@@ -158,10 +158,8 @@ Questions and comments can be sent to Michael Bradley <mbradley@swin.edu.au>.
 Maintainers
 ============
 
-- Jacob Seiler (@jacobseiler)
-- Manodeep Sinha (@manodeep)
 - Darren Croton (@darrencroton)
-- Michael Bradley (@Mbradley1985)
+- Michael Bradley (@MBradley1985)
 
 .. |GitHub CI| image:: https://github.com/sage-home/sage-model/actions/workflows/ci.yml/badge.svg
    :target: https://github.com/sage-home/sage-model/actions
