@@ -90,52 +90,38 @@ If you're following the above, these scripts can run as-is to produce a series o
 Near the top of both scripts, there is a "USER OPTIONS" section where you can modify the simulation and plotting details for your own needs. 
 These scripts can be used as a template to read the hdf5 ``SAGE`` model output and to make your own custom figures.
 
+Parameter Optimization with PSO
+================================
 
-Plotting the output (sage-analysis package)
-===========================================
+``SAGE`` 2.0 includes a Particle Swarm Optimization (PSO) framework in the ``optim/`` directory for automated parameter calibration. 
+This system allows you to optimize model parameters against observational constraints to improve the physical realism of your galaxy formation models.
 
-We have a separate `sage-analysis <https://github.com/sage-home/sage-analysis/>`_ python package for plotting ``SAGE`` output. Please refer to the `sage_analysis
-documentation <https://sage-analysis.readthedocs.io/en/latest/user/analyzing_sage.html>`_ for more details. 
+The PSO framework includes:
 
+* **Parameter space exploration**: Systematically explores the model parameter space to find optimal configurations
+* **Observational constraints**: Compares model outputs against observational data (stellar mass functions, star formation rates, etc.)
+* **Emulator integration**: Includes machine learning emulators to accelerate the optimization process
+* **Uncertainty quantification**: Provides tools to assess parameter uncertainties and model reliability
 
-Installing ``sage-analysis`` (requires python version >= 3.6)
---------------------------------------------------------------
-
-.. code::
-
-    $ cd ../    # <- Change to the location where you want to clone the sage-analysis repo
-    $ git clone https://github.com/sage-home/sage-analysis.git
-    $ cd sage-analysis  
-
-You may need to first create a Python virtual environment in your sage-analysis directory and source it:
+To run the PSO optimization:
 
 .. code::
 
-    $ python3 -m venv .sage_venv
-    $ source .sage_venv/bin/activate
+    $ cd optim/
+    $ python3 main.py
+    $ python3 ./run_pso.sh
 
-Then finish installing sage-analysis:
+The optimization can be configured by modifying the constraint definitions in ``constraints.py`` and the parameter space definitions in the configuration files. 
+The ``sage_emulator.py`` provides accelerated model evaluation for faster optimization convergence.
 
-.. code::
-
-    $ python3 -m pip install -e .    # Install the sage-analysis python package
-    $ cd ../sage-model 
-
-Assuming that the `sage-analysis` repo was installed successfully, you are now ready to plot the output from ``SAGE``.
-
-Plotting
---------
-
-The ``plotting`` directory contains an ``example.py`` script that can be run to plot the basic output from ``SAGE``.
+For detailed PSO analysis and diagnostics, use:
 
 .. code::
 
-    $ cd plotting/
-    $ python3 example.py
+    $ python3 diagnostics.py
+    $ python3 diagnostics2.py
 
-This will create a number of plots in the ``plotting/plots/`` directory. Please refer to the `sage_analysis
-documentation <https://sage-analysis.readthedocs.io/en/latest/user/analyzing_sage.html>`_ for a thorough guide on how
-to tweak the plotting script to suit your needs.
+The PSO results help identify optimal parameter combinations and provide insights into parameter degeneracies and model sensitivities.
 
 
 Citation
@@ -167,7 +153,7 @@ If you use SAGE in a publication, please cite the following items:
 Author
 =======
 
-Questions and comments can be sent to Darren Croton: dcroton@astro.swin.edu.au.
+Questions and comments can be sent to Michael Bradley <mbradley@swin.edu.au>.
 
 Maintainers
 ============
@@ -175,6 +161,7 @@ Maintainers
 - Jacob Seiler (@jacobseiler)
 - Manodeep Sinha (@manodeep)
 - Darren Croton (@darrencroton)
+- Michael Bradley (@Mbradley1985)
 
 .. |GitHub CI| image:: https://github.com/sage-home/sage-model/actions/workflows/ci.yml/badge.svg
    :target: https://github.com/sage-home/sage-model/actions
