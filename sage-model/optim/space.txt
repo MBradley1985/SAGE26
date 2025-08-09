@@ -1,0 +1,3 @@
+SfrEfficiency,SFE,0,0.001,0.1
+FeedbackReheatingEpsilon,eHeat,0,0.05,1.0
+FeedbackEjectionEfficiency,eEject,0,0.05,1.0
