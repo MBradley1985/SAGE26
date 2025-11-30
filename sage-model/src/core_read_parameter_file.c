@@ -233,14 +233,31 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->Exponent_Forest_Dist_Scheme);
     ParamID[NParam++] = DOUBLE;
 
-    strncpy(ParamTag[NParam], "MassLoadingOn", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->MassLoadingOn);
+    strncpy(ParamTag[NParam], "CGMrecipeOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->CGMrecipeOn);
     ParamID[NParam++] = INT;
 
-    strncpy(ParamTag[NParam], "DynamicalTimeResolutionFactor", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->DynamicalTimeResolutionFactor);
+    strncpy(ParamTag[NParam], "FIREmodeOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->FIREmodeOn);
     ParamID[NParam++] = INT;
 
+    strncpy(ParamTag[NParam], "RedshiftPowerLawExponent", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->RedshiftPowerLawExponent);
+    ParamID[NParam++] = DOUBLE;
+
+    strncpy(ParamTag[NParam], "FFBMaxEfficiency", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->FFBMaxEfficiency);
+    ParamID[NParam++] = DOUBLE;
+
+    strncpy(ParamTag[NParam], "FeedbackFreeModeOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->FeedbackFreeModeOn);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "BulgeSizeOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->BulgeSizeOn);
+    ParamID[NParam++] = INT;
+
+    
     used_tag = mymalloc(sizeof(int) * NParam);
     for(int i=0; i<NParam; i++) {
         used_tag[i]=1;

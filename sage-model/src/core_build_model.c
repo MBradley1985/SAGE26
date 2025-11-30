@@ -20,8 +20,6 @@
 #include "model_starformation_and_feedback.h"
 #include "model_cooling_heating.h"
 
-static long debug_galaxy_counter = 0;
-
 
 static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals, struct halo_data *halos,
                            struct halo_aux_data *haloaux, struct GALAXY **ptr_to_galaxies, struct GALAXY **ptr_to_halogal, struct params *run_params);
@@ -227,6 +225,9 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                         galaxies[ngal].MergTime = 999.9f;
 
                         galaxies[ngal].DiskScaleRadius = get_disk_radius(halonr, ngal, halos, galaxies);
+                        galaxies[ngal].BulgeScaleRadius = get_bulge_radius(ngal, galaxies, run_params);
+                        galaxies[ngal].MergerBulgeRadius = get_bulge_radius(ngal, galaxies, run_params);
+                        galaxies[ngal].InstabilityBulgeRadius = get_bulge_radius(ngal, galaxies, run_params);
 
                         galaxies[ngal].Type = 0;
                     } else {
@@ -238,6 +239,8 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                             galaxies[ngal].infallMvir = previousMvir;
                             galaxies[ngal].infallVvir = previousVvir;
                             galaxies[ngal].infallVmax = previousVmax;
+                            galaxies[ngal].TimeOfInfall = halos[halonr].SnapNum;  // Track snapshot of infall
+
                         }
 
                         if(galaxies[ngal].Type == 0 || galaxies[ngal].MergTime > 999.0f) {
@@ -321,57 +324,21 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
       MS: Note save halo_snapnum and galaxy_snapnum to local variables
           and replace all instances of snapnum to those local variables
      */
-    debug_galaxy_counter++;
 
     const int halo_snapnum = halos[halonr].SnapNum;
     const double Zcurr = run_params->ZZ[halo_snapnum];
     const double halo_age = run_params->Age[halo_snapnum];
     const double infallingGas = infall_recipe(centralgal, ngal, Zcurr, galaxies, run_params);
 
-    // ADAPTIVE TIMESTEP: Use dynamical time constraint
-    const double Rvir = galaxies[centralgal].Rvir;
-    const double Vvir = galaxies[centralgal].Vvir;
-    const double deltaT = run_params->Age[galaxies[0].SnapNum] - halo_age;
-
-    int nsteps;
-    double actual_dt;
-
-    if (Vvir > 0.0 && Rvir > 0.0) {
-        // Calculate dynamical time: t_dyn = 0.1 * R_vir / V_vir
-        const double t_dyn = 0.1 * Rvir / Vvir;
-        
-        // Target: no time step should be longer than t_dyn/N
-        // where N is the resolution factor (5, 10, 20, etc.)
-        const int resolution_factor = run_params->DynamicalTimeResolutionFactor;  // 10 steps per dynamical time
-        
-        // Maximum allowed time step
-        const double max_allowed_dt = t_dyn / resolution_factor;
-        
-        // Calculate required number of steps
-        nsteps = (int)ceil(deltaT / max_allowed_dt);
-        
-        // Ensure we have at least the default number of steps
-        if (nsteps < STEPS) {
-            nsteps = STEPS;
-        }
-        
-        // Cap at reasonable maximum (should naturally be ~10-30 for most cases)
-        const int max_steps = 30;
-        if (nsteps > max_steps) {
-            nsteps = max_steps;
-        }
-        
-        actual_dt = deltaT / nsteps;
-        
-    } else {
-        // Fallback to default if Vvir or Rvir are invalid
-        nsteps = STEPS;
-        actual_dt = deltaT / STEPS;
+    if (run_params->CGMrecipeOn == 1) {
+        determine_and_store_regime(ngal, galaxies, run_params);
+    }
+    if (run_params->FeedbackFreeModeOn == 1) {
+        determine_and_store_ffb_regime(ngal, galaxies, run_params);
     }
 
-
-    // We integrate things forward by using a number of intervals equal to nsteps
-    for(int step = 0; step < nsteps; step++) {
+    // We integrate things forward by using a number of intervals equal to STEPS
+    for(int step = 0; step < STEPS; step++) {
 
         // Loop over all galaxies in the halo
         for(int p = 0; p < ngal; p++) {
@@ -380,8 +347,8 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
                 continue;
             }
 
-            // const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
-            const double time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * actual_dt;
+            const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
+            const double time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / STEPS);
 
             if(galaxies[p].dT < 0.0) {
                 galaxies[p].dT = deltaT;
@@ -389,23 +356,30 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
 
             // For the central galaxy only
             if(p == centralgal) {
-                add_infall_to_hot(centralgal, infallingGas * actual_dt / deltaT, Zcurr, galaxies, run_params);
+                add_infall_to_hot(centralgal, infallingGas / STEPS, galaxies, run_params);
 
                 if(run_params->ReIncorporationFactor > 0.0) {
-                    reincorporate_gas(centralgal, actual_dt, galaxies, run_params);
+                    reincorporate_gas(centralgal, deltaT / STEPS, galaxies, run_params);
                 }
             } else {
                 if(galaxies[p].Type == 1 && galaxies[p].HotGas > 0.0) {
-                    strip_from_satellite(centralgal, p, Zcurr, galaxies, run_params, actual_dt);
+                    strip_from_satellite(centralgal, p, Zcurr, galaxies, run_params);
                 }
             }
 
             // Determine the cooling gas given the halo properties
-            double coolingGas = cooling_recipe(p, actual_dt, galaxies, run_params);
-            cool_gas_onto_galaxy(p, coolingGas, galaxies);
+            double coolingGas;
+            if(run_params->CGMrecipeOn == 1) {
+
+                cooling_recipe_regime_aware(p, deltaT / STEPS, galaxies, run_params);
+                // cool_gas_onto_galaxy_regime_aware(p, coolingGas, galaxies);
+            } else {
+                coolingGas = cooling_recipe(p, deltaT / STEPS, galaxies, run_params);
+                cool_gas_onto_galaxy(p, coolingGas, galaxies);
+            }
 
             // stars form and then explode!
-            starformation_and_feedback(p, centralgal, time, actual_dt, halonr, step, galaxies, run_params);
+            starformation_and_feedback(p, centralgal, time, deltaT / STEPS, halonr, step, galaxies, run_params);
         }
 
         // check for satellite disruption and merger events
@@ -418,12 +392,12 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
                         "Error: galaxies[%d].MergTime = %lf is too large! Should have been within the age of the Universe\n",
                         p, galaxies[p].MergTime);
 
-                // const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
-                galaxies[p].MergTime -= actual_dt;
+                const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
+                galaxies[p].MergTime -= deltaT / STEPS;
 
                 // only consider mergers or disruption for halo-to-baryonic mass ratios below the threshold
                 // or for satellites with no baryonic mass (they don't grow and will otherwise hang around forever)
-                double currentMvir = galaxies[p].Mvir - galaxies[p].deltaMvir * (1.0 - ((double)step + 1.0) / (double)nsteps);
+                double currentMvir = galaxies[p].Mvir - galaxies[p].deltaMvir * (1.0 - ((double)step + 1.0) / (double)STEPS);
                 double galaxyBaryons = galaxies[p].StellarMass + galaxies[p].ColdGas;
                 if((galaxyBaryons == 0.0) || (galaxyBaryons > 0.0 && (currentMvir / galaxyBaryons <= run_params->ThresholdSatDisruption))) {
 
@@ -438,22 +412,22 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
                     if(isfinite(galaxies[p].MergTime)) {
                         // disruption has occured!
                         if(galaxies[p].MergTime > 0.0) {
-                            disrupt_satellite_to_ICS(merger_centralgal, p, galaxies);
+                            disrupt_satellite_to_ICS(merger_centralgal, p, galaxies, run_params);
                         } else {
                             // a merger has occured!
-                            double time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * actual_dt;
-                            deal_with_galaxy_merger(p, merger_centralgal, centralgal, time, actual_dt, halonr, step, galaxies, run_params);
+                            double time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / STEPS);
+                            deal_with_galaxy_merger(p, merger_centralgal, centralgal, time, deltaT / STEPS, halonr, step, galaxies, run_params);
                         }
                     }
                 }
+
             }
         }
     } // Go on to the next STEPS substep
 
-
     // Extra miscellaneous stuff before finishing this halo
     galaxies[centralgal].TotalSatelliteBaryons = 0.0;
-    // const double deltaT = run_params->Age[galaxies[0].SnapNum] - halo_age;
+    const double deltaT = run_params->Age[galaxies[0].SnapNum] - halo_age;
     const double inv_deltaT = 1.0/deltaT;
 
     for(int p = 0; p < ngal; p++) {

@@ -56,19 +56,19 @@ struct HDF5_GALAXY_OUTPUT
     float *StellarMass;
     float *BulgeMass;
     float *HotGas;
-    float *CGMgas;
+    float *EjectedMass;
     float *BlackHoleMass;
     float *ICS;
-    float *HI_gas;
-    float *H2_gas;
+    float *H2gas;
     
     /* metals */
     float *MetalsColdGas;
     float *MetalsStellarMass;
     float *MetalsBulgeMass;
     float *MetalsHotGas;
-    float *MetalsCGMgas;
+    float *MetalsEjectedMass;
     float *MetalsICS;
+    float *MassLoading;
     
     /* to calculate magnitudes */
     float *SfrDisk;
@@ -78,6 +78,11 @@ struct HDF5_GALAXY_OUTPUT
     
     /* misc */
     float *DiskScaleRadius;
+    float *BulgeScaleRadius;
+    float *MergerBulgeRadius;
+    float *InstabilityBulgeRadius;
+    float *MergerBulgeMass;
+    float *InstabilityBulgeMass;
     float *Cooling;
     float *Heating;
     float *QuasarModeBHaccretionMass;
@@ -89,15 +94,19 @@ struct HDF5_GALAXY_OUTPUT
     float *infallMvir;
     float *infallVvir;
     float *infallVmax;
+    float *TimeOfInfall;
 
-    float *MassLoading;
-    float *ReincorporatedGas;
-    
-    int32_t   *InflowRegime;        // 0=cold streams, 1=shock heated, -1=no infall
-    float     *CriticalMassDB06;    // M_crit from Dekel & Birnboim at current z
-    float     *MvirToMcritRatio;    // Mvir/Mcrit (>1 = shock heated, <1 = cold streams)
-    float     *ColdInflowMass;      // Cumulative mass that came in as cold streams
-    float     *HotInflowMass;       // Cumulative mass that came in shock-heated
+    /* CGM properties */
+    int32_t *Regime;  /* 0 = CGM-regime 1 = ICM-regime */
+    float *CGMgas;
+    float *MetalsCGMgas;
+    float *tcool;
+    float *tff;
+    float *tcool_over_tff;
+    float *tdeplete;
+    float *RcoolToRvir;
+
+    int32_t *FFBRegime;
 };
     
     // Proto-Types //

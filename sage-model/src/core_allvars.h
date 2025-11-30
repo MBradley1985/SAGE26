@@ -92,7 +92,9 @@ enum sage_error_types {
 struct GALAXY
 {
     int32_t   SnapNum;
-    int32_t  Type;
+    int32_t   Type;
+    int32_t   Regime;
+    int32_t   FFBRegime;
 
     int32_t   GalaxyNr;
     int32_t   CentralGal;
@@ -125,19 +127,20 @@ struct GALAXY
     float StellarMass;
     float BulgeMass;
     float HotGas;
-    float CGMgas;
+    float EjectedMass;
     float BlackHoleMass;
     float ICS;
-    float H2_gas;  
-    float HI_gas;
+    float CGMgas;
+    float H2gas;
 
     /* metals */
     float MetalsColdGas;
     float MetalsStellarMass;
     float MetalsBulgeMass;
     float MetalsHotGas;
-    float MetalsCGMgas;
+    float MetalsEjectedMass;
     float MetalsICS;
+    float MetalsCGMgas;
 
     /* to calculate magnitudes */
     float SfrDisk[STEPS];
@@ -149,6 +152,7 @@ struct GALAXY
 
     /* misc */
     float DiskScaleRadius;
+    float BulgeScaleRadius;
     float MergTime;
     double Cooling;
     double Heating;
@@ -158,22 +162,26 @@ struct GALAXY
     float TimeOfLastMinorMerger;
     float OutflowRate;
     float TotalSatelliteBaryons;
+    float RcoolToRvir;
 
     /* infall properties */
     float infallMvir;
     float infallVvir;
     float infallVmax;
+    float TimeOfInfall;
 
     float MassLoading;
 
-    int32_t InflowRegime;  // 0=cold streams, 1=shock heated, -1=no infall
-    float CriticalMassDB06;  // M_crit from Dekel & Birnboim at current z
-    float MvirToMcritRatio;  // Mvir/Mcrit (>1 = shock heated, <1 = cold streams)
-    float ColdInflowMass;    // Total mass that came in as cold streams
-    float HotInflowMass;     // Total mass that came in shock-heated
-    float ColdInflowMetals;  // Metals in cold inflow
-    float HotInflowMetals;   // Metals in hot inflow
-    float ReincorporatedGas; // Mass of gas reincorporated into the galaxy
+    // Diagnostic variables for CGM precipitation model
+    float tcool;
+    float tff;
+    float tcool_over_tff;
+    float tdeplete;
+
+    float MergerBulgeMass;     // For size calculation only
+    float InstabilityBulgeMass; // For size calculation only
+    float MergerBulgeRadius;       // Classical bulge radius (post-processing)
+    float InstabilityBulgeRadius;  // Pseudo-bulge radius (post-processing)
 };
 
 
@@ -439,8 +447,11 @@ struct params
     int32_t    SupernovaRecipeOn;
     int32_t    ReionizationOn;
     int32_t    DiskInstabilityOn;
-    int32_t    MassLoadingOn;
-    int32_t    DynamicalTimeResolutionFactor; 
+    int32_t    CGMrecipeOn;
+    int32_t    FIREmodeOn;
+    int32_t    CGMrecipeSAGEOn;
+    int32_t    FeedbackFreeModeOn;
+    int32_t    BulgeSizeOn;
 
     double RecycleFraction;
     double Yield;
@@ -449,6 +460,7 @@ struct params
     double ThreshMajorMerger;
     double BaryonFrac;
     double SfrEfficiency;
+    double FFBMaxEfficiency;
     double FeedbackReheatingEpsilon;
     double FeedbackEjectionEfficiency;
     double RadioModeEfficiency;
@@ -457,6 +469,7 @@ struct params
     double Reionization_z0;
     double Reionization_zr;
     double ThresholdSatDisruption;
+    double RedshiftPowerLawExponent;
 
     double UnitLength_in_cm;
     double UnitVelocity_in_cm_per_s;
