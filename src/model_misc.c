@@ -399,28 +399,28 @@ void determine_and_store_ffb_regime(const int ngal, struct GALAXY *galaxies,
             ffb_galaxies_assigned++;
             
             // Debug output for first few FFB halos at high-z
-            if(ffb_galaxies_assigned <= 10 && z > 8.0) {
-                const double Mvir_ffb = calculate_ffb_threshold_mass(z, run_params);
-                printf("=== FFB HALO #%d DETECTED ===\n", ffb_galaxies_assigned);
-                printf("  Galaxy %d at z=%.4f\n", p, z);
-                printf("  Mvir = %.4e (10^10 Msun/h)\n", Mvir);
-                printf("  Threshold = %.4e (10^10 Msun/h)\n", Mvir_ffb);
-                printf("  Mass ratio = %.4f\n", Mvir / Mvir_ffb);
-                printf("  FFB fraction (f_ffb) = %.4f\n", f_ffb);
-                printf("  --> FFB MODE ACTIVATED\n");
-                printf("============================\n\n");
-            }
+            // if(ffb_galaxies_assigned <= 10 && z > 8.0) {
+            //     const double Mvir_ffb = calculate_ffb_threshold_mass(z, run_params);
+            //     printf("=== FFB HALO #%d DETECTED ===\n", ffb_galaxies_assigned);
+            //     printf("  Galaxy %d at z=%.4f\n", p, z);
+            //     printf("  Mvir = %.4e (10^10 Msun/h)\n", Mvir);
+            //     printf("  Threshold = %.4e (10^10 Msun/h)\n", Mvir_ffb);
+            //     printf("  Mass ratio = %.4f\n", Mvir / Mvir_ffb);
+            //     printf("  FFB fraction (f_ffb) = %.4f\n", f_ffb);
+            //     printf("  --> FFB MODE ACTIVATED\n");
+            //     printf("============================\n\n");
+            // }
         } else {
             galaxies[p].FFBRegime = 0;  // Normal halo
         }
     }
     
     // Print summary every 10000 galaxies
-    if(total_galaxies_checked % 10000 == 0 && total_galaxies_checked > 0) {
-        printf("FFB SUMMARY: %d/%d galaxies (%.1f%%) assigned FFB regime\n", 
-               ffb_galaxies_assigned, total_galaxies_checked, 
-               100.0 * ffb_galaxies_assigned / total_galaxies_checked);
-    }
+    // if(total_galaxies_checked % 10000 == 0 && total_galaxies_checked > 0) {
+    //     printf("FFB SUMMARY: %d/%d galaxies (%.1f%%) assigned FFB regime\n", 
+    //            ffb_galaxies_assigned, total_galaxies_checked, 
+    //            100.0 * ffb_galaxies_assigned / total_galaxies_checked);
+    // }
 }
 
 
