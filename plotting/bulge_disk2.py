@@ -81,6 +81,7 @@ def load_all_snapshots(filepath):
                 'BulgeMass': snap_group['BulgeMass'][:] * 1e10 / HUBBLE_H,  # Msun
                 'ColdGas': snap_group['ColdGas'][:] * 1e10 / HUBBLE_H,  # Msun
                 'Mvir': snap_group['Mvir'][:] * 1e10 / HUBBLE_H,  # Msun
+                'DiskRadius': snap_group['DiskRadius'][:] * 1e3 / HUBBLE_H,  # kpc
             }
             
             # Optional fields (may not exist in all versions)
@@ -458,21 +459,27 @@ def plot_half_mass_radius_vs_stellar_mass_grid(data_ffb_on, output_file):
         snap_zs = [data_ffb_on[k]['Redshift'] for k in snap_nums]
         idx = np.argmin(np.abs(np.array(snap_zs) - z_centers[i]))
         snap = data_ffb_on[snap_nums[idx]]
-        # Select centrals with stellar mass > 1e9
-        mask = (snap['Type'] == 0) & (snap['StellarMass'] > 1e9)
+        # Select centrals with stellar mass > 1e8 and elliptical (bulge-to-total > 0.8)
+        mask = (snap['StellarMass'] > 1e9) & (snap['BulgeToTotal'] > 0.8)
         if np.sum(mask) == 0:
             axes[i].text(0.5, 0.5, 'No data', ha='center', va='center')
             continue
         # Get required arrays
         stellar_mass = snap['StellarMass'][mask]
-        bulge_merger_mass = snap['MergerBulgeMass'][mask]
-        bulge_instability_mass = snap['InstabilityBulgeMass'][mask]
-        merger_bulge_radius = snap['BulgeScaleRadius'][mask]
-        instability_bulge_radius = snap['BulgeScaleRadius'][mask]
-        total_mass = bulge_merger_mass + bulge_instability_mass
-        total_mass[total_mass == 0] = 1e-10
-        half_mass_radius = (bulge_merger_mass * merger_bulge_radius +
-                            bulge_instability_mass * instability_bulge_radius) / total_mass
+        # bulge_merger_mass = snap['MergerBulgeMass'][mask]
+        # bulge_instability_mass = snap['InstabilityBulgeMass'][mask]
+        # merger_bulge_radius = snap['BulgeScaleRadius'][mask]
+        # instability_bulge_radius = snap['BulgeScaleRadius'][mask]
+        disk_scale_radius = snap['DiskRadius'][mask]
+        print(f"Disk scale radius stats z={z_centers[i]:.2f}: min={disk_scale_radius.min():.2e}, max={disk_scale_radius.max():.2e} kpc")
+        print(f"Disk scale radius NaNs: {np.sum(np.isnan(disk_scale_radius))}, Infs: {np.sum(np.isinf(disk_scale_radius))}")
+        # total_mass = bulge_merger_mass + bulge_instability_mass
+        # total_mass[total_mass == 0] = 1e-10
+        half_mass_radius = 1.68 * disk_scale_radius
+        print(f"Half-mass radius plot z={z_centers[i]:.2f}: ")
+        print(f"  Number of galaxies: {len(stellar_mass)}")
+        print(f"  Stellar mass range: {stellar_mass.min():.2e} - {stellar_mass.max():.2e} Msun")
+        print(f"  Half-mass radius range: {half_mass_radius.min():.2e} - {half_mass_radius.max():.2e} kpc")
         w_pos = np.where((half_mass_radius > 0) & (stellar_mass > 0))[0]
         if len(w_pos) == 0:
             axes[i].text(0.5, 0.5, 'No valid galaxies', ha='center', va='center')
@@ -482,14 +489,14 @@ def plot_half_mass_radius_vs_stellar_mass_grid(data_ffb_on, output_file):
         hb = axes[i].hexbin(log10_stellar_mass, log10_half_mass_radius,
                             gridsize=60, cmap='Blues_r', mincnt=1, linewidths=0.2)
         axes[i].set_title(f'z={z_centers[i]:.2f}', fontsize=13)
-        axes[i].set_xlim(10.5, 12)
+        # axes[i].set_xlim(10.5, 12)
         axes[i].set_ylim(-2, 2)
         if i % 2 == 0:
             axes[i].set_ylabel(r'$\log_{10} R_{1/2}\ (\mathrm{kpc})$')
         if i >= 6:
             axes[i].set_xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
     # fig.colorbar(hb, ax=axes, label='Number of Galaxies', shrink=0.6)
-    fig.suptitle('Half-Mass Radius vs Stellar Mass by Redshift', fontsize=16, fontweight='bold')
+    # fig.suptitle('Half-Mass Radius vs Stellar Mass by Redshift', fontsize=16, fontweight='bold')
     plt.tight_layout(rect=[0, 0, 1, 0.97])
     plt.savefig(output_file, dpi=200)
     print(f"✓ Saved: {output_file}")

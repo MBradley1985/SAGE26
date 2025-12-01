@@ -516,10 +516,10 @@ if __name__ == '__main__':
     # Mass-weighted radius
     # half_mass_radius = (disk_mass * DiskRadius[w] + bulge_mass * BulgeRadius[w]) / total_mass
 
-    half_mass_radius = (bulge_merger_mass[w] * merger_bulge_radius[w] +
-                        bulge_instability_mass[w] * instability_bulge_radius[w] ) / total_mass
+    # half_mass_radius = (bulge_merger_mass[w] * merger_bulge_radius[w] +
+    #                     bulge_instability_mass[w] * instability_bulge_radius[w] ) / total_mass
 
-    # half_mass_radius = 1.68 * DiskRadius[w]
+    half_mass_radius = 1.68 * DiskRadius[w]
     
     # Filter positive values
     w_pos = np.where(half_mass_radius > 0)[0]
