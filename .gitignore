@@ -18,6 +18,7 @@ _sage_cffi.*
 codecov
 *.tar*
 *.png
+*.par
 *.ipynb_checkpoints
 *.dSYM
 *.txt

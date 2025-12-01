@@ -18,6 +18,8 @@ scripts=(
     "plotting/bulge_disk.py"
     "plotting/bulge_disk2.py"
     "plotting/ffb_analysis.py"
+    "plotting/ffb_analysis2.py"
+    "plotting/verify_ffb.py"
     # "plotting/sf_pop_trace.py"
     "plotting/stat_test.py"
     "plotting/stat_test2.py"
@@ -33,5 +35,12 @@ for script in "${scripts[@]}"; do
     fi
     echo ""
 done
+
+echo "========================================="
+echo "Removing temporary folders..."
+rm -rf plotting/__pycache__
+rm -rf cache
+echo "Temporary folders removed."
+echo "========================================="
 
 echo "All scripts processed!"
