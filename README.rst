@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="SAGElogo.png" width="300">
+  <img src="SAGElogo.jpg" width="300">
 </p>
 
 |GitHub CI| |DOCS| 
