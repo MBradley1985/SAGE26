@@ -104,10 +104,6 @@ This will generate a large number of plots for both z=0 and higher redshift resu
 Parameter Optimization with PSO
 ================================
 
-
-Parameter Optimization with PSO
-================================
-
 The Particle Swarm Optimization (PSO) framework for automated parameter calibration is now available as a separate package: `SAGE-PSO`.
 
 You can clone the PSO package directly from GitHub:
@@ -126,23 +122,7 @@ The PSO package includes:
 * **Emulator integration**: Includes machine learning emulators to accelerate the optimization process
 * **Uncertainty quantification**: Provides tools to assess parameter uncertainties and model reliability
 
-To run the PSO optimization:
-
-.. code::
-
-    $ python3 main.py
-    $ ./run_pso.sh
-
-The optimization can be configured by modifying the constraint definitions in ``constraints.py`` and the parameter space definitions in the configuration files. 
-
-For detailed PSO analysis and diagnostics, use:
-
-.. code::
-
-    $ python3 diagnostics.py
-
-The PSO results help identify optimal parameter combinations and provide insights into parameter degeneracies and model sensitivities.
-
+To get started with SAGE-PSO, please refer to the documentation available in the repository, which includes installation instructions, usage examples, and guidelines for setting up your own optimization runs.
 
 Citation
 =========
