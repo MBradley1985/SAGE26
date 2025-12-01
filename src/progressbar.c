@@ -17,93 +17,85 @@
 #define MAXLEN 1000
 #endif
 
-static double SMALLPRINTSTEP;
-static char PROGRESSBARSTRING[MAXLEN];
-static int beg_of_string_index;
-static double percent = 0;
-static int END_INDEX_FOR_PERCENT_DONE[101];
-struct timeval tstart;
+static int64_t total_steps = 0;
+static struct timeval tstart;
+static int prev_percent = -1;
 
 void init_my_progressbar(FILE *stream, const int64_t N, int *interrupted)
 {
-  if (N <= 0) {
-      fprintf(stream, "WARNING: N=%" PRId64 " is not positive. Progress bar will not be printed\n", N);
-      SMALLPRINTSTEP = 0.0;
-  } else {
-    // set the increment
-    SMALLPRINTSTEP = 0.01 * N;
-
-    // pre-fill the progress bar string
-    // first the 0%
-    int index = 0;
-    my_snprintf(&(PROGRESSBARSTRING[index]), MAXLEN - index, "%s", "0%");
-    index += 2;
-    END_INDEX_FOR_PERCENT_DONE[0] = index;
-    for (int i = 1; i < 100; i++) {
-      if (i % 10 == 0) {
-        my_snprintf(&(PROGRESSBARSTRING[index]), MAXLEN - index, "%02d%%", i);
-        index += 3;
-      } else {
-        PROGRESSBARSTRING[index++] = '.';
-      }
-      END_INDEX_FOR_PERCENT_DONE[i] = index;
+    if (N <= 0) {
+        fprintf(stream, "WARNING: N=%" PRId64 " is not positive. Progress bar will not be printed\n", N);
+        total_steps = 0;
+    } else {
+        total_steps = N;
     }
-
-    // end with 100%
-    my_snprintf(&(PROGRESSBARSTRING[index]), MAXLEN - index, "%s", "100%");
-    index += 4;
-    END_INDEX_FOR_PERCENT_DONE[100] = index;
-    PROGRESSBARSTRING[index + 1] = '\0';
-  }
-  *interrupted = 0;
-  beg_of_string_index = 0;
-  gettimeofday(&tstart, NULL);
+    *interrupted = 0;
+    prev_percent = -1;
+    gettimeofday(&tstart, NULL);
 }
 
 void my_progressbar(FILE *stream, const int64_t curr_index, int *interrupted)
 {
-  int integer_percent = 0;
-  if (SMALLPRINTSTEP > 0.0) {
+    if (total_steps <= 0) return;
+
     if (*interrupted == 1) {
-      fprintf(stream, "\n");
-      *interrupted = 0;
-      beg_of_string_index = 0;
+        fprintf(stream, "\n");
+        *interrupted = 0;
+        prev_percent = -1; // Force redraw
     }
 
-    percent = (curr_index + 1) / SMALLPRINTSTEP;    // division is in double -> C has 0-based
-                                                    // indexing -- the +1 accounts for that.
-    integer_percent = (int)percent;
+    // Calculate percentage
+    double percent = (double)(curr_index + 1) / total_steps * 100.0;
+    int integer_percent = (int)percent;
 
-    if (integer_percent >= 0 && integer_percent <= 100) {
-      fprintf(stream, "%.*s", END_INDEX_FOR_PERCENT_DONE[integer_percent] - beg_of_string_index,
-              &(PROGRESSBARSTRING[beg_of_string_index]));
-      beg_of_string_index = END_INDEX_FOR_PERCENT_DONE[integer_percent];
+    // Only update if percentage changed or it's the first time
+    if (integer_percent != prev_percent) {
+        prev_percent = integer_percent;
+
+        struct timeval tnow;
+        gettimeofday(&tnow, NULL);
+        
+        double elapsed = (tnow.tv_sec - tstart.tv_sec) + (tnow.tv_usec - tstart.tv_usec) / 1000000.0;
+        double rate = (curr_index + 1) / elapsed;
+        double remaining = 0.0;
+        if (rate > 0) {
+             remaining = (total_steps - (curr_index + 1)) / rate;
+        }
+        
+        int eta_h = (int)(remaining / 3600);
+        int eta_m = (int)((remaining - eta_h * 3600) / 60);
+        int eta_s = (int)(remaining - eta_h * 3600 - eta_m * 60);
+
+        // Create bar
+        int bar_width = 30;
+        int pos = (int)((bar_width * percent) / 100.0);
+        
+        fprintf(stream, "\rProgress: [");
+        for (int i = 0; i < bar_width; ++i) {
+            if (i < pos) fprintf(stream, "=");
+            else if (i == pos) fprintf(stream, ">");
+            else fprintf(stream, " ");
+        }
+        fprintf(stream, "] %3d%% | ETA: %02d:%02d:%02d", integer_percent, eta_h, eta_m, eta_s);
+        fflush(stream);
     }
-  }
 }
 
 void finish_myprogressbar(FILE *stream, int *interrupted)
 {
-  struct timeval t1;
-  gettimeofday(&t1, NULL);
-  char *time_string = get_time_string(tstart, t1);
-  if (SMALLPRINTSTEP > 0.0) {
-    if (*interrupted == 0) {
-      if (percent < 100.0) {
-        fprintf(stream, "100%% done.");
-      } else {
-        fprintf(stream, " done.");
-      }
-    } else {
-      fprintf(stream, "\n%s done.", PROGRESSBARSTRING);
-      *interrupted = 0;
+    if (total_steps > 0) {
+        // Ensure 100% is shown
+        fprintf(stream, "\rProgress: [");
+        for (int i = 0; i < 30; ++i) fprintf(stream, "=");
+        fprintf(stream, "] 100%% | ETA: 00:00:00");
+        fprintf(stream, "\n");
     }
-  } else {
-    fprintf(stream, " done.");
-  }
-  fprintf(stream, " Time taken = %s\n", time_string);
-  free(time_string);
 
-  beg_of_string_index = 0;
-  my_snprintf(PROGRESSBARSTRING, MAXLEN, "%s", " ");
+    struct timeval t1;
+    gettimeofday(&t1, NULL);
+    char *time_string = get_time_string(tstart, t1);
+    fprintf(stream, "Done. Time taken = %s\n", time_string);
+    free(time_string);
+    
+    if (*interrupted) *interrupted = 0;
 }
