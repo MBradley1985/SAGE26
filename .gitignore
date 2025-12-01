@@ -12,7 +12,7 @@ libsage.so
 perf.data*
 *.pdf
 tmp*
-
+*.par
 *vscode*
 _sage_cffi.*
 codecov
