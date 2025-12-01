@@ -1,12 +1,10 @@
-|GitHub CI| |DOCS| 
-*************************************
-Semi-Analytic Galaxy Evolution (SAGE)
-*************************************
-
 .. image:: ./SAGElogo.jpg
    :width: 300
    :alt: Project Logo
    :align: center
+*************************************
+Semi-Analytic Galaxy Evolution (SAGE)
+*************************************
 
 ``SAGE`` is a publicly available code-base for modelling galaxy formation in a
 cosmological context. A description of the model and its default calibration
