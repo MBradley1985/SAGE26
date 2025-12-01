@@ -1,4 +1,4 @@
-![Logo](SAGElogo.jpg)
+![Logo](./SAGElogo.jpg)
 
 |GitHub CI| |DOCS| 
 *************************************
