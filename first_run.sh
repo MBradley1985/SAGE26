@@ -9,8 +9,8 @@ echo ""
 # Hence let's first ensure that we're actually there.
 parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 current_dir_end=${PWD##*/}  # This is the current directory without the base-name.
-if [[ ${current_dir_end} != *"sage-model"* ]]; then
-   echo "This setup script should be run from inside the 'sage-model' directory."
+if [[ ${current_dir_end} != *"SAGE26"* ]]; then
+   echo "This setup script should be run from inside the 'SAGE26' directory."
    echo "Please 'cd' there first and execute again."
    exit 1
 fi
