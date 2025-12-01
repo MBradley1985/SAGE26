@@ -454,7 +454,7 @@ if __name__ == '__main__':
     print('Plotting Cold gas vs Disk Diameter')
 
     plt.figure()
-    w = np.where((StellarMass > 1e9) & (DiskRadius > 0.0) & (ColdGas > 0.0))[0]
+    w = np.where((StellarMass > 1e8) & (DiskRadius > 0.0) & (ColdGas > 0.0))[0]
     if(len(w) > dilute): w = sample(list(w), dilute)
 
     cold_gas_mass = ColdGas[w] - BulgeMass[w]
@@ -475,7 +475,7 @@ if __name__ == '__main__':
 
     plt.xlabel(r'$\log_{10} D_{\mathrm{disk}}\ (\mathrm{kpc})$')
     plt.ylabel(r'$\log_{10} M_{\mathrm{cold\ gas}}\ (M_{\odot})$')
-    plt.xlim(0, 2.0)  # 10^0 to 10^2 kpc
+    plt.xlim(0.8, 2.4)  # 10^0 to 10^2 kpc
     plt.ylim(8.0, 11.5)
 
     outputFile = OutputDir + '31.cold_gas_vs_disk_diameter' + OutputFormat
@@ -488,22 +488,38 @@ if __name__ == '__main__':
     print('Plotting Half-Mass Radius vs Stellar Mass (Sc-type disk-dominated galaxies)')
 
     plt.figure()
-    
-    # Calculate disk fraction
+
     disk_mass = StellarMass - BulgeMass
     disk_fraction = disk_mass / StellarMass
+
+    w = np.where((StellarMass > 1e9) & (BulgeRadius > 0.0) & (DiskRadius > 0.0) & (disk_fraction >= 0.8))[0]
+    
+    # Calculate disk fraction
+    # disk_mass = StellarMass - BulgeMass
+    # disk_fraction = disk_mass / StellarMass
+    bulge_instability_mass = InstabilityBulgeMass
+    bulge_merger_mass = MergerBulgeMass
+    disk_radius = DiskRadius
+    bulge_radius = BulgeRadius
+    instability_bulge_radius = InstabilityBulgeRadius
+    merger_bulge_radius = MergerBulgeRadius
     
     # Filter for Sc-type galaxies: disk >= 80% of stellar mass
-    w = np.where((StellarMass > 1e9) & (BulgeRadius > 0.0) & (DiskRadius > 0.0) & (disk_fraction >= 0.8))[0]
+    # w = np.where((StellarMass > 1e9) & (BulgeRadius > 0.0) & (DiskRadius > 0.0) & (disk_fraction >= 0.8))[0]
 
     # Calculate half-mass radius as mass-weighted average
     disk_mass = StellarMass[w] - BulgeMass[w]
     bulge_mass = BulgeMass[w]
-    total_mass = StellarMass[w]
+    # total_mass = StellarMass[w]
+    total_mass = bulge_merger_mass[w] + bulge_instability_mass[w]
     
     # Mass-weighted radius
-#     half_mass_radius = (disk_mass * DiskRadius[w] + bulge_mass * BulgeRadius[w]) / total_mass
-    half_mass_radius = 1.68 * DiskRadius[w]
+    # half_mass_radius = (disk_mass * DiskRadius[w] + bulge_mass * BulgeRadius[w]) / total_mass
+
+    half_mass_radius = (bulge_merger_mass[w] * merger_bulge_radius[w] +
+                        bulge_instability_mass[w] * instability_bulge_radius[w] ) / total_mass
+
+    # half_mass_radius = 1.68 * DiskRadius[w]
     
     # Filter positive values
     w_pos = np.where(half_mass_radius > 0)[0]
@@ -525,7 +541,8 @@ if __name__ == '__main__':
     plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
     plt.ylabel(r'$R_{1/2}\ (\mathrm{kpc})$')
     plt.xlim(9.5, 11.5)
-    plt.ylim(-1, 1)  # log10 space: -1 = 0.1 kpc, 0 = 1 kpc, 1 = 10 kpc
+    # plt.ylim(-1, 2)  # log10 space: -1 = 0.1 kpc, 0 = 1 kpc, 1 = 10 kpc
+
     
     # Set y-tick labels to show exponential notation
     plt.yticks([-1, 0, 1], [r'$10^{-1}$', r'$10^{0}$', r'$10^{1}$'])
@@ -786,6 +803,29 @@ if __name__ == '__main__':
     outputFile = OutputDir + '34.bulge_formation_timescales' + OutputFormat
     plt.savefig(outputFile, dpi=150)
     print(f'Saved file to {outputFile}\n')
+    plt.close()
+
+    # =======================================================
+
+    # Plotting Mass vs Vvir for Elliptical Galaxies
+    print('Plotting Mass vs Vvir for Elliptical Galaxies')
+    # Ellipticals: bulge-dominated, e.g. bulge fraction > 0.8
+    bulge_fraction = BulgeMass / StellarMass
+    w_elliptical = np.where((StellarMass > 1e9) & (bulge_fraction >= 0.8) & (Vvir > 0))[0]
+    if(len(w_elliptical) > dilute): w_elliptical = sample(list(w_elliptical), dilute)
+    mass_elliptical = StellarMass[w_elliptical]
+    vvir_elliptical = Vvir[w_elliptical]
+    bulge_mass_elliptical = BulgeMass[w_elliptical]
+    plt.figure()
+    sc = plt.scatter(np.log10(vvir_elliptical), np.log10(mass_elliptical), c=np.log10(bulge_mass_elliptical), cmap='plasma', s=10, alpha=0.7, edgecolors='none')
+    plt.xlabel(r'$\log_{10} V_{\mathrm{vir}}\ (\mathrm{km/s})$')
+    plt.ylabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
+
+    plt.colorbar(sc, label=r'$\log_{10} M_{\mathrm{bulge}}\ (M_{\odot})$')
+    plt.tight_layout()
+    outputFile = OutputDir + '35.elliptical_mass_vs_vvir' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
     plt.close()
 
     # =======================================================
