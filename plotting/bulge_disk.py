@@ -111,6 +111,7 @@ if __name__ == '__main__':
 
     Tvir = 35.9 * (Vvir)**2  # in Kelvin
     Tmax = 2.5e5  # K, corresponds to Vvir ~52.7 km/s
+    TimeOfLastMajorMerger = read_hdf(snap_num = Snapshot, param = 'TimeOfLastMajorMerger')
 
     Regime = read_hdf(snap_num = Snapshot, param = 'Regime')
 
@@ -207,9 +208,9 @@ if __name__ == '__main__':
     instability_bulge_mass = InstabilityBulgeMass[w]
     instability_bulge_mass[instability_bulge_mass <= 0] = 1e-10
 
-    plt.scatter(log10_stellar_mass, np.log10(disk_mass), c='dodgerblue', s=10, alpha=0.8, label='Disk Mass', marker='s', edgecolors='b')
-    plt.scatter(log10_stellar_mass, np.log10(merger_bulge_mass), c='r', s=10, alpha=0.6, label='Merger Bulge Mass', marker='s', edgecolors='firebrick')
-    plt.scatter(log10_stellar_mass, np.log10(instability_bulge_mass), c='greenyellow', s=10, alpha=0.15, label='Instability Bulge Mass', marker='s')
+    plt.scatter(log10_stellar_mass, np.log10(disk_mass), c='dodgerblue', s=10, alpha=0.8, label='Disk Mass', marker='s', edgecolors='b', zorder=8)
+    plt.scatter(log10_stellar_mass, np.log10(merger_bulge_mass), c='r', s=10, alpha=0.7, label='Merger Bulge Mass', marker='s', edgecolors='firebrick', zorder=9)
+    plt.scatter(log10_stellar_mass, np.log10(instability_bulge_mass), c='greenyellow', s=10, alpha=0.15, label='Instability Bulge Mass', marker='s', zorder=10)
 
     plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
     plt.ylabel(r'$\log_{10} M_{\mathrm{component}}\ (M_{\odot})$')
@@ -236,9 +237,9 @@ if __name__ == '__main__':
     merger_ratio = MergerBulgeMass[w] / StellarMass[w]
     instability_ratio = InstabilityBulgeMass[w] / StellarMass[w]
 
-    plt.scatter(log10_stellar_mass, disk_ratio, c='dodgerblue', s=10, alpha=0.8, label='Disk Fraction', marker='s', edgecolors='b')
-    plt.scatter(log10_stellar_mass, merger_ratio, c='r', s=10, alpha=0.6, label='Merger Bulge Fraction', marker='s', edgecolors='firebrick')
-    plt.scatter(log10_stellar_mass, instability_ratio, c='greenyellow', s=10, alpha=0.15, label='Instability Bulge Fraction', marker='s')
+    plt.scatter(log10_stellar_mass, disk_ratio, c='dodgerblue', s=10, alpha=0.8, label='Disk Fraction', marker='s', edgecolors='b', zorder=8)
+    plt.scatter(log10_stellar_mass, merger_ratio, c='r', s=10, alpha=0.7, label='Merger Bulge Fraction', marker='s', edgecolors='firebrick', zorder=9)
+    plt.scatter(log10_stellar_mass, instability_ratio, c='greenyellow', s=10, alpha=0.15, label='Instability Bulge Fraction', marker='s', zorder=10)
 
     plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
     plt.ylabel(r'Mass Fraction')
@@ -555,12 +556,6 @@ if __name__ == '__main__':
     # -------------------------------------------------------
 
     print('Plotting Bulge Formation Timescales (Figure 10)')
-
-    # Read TimeOfLastMajorMerger if not loaded
-    try:
-        TimeOfLastMajorMerger
-    except NameError:
-        TimeOfLastMajorMerger = read_hdf(snap_num = Snapshot, param = 'TimeOfLastMajorMerger')
 
     # Filter for ALL central galaxies at z=0
     w_central = np.where(Type == 0)[0]
