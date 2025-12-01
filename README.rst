@@ -50,6 +50,7 @@ When compiling with MPI support, the ``Makefile`` expects that the MPI compiler 
 
 Addtionally, ``SAGE`` can be configured to read trees in `HDF5 <https://support.hdfgroup.org/HDF5/>`_ format by setting
 ``USE-HDF5 = yes`` in the ``Makefile``. If the input trees are in HDF5 format, or you wish to output the catalogs in HDF5 (rather than the default binary format), then please compile with the ``USE-HDF5 = yes`` option.
+This is set to ``yes`` by default.  Ensure that you have the HDF5 libraries installed and that the ``Makefile`` is configured to find them.
 
 Running the code
 ================
@@ -90,13 +91,35 @@ If you're following the above, these scripts can run as-is to produce a series o
 Near the top of both scripts, there is a "USER OPTIONS" section where you can modify the simulation and plotting details for your own needs. 
 These scripts can be used as a template to read the hdf5 ``SAGE`` model output and to make your own custom figures.
 
+Plotting the output (many plots method)
+==================================
+
+Alternatively, you can use the more comprehensive plotting scripts located in the ``plotting/`` directory, by running the ``plotting.sh`` script.
+This will generate a large number of plots for both z=0 and higher redshift results.
+
+.. code::
+
+    $ ./plotting.sh
+
 Parameter Optimization with PSO
 ================================
 
-``SAGE`` 2.0 includes a Particle Swarm Optimization (PSO) framework in the ``optim/`` directory for automated parameter calibration. 
-This system allows you to optimize model parameters against observational constraints to improve the physical realism of your galaxy formation models.
 
-The PSO framework includes:
+Parameter Optimization with PSO
+================================
+
+The Particle Swarm Optimization (PSO) framework for automated parameter calibration is now available as a separate package: `SAGE-PSO`.
+
+You can clone the PSO package directly from GitHub:
+
+.. code::
+
+    $ git clone https://github.com/MBradley1985/SAGE-PSO.git
+    $ cd SAGE-PSO/
+
+This system allows you to optimize SAGE model parameters against observational constraints to improve the physical realism of your galaxy formation models.
+
+The PSO package includes:
 
 * **Parameter space exploration**: Systematically explores the model parameter space to find optimal configurations
 * **Observational constraints**: Compares model outputs against observational data (stellar mass functions, star formation rates, etc.)
@@ -107,19 +130,16 @@ To run the PSO optimization:
 
 .. code::
 
-    $ cd optim/
     $ python3 main.py
-    $ python3 ./run_pso.sh
+    $ ./run_pso.sh
 
 The optimization can be configured by modifying the constraint definitions in ``constraints.py`` and the parameter space definitions in the configuration files. 
-The ``sage_emulator.py`` provides accelerated model evaluation for faster optimization convergence.
 
 For detailed PSO analysis and diagnostics, use:
 
 .. code::
 
     $ python3 diagnostics.py
-    $ python3 diagnostics2.py
 
 The PSO results help identify optimal parameter combinations and provide insights into parameter degeneracies and model sensitivities.
 
