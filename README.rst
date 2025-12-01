@@ -1,4 +1,6 @@
-![Logo](./SAGElogo.jpg)
+<p align="center">
+  <img src="./SAGElogo.jpg" width="300">
+</p>
 
 |GitHub CI| |DOCS| 
 *************************************
