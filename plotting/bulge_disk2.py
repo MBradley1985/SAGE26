@@ -436,6 +436,65 @@ def calculate_global_bt_evolution(data_ffb_on, data_ffb_off):
 # PLOTTING FUNCTIONS
 # ============================================================================
 
+# ============================================================================
+# ==========================================================================
+# NEW FIGURE: Half-mass radius vs stellar mass grid by redshift
+# ==========================================================================
+def plot_half_mass_radius_vs_stellar_mass_grid(data_ffb_on, output_file):
+    """
+    Plot 8-panel grid: log10(half-mass radius) vs log10(stellar mass) for redshift bins z=0.35 to z=2.5
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    # Define redshift bins (8 bins from z=0.35 to z=2.5)
+    z_bins = np.linspace(0.35, 2.5, 9)
+    z_centers = 0.5 * (z_bins[:-1] + z_bins[1:])
+    fig, axes = plt.subplots(4, 2, figsize=(12, 16), sharex=True, sharey=True)
+    axes = axes.flatten()
+    # Loop over bins
+    for i, (zmin, zmax) in enumerate(zip(z_bins[:-1], z_bins[1:])):
+        # Find closest snapshot for each bin center
+        snap_nums = list(data_ffb_on.keys())
+        snap_zs = [data_ffb_on[k]['Redshift'] for k in snap_nums]
+        idx = np.argmin(np.abs(np.array(snap_zs) - z_centers[i]))
+        snap = data_ffb_on[snap_nums[idx]]
+        # Select centrals with stellar mass > 1e9
+        mask = (snap['Type'] == 0) & (snap['StellarMass'] > 1e9)
+        if np.sum(mask) == 0:
+            axes[i].text(0.5, 0.5, 'No data', ha='center', va='center')
+            continue
+        # Get required arrays
+        stellar_mass = snap['StellarMass'][mask]
+        bulge_merger_mass = snap['MergerBulgeMass'][mask]
+        bulge_instability_mass = snap['InstabilityBulgeMass'][mask]
+        merger_bulge_radius = snap['BulgeScaleRadius'][mask]
+        instability_bulge_radius = snap['BulgeScaleRadius'][mask]
+        total_mass = bulge_merger_mass + bulge_instability_mass
+        total_mass[total_mass == 0] = 1e-10
+        half_mass_radius = (bulge_merger_mass * merger_bulge_radius +
+                            bulge_instability_mass * instability_bulge_radius) / total_mass
+        w_pos = np.where((half_mass_radius > 0) & (stellar_mass > 0))[0]
+        if len(w_pos) == 0:
+            axes[i].text(0.5, 0.5, 'No valid galaxies', ha='center', va='center')
+            continue
+        log10_stellar_mass = np.log10(stellar_mass[w_pos])
+        log10_half_mass_radius = np.log10(half_mass_radius[w_pos])
+        hb = axes[i].hexbin(log10_stellar_mass, log10_half_mass_radius,
+                            gridsize=60, cmap='Blues_r', mincnt=1, linewidths=0.2)
+        axes[i].set_title(f'z={z_centers[i]:.2f}', fontsize=13)
+        axes[i].set_xlim(10.5, 12)
+        axes[i].set_ylim(-2, 2)
+        if i % 2 == 0:
+            axes[i].set_ylabel(r'$\log_{10} R_{1/2}\ (\mathrm{kpc})$')
+        if i >= 6:
+            axes[i].set_xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
+    # fig.colorbar(hb, ax=axes, label='Number of Galaxies', shrink=0.6)
+    fig.suptitle('Half-Mass Radius vs Stellar Mass by Redshift', fontsize=16, fontweight='bold')
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+    plt.savefig(output_file, dpi=200)
+    print(f"✓ Saved: {output_file}")
+    plt.close()
+
 def create_global_bt_plot(global_bt_results, output_file):
     """
     Create standalone plot of global bulge-to-total ratio evolution
@@ -994,16 +1053,19 @@ def main():
     print("STEP 3: CREATING VISUALIZATIONS")
     print("-"*80)
     
-    output_file = "ffb_comprehensive_bulge_disk_analysis.png"
+    output_file = "output/millennium/plots/ffb_comprehensive_bulge_disk_analysis.png"
     create_comprehensive_plot(bt_results, mass_results, morph_results, 
                              pathway_results, output_file)
+
+    # New figure: half-mass radius vs stellar mass grid
+    plot_half_mass_radius_vs_stellar_mass_grid(data_ffb_on, "output/millennium/plots/ffb_half_mass_radius_vs_stellar_mass_grid.png")
     
     # Create standalone global B/T plot
-    create_global_bt_plot(global_bt_results, "ffb_global_bt_evolution.png")
+    create_global_bt_plot(global_bt_results, "output/millennium/plots/ffb_global_bt_evolution.png")
     
     # Create B/T distribution plot (this is what the user wants!)
     bt_dist_on, bt_dist_off = create_bt_distribution_plot(data_ffb_on, data_ffb_off, 
-                                                          "ffb_bt_distribution_evolution.png")
+                                                          "output/millennium/plots/ffb_bt_distribution_evolution.png")
     
     # Print summary table
     create_summary_table(bt_results, mass_results, pathway_results)
