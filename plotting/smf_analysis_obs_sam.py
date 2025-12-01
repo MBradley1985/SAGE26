@@ -26,6 +26,7 @@ from scipy import stats
 import pandas as pd
 from random import seed
 import matplotlib.gridspec as gridspec
+from astropy.table import Table
 
 # Configuration parameters - UPDATE THESE TO MATCH YOUR SETUP
 
@@ -44,21 +45,7 @@ MILLENNIUM_BARYON_FRACTION = 0.17
 # Define multiple directories and their properties
 MODEL_CONFIGS = [
     {
-        'name': 'FIRE feedback',           # Display name for legend
-        'dir': './output/millennium/',  # Directory path
-        'color': 'black',            # Color for plotting
-        'linestyle': '-',            # Line style
-        'linewidth': 3,              # Thick line for SAGE25
-        'alpha': 0.8,                # Transparency
-        'boxsize': MILLENNIUM_BOXSIZE,             # Box size in h^-1 Mpc for this model
-        'volume_fraction': 1.0,      # Fraction of the full volume output by the model
-        'use_for_residuals': False,  # NEW: Flag to indicate this is NOT the comparison model
-        'hubble_h': MILLENNIUM_HUBBLE_H,            # Hubble parameter for this model
-        'baryon_fraction': MILLENNIUM_BARYON_FRACTION,     # Baryon fraction for this model
-        'redshifts': DEFAULT_REDSHIFTS  # Redshift of each snapshot for this model
-    },
-    {
-        'name': 'SAGE (latest)',           # Display name for legend (Duplicate for High-Z/All-Z plots)
+        'name': 'SAGE26',           # Display name for legend (Duplicate for High-Z/All-Z plots)
         'dir': './output/millennium/',  # Directory path
         'color': 'black',            # Color for plotting
         'linestyle': '-',            # Line style
@@ -196,6 +183,7 @@ MuzzinDataFile = './data/SMF_Muzzin2013.dat'  # Path to Muzzin 2013 data file
 SantiniDataFile = './data/SMF_Santini2012.dat'  # Path to Santini 2012 data file
 WrightDataFile = './data/Wright18_CombinedSMF.dat'  # Path to Wright 2018 data file
 GAEADataFile = './data/all_gsmf_GPMS.dat'  # Path to GAEA data file
+HarveyDataFile = './data/FiducialBagpipesGSMF.ecsv'  # Path to Harvey+24 data file
 
 # Simulation details - REMOVED GLOBAL VALUES: Now each model has its own hubble_h and redshifts
 
@@ -882,6 +870,82 @@ def load_gaea_data(filename, hubble_h=0.73):
         return {}
 
 
+
+def load_harvey_data(filename):
+    """
+    Load Harvey+24 (Bagpipes) stellar mass function data from ECSV file
+    
+    Parameters:
+    -----------
+    filename : str
+        Path to Harvey data file
+        
+    Returns:
+    --------
+    dict : Dictionary with redshift as keys and data dict as values
+    """
+    if not os.path.exists(filename):
+        print(f"Warning: Harvey data file {filename} not found.")
+        return {}
+    
+    harvey_data = {}
+    
+    try:
+        print(f"Loading Harvey data from {filename}...")
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Group by redshift
+        unique_redshifts = np.unique(table['z'])
+        
+        for z in unique_redshifts:
+            mask = table['z'] == z
+            subset = table[mask]
+            
+            # Extract columns
+            log_mstar = subset['log10Mstar']
+            phi = subset['phi']
+            # Handle potential column name variations (newline in header)
+            if 'phi_error_low' in subset.colnames:
+                phi_err_low = subset['phi_error_low']
+            elif 'phi_error_\nlow' in subset.colnames:
+                phi_err_low = subset['phi_error_\nlow']
+            else:
+                # Try to find column ending with 'low'
+                cols = [c for c in subset.colnames if 'low' in c and 'phi' in c]
+                if cols:
+                    phi_err_low = subset[cols[0]]
+                else:
+                    print(f"Warning: Could not find phi_error_low column. Available: {subset.colnames}")
+                    phi_err_low = np.zeros_like(phi)
+
+            if 'phi_error_upp' in subset.colnames:
+                phi_err_upp = subset['phi_error_upp']
+            elif 'phi_error_\nupp' in subset.colnames:
+                phi_err_upp = subset['phi_error_\nupp']
+            else:
+                # Try to find column ending with 'upp'
+                cols = [c for c in subset.colnames if 'upp' in c and 'phi' in c]
+                if cols:
+                    phi_err_upp = subset[cols[0]]
+                else:
+                    print(f"Warning: Could not find phi_error_upp column. Available: {subset.colnames}")
+                    phi_err_upp = np.zeros_like(phi)
+            
+            # Store in dictionary
+            harvey_data[z] = {
+                'log_mstar': log_mstar,
+                'phi': phi,
+                'phi_err_low': phi_err_low,
+                'phi_err_upp': phi_err_upp
+            }
+            
+        print(f"  Loaded Harvey data for redshifts: {unique_redshifts}")
+        return harvey_data
+        
+    except Exception as e:
+        print(f"Error loading Harvey data: {e}")
+        return {}
+
 def load_observational_data(filename=None):
     """
     Load observational stellar mass function data from ECSV file
@@ -1127,7 +1191,7 @@ def create_redshift_bins(available_snapshots, model_config=None, z_range=None):
         (6.5, 7.5),    # z ~ 7.0
         (7.5, 8.5),    # z ~ 8.0
         (8.5, 9.5),    # z ~ 9.0
-        (9.5, 10.5),   # z ~ 10.0
+        (9.5, 12.0),   # z ~ 10-12
         (12.0, 13.0),  # z ~ 12.5
     ]
     
@@ -1212,7 +1276,7 @@ def calculate_smf(stellar_masses, volume):
     # Return bin centers in log space (for plotting) and phi values
     return xaxeshisto, phi, phi_err
 
-def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data, santini_data, wright_data, obs_datasets_in_legend, sim_datasets_in_legend):
+def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data, santini_data, wright_data, harvey_data, obs_datasets_in_legend, sim_datasets_in_legend):
     """
     Add observational data to the plot, including Baldry 2008 data for lowest redshift bin
     and Muzzin 2013 data for appropriate redshift bins
@@ -1233,6 +1297,8 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
         Santini 2012 data dictionary
     wright_data : dict
         Wright 2018 data dictionary
+    harvey_data : dict
+        Harvey+24 data dictionary
     obs_datasets_in_legend : dict
         Tracking dictionary for observational dataset TYPES
     sim_datasets_in_legend : dict
@@ -1256,6 +1322,15 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
         'farmer': None
     }
     
+    # Determine search range for observations
+    search_z_low = z_low
+    search_z_high = z_high
+    
+    # SPECIAL CASE: For z=12-13 bin, also include observations from z=9.5-12
+    if z_low >= 11.9 and z_high <= 13.1:
+        print("  SPECIAL: Using z=9.5-12 observations for z=12-13 bin")
+        search_z_low = 9.5
+
     # Add Baldry 2008 data for the lowest redshift bin
     if is_lowest_redshift_bin(z_low, z_high):
         try:
@@ -1288,7 +1363,7 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
     # Add Muzzin 2013 data - find best matching redshift bin
     print(f"  Checking Muzzin 2013 data for bin {z_low:.1f} < z < {z_high:.1f}")
     
-    muzzin_bin = match_redshift_bin_to_obs(z_low, z_high, muzzin_data)
+    muzzin_bin = match_redshift_bin_to_obs(search_z_low, search_z_high, muzzin_data)
     
     if muzzin_bin is not None and muzzin_bin in muzzin_data:
         try:
@@ -1328,7 +1403,7 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
     # Add Santini 2012 data - find best matching redshift bin
     print(f"  Checking Santini 2012 data for bin {z_low:.1f} < z < {z_high:.1f}")
     
-    santini_bin = match_redshift_bin_to_obs(z_low, z_high, santini_data)
+    santini_bin = match_redshift_bin_to_obs(search_z_low, search_z_high, santini_data)
     
     if santini_bin is not None and santini_bin in santini_data:
         try:
@@ -1369,6 +1444,74 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
             traceback.print_exc()
     else:
         print(f"    No Santini 2012 data matches bin {z_low:.1f} < z < {z_high:.1f}")
+
+    # Add Harvey+24 data - find best matching redshift bin
+    print(f"  Checking Harvey+24 data for bin {z_low:.1f} < z < {z_high:.1f}")
+    
+    # Find the best matching Harvey redshift for this bin
+    z_center = (search_z_low + search_z_high) / 2
+    best_harvey_z = None
+    best_distance = float('inf')
+    
+    for obs_z in harvey_data.keys():
+        matches = find_closest_redshift_in_range(obs_z, search_z_low, search_z_high)
+        if matches:
+            # Calculate distance to bin center
+            distance = abs(obs_z - z_center)
+            if distance < best_distance:
+                best_distance = distance
+                best_harvey_z = obs_z
+    
+    if best_harvey_z is not None:
+        try:
+            harvey_masses = harvey_data[best_harvey_z]['log_mstar']
+            harvey_phi = harvey_data[best_harvey_z]['phi']
+            harvey_error_low = harvey_data[best_harvey_z]['phi_err_low']
+            harvey_error_upp = harvey_data[best_harvey_z]['phi_err_upp']
+            
+            # Filter out zero or negative values for log plotting
+            mask = (harvey_phi > 0)
+            
+            if np.any(mask):
+                h_mass = harvey_masses[mask]
+                h_phi = harvey_phi[mask]
+                h_err_low = harvey_error_low[mask]
+                h_err_upp = harvey_error_upp[mask]
+                
+                h_log_phi = np.log10(h_phi)
+                
+                # Calculate errors in log space
+                h_log_phi_upp = np.log10(h_phi + h_err_upp)
+                h_yerr_upp = h_log_phi_upp - h_log_phi
+                
+                # Handle lower error (avoid log(<=0))
+                lower_val = h_phi - h_err_low
+                lower_val[lower_val <= 0] = 1e-10 
+                h_log_phi_low = np.log10(lower_val)
+                h_yerr_low = h_log_phi - h_log_phi_low
+                
+                # Only add label if Harvey dataset type hasn't been labeled anywhere in the figure yet
+                harvey_label = 'Harvey+2024' if not obs_datasets_in_legend.get('harvey', False) else None
+                
+                # Plot Harvey 2024 data - POINTS WITH ERROR BARS
+                harvey_plot = ax.errorbar(h_mass, h_log_phi, 
+                           yerr=[h_yerr_low, h_yerr_upp],
+                           fmt='D', color='gray', markersize=4, 
+                           label=harvey_label, alpha=0.8, capsize=2)
+                
+                obs_added_info['harvey'] = best_harvey_z
+                if harvey_label is not None:
+                    obs_datasets_in_legend['harvey'] = True
+                    obs_legend_items.append((harvey_plot, harvey_label))
+                print(f"  ✓ Added Harvey+2024 data for z={best_harvey_z}")
+                print(f"    -> {np.sum(mask)} data points plotted")
+                
+        except Exception as e:
+            print(f"Warning: Could not add Harvey+2024 data: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        print(f"    No Harvey+2024 data matches bin {z_low:.1f} < z < {z_high:.1f}")
     
 
     # Add CSV observational data (SHARK files) - BEST MATCH ONLY
@@ -1376,7 +1519,7 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
     print(f"  Available redshifts in obs_data_by_z: {sorted(obs_data_by_z.keys())}")
     
     # Find the best matching SHARK redshift for this bin
-    z_center = (z_low + z_high) / 2
+    z_center = (search_z_low + search_z_high) / 2
     best_shark_z = None
     best_distance = float('inf')
     
@@ -1385,7 +1528,7 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
     print(f"  Available SHARK redshifts: {sorted(shark_data.keys())}")
     
     for obs_z in shark_data.keys():
-        matches = find_closest_redshift_in_range(obs_z, z_low, z_high)
+        matches = find_closest_redshift_in_range(obs_z, search_z_low, search_z_high)
         print(f"    Testing SHARK z={obs_z}: matches={matches}")
         if matches:
             # Calculate distance to bin center
@@ -1436,7 +1579,7 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
     print(f"  Checking SMFvals data for bin {z_low:.1f} < z < {z_high:.1f}")
     
     # Find the best matching SMFvals redshift for this bin
-    z_center = (z_low + z_high) / 2
+    z_center = (search_z_low + search_z_high) / 2
     best_smfvals_z = None
     best_distance = float('inf')
     
@@ -1444,7 +1587,7 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
     smfvals_data = {z: data for z, data in obs_data_by_z.items() if data.get('type') == 'smfvals'}
     
     for obs_z in smfvals_data.keys():
-        if find_closest_redshift_in_range(obs_z, z_low, z_high):
+        if find_closest_redshift_in_range(obs_z, search_z_low, search_z_high):
             distance = abs(obs_z - z_center)
             if distance < best_distance:
                 best_distance = distance
@@ -1538,7 +1681,7 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
     print(f"  Checking Farmer data for bin {z_low:.1f} < z < {z_high:.1f}")
     
     # Find the best matching Farmer redshift for this bin
-    z_center = (z_low + z_high) / 2
+    z_center = (search_z_low + search_z_high) / 2
     best_farmer_z = None
     best_distance = float('inf')
     
@@ -1546,7 +1689,7 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
     farmer_data = {z: data for z, data in obs_data_by_z.items() if data.get('type') == 'farmer'}
     
     for obs_z in farmer_data.keys():
-        if find_closest_redshift_in_range(obs_z, z_low, z_high):
+        if find_closest_redshift_in_range(obs_z, search_z_low, search_z_high):
             distance = abs(obs_z - z_center)
             if distance < best_distance:
                 best_distance = distance
@@ -1628,110 +1771,6 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
                     print(f"  ✓ Successfully plotted {obs_info['label']} (z={best_farmer_z})")
             
             obs_added_info['farmer'] = best_farmer_z
-                
-        except Exception as e:
-            print(f"Warning: Could not add {obs_info['label']} data: {e}")
-            import traceback
-            traceback.print_exc()
-    else:
-        print(f"    No SMFvals data matches bin {z_low:.1f} < z < {z_high:.1f}")
-
-    # Add Farmer data - find best matching redshift
-    print(f"  Checking Farmer data for bin {z_low:.1f} < z < {z_high:.1f}")
-    
-    # Find the best matching Farmer redshift for this bin
-    z_center = (z_low + z_high) / 2
-    best_farmer_z = None
-    best_distance = float('inf')
-    
-    # Look for Farmer data
-    farmer_data = {z: data for z, data in obs_data_by_z.items() if data.get('type') == 'farmer'}
-    
-    for obs_z in farmer_data.keys():
-        if find_closest_redshift_in_range(obs_z, z_low, z_high):
-            distance = abs(obs_z - z_center)
-            if distance < best_distance:
-                best_distance = distance
-                best_farmer_z = obs_z
-    
-    # Plot Farmer data if found
-    if best_farmer_z is not None:
-        obs_info = obs_data_by_z[best_farmer_z]
-        print(f"    Selected best match: Farmer z={best_farmer_z} (distance to center: {best_distance:.3f})")
-        
-        try:
-            obs_masses = obs_info['x']
-            obs_phi = obs_info['y']
-            
-            # Check if we have error bounds
-            if 'y_lower' in obs_info and 'y_upper' in obs_info:
-                obs_phi_lower = obs_info['y_lower']
-                obs_phi_upper = obs_info['y_upper']
-                
-                # Convert to log space for plotting
-                mask = (obs_phi > 0) & (obs_phi_lower > 0) & (obs_phi_upper > 0)
-                if np.any(mask):
-                    obs_masses_plot = obs_masses[mask]
-                    obs_phi_log = np.log10(obs_phi[mask])
-                    obs_phi_lower_log = np.log10(obs_phi_lower[mask])
-                    obs_phi_upper_log = np.log10(obs_phi_upper[mask])
-                    
-                    # Calculate VERTICAL error bars in log space
-                    # Farmer phi_lower and phi_upper are absolute bounds, not percentiles
-                    yerr_lower = obs_phi_log - obs_phi_lower_log  # Lower error bar length
-                    yerr_upper = obs_phi_upper_log - obs_phi_log  # Upper error bar length
-                    
-                    print(f"      -> Plotting with VERTICAL error bars")
-                    print(f"      -> Central phi: {np.mean(obs_phi_log):.3f}")
-                    print(f"      -> Average lower error: {np.mean(yerr_lower):.3f}")
-                    print(f"      -> Average upper error: {np.mean(yerr_upper):.3f}")
-                    
-                    # Only add label if Farmer dataset type hasn't been labeled anywhere in the figure yet
-                    farmer_label = f"{obs_info['label']}" if not obs_datasets_in_legend['farmer'] else None
-                    
-                    # Get marker style from config
-                    marker_style = obs_info.get('marker', 'D')  # default to diamonds
-                    marker_size = obs_info.get('markersize', 5)
-                    
-                    # Plot with VERTICAL error bars (yerr parameter) - SYMBOLS ONLY, NO LINES
-                    farmer_plot = ax.errorbar(obs_masses_plot, obs_phi_log, 
-                               yerr=[yerr_lower, yerr_upper],  # VERTICAL error bars for phi uncertainty
-                               xerr=None,  # NO horizontal error bars
-                               fmt=marker_style, color=obs_info['color'], markersize=marker_size,
-                               label=farmer_label, alpha=0.8, capsize=3, linewidth=0,
-                               elinewidth=1.5)  # Make error bar lines a bit thicker
-                    
-                    if farmer_label is not None:
-                        obs_datasets_in_legend['farmer'] = True
-                        obs_legend_items.append((farmer_plot, farmer_label))
-                    print(f"  ✓ Successfully plotted {obs_info['label']} with error bars (z={best_farmer_z})")
-            else:
-                # No error bounds, plot as simple symbols
-                mask = obs_phi > 0
-                if np.any(mask):
-                    obs_masses_plot = obs_masses[mask]
-                    obs_phi_log = np.log10(obs_phi[mask])
-                    
-                    # Only add label if Farmer dataset type hasn't been labeled anywhere in the figure yet
-                    farmer_label = f"{obs_info['label']}" if not obs_datasets_in_legend['farmer'] else None
-                    
-                    # Get marker style from config
-                    marker_style = obs_info.get('marker', 'D')  # default to diamonds
-                    marker_size = obs_info.get('markersize', 5)
-                    
-                    # Plot as symbols only - NO LINES
-                    farmer_plot = ax.plot(obs_masses_plot, obs_phi_log, 
-                           marker_style, color=obs_info['color'], 
-                           label=farmer_label, alpha=0.8, markersize=marker_size)
-                    
-                    if farmer_label is not None:
-                        obs_datasets_in_legend['farmer'] = True
-                        obs_legend_items.append((farmer_plot[0], farmer_label))
-                    print(f"  ✓ Successfully plotted {obs_info['label']} (z={best_farmer_z})")
-            
-            obs_added_info['farmer'] = best_farmer_z
-            if farmer_label is not None:
-                obs_datasets_in_legend['farmer'] = True
                 
         except Exception as e:
             print(f"Warning: Could not add {obs_info['label']} data: {e}")
@@ -1739,9 +1778,10 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
             traceback.print_exc()
     else:
         print(f"    No Farmer data matches bin {z_low:.1f} < z < {z_high:.1f}")
+
     
     # Add other observational data from ECSV file if available
-    obs_bin = match_redshift_bin_to_obs(z_low, z_high, obs_data)
+    obs_bin = match_redshift_bin_to_obs(search_z_low, search_z_high, obs_data)
     
     if obs_bin is not None and obs_bin in obs_data:
         # Get observational data for this bin
@@ -1884,6 +1924,7 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
     muzzin_data = {}
     santini_data = {}
     wright_data = {}
+    harvey_data = {}
     
     # Track which dataset TYPES have appeared in legends globally
     obs_datasets_in_legend = {
@@ -1893,7 +1934,8 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
         'cosmos': False,
         'wright': False,
         'smfvals': False,
-        'farmer': False
+        'farmer': False,
+        'harvey': False
     }
     
     # Track which simulation models have appeared in legends globally
@@ -1913,8 +1955,9 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
         muzzin_data = load_muzzin_2013_data()
         santini_data = load_santini_2012_data()
         wright_data = load_wright_2018_data()
+        harvey_data = load_harvey_data(HarveyDataFile)
         
-        if not obs_data and not muzzin_data and not santini_data and not wright_data:
+        if not obs_data and not muzzin_data and not santini_data and not wright_data and not harvey_data:
             print("Warning: No observational data loaded. Proceeding without observations.")
             show_observations = False
         else:
@@ -1994,7 +2037,7 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
         
         # Add observational data first (so it appears behind SAGE data)
         if show_observations:
-            obs_legend_items, sim_legend_items = add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data, santini_data, wright_data, obs_datasets_in_legend, sim_datasets_in_legend)
+            obs_legend_items, sim_legend_items = add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data, santini_data, wright_data, harvey_data, obs_datasets_in_legend, sim_datasets_in_legend)
             panel_obs_legend_items.extend(obs_legend_items)
             panel_sim_legend_items.extend(sim_legend_items)
 
@@ -2363,6 +2406,7 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
     muzzin_data = {}
     santini_data = {}
     wright_data = {}
+    harvey_data = {}
     
     # Track which dataset TYPES have appeared in legends globally
     obs_datasets_in_legend = {
@@ -2372,7 +2416,8 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
         'cosmos': False,
         'wright': False,
         'smfvals': False,
-        'farmer': False
+        'farmer': False,
+        'harvey': False
     }
     
     # Track which simulation models have appeared in legends globally
@@ -2388,8 +2433,9 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
         muzzin_data = load_muzzin_2013_data()
         santini_data = load_santini_2012_data()
         wright_data = load_wright_2018_data()
+        harvey_data = load_harvey_data(HarveyDataFile)
         
-        if not obs_data and not muzzin_data and not santini_data and not wright_data:
+        if not obs_data and not muzzin_data and not santini_data and not wright_data and not harvey_data:
             print("Warning: No observational data loaded. Proceeding without observations.")
             show_observations = False
         else:
@@ -2457,7 +2503,7 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
         
         # Add observational data first (so it appears behind SAGE data)
         if show_observations:
-            obs_legend_items, sim_legend_items = add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data, santini_data, wright_data, obs_datasets_in_legend, sim_datasets_in_legend)
+            obs_legend_items, sim_legend_items = add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data, santini_data, wright_data, harvey_data, obs_datasets_in_legend, sim_datasets_in_legend)
             panel_obs_legend_items.extend(obs_legend_items)
             panel_sim_legend_items.extend(sim_legend_items)
         
@@ -2728,6 +2774,7 @@ def plot_smf_all_redshift_bins_with_residuals(galaxy_types='all', mass_range=(7,
     muzzin_data = {}
     santini_data = {}
     wright_data = {}
+    harvey_data = {}
     
     # Track which dataset TYPES have appeared in legends globally
     obs_datasets_in_legend = {
@@ -2737,7 +2784,8 @@ def plot_smf_all_redshift_bins_with_residuals(galaxy_types='all', mass_range=(7,
         'cosmos': False,
         'wright': False,
         'smfvals': False,
-        'farmer': False
+        'farmer': False,
+        'harvey': False
     }
     
     # Track which simulation models have appeared in legends globally
@@ -2753,8 +2801,9 @@ def plot_smf_all_redshift_bins_with_residuals(galaxy_types='all', mass_range=(7,
         muzzin_data = load_muzzin_2013_data()
         santini_data = load_santini_2012_data()
         wright_data = load_wright_2018_data()
+        harvey_data = load_harvey_data(HarveyDataFile)
         
-        if not obs_data and not muzzin_data and not santini_data and not wright_data:
+        if not obs_data and not muzzin_data and not santini_data and not wright_data and not harvey_data:
             print("Warning: No observational data loaded. Proceeding without observations.")
             show_observations = False
         else:
@@ -2857,7 +2906,7 @@ def plot_smf_all_redshift_bins_with_residuals(galaxy_types='all', mass_range=(7,
         # Add observational data first (so it appears behind SAGE data)
         if show_observations:
             obs_legend_items, sim_legend_items = add_observational_data_with_baldry(
-                main_ax, z_low, z_high, obs_data, muzzin_data, santini_data, wright_data, 
+                main_ax, z_low, z_high, obs_data, muzzin_data, santini_data, wright_data, harvey_data, 
                 obs_datasets_in_legend, sim_datasets_in_legend)
             panel_obs_legend_items.extend(obs_legend_items)
             panel_sim_legend_items.extend(sim_legend_items)
@@ -3136,6 +3185,7 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
     muzzin_data = {}
     santini_data = {}
     wright_data = {}
+    harvey_data = {}
     
     # Track which dataset TYPES have appeared in legends globally
     obs_datasets_in_legend = {
@@ -3145,7 +3195,8 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
         'cosmos': False,
         'wright': False,
         'smfvals': False,
-        'farmer': False
+        'farmer': False,
+        'harvey': False
     }
     
     # Track which simulation models have appeared in legends globally
@@ -3161,8 +3212,9 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
         muzzin_data = load_muzzin_2013_data()
         santini_data = load_santini_2012_data()
         wright_data = load_wright_2018_data()
+        harvey_data = load_harvey_data(HarveyDataFile)
         
-        if not obs_data and not muzzin_data and not santini_data and not wright_data:
+        if not obs_data and not muzzin_data and not santini_data and not wright_data and not harvey_data:
             print("Warning: No observational data loaded. Proceeding without observations.")
             show_observations = False
         else:
@@ -3230,7 +3282,7 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
         
         # Add observational data first (so it appears behind SAGE data)
         if show_observations:
-            obs_legend_items, sim_legend_items = add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data, santini_data, wright_data, obs_datasets_in_legend, sim_datasets_in_legend)
+            obs_legend_items, sim_legend_items = add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data, santini_data, wright_data, harvey_data, obs_datasets_in_legend, sim_datasets_in_legend)
             panel_obs_legend_items.extend(obs_legend_items)
             panel_sim_legend_items.extend(sim_legend_items)
         
@@ -3445,6 +3497,7 @@ def plot_smf_all_redshift_bins(galaxy_types='all', mass_range=(7, 12),
     muzzin_data = {}
     santini_data = {}
     wright_data = {}
+    harvey_data = {}
     
     # Track which dataset TYPES have appeared in legends globally
     obs_datasets_in_legend = {
@@ -3454,7 +3507,8 @@ def plot_smf_all_redshift_bins(galaxy_types='all', mass_range=(7, 12),
         'cosmos': False,
         'wright': False,
         'smfvals': False,
-        'farmer': False
+        'farmer': False,
+        'harvey': False
     }
     
     # Track which simulation models have appeared in legends globally
@@ -3474,8 +3528,9 @@ def plot_smf_all_redshift_bins(galaxy_types='all', mass_range=(7, 12),
         muzzin_data = load_muzzin_2013_data()
         santini_data = load_santini_2012_data()
         wright_data = load_wright_2018_data()
+        harvey_data = load_harvey_data(HarveyDataFile)
         
-        if not obs_data and not muzzin_data and not santini_data and not wright_data:
+        if not obs_data and not muzzin_data and not santini_data and not wright_data and not harvey_data:
             print("Warning: No observational data loaded. Proceeding without observations.")
             show_observations = False
         else:
@@ -3539,7 +3594,7 @@ def plot_smf_all_redshift_bins(galaxy_types='all', mass_range=(7, 12),
         
         # Add observational data first (so it appears behind SAGE data)
         if show_observations:
-            obs_legend_items, sim_legend_items = add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data, santini_data, wright_data, obs_datasets_in_legend, sim_datasets_in_legend)
+            obs_legend_items, sim_legend_items = add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data, santini_data, wright_data, harvey_data, obs_datasets_in_legend, sim_datasets_in_legend)
             panel_obs_legend_items.extend(obs_legend_items)
             panel_sim_legend_items.extend(sim_legend_items)
 
@@ -3872,16 +3927,16 @@ if __name__ == "__main__":
     
     # Define model groups based on user request
     low_z_model_names = [
-        'FIRE feedback', 'SAGE C16', 'C16 feedback'
+        'SAGE26', 'SAGE C16', 'C16 feedback'
     ]
     
     high_z_model_names = [
-        'SAGE (latest)', 'SAGE C16', 'no FFB', '30% FFB', 
+        'SAGE26', 'SAGE C16', 'no FFB', '30% FFB', 
         '40% FFB', '50% FFB', '80% FFB', '100% FFB'
     ]
     
     all_z_model_names = [
-        'SAGE (latest)', 'SAGE C16', 'evilSAGE'
+        'SAGE26', 'SAGE C16', 'evilSAGE'
     ]
     
     # Helper to filter models
