@@ -2079,37 +2079,38 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
             try:
                 # Find the best snapshot for this redshift bin from this model
                 available_snaps = model_snapshots[model_name]
-                target_z = z_low
                 best_snap = None
                 min_diff = float('inf')
                 
-                # Find snapshots in this bin for this model
-                snapshots_in_bin = []
-                for snap in available_snaps:
-                    z_snap = get_redshift_from_snapshot(snap, model_config)
-                    if z_low <= z_snap < z_high:
-                        snapshots_in_bin.append(snap)
-                
-                if not snapshots_in_bin:
-                    print(f"  No snapshots found for {model_name} in this redshift bin")
-                    continue
-                
-                # Use the same logic as original script to pick the best snapshot
+                # Special handling for lowest redshift bin (z~0)
                 if is_lowest_redshift_bin(z_low, z_high):
-                    # Use z=0 snapshot if available
-                    if 63 in snapshots_in_bin:
-                        best_snap = 63
-                    else:
-                        best_snap = snapshots_in_bin[0]  # Use first available
-                else:
-                    # Find snapshot with redshift just above the lower bound
-                    for snap in snapshots_in_bin:
+                    # Try to find z=0 snapshot (usually Snap_63)
+                    for snap in available_snaps:
                         z_snap = get_redshift_from_snapshot(snap, model_config)
-                        if z_snap >= target_z:
-                            diff = z_snap - target_z
+                        if abs(z_snap - 0.0) < 0.01:
+                            best_snap = snap
+                            break
+                    
+                    # If no z=0, find closest to z=0.1 (center of low-z bin)
+                    if best_snap is None:
+                        target_z = 0.1
+                        for snap in available_snaps:
+                            z_snap = get_redshift_from_snapshot(snap, model_config)
+                            diff = abs(z_snap - target_z)
                             if diff < min_diff:
                                 min_diff = diff
                                 best_snap = snap
+                else:
+                    # For other bins, find snapshot closest to z_low + 0.15
+                    # This ensures we match observations at the lower end of the bin
+                    target_z = z_low + 0.15
+                    
+                    for snap in available_snaps:
+                        z_snap = get_redshift_from_snapshot(snap, model_config)
+                        diff = abs(z_snap - target_z)
+                        if diff < min_diff:
+                            min_diff = diff
+                            best_snap = snap
                     
                     # If no snapshot found above target_z, use closest
                     if best_snap is None:
@@ -2528,37 +2529,38 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
             try:
                 # Find the best snapshot for this redshift bin from this model
                 available_snaps = model_snapshots[model_name]
-                target_z = z_low
                 best_snap = None
                 min_diff = float('inf')
                 
-                # Find snapshots in this bin for this model
-                snapshots_in_bin = []
-                for snap in available_snaps:
-                    z_snap = get_redshift_from_snapshot(snap, model_config)
-                    if z_low <= z_snap < z_high:
-                        snapshots_in_bin.append(snap)
-                
-                if not snapshots_in_bin:
-                    print(f"  No snapshots found for {model_name} in this redshift bin")
-                    continue
-                
-                # Use the same logic as original script to pick the best snapshot
+                # Special handling for lowest redshift bin (z~0)
                 if is_lowest_redshift_bin(z_low, z_high):
-                    # Use z=0 snapshot if available
-                    if 63 in snapshots_in_bin:
-                        best_snap = 63
-                    else:
-                        best_snap = snapshots_in_bin[0]  # Use first available
-                else:
-                    # Find snapshot with redshift just above the lower bound
-                    for snap in snapshots_in_bin:
+                    # Try to find z=0 snapshot (usually Snap_63)
+                    for snap in available_snaps:
                         z_snap = get_redshift_from_snapshot(snap, model_config)
-                        if z_snap >= target_z:
-                            diff = z_snap - target_z
+                        if abs(z_snap - 0.0) < 0.01:
+                            best_snap = snap
+                            break
+                    
+                    # If no z=0, find closest to z=0.1 (center of low-z bin)
+                    if best_snap is None:
+                        target_z = 0.1
+                        for snap in available_snaps:
+                            z_snap = get_redshift_from_snapshot(snap, model_config)
+                            diff = abs(z_snap - target_z)
                             if diff < min_diff:
                                 min_diff = diff
                                 best_snap = snap
+                else:
+                    # For other bins, find snapshot closest to z_low + 0.15
+                    # This ensures we match observations at the lower end of the bin
+                    target_z = z_low + 0.15
+                    
+                    for snap in available_snaps:
+                        z_snap = get_redshift_from_snapshot(snap, model_config)
+                        diff = abs(z_snap - target_z)
+                        if diff < min_diff:
+                            min_diff = diff
+                            best_snap = snap
                     
                     # If no snapshot found above target_z, use closest
                     if best_snap is None:
@@ -2935,37 +2937,38 @@ def plot_smf_all_redshift_bins_with_residuals(galaxy_types='all', mass_range=(7,
             try:
                 # Find the best snapshot for this redshift bin from this model
                 available_snaps = model_snapshots[model_name]
-                target_z = z_low
                 best_snap = None
                 min_diff = float('inf')
                 
-                # Find snapshots in this bin for this model
-                snapshots_in_bin = []
-                for snap in available_snaps:
-                    z_snap = get_redshift_from_snapshot(snap, model_config)
-                    if z_low <= z_snap < z_high:
-                        snapshots_in_bin.append(snap)
-                
-                if not snapshots_in_bin:
-                    print(f"  No snapshots found for {model_name} in this redshift bin")
-                    continue
-                
-                # Use the same logic as original script to pick the best snapshot
+                # Special handling for lowest redshift bin (z~0)
                 if is_lowest_redshift_bin(z_low, z_high):
-                    # Use z=0 snapshot if available
-                    if 63 in snapshots_in_bin:
-                        best_snap = 63
-                    else:
-                        best_snap = snapshots_in_bin[0]  # Use first available
-                else:
-                    # Find snapshot with redshift just above the lower bound
-                    for snap in snapshots_in_bin:
+                    # Try to find z=0 snapshot (usually Snap_63)
+                    for snap in available_snaps:
                         z_snap = get_redshift_from_snapshot(snap, model_config)
-                        if z_snap >= target_z:
-                            diff = z_snap - target_z
+                        if abs(z_snap - 0.0) < 0.01:
+                            best_snap = snap
+                            break
+                    
+                    # If no z=0, find closest to z=0.1 (center of low-z bin)
+                    if best_snap is None:
+                        target_z = 0.1
+                        for snap in available_snaps:
+                            z_snap = get_redshift_from_snapshot(snap, model_config)
+                            diff = abs(z_snap - target_z)
                             if diff < min_diff:
                                 min_diff = diff
                                 best_snap = snap
+                else:
+                    # For other bins, find snapshot closest to z_low + 0.15
+                    # This ensures we match observations at the lower end of the bin
+                    target_z = z_low + 0.15
+                    
+                    for snap in available_snaps:
+                        z_snap = get_redshift_from_snapshot(snap, model_config)
+                        diff = abs(z_snap - target_z)
+                        if diff < min_diff:
+                            min_diff = diff
+                            best_snap = snap
                     
                     # If no snapshot found above target_z, use closest
                     if best_snap is None:
@@ -3307,37 +3310,38 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
             try:
                 # Find the best snapshot for this redshift bin from this model
                 available_snaps = model_snapshots[model_name]
-                target_z = z_low
                 best_snap = None
                 min_diff = float('inf')
                 
-                # Find snapshots in this bin for this model
-                snapshots_in_bin = []
-                for snap in available_snaps:
-                    z_snap = get_redshift_from_snapshot(snap, model_config)
-                    if z_low <= z_snap < z_high:
-                        snapshots_in_bin.append(snap)
-                
-                if not snapshots_in_bin:
-                    print(f"  No snapshots found for {model_name} in this redshift bin")
-                    continue
-                
-                # Use the same logic as original script to pick the best snapshot
+                # Special handling for lowest redshift bin (z~0)
                 if is_lowest_redshift_bin(z_low, z_high):
-                    # Use z=0 snapshot if available
-                    if 63 in snapshots_in_bin:
-                        best_snap = 63
-                    else:
-                        best_snap = snapshots_in_bin[0]  # Use first available
-                else:
-                    # Find snapshot with redshift just above the lower bound
-                    for snap in snapshots_in_bin:
+                    # Try to find z=0 snapshot (usually Snap_63)
+                    for snap in available_snaps:
                         z_snap = get_redshift_from_snapshot(snap, model_config)
-                        if z_snap >= target_z:
-                            diff = z_snap - target_z
+                        if abs(z_snap - 0.0) < 0.01:
+                            best_snap = snap
+                            break
+                    
+                    # If no z=0, find closest to z=0.1 (center of low-z bin)
+                    if best_snap is None:
+                        target_z = 0.1
+                        for snap in available_snaps:
+                            z_snap = get_redshift_from_snapshot(snap, model_config)
+                            diff = abs(z_snap - target_z)
                             if diff < min_diff:
                                 min_diff = diff
                                 best_snap = snap
+                else:
+                    # For other bins, find snapshot closest to z_low + 0.15
+                    # This ensures we match observations at the lower end of the bin
+                    target_z = z_low + 0.15
+                    
+                    for snap in available_snaps:
+                        z_snap = get_redshift_from_snapshot(snap, model_config)
+                        diff = abs(z_snap - target_z)
+                        if diff < min_diff:
+                            min_diff = diff
+                            best_snap = snap
                     
                     # If no snapshot found above target_z, use closest
                     if best_snap is None:
@@ -3636,37 +3640,38 @@ def plot_smf_all_redshift_bins(galaxy_types='all', mass_range=(7, 12),
             try:
                 # Find the best snapshot for this redshift bin from this model
                 available_snaps = model_snapshots[model_name]
-                target_z = z_low
                 best_snap = None
                 min_diff = float('inf')
                 
-                # Find snapshots in this bin for this model
-                snapshots_in_bin = []
-                for snap in available_snaps:
-                    z_snap = get_redshift_from_snapshot(snap, model_config)
-                    if z_low <= z_snap < z_high:
-                        snapshots_in_bin.append(snap)
-                
-                if not snapshots_in_bin:
-                    print(f"  No snapshots found for {model_name} in this redshift bin")
-                    continue
-                
-                # Use the same logic as original script to pick the best snapshot
+                # Special handling for lowest redshift bin (z~0)
                 if is_lowest_redshift_bin(z_low, z_high):
-                    # Use z=0 snapshot if available
-                    if 63 in snapshots_in_bin:
-                        best_snap = 63
-                    else:
-                        best_snap = snapshots_in_bin[0]  # Use first available
-                else:
-                    # Find snapshot with redshift just above the lower bound
-                    for snap in snapshots_in_bin:
+                    # Try to find z=0 snapshot (usually Snap_63)
+                    for snap in available_snaps:
                         z_snap = get_redshift_from_snapshot(snap, model_config)
-                        if z_snap >= target_z:
-                            diff = z_snap - target_z
+                        if abs(z_snap - 0.0) < 0.01:
+                            best_snap = snap
+                            break
+                    
+                    # If no z=0, find closest to z=0.1 (center of low-z bin)
+                    if best_snap is None:
+                        target_z = 0.1
+                        for snap in available_snaps:
+                            z_snap = get_redshift_from_snapshot(snap, model_config)
+                            diff = abs(z_snap - target_z)
                             if diff < min_diff:
                                 min_diff = diff
                                 best_snap = snap
+                else:
+                    # For other bins, find snapshot closest to z_low + 0.15
+                    # This ensures we match observations at the lower end of the bin
+                    target_z = z_low + 0.15
+                    
+                    for snap in available_snaps:
+                        z_snap = get_redshift_from_snapshot(snap, model_config)
+                        diff = abs(z_snap - target_z)
+                        if diff < min_diff:
+                            min_diff = diff
+                            best_snap = snap
                     
                     # If no snapshot found above target_z, use closest
                     if best_snap is None:
