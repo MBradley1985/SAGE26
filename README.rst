@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="SAGElogo.png" width="300">
+</p>
+
 |GitHub CI| |DOCS| 
 *************************************
 Semi-Analytic Galaxy Evolution (SAGE)
