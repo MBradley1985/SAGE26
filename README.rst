@@ -1,3 +1,4 @@
+![Logo](SAGElogo.png)
 |GitHub CI| |DOCS| 
 *************************************
 Semi-Analytic Galaxy Evolution (SAGE)
@@ -168,3 +169,4 @@ Maintainers
 .. |DOCS| image:: https://img.shields.io/readthedocs/sage-model/latest.svg?logo=read%20the%20docs&logoColor=white&label=Docs
     :alt: RTD Badge
     :target: https://sage-model.readthedocs.io/en/latest/index.html
+
