@@ -269,7 +269,7 @@ if __name__ == '__main__':
     bulge_mass[bulge_mass <= 0] = 1e-10
 
     plt.scatter(log10_stellar_mass, np.log10(disk_mass), c='dodgerblue', s=10, alpha=0.8, label='Disk Mass', marker='s', edgecolors='b')
-    # plt.scatter(log10_stellar_mass, np.log10(bulge_mass), c='r', s=10, alpha=0.6, label='Bulge Mass', marker='s', edgecolors='firebrick')
+    plt.scatter(log10_stellar_mass, np.log10(bulge_mass), c='r', s=10, alpha=0.6, label='Bulge Mass', marker='s', edgecolors='firebrick')
 
     plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
     plt.ylabel(r'$\log_{10} M_{\mathrm{component}}\ (M_{\odot})$')
