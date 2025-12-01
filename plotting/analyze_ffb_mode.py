@@ -394,7 +394,7 @@ Max boost factor: {1 + f_ffb_all.max() * (6.67 - 1):.2f}x
     output_path = Path(output_dir) / 'plots'
     output_path.mkdir(exist_ok=True)
     
-    output_file = output_path / 'ffb_mode_analysis.png'
+    output_file = output_path / 'ffb_mode_analysis.pdf'
     plt.savefig(output_file, dpi=150, bbox_inches='tight')
     print(f"\nSaved FFB analysis plot to: {output_file}")
     

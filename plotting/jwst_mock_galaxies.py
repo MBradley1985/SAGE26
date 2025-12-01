@@ -421,7 +421,7 @@ class COSMOSSageMatching:
         
         plt.tight_layout()
         plt.savefig(f'{output_dir}/mass_redshift_comparison.pdf', dpi=300, bbox_inches='tight')
-        # plt.savefig(f'{output_dir}/mass_redshift_comparison.png', dpi=300, bbox_inches='tight')
+        # plt.savefig(f'{output_dir}/mass_redshift_comparison.pdf', dpi=300, bbox_inches='tight')
         plt.close()
         
         logger.info(f"Mass-redshift comparison plot saved to {output_dir}")
@@ -2761,7 +2761,7 @@ def create_6panel_tracking_plot(all_evolution, output_dir='./plots/', figsize=(1
     plt.subplots_adjust(bottom=0.01)  # Make room for the legend at the bottom
     
     plt.savefig(f'{output_dir}/sage_mock_evolution_tracking_6panel.pdf', dpi=300, bbox_inches='tight')
-    # plt.savefig(f'{output_dir}/sage_mock_evolution_tracking_6panel.png', dpi=300, bbox_inches='tight')
+    # plt.savefig(f'{output_dir}/sage_mock_evolution_tracking_6panel.pdf', dpi=300, bbox_inches='tight')
     plt.close()
     
     logger.info(f"6-panel galaxy tracking plot saved to {output_dir}")
@@ -3193,7 +3193,7 @@ def run_galaxy_tracking_analysis():
     
     print(f"\nOutput files:")
     print("- ./plots/sage_mock_evolution_tracking_6panel.pdf")
-    print("- ./plots/sage_mock_evolution_tracking_6panel.png")
+    print("- ./plots/sage_mock_evolution_tracking_6panel.pdf")
     print()
     print("Plot shows 6 lines total:")
     print("- 3 solid lines (centrals): COSMOS (gold), EPOCHS (red), CEERS (purple)")  

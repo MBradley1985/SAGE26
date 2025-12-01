@@ -28,7 +28,7 @@ smoothing_sigma = 20.0  # Gaussian smoothing kernel size (Increased to blend dot
 mass_threshold = 0.0  # No threshold - use all galaxies to trace the web
 
 OutputDir = DirName + 'plots/'
-OutputFormat = '.png'
+OutputFormat = '.pdf'
 
 # ==================================================================
 

@@ -35,7 +35,7 @@ redshifts = [127.000, 79.998, 50.000, 30.000, 19.916, 18.244, 16.725, 15.343, 14
              0.116, 0.089, 0.064, 0.041, 0.020, 0.000]
 
 OutputDir = './ffb_plots/'
-OutputFormat = '.png'
+OutputFormat = '.pdf'
 
 min_stellar_mass = 1e7  # Msun/h
 

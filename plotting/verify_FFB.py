@@ -254,8 +254,8 @@ def main():
         ax.text(i, mf + instab/2, f'{instab:.2f}', ha='center', va='center', fontweight='bold')
     
     plt.tight_layout()
-    plt.savefig('ffb_focused_comparison.png', dpi=150, bbox_inches='tight')
-    print(f"\n✓ Saved: ffb_focused_comparison.png")
+    plt.savefig('output/millennium/plots/ffb_focused_comparison.pdf', dpi=150, bbox_inches='tight')
+    print(f"\n✓ Saved: ffb_focused_comparison.pdf")
     
     # Final summary
     print("\n" + "="*80)

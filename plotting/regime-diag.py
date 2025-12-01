@@ -15,7 +15,7 @@ import os
 # File details (MODIFY THESE TO MATCH YOUR SETUP)
 DirName = './output/millennium/'
 OutputDir = DirName + 'plots/'
-OutputFormat = '.png'
+OutputFormat = '.pdf'
 FileName = 'model_0.hdf5'
 Snapshot = 'Snap_63'  # z=0 for Millennium
 
@@ -350,7 +350,7 @@ if __name__ == '__main__':
     plt.close()
     
     print("\n" + "="*70)
-    print("SUCCESS: Figure saved to regime_transition_analysis.png")
+    print("SUCCESS: Figure saved to regime_transition_analysis.pdf")
     print("="*70 + "\n")
     
     # ================================================================

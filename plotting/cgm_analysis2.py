@@ -50,7 +50,7 @@ redshifts = [127.000, 79.998, 50.000, 30.000, 19.916, 18.244, 16.725, 15.343, 14
 
 # Plotting options
 dilute = 30000
-OutputFormat = '.png'
+OutputFormat = '.pdf'
 
 # Plot styling
 plt.rcParams["figure.figsize"] = (12, 10)
@@ -934,13 +934,13 @@ def main():
     print("CGM SECTION FIGURES COMPLETED!")
     print("="*70)
     print("\nFigures generated:")
-    print("  1a. cgm_fig1a_cgm_mass_and_fraction.png - CGM Mass (2 redshifts)")
-    print("  1b. cgm_fig1b_hot_mass_and_fraction.png - Hot Gas Mass (2 redshifts)")
-    print("  2. cgm_fig2_mass_function.png - Combined Mass Function (4 redshifts)")
-    print("  3a. cgm_fig3a_cgm_metallicity.png - CGM Metallicity (2 redshifts)")
-    print("  3b. cgm_fig3b_hot_metallicity.png - Hot Gas Metallicity (2 redshifts)")
-    print("  4a. cgm_fig4a_cgm_evolution.png - CGM Evolution (4 redshifts)")
-    print("  4b. cgm_fig4b_hot_evolution.png - Hot Gas Evolution (4 redshifts)")
+    print("  1a. cgm_fig1a_cgm_mass_and_fraction.pdf - CGM Mass (2 redshifts)")
+    print("  1b. cgm_fig1b_hot_mass_and_fraction.pdf - Hot Gas Mass (2 redshifts)")
+    print("  2. cgm_fig2_mass_function.pdf - Combined Mass Function (4 redshifts)")
+    print("  3a. cgm_fig3a_cgm_metallicity.pdf - CGM Metallicity (2 redshifts)")
+    print("  3b. cgm_fig3b_hot_metallicity.pdf - Hot Gas Metallicity (2 redshifts)")
+    print("  4a. cgm_fig4a_cgm_evolution.pdf - CGM Evolution (4 redshifts)")
+    print("  4b. cgm_fig4b_hot_evolution.pdf - Hot Gas Evolution (4 redshifts)")
     
     # Print galaxy statistics at z=0
     print("\n" + "="*70)

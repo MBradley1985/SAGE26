@@ -32,7 +32,7 @@ BoxSize = 62.5          # h-1 Mpc
 VolumeFraction = 0.3   # Fraction of the full volume output by the model
 
 # Plotting options
-OutputFormat = '.png'
+OutputFormat = '.pdf'
 plt.rcParams["figure.figsize"] = (10, 8)
 plt.rcParams["figure.dpi"] = 96
 plt.rcParams["font.size"] = 12
