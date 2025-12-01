@@ -145,7 +145,7 @@ def create_interactive_plot(pos_x, pos_y, pos_z, properties_dict, sample_indices
         
         # Determine colorscale and range based on property
         if 'Mass' in prop_name or 'mass' in prop_name:
-            colorscale = 'Viridis'  # Purple-green for masses
+            colorscale = 'plasma'  # Purple-green for masses
             # Handle log scale for masses
             valid = prop > 0
             log_prop = np.zeros_like(prop)
@@ -462,7 +462,7 @@ if __name__ == '__main__':
     ax3.set_zlim(0, BoxSize)
 
     plt.tight_layout()
-    OutputFormat = '.png'
+    OutputFormat = '.pdf'
 
     # Save the 3D visualization
     outputFile = OutputDir + '23.3DDensityPlotandH2andH1' + OutputFormat

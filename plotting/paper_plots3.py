@@ -144,7 +144,7 @@ Main_VolumeFraction = 1.0  # Fraction of the full volume output by the model
 SFR_SimDirs = [
     {
         'path': './output/millennium/', 
-        'label': 'Millennium', 
+        'label': 'SAGE (latest)', 
         'color': 'black', 
         'linestyle': '-',
         'BoxSize': 62.5,  # h-1 Mpc
@@ -161,33 +161,33 @@ SFR_SimDirs = [
         'BHMFsnaps': [63, 40, 32, 27, 23, 20, 18, 16]
     },
     {
-        'path': './output/miniuchuu_full_mod_lowerbaryonicfrac_28052025/', 
-        'label': 'miniUchuu', 
-        'color': 'blue', 
-        'linestyle': '-',
-        'BoxSize': 400,  # h-1 Mpc  (example - adjust to your actual values)
-        'Hubble_h': 0.677,  # (example - adjust to your actual values)
+        'path': '/Users/mbradley/Documents/PhD/SAGE_BROKEN/sage-model/output/millennium/', 
+        'label': 'evilSAGE', 
+        'color': 'purple', 
+        'linestyle': ':',
+        'BoxSize': 62.5,  # h-1 Mpc
+        'Hubble_h': 0.73,
         'VolumeFraction': 1.0,
-        'FirstSnap': 0,  # (adjust to your actual values)
-        'LastSnap': 49,  # (adjust to your actual values)
-        'redshifts': [13.9334, 12.67409, 11.50797, 10.44649, 9.480752, 8.58543, 7.77447, 7.032387, 6.344409, 5.721695,
-            5.153127, 4.629078, 4.26715, 3.929071, 3.610462, 3.314082, 3.128427, 2.951226, 2.77809, 2.616166,
-            2.458114, 2.309724, 2.16592, 2.027963, 1.8962, 1.770958, 1.65124, 1.535928, 1.426272, 1.321656,
-            1.220303, 1.124166, 1.031983, 0.9441787, 0.8597281, 0.779046, 0.7020205, 0.6282588, 0.5575475, 0.4899777,
-            0.4253644, 0.3640053, 0.3047063, 0.2483865, 0.1939743, 0.1425568, 0.09296665, 0.0455745, 0.02265383, 0.0001130128],
-        'SMFsnaps': [49, 38, 32, 23, 17, 13, 10, 8, 7, 5, 4],  # Example snapshots
-        'BHMFsnaps': [49, 38, 32, 23, 17, 13, 10, 8, 7, 5, 4]  # Example snapshots
+        'FirstSnap': 0,
+        'LastSnap': 63,
+        'redshifts': [127.000, 79.998, 50.000, 30.000, 19.916, 18.244, 16.725, 15.343, 14.086, 12.941, 11.897, 10.944, 10.073, 
+                     9.278, 8.550, 7.883, 7.272, 6.712, 6.197, 5.724, 5.289, 4.888, 4.520, 4.179, 3.866, 3.576, 3.308, 3.060, 
+                     2.831, 2.619, 2.422, 2.239, 2.070, 1.913, 1.766, 1.630, 1.504, 1.386, 1.276, 1.173, 1.078, 0.989, 0.905, 
+                     0.828, 0.755, 0.687, 0.624, 0.564, 0.509, 0.457, 0.408, 0.362, 0.320, 0.280, 0.242, 0.208, 0.175, 0.144, 
+                     0.116, 0.089, 0.064, 0.041, 0.020, 0.000],
+        'SMFsnaps': [63, 40, 32, 27, 23, 20, 18, 16],
+        'BHMFsnaps': [63, 40, 32, 27, 23, 20, 18, 16]
     },
     {
-        'path': './output/millennium_vanilla/',
-        'label': 'C16 Millennium',
-        'color': 'darkred',
+        'path': '../SAGE-VANILLA/sage-model/output/millennium/', 
+        'label': 'SAGE C16', 
+        'color': 'blue', 
         'linestyle': '--',
-        'BoxSize': 62.5,  # h-1 Mpc  (example - adjust to your actual values)
-        'Hubble_h': 0.73,  # (example - adjust to your actual values)
+        'BoxSize': 62.5,  # h-1 Mpc
+        'Hubble_h': 0.73,
         'VolumeFraction': 1.0,
-        'FirstSnap': 0,  # (adjust to your actual values)
-        'LastSnap': 63,  # (adjust to your actual values)
+        'FirstSnap': 0,
+        'LastSnap': 63,
         'redshifts': [127.000, 79.998, 50.000, 30.000, 19.916, 18.244, 16.725, 15.343, 14.086, 12.941, 11.897, 10.944, 10.073, 
                      9.278, 8.550, 7.883, 7.272, 6.712, 6.197, 5.724, 5.289, 4.888, 4.520, 4.179, 3.866, 3.576, 3.308, 3.060, 
                      2.831, 2.619, 2.422, 2.239, 2.070, 1.913, 1.766, 1.630, 1.504, 1.386, 1.276, 1.173, 1.078, 0.989, 0.905, 
@@ -200,34 +200,70 @@ SFR_SimDirs = [
 
 # Define simulation configurations for SMF comparison
 SMF_SimConfigs = [
-    # SAGE 2.0 simulations (solid lines)
+    # SAGE25 simulations (solid lines)
     {
         'path': './output/millennium/', 
-        'label': 'SAGE 2.0', 
-        'color': PLOT_COLORS['millennium'], 
+        'label': 'SAGE (latest)', 
+        'color': 'black', 
         'linestyle': '-',  # solid line
         'BoxSize': 62.5,  # h-1 Mpc
         'Hubble_h': 0.73,
         'VolumeFraction': 1.0
     },
     {
-        'path': './output/miniuchuu_full_mod_lowerbaryonicfrac_28052025/', 
-        'label': 'SAGE 2.0 miniUchuu', 
-        'color': PLOT_COLORS['miniuchuu'], 
+        'path': '/Users/mbradley/Documents/PhD/SAGE_BROKEN/sage-model/output/millennium/', 
+        'label': 'evilSAGE', 
+        'color': 'blue', 
         'linestyle': '-',  # solid line
-        'BoxSize': 400,  # h-1 Mpc
-        'Hubble_h': 0.677,
+        'BoxSize': 62.5,  # h-1 Mpc
+        'Hubble_h': 0.73,
         'VolumeFraction': 1.0
     },
-    # Vanilla SAGE simulation (dashed lines)
     {
-        'path': './output/millennium_vanilla', 
+        'path': '../SAGE-VANILLA/sage-model/output/millennium/', 
         'label': 'SAGE C16', 
-        'color': 'darkred', 
+        'color': 'blue', 
         'linestyle': '--',  # dashed line
         'BoxSize': 62.5,  # h-1 Mpc
         'Hubble_h': 0.73,
         'VolumeFraction': 1.0
+    }
+]
+
+GAS_SimConfigs = [
+    # Main simulation (your current one)
+    {
+        'path': './output/millennium/', 
+        'label': 'SAGE (latest)', 
+        'color': 'black', 
+        'linestyle': '-',
+        'BoxSize': 62.5,
+        'Hubble_h': 0.73,
+        'VolumeFraction': 1.0,
+        'linewidth': 3,
+        'alpha': 0.9
+    },
+    {
+        'path': '/Users/mbradley/Documents/PhD/SAGE_BROKEN/sage-model/output/millennium/', 
+        'label': 'evilSAGE', 
+        'color': 'blue', 
+        'linestyle': ':',
+        'BoxSize': 62.5,
+        'Hubble_h': 0.73,
+        'VolumeFraction': 1.0,
+        'linewidth': 3,
+        'alpha': 0.9
+    },
+    {
+        'path': '../SAGE-VANILLA/sage-model/output/millennium/', 
+        'label': 'SAGE C16', 
+        'color': 'blue', 
+        'linestyle': '--',
+        'BoxSize': 62.5,
+        'Hubble_h': 0.73,
+        'VolumeFraction': 1.0,
+        'linewidth': 3,
+        'alpha': 0.9
     }
 ]
 
@@ -575,7 +611,7 @@ def plot_stellar_mass_function_comparison(sim_configs, snapshot, output_dir):
                 model_handles.append(line_main)
                 model_labels.append(label_all)
             
-            # Check if this is a SAGE 2.0 model (exclude C16)
+            # Check if this is a SAGE25 model (exclude C16)
             is_sage2 = 'C16' not in label
             logger.info(f'  Adding shading for {label}: {is_sage2}')
             
@@ -594,7 +630,7 @@ def plot_stellar_mass_function_comparison(sim_configs, snapshot, output_dir):
                 ax2.plot(xaxeshisto, phi_red_log, color=color, linestyle=linestyle, 
                         linewidth=linewidth_all, alpha=0.9)
                 
-                # Red shading for SAGE 2.0 only
+                # Red shading for SAGE25 only
                 if is_sage2:
                     valid_mask = ~np.isnan(phi_red_log)
                     valid_points = np.sum(valid_mask)
@@ -609,7 +645,7 @@ def plot_stellar_mass_function_comparison(sim_configs, snapshot, output_dir):
                 ax3.plot(xaxeshisto, phi_blue_log, color=color, linestyle=linestyle, 
                         linewidth=linewidth_all, alpha=0.9)
                 
-                # Blue shading for SAGE 2.0 only
+                # Blue shading for SAGE25 only
                 if is_sage2:
                     valid_mask = ~np.isnan(phi_blue_log)
                     valid_points = np.sum(valid_mask)

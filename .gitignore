@@ -36,5 +36,4 @@ yy*
 # Documentation with Sphinx #
 docs/build
 docs/make.bat
-plotting/allresults-history.py
-plotting/allresults-local.py
+

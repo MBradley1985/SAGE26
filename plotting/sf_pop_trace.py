@@ -180,7 +180,7 @@ MODEL_CONFIGS = [
     # }
     # {
     #     'name': 'Broken model',  # This should match a key in PLOT_COLORS for coloring
-    #     'directory': '/Users/mbradley/Documents/PhD/SAGE-VANILLA/sage-model/output/millennium/',  # Path to your model output directory
+    #     'directory': '/Users/mbradley/Documents/PhD/SAGE-VANILLA/sage-model/output/millennium_vanilla/',  # Path to your model output directory
     #     'filename': 'model_0.hdf5',  # HDF5 filename (usually stays the same)
     #     'snapshot': 'Snap_63',  # Your final snapshot (e.g., 'Snap_127' if you have 128 snapshots)
     #     'hubble_h': 0.73,  # Your Hubble parameter (e.g., 0.6774)
@@ -250,7 +250,7 @@ def setup_model_config(model_config):
     SMF_SimConfigs = [
         {
             'path': model_config['directory'],
-            'label': f'SAGE 2.0 ({model_config["name"]})',
+            'label': f'SAGE25 ({model_config["name"]})',
             'color': PLOT_COLORS.get(model_config['name'], '#1f77b4'),  # Default color if not found
             'linestyle': '-',
             'BoxSize': model_config['box_size'],

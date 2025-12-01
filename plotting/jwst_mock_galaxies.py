@@ -41,7 +41,7 @@ PERFORMANCE OPTIMIZATIONS FOR GALAXY TRACKING AND 6-PANEL PLOTS:
 
 class COSMOSSageMatching:
     """
-    Simple tool to match COSMOS observations with SAGE 2.0 model galaxies
+    Simple tool to match COSMOS observations with SAGE25 model galaxies
     """
     
     def __init__(self, cosmos_file, sage_dir, hubble_h=0.73):
@@ -428,7 +428,7 @@ class COSMOSSageMatching:
 
 class ObservationalSageMatching:
     """
-    Generic tool to match observational data (COSMOS, EPOCHS, etc.) with SAGE 2.0 model galaxies
+    Generic tool to match observational data (COSMOS, EPOCHS, etc.) with SAGE25 model galaxies
     """
     
     def __init__(self, obs_file, sage_dir, dataset_name='Observatory', hubble_h=0.73):
@@ -821,7 +821,7 @@ class ObservationalSageMatching:
 
 class CEERSSageMatching:
     """
-    Tool to match CEERS quiescent galaxies with SAGE 2.0 model galaxies
+    Tool to match CEERS quiescent galaxies with SAGE25 model galaxies
     Uses pre-defined arrays of CEERS data rather than loading from CSV
     """
     
@@ -1276,7 +1276,7 @@ def run_cosmos_sage_matching():
     # Initialize matcher - UPDATE THESE PATHS!
     matcher = COSMOSSageMatching(
         cosmos_file='./data/COSMOS.csv',  # Update this path to your COSMOS CSV file
-        sage_dir='./output/millennium_FIRE/',        # Update this path to your SAGE output directory
+        sage_dir='./output/millennium/',        # Update this path to your SAGE output directory
         hubble_h=0.73
     )
     
@@ -1331,7 +1331,7 @@ def run_epochs_sage_matching():
     # Initialize matcher for EPOCHS - UPDATE THESE PATHS!
     matcher = ObservationalSageMatching(
         obs_file= './data/EPOCHS.csv',  # Update this path to your EPOCHS CSV file
-        sage_dir='./output/millennium_FIRE/',  # Update this path to your SAGE output directory
+        sage_dir='./output/millennium/',  # Update this path to your SAGE output directory
         dataset_name='EPOCHS',
         hubble_h=0.73
     )
@@ -1387,7 +1387,7 @@ def run_ceers_sage_matching():
     
     # Initialize matcher for CEERS
     matcher = CEERSSageMatching(
-        sage_dir='./output/millennium_FIRE/',  # Update this path to your SAGE output directory
+        sage_dir='./output/millennium/',  # Update this path to your SAGE output directory
         hubble_h=0.73
     )
     
