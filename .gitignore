@@ -20,7 +20,6 @@ codecov
 *.png
 *.ipynb_checkpoints
 *.dSYM
-sage_analysis/plots/
 *.txt
 *.log
 *.out
@@ -37,6 +36,5 @@ yy*
 # Documentation with Sphinx #
 docs/build
 docs/make.bat
-optim/run_pso.sh
 plotting/allresults-history.py
 plotting/allresults-local.py
