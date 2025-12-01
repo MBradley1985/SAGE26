@@ -45,7 +45,7 @@ redshifts = [127.000, 79.998, 50.000, 30.000, 19.916, 18.244, 16.725, 15.343, 14
 
 # Plotting options
 OutputDir = './ffb_plots/'
-OutputFormat = '.png'
+OutputFormat = '.pdf'
 plt.rcParams["figure.figsize"] = (10, 8)
 plt.rcParams["figure.dpi"] = 96
 plt.rcParams["font.size"] = 12

@@ -1053,19 +1053,19 @@ def main():
     print("STEP 3: CREATING VISUALIZATIONS")
     print("-"*80)
     
-    output_file = "output/millennium/plots/ffb_comprehensive_bulge_disk_analysis.png"
+    output_file = "output/millennium/plots/ffb_comprehensive_bulge_disk_analysis.pdf"
     create_comprehensive_plot(bt_results, mass_results, morph_results, 
                              pathway_results, output_file)
 
     # New figure: half-mass radius vs stellar mass grid
-    plot_half_mass_radius_vs_stellar_mass_grid(data_ffb_on, "output/millennium/plots/ffb_half_mass_radius_vs_stellar_mass_grid.png")
+    plot_half_mass_radius_vs_stellar_mass_grid(data_ffb_on, "output/millennium/plots/ffb_half_mass_radius_vs_stellar_mass_grid.pdf")
     
     # Create standalone global B/T plot
-    create_global_bt_plot(global_bt_results, "output/millennium/plots/ffb_global_bt_evolution.png")
+    create_global_bt_plot(global_bt_results, "output/millennium/plots/ffb_global_bt_evolution.pdf")
     
     # Create B/T distribution plot (this is what the user wants!)
     bt_dist_on, bt_dist_off = create_bt_distribution_plot(data_ffb_on, data_ffb_off, 
-                                                          "output/millennium/plots/ffb_bt_distribution_evolution.png")
+                                                          "output/millennium/plots/ffb_bt_distribution_evolution.pdf")
     
     # Print summary table
     create_summary_table(bt_results, mass_results, pathway_results)
@@ -1106,8 +1106,8 @@ def main():
           f"at z={global_bt_results['redshift'][max_global_bt_idx]:.1f}")
     
     print(f"\n✓ Output saved to: {output_file}")
-    print(f"✓ Global B/T plot saved to: ffb_global_bt_evolution.png")
-    print(f"✓ B/T distribution plot saved to: ffb_bt_distribution_evolution.png")
+    print(f"✓ Global B/T plot saved to: ffb_global_bt_evolution.pdf")
+    print(f"✓ B/T distribution plot saved to: ffb_bt_distribution_evolution.pdf")
     print("="*80 + "\n")
 
 if __name__ == "__main__":

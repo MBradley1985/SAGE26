@@ -52,7 +52,7 @@ redshifts = [127.000, 79.998, 50.000, 30.000, 19.916, 18.244, 16.725, 15.343, 14
 
 # Plotting options
 dilute = 5000  # Number of galaxies for scatter plots
-OutputFormat = '.png'
+OutputFormat = '.pdf'
 
 # Plot styling
 plt.rcParams["figure.figsize"] = (10, 8)

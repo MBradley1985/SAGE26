@@ -34,7 +34,7 @@ dilute = 7500       # Number of galaxies to plot in scatter plots
 sSFRcut = -11.0     # Divide quiescent from star forming galaxies
 SMFsnaps = [63, 37, 32, 27, 23, 20, 18, 16]  # Snapshots to plot the SMF
 
-OutputFormat = '.png'
+OutputFormat = '.pdf'
 plt.rcParams["figure.figsize"] = (8.34,6.25)
 plt.rcParams["figure.dpi"] = 96
 plt.rcParams["font.size"] = 14
