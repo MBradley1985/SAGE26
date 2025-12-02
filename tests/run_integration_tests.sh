@@ -47,7 +47,7 @@ else
     exit 1
 fi
 
-echo -e "${YELLOW}▸ Test 2: Conservation Laws (15 tests)${NC}"
+echo -e "${YELLOW}▸ Test 2: Conservation Laws (37 tests)${NC}"
 if ./test_build/test_conservation > "$TEST_OUTPUT_DIR/conservation.log" 2>&1; then
     PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/conservation.log" | head -1)
     echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
@@ -84,7 +84,7 @@ else
 fi
 
 # Count total passes and fails from individual test outputs
-TOTAL_TESTS=80
+TOTAL_TESTS=102
 PASSED=0
 FAILED=0
 
