@@ -3,6 +3,7 @@ tests/test_data/
 input/millennium/
 output/
 input/
+tests/
 
 *.o
 *.*~
