@@ -37,7 +37,11 @@ TEST_SOURCES = \
 	test_conservation.c \
 	test_regime_cgm.c \
 	test_bulge_sizes.c \
-	test_physics_validation.c
+	test_physics_validation.c \
+	test_mergers.c \
+	test_disk_instability.c \
+	test_infall.c \
+	test_numerical_stability.c
 
 # Test executables
 TEST_BINS = $(TEST_SOURCES:%.c=$(OUTPUT_DIR)/%)

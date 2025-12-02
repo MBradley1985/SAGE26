@@ -83,8 +83,44 @@ else
     echo "  See: $TEST_OUTPUT_DIR/physics_validation.log"
 fi
 
+echo -e "${YELLOW}▸ Test 6: Galaxy Mergers (10 tests)${NC}"
+if ./test_build/test_mergers > "$TEST_OUTPUT_DIR/mergers.log" 2>&1; then
+    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/mergers.log" | head -1)
+    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
+else
+    echo -e "${RED}  ✗ FAIL - Some merger tests failed${NC}"
+    echo "  See: $TEST_OUTPUT_DIR/mergers.log"
+fi
+
+echo -e "${YELLOW}▸ Test 7: Disk Instability (7 tests)${NC}"
+if ./test_build/test_disk_instability > "$TEST_OUTPUT_DIR/disk_instability.log" 2>&1; then
+    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/disk_instability.log" | head -1)
+    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
+else
+    echo -e "${RED}  ✗ FAIL - Some disk instability tests failed${NC}"
+    echo "  See: $TEST_OUTPUT_DIR/disk_instability.log"
+fi
+
+echo -e "${YELLOW}▸ Test 8: Gas Infall (7 tests)${NC}"
+if ./test_build/test_infall > "$TEST_OUTPUT_DIR/infall.log" 2>&1; then
+    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/infall.log" | head -1)
+    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
+else
+    echo -e "${RED}  ✗ FAIL - Some infall tests failed${NC}"
+    echo "  See: $TEST_OUTPUT_DIR/infall.log"
+fi
+
+echo -e "${YELLOW}▸ Test 9: Numerical Stability (7 tests)${NC}"
+if ./test_build/test_numerical_stability > "$TEST_OUTPUT_DIR/numerical_stability.log" 2>&1; then
+    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/numerical_stability.log" | head -1)
+    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
+else
+    echo -e "${RED}  ✗ FAIL - Some numerical stability tests failed${NC}"
+    echo "  See: $TEST_OUTPUT_DIR/numerical_stability.log"
+fi
+
 # Count total passes and fails from individual test outputs
-TOTAL_TESTS=102
+TOTAL_TESTS=140
 PASSED=0
 FAILED=0
 

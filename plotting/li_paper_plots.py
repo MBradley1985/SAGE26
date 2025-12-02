@@ -1535,19 +1535,19 @@ def plot_ffb_threshold_analysis(models=None):
         # Calculate FFB threshold mass for this redshift
         M_ffb_threshold = calculate_ffb_threshold_mass(z_actual, hubble_h)
         
-        # Left plot: ALL disk galaxies
-        # Right plot: Only galaxies near FFB threshold
+        # Left plot: ALL galaxies (using disk half-mass radius)
+        # Right plot: Only disk galaxies near FFB threshold
         is_disk = galaxy_type == 0
         has_stellar_mass = stellar_mass > 0
         near_threshold = (mvir > M_ffb_threshold * 0.8) & (mvir < M_ffb_threshold * 1.2)
         
-        # For left plot: all disk galaxies with stellar mass
-        w_all = np.where(is_disk & has_stellar_mass)[0]
+        # For left plot: all galaxies with stellar mass (not just disk galaxies)
+        w_all = np.where(has_stellar_mass)[0]
         
-        # For right plot: only galaxies near FFB threshold
+        # For right plot: only disk galaxies near FFB threshold
         w = np.where(is_disk & has_stellar_mass & near_threshold)[0]
         
-        # Left plot: collect ALL disk galaxies
+        # Left plot: collect ALL galaxies
         if len(w_all) > 0:
             all_mvir.extend(mvir[w_all])
             all_redshifts.extend([z_actual] * len(w_all))
