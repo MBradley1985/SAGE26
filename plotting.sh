@@ -20,6 +20,7 @@ scripts=(
     "plotting/ffb_analysis.py"
     "plotting/ffb_analysis2.py"
     "plotting/verify_ffb.py"
+    "plotting/li_paper_plots.py"
     # "plotting/sf_pop_trace.py"
     "plotting/stat_test.py"
     "plotting/stat_test2.py"

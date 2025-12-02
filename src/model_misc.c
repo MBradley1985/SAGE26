@@ -375,8 +375,8 @@ void determine_and_store_ffb_regime(const int ngal, struct GALAXY *galaxies,
     }
     
     // Counter for diagnostics
-    static int total_galaxies_checked = 0;
-    static int ffb_galaxies_assigned = 0;
+    // static int total_galaxies_checked = 0;
+    // static int ffb_galaxies_assigned = 0;
     
     // Classify each galaxy as FFB or normal based on equation (2)
     for(int p = 0; p < ngal; p++) {
@@ -392,11 +392,11 @@ void determine_and_store_ffb_regime(const int ngal, struct GALAXY *galaxies,
         // Galaxies near threshold have intermediate probability of being FFB
         const double random_uniform = (double)rand() / (double)RAND_MAX;
         
-        total_galaxies_checked++;
+        // total_galaxies_checked++;
         
         if(random_uniform < f_ffb) {
             galaxies[p].FFBRegime = 1;  // FFB halo
-            ffb_galaxies_assigned++;
+            // ffb_galaxies_assigned++;
             
             // Debug output for first few FFB halos at high-z
             // if(ffb_galaxies_assigned <= 10 && z > 8.0) {
