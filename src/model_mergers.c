@@ -45,7 +45,7 @@ double estimate_merging_time(const int sat_halo, const int mother_halo, const in
 
 }
 
-double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GALAXY *g2, const double mass_ratio)
+double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GALAXY *g2)
 {
     // 1. Calculate Total Baryonic Mass (Stars + Gas) for both progenitors
     double M1 = g1->StellarMass + g1->ColdGas;
@@ -142,7 +142,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
 
     // 1. Calculate the New Merger Radius via Energy Conservation
     // We calculate this regardless of merger type, but apply it selectively
-    double new_merger_radius = calculate_merger_remnant_radius(&galaxies[merger_centralgal], &galaxies[p], mass_ratio);
+    double new_merger_radius = calculate_merger_remnant_radius(&galaxies[merger_centralgal], &galaxies[p]);
     
     // Determine Central Morphology (Tonini 2016 Section 5.2)
     // Is the central galaxy Disc-dominated or Bulge-dominated?
@@ -166,7 +166,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     if(mass_ratio > run_params->ThreshMajorMerger) {
         // CASE 1: MAJOR MERGER (Section 5.2.3)
         // Destroys disc, creates pure merger-driven bulge
-        make_bulge_from_burst(merger_centralgal, galaxies, run_params);
+        make_bulge_from_burst(merger_centralgal, galaxies);
         
         // Apply the Energy Conservation Radius
         galaxies[merger_centralgal].MergerBulgeRadius = new_merger_radius;
@@ -338,7 +338,7 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
 
 
 
-void make_bulge_from_burst(const int p, struct GALAXY *galaxies, const struct params *run_params)
+void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
 {
     // generate bulge
     galaxies[p].BulgeMass = galaxies[p].StellarMass;
