@@ -699,6 +699,34 @@ def load_bouwens_uvlf(redshift):
         print(f"  Warning: Could not load Bouwens UVLF data: {e}")
         return None, None, None, None
 
+def load_finkelstein_uvlf(redshift):
+    """Load Finkelstein et al. 2022 observational UV luminosity function data for a given redshift"""
+    filename = './data/finkelstein_lf_2022.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Use z=9 data for z=9,10,11 panels (within ±2.5 for very broad match)
+        z_match = np.abs(table['z'] - 9.0) < 0.5
+        if not np.any(z_match):
+            return None, None, None, None
+        
+        data = table[z_match]
+        
+        M_UV = np.array(data['M_UV'])
+        log_phi = np.array(data['log_phi'])
+        log_phi_err_low = np.array(data['log_phi_lower'])
+        log_phi_err_high = np.array(data['log_phi_upper'])
+        
+        return M_UV, log_phi, log_phi_err_low, log_phi_err_high
+    except Exception as e:
+        print(f"  Warning: Could not load Finkelstein UVLF data: {e}")
+        return None, None, None, None
+
 def plot_smf_grid(models=None, redshift_range='high'):
     """Plot SMF grid for different redshifts comparing different FFB models
     
@@ -1365,8 +1393,9 @@ def plot_uvlf_grid(models=None):
                 if np.any(valid):
                     ax.errorbar(mcleod_muv[valid], mcleod_phi[valid],
                                yerr=mcleod_err[valid],
-                               fmt='s', color='black', markersize=10, alpha=1.0,
-                               label='McLeod+16' if idx == 0 else '', capsize=2, linewidth=1.5)
+                               fmt='s', markerfacecolor='white', markeredgecolor='gainsboro',
+                               markersize=10, markeredgewidth=2.5, ecolor='gainsboro',
+                               label='pre-JWST' if idx == 0 else '', capsize=2, linewidth=2.5)
                     print(f"  McLeod+16 UVLF data added")
         
         # Oesch et al. 2018 - for z~10
@@ -1380,8 +1409,9 @@ def plot_uvlf_grid(models=None):
                     yerr_high = np.abs(oesch_err_high[valid] - oesch_phi[valid])
                     ax.errorbar(oesch_muv[valid], oesch_phi[valid],
                                yerr=[yerr_low, yerr_high],
-                               fmt='D', color='black', markersize=10, alpha=1.0,
-                               label='Oesch+18' if idx == 0 else '', capsize=2, linewidth=1.5)
+                               fmt='D', markerfacecolor='white', markeredgecolor='gainsboro',
+                               markersize=10, markeredgewidth=2.5, ecolor='gainsboro',
+                               label='', capsize=2, linewidth=2.5)
                     print(f"  Oesch+18 UVLF data added")
         
         # Morishita et al. 2018 - for z~9 and z~10
@@ -1395,8 +1425,9 @@ def plot_uvlf_grid(models=None):
                     yerr_high = np.abs(morishita_err_high[valid] - morishita_phi[valid])
                     ax.errorbar(morishita_muv[valid], morishita_phi[valid],
                                yerr=[yerr_low, yerr_high],
-                               fmt='^', color='black', markersize=10, alpha=1.0,
-                               label='Morishita+18' if idx == 0 else '', capsize=2, linewidth=1.5)
+                               fmt='^', markerfacecolor='white', markeredgecolor='gainsboro',
+                               markersize=10, markeredgewidth=2.5, ecolor='gainsboro',
+                               label='', capsize=2, linewidth=2.5)
                     print(f"  Morishita+18 UVLF data added")
         
         # Stefanon et al. 2019 - for z~9
@@ -1410,8 +1441,9 @@ def plot_uvlf_grid(models=None):
                     yerr_high = np.abs(stefanon_err_high[valid] - stefanon_phi[valid])
                     ax.errorbar(stefanon_muv[valid], stefanon_phi[valid],
                                yerr=[yerr_low, yerr_high],
-                               fmt='o', color='black', markersize=10, alpha=1.0,
-                               label='Stefanon+19' if idx == 0 else '', capsize=2, linewidth=1.5)
+                               fmt='o', markerfacecolor='white', markeredgecolor='gainsboro',
+                               markersize=10, markeredgewidth=2.5, ecolor='gainsboro',
+                               label='', capsize=2, linewidth=2.5)
                     print(f"  Stefanon+19 UVLF data added")
         
         # Bouwens et al. 2021 - for z~9
@@ -1425,9 +1457,26 @@ def plot_uvlf_grid(models=None):
                     yerr_high = np.abs(bouwens_err_high[valid] - bouwens_phi[valid])
                     ax.errorbar(bouwens_muv[valid], bouwens_phi[valid],
                                yerr=[yerr_low, yerr_high],
-                               fmt='v', color='black', markersize=10, alpha=1.0,
-                               label='Bouwens+21' if idx == 0 else '', capsize=2, linewidth=1.5)
+                               fmt='v', markerfacecolor='white', markeredgecolor='gainsboro',
+                               markersize=10, markeredgewidth=2.5, ecolor='gainsboro',
+                               label='', capsize=2, linewidth=2.5)
                     print(f"  Bouwens+21 UVLF data added")
+        
+        # Finkelstein et al. 2022 (JWST CEERS) - for z~9-11
+        if 8.5 <= z_actual <= 11.5:
+            finkelstein_muv, finkelstein_phi, finkelstein_err_low, finkelstein_err_high = load_finkelstein_uvlf(z_actual)
+            if finkelstein_muv is not None:
+                valid = np.isfinite(finkelstein_phi) & (finkelstein_phi > -9)
+                if np.any(valid):
+                    # Calculate error bars (already in log space)
+                    yerr_low = np.abs(finkelstein_phi[valid] - finkelstein_err_low[valid])
+                    yerr_high = np.abs(finkelstein_err_high[valid] - finkelstein_phi[valid])
+                    ax.errorbar(finkelstein_muv[valid], finkelstein_phi[valid],
+                               yerr=[yerr_low, yerr_high],
+                               fmt='<', markerfacecolor='white', markeredgecolor='gainsboro',
+                               markersize=10, markeredgewidth=2.5, ecolor='gainsboro',
+                               label='', capsize=2, linewidth=2.5)
+                    print(f"  Finkelstein+22 UVLF data added")
         
         # Formatting
         ax.set_xlim(-24, -16)
@@ -1449,7 +1498,35 @@ def plot_uvlf_grid(models=None):
         
         # Only show legend in first subplot
         if idx == 0:
-            ax.legend(loc='lower left', fontsize=9, ncol=1)
+            # Get existing handles and labels
+            handles, labels = ax.get_legend_handles_labels()
+            
+            # Create custom handle for pre-JWST with circle marker
+            from matplotlib.lines import Line2D
+            prejwst_handle = Line2D([0], [0], marker='o', color='w', 
+                                   markerfacecolor='white', markeredgecolor='gainsboro',
+                                   markersize=10, markeredgewidth=2.5,
+                                   label='pre-JWST')
+            
+            # Find and replace the pre-JWST entry if it exists
+            new_handles = []
+            new_labels = []
+            prejwst_added = False
+            for handle, label in zip(handles, labels):
+                if label == 'pre-JWST' and not prejwst_added:
+                    new_handles.append(prejwst_handle)
+                    new_labels.append('pre-JWST')
+                    prejwst_added = True
+                elif label != 'pre-JWST':
+                    new_handles.append(handle)
+                    new_labels.append(label)
+            
+            # If pre-JWST wasn't in the list, add it
+            if not prejwst_added:
+                new_handles.append(prejwst_handle)
+                new_labels.append('pre-JWST')
+            
+            ax.legend(new_handles, new_labels, loc='lower left', fontsize=9, ncol=1)
     
     # Add common y-axis label before tight_layout
     fig.text(0.04, 0.5, r'$\log_{10}(\Phi / \mathrm{Mpc}^{-3} \, \mathrm{mag}^{-1})$', 
