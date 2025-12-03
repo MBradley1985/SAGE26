@@ -1,0 +1,39 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: z, unit: redshift, datatype: float64, description: Central redshift of the bin}
+# - {name: log_M, unit: dex(Msun), datatype: float64, description: Log10 Stellar Mass}
+# - {name: log_phi, unit: dex(Mpc-3 dex-1), datatype: float64, description: Log10 Number Density}
+# - {name: log_phi_upper, unit: dex(Mpc-3 dex-1), datatype: float64, description: Log10 Number Density (Upper 1-sigma)}
+# - {name: log_phi_lower, unit: dex(Mpc-3 dex-1), datatype: float64, description: Log10 Number Density (Lower 1-sigma)}
+# meta: !!omap
+# - author: Stefanon et al.
+# - year: 2021
+# - title: Galaxy Stellar Mass Functions from z~6 to z~10
+# - table_sources: Table 4
+z log_M log_phi log_phi_upper log_phi_lower
+6.0 8.25 -2.44 -2.32 -2.59
+6.0 8.75 -2.71 -2.62 -2.81
+6.0 9.25 -3.22 -3.12 -3.33
+6.0 9.75 -3.61 -3.49 -3.75
+6.0 10.25 -4.22 -4.05 -4.43
+6.0 10.75 -4.83 -4.56 -5.24
+6.0 11.25 -5.26 -5.26 -inf
+7.0 8.25 -2.56 -2.33 -2.92
+7.0 8.75 -2.93 -2.76 -3.15
+7.0 9.25 -3.47 -3.31 -3.66
+7.0 9.75 -3.95 -3.76 -4.19
+7.0 10.25 -4.55 -4.25 -4.98
+7.0 10.75 -5.26 -5.26 -inf
+8.0 8.25 -2.85 -2.41 -4.20
+8.0 8.75 -3.29 -2.99 -3.76
+8.0 9.25 -3.90 -3.58 -4.41
+8.0 9.75 -4.66 -4.18 -5.62
+8.0 10.25 -5.26 -5.26 -inf
+9.0 8.25 -3.29 -2.59 -inf
+9.0 8.75 -3.83 -3.22 -inf
+9.0 9.25 -4.31 -3.62 -inf
+9.0 9.75 -5.26 -5.26 -inf
+10.0 8.25 -4.39 -3.22 -inf
+10.0 8.75 -4.29 -3.33 -inf
+10.0 9.25 -5.26 -5.26 -inf

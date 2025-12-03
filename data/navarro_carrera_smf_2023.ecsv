@@ -1,0 +1,45 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: z, unit: redshift, datatype: float64, description: Redshift bin}
+# - {name: log_M, unit: dex(Msun), datatype: float64, description: Log10 Stellar Mass (Bin Center)}
+# - {name: log_phi, unit: dex(Mpc-3 dex-1), datatype: float64, description: Log10 Number Density}
+# - {name: log_phi_upper, unit: dex(Mpc-3 dex-1), datatype: float64, description: Log10 Number Density (Upper 1-sigma)}
+# - {name: log_phi_lower, unit: dex(Mpc-3 dex-1), datatype: float64, description: Log10 Number Density (Lower 1-sigma)}
+# meta: !!omap
+# - {author: Navarro-Carrera et al.}
+# - {year: 2024}
+# - {title: Constraints on the Faint End of the Galaxy Stellar Mass Function at z ~ 4-8}
+# - {table_sources: 'Table 4'}
+z log_M log_phi log_phi_upper log_phi_lower
+4.0 7.875 -1.8097 -1.7122 -1.9355
+5.0 7.875 -1.8928 -1.7520 -2.1024
+4.0 8.125 -1.9788 -1.8794 -2.1079
+5.0 8.125 -1.9586 -1.8356 -2.1308
+6.0 8.125 -1.9172 -1.7595 -2.1675
+4.0 8.375 -2.1308 -2.0315 -2.2596
+5.0 8.375 -2.0809 -1.9586 -2.2518
+6.0 8.375 -1.8962 -1.7399 -2.1427
+7.0 8.375 -2.5376 -2.3098 -3.0458
+8.0 8.375 -2.9586 -2.7212 -3.5229
+4.0 8.625 -2.3098 -2.2007 -2.4559
+5.0 8.625 -2.3098 -2.1739 -2.5086
+6.0 8.625 -2.0605 -2.0969 -2.2924
+7.0 8.625 -2.7447 -2.5376 -3.1549
+8.0 8.625 -3.3979 -3.1549 -4.0000
+4.0 8.875 -2.4559 -2.3372 -2.6198
+5.0 8.875 -2.1871 -2.0132 -2.4815
+6.0 8.875 -2.4685 -2.3279 -2.6778
+7.0 8.875 -2.6576 -2.4202 -3.2218
+4.0 9.125 -2.6198 -2.4949 -2.7959
+5.0 9.125 -2.9208 -2.7447 -3.2218
+6.0 9.125 -2.6021 -2.3979 -3.0000
+7.0 9.125 -3.1549 -2.8539 -inf
+8.0 9.125 -4.0000 -3.6990 -inf
+4.0 9.375 -3.1549 -2.9208 -3.6990
+5.0 9.375 -3.0969 -2.8861 -3.5229
+6.0 9.375 -2.6990 -2.4949 -3.0969
+7.0 9.375 -3.0458 -2.7696 -4.0000
+4.0 9.625 -3.0969 -2.9208 -3.3979
+5.0 9.625 -3.0000 -2.7447 -3.6990
+6.0 9.625 -3.0969 -2.7959 -inf

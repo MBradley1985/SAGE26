@@ -448,6 +448,118 @@ def load_bagpipes_smf(redshift):
         print(f"  Warning: Could not load Bagpipes data: {e}")
         return None, None, None, None
 
+def load_weibel_smf(redshift):
+    """Load Weibel et al. 2024 observational SMF data for a given redshift"""
+    filename = './data/weibel_smf_2024.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±0.5)
+        z_match = np.abs(table['z'] - redshift) < 0.5
+        if not np.any(z_match):
+            return None, None, None, None
+        
+        data = table[z_match]
+        
+        log_mass = np.array(data['log_M'])
+        phi = np.array(data['log_phi'])
+        phi_err_low = np.array(data['log_phi_lower'])
+        phi_err_high = np.array(data['log_phi_upper'])
+        
+        return log_mass, phi, phi_err_low, phi_err_high
+    except Exception as e:
+        print(f"  Warning: Could not load Weibel data: {e}")
+        return None, None, None, None
+
+def load_navarro_carrera_smf(redshift):
+    """Load Navarro-Carrera et al. 2024 observational SMF data for a given redshift"""
+    filename = './data/navarro_carrera_smf_2023.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±0.5)
+        z_match = np.abs(table['z'] - redshift) < 0.5
+        if not np.any(z_match):
+            return None, None, None, None
+        
+        data = table[z_match]
+        
+        log_mass = np.array(data['log_M'])
+        phi = np.array(data['log_phi'])
+        phi_err_low = np.array(data['log_phi_lower'])
+        phi_err_high = np.array(data['log_phi_upper'])
+        
+        return log_mass, phi, phi_err_low, phi_err_high
+    except Exception as e:
+        print(f"  Warning: Could not load Navarro-Carrera data: {e}")
+        return None, None, None, None
+
+def load_kikuchihara_smf(redshift):
+    """Load Kikuchihara et al. 2020 observational SMF data for a given redshift"""
+    filename = './data/kikuchihara_smf_2020.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±0.5)
+        z_match = np.abs(table['z'] - redshift) < 0.5
+        if not np.any(z_match):
+            return None, None, None, None
+        
+        data = table[z_match]
+        
+        log_mass = np.array(data['log_M'])
+        phi = np.array(data['log_phi'])
+        phi_err_low = np.array(data['log_phi_lower'])
+        phi_err_high = np.array(data['log_phi_upper'])
+        
+        return log_mass, phi, phi_err_low, phi_err_high
+    except Exception as e:
+        print(f"  Warning: Could not load Kikuchihara data: {e}")
+        return None, None, None, None
+
+def load_stefanon_smf(redshift):
+    """Load Stefanon et al. 2021 observational SMF data for a given redshift"""
+    filename = './data/stefanon_smf_2021.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±0.5)
+        z_match = np.abs(table['z'] - redshift) < 0.5
+        if not np.any(z_match):
+            return None, None, None, None
+        
+        data = table[z_match]
+        
+        log_mass = np.array(data['log_M'])
+        phi = np.array(data['log_phi'])
+        phi_err_low = np.array(data['log_phi_lower'])
+        phi_err_high = np.array(data['log_phi_upper'])
+        
+        return log_mass, phi, phi_err_low, phi_err_high
+    except Exception as e:
+        print(f"  Warning: Could not load Stefanon data: {e}")
+        return None, None, None, None
+
 def plot_smf_grid(models=None, redshift_range='high'):
     """Plot SMF grid for different redshifts comparing different FFB models
     
@@ -584,7 +696,7 @@ def plot_smf_grid(models=None, redshift_range='high'):
                 ax.errorbar(cosmos_mass[valid], cosmos_phi[valid], 
                            yerr=[yerr_low, yerr_high],
                            fmt='s', color='black', markersize=10, alpha=1.0,
-                           label='Farmer+ (COSMOS2020)' if idx == 0 else '', capsize=2, linewidth=1.5)
+                           label='COSMOS2020' if idx == 0 else '', capsize=2, linewidth=1.5)
                 print(f"  Farmer+ (COSMOS2020) data added")
         
         # Bagpipes (Harvey+24) - for high redshifts
@@ -601,6 +713,66 @@ def plot_smf_grid(models=None, redshift_range='high'):
                                fmt='D', color='black', markersize=10, alpha=1.0,
                                label='Harvey+24' if idx == 0 else '', capsize=2, linewidth=1.5)
                     print(f"  Harvey+24 (Bagpipes) data added")
+        
+        # Weibel et al. 2024 - for z=4-9
+        if 4.0 <= z_actual <= 9.0:
+            weibel_mass, weibel_phi, weibel_err_low, weibel_err_high = load_weibel_smf(z_actual)
+            if weibel_mass is not None:
+                valid = np.isfinite(weibel_phi) & (weibel_phi > -9)
+                if np.any(valid):
+                    # Calculate error bars (already in log space)
+                    yerr_low = np.abs(weibel_phi[valid] - weibel_err_low[valid])
+                    yerr_high = np.abs(weibel_err_high[valid] - weibel_phi[valid])
+                    ax.errorbar(weibel_mass[valid], weibel_phi[valid],
+                               yerr=[yerr_low, yerr_high],
+                               fmt='^', color='black', markersize=10, alpha=1.0,
+                               label='Weibel+24' if idx == 0 else '', capsize=2, linewidth=1.5)
+                    print(f"  Weibel+24 data added")
+        
+        # Navarro-Carrera et al. 2024 - for z=4-8
+        if 4.0 <= z_actual <= 8.0:
+            nc_mass, nc_phi, nc_err_low, nc_err_high = load_navarro_carrera_smf(z_actual)
+            if nc_mass is not None:
+                valid = np.isfinite(nc_phi) & (nc_phi > -9)
+                if np.any(valid):
+                    # Calculate error bars (already in log space)
+                    yerr_low = np.abs(nc_phi[valid] - nc_err_low[valid])
+                    yerr_high = np.abs(nc_err_high[valid] - nc_phi[valid])
+                    ax.errorbar(nc_mass[valid], nc_phi[valid],
+                               yerr=[yerr_low, yerr_high],
+                               fmt='o', color='black', markersize=10, alpha=1.0,
+                               label='Navarro-Carrera+24' if idx == 0 else '', capsize=2, linewidth=1.5)
+                    print(f"  Navarro-Carrera+24 data added")
+        
+        # Kikuchihara et al. 2020 - for z=6-9
+        if 6.0 <= z_actual <= 9.0:
+            kik_mass, kik_phi, kik_err_low, kik_err_high = load_kikuchihara_smf(z_actual)
+            if kik_mass is not None:
+                valid = np.isfinite(kik_phi) & (kik_phi > -9)
+                if np.any(valid):
+                    # Calculate error bars (already in log space)
+                    yerr_low = np.abs(kik_phi[valid] - kik_err_low[valid])
+                    yerr_high = np.abs(kik_err_high[valid] - kik_phi[valid])
+                    ax.errorbar(kik_mass[valid], kik_phi[valid],
+                               yerr=[yerr_low, yerr_high],
+                               fmt='v', color='black', markersize=10, alpha=1.0,
+                               label='Kikuchihara+20' if idx == 0 else '', capsize=2, linewidth=1.5)
+                    print(f"  Kikuchihara+20 data added")
+        
+        # Stefanon et al. 2021 - for z=6-10
+        if 6.0 <= z_actual <= 10.0:
+            stef_mass, stef_phi, stef_err_low, stef_err_high = load_stefanon_smf(z_actual)
+            if stef_mass is not None:
+                valid = np.isfinite(stef_phi) & (stef_phi > -9)
+                if np.any(valid):
+                    # Calculate error bars (already in log space)
+                    yerr_low = np.abs(stef_phi[valid] - stef_err_low[valid])
+                    yerr_high = np.abs(stef_err_high[valid] - stef_phi[valid])
+                    ax.errorbar(stef_mass[valid], stef_phi[valid],
+                               yerr=[yerr_low, yerr_high],
+                               fmt='<', color='black', markersize=10, alpha=1.0,
+                               label='Stefanon+21' if idx == 0 else '', capsize=2, linewidth=1.5)
+                    print(f"  Stefanon+21 data added")
         
         # Formatting
         ax.set_xlim(8, 12)
@@ -620,9 +792,41 @@ def plot_smf_grid(models=None, redshift_range='high'):
         else:  # Top row - hide x-axis tick labels
             ax.tick_params(axis='x', labelbottom=False)
         
-        # Only show legend in first subplot
+        # Only show legends in first subplot
         if idx == 0:
-            ax.legend(loc='lower left', fontsize=9, ncol=1, frameon=False)
+            # Get all handles and labels
+            handles, labels = ax.get_legend_handles_labels()
+            
+            # Separate models/simulations from observations
+            model_handles = []
+            model_labels = []
+            obs_handles = []
+            obs_labels = []
+            
+            for handle, label in zip(handles, labels):
+                # Observations have specific marker styles (errorbar plots)
+                if label in ['COSMOS2020', 'Harvey+24', 'Weibel+24', 'Navarro-Carrera+24', 'Kikuchihara+20', 'Stefanon+21']:
+                    obs_handles.append(handle)
+                    obs_labels.append(label)
+                else:
+                    # Models and Li+ 2024 analytical predictions
+                    model_handles.append(handle)
+                    model_labels.append(label)
+            
+            # Create observations legend in lower left
+            if obs_handles:
+                obs_legend = ax.legend(obs_handles, obs_labels, 
+                                      loc='lower left', fontsize=9, 
+                                      ncol=1, frameon=False)
+                ax.add_artist(obs_legend)
+            
+            # Create models legend in upper right (below redshift text)
+            if model_handles:
+                model_legend = ax.legend(model_handles, model_labels,
+                                        loc='upper right', fontsize=9,
+                                        ncol=1, frameon=False,
+                                        bbox_to_anchor=(0.98, 0.88))
+                ax.add_artist(model_legend)
     
     # Add common y-axis label before tight_layout
     fig.text(0.04, 0.5, r'$\log_{10}(\Phi / \mathrm{Mpc}^{-3} \, \mathrm{dex}^{-1})$', 

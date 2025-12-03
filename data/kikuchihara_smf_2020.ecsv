@@ -1,0 +1,43 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: z, unit: redshift, datatype: float64, description: Redshift bin}
+# - {name: log_M, unit: dex(Msun), datatype: float64, description: Log10 Stellar Mass (Bin Center)}
+# - {name: log_phi, unit: dex(Mpc-3 dex-1), datatype: float64, description: Log10 Number Density}
+# - {name: log_phi_upper, unit: dex(Mpc-3 dex-1), datatype: float64, description: Log10 Number Density (Upper 1-sigma)}
+# - {name: log_phi_lower, unit: dex(Mpc-3 dex-1), datatype: float64, description: Log10 Number Density (Lower 1-sigma)}
+# meta: !!omap
+# - author: Kikuchihara et al.
+# - year: 2020
+# - title: 'The Astrophysical Journal, 893:60'
+# - table_sources: Table 3
+z log_M log_phi log_phi_upper log_phi_lower
+6.0 6.25 -0.8030 -0.6271 -1.0410
+7.0 6.25 -0.9234 -0.6861 -1.3325
+6.0 6.75 -1.2725 -1.1612 -1.4145
+7.0 6.75 -1.3307 -1.1965 -1.5031
+6.0 7.25 -1.5735 -1.4908 -1.6737
+7.0 7.25 -1.6180 -1.5229 -1.7328
+8.0 7.25 -1.8210 -1.5544 -2.3372
+9.0 7.25 -2.0088 -1.6383 -2.9586
+6.0 7.75 -2.0000 -1.9431 -2.0655
+7.0 7.75 -2.0223 -1.9547 -2.0969
+8.0 7.75 -2.4437 -2.2596 -2.7212
+9.0 7.75 -2.3372 -2.0809 -2.7696
+6.0 8.25 -2.1871 -2.1367 -2.2441
+7.0 8.25 -2.4202 -2.3565 -2.4949
+8.0 8.25 -2.7696 -2.6383 -2.9586
+9.0 8.25 -3.0000 -2.7447 -3.5229
+6.0 8.75 -2.6383 -2.5850 -2.6990
+7.0 8.75 -2.7696 -2.6990 -2.8539
+8.0 8.75 -3.3010 -3.0458 -3.6990
+9.0 8.75 -3.5229 -3.0969 -inf
+6.0 9.25 -2.9208 -2.8239 -3.0458
+7.0 9.25 -3.3979 -3.1549 -3.8239
+8.0 9.25 -3.6990 -3.2218 -inf
+9.0 9.25 -3.6990 -3.2218 -inf
+6.0 9.75 -3.3979 -3.1549 -3.8239
+7.0 9.75 -3.6990 -3.2218 -inf
+8.0 9.75 -4.0000 -3.3979 -inf
+6.0 10.25 -4.3010 -3.5229 -inf
+7.0 10.25 -3.5229 -3.0969 -inf
