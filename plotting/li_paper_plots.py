@@ -560,6 +560,145 @@ def load_stefanon_smf(redshift):
         print(f"  Warning: Could not load Stefanon data: {e}")
         return None, None, None, None
 
+def load_mcleod_uvlf(redshift):
+    """Load McLeod et al. 2016 observational UV luminosity function data for a given redshift"""
+    filename = './data/mcloud_lf_2016.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±0.5)
+        z_match = np.abs(table['z'] - redshift) < 0.5
+        if not np.any(z_match):
+            return None, None, None
+        
+        data = table[z_match]
+        
+        M_UV = np.array(data['M_UV'])
+        log_phi = np.array(data['log_phi'])
+        log_phi_err = np.array(data['log_phi_error'])
+        
+        return M_UV, log_phi, log_phi_err
+    except Exception as e:
+        print(f"  Warning: Could not load McLeod UVLF data: {e}")
+        return None, None, None
+
+def load_oesch_uvlf(redshift):
+    """Load Oesch et al. 2018 observational UV luminosity function data for a given redshift"""
+    filename = './data/oesch_lf_2018.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±0.5)
+        z_match = np.abs(table['z'] - redshift) < 0.5
+        if not np.any(z_match):
+            return None, None, None, None
+        
+        data = table[z_match]
+        
+        M_UV = np.array(data['M_UV'])
+        log_phi = np.array(data['log_phi'])
+        log_phi_err_low = np.array(data['log_phi_lower'])
+        log_phi_err_high = np.array(data['log_phi_upper'])
+        
+        return M_UV, log_phi, log_phi_err_low, log_phi_err_high
+    except Exception as e:
+        print(f"  Warning: Could not load Oesch UVLF data: {e}")
+        return None, None, None, None
+
+def load_morishita_uvlf(redshift):
+    """Load Morishita et al. 2018 observational UV luminosity function data for a given redshift"""
+    filename = './data/morishita_lf_2018.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±0.5)
+        z_match = np.abs(table['z'] - redshift) < 0.5
+        if not np.any(z_match):
+            return None, None, None, None
+        
+        data = table[z_match]
+        
+        M_UV = np.array(data['M_UV'])
+        log_phi = np.array(data['log_phi'])
+        log_phi_err_low = np.array(data['log_phi_lower'])
+        log_phi_err_high = np.array(data['log_phi_upper'])
+        
+        return M_UV, log_phi, log_phi_err_low, log_phi_err_high
+    except Exception as e:
+        print(f"  Warning: Could not load Morishita UVLF data: {e}")
+        return None, None, None, None
+
+def load_stefanon_uvlf(redshift):
+    """Load Stefanon et al. 2019 observational UV luminosity function data for a given redshift"""
+    filename = './data/stefanon_lf_2019.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±0.5)
+        z_match = np.abs(table['z'] - redshift) < 0.5
+        if not np.any(z_match):
+            return None, None, None, None
+        
+        data = table[z_match]
+        
+        M_UV = np.array(data['M_UV'])
+        log_phi = np.array(data['log_phi'])
+        log_phi_err_low = np.array(data['log_phi_lower'])
+        log_phi_err_high = np.array(data['log_phi_upper'])
+        
+        return M_UV, log_phi, log_phi_err_low, log_phi_err_high
+    except Exception as e:
+        print(f"  Warning: Could not load Stefanon UVLF data: {e}")
+        return None, None, None, None
+
+def load_bouwens_uvlf(redshift):
+    """Load Bouwens et al. 2021 observational UV luminosity function data for a given redshift"""
+    filename = './data/bouwens_lf_2021.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±0.5)
+        z_match = np.abs(table['z'] - redshift) < 0.5
+        if not np.any(z_match):
+            return None, None, None, None
+        
+        data = table[z_match]
+        
+        M_UV = np.array(data['M_UV'])
+        log_phi = np.array(data['log_phi'])
+        log_phi_err_low = np.array(data['log_phi_lower'])
+        log_phi_err_high = np.array(data['log_phi_upper'])
+        
+        return M_UV, log_phi, log_phi_err_low, log_phi_err_high
+    except Exception as e:
+        print(f"  Warning: Could not load Bouwens UVLF data: {e}")
+        return None, None, None, None
+
 def plot_smf_grid(models=None, redshift_range='high'):
     """Plot SMF grid for different redshifts comparing different FFB models
     
@@ -755,7 +894,8 @@ def plot_smf_grid(models=None, redshift_range='high'):
                     yerr_high = np.abs(kik_err_high[valid] - kik_phi[valid])
                     ax.errorbar(kik_mass[valid], kik_phi[valid],
                                yerr=[yerr_low, yerr_high],
-                               fmt='v', color='black', markersize=10, alpha=1.0,
+                               fmt='v', markerfacecolor='white', markeredgecolor='black', 
+                               markersize=10, markeredgewidth=1.5, ecolor='black',
                                label='Kikuchihara+20' if idx == 0 else '', capsize=2, linewidth=1.5)
                     print(f"  Kikuchihara+20 data added")
         
@@ -770,7 +910,8 @@ def plot_smf_grid(models=None, redshift_range='high'):
                     yerr_high = np.abs(stef_err_high[valid] - stef_phi[valid])
                     ax.errorbar(stef_mass[valid], stef_phi[valid],
                                yerr=[yerr_low, yerr_high],
-                               fmt='<', color='black', markersize=10, alpha=1.0,
+                               fmt='<', markerfacecolor='white', markeredgecolor='black',
+                               markersize=10, markeredgewidth=1.5, ecolor='black',
                                label='Stefanon+21' if idx == 0 else '', capsize=2, linewidth=1.5)
                     print(f"  Stefanon+21 data added")
         
@@ -1214,6 +1355,79 @@ def plot_uvlf_grid(models=None):
             print(f"  Li+2023 analytical UVLF predictions added (3 lines)")
         except Exception as e:
             print(f"  Warning: Could not compute analytical UVLF: {e}")
+        
+        # Add observational data
+        # McLeod et al. 2016 - for z~9
+        if 8.5 <= z_actual <= 9.5:
+            mcleod_muv, mcleod_phi, mcleod_err = load_mcleod_uvlf(z_actual)
+            if mcleod_muv is not None:
+                valid = np.isfinite(mcleod_phi) & (mcleod_phi > -9)
+                if np.any(valid):
+                    ax.errorbar(mcleod_muv[valid], mcleod_phi[valid],
+                               yerr=mcleod_err[valid],
+                               fmt='s', color='black', markersize=10, alpha=1.0,
+                               label='McLeod+16' if idx == 0 else '', capsize=2, linewidth=1.5)
+                    print(f"  McLeod+16 UVLF data added")
+        
+        # Oesch et al. 2018 - for z~10
+        if 9.5 <= z_actual <= 10.5:
+            oesch_muv, oesch_phi, oesch_err_low, oesch_err_high = load_oesch_uvlf(z_actual)
+            if oesch_muv is not None:
+                valid = np.isfinite(oesch_phi) & (oesch_phi > -9)
+                if np.any(valid):
+                    # Calculate error bars (already in log space)
+                    yerr_low = np.abs(oesch_phi[valid] - oesch_err_low[valid])
+                    yerr_high = np.abs(oesch_err_high[valid] - oesch_phi[valid])
+                    ax.errorbar(oesch_muv[valid], oesch_phi[valid],
+                               yerr=[yerr_low, yerr_high],
+                               fmt='D', color='black', markersize=10, alpha=1.0,
+                               label='Oesch+18' if idx == 0 else '', capsize=2, linewidth=1.5)
+                    print(f"  Oesch+18 UVLF data added")
+        
+        # Morishita et al. 2018 - for z~9 and z~10
+        if 8.5 <= z_actual <= 10.5:
+            morishita_muv, morishita_phi, morishita_err_low, morishita_err_high = load_morishita_uvlf(z_actual)
+            if morishita_muv is not None:
+                valid = np.isfinite(morishita_phi) & (morishita_phi > -9)
+                if np.any(valid):
+                    # Calculate error bars (already in log space)
+                    yerr_low = np.abs(morishita_phi[valid] - morishita_err_low[valid])
+                    yerr_high = np.abs(morishita_err_high[valid] - morishita_phi[valid])
+                    ax.errorbar(morishita_muv[valid], morishita_phi[valid],
+                               yerr=[yerr_low, yerr_high],
+                               fmt='^', color='black', markersize=10, alpha=1.0,
+                               label='Morishita+18' if idx == 0 else '', capsize=2, linewidth=1.5)
+                    print(f"  Morishita+18 UVLF data added")
+        
+        # Stefanon et al. 2019 - for z~9
+        if 8.5 <= z_actual <= 9.5:
+            stefanon_muv, stefanon_phi, stefanon_err_low, stefanon_err_high = load_stefanon_uvlf(z_actual)
+            if stefanon_muv is not None:
+                valid = np.isfinite(stefanon_phi) & (stefanon_phi > -9)
+                if np.any(valid):
+                    # Calculate error bars (already in log space)
+                    yerr_low = np.abs(stefanon_phi[valid] - stefanon_err_low[valid])
+                    yerr_high = np.abs(stefanon_err_high[valid] - stefanon_phi[valid])
+                    ax.errorbar(stefanon_muv[valid], stefanon_phi[valid],
+                               yerr=[yerr_low, yerr_high],
+                               fmt='o', color='black', markersize=10, alpha=1.0,
+                               label='Stefanon+19' if idx == 0 else '', capsize=2, linewidth=1.5)
+                    print(f"  Stefanon+19 UVLF data added")
+        
+        # Bouwens et al. 2021 - for z~9
+        if 8.5 <= z_actual <= 9.5:
+            bouwens_muv, bouwens_phi, bouwens_err_low, bouwens_err_high = load_bouwens_uvlf(z_actual)
+            if bouwens_muv is not None:
+                valid = np.isfinite(bouwens_phi) & (bouwens_phi > -9)
+                if np.any(valid):
+                    # Calculate error bars (already in log space)
+                    yerr_low = np.abs(bouwens_phi[valid] - bouwens_err_low[valid])
+                    yerr_high = np.abs(bouwens_err_high[valid] - bouwens_phi[valid])
+                    ax.errorbar(bouwens_muv[valid], bouwens_phi[valid],
+                               yerr=[yerr_low, yerr_high],
+                               fmt='v', color='black', markersize=10, alpha=1.0,
+                               label='Bouwens+21' if idx == 0 else '', capsize=2, linewidth=1.5)
+                    print(f"  Bouwens+21 UVLF data added")
         
         # Formatting
         ax.set_xlim(-24, -16)
