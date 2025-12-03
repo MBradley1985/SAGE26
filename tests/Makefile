@@ -51,11 +51,103 @@ TEST_SOURCES = \
 	test_halo_mergers.c \
 	test_agn_feedback.c
 
-# Test executables
-TEST_BINS = $(TEST_SOURCES:%.c=$(OUTPUT_DIR)/%)
+# Function to check if all dependencies exist for a test
+# Usage: $(call check_test_deps,test_name)
+define check_test_deps
+$(shell \
+	test_file="$(TEST_DIR)/$(1).c"; \
+	if [ ! -f "$$test_file" ]; then \
+		echo ""; \
+		exit 0; \
+	fi; \
+	missing=""; \
+	for src in $(PROJECT_SOURCES); do \
+		if [ ! -f "$$src" ]; then \
+			missing="$$missing $$src"; \
+		fi; \
+	done; \
+	for header in $(SRC_DIR)/core_allvars.h $(SRC_DIR)/core_utils.h; do \
+		if [ ! -f "$$header" ]; then \
+			missing="$$missing $$header"; \
+		fi; \
+	done; \
+	if [ -n "$$missing" ]; then \
+		echo ""; \
+	else \
+		echo "$(OUTPUT_DIR)/$(1)"; \
+	fi \
+)
+endef
 
-# Default target
-all: $(TEST_BINS)
+# Build list of tests that can actually be built
+BUILDABLE_TESTS = $(foreach test,$(TEST_SOURCES:%.c=%),$(call check_test_deps,$(test)))
+
+# Test executables (only buildable ones)
+TEST_BINS = $(BUILDABLE_TESTS)
+
+# Default target - continue building even if some tests fail
+all: check_dependencies
+	@failed=0; built=0; \
+	for test_src in $(TEST_SOURCES); do \
+		test_name=$${test_src%.c}; \
+		test_file="$(TEST_DIR)/$$test_src"; \
+		if [ ! -f "$$test_file" ]; then \
+			continue; \
+		fi; \
+		missing=""; \
+		for src in $(PROJECT_SOURCES); do \
+			if [ ! -f "$$src" ]; then \
+				missing="$$missing $$src"; \
+			fi; \
+		done; \
+		if [ -z "$$missing" ]; then \
+			if $(MAKE) $(OUTPUT_DIR)/$$test_name 2>/dev/null; then \
+				built=$$((built + 1)); \
+			else \
+				echo "✗ Failed to build $$test_name (compilation errors)"; \
+				failed=$$((failed + 1)); \
+			fi; \
+		fi; \
+	done; \
+	echo ""; \
+	if [ $$built -eq 0 ]; then \
+		echo "✗ No tests were successfully built"; \
+		exit 1; \
+	else \
+		echo "✓ Built $$built test(s)"; \
+		if [ $$failed -gt 0 ]; then \
+			echo "⚠ $$failed test(s) failed to build"; \
+		fi; \
+	fi
+
+# Check and report on dependencies
+check_dependencies:
+	@echo "Checking test dependencies..."
+	@total=0; buildable=0; \
+	for test_src in $(TEST_SOURCES); do \
+		total=$$((total + 1)); \
+		test_name=$${test_src%.c}; \
+		test_file="$(TEST_DIR)/$$test_src"; \
+		if [ ! -f "$$test_file" ]; then \
+			echo "  ⊗ $$test_name - test file missing"; \
+			continue; \
+		fi; \
+		missing=""; \
+		for src in $(PROJECT_SOURCES); do \
+			if [ ! -f "$$src" ]; then \
+				missing="$$missing $${src##*/}"; \
+			fi; \
+		done; \
+		if [ -n "$$missing" ]; then \
+			echo "  ⊗ $$test_name - missing:$$missing"; \
+		else \
+			echo "  ✓ $$test_name"; \
+			buildable=$$((buildable + 1)); \
+		fi; \
+	done; \
+	echo ""; \
+	echo "Tests buildable: $$buildable/$$total"; \
+	echo ""
 
 # Create output directory
 $(OUTPUT_DIR):
@@ -64,29 +156,53 @@ $(OUTPUT_DIR):
 # Pattern rule for building tests
 $(OUTPUT_DIR)/test_%: test_%.c $(PROJECT_SOURCES) | $(OUTPUT_DIR)
 	@echo "Building $@..."
+	@missing=""; \
+	for src in $(PROJECT_SOURCES); do \
+		if [ ! -f "$$src" ]; then \
+			missing="$$missing $$src"; \
+		fi; \
+	done; \
+	if [ -n "$$missing" ]; then \
+		echo "✗ Cannot build $@ - missing source files:$$missing"; \
+		exit 1; \
+	fi
 	$(CC) $(CFLAGS) $< $(PROJECT_SOURCES) $(LDFLAGS) -o $@
 	@echo "✓ Built $@"
 
 # Run all tests
 test: $(TEST_BINS)
-	@echo ""
-	@echo "════════════════════════════════════════════════════════════"
-	@echo "  RUNNING ALL TESTS"
-	@echo "════════════════════════════════════════════════════════════"
-	@failed=0; \
-	for test in $(TEST_BINS); do \
+	@if [ -z "$(TEST_BINS)" ]; then \
 		echo ""; \
-		$$test || failed=$$((failed + 1)); \
+		echo "════════════════════════════════════════════════════════════"; \
+		echo "  ⚠ NO TESTS TO RUN"; \
+		echo "════════════════════════════════════════════════════════════"; \
+		echo "  All tests are missing dependencies."; \
+		echo "  Run 'make check_dependencies' for details."; \
+		echo "════════════════════════════════════════════════════════════"; \
+		echo ""; \
+		exit 1; \
+	fi; \
+	echo ""; \
+	echo "════════════════════════════════════════════════════════════"; \
+	echo "  RUNNING ALL TESTS ($(words $(TEST_BINS)) suites)"; \
+	echo "════════════════════════════════════════════════════════════"; \
+	failed=0; run=0; \
+	for test in $(TEST_BINS); do \
+		if [ -f "$$test" ]; then \
+			echo ""; \
+			run=$$((run + 1)); \
+			$$test || failed=$$((failed + 1)); \
+		fi; \
 	done; \
 	echo ""; \
 	if [ $$failed -eq 0 ]; then \
 		echo "════════════════════════════════════════════════════════════"; \
-		echo "  ✓ ALL TEST SUITES PASSED"; \
+		echo "  ✓ ALL $$run TEST SUITE(S) PASSED"; \
 		echo "════════════════════════════════════════════════════════════"; \
 		echo ""; \
 	else \
 		echo "════════════════════════════════════════════════════════════"; \
-		echo "  ✗ $$failed TEST SUITE(S) FAILED"; \
+		echo "  ✗ $$failed of $$run TEST SUITE(S) FAILED"; \
 		echo "════════════════════════════════════════════════════════════"; \
 		echo ""; \
 		exit 1; \

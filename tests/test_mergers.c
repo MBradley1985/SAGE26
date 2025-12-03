@@ -215,26 +215,26 @@ void test_merger_remnant_radius() {
     gal1.StellarMass = 1.0;
     gal1.BulgeMass = 0.4;
     gal1.ColdGas = 0.5;
-    gal1.BulgeScaleRadius = 0.005;  // 5 kpc/h
+    gal1.BulgeRadius = 0.005;  // 5 kpc/h
     
     // Secondary galaxy
     gal2.StellarMass = 0.3;
     gal2.BulgeMass = 0.1;
     gal2.ColdGas = 0.2;
-    gal2.BulgeScaleRadius = 0.003;  // 3 kpc/h
+    gal2.BulgeRadius = 0.003;  // 3 kpc/h
     
     // Mass-weighted average radius
     double total_mass = gal1.BulgeMass + gal2.BulgeMass;
-    double remnant_radius = (gal1.BulgeMass * gal1.BulgeScaleRadius + 
-                            gal2.BulgeMass * gal2.BulgeScaleRadius) / total_mass;
+    double remnant_radius = (gal1.BulgeMass * gal1.BulgeRadius + 
+                            gal2.BulgeMass * gal2.BulgeRadius) / total_mass;
     
     // Remnant radius should be positive and reasonable
     ASSERT_GREATER_THAN(remnant_radius, 0.0, "Remnant radius > 0");
     ASSERT_LESS_THAN(remnant_radius, 0.1, "Remnant radius reasonable (< 100 kpc/h)");
     
     // Should be between the two input radii
-    double min_radius = gal2.BulgeScaleRadius;
-    double max_radius = gal1.BulgeScaleRadius;
+    double min_radius = gal2.BulgeRadius;
+    double max_radius = gal1.BulgeRadius;
     
     ASSERT_TRUE(remnant_radius >= min_radius, "Remnant >= smaller radius");
     ASSERT_TRUE(remnant_radius <= max_radius, "Remnant <= larger radius");

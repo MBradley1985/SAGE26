@@ -54,6 +54,20 @@ make test_physics        # Physics validation (31 tests)
 make quick
 ```
 
+### Checking Dependencies
+
+```bash
+# Check which tests can be built with current source files
+make check_dependencies
+```
+
+The test suite now automatically detects missing source files and skips tests that cannot be built. This is useful when:
+- Working with an incomplete source tree
+- Testing specific modules in isolation
+- Debugging build issues
+
+Tests are only built and run when all required source files are present.
+
 ### Running Integration Tests
 
 ```bash
@@ -392,20 +406,64 @@ make all
 2. Run individual test suite: `make test_conservation`
 3. Use a debugger: `lldb test_build/test_conservation`
 
-### Missing Source Files
+### Missing Source Files and Automatic Dependency Checking
 
-The Makefile requires these source files from `../src/`:
-- `core_utils.c`
-- `model_misc.c`
-- `model_starformation_and_feedback.c`
-- `model_cooling_heating.c`
-- `model_reincorporation.c`
-- `model_infall.c`
-- `model_disk_instability.c`
-- `model_mergers.c`
-- `core_cool_func.c`
+**As of December 2025**, the test suite now includes automatic dependency checking. Tests that have missing source files are automatically skipped rather than causing build failures.
 
-If compilation fails, ensure these files exist.
+#### How It Works
+
+When you run `make all` or `make test`:
+1. The build system checks which source files are available
+2. Tests are only built if ALL their dependencies exist
+3. Missing tests are reported with details about what's missing
+4. Only successfully built tests are executed
+
+#### Checking Dependencies
+
+```bash
+# See which tests can be built with current source tree
+make check_dependencies
+
+# Example output:
+# Checking test dependencies...
+#   ✓ test_conservation
+#   ✓ test_regime_cgm
+#   ⊗ test_agn_feedback - missing: model_agn.c
+#   ✓ test_cooling_heating
+# 
+# Tests buildable: 15/17
+```
+
+#### Required Source Files
+
+The test suite requires these source files from `../src/`:
+- `core_utils.c` - Core utility functions
+- `model_misc.c` - Miscellaneous model functions
+- `model_starformation_and_feedback.c` - Star formation & feedback
+- `model_cooling_heating.c` - Cooling and heating physics
+- `model_reincorporation.c` - Gas reincorporation
+- `model_infall.c` - Gas infall
+- `model_disk_instability.c` - Disk instability
+- `model_mergers.c` - Galaxy mergers
+- `core_cool_func.c` - Cooling functions
+
+Individual tests may have additional dependencies on specific functions within these files.
+
+#### Use Cases
+
+This automatic dependency checking is useful for:
+- **Incomplete source trees:** When working with a subset of SAGE26 modules
+- **Incremental development:** Build and test modules as they're developed
+- **Module isolation:** Test specific physics modules independently
+- **Debugging:** Identify which tests depend on problematic source files
+- **Continuous integration:** Gracefully handle partial builds
+
+#### Behavior
+
+- `make all` - Builds only tests with satisfied dependencies
+- `make test` - Runs only successfully built tests
+- `make check_dependencies` - Reports dependency status without building
+- Exit codes reflect actual test failures, not missing dependencies
 
 ## Best Practices
 

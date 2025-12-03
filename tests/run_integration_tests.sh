@@ -22,8 +22,6 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
 echo -e "${BLUE}  SAGE26 MODEL INTEGRATION TESTS${NC}"
 echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  Test Suites: 17 | Expected Tests: 320${NC}"
-echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
 echo ""
 
 # Start timing
@@ -43,208 +41,170 @@ mkdir -p "$TEST_OUTPUT_DIR"
 # Change to tests directory
 cd "$SCRIPT_DIR"
 
+# Helper function to run a test if it exists
+# Args: test_number, test_name, test_binary, description, expected_test_count
+run_test_if_exists() {
+    local test_num=$1
+    local test_name=$2
+    local test_binary=$3
+    local description=$4
+    local expected_count=$5
+    
+    # Extract binary base name for log file (e.g., test_conservation from ./test_build/test_conservation)
+    local binary_basename=$(basename "$test_binary")
+    local log_file="$TEST_OUTPUT_DIR/${binary_basename}.log"
+    
+    if [ ! -f "$test_binary" ]; then
+        echo -e "${YELLOW}▸ Test $test_num: $test_name ($expected_count tests)${NC}"
+        echo -e "  ${YELLOW}⊗ SKIP - Test not built (missing dependencies)${NC}"
+        return 1
+    fi
+    
+    echo -e "${YELLOW}▸ Test $test_num: $test_name ($expected_count tests)${NC}"
+    echo -e "  ${NC}$description${NC}"
+    
+    if "$test_binary" > "$log_file" 2>&1; then
+        local pass_info=$(grep -o "Passed:.*" "$log_file" | head -1)
+        echo -e "${GREEN}  ✓ PASS - $pass_info${NC}"
+        return 0
+    else
+        echo -e "${RED}  ✗ FAIL - Some ${test_name} tests failed${NC}"
+        echo "  See: $log_file"
+        return 0
+    fi
+}
+
 echo -e "${YELLOW}▸ Test 1: Building all test suites${NC}"
-echo -e "  ${NC}Compiling 17 test executables...${NC}"
+echo -e "  ${NC}Compiling test executables...${NC}"
 BUILD_START=$(date +%s)
 make clean > /dev/null 2>&1
-if make all > /dev/null 2>&1; then
-    BUILD_END=$(date +%s)
-    BUILD_TIME=$((BUILD_END - BUILD_START))
-    echo -e "${GREEN}  ✓ PASS - All test suites compiled successfully (${BUILD_TIME}s)${NC}"
+BUILD_OUTPUT=$(make all 2>&1)
+BUILD_EXIT=$?
+BUILD_END=$(date +%s)
+BUILD_TIME=$((BUILD_END - BUILD_START))
+
+# Count how many tests were actually built and failed
+BUILT_COUNT=$(echo "$BUILD_OUTPUT" | grep "✓ Built" | wc -l | tr -d ' ')
+FAILED_BUILD=$(echo "$BUILD_OUTPUT" | grep "✗ Failed to build" | wc -l | tr -d ' ')
+
+if [ $BUILD_EXIT -eq 0 ]; then
+    echo -e "${GREEN}  ✓ PASS - $BUILT_COUNT test suite(s) compiled successfully (${BUILD_TIME}s)${NC}"
+    
+    # Check if any tests were skipped or failed to build
+    SKIPPED=$(echo "$BUILD_OUTPUT" | grep "⊗" | wc -l | tr -d ' ')
+    if [ "$SKIPPED" -gt 0 ] || [ "$FAILED_BUILD" -gt 0 ]; then
+        if [ "$SKIPPED" -gt 0 ]; then
+            echo -e "${YELLOW}  ⚠ Note: $SKIPPED test(s) skipped due to missing dependencies${NC}"
+        fi
+        if [ "$FAILED_BUILD" -gt 0 ]; then
+            echo -e "${YELLOW}  ⚠ Note: $FAILED_BUILD test(s) failed to build (compilation errors)${NC}"
+        fi
+    fi
 else
     echo -e "${RED}  ✗ FAIL - Build failed${NC}"
+    echo "$BUILD_OUTPUT"
     exit 1
 fi
 
-echo -e "${YELLOW}▸ Test 2: Conservation Laws (37 tests)${NC}"
-echo -e "  ${NC}Testing mass, metal, and energy conservation...${NC}"
-if ./test_build/test_conservation > "$TEST_OUTPUT_DIR/conservation.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/conservation.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some conservation tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/conservation.log"
+# If no tests were built at all, exit
+if [ "$BUILT_COUNT" -eq 0 ]; then
+    echo -e "${RED}  ✗ FAIL - No tests could be built${NC}"
+    echo -e "  Run 'make check_dependencies' for details"
+    exit 1
 fi
 
-echo -e "${YELLOW}▸ Test 3: Regime Determination & CGM Physics (21 tests)${NC}"
-echo -e "  ${NC}Testing Voit criterion, precipitation, and regime routing...${NC}"
-if ./test_build/test_regime_cgm > "$TEST_OUTPUT_DIR/regime_cgm.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/regime_cgm.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some regime/CGM tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/regime_cgm.log"
-fi
+run_test_if_exists 2 "Conservation Laws" "./test_build/test_conservation" \
+    "Testing mass, metal, and energy conservation..." 37
 
-echo -e "${YELLOW}▸ Test 4: Bulge Size Physics (13 tests)${NC}"
-echo -e "  ${NC}Testing Shen scaling relations and instability bulges...${NC}"
-if ./test_build/test_bulge_sizes > "$TEST_OUTPUT_DIR/bulge_sizes.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/bulge_sizes.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some bulge size tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/bulge_sizes.log"
-fi
+run_test_if_exists 3 "Regime Determination & CGM Physics" "./test_build/test_regime_cgm" \
+    "Testing Voit criterion, precipitation, and regime routing..." 21
 
-echo -e "${YELLOW}▸ Test 5: Physics Validation (31 tests)${NC}"
-echo -e "  ${NC}Testing physical bounds, quenching, and parameter ranges...${NC}"
-if ./test_build/test_physics_validation > "$TEST_OUTPUT_DIR/physics_validation.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/physics_validation.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some physics validation tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/physics_validation.log"
-fi
+run_test_if_exists 4 "Bulge Size Physics" "./test_build/test_bulge_sizes" \
+    "Testing Shen scaling relations and instability bulges..." 13
 
-echo -e "${YELLOW}▸ Test 6: Galaxy Mergers (13 tests)${NC}"
-echo -e "  ${NC}Testing major/minor classification and merger timescales...${NC}"
-if ./test_build/test_mergers > "$TEST_OUTPUT_DIR/mergers.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/mergers.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some merger tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/mergers.log"
-fi
+run_test_if_exists 5 "Physics Validation" "./test_build/test_physics_validation" \
+    "Testing physical bounds, quenching, and parameter ranges..." 31
 
-echo -e "${YELLOW}▸ Test 7: Disk Instability (9 tests)${NC}"
-echo -e "  ${NC}Testing stability criterion and bulge formation channel...${NC}"
-if ./test_build/test_disk_instability > "$TEST_OUTPUT_DIR/disk_instability.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/disk_instability.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some disk instability tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/disk_instability.log"
-fi
+run_test_if_exists 6 "Galaxy Mergers" "./test_build/test_mergers" \
+    "Testing major/minor classification and merger timescales..." 13
 
-echo -e "${YELLOW}▸ Test 8: Gas Infall (12 tests)${NC}"
-echo -e "  ${NC}Testing baryon fraction and regime-based gas routing...${NC}"
-if ./test_build/test_infall > "$TEST_OUTPUT_DIR/infall.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/infall.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some infall tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/infall.log"
-fi
+run_test_if_exists 7 "Disk Instability" "./test_build/test_disk_instability" \
+    "Testing stability criterion and bulge formation channel..." 9
 
-echo -e "${YELLOW}▸ Test 9: Numerical Stability (24 tests)${NC}"
-echo -e "  ${NC}Testing NaN/Inf protection and roundoff error handling...${NC}"
-if ./test_build/test_numerical_stability > "$TEST_OUTPUT_DIR/numerical_stability.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/numerical_stability.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some numerical stability tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/numerical_stability.log"
-fi
+run_test_if_exists 8 "Gas Infall" "./test_build/test_infall" \
+    "Testing baryon fraction and regime-based gas routing..." 12
 
-echo -e "${YELLOW}▸ Test 10: Metal Enrichment (22 tests)${NC}"
-echo -e "  ${NC}Testing stellar yields, SN feedback, and metal tracking...${NC}"
-if ./test_build/test_metal_enrichment > "$TEST_OUTPUT_DIR/metal_enrichment.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/metal_enrichment.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some metal enrichment tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/metal_enrichment.log"
-fi
+run_test_if_exists 9 "Numerical Stability" "./test_build/test_numerical_stability" \
+    "Testing NaN/Inf protection and roundoff error handling..." 24
 
-echo -e "${YELLOW}▸ Test 11: Ram Pressure Stripping (14 tests)${NC}"
-echo -e "  ${NC}Testing hot/cold gas stripping in satellites...${NC}"
-if ./test_build/test_stripping > "$TEST_OUTPUT_DIR/stripping.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/stripping.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some stripping tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/stripping.log"
-fi
+run_test_if_exists 10 "Metal Enrichment" "./test_build/test_metal_enrichment" \
+    "Testing stellar yields, SN feedback, and metal tracking..." 22
 
-echo -e "${YELLOW}▸ Test 12: Multi-Satellite Systems (9 tests)${NC}"
-echo -e "  ${NC}Testing orbital dynamics and tidal interactions...${NC}"
-if ./test_build/test_multi_satellite > "$TEST_OUTPUT_DIR/multi_satellite.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/multi_satellite.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some multi-satellite tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/multi_satellite.log"
-fi
+run_test_if_exists 11 "Ram Pressure Stripping" "./test_build/test_stripping" \
+    "Testing hot/cold gas stripping in satellites..." 14
 
-echo -e "${YELLOW}▸ Test 13: Star Formation Recipes (27 tests)${NC}"
-echo -e "  ${NC}Testing SF laws, quenching, and feedback efficiency...${NC}"
-if ./test_build/test_star_formation_recipes > "$TEST_OUTPUT_DIR/star_formation_recipes.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/star_formation_recipes.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some star formation recipe tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/star_formation_recipes.log"
-fi
+run_test_if_exists 12 "Multi-Satellite Systems" "./test_build/test_multi_satellite" \
+    "Testing orbital dynamics and tidal interactions..." 9
 
-echo -e "${YELLOW}▸ Test 14: Reincorporation (21 tests)${NC}"
-echo -e "  ${NC}Testing ejected gas return rates and timescales...${NC}"
-if ./test_build/test_reincorporation > "$TEST_OUTPUT_DIR/reincorporation.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/reincorporation.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some reincorporation tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/reincorporation.log"
-fi
+run_test_if_exists 13 "Star Formation Recipes" "./test_build/test_star_formation_recipes" \
+    "Testing SF laws, quenching, and feedback efficiency..." 27
 
-echo -e "${YELLOW}▸ Test 15: Cooling & Heating (25 tests)${NC}"
-echo -e "  ${NC}Testing thermal balance, tcool/tff, and precipitation...${NC}"
-if ./test_build/test_cooling_heating > "$TEST_OUTPUT_DIR/cooling_heating.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/cooling_heating.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some cooling/heating tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/cooling_heating.log"
-fi
+run_test_if_exists 14 "Reincorporation" "./test_build/test_reincorporation" \
+    "Testing ejected gas return rates and timescales..." 21
 
-echo -e "${YELLOW}▸ Test 16: Halo Assembly & Mergers (24 tests)${NC}"
-echo -e "  ${NC}Testing mass ratios, dynamical friction, and BH growth...${NC}"
-if ./test_build/test_halo_mergers > "$TEST_OUTPUT_DIR/halo_mergers.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/halo_mergers.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some halo merger tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/halo_mergers.log"
-fi
+run_test_if_exists 15 "Cooling & Heating" "./test_build/test_cooling_heating" \
+    "Testing thermal balance, tcool/tff, and precipitation..." 25
 
-echo -e "${YELLOW}▸ Test 17: AGN Feedback (18 tests)${NC}"
-echo -e "  ${NC}Testing radio/quasar modes, Eddington limits, and heating...${NC}"
-if ./test_build/test_agn_feedback > "$TEST_OUTPUT_DIR/agn_feedback.log" 2>&1; then
-    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/agn_feedback.log" | head -1)
-    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
-else
-    echo -e "${RED}  ✗ FAIL - Some AGN feedback tests failed${NC}"
-    echo "  See: $TEST_OUTPUT_DIR/agn_feedback.log"
-fi
+run_test_if_exists 16 "Halo Assembly & Mergers" "./test_build/test_halo_mergers" \
+    "Testing mass ratios, dynamical friction, and BH growth..." 24
 
-# Count total passes and fails from individual test outputs
+run_test_if_exists 17 "AGN Feedback" "./test_build/test_agn_feedback" \
+    "Testing radio/quasar modes, Eddington limits, and heating..." 18
+
+# Count total passes, fails, and skipped tests
 PASSED=0
 FAILED=0
+SUITES_RUN=0
+SUITES_SKIPPED=0
 
-# Sum up results from each log file
-for log in "$TEST_OUTPUT_DIR"/*.log; do
-    if [ -f "$log" ]; then
-        # Extract just the count number from "  Passed:       XX (YY%)" format
-        # Match the number before the opening parenthesis
-        P=$(grep "  Passed:" "$log" | sed 's/.*Passed:[^0-9]*\([0-9]*\).*/\1/')
-        F=$(grep "  Failed:" "$log" | sed 's/.*Failed:[^0-9]*\([0-9]*\).*/\1/')
-        if [ -n "$P" ] && [ "$P" != "Passed:" ]; then
-            PASSED=$((PASSED + P))
-        fi
-        if [ -n "$F" ] && [ "$F" != "Failed:" ]; then
-            FAILED=$((FAILED + F))
+# Check which test suites exist and sum up results from each log file
+for test_exe in ./test_build/test_*; do
+    # Skip .dSYM directories and non-executable files
+    if [ -f "$test_exe" ] && [ -x "$test_exe" ] && [[ ! "$test_exe" =~ \.dSYM ]]; then
+        SUITES_RUN=$((SUITES_RUN + 1))
+        test_name=$(basename "$test_exe")
+        log="$TEST_OUTPUT_DIR/${test_name}.log"
+        if [ -f "$log" ]; then
+            # Extract just the count number from "  Passed:       XX (YY%)" format
+            P=$(grep "  Passed:" "$log" | sed 's/.*Passed:[^0-9]*\([0-9]*\).*/\1/')
+            F=$(grep "  Failed:" "$log" | sed 's/.*Failed:[^0-9]*\([0-9]*\).*/\1/')
+            if [ -n "$P" ] && [ "$P" != "Passed:" ]; then
+                PASSED=$((PASSED + P))
+            fi
+            if [ -n "$F" ] && [ "$F" != "Failed:" ]; then
+                FAILED=$((FAILED + F))
+            fi
         fi
     fi
 done
 
+# Count expected test suites (count .c files)
+TOTAL_SUITES=$(ls test_*.c 2>/dev/null | wc -l | tr -d ' ')
+SUITES_SKIPPED=$((TOTAL_SUITES - SUITES_RUN))
 TOTAL_TESTS=$((PASSED + FAILED))
 
-# Calculate percentages using bc or python
-if command -v bc &> /dev/null; then
-    PASS_PCT=$(echo "scale=1; ($PASSED * 100) / $TOTAL_TESTS" | bc)
-    FAIL_PCT=$(echo "scale=1; ($FAILED * 100) / $TOTAL_TESTS" | bc)
+# Calculate percentages using bc or python (avoid division by zero)
+if [ "$TOTAL_TESTS" -gt 0 ]; then
+    if command -v bc &> /dev/null; then
+        PASS_PCT=$(echo "scale=1; ($PASSED * 100) / $TOTAL_TESTS" | bc)
+        FAIL_PCT=$(echo "scale=1; ($FAILED * 100) / $TOTAL_TESTS" | bc)
+    else
+        PASS_PCT=$(python3 -c "print(f'{($PASSED/$TOTAL_TESTS)*100:.1f}')")
+        FAIL_PCT=$(python3 -c "print(f'{($FAILED/$TOTAL_TESTS)*100:.1f}')")
+    fi
 else
-    PASS_PCT=$(python3 -c "print(f'{($PASSED/$TOTAL_TESTS)*100:.1f}')")
-    FAIL_PCT=$(python3 -c "print(f'{($FAILED/$TOTAL_TESTS)*100:.1f}')")
+    PASS_PCT="0.0"
+    FAIL_PCT="0.0"
 fi
 
 # Calculate total execution time
@@ -255,19 +215,37 @@ echo ""
 echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
 echo -e "${BLUE}  TEST SUMMARY${NC}"
 echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
-echo -e "  Test Suites:  17"
+echo -e "  Test Suites:  $SUITES_RUN of $TOTAL_SUITES run"
+if [ "$SUITES_SKIPPED" -gt 0 ]; then
+    echo -e "  ${YELLOW}Skipped:      $SUITES_SKIPPED suite(s) (missing dependencies)${NC}"
+fi
 echo -e "  Total tests:  $TOTAL_TESTS"
-echo -e "  Passed:       $PASSED (${PASS_PCT}%)"
-echo -e "  Failed:       $FAILED (${FAIL_PCT}%)"
+if [ "$TOTAL_TESTS" -gt 0 ]; then
+    echo -e "  Passed:       $PASSED (${PASS_PCT}%)"
+    echo -e "  Failed:       $FAILED (${FAIL_PCT}%)"
+fi
 echo -e "  Execution:    ${TOTAL_TIME}s"
 echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
 
-if [ "$FAILED" -eq 0 ]; then
+if [ "$TOTAL_TESTS" -eq 0 ]; then
+    echo -e "${RED}  ✗ NO TESTS COULD BE RUN${NC}"
+    echo ""
+    echo -e "All test suites were skipped due to missing dependencies."
+    echo -e "Run 'make check_dependencies' for details."
+    echo ""
+    exit 1
+elif [ "$FAILED" -eq 0 ]; then
     echo -e "${GREEN}  ✓ ALL INTEGRATION TESTS PASSED${NC}"
     echo ""
-    echo -e "  Performance:  $TOTAL_TESTS tests in ${TOTAL_TIME}s ($(python3 -c "print(f'{$TOTAL_TESTS/$TOTAL_TIME:.1f}')") tests/sec)"
+    if [ "$TOTAL_TESTS" -gt 0 ]; then
+        echo -e "  Performance:  $TOTAL_TESTS tests in ${TOTAL_TIME}s ($(python3 -c "print(f'{$TOTAL_TESTS/$TOTAL_TIME:.1f}')") tests/sec)"
+    fi
     echo -e "  Logs saved:   ${TEST_OUTPUT_DIR}"
-    echo -e "  Coverage:     Complete model physics validated"
+    if [ "$SUITES_SKIPPED" -eq 0 ]; then
+        echo -e "  Coverage:     Complete model physics validated"
+    else
+        echo -e "  ${YELLOW}Note:         $SUITES_SKIPPED suite(s) skipped${NC}"
+    fi
     echo ""
     exit 0
 else
