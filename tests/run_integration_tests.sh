@@ -83,7 +83,7 @@ else
     echo "  See: $TEST_OUTPUT_DIR/physics_validation.log"
 fi
 
-echo -e "${YELLOW}▸ Test 6: Galaxy Mergers (10 tests)${NC}"
+echo -e "${YELLOW}▸ Test 6: Galaxy Mergers (13 tests)${NC}"
 if ./test_build/test_mergers > "$TEST_OUTPUT_DIR/mergers.log" 2>&1; then
     PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/mergers.log" | head -1)
     echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
@@ -92,7 +92,7 @@ else
     echo "  See: $TEST_OUTPUT_DIR/mergers.log"
 fi
 
-echo -e "${YELLOW}▸ Test 7: Disk Instability (7 tests)${NC}"
+echo -e "${YELLOW}▸ Test 7: Disk Instability (9 tests)${NC}"
 if ./test_build/test_disk_instability > "$TEST_OUTPUT_DIR/disk_instability.log" 2>&1; then
     PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/disk_instability.log" | head -1)
     echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
@@ -101,7 +101,7 @@ else
     echo "  See: $TEST_OUTPUT_DIR/disk_instability.log"
 fi
 
-echo -e "${YELLOW}▸ Test 8: Gas Infall (7 tests)${NC}"
+echo -e "${YELLOW}▸ Test 8: Gas Infall (12 tests)${NC}"
 if ./test_build/test_infall > "$TEST_OUTPUT_DIR/infall.log" 2>&1; then
     PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/infall.log" | head -1)
     echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
@@ -110,7 +110,7 @@ else
     echo "  See: $TEST_OUTPUT_DIR/infall.log"
 fi
 
-echo -e "${YELLOW}▸ Test 9: Numerical Stability (7 tests)${NC}"
+echo -e "${YELLOW}▸ Test 9: Numerical Stability (24 tests)${NC}"
 if ./test_build/test_numerical_stability > "$TEST_OUTPUT_DIR/numerical_stability.log" 2>&1; then
     PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/numerical_stability.log" | head -1)
     echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
@@ -119,26 +119,63 @@ else
     echo "  See: $TEST_OUTPUT_DIR/numerical_stability.log"
 fi
 
+echo -e "${YELLOW}▸ Test 10: Metal Enrichment${NC}"
+if ./test_build/test_metal_enrichment > "$TEST_OUTPUT_DIR/metal_enrichment.log" 2>&1; then
+    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/metal_enrichment.log" | head -1)
+    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
+else
+    echo -e "${RED}  ✗ FAIL - Some metal enrichment tests failed${NC}"
+    echo "  See: $TEST_OUTPUT_DIR/metal_enrichment.log"
+fi
+
+echo -e "${YELLOW}▸ Test 11: Ram Pressure Stripping${NC}"
+if ./test_build/test_stripping > "$TEST_OUTPUT_DIR/stripping.log" 2>&1; then
+    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/stripping.log" | head -1)
+    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
+else
+    echo -e "${RED}  ✗ FAIL - Some stripping tests failed${NC}"
+    echo "  See: $TEST_OUTPUT_DIR/stripping.log"
+fi
+
+echo -e "${YELLOW}▸ Test 12: Multi-Satellite Systems${NC}"
+if ./test_build/test_multi_satellite > "$TEST_OUTPUT_DIR/multi_satellite.log" 2>&1; then
+    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/multi_satellite.log" | head -1)
+    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
+else
+    echo -e "${RED}  ✗ FAIL - Some multi-satellite tests failed${NC}"
+    echo "  See: $TEST_OUTPUT_DIR/multi_satellite.log"
+fi
+
+echo -e "${YELLOW}▸ Test 13: Star Formation Recipes${NC}"
+if ./test_build/test_star_formation_recipes > "$TEST_OUTPUT_DIR/star_formation_recipes.log" 2>&1; then
+    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/star_formation_recipes.log" | head -1)
+    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
+else
+    echo -e "${RED}  ✗ FAIL - Some star formation recipe tests failed${NC}"
+    echo "  See: $TEST_OUTPUT_DIR/star_formation_recipes.log"
+fi
+
 # Count total passes and fails from individual test outputs
-TOTAL_TESTS=140
 PASSED=0
 FAILED=0
 
 # Sum up results from each log file
 for log in "$TEST_OUTPUT_DIR"/*.log; do
     if [ -f "$log" ]; then
-        # Look for the summary line specifically "  Passed:       XX (YY%)"
-        # For Passed: take 2nd number (actual count), for Failed: take 1st number
-        P=$(grep "  Passed:" "$log" | grep -oE '[0-9]+' | sed -n '2p')
-        F=$(grep "  Failed:" "$log" | grep -oE '[0-9]+' | sed -n '1p')
-        if [ -n "$P" ]; then
+        # Extract just the count number from "  Passed:       XX (YY%)" format
+        # Match the number before the opening parenthesis
+        P=$(grep "  Passed:" "$log" | sed 's/.*Passed:[^0-9]*\([0-9]*\).*/\1/')
+        F=$(grep "  Failed:" "$log" | sed 's/.*Failed:[^0-9]*\([0-9]*\).*/\1/')
+        if [ -n "$P" ] && [ "$P" != "Passed:" ]; then
             PASSED=$((PASSED + P))
         fi
-        if [ -n "$F" ]; then
+        if [ -n "$F" ] && [ "$F" != "Failed:" ]; then
             FAILED=$((FAILED + F))
         fi
     fi
 done
+
+TOTAL_TESTS=$((PASSED + FAILED))
 
 # Calculate percentages using bc or python
 if command -v bc &> /dev/null; then

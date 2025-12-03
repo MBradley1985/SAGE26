@@ -41,7 +41,11 @@ TEST_SOURCES = \
 	test_mergers.c \
 	test_disk_instability.c \
 	test_infall.c \
-	test_numerical_stability.c
+	test_numerical_stability.c \
+	test_metal_enrichment.c \
+	test_stripping.c \
+	test_multi_satellite.c \
+	test_star_formation_recipes.c
 
 # Test executables
 TEST_BINS = $(TEST_SOURCES:%.c=$(OUTPUT_DIR)/%)

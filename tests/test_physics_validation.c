@@ -144,7 +144,7 @@ void test_metallicity_bounds() {
         {10.0, 0.3, "High-mass high-Z"},
     };
     
-    for(int i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); i++) {
+    for(size_t i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); i++) {
         gal.ColdGas = test_cases[i].gas;
         gal.MetalsColdGas = test_cases[i].metals;
         
