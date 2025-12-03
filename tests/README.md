@@ -4,15 +4,22 @@ Comprehensive unit and integration tests for the SAGE26 semi-analytic galaxy for
 
 ## Overview
 
-This test suite validates the physical correctness and numerical stability of the SAGE26 model through 160 automated tests covering:
+This test suite validates the physical correctness and numerical stability of the SAGE26 model through **320 automated tests** across **17 test suites** covering:
 - Conservation laws (mass, metals, energy)
 - Regime determination and CGM physics
-- Bulge size calculations
-- Physics validation
-- Galaxy mergers
+- Bulge size calculations and morphology
+- Physics validation and parameter bounds
+- Galaxy mergers and halo assembly
 - Disk instability
-- Gas infall
-- Numerical stability
+- Gas infall and reionization
+- Numerical stability and edge cases
+- Metal enrichment and yields
+- Ram pressure stripping
+- Multi-satellite systems
+- Star formation recipes
+- Gas reincorporation
+- Cooling and heating physics
+- AGN feedback and black hole growth
 
 ## Quick Start
 
@@ -328,7 +335,15 @@ These help catch performance regressions during development.
 | Disk Instability | 9 | Instability criterion |
 | Gas Infall | 12 | Infall routing, reionization |
 | Numerical Stability | 24 | Edge cases, precision |
-| **Total** | **160** | **Core model physics** |
+| Metal Enrichment | 22 | Stellar yields, SN feedback |
+| Ram Pressure Stripping | 14 | Hot/cold gas stripping |
+| Multi-Satellite Systems | 9 | Orbital dynamics, tidal effects |
+| Star Formation Recipes | 27 | SF laws, quenching mechanisms |
+| Reincorporation | 21 | Ejected gas return rates |
+| Cooling & Heating | 25 | Thermal balance, precipitation |
+| Halo Assembly & Mergers | 24 | Mass ratios, dynamical friction |
+| AGN Feedback | 18 | Radio/quasar modes, Eddington limits |
+| **Total** | **320** | **Complete model physics** |
 
 ## Troubleshooting
 
