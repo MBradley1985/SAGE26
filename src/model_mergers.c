@@ -60,7 +60,7 @@ double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GAL
     
     // Progenitor 1 (Central)
     double R1_disk_half = 1.68 * g1->DiskScaleRadius;
-    double R1_bulge_half = g1->BulgeScaleRadius;
+    double R1_bulge_half = g1->BulgeRadius;
     double R1;
 
     if (g1->StellarMass + g1->ColdGas > 0) {
@@ -75,7 +75,7 @@ double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GAL
 
     // Progenitor 2 (Satellite)
     double R2_disk_half = 1.68 * g2->DiskScaleRadius;
-    double R2_bulge_half = g2->BulgeScaleRadius;
+    double R2_bulge_half = g2->BulgeRadius;
     double R2;
 
     if (g2->StellarMass + g2->ColdGas > 0) {
@@ -170,7 +170,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         
         // Apply the Energy Conservation Radius
         galaxies[merger_centralgal].MergerBulgeRadius = new_merger_radius;
-        galaxies[merger_centralgal].BulgeScaleRadius = new_merger_radius; // It is now a pure spheroid
+        galaxies[merger_centralgal].BulgeRadius = new_merger_radius; // It is now a pure spheroid
         
         galaxies[merger_centralgal].TimeOfLastMajorMerger = time;
         galaxies[p].mergeType = 2; 
@@ -346,7 +346,7 @@ void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
     galaxies[p].InstabilityBulgeMass = 0.0;                      // Destroyed
     galaxies[p].MetalsBulgeMass = galaxies[p].MetalsStellarMass;
 
-    // galaxies[p].BulgeScaleRadius = get_bulge_radius(p, galaxies, run_params);
+    // galaxies[p].BulgeRadius = get_bulge_radius(p, galaxies, run_params);
 
     // update the star formation rate
     for(int step = 0; step < STEPS; step++) {

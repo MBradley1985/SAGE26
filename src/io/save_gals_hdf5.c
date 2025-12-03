@@ -355,7 +355,7 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SfrDiskZ);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SfrBulgeZ);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, DiskScaleRadius);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, BulgeScaleRadius);
+        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, BulgeRadius);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MergerBulgeRadius);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, InstabilityBulgeRadius);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MergerBulgeMass);
@@ -640,7 +640,7 @@ int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SfrDiskZ);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SfrBulgeZ);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, DiskScaleRadius);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, BulgeScaleRadius);
+        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, BulgeRadius);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MergerBulgeRadius);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, InstabilityBulgeRadius);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MergerBulgeMass);
@@ -786,7 +786,7 @@ int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char (*fiel
                                                          "Vmax", "VelDisp", "ColdGas", "StellarMass", "BulgeMass", "HotGas", "EjectedMass",
                                                          "BlackHoleMass", "IntraClusterStars", "MetalsColdGas", "MetalsStellarMass", "MetalsBulgeMass",
                                                          "MetalsHotGas", "MetalsEjectedMass", "MetalsIntraClusterStars", "SfrDisk", "SfrBulge", "SfrDiskZ",
-                                                         "SfrBulgeZ", "DiskRadius", "BulgeScaleRadius", "MergerBulgeRadius", "InstabilityBulgeRadius", "MergerBulgeMass", "InstabilityBulgeMass", "Cooling", "Heating", "QuasarModeBHaccretionMass",
+                                                         "SfrBulgeZ", "DiskRadius", "BulgeRadius", "MergerBulgeRadius", "InstabilityBulgeRadius", "MergerBulgeMass", "InstabilityBulgeMass", "Cooling", "Heating", "QuasarModeBHaccretionMass",
                                                          "TimeOfLastMajorMerger", "TimeOfLastMinorMerger", "OutflowRate", "infallMvir",
                                                          "infallVvir", "infallVmax", "Regime", "CGMgas", "MetalsCGMgas", "MassLoading", "H2gas",
                                                          "tcool", "tff", "tcool_over_tff", "tdeplete", "RcoolToRvir", "TimeOfInfall", "FFBRegime"};
@@ -982,7 +982,7 @@ int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct save_info 
     save_info->buffer_output_gals[output_snap_idx].SfrBulgeZ[gals_in_buffer] = tmp_SfrBulgeZ;
 
     save_info->buffer_output_gals[output_snap_idx].DiskScaleRadius[gals_in_buffer] = g->DiskScaleRadius;
-    save_info->buffer_output_gals[output_snap_idx].BulgeScaleRadius[gals_in_buffer] = g->BulgeScaleRadius;
+    save_info->buffer_output_gals[output_snap_idx].BulgeRadius[gals_in_buffer] = g->BulgeRadius;
     save_info->buffer_output_gals[output_snap_idx].MergerBulgeRadius[gals_in_buffer] = g->MergerBulgeRadius;
     save_info->buffer_output_gals[output_snap_idx].InstabilityBulgeRadius[gals_in_buffer] = g->InstabilityBulgeRadius;
     save_info->buffer_output_gals[output_snap_idx].MergerBulgeMass[gals_in_buffer] = g->MergerBulgeMass;
@@ -1196,7 +1196,7 @@ int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to_write,
     EXTEND_AND_WRITE_GALAXY_DATASET(SfrDiskZ);
     EXTEND_AND_WRITE_GALAXY_DATASET(SfrBulgeZ);
     EXTEND_AND_WRITE_GALAXY_DATASET(DiskScaleRadius);
-    EXTEND_AND_WRITE_GALAXY_DATASET(BulgeScaleRadius);
+    EXTEND_AND_WRITE_GALAXY_DATASET(BulgeRadius);
     EXTEND_AND_WRITE_GALAXY_DATASET(MergerBulgeRadius);
     EXTEND_AND_WRITE_GALAXY_DATASET(InstabilityBulgeRadius);
     EXTEND_AND_WRITE_GALAXY_DATASET(MergerBulgeMass);

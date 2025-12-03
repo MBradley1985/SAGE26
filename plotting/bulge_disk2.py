@@ -105,10 +105,10 @@ def load_all_snapshots(filepath):
             else:
                 snap_data['DiskScaleRadius'] = np.zeros_like(snap_data['StellarMass'])
             
-            if 'BulgeScaleRadius' in snap_group:
-                snap_data['BulgeScaleRadius'] = snap_group['BulgeScaleRadius'][:] * 1e3 / HUBBLE_H  # kpc
+            if 'BulgeRadius' in snap_group:
+                snap_data['BulgeRadius'] = snap_group['BulgeRadius'][:] * 1e3 / HUBBLE_H  # kpc
             else:
-                snap_data['BulgeScaleRadius'] = np.zeros_like(snap_data['StellarMass'])
+                snap_data['BulgeRadius'] = np.zeros_like(snap_data['StellarMass'])
             
             # Calculate derived quantities
             snap_data['DiskMass'] = snap_data['StellarMass'] - snap_data['BulgeMass']
@@ -468,8 +468,8 @@ def plot_half_mass_radius_vs_stellar_mass_grid(data_ffb_on, output_file):
         stellar_mass = snap['StellarMass'][mask]
         # bulge_merger_mass = snap['MergerBulgeMass'][mask]
         # bulge_instability_mass = snap['InstabilityBulgeMass'][mask]
-        # merger_bulge_radius = snap['BulgeScaleRadius'][mask]
-        # instability_bulge_radius = snap['BulgeScaleRadius'][mask]
+        # merger_bulge_radius = snap['BulgeRadius'][mask]
+        # instability_bulge_radius = snap['BulgeRadius'][mask]
         disk_scale_radius = snap['DiskRadius'][mask]
         print(f"Disk scale radius stats z={z_centers[i]:.2f}: min={disk_scale_radius.min():.2e}, max={disk_scale_radius.max():.2e} kpc")
         print(f"Disk scale radius NaNs: {np.sum(np.isnan(disk_scale_radius))}, Infs: {np.sum(np.isinf(disk_scale_radius))}")

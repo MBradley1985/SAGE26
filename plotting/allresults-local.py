@@ -73,7 +73,7 @@ if __name__ == '__main__':
 
     IntraClusterStars = read_hdf(snap_num = Snapshot, param = 'IntraClusterStars') * 1.0e10 / Hubble_h
     DiskRadius = read_hdf(snap_num = Snapshot, param = 'DiskRadius')
-    BulgeRadius = read_hdf(snap_num = Snapshot, param = 'BulgeScaleRadius')
+    BulgeRadius = read_hdf(snap_num = Snapshot, param = 'BulgeRadius')
     MergerBulgeRadius = read_hdf(snap_num = Snapshot, param = 'MergerBulgeRadius')
     InstabilityBulgeRadius = read_hdf(snap_num = Snapshot, param = 'InstabilityBulgeRadius')
     MergerBulgeMass = read_hdf(snap_num = Snapshot, param = 'MergerBulgeMass') * 1.0e10 / Hubble_h

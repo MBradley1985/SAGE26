@@ -225,7 +225,7 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                         galaxies[ngal].MergTime = 999.9f;
 
                         galaxies[ngal].DiskScaleRadius = get_disk_radius(halonr, ngal, halos, galaxies);
-                        galaxies[ngal].BulgeScaleRadius = get_bulge_radius(ngal, galaxies, run_params);
+                        galaxies[ngal].BulgeRadius = get_bulge_radius(ngal, galaxies, run_params);
                         galaxies[ngal].MergerBulgeRadius = get_bulge_radius(ngal, galaxies, run_params);
                         galaxies[ngal].InstabilityBulgeRadius = get_bulge_radius(ngal, galaxies, run_params);
 

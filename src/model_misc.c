@@ -75,7 +75,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     }
 
     galaxies[p].DiskScaleRadius = get_disk_radius(halonr, p, halos, galaxies);
-    galaxies[p].BulgeScaleRadius = get_bulge_radius(p, galaxies, run_params);
+    galaxies[p].BulgeRadius = get_bulge_radius(p, galaxies, run_params);
     galaxies[p].MergerBulgeRadius = get_bulge_radius(p, galaxies, run_params);
     galaxies[p].InstabilityBulgeRadius = get_bulge_radius(p, galaxies, run_params);
     galaxies[p].MergTime = 999.9f;
@@ -123,7 +123,7 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
 {
     // BulgeSizeOn == 0: No bulge size calculation
     if(run_params->BulgeSizeOn == 0) {
-        galaxies[p].BulgeScaleRadius = 0.0;
+        galaxies[p].BulgeRadius = 0.0;
         galaxies[p].MergerBulgeRadius = 0.0;
         galaxies[p].InstabilityBulgeRadius = 0.0;
         return 0.0;
@@ -134,7 +134,7 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
     // BulgeSizeOn == 1: Shen equation 33 (simple power-law)
     if(run_params->BulgeSizeOn == 1) {
         if(galaxies[p].BulgeMass <= 0.0) {
-            galaxies[p].BulgeScaleRadius = 0.0;
+            galaxies[p].BulgeRadius = 0.0;
             galaxies[p].MergerBulgeRadius = 0.0;
             galaxies[p].InstabilityBulgeRadius = 0.0;
             return 0.0;
@@ -150,7 +150,7 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
         // Convert to code units (Mpc/h)
         const double R_bulge = R_bulge_kpc * 1.0e-3 * h;
         
-        galaxies[p].BulgeScaleRadius = R_bulge;
+        galaxies[p].BulgeRadius = R_bulge;
         galaxies[p].MergerBulgeRadius = 0.0;
         galaxies[p].InstabilityBulgeRadius = 0.0;
         
@@ -160,7 +160,7 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
     // BulgeSizeOn == 2: Shen equation 32 (two-regime power-law)
     if(run_params->BulgeSizeOn == 2) {
         if(galaxies[p].BulgeMass <= 0.0) {
-            galaxies[p].BulgeScaleRadius = 0.0;
+            galaxies[p].BulgeRadius = 0.0;
             galaxies[p].MergerBulgeRadius = 0.0;
             galaxies[p].InstabilityBulgeRadius = 0.0;
             return 0.0;
@@ -189,7 +189,7 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
         // Convert to code units (Mpc/h)
         const double R_bulge = R_bulge_kpc * 1.0e-3 * h;
         
-        galaxies[p].BulgeScaleRadius = R_bulge;
+        galaxies[p].BulgeRadius = R_bulge;
         galaxies[p].MergerBulgeRadius = 0.0;
         galaxies[p].InstabilityBulgeRadius = 0.0;
         
@@ -233,12 +233,12 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
         // 3. Weighted Average (Equation 25)
         double R_bulge = (M_merger * R_merger + M_instability * R_instability) / M_total;
         
-        galaxies[p].BulgeScaleRadius = R_bulge;
+        galaxies[p].BulgeRadius = R_bulge;
         return R_bulge;
     }
     
     // Default fallback (should not reach here)
-    galaxies[p].BulgeScaleRadius = 0.0;
+    galaxies[p].BulgeRadius = 0.0;
     galaxies[p].MergerBulgeRadius = 0.0;
     galaxies[p].InstabilityBulgeRadius = 0.0;
     return 0.0;
