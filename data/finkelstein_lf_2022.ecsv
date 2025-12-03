@@ -1,0 +1,25 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: z, unit: redshift, datatype: float64, description: Redshift bin}
+# - {name: M_UV, unit: mag, datatype: float64, description: Absolute UV Magnitude (AB)}
+# - {name: log_phi, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density}
+# - {name: log_phi_upper, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density (Upper 1-sigma)}
+# - {name: log_phi_lower, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density (Lower 1-sigma)}
+# meta: !!omap
+# - author: Finkelstein et al.
+# - year: 2022
+# - title: A Long Time Ago in a Galaxy Far, Far Away - A Candidate z ~ 12 Galaxy in Early JWST CEERS Imaging
+# - table_sources: Table 10
+z M_UV log_phi log_phi_upper log_phi_lower
+9.0 -22.50 -7.22 -6.10 -inf
+9.0 -22.00 -5.55 -5.19 -6.37
+9.0 -21.50 -5.13 -4.83 -5.70
+9.0 -21.00 -4.95 -4.72 -5.30
+9.0 -20.50 -4.27 -4.13 -4.43
+9.0 -20.00 -4.05 -3.93 -4.18
+9.0 -19.50 -3.81 -3.70 -3.93
+9.0 -19.00 -3.55 -3.42 -3.70
+9.0 -18.50 -3.47 -3.32 -3.65
+9.0 -18.00 -3.19 -2.99 -3.46
+9.0 -17.50 -3.22 -2.97 -3.58
