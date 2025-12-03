@@ -236,17 +236,26 @@ void test_quenching_in_massive_halos() {
     // Calculate cooling with AGN heating
     double cooling = cooling_recipe(0, dt, &gal, &run_params);
     
-    // Note: AGN heating requires proper history/state which this test doesn't set up
-    // Just verify basic physics: cooling should be non-negative and <= available gas
+    // NOTE: AGN heating requires proper thermal history (r_heat, Heating) and 
+    // multi-timestep state which this unit test doesn't set up. This test verifies
+    // that the cooling function handles massive halos without crashes, but cannot
+    // fully test AGN suppression effectiveness without integration test context.
+    // For full AGN suppression testing, see integration tests in run_integration_tests.sh
+    
     double cooling_fraction = cooling / gal.HotGas;
     
-    printf("  Info: Cooling fraction with AGN: %.6f (AGN heating needs full state)\n", cooling_fraction);
+    printf("  ℹ Cooling fraction with AGN: %.6f\n", cooling_fraction);
+    printf("  ℹ Note: Full AGN suppression requires thermal history (see integration tests)\n");
+    
     ASSERT_TRUE(cooling_fraction >= 0.0,
                 "Cooling is non-negative");
     
     // Should not exceed available gas (allow tiny floating point error)
     ASSERT_TRUE(cooling <= gal.HotGas * 1.001,
                 "Cooling doesn't significantly exceed available gas");
+    
+    // In a proper simulation with AGN history, massive halos should have 
+    // cooling_fraction << 1. Here we just verify no crashes occur.
 }
 
 void test_ffb_efficiency_bounds() {
