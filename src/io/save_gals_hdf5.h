@@ -78,7 +78,7 @@ struct HDF5_GALAXY_OUTPUT
     
     /* misc */
     float *DiskScaleRadius;
-    float *BulgeScaleRadius;
+    float *BulgeRadius;
     float *MergerBulgeRadius;
     float *InstabilityBulgeRadius;
     float *MergerBulgeMass;

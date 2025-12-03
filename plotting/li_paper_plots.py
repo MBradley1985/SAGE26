@@ -8,9 +8,94 @@ import os
 import warnings
 import sys
 from astropy.table import Table
+from astropy import units as u
+from scipy.interpolate import Akima1DInterpolator
+
+# Import analytical functions from ffb_predict
+import sys
+sys.path.insert(0, os.path.dirname(__file__))
+from ffb_predict import (
+    # Cosmology setup
+    cosmo, fb,
+    # Mass functions and densities
+    compute_dNdlgMs, compute_dNdMUV_Ms, 
+    compute_rho_star, compute_rho_SFR, compute_rho_UV,
+    compute_surface_density_obs,
+    # FFB functions
+    ffb_lgMh_crit, func_lgMs_med, func_MUV_lgMs,
+    ffb_radius, func_SFE_instant, ffb_fgas, ffb_Mgas,
+    # Halo mass function
+    compute_dNdlgMh,
+    # Set options
+    set_option, get_option
+)
 
 # Suppress warnings for clean output
 warnings.filterwarnings("ignore")
+
+# ========================== UV MAGNITUDE CONVERSION ==========================
+
+def func_MUV_sfr(SFR, z):
+    """
+    Convert SFR to UV absolute magnitude using Behroozi+2020, eq B3.
+    This is the correct conversion from the Li+2023 paper (ffb_predict.py).
+    
+    Parameters:
+    -----------
+    SFR : array-like
+        Star formation rate in Msun/yr
+    z : float
+        Redshift
+    
+    Returns:
+    --------
+    MUV : array-like
+        Absolute UV magnitude at 1500 Angstrom
+    """
+    # Behroozi+2020, eq B3 - redshift-dependent conversion factor
+    kappa_UV = 5.1e-29 * (1 + np.exp(-20.79 / (1 + z) + 0.98))
+    lum = SFR / kappa_UV * (u.erg / u.s / u.Hz)
+    dist_lum = 10 * u.pc
+    flux = lum / (4 * np.pi * dist_lum**2)
+    MUV = flux.to(u.ABmag).value
+    return MUV
+
+# ========================== FFB METALLICITY ANALYTICAL FUNCTIONS ==========================
+
+def func_SFE_instant(lgMh, z, eps_max=None):
+    """Instantaneous star formation efficiency (SFR / Mdot_baryon)
+    
+    If eps_max is provided, scales to that maximum value.
+    Otherwise uses default FFB maximum of 1.0
+    """
+    if eps_max is None:
+        eps_max = 1.0
+    
+    lgMh_crit = 10.8 - 6.2 * np.log10((1 + z) / 10)
+    # Below threshold: low efficiency, above threshold: approach eps_max
+    # Using sigmoid centered at threshold with smooth transition
+    transition_width = 0.5  # in dex
+    eps = eps_max * (1 / (1 + np.exp(-(lgMh - lgMh_crit) / transition_width)))
+    return eps.clip(0.01, eps_max)
+
+def ffb_str_coverage(lgMh, z, eps=None, eps_max=None):
+    """Sky coverage fraction by cold streams (from ffb_predict.py)"""
+    if eps is None:
+        eps = func_SFE_instant(lgMh, z, eps_max=eps_max)
+    eta = 5 / eps - 4
+    
+    Mz_dep = 10 ** ((lgMh - 10.8) * 0.3333) * ((1 + z) / 10) ** 0.5
+    f_omega = 0.22 * eta**-0.5 * eps**-1 * Mz_dep
+    return np.clip(f_omega, 0, 1)
+
+def ffb_metal_analytical(lgMh, z, Zsn=1, Zin=0.1, eps=None, eps_max=None):
+    """Analytical metallicity from ffb_predict.py mixing formula"""
+    if eps is None:
+        eps = func_SFE_instant(lgMh, z, eps_max=eps_max)
+    f_omega = ffb_str_coverage(lgMh, z, eps=eps, eps_max=eps_max)
+    
+    Zmix = Zin + 0.2 * eps * f_omega / (1 + (1 - 0.8 * eps) * f_omega) * (Zsn - Zin)
+    return Zmix
 
 # ========================== USER OPTIONS ==========================
 
@@ -446,6 +531,46 @@ def plot_smf_grid(models=None, redshift_range='high'):
             
             print(f"  {model['name']}: {len(stellar_mass[stellar_mass>0])} galaxies")
         
+        # Add analytical predictions from Li+2023 (ffb_predict.py)
+        try:
+            lgMs_analytical = np.linspace(8, 12, 100)
+            
+            # FFB model with eps_max=1.0 (default, upper bound)
+            set_option(FFB_SFE_MAX=1.0)
+            lgMs_bins, dNdlgMs_ffb1 = compute_dNdlgMs(z_actual, lgMs=lgMs_analytical)
+            log_phi_ffb1 = np.log10(dNdlgMs_ffb1)
+            valid = np.isfinite(log_phi_ffb1) & (log_phi_ffb1 > -9)
+            ax.plot(lgMs_bins[valid], log_phi_ffb1[valid],
+                   color='dodgerblue', linestyle='--', linewidth=2,
+                   label='Li+ 2024' if idx == 0 else '',
+                   alpha=0.7, zorder=4)
+            
+            # FFB model with eps_max=0.2 (lower bound)
+            set_option(FFB_SFE_MAX=0.2)
+            lgMs_bins, dNdlgMs_ffb02 = compute_dNdlgMs(z_actual, lgMs=lgMs_analytical)
+            log_phi_ffb02 = np.log10(dNdlgMs_ffb02)
+            valid = np.isfinite(log_phi_ffb02) & (log_phi_ffb02 > -9)
+            ax.plot(lgMs_bins[valid], log_phi_ffb02[valid],
+                   color='orange', linestyle='--', linewidth=2,
+                   label='' if idx == 0 else '',
+                   alpha=0.7, zorder=4)
+            
+            # Universe Machine model (no FFB)
+            set_option(FFB_SFE_MAX=0.0)  # Disable FFB
+            lgMs_bins, dNdlgMs_um = compute_dNdlgMs(z_actual, lgMs=lgMs_analytical)
+            log_phi_um = np.log10(dNdlgMs_um)
+            valid = np.isfinite(log_phi_um) & (log_phi_um > -9)
+            ax.plot(lgMs_bins[valid], log_phi_um[valid],
+                   color='gray', linestyle='--', linewidth=2,
+                   label='' if idx == 0 else '',
+                   alpha=0.7, zorder=4)
+            
+            # Reset to default
+            set_option(FFB_SFE_MAX=1.0)
+            print(f"  Li+2023 analytical predictions added (3 lines)")
+        except Exception as e:
+            print(f"  Warning: Could not compute analytical SMF: {e}")
+        
         # Add observational data
         # COSMOS2020 (Farmer+)
         cosmos_mass, cosmos_phi, cosmos_err_low, cosmos_err_high = load_cosmos2020_smf(z_actual)
@@ -613,6 +738,65 @@ def plot_smf_vs_redshift(models=None):
                                zorder=2)
                 print(f"  {model['name']}: plotted")
         
+        # Add analytical predictions from Li+2023 (three lines)
+        try:
+            # FFB eps_max=1.0
+            set_option(FFB_SFE_MAX=1.0)
+            redshifts_ffb1, n_density_ffb1 = [], []
+            for z_actual in actual_redshifts:
+                lgMs_bins, dNdlgMs = compute_dNdlgMs(z_actual)
+                mask = lgMs_bins > np.log10(mass_threshold)
+                if np.sum(mask) > 0:
+                    n_cumulative = np.trapz(dNdlgMs[mask], lgMs_bins[mask])
+                    if n_cumulative > 0:
+                        redshifts_ffb1.append(z_actual)
+                        n_density_ffb1.append(np.log10(n_cumulative))
+            if len(redshifts_ffb1) > 0:
+                ax.plot(redshifts_ffb1, n_density_ffb1,
+                       color='dodgerblue', linestyle='--', linewidth=2,
+                       label='Li+ 2024' if ax_idx == 0 else '',
+                       alpha=0.7, zorder=4)
+            
+            # FFB eps_max=0.2
+            set_option(FFB_SFE_MAX=0.2)
+            redshifts_ffb02, n_density_ffb02 = [], []
+            for z_actual in actual_redshifts:
+                lgMs_bins, dNdlgMs = compute_dNdlgMs(z_actual)
+                mask = lgMs_bins > np.log10(mass_threshold)
+                if np.sum(mask) > 0:
+                    n_cumulative = np.trapz(dNdlgMs[mask], lgMs_bins[mask])
+                    if n_cumulative > 0:
+                        redshifts_ffb02.append(z_actual)
+                        n_density_ffb02.append(np.log10(n_cumulative))
+            if len(redshifts_ffb02) > 0:
+                ax.plot(redshifts_ffb02, n_density_ffb02,
+                       color='orange', linestyle='--', linewidth=2,
+                       label='',
+                       alpha=0.7, zorder=4)
+            
+            # UM model (no FFB)
+            set_option(FFB_SFE_MAX=0.0)
+            redshifts_um, n_density_um = [], []
+            for z_actual in actual_redshifts:
+                lgMs_bins, dNdlgMs = compute_dNdlgMs(z_actual)
+                mask = lgMs_bins > np.log10(mass_threshold)
+                if np.sum(mask) > 0:
+                    n_cumulative = np.trapz(dNdlgMs[mask], lgMs_bins[mask])
+                    if n_cumulative > 0:
+                        redshifts_um.append(z_actual)
+                        n_density_um.append(np.log10(n_cumulative))
+            if len(redshifts_um) > 0:
+                ax.plot(redshifts_um, n_density_um,
+                       color='gray', linestyle='--', linewidth=2,
+                       label='',
+                       alpha=0.7, zorder=4)
+            
+            # Reset to default
+            set_option(FFB_SFE_MAX=1.0)
+            print(f"  Li+2023 analytical predictions added (3 lines) for M* > {mass_threshold:.0e}")
+        except Exception as e:
+            print(f"  Warning: Could not compute analytical prediction: {e}")
+        
         # Formatting
         ax.set_xlim(5, 16)
         ax.set_xlabel('Redshift z', fontsize=12)
@@ -650,16 +834,13 @@ def plot_smf_vs_redshift(models=None):
     
     print('='*60 + '\n')
 
-def calculate_uv_luminosity_function(stellar_mass, sfr_disk, sfr_bulge, volume, hubble_h, binwidth=0.5):
+def calculate_uv_luminosity_function(stellar_mass, sfr_disk, sfr_bulge, volume, hubble_h, redshift, binwidth=0.5):
     """Calculate UV luminosity function with Poisson errors
     
-    Uses conversion from SFR to UV luminosity following Kennicutt (1998) and Madau & Dickinson (2014):
-    L_UV(1500Å) = 1.4e-28 * SFR [erg/s/Hz] where SFR is in Msun/yr
+    Uses conversion from SFR to UV luminosity following Behroozi+2020 (eq B3):
+    kappa_UV = 5.1e-29 * (1 + exp(-20.79 / (1 + z) + 0.98))
     
-    Converting to absolute magnitude:
-    M_UV = 51.63 - 2.5*log10(L_UV[erg/s/Hz])
-    
-    Simplified relation: M_UV ≈ -2.5*log10(SFR[Msun/yr]) - 17.88
+    This is the correct conversion from Li+2023 paper (ffb_predict.py).
     
     Returns: M_UV bins, log(phi), log(phi_lower), log(phi_upper)
     """
@@ -671,9 +852,9 @@ def calculate_uv_luminosity_function(stellar_mass, sfr_disk, sfr_bulge, volume, 
     if len(w) == 0:
         return np.array([]), np.array([]), np.array([]), np.array([])
     
-    # Convert SFR to UV magnitude at 1500Å
-    # M_UV = -2.5*log10(SFR) - 17.88 (Kennicutt 1998, converted to AB mag)
-    M_UV = -2.5 * np.log10(sfr_total[w]) - 17.88
+    # Convert SFR to UV magnitude at 1500Å using Behroozi+2020 formula
+    # This includes redshift-dependent conversion factor
+    M_UV = func_MUV_sfr(sfr_total[w], redshift)
     
     # Create histogram in UV magnitude space
     mi = np.floor(M_UV.min()) - 2
@@ -766,7 +947,7 @@ def plot_uvlf_grid(models=None):
             volume = (model['boxsize'] / hubble_h)**3.0 * model.get('volume_fraction', 1.0)
             
             # Calculate UVLF with errors
-            M_UV_bins, uvlf, uvlf_lower, uvlf_upper = calculate_uv_luminosity_function(stellar_mass, sfr_disk, sfr_bulge, volume, hubble_h)
+            M_UV_bins, uvlf, uvlf_lower, uvlf_upper = calculate_uv_luminosity_function(stellar_mass, sfr_disk, sfr_bulge, volume, hubble_h, z_actual)
             
             # Plot
             valid = uvlf > -9  # Only plot non-zero bins
@@ -789,6 +970,46 @@ def plot_uvlf_grid(models=None):
                            zorder=2)
             
             print(f"  {model['name']}: {len(stellar_mass[stellar_mass>0])} galaxies")
+        
+        # Add analytical predictions from Li+2023 (three lines)
+        try:
+            MUV_analytical = np.linspace(-24, -16, 100)
+            
+            # FFB eps_max=1.0
+            set_option(FFB_SFE_MAX=1.0)
+            MUV_bins, dNdMUV_ffb1 = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
+            log_phi_ffb1 = np.log10(dNdMUV_ffb1)
+            valid = np.isfinite(log_phi_ffb1) & (log_phi_ffb1 > -9)
+            ax.plot(MUV_bins[valid], log_phi_ffb1[valid],
+                   color='dodgerblue', linestyle='--', linewidth=2,
+                   label='Li+ 2024' if idx == 0 else '',
+                   alpha=0.7, zorder=4)
+            
+            # FFB eps_max=0.2
+            set_option(FFB_SFE_MAX=0.2)
+            MUV_bins, dNdMUV_ffb02 = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
+            log_phi_ffb02 = np.log10(dNdMUV_ffb02)
+            valid = np.isfinite(log_phi_ffb02) & (log_phi_ffb02 > -9)
+            ax.plot(MUV_bins[valid], log_phi_ffb02[valid],
+                   color='orange', linestyle='--', linewidth=2,
+                   label='',
+                   alpha=0.7, zorder=4)
+            
+            # UM model (no FFB)
+            set_option(FFB_SFE_MAX=0.0)
+            MUV_bins, dNdMUV_um = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
+            log_phi_um = np.log10(dNdMUV_um)
+            valid = np.isfinite(log_phi_um) & (log_phi_um > -9)
+            ax.plot(MUV_bins[valid], log_phi_um[valid],
+                   color='gray', linestyle='--', linewidth=2,
+                   label='',
+                   alpha=0.7, zorder=4)
+            
+            # Reset to default
+            set_option(FFB_SFE_MAX=1.0)
+            print(f"  Li+2023 analytical UVLF predictions added (3 lines)")
+        except Exception as e:
+            print(f"  Warning: Could not compute analytical UVLF: {e}")
         
         # Formatting
         ax.set_xlim(-24, -16)
@@ -898,8 +1119,8 @@ def plot_uvlf_vs_redshift(models=None):
                 sfr_total = sfr_disk + sfr_bulge
                 w = np.where(sfr_total > 0.0)[0]
                 if len(w) > 0:
-                    # Convert SFR to UV magnitude using Kennicutt (1998)
-                    M_UV = -2.5 * np.log10(sfr_total[w]) - 17.88
+                    # Convert SFR to UV magnitude using Behroozi+2020 (correct formula from Li+2023 paper)
+                    M_UV = func_MUV_sfr(sfr_total[w], z_actual)
                     
                     # Count galaxies brighter than threshold (M_UV < threshold, i.e., more negative)
                     n_brighter = np.sum(M_UV < M_UV_threshold)
@@ -934,6 +1155,65 @@ def plot_uvlf_vs_redshift(models=None):
                                alpha=0.2,
                                zorder=2)
                 print(f"  {model['name']}: plotted")
+        
+        # Add analytical predictions from Li+2023 (three lines)
+        try:
+            # FFB eps_max=1.0
+            set_option(FFB_SFE_MAX=1.0)
+            redshifts_ffb1, phi_ffb1 = [], []
+            for z_actual in actual_redshifts:
+                MUV_bins, dNdMUV = compute_dNdMUV_Ms(z_actual, attenuation=None)
+                mask = MUV_bins < M_UV_threshold
+                if np.sum(mask) > 0:
+                    n_cumulative = np.abs(np.trapz(dNdMUV[mask], MUV_bins[mask]))
+                    if n_cumulative > 0:
+                        redshifts_ffb1.append(z_actual)
+                        phi_ffb1.append(np.log10(n_cumulative))
+            if len(redshifts_ffb1) > 0:
+                ax.plot(redshifts_ffb1, phi_ffb1,
+                       color='dodgerblue', linestyle='--', linewidth=2,
+                       label='Li+ 2024' if ax_idx == 0 else '',
+                       alpha=0.7, zorder=4)
+            
+            # FFB eps_max=0.2
+            set_option(FFB_SFE_MAX=0.2)
+            redshifts_ffb02, phi_ffb02 = [], []
+            for z_actual in actual_redshifts:
+                MUV_bins, dNdMUV = compute_dNdMUV_Ms(z_actual, attenuation=None)
+                mask = MUV_bins < M_UV_threshold
+                if np.sum(mask) > 0:
+                    n_cumulative = np.abs(np.trapz(dNdMUV[mask], MUV_bins[mask]))
+                    if n_cumulative > 0:
+                        redshifts_ffb02.append(z_actual)
+                        phi_ffb02.append(np.log10(n_cumulative))
+            if len(redshifts_ffb02) > 0:
+                ax.plot(redshifts_ffb02, phi_ffb02,
+                       color='orange', linestyle='--', linewidth=2,
+                       label='',
+                       alpha=0.7, zorder=4)
+            
+            # UM model (no FFB)
+            set_option(FFB_SFE_MAX=0.0)
+            redshifts_um, phi_um = [], []
+            for z_actual in actual_redshifts:
+                MUV_bins, dNdMUV = compute_dNdMUV_Ms(z_actual, attenuation=None)
+                mask = MUV_bins < M_UV_threshold
+                if np.sum(mask) > 0:
+                    n_cumulative = np.abs(np.trapz(dNdMUV[mask], MUV_bins[mask]))
+                    if n_cumulative > 0:
+                        redshifts_um.append(z_actual)
+                        phi_um.append(np.log10(n_cumulative))
+            if len(redshifts_um) > 0:
+                ax.plot(redshifts_um, phi_um,
+                       color='gray', linestyle='--', linewidth=2,
+                       label='',
+                       alpha=0.7, zorder=4)
+            
+            # Reset to default
+            set_option(FFB_SFE_MAX=1.0)
+            print(f"  Li+2023 analytical predictions added (3 lines) for M_UV < {M_UV_threshold}")
+        except Exception as e:
+            print(f"  Warning: Could not compute analytical UVLF prediction: {e}")
         
         # Formatting
         ax.set_xlim(5, 16)
@@ -1106,8 +1386,8 @@ def plot_cumulative_surface_density(models=None):
                 sfr_total = sfr_disk + sfr_bulge
                 w = np.where(sfr_total > 0.0)[0]
                 if len(w) > 0:
-                    # Convert SFR to UV magnitude using Kennicutt (1998)
-                    M_UV = -2.5 * np.log10(sfr_total[w]) - 17.88
+                    # Convert SFR to UV magnitude using Behroozi+2020 (correct formula from Li+2023 paper)
+                    M_UV = func_MUV_sfr(sfr_total[w], z_actual)
                     
                     # Convert M_UV to m_F277W
                     m_F277W = convert_MUV_to_mF277W(M_UV, z_actual)
@@ -1153,6 +1433,158 @@ def plot_cumulative_surface_density(models=None):
                        alpha=0.8)
                 print(f"  {model['name']}: plotted")
         
+        # Add analytical predictions from Li+ 2024
+        try:
+            # Compute analytical surface density by integrating UVLF and converting to observable F277W
+            # We'll compute cumulative number density in 1 deg^2 for galaxies brighter than m_threshold
+            
+            # FFB eps_max=1.0 (upper bound)
+            set_option(FFB_SFE_MAX=1.0)
+            redshifts_ffb1, surf_dens_ffb1 = [], []
+            for z_actual in actual_redshifts:
+                # Get UVLF from analytical model
+                MUV_analytical = np.linspace(-25, -10, 200)
+                MUV_bins, dNdMUV = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
+                
+                # Convert M_UV to m_F277W for each magnitude
+                m_F277W_analytical = convert_MUV_to_mF277W(MUV_bins, z_actual)
+                
+                # Integrate UVLF for galaxies brighter than threshold
+                # dNdMUV is in units of Mpc^-3 mag^-1
+                mask = m_F277W_analytical < m_threshold
+                if np.sum(mask) > 0:
+                    # Number density of galaxies brighter than threshold (per Mpc^3)
+                    n_density = np.abs(np.trapz(dNdMUV[mask], MUV_bins[mask]))
+                    
+                    # Convert to surface density per deg^2
+                    # Use same angular distance calculation as SAGE
+                    c = 299792.458  # km/s
+                    H0 = 0.678 * 100  # Using default hubble_h
+                    if z_actual < 5:
+                        d_L = (c / H0) * z_actual * (1 + z_actual / 2)
+                    else:
+                        d_L = (c / H0) * z_actual * (1 + z_actual * 0.75 / 2)
+                    d_A = d_L / (1 + z_actual)**2
+                    
+                    # For 1 deg^2 area
+                    angular_size_rad = np.deg2rad(1.0)  # 1 degree in radians
+                    comoving_size = angular_size_rad * d_A  # Mpc
+                    comoving_area = comoving_size**2  # Mpc^2
+                    
+                    # Comoving depth for thin shell (approximate as small dz)
+                    dz = 0.1
+                    z1, z2 = z_actual - dz/2, z_actual + dz/2
+                    if z1 < 5:
+                        d_L1 = (c / H0) * z1 * (1 + z1 / 2)
+                        d_L2 = (c / H0) * z2 * (1 + z2 / 2)
+                    else:
+                        d_L1 = (c / H0) * z1 * (1 + z1 * 0.75 / 2)
+                        d_L2 = (c / H0) * z2 * (1 + z2 * 0.75 / 2)
+                    comoving_depth = abs(d_L2 - d_L1) / (1 + z_actual)
+                    
+                    comoving_volume = comoving_area * comoving_depth  # Mpc^3
+                    
+                    # Surface density (galaxies per deg^2)
+                    surf_dens = n_density * comoving_volume
+                    
+                    if surf_dens > 0:
+                        redshifts_ffb1.append(z_actual)
+                        surf_dens_ffb1.append(np.log10(surf_dens))
+            
+            if len(redshifts_ffb1) > 0:
+                ax.plot(redshifts_ffb1, surf_dens_ffb1,
+                       color='dodgerblue', linestyle='--', linewidth=2,
+                       label='Li+ 2024' if ax_idx == 0 else '',
+                       alpha=0.7, zorder=4)
+            
+            # FFB eps_max=0.2 (lower bound)
+            set_option(FFB_SFE_MAX=0.2)
+            redshifts_ffb02, surf_dens_ffb02 = [], []
+            for z_actual in actual_redshifts:
+                MUV_analytical = np.linspace(-25, -10, 200)
+                MUV_bins, dNdMUV = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
+                m_F277W_analytical = convert_MUV_to_mF277W(MUV_bins, z_actual)
+                mask = m_F277W_analytical < m_threshold
+                if np.sum(mask) > 0:
+                    n_density = np.abs(np.trapz(dNdMUV[mask], MUV_bins[mask]))
+                    c = 299792.458
+                    H0 = 0.678 * 100
+                    if z_actual < 5:
+                        d_L = (c / H0) * z_actual * (1 + z_actual / 2)
+                    else:
+                        d_L = (c / H0) * z_actual * (1 + z_actual * 0.75 / 2)
+                    d_A = d_L / (1 + z_actual)**2
+                    angular_size_rad = np.deg2rad(1.0)
+                    comoving_size = angular_size_rad * d_A
+                    comoving_area = comoving_size**2
+                    dz = 0.1
+                    z1, z2 = z_actual - dz/2, z_actual + dz/2
+                    if z1 < 5:
+                        d_L1 = (c / H0) * z1 * (1 + z1 / 2)
+                        d_L2 = (c / H0) * z2 * (1 + z2 / 2)
+                    else:
+                        d_L1 = (c / H0) * z1 * (1 + z1 * 0.75 / 2)
+                        d_L2 = (c / H0) * z2 * (1 + z2 * 0.75 / 2)
+                    comoving_depth = abs(d_L2 - d_L1) / (1 + z_actual)
+                    comoving_volume = comoving_area * comoving_depth
+                    surf_dens = n_density * comoving_volume
+                    if surf_dens > 0:
+                        redshifts_ffb02.append(z_actual)
+                        surf_dens_ffb02.append(np.log10(surf_dens))
+            
+            if len(redshifts_ffb02) > 0:
+                ax.plot(redshifts_ffb02, surf_dens_ffb02,
+                       color='orange', linestyle='--', linewidth=2,
+                       label='',
+                       alpha=0.7, zorder=4)
+            
+            # UM model (no FFB)
+            set_option(FFB_SFE_MAX=0.0)
+            redshifts_um, surf_dens_um = [], []
+            for z_actual in actual_redshifts:
+                MUV_analytical = np.linspace(-25, -10, 200)
+                MUV_bins, dNdMUV = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
+                m_F277W_analytical = convert_MUV_to_mF277W(MUV_bins, z_actual)
+                mask = m_F277W_analytical < m_threshold
+                if np.sum(mask) > 0:
+                    n_density = np.abs(np.trapz(dNdMUV[mask], MUV_bins[mask]))
+                    c = 299792.458
+                    H0 = 0.678 * 100
+                    if z_actual < 5:
+                        d_L = (c / H0) * z_actual * (1 + z_actual / 2)
+                    else:
+                        d_L = (c / H0) * z_actual * (1 + z_actual * 0.75 / 2)
+                    d_A = d_L / (1 + z_actual)**2
+                    angular_size_rad = np.deg2rad(1.0)
+                    comoving_size = angular_size_rad * d_A
+                    comoving_area = comoving_size**2
+                    dz = 0.1
+                    z1, z2 = z_actual - dz/2, z_actual + dz/2
+                    if z1 < 5:
+                        d_L1 = (c / H0) * z1 * (1 + z1 / 2)
+                        d_L2 = (c / H0) * z2 * (1 + z2 / 2)
+                    else:
+                        d_L1 = (c / H0) * z1 * (1 + z1 * 0.75 / 2)
+                        d_L2 = (c / H0) * z2 * (1 + z2 * 0.75 / 2)
+                    comoving_depth = abs(d_L2 - d_L1) / (1 + z_actual)
+                    comoving_volume = comoving_area * comoving_depth
+                    surf_dens = n_density * comoving_volume
+                    if surf_dens > 0:
+                        redshifts_um.append(z_actual)
+                        surf_dens_um.append(np.log10(surf_dens))
+            
+            if len(redshifts_um) > 0:
+                ax.plot(redshifts_um, surf_dens_um,
+                       color='gray', linestyle='--', linewidth=2,
+                       label='',
+                       alpha=0.7, zorder=4)
+            
+            # Reset to default
+            set_option(FFB_SFE_MAX=1.0)
+            
+        except Exception as e:
+            print(f"  Warning: Could not compute analytical surface density: {e}")
+        
         # Formatting
         ax.set_xlim(5, 16)
         ax.set_ylim(-2, 3)
@@ -1169,7 +1601,7 @@ def plot_cumulative_surface_density(models=None):
         # Only show y-axis label on left plot
         if ax_idx == 0:
             ax.set_ylabel(r'$\log_{10}(\Sigma / \mathrm{deg}^{-2})$', fontsize=12)
-            ax.legend(loc='lower left', fontsize=10, frameon=False)
+            ax.legend(loc='upper right', fontsize=10, frameon=False, bbox_to_anchor=(0.95, 0.88))
         else:
             # Remove y-axis tick labels from middle and right plots
             ax.tick_params(axis='y', labelleft=False)
@@ -1275,8 +1707,8 @@ def plot_density_evolution(models=None):
             w = np.where(sfr_total > 0.0)[0]
             
             if len(w) > 0:
-                # Convert SFR to UV magnitude
-                M_UV = -2.5 * np.log10(sfr_total[w]) - 17.88
+                # Convert SFR to UV magnitude using Behroozi+2020 (correct formula from Li+2023 paper)
+                M_UV = func_MUV_sfr(sfr_total[w], z_actual)
                 
                 # PANEL 1: Stellar Mass Density (M_UV < -17.5)
                 w_bright = np.where(M_UV < M_UV_threshold_stellar)[0]
@@ -1394,6 +1826,148 @@ def plot_density_evolution(models=None):
                                 zorder=2)
             print(f"  {model['name']}: SFR density plotted")
     
+    # Add analytical predictions from Li+2023 to all three panels
+    try:
+        # Panel 1: Stellar Mass Density (three lines)
+        # FFB eps_max=1.0
+        set_option(FFB_SFE_MAX=1.0)
+        redshifts_ffb1, rho_star_ffb1 = [], []
+        for z_actual in actual_redshifts:
+            rho = compute_rho_star(z_actual, M_UV_threshold_stellar)
+            if rho > 0:
+                redshifts_ffb1.append(z_actual)
+                rho_star_ffb1.append(np.log10(rho))
+        if len(redshifts_ffb1) > 0:
+            axes[0].plot(redshifts_ffb1, rho_star_ffb1,
+                        color='dodgerblue', linestyle='--', linewidth=2,
+                        label='Li+ 2024', alpha=0.7, zorder=4)
+        
+        # FFB eps_max=0.2
+        set_option(FFB_SFE_MAX=0.2)
+        redshifts_ffb02, rho_star_ffb02 = [], []
+        for z_actual in actual_redshifts:
+            rho = compute_rho_star(z_actual, M_UV_threshold_stellar)
+            if rho > 0:
+                redshifts_ffb02.append(z_actual)
+                rho_star_ffb02.append(np.log10(rho))
+        if len(redshifts_ffb02) > 0:
+            axes[0].plot(redshifts_ffb02, rho_star_ffb02,
+                        color='orange', linestyle='--', linewidth=2,
+                        label='', alpha=0.7, zorder=4)
+        
+        # UM model (no FFB)
+        set_option(FFB_SFE_MAX=0.0)
+        redshifts_um, rho_star_um = [], []
+        for z_actual in actual_redshifts:
+            rho = compute_rho_star(z_actual, M_UV_threshold_stellar)
+            if rho > 0:
+                redshifts_um.append(z_actual)
+                rho_star_um.append(np.log10(rho))
+        if len(redshifts_um) > 0:
+            axes[0].plot(redshifts_um, rho_star_um,
+                        color='gray', linestyle='--', linewidth=2,
+                        label='', alpha=0.7, zorder=4)
+        
+        # Reset to default
+        set_option(FFB_SFE_MAX=1.0)
+        print(f"  Li+2023 analytical stellar mass density added (3 lines)")
+    except Exception as e:
+        print(f"  Warning: Could not compute analytical stellar mass density: {e}")
+    
+    try:
+        # Panel 2: UV Luminosity Density (three lines)
+        # FFB eps_max=1.0
+        set_option(FFB_SFE_MAX=1.0)
+        redshifts_ffb1, rho_UV_ffb1 = [], []
+        for z_actual in actual_redshifts:
+            rho = compute_rho_UV(z_actual, M_UV_threshold_uv, attenuation=None)
+            if rho > 0:
+                redshifts_ffb1.append(z_actual)
+                rho_UV_ffb1.append(np.log10(rho))
+        if len(redshifts_ffb1) > 0:
+            axes[1].plot(redshifts_ffb1, rho_UV_ffb1,
+                        color='dodgerblue', linestyle='--', linewidth=2,
+                        label='', alpha=0.7, zorder=4)
+        
+        # FFB eps_max=0.2
+        set_option(FFB_SFE_MAX=0.2)
+        redshifts_ffb02, rho_UV_ffb02 = [], []
+        for z_actual in actual_redshifts:
+            rho = compute_rho_UV(z_actual, M_UV_threshold_uv, attenuation=None)
+            if rho > 0:
+                redshifts_ffb02.append(z_actual)
+                rho_UV_ffb02.append(np.log10(rho))
+        if len(redshifts_ffb02) > 0:
+            axes[1].plot(redshifts_ffb02, rho_UV_ffb02,
+                        color='orange', linestyle='--', linewidth=2,
+                        label='', alpha=0.7, zorder=4)
+        
+        # UM model (no FFB)
+        set_option(FFB_SFE_MAX=0.0)
+        redshifts_um, rho_UV_um = [], []
+        for z_actual in actual_redshifts:
+            rho = compute_rho_UV(z_actual, M_UV_threshold_uv, attenuation=None)
+            if rho > 0:
+                redshifts_um.append(z_actual)
+                rho_UV_um.append(np.log10(rho))
+        if len(redshifts_um) > 0:
+            axes[1].plot(redshifts_um, rho_UV_um,
+                        color='gray', linestyle='--', linewidth=2,
+                        label='', alpha=0.7, zorder=4)
+        
+        # Reset to default
+        set_option(FFB_SFE_MAX=1.0)
+        print(f"  Li+2023 analytical UV luminosity density added (3 lines)")
+    except Exception as e:
+        print(f"  Warning: Could not compute analytical UV luminosity density: {e}")
+    
+    try:
+        # Panel 3: SFR Density (three lines)
+        # FFB eps_max=1.0
+        set_option(FFB_SFE_MAX=1.0)
+        redshifts_ffb1, rho_SFR_ffb1 = [], []
+        for z_actual in actual_redshifts:
+            rho = compute_rho_SFR(z_actual, M_UV_threshold_sfr)
+            if rho > 0:
+                redshifts_ffb1.append(z_actual)
+                rho_SFR_ffb1.append(np.log10(rho))
+        if len(redshifts_ffb1) > 0:
+            axes[2].plot(redshifts_ffb1, rho_SFR_ffb1,
+                        color='dodgerblue', linestyle='--', linewidth=2,
+                        label='', alpha=0.7, zorder=4)
+        
+        # FFB eps_max=0.2
+        set_option(FFB_SFE_MAX=0.2)
+        redshifts_ffb02, rho_SFR_ffb02 = [], []
+        for z_actual in actual_redshifts:
+            rho = compute_rho_SFR(z_actual, M_UV_threshold_sfr)
+            if rho > 0:
+                redshifts_ffb02.append(z_actual)
+                rho_SFR_ffb02.append(np.log10(rho))
+        if len(redshifts_ffb02) > 0:
+            axes[2].plot(redshifts_ffb02, rho_SFR_ffb02,
+                        color='orange', linestyle='--', linewidth=2,
+                        label='', alpha=0.7, zorder=4)
+        
+        # UM model (no FFB)
+        set_option(FFB_SFE_MAX=0.0)
+        redshifts_um, rho_SFR_um = [], []
+        for z_actual in actual_redshifts:
+            rho = compute_rho_SFR(z_actual, M_UV_threshold_sfr)
+            if rho > 0:
+                redshifts_um.append(z_actual)
+                rho_SFR_um.append(np.log10(rho))
+        if len(redshifts_um) > 0:
+            axes[2].plot(redshifts_um, rho_SFR_um,
+                        color='gray', linestyle='--', linewidth=2,
+                        label='', alpha=0.7, zorder=4)
+        
+        # Reset to default
+        set_option(FFB_SFE_MAX=1.0)
+        print(f"  Li+2023 analytical SFR density added (3 lines)")
+    except Exception as e:
+        print(f"  Warning: Could not compute analytical SFR density: {e}")
+    
     # Formatting for each panel
     for idx, ax in enumerate(axes):
         ax.set_xlim(5, 16)
@@ -1437,7 +2011,7 @@ def plot_density_evolution(models=None):
     
     print('='*60 + '\n')
 
-def calculate_ffb_threshold_mass(z, hubble_h):
+def calculate_ffb_threshold_mass(z, hubble_h, return_log=False):
     """Calculate FFB threshold mass from Li et al. 2024
     
     M_v,ffb / 10^10.8 M_sun ~ ((1+z)/10)^-6.2
@@ -1445,9 +2019,10 @@ def calculate_ffb_threshold_mass(z, hubble_h):
     Args:
         z: Redshift
         hubble_h: Hubble parameter (not used, kept for API compatibility)
+        return_log: If True, return log10(M_vir) instead of M_vir
     
     Returns:
-        M_vir threshold in physical Msun
+        M_vir threshold in physical Msun (or log10(Msun) if return_log=True)
     """
     z_norm = (1.0 + z) / 10.0
     M_norm = 10.8
@@ -1456,8 +2031,11 @@ def calculate_ffb_threshold_mass(z, hubble_h):
     # Calculate log10(M_v,ffb) in units of M_sun (physical)
     log_Mvir_ffb_Msun = M_norm + z_exponent * np.log10(z_norm)
     
-    # Return in physical Msun
-    return 10.0**log_Mvir_ffb_Msun
+    # Return log or linear based on flag
+    if return_log:
+        return log_Mvir_ffb_Msun
+    else:
+        return 10.0**log_Mvir_ffb_Msun
 
 def plot_ffb_threshold_analysis(models=None):
     """Plot FFB threshold galaxy properties
@@ -1529,8 +2107,15 @@ def plot_ffb_threshold_analysis(models=None):
         stellar_mass = read_hdf_from_model(model_dir, filename, snapshot, 'StellarMass', hubble_h) * 1.0e10 / hubble_h
         bulge_mass = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeMass', hubble_h) * 1.0e10 / hubble_h
         disk_radius = read_hdf_from_model(model_dir, filename, snapshot, 'DiskRadius', hubble_h)  # Already in Mpc/h
-        bulge_radius = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeScaleRadius', hubble_h)  # Already in Mpc/h
+        bulge_radius_raw = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeRadius', hubble_h)  # Already in Mpc/h
         galaxy_type = read_hdf_from_model(model_dir, filename, snapshot, 'Type', hubble_h)
+        
+        # Check if BulgeRadius loaded correctly (should have same length as other arrays)
+        if len(bulge_radius_raw) != len(mvir):
+            # BulgeRadius doesn't exist, use BulgeScaleRadius instead or set to zeros
+            bulge_radius = np.zeros_like(disk_radius)
+        else:
+            bulge_radius = bulge_radius_raw
         
         # Calculate FFB threshold mass for this redshift
         M_ffb_threshold = calculate_ffb_threshold_mass(z_actual, hubble_h)
@@ -1745,6 +2330,52 @@ def plot_ffb_threshold_analysis(models=None):
                     transform=axes[1].transAxes,
                     verticalalignment='top',
                     fontsize=11)
+        
+        # Add analytical predictions from Li+2023 (shell mode with 3 epsilon values)
+        try:
+            redshifts_analytical = np.linspace(5, 16, 50)
+            
+            # FFB eps_max=1.0 (shell)
+            set_option(FFB_SFE_MAX=1.0)
+            radius_ffb1_shell = []
+            for z in redshifts_analytical:
+                lgMh_crit = ffb_lgMh_crit(z)
+                R_shell = ffb_radius(lgMh_crit, z, mode='shell', lambdas=0.025, eps=None)
+                R_shell_kpc = R_shell * 1.68 * 1000.0 / hubble_h / (1.0 + z)
+                radius_ffb1_shell.append(R_shell_kpc)
+            axes[1].plot(redshifts_analytical, radius_ffb1_shell,
+                        color='dodgerblue', linestyle='--', linewidth=2,
+                        label='Li+ 2024', alpha=0.7, zorder=4)
+            
+            # FFB eps_max=0.2 (shell)
+            set_option(FFB_SFE_MAX=0.2)
+            radius_ffb02_shell = []
+            for z in redshifts_analytical:
+                lgMh_crit = ffb_lgMh_crit(z)
+                R_shell = ffb_radius(lgMh_crit, z, mode='shell', lambdas=0.025, eps=None)
+                R_shell_kpc = R_shell * 1.68 * 1000.0 / hubble_h / (1.0 + z)
+                radius_ffb02_shell.append(R_shell_kpc)
+            axes[1].plot(redshifts_analytical, radius_ffb02_shell,
+                        color='orange', linestyle='--', linewidth=2,
+                        label='', alpha=0.7, zorder=4)
+            
+            # UM model - use disc mode as approximation
+            set_option(FFB_SFE_MAX=0.0)
+            radius_um_disc = []
+            for z in redshifts_analytical:
+                lgMh_crit = ffb_lgMh_crit(z)
+                R_disc = ffb_radius(lgMh_crit, z, mode='disc', lambdas=0.025, eps=None)
+                R_disc_kpc = R_disc * 1.68 * 1000.0 / hubble_h / (1.0 + z)
+                radius_um_disc.append(R_disc_kpc)
+            axes[1].plot(redshifts_analytical, radius_um_disc,
+                        color='gray', linestyle='--', linewidth=2,
+                        label='', alpha=0.7, zorder=4)
+            
+            # Reset to default
+            set_option(FFB_SFE_MAX=1.0)
+            print(f"  Li+2023 analytical radius predictions added (3 lines)")
+        except Exception as e:
+            print(f"  Warning: Could not compute analytical radius: {e}")
     
     plt.tight_layout()
     
@@ -1814,7 +2445,7 @@ def plot_ffb_threshold_analysis_empirical():
         
         # SAGE Radius is Comoving Mpc/h
         sage_disk_radius = read_hdf_from_model(model_dir, filename, snapshot, 'DiskRadius', hubble_h) 
-        sage_bulge_radius = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeScaleRadius', hubble_h)
+        sage_bulge_radius = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeRadius', hubble_h)
         
         # --- UNIT CONVERSION (Correcting to Physical kpc) ---
         # 1. Mpc/h -> kpc/h: * 1000
@@ -2193,6 +2824,56 @@ def plot_gas_fraction_evolution():
         ax.set_xlim(5, 20)
         ax.set_ylim(-3, 0)
         ax.legend(loc='lower left', fontsize=10, frameon=False, title='FFB Model Spread (16-84%)', title_fontsize=9)
+        
+        # Add analytical predictions from Li+2023 (shell mode with 3 epsilon values)
+        try:
+            redshifts_analytical = np.linspace(5, 20, 50)
+            
+            # FFB eps_max=1.0 (shell)
+            set_option(FFB_SFE_MAX=1.0)
+            fgas_ffb1_shell = []
+            for z in redshifts_analytical:
+                lgMh_crit = ffb_lgMh_crit(z)
+                fgas = ffb_fgas(lgMh_crit, z, mode='shell', eps=None)
+                fgas_ffb1_shell.append(np.log10(fgas) if fgas > 0 else np.nan)
+            valid = ~np.isnan(fgas_ffb1_shell)
+            if np.sum(valid) > 0:
+                ax.plot(redshifts_analytical[valid], np.array(fgas_ffb1_shell)[valid],
+                       color='dodgerblue', linestyle='--', linewidth=2,
+                       label='Li+ 2024', alpha=0.7, zorder=4)
+            
+            # FFB eps_max=0.2 (shell)
+            set_option(FFB_SFE_MAX=0.2)
+            fgas_ffb02_shell = []
+            for z in redshifts_analytical:
+                lgMh_crit = ffb_lgMh_crit(z)
+                fgas = ffb_fgas(lgMh_crit, z, mode='shell', eps=None)
+                fgas_ffb02_shell.append(np.log10(fgas) if fgas > 0 else np.nan)
+            valid = ~np.isnan(fgas_ffb02_shell)
+            if np.sum(valid) > 0:
+                ax.plot(redshifts_analytical[valid], np.array(fgas_ffb02_shell)[valid],
+                       color='orange', linestyle='--', linewidth=2,
+                       label='', alpha=0.7, zorder=4)
+            
+            # UM model - use disc mode
+            set_option(FFB_SFE_MAX=0.0)
+            fgas_um_disc = []
+            for z in redshifts_analytical:
+                lgMh_crit = ffb_lgMh_crit(z)
+                fgas = ffb_fgas(lgMh_crit, z, mode='disc', eps=None)
+                fgas_um_disc.append(np.log10(fgas) if fgas > 0 else np.nan)
+            valid = ~np.isnan(fgas_um_disc)
+            if np.sum(valid) > 0:
+                ax.plot(redshifts_analytical[valid], np.array(fgas_um_disc)[valid],
+                       color='gray', linestyle='--', linewidth=2,
+                       label='', alpha=0.7, zorder=4)
+            
+            # Reset to default
+            set_option(FFB_SFE_MAX=1.0)
+            print(f"  Li+2023 analytical gas fraction predictions added (3 lines)")
+        except Exception as e:
+            print(f"  Warning: Could not compute analytical gas fraction: {e}")
+    
     # Save figure
     OutputDir = DirName + 'plots/'
     if not os.path.exists(OutputDir):
@@ -2206,12 +2887,18 @@ def plot_gas_fraction_evolution():
     print('='*60 + '\n')
 
 
-def plot_ffb_metallicity_limit():
+def plot_ffb_metallicity_limit(use_analytical=True):
     """
     Plot the upper limit for metallicity in FFB star-forming clouds.
     Shows mixing between outflowing metals (Zsn = 1 Zsun) and inflowing gas
     (Zin = 0.1 Zsun or 0.02 Zsun) at the FFB threshold mass.
     Shading represents epsilon_max from 0.2 (bottom) to 1.0 (top).
+    
+    Parameters:
+    -----------
+    use_analytical : bool
+        If True, includes analytical predictions from ffb_predict.py methodology
+        If False, only plots empirical SAGE data (original behavior)
     
     Based on equation (42) from the paper.
     Uses actual mass loading factors from SAGE galaxies at FFB threshold.
@@ -2288,7 +2975,15 @@ def plot_ffb_metallicity_limit():
                 w = np.where(is_disk & has_sfr & near_threshold)[0]
                 
                 if len(w) > 5:  # Need at least 5 galaxies
-                    # Get median mass loading factor
+                    # Read metallicity data
+                    try:
+                        metals_cold = read_hdf_from_model(model_dir, filename, snap_str, 'MetalsColdGas', hubble_h) * 1.0e10 / hubble_h
+                        cold_gas = read_hdf_from_model(model_dir, filename, snap_str, 'ColdGas', hubble_h) * 1.0e10 / hubble_h
+                    except:
+                        metals_cold = None
+                        cold_gas = None
+                    
+                    # Get median mass loading factor and count for Poisson errors
                     valid_ml = mass_loading[w] > 0
                     if np.sum(valid_ml) > 0:
                         median_ml = np.median(mass_loading[w[valid_ml]])
@@ -2304,7 +2999,9 @@ def plot_ffb_metallicity_limit():
                 'name': model['name'],
                 'eps_max': model['eps_max'],
                 'redshifts': np.array(redshifts_model),
-                'mass_loading': np.array(mass_loading_model)
+                'mass_loading': np.array(mass_loading_model),
+                'dir': model_dir,
+                'filename': filename
             })
             print(f"  Processed {len(redshifts_model)} redshifts")
             print(f"    Mass loading range: {np.min(mass_loading_model):.2f} to {np.max(mass_loading_model):.2f}")
@@ -2314,62 +3011,179 @@ def plot_ffb_metallicity_limit():
     
     def calculate_metallicity_from_data(z_grid, model_data, Z_in):
         """
-        Calculate metallicity using actual mass loading data.
+        Calculate metallicity using analytical formula with eps_max from model.
+        This ensures consistency between empirical and analytical approaches.
         """
-        # Interpolate mass loading to grid
-        eta_interp = np.interp(z_grid, model_data['redshifts'], model_data['mass_loading'],
-                              left=np.nan, right=np.nan)
+        # Get FFB threshold mass at each redshift
+        lgMh_ffb = np.array([calculate_ffb_threshold_mass(z, hubble_h, return_log=True) for z in z_grid])
         
-        # Inflow rate relative to SFR
-        # For high-z, small galaxies: strong cosmological accretion
-        f_in = 5.0 * (1 + z_grid) / 11.0  # ~9 at z=20, ~5 at z=10, ~2.7 at z=5
+        # Calculate metallicity using analytical formula with model's eps_max
+        eps_max = model_data['eps_max']
+        Z_mix = ffb_metal_analytical(lgMh_ffb, z_grid, 
+                                      Zsn=1.0,  # Z_sn in solar units
+                                      Zin=Z_in / Z_sun,  # Convert to solar units
+                                      eps_max=eps_max)
         
-        # Mixed metallicity from equation (42)
-        Z_mix = (eta_interp * Z_sn + f_in * Z_in) / (eta_interp + f_in)
+        return Z_mix  # Already in units of Z_sun
+    
+    def calculate_metallicity_from_sage_data(z_grid, model_data, Z_in):
+        """
+        Calculate metallicity directly from SAGE cold gas metallicity.
+        This uses the actual simulated metallicity values, not analytical formulas.
+        The Z_in parameter is not used here - it's just for consistency with the function signature.
+        """
+        # We need to read the actual cold gas metallicity from SAGE at each redshift
+        Z_sage_by_z = []
         
-        return Z_mix / Z_sun  # Return in units of Z_sun
+        for z_target in z_grid:
+            # Find closest redshift in model data
+            z_diffs = np.abs(model_data['redshifts'] - z_target)
+            if np.min(z_diffs) < 0.5:  # Within 0.5 in redshift
+                iz = np.argmin(z_diffs)
+                z_actual = model_data['redshifts'][iz]
+                
+                # Read metallicity data for this redshift
+                try:
+                    snap_str = f'Snap_{snapshots[actual_redshifts.index(z_actual)]}'
+                    metals_cold = read_hdf_from_model(model_data['dir'], model_data['filename'], snap_str, 'MetalsColdGas', hubble_h) * 1.0e10 / hubble_h
+                    cold_gas = read_hdf_from_model(model_data['dir'], model_data['filename'], snap_str, 'ColdGas', hubble_h) * 1.0e10 / hubble_h
+                    mvir = read_hdf_from_model(model_data['dir'], model_data['filename'], snap_str, 'Mvir', hubble_h) * 1.0e10 / hubble_h
+                    sfr_disk = read_hdf_from_model(model_data['dir'], model_data['filename'], snap_str, 'SfrDisk', hubble_h)
+                    sfr_bulge = read_hdf_from_model(model_data['dir'], model_data['filename'], snap_str, 'SfrBulge', hubble_h)
+                    galaxy_type = read_hdf_from_model(model_data['dir'], model_data['filename'], snap_str, 'Type', hubble_h)
+                    
+                    M_ffb_threshold = calculate_ffb_threshold_mass(z_actual, hubble_h)
+                    sfr_total = sfr_disk + sfr_bulge
+                    is_disk = galaxy_type == 0
+                    has_sfr = sfr_total > 0
+                    near_threshold = (mvir > M_ffb_threshold * 0.8) & (mvir < M_ffb_threshold * 1.2)
+                    w = np.where(is_disk & has_sfr & near_threshold & (cold_gas > 0))[0]
+                    
+                    if len(w) > 0:
+                        Z_gas = metals_cold[w] / cold_gas[w] / Z_sun
+                        Z_median = np.median(Z_gas)
+                        Z_sage_by_z.append(Z_median)
+                    else:
+                        Z_sage_by_z.append(np.nan)
+                except:
+                    Z_sage_by_z.append(np.nan)
+            else:
+                Z_sage_by_z.append(np.nan)
+        
+        return np.array(Z_sage_by_z)
     
-    # Calculate metallicity limits for both Z_in scenarios using actual data
-    # Find models closest to eps_max = 0.2 and 1.0
-    model_low_eps = all_model_data[0]  # FFB 20% (eps_max = 0.2)
-    model_high_eps = all_model_data[-1]  # FFB 100% (eps_max = 1.0)
+    # Calculate SAGE metallicity for each Z_in scenario (median across all models)
+    print(f"\nCalculating SAGE metallicity predictions for {len(all_model_data)} models...")
     
-    # High Z_in (0.1 Zsun) - Blue
-    Z_high_low_eps = calculate_metallicity_from_data(z_grid, model_low_eps, Z_in_high)
-    Z_high_high_eps = calculate_metallicity_from_data(z_grid, model_high_eps, Z_in_high)
+    Z_sage_high_all = []  # High Z_in = 0.1 Z_sun
+    Z_sage_low_all = []   # Low Z_in = 0.02 Z_sun
     
-    # Low Z_in (0.02 Zsun) - Orange
-    Z_low_low_eps = calculate_metallicity_from_data(z_grid, model_low_eps, Z_in_low)
-    Z_low_high_eps = calculate_metallicity_from_data(z_grid, model_high_eps, Z_in_low)
+    for model_data in all_model_data:
+        print(f"  Processing {model_data['name']} (eps_max={model_data['eps_max']})")
+        
+        # Calculate metallicity using SAGE data with analytical mixing formula
+        Z_high = calculate_metallicity_from_sage_data(z_grid, model_data, Z_in_high)
+        Z_low = calculate_metallicity_from_sage_data(z_grid, model_data, Z_in_low)
+        
+        Z_sage_high_all.append(Z_high)
+        Z_sage_low_all.append(Z_low)
+    
+    # Convert to arrays: (n_models, n_redshifts)
+    Z_sage_high_all = np.array(Z_sage_high_all)
+    Z_sage_low_all = np.array(Z_sage_low_all)
+    
+    # Take median across all models for clean single lines
+    Z_sage_high = np.nanmedian(Z_sage_high_all, axis=0)
+    Z_sage_low = np.nanmedian(Z_sage_low_all, axis=0)
+    
+    # Calculate spread across models for uncertainty bands
+    Z_sage_high_min = np.nanpercentile(Z_sage_high_all, 16, axis=0)
+    Z_sage_high_max = np.nanpercentile(Z_sage_high_all, 84, axis=0)
+    
+    Z_sage_low_min = np.nanpercentile(Z_sage_low_all, 16, axis=0)
+    Z_sage_low_max = np.nanpercentile(Z_sage_low_all, 84, axis=0)
+    
+    valid_high = ~np.isnan(Z_sage_high)
+    valid_low = ~np.isnan(Z_sage_low)
+    
+    print(f"\n  High Z_in (0.1 Z_sun): {np.nanmin(Z_sage_high):.3f} - {np.nanmax(Z_sage_high):.3f} Z_sun")
+    print(f"  Low Z_in (0.02 Z_sun): {np.nanmin(Z_sage_low):.3f} - {np.nanmax(Z_sage_low):.3f} Z_sun")
+    print(f"  Valid points: High={np.sum(valid_high)}, Low={np.sum(valid_low)} out of {len(z_grid)}")
     
     # Create figure
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
     
-    # Filter out NaN values for plotting
-    valid_high = ~np.isnan(Z_high_low_eps) & ~np.isnan(Z_high_high_eps)
-    valid_low = ~np.isnan(Z_low_low_eps) & ~np.isnan(Z_low_high_eps)
+    # Plot two SAGE metallicity predictions using analytical mixing formula
+    print(f"\nPlotting SAGE metallicity predictions...")
     
-    # Plot high Z_in scenario (blue)
+    # Calculate min/max for shading
+    Z_high_full_min = np.nanmin(Z_sage_high_all, axis=0)
+    Z_high_full_max = np.nanmax(Z_sage_high_all, axis=0)
+    Z_low_full_min = np.nanmin(Z_sage_low_all, axis=0)
+    Z_low_full_max = np.nanmax(Z_sage_low_all, axis=0)
+    
+    valid_band_high = ~np.isnan(Z_high_full_min) & ~np.isnan(Z_high_full_max)
+    valid_band_low = ~np.isnan(Z_low_full_min) & ~np.isnan(Z_low_full_max)
+    
+    print(f"  High Z_in shading: {np.sum(valid_band_high)} valid points, range {np.nanmin(Z_high_full_min):.4f} to {np.nanmax(Z_high_full_max):.4f}")
+    print(f"  Low Z_in shading: {np.sum(valid_band_low)} valid points, range {np.nanmin(Z_low_full_min):.4f} to {np.nanmax(Z_low_full_max):.4f}")
+    print(f"  Z_sage_high_all shape: {Z_sage_high_all.shape}, number of models: {len(all_model_data)}")
+    
+    # Check actual width of shading
+    if np.sum(valid_band_high) > 0:
+        width_high = Z_high_full_max[valid_band_high] - Z_high_full_min[valid_band_high]
+        print(f"  High Z_in band width: mean={np.mean(width_high):.4f}, max={np.max(width_high):.4f}")
+    if np.sum(valid_band_low) > 0:
+        width_low = Z_low_full_max[valid_band_low] - Z_low_full_min[valid_band_low]
+        print(f"  Low Z_in band width: mean={np.mean(width_low):.4f}, max={np.max(width_low):.4f}")
+    
+    # Draw shading FIRST (so it's in background)
+    if np.sum(valid_band_high) > 0:
+        print(f"  Drawing HIGH shading: z from {z_grid[valid_band_high].min():.1f} to {z_grid[valid_band_high].max():.1f}")
+        ax.fill_between(z_grid[valid_band_high], 
+                       Z_high_full_min[valid_band_high], 
+                       Z_high_full_max[valid_band_high],
+                       color='cornflowerblue', alpha=0.5, linewidth=0, zorder=1,
+                       label=r'$\epsilon_{\rm max}$ variation (20-100%)')
+    
+    if np.sum(valid_band_low) > 0:
+        print(f"  Drawing LOW shading: z from {z_grid[valid_band_low].min():.1f} to {z_grid[valid_band_low].max():.1f}")
+        ax.fill_between(z_grid[valid_band_low], 
+                       Z_low_full_min[valid_band_low], 
+                       Z_low_full_max[valid_band_low],
+                       color='orange', alpha=0.5, linewidth=0, zorder=1)
+    
+    # High Z_in = 0.1 Z_sun (blue) - individual model lines
     if np.sum(valid_high) > 0:
-        ax.fill_between(z_grid[valid_high], Z_high_low_eps[valid_high], Z_high_high_eps[valid_high],
-                       color='royalblue', alpha=0.4,
-                       label=r'$Z_{\rm in} = 0.1\,Z_{\odot}$')
+        for i, model_data in enumerate(all_model_data):
+            Z_model = Z_sage_high_all[i]
+            valid_model = ~np.isnan(Z_model)
+            if np.sum(valid_model) > 0:
+                label = f'{model_data["name"]}' if i == 0 else None
+                ax.plot(z_grid[valid_model], Z_model[valid_model],
+                       color='royalblue', linestyle='-', linewidth=0.8, alpha=0.6, zorder=2)
         
-        # Add median line
-        Z_high_median = (Z_high_low_eps + Z_high_high_eps) / 2
-        ax.plot(z_grid[valid_high], Z_high_median[valid_high],
-               color='royalblue', linestyle='-', linewidth=2, alpha=0.8)
+        # Median line (thick, on top)
+        ax.plot(z_grid[valid_high], Z_sage_high[valid_high],
+               color='darkblue', linestyle='-', linewidth=3.0, zorder=3,
+               label=r'SAGE ($Z_{\rm in}=0.1\,Z_{\odot}$)')
     
-    # Plot low Z_in scenario (orange)
+    # Low Z_in = 0.02 Z_sun (orange) - individual model lines
     if np.sum(valid_low) > 0:
-        ax.fill_between(z_grid[valid_low], Z_low_low_eps[valid_low], Z_low_high_eps[valid_low],
-                       color='darkorange', alpha=0.4,
-                       label=r'$Z_{\rm in} = 0.02\,Z_{\odot}$')
+        for i, model_data in enumerate(all_model_data):
+            Z_model = Z_sage_low_all[i]
+            valid_model = ~np.isnan(Z_model)
+            if np.sum(valid_model) > 0:
+                ax.plot(z_grid[valid_model], Z_model[valid_model],
+                       color='darkorange', linestyle='-', linewidth=0.8, alpha=0.6, zorder=2)
         
-        # Add median line
-        Z_low_median = (Z_low_low_eps + Z_low_high_eps) / 2
-        ax.plot(z_grid[valid_low], Z_low_median[valid_low],
-               color='darkorange', linestyle='-', linewidth=2, alpha=0.8)
+        # Median line (thick, on top)
+        ax.plot(z_grid[valid_low], Z_sage_low[valid_low],
+               color='saddlebrown', linestyle='-', linewidth=3.0, zorder=3,
+               label=r'SAGE ($Z_{\rm in}=0.02\,Z_{\odot}$)')
+    
+    if np.sum(valid_high) == 0 and np.sum(valid_low) == 0:
+        print("WARNING: No valid SAGE data to plot!")
     
     # Formatting
     ax.set_xlabel('Redshift z', fontsize=12)
@@ -2377,22 +3191,7 @@ def plot_ffb_metallicity_limit():
     ax.set_xlim(5, 20)
     ax.set_yscale('log')
     
-    # Add text annotation
-    ax.text(0.05, 0.95, 'FFB Threshold Galaxies',
-           transform=ax.transAxes,
-           verticalalignment='top',
-           horizontalalignment='left',
-           fontsize=11)
-    
-    ax.text(0.05, 0.88, r'$\epsilon_{\rm max}$: 0.2 (bottom) to 1.0 (top)',
-           transform=ax.transAxes,
-           verticalalignment='top',
-           horizontalalignment='left',
-           fontsize=9,
-           style='italic')
-    
-    ax.legend(loc='upper right', fontsize=10, frameon=False)
-    ax.grid(True, alpha=0.3, linestyle='--')
+    ax.legend(loc='upper right', fontsize=9, frameon=True, framealpha=0.9, ncol=1)
     
     plt.tight_layout()
     
@@ -2487,7 +3286,7 @@ def main():
     
     IntraClusterStars = read_hdf(snap_num = Snapshot, param = 'IntraClusterStars') * 1.0e10 / Hubble_h
     DiskRadius = read_hdf(snap_num = Snapshot, param = 'DiskRadius')
-    BulgeRadius = read_hdf(snap_num = Snapshot, param = 'BulgeScaleRadius')
+    BulgeRadius = read_hdf(snap_num = Snapshot, param = 'BulgeRadius')
     MergerBulgeRadius = read_hdf(snap_num = Snapshot, param = 'MergerBulgeRadius')
     InstabilityBulgeRadius = read_hdf(snap_num = Snapshot, param = 'InstabilityBulgeRadius')
     MergerBulgeMass = read_hdf(snap_num = Snapshot, param = 'MergerBulgeMass') * 1.0e10 / Hubble_h
@@ -2541,7 +3340,7 @@ def main():
     plot_ffb_threshold_analysis()
     plot_ffb_threshold_analysis_empirical()
     plot_gas_fraction_evolution()
-    plot_ffb_metallicity_limit()
+    # plot_ffb_metallicity_limit(use_analytical=True)  # Disabled
     
     print('\nAll plots completed!')
     print(f'Plots saved to: {OutputDir}')

@@ -152,7 +152,7 @@ struct GALAXY
 
     /* misc */
     float DiskScaleRadius;
-    float BulgeScaleRadius;
+    float BulgeRadius;
     float MergTime;
     double Cooling;
     double Heating;
