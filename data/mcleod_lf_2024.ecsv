@@ -1,0 +1,22 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: z, unit: redshift, datatype: float64, description: Redshift bin}
+# - {name: M_UV, unit: mag, datatype: float64, description: Absolute UV Magnitude (AB)}
+# - {name: log_phi, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density}
+# - {name: log_phi_error, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density Error (1-sigma)}
+# meta: !!omap
+# - author: McLeod et al.
+# - year: 2024
+# - title: The galaxy UV luminosity function at z ~ 11 from a suite of public JWST ERS, ERO, and Cycle-1 programs
+# - table_sources: Table 4
+z M_UV log_phi log_phi_error
+11.0 -22.57 -6.9208 0.4343
+11.0 -21.80 -5.8894 0.4309
+11.0 -20.80 -4.9017 0.1482
+11.0 -20.05 -4.4008 0.1464
+11.0 -19.55 -4.0060 0.1848
+11.0 -18.85 -3.6291 0.1699
+11.0 -18.23 -3.2001 0.1973
+13.5 -19.45 -4.6075 0.2918
+13.5 -18.95 -4.2077 0.2918

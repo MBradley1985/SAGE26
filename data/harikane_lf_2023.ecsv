@@ -1,0 +1,24 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: z, unit: redshift, datatype: float64, description: Redshift bin}
+# - {name: M_UV, unit: mag, datatype: float64, description: Absolute UV Magnitude (AB)}
+# - {name: log_phi, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density}
+# - {name: log_phi_error_upper, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density Error (Upper)}
+# - {name: log_phi_error_lower, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density Error (Lower)}
+# meta: !!omap
+# - author: Harikane et al.
+# - year: 2023
+# - title: A Comprehensive Study of Galaxies at z ~ 9–16...
+# - table_sources: Table 7
+z M_UV log_phi log_phi_error_upper log_phi_error_lower
+9.0 -22.50 -6.13 0.23 0.50
+9.0 -21.50 -5.19 0.10 0.13
+9.0 -20.50 -4.43 0.05 0.06
+9.0 -19.50 -3.83 0.04 0.04
+9.0 -18.50 -3.42 0.04 0.04
+12.0 -22.50 -7.22 -inf -inf
+12.0 -21.50 -6.22 0.35 0.98
+12.0 -20.50 -5.33 0.17 0.28
+12.0 -19.50 -4.67 0.17 0.28
+16.0 -21.50 -6.52 0.30 0.73
