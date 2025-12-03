@@ -1832,7 +1832,7 @@ def plot_ffb_threshold_analysis_empirical():
         has_mass = stellar_mass > 0
         
         # Collect data for heatmap
-        valid_map = is_central & has_mass & (r_disk_kpc > 0)
+        valid_map = has_mass & (r_disk_kpc > 0)
         if np.sum(valid_map) > 0:
             all_mvir.extend(mvir[valid_map])
             all_redshifts.extend([z_actual] * np.sum(valid_map))

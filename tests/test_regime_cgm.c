@@ -40,7 +40,7 @@ void test_regime_boundary() {
         {1e13, 1, "Well above threshold (1e13 Msun)"},
     };
     
-    for(int i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); i++) {
+    for(size_t i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); i++) {
         struct GALAXY gal;
         memset(&gal, 0, sizeof(struct GALAXY));
         
