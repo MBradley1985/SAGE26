@@ -3,8 +3,8 @@ tests/test_data/
 input/millennium/
 output/
 input/
-tests/test_built
-tests/test_output
+tests/test_build/
+tests/test_output/
 
 *.o
 *.*~
