@@ -116,20 +116,27 @@ clean:
 
 # Help target
 help:
-	@echo "SAGE Model Test Suite"
-	@echo "====================="
+	@echo "SAGE26 Test Suite"
+	@echo "================="
+	@echo ""
+	@echo "Comprehensive unit tests for SAGE26 semi-analytic model"
+	@echo "with CGM physics extensions (278 tests across 16 suites)"
 	@echo ""
 	@echo "Targets:"
 	@echo "  make              - Build all tests"
 	@echo "  make test         - Build and run all tests"
 	@echo "  make quick        - Run quick tests (conservation only)"
-	@echo "  make test_conservation - Run conservation tests"
-	@echo "  make test_conservation - Run conservation tests"
-	@echo "  make test_regime  - Run regime/CGM tests"
+	@echo "  make test_conservation - Run conservation law tests"
+	@echo "  make test_regime  - Run regime/CGM physics tests"
 	@echo "  make test_bulge   - Run bulge size tests"
 	@echo "  make test_physics - Run physics validation tests"
 	@echo "  make clean        - Remove build artifacts"
 	@echo "  make help         - Show this help"
+	@echo ""
+	@echo "Documentation:"
+	@echo "  README.md              - Test suite overview and usage"
+	@echo "  TEST_SUITE_REVIEW.md   - Recent review findings (Dec 2025)"
+	@echo "  run_integration_tests.sh - Full integration tests"
 	@echo ""
 
 .PHONY: all test quick clean help test_conservation test_regime test_bulge test_physics
