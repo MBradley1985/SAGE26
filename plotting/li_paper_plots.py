@@ -244,7 +244,7 @@ PLOT_MODELS = [
         'volume_fraction': 1.0
     },
     {
-        'name': 'FFB 20% (SAGE26)',
+        'name': 'FFB 20%',
         'dir': './output/millennium/',
         'color': 'orange',
         'linestyle': '-',
@@ -726,6 +726,204 @@ def load_finkelstein_uvlf(redshift):
     except Exception as e:
         print(f"  Warning: Could not load Finkelstein UVLF data: {e}")
         return None, None, None, None
+
+def load_adams_uvlf(redshift):
+    """Load Adams et al. 2024 observational UV luminosity function data for a given redshift"""
+    filename = './data/adams_lf_2024.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±1.0)
+        z_match = np.abs(table['z'] - redshift) < 1.0
+        if not np.any(z_match):
+            return None, None, None
+        
+        data = table[z_match]
+        
+        M_UV = np.array(data['M_UV'])
+        log_phi = np.array(data['log_phi'])
+        # Convert error values to log bounds
+        log_phi_err_upper = np.array(data['log_phi_error_upper'])
+        log_phi_err_lower = np.array(data['log_phi_error_lower'])
+        
+        return M_UV, log_phi, (log_phi_err_lower, log_phi_err_upper)
+    except Exception as e:
+        print(f"  Warning: Could not load Adams UVLF data: {e}")
+        return None, None, None
+
+def load_bouwens23a_uvlf(redshift):
+    """Load Bouwens et al. 2023a observational UV luminosity function data for a given redshift"""
+    filename = './data/bouwens_lf_2023a.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±1.0)
+        z_match = np.abs(table['z'] - redshift) < 1.0
+        if not np.any(z_match):
+            return None, None, None
+        
+        data = table[z_match]
+        
+        M_UV = np.array(data['M_UV'])
+        log_phi = np.array(data['log_phi'])
+        log_phi_err = np.array(data['log_phi_error'])
+        
+        return M_UV, log_phi, log_phi_err
+    except Exception as e:
+        print(f"  Warning: Could not load Bouwens 2023a UVLF data: {e}")
+        return None, None, None
+
+def load_bouwens23b_uvlf(redshift):
+    """Load Bouwens et al. 2023b observational UV luminosity function data for a given redshift"""
+    filename = './data/bouwens_lf_2023b.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±0.5)
+        z_match = np.abs(table['z'] - redshift) < 0.5
+        if not np.any(z_match):
+            return None, None, None
+        
+        data = table[z_match]
+        
+        M_UV = np.array(data['M_UV'])
+        log_phi = np.array(data['log_phi'])
+        log_phi_err = np.array(data['log_phi_error'])
+        
+        return M_UV, log_phi, log_phi_err
+    except Exception as e:
+        print(f"  Warning: Could not load Bouwens 2023b UVLF data: {e}")
+        return None, None, None
+
+def load_donnan_uvlf(redshift):
+    """Load Donnan et al. 2023 observational UV luminosity function data for a given redshift"""
+    filename = './data/donnan_lf_2023.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±0.5)
+        z_match = np.abs(table['z'] - redshift) < 0.5
+        if not np.any(z_match):
+            return None, None, None
+        
+        data = table[z_match]
+        
+        M_UV = np.array(data['M_UV'])
+        log_phi = np.array(data['log_phi'])
+        log_phi_err = np.array(data['log_phi_error'])
+        
+        return M_UV, log_phi, log_phi_err
+    except Exception as e:
+        print(f"  Warning: Could not load Donnan UVLF data: {e}")
+        return None, None, None
+
+def load_harikane_uvlf(redshift):
+    """Load Harikane et al. 2023 observational UV luminosity function data for a given redshift"""
+    filename = './data/harikane_lf_2023.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±1.5 for z=16)
+        z_match = np.abs(table['z'] - redshift) < 1.5
+        if not np.any(z_match):
+            return None, None, None
+        
+        data = table[z_match]
+        
+        M_UV = np.array(data['M_UV'])
+        log_phi = np.array(data['log_phi'])
+        log_phi_err_upper = np.array(data['log_phi_error_upper'])
+        log_phi_err_lower = np.array(data['log_phi_error_lower'])
+        
+        return M_UV, log_phi, (log_phi_err_lower, log_phi_err_upper)
+    except Exception as e:
+        print(f"  Warning: Could not load Harikane UVLF data: {e}")
+        return None, None, None
+
+def load_mcleod24_uvlf(redshift):
+    """Load McLeod et al. 2024 observational UV luminosity function data for a given redshift"""
+    filename = './data/mcleod_lf_2024.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±1.5)
+        z_match = np.abs(table['z'] - redshift) < 1.5
+        if not np.any(z_match):
+            return None, None, None
+        
+        data = table[z_match]
+        
+        M_UV = np.array(data['M_UV'])
+        log_phi = np.array(data['log_phi'])
+        log_phi_err = np.array(data['log_phi_error'])
+        
+        return M_UV, log_phi, log_phi_err
+    except Exception as e:
+        print(f"  Warning: Could not load McLeod 2024 UVLF data: {e}")
+        return None, None, None
+
+def load_yan_uvlf(redshift):
+    """Load Yan et al. 2023 observational UV luminosity function data for a given redshift"""
+    filename = './data/yan_lf_2023.ecsv'
+    
+    if not os.path.exists(filename):
+        return None, None, None
+    
+    try:
+        # Read the ECSV file
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        # Filter for redshift closest to target (within ±2.5 for high-z)
+        z_match = np.abs(table['z'] - redshift) < 2.5
+        if not np.any(z_match):
+            return None, None, None
+        
+        data = table[z_match]
+        
+        M_UV = np.array(data['M_UV'])
+        # Convert from 10^-6 Mpc^-3 mag^-1 to log10(Mpc^-3 mag^-1)
+        phi = np.array(data['phi']) * 1e-6  # Convert to Mpc^-3 mag^-1
+        phi_err = np.array(data['phi_err']) * 1e-6
+        
+        # Convert to log space
+        log_phi = np.log10(phi)
+        # Propagate errors to log space: delta(log10(x)) = delta(x) / (x * ln(10))
+        log_phi_err = phi_err / (phi * np.log(10))
+        
+        return M_UV, log_phi, log_phi_err
+    except Exception as e:
+        print(f"  Warning: Could not load Yan UVLF data: {e}")
+        return None, None, None
 
 def plot_smf_grid(models=None, redshift_range='high'):
     """Plot SMF grid for different redshifts comparing different FFB models
@@ -1325,12 +1523,13 @@ def plot_uvlf_grid(models=None):
             # Plot
             valid = uvlf > -9  # Only plot non-zero bins
             
-            # Plot line
+            # Plot line - exclude legend for z > 9.28
+            show_legend = idx == 0 and z_actual <= 9.28
             ax.plot(M_UV_bins[valid], uvlf[valid], 
                    color=model['color'], 
                    linestyle=model['linestyle'],
                    linewidth=model['linewidth'],
-                   label=model['name'],
+                   label=model['name'] if show_legend else '',
                    alpha=0.8,
                    zorder=3)
             
@@ -1344,45 +1543,46 @@ def plot_uvlf_grid(models=None):
             
             print(f"  {model['name']}: {len(stellar_mass[stellar_mass>0])} galaxies")
         
-        # Add analytical predictions from Li+2023 (three lines)
-        try:
-            MUV_analytical = np.linspace(-24, -16, 100)
-            
-            # FFB eps_max=1.0
-            set_option(FFB_SFE_MAX=1.0)
-            MUV_bins, dNdMUV_ffb1 = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
-            log_phi_ffb1 = np.log10(dNdMUV_ffb1)
-            valid = np.isfinite(log_phi_ffb1) & (log_phi_ffb1 > -9)
-            ax.plot(MUV_bins[valid], log_phi_ffb1[valid],
-                   color='dodgerblue', linestyle='--', linewidth=2,
-                   label='Li+ 2024' if idx == 0 else '',
-                   alpha=0.7, zorder=4)
-            
-            # FFB eps_max=0.2
-            set_option(FFB_SFE_MAX=0.2)
-            MUV_bins, dNdMUV_ffb02 = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
-            log_phi_ffb02 = np.log10(dNdMUV_ffb02)
-            valid = np.isfinite(log_phi_ffb02) & (log_phi_ffb02 > -9)
-            ax.plot(MUV_bins[valid], log_phi_ffb02[valid],
-                   color='orange', linestyle='--', linewidth=2,
-                   label='',
-                   alpha=0.7, zorder=4)
-            
-            # UM model (no FFB)
-            set_option(FFB_SFE_MAX=0.0)
-            MUV_bins, dNdMUV_um = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
-            log_phi_um = np.log10(dNdMUV_um)
-            valid = np.isfinite(log_phi_um) & (log_phi_um > -9)
-            ax.plot(MUV_bins[valid], log_phi_um[valid],
-                   color='gray', linestyle='--', linewidth=2,
-                   label='',
-                   alpha=0.7, zorder=4)
-            
-            # Reset to default
-            set_option(FFB_SFE_MAX=1.0)
-            print(f"  Li+2023 analytical UVLF predictions added (3 lines)")
-        except Exception as e:
-            print(f"  Warning: Could not compute analytical UVLF: {e}")
+        # Add analytical predictions from Li+2023 (three lines) - only for z <= 9.28
+        if z_actual <= 9.28:
+            try:
+                MUV_analytical = np.linspace(-24, -16, 100)
+                
+                # FFB eps_max=1.0
+                set_option(FFB_SFE_MAX=1.0)
+                MUV_bins, dNdMUV_ffb1 = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
+                log_phi_ffb1 = np.log10(dNdMUV_ffb1)
+                valid = np.isfinite(log_phi_ffb1) & (log_phi_ffb1 > -9)
+                ax.plot(MUV_bins[valid], log_phi_ffb1[valid],
+                       color='dodgerblue', linestyle='--', linewidth=2,
+                       label='Li+ 2024' if idx == 0 else '',
+                       alpha=0.7, zorder=4)
+                
+                # FFB eps_max=0.2
+                set_option(FFB_SFE_MAX=0.2)
+                MUV_bins, dNdMUV_ffb02 = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
+                log_phi_ffb02 = np.log10(dNdMUV_ffb02)
+                valid = np.isfinite(log_phi_ffb02) & (log_phi_ffb02 > -9)
+                ax.plot(MUV_bins[valid], log_phi_ffb02[valid],
+                       color='orange', linestyle='--', linewidth=2,
+                       label='',
+                       alpha=0.7, zorder=4)
+                
+                # UM model (no FFB)
+                set_option(FFB_SFE_MAX=0.0)
+                MUV_bins, dNdMUV_um = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
+                log_phi_um = np.log10(dNdMUV_um)
+                valid = np.isfinite(log_phi_um) & (log_phi_um > -9)
+                ax.plot(MUV_bins[valid], log_phi_um[valid],
+                       color='gray', linestyle='--', linewidth=2,
+                       label='',
+                       alpha=0.7, zorder=4)
+                
+                # Reset to default
+                set_option(FFB_SFE_MAX=1.0)
+                print(f"  Li+2023 analytical UVLF predictions added (3 lines)")
+            except Exception as e:
+                print(f"  Warning: Could not compute analytical UVLF: {e}")
         
         # Add observational data
         # McLeod et al. 2016 - for z~9
@@ -1462,8 +1662,8 @@ def plot_uvlf_grid(models=None):
                                label='', capsize=2, linewidth=2.5)
                     print(f"  Bouwens+21 UVLF data added")
         
-        # Finkelstein et al. 2022 (JWST CEERS) - for z~9-11
-        if 8.5 <= z_actual <= 11.5:
+        # Finkelstein et al. 2022 (JWST CEERS) - for z~10 only
+        if 9.5 <= z_actual <= 10.5:
             finkelstein_muv, finkelstein_phi, finkelstein_err_low, finkelstein_err_high = load_finkelstein_uvlf(z_actual)
             if finkelstein_muv is not None:
                 valid = np.isfinite(finkelstein_phi) & (finkelstein_phi > -9)
@@ -1477,6 +1677,98 @@ def plot_uvlf_grid(models=None):
                                markersize=10, markeredgewidth=2.5, ecolor='gainsboro',
                                label='', capsize=2, linewidth=2.5)
                     print(f"  Finkelstein+22 UVLF data added")
+        
+        # Adams et al. 2024 (JWST) - for z~9, 10.5, 12.5
+        adams_result = load_adams_uvlf(z_actual)
+        if adams_result[0] is not None:
+            adams_muv, adams_phi, adams_err = adams_result
+            valid = np.isfinite(adams_phi) & (adams_phi > -9)
+            if np.any(valid):
+                # Error is provided as (lower, upper) - these are already error magnitudes
+                yerr_lower, yerr_upper = adams_err
+                # Filter out invalid errors (negative or inf)
+                valid_err = valid & np.isfinite(yerr_lower) & np.isfinite(yerr_upper) & (yerr_lower >= 0) & (yerr_upper >= 0)
+                if np.any(valid_err):
+                    ax.errorbar(adams_muv[valid_err], adams_phi[valid_err],
+                               yerr=[yerr_lower[valid_err], yerr_upper[valid_err]],
+                               fmt='s', color='black', markersize=10, alpha=1.0,
+                               label='Adams+24' if idx == 0 else '', capsize=2, linewidth=1.5)
+                    print(f"  Adams+24 UVLF data added")
+        
+        # Bouwens et al. 2023a (JWST) - for z~8.5, 10.5, 12.5
+        bouwens23a_result = load_bouwens23a_uvlf(z_actual)
+        if bouwens23a_result[0] is not None:
+            b23a_muv, b23a_phi, b23a_err = bouwens23a_result
+            valid = np.isfinite(b23a_phi) & (b23a_phi > -9) & np.isfinite(b23a_err) & (b23a_err >= 0)
+            if np.any(valid):
+                ax.errorbar(b23a_muv[valid], b23a_phi[valid],
+                           yerr=b23a_err[valid],
+                           fmt='D', color='black', markersize=10, alpha=1.0,
+                           label='Bouwens+23' if idx == 1 else '', capsize=2, linewidth=1.5)
+                print(f"  Bouwens+23a UVLF data added")
+        
+        # Bouwens et al. 2023b (JWST) - for z~9, 10, 12
+        bouwens23b_result = load_bouwens23b_uvlf(z_actual)
+        if bouwens23b_result[0] is not None:
+            b23b_muv, b23b_phi, b23b_err = bouwens23b_result
+            valid = np.isfinite(b23b_phi) & (b23b_phi > -9) & np.isfinite(b23b_err) & (b23b_err >= 0)
+            if np.any(valid):
+                ax.errorbar(b23b_muv[valid], b23b_phi[valid],
+                           yerr=b23b_err[valid],
+                           fmt='^', color='black', markersize=10, alpha=1.0,
+                           label='', capsize=2, linewidth=1.5)
+                print(f"  Bouwens+23b UVLF data added")
+        
+        # Donnan et al. 2023 (JWST) - for z~9, 10, 12
+        donnan_result = load_donnan_uvlf(z_actual)
+        if donnan_result[0] is not None:
+            don_muv, don_phi, don_err = donnan_result
+            valid = np.isfinite(don_phi) & (don_phi > -9) & np.isfinite(don_err) & (don_err >= 0)
+            if np.any(valid):
+                ax.errorbar(don_muv[valid], don_phi[valid],
+                           yerr=don_err[valid],
+                           fmt='v', color='black', markersize=10, alpha=1.0,
+                           label='Donnan+23' if idx == 0 else '', capsize=2, linewidth=1.5)
+                print(f"  Donnan+23 UVLF data added")
+        
+        # Harikane et al. 2023 (JWST) - for z~9, 12, 16
+        harikane_result = load_harikane_uvlf(z_actual)
+        if harikane_result[0] is not None:
+            har_muv, har_phi, har_err = harikane_result
+            valid = np.isfinite(har_phi) & (har_phi > -9)
+            if np.any(valid):
+                yerr_lower, yerr_upper = har_err
+                valid_err = valid & np.isfinite(yerr_lower) & np.isfinite(yerr_upper) & (yerr_lower >= 0) & (yerr_upper >= 0)
+                if np.any(valid_err):
+                    ax.errorbar(har_muv[valid_err], har_phi[valid_err],
+                               yerr=[yerr_lower[valid_err], yerr_upper[valid_err]],
+                               fmt='<', color='black', markersize=10, alpha=1.0,
+                               label='Harikane+23' if idx == 0 else '', capsize=2, linewidth=1.5)
+                    print(f"  Harikane+23 UVLF data added")
+        
+        # McLeod et al. 2024 (JWST) - for z~11, 13.5 (first appears at idx=2)
+        mcleod24_result = load_mcleod24_uvlf(z_actual)
+        if mcleod24_result[0] is not None:
+            mcl_muv, mcl_phi, mcl_err = mcleod24_result
+            valid = np.isfinite(mcl_phi) & (mcl_phi > -9) & np.isfinite(mcl_err) & (mcl_err >= 0)
+            if np.any(valid):
+                ax.errorbar(mcl_muv[valid], mcl_phi[valid],
+                           yerr=mcl_err[valid],
+                           fmt='>', color='black', markersize=10, alpha=1.0,
+                           label='McLeod+24' if idx == 2 else '', capsize=2, linewidth=1.5)
+                print(f"  McLeod+24 UVLF data added")
+        
+        # Yan et al. 2023 (JWST) - for z~12.7, 17.3 (first appears at idx=3)
+        yan_result = load_yan_uvlf(z_actual)
+        if yan_result[0] is not None:
+            yan_muv, yan_phi, yan_err = yan_result
+            valid = np.isfinite(yan_phi) & (yan_phi > -9) & np.isfinite(yan_err) & (yan_err >= 0)
+            if np.any(valid):
+                ax.errorbar(yan_muv[valid], yan_phi[valid],
+                           yerr=yan_err[valid],
+                           fmt='p', color='black', markersize=10, alpha=1.0,
+                           label='Yan+23' if idx == 3 else '', capsize=2, linewidth=1.5)
+                print(f"  Yan+23 UVLF data added")
         
         # Formatting
         ax.set_xlim(-24, -16)
@@ -1496,37 +1788,46 @@ def plot_uvlf_grid(models=None):
         else:  # Top row - hide x-axis tick labels
             ax.tick_params(axis='x', labelbottom=False)
         
-        # Only show legend in first subplot
-        if idx == 0:
+        # Show legend for panels that have new datasets appearing
+        # idx=0 (z~9): pre-JWST, Adams, Donnan, Harikane
+        # idx=1 (z~10): Bouwens
+        # idx=2 (z~11): McLeod
+        # idx=3 (z~12): Yan
+        if idx in [0, 1, 2, 3]:
             # Get existing handles and labels
             handles, labels = ax.get_legend_handles_labels()
             
-            # Create custom handle for pre-JWST with circle marker
-            from matplotlib.lines import Line2D
-            prejwst_handle = Line2D([0], [0], marker='o', color='w', 
-                                   markerfacecolor='white', markeredgecolor='gainsboro',
-                                   markersize=10, markeredgewidth=2.5,
-                                   label='pre-JWST')
-            
-            # Find and replace the pre-JWST entry if it exists
-            new_handles = []
-            new_labels = []
-            prejwst_added = False
-            for handle, label in zip(handles, labels):
-                if label == 'pre-JWST' and not prejwst_added:
+            # Create custom handle for pre-JWST with circle marker (only for idx=0)
+            if idx == 0:
+                from matplotlib.lines import Line2D
+                prejwst_handle = Line2D([0], [0], marker='o', color='w', 
+                                       markerfacecolor='white', markeredgecolor='gainsboro',
+                                       markersize=10, markeredgewidth=2.5,
+                                       label='pre-JWST')
+                
+                # Find and replace the pre-JWST entry if it exists
+                new_handles = []
+                new_labels = []
+                prejwst_added = False
+                for handle, label in zip(handles, labels):
+                    if label == 'pre-JWST' and not prejwst_added:
+                        new_handles.append(prejwst_handle)
+                        new_labels.append('pre-JWST')
+                        prejwst_added = True
+                    elif label != 'pre-JWST':
+                        new_handles.append(handle)
+                        new_labels.append(label)
+                
+                # If pre-JWST wasn't in the list, add it
+                if not prejwst_added:
                     new_handles.append(prejwst_handle)
                     new_labels.append('pre-JWST')
-                    prejwst_added = True
-                elif label != 'pre-JWST':
-                    new_handles.append(handle)
-                    new_labels.append(label)
-            
-            # If pre-JWST wasn't in the list, add it
-            if not prejwst_added:
-                new_handles.append(prejwst_handle)
-                new_labels.append('pre-JWST')
-            
-            ax.legend(new_handles, new_labels, loc='lower left', fontsize=9, ncol=1)
+                
+                ax.legend(new_handles, new_labels, loc='lower left', fontsize=9, ncol=1)
+            else:
+                # For other panels, just show the legend normally
+                if handles:
+                    ax.legend(handles, labels, loc='lower left', fontsize=9, ncol=1)
     
     # Add common y-axis label before tight_layout
     fig.text(0.04, 0.5, r'$\log_{10}(\Phi / \mathrm{Mpc}^{-3} \, \mathrm{mag}^{-1})$', 
