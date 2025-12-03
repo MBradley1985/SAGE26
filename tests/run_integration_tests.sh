@@ -155,6 +155,33 @@ else
     echo "  See: $TEST_OUTPUT_DIR/star_formation_recipes.log"
 fi
 
+echo -e "${YELLOW}▸ Test 14: Reincorporation${NC}"
+if ./test_build/test_reincorporation > "$TEST_OUTPUT_DIR/reincorporation.log" 2>&1; then
+    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/reincorporation.log" | head -1)
+    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
+else
+    echo -e "${RED}  ✗ FAIL - Some reincorporation tests failed${NC}"
+    echo "  See: $TEST_OUTPUT_DIR/reincorporation.log"
+fi
+
+echo -e "${YELLOW}▸ Test 15: Cooling & Heating${NC}"
+if ./test_build/test_cooling_heating > "$TEST_OUTPUT_DIR/cooling_heating.log" 2>&1; then
+    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/cooling_heating.log" | head -1)
+    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
+else
+    echo -e "${RED}  ✗ FAIL - Some cooling/heating tests failed${NC}"
+    echo "  See: $TEST_OUTPUT_DIR/cooling_heating.log"
+fi
+
+echo -e "${YELLOW}▸ Test 16: Halo Assembly & Mergers${NC}"
+if ./test_build/test_halo_mergers > "$TEST_OUTPUT_DIR/halo_mergers.log" 2>&1; then
+    PASS=$(grep -o "Passed:.*" "$TEST_OUTPUT_DIR/halo_mergers.log" | head -1)
+    echo -e "${GREEN}  ✓ PASS - $PASS${NC}"
+else
+    echo -e "${RED}  ✗ FAIL - Some halo merger tests failed${NC}"
+    echo "  See: $TEST_OUTPUT_DIR/halo_mergers.log"
+fi
+
 # Count total passes and fails from individual test outputs
 PASSED=0
 FAILED=0

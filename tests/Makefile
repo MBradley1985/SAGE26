@@ -45,7 +45,10 @@ TEST_SOURCES = \
 	test_metal_enrichment.c \
 	test_stripping.c \
 	test_multi_satellite.c \
-	test_star_formation_recipes.c
+	test_star_formation_recipes.c \
+	test_reincorporation.c \
+	test_cooling_heating.c \
+	test_halo_mergers.c
 
 # Test executables
 TEST_BINS = $(TEST_SOURCES:%.c=$(OUTPUT_DIR)/%)
