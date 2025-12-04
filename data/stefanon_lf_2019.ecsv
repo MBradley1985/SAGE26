@@ -1,18 +1,16 @@
 # %ECSV 1.0
 # ---
 # datatype:
-# - {name: z, unit: redshift, datatype: float64, description: Redshift bin}
-# - {name: M_UV, unit: mag, datatype: float64, description: Absolute UV Magnitude (AB)}
-# - {name: log_phi, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density}
-# - {name: log_phi_upper, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density (Upper 1-sigma)}
-# - {name: log_phi_lower, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density (Lower 1-sigma)}
-# meta: !!omap
-# - author: Stefanon et al.
-# - year: 2019
-# - title: The Brightest z > 8 Galaxies over the 0.5 deg^2 of the COSMOS/UltraVISTA Survey Fields
-# - table_sources: Table 6
-z M_UV log_phi log_phi_upper log_phi_lower
-9.0 -22.30 -6.52 -5.87 -inf
-9.0 -21.80 -6.52 -5.87 -inf
-9.0 -21.30 -5.57 -5.20 -6.31
-9.0 -20.80 -5.02 -4.77 -5.42
+# - {name: redshift, datatype: float64, description: Redshift z~10}
+# - {name: M_UV, unit: mag, datatype: float64, description: UV Magnitude}
+# - {name: phi_star, unit: 1e-4 Mpc-3 mag-1, datatype: float64, description: Normalization}
+# - {name: phi_star_err_up, unit: 1e-4 Mpc-3 mag-1, datatype: float64}
+# - {name: phi_star_err_low, unit: 1e-4 Mpc-3 mag-1, datatype: float64}
+# schema: astropy-2.0
+redshift M_UV phi_star phi_star_err_up phi_star_err_low
+10.0 -22.25 0.0 0.0 0.0
+10.0 -21.25 0.010 0.022 0.008
+10.0 -20.25 0.10 0.10 0.05
+10.0 -19.25 0.34 0.45 0.22
+10.0 -18.25 1.9 2.5 1.2
+10.0 -17.25 6.3 14.9 5.2

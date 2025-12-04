@@ -1364,6 +1364,68 @@ def load_observational_uvlf_data():
     except Exception as e:
         print(f"Warning: Could not load morishita_lf_2018.ecsv: {e}")
     
+    # Load Yan et al. 2023 - multiply by 10^-6, use only Avg sample
+    try:
+        table = Table.read(data_dir + 'yan_lf_2023.ecsv', format='ascii.ecsv')
+        # Use only the averaged sample (Avg)
+        mask = table['sample_type'] == 'Avg'
+        obs_data['yan_2023'] = {
+            'redshifts': np.array(table['redshift_approx'][mask]),
+            'M_UV': np.array(table['M_UV'][mask]),
+            'phi': np.array(table['phi'][mask]) * 1e-6,
+            'phi_err_up': np.array(table['phi_err'][mask]) * 1e-6,
+            'phi_err_low': np.array(table['phi_err'][mask]) * 1e-6,
+        }
+        print(f"Loaded Yan+2023: {np.sum(mask)} data points (Avg sample)")
+    except Exception as e:
+        print(f"Warning: Could not load yan_lf_2023.ecsv: {e}")
+    
+    # Load Harikane et al. 2024 - raw values, exclude upper limits
+    try:
+        table = Table.read(data_dir + 'harikane_lf_2024.ecsv', format='ascii.ecsv')
+        # Exclude upper limits
+        mask = table['limit_type'] != 'upper_limit'
+        obs_data['harikane_2024'] = {
+            'redshifts': np.array(table['redshift_approx'][mask], dtype=float),
+            'M_UV': np.array(table['M_UV'][mask]),
+            'phi': np.array(table['phi'][mask]),
+            'phi_err_up': np.array(table['phi_err_up'][mask]),
+            'phi_err_low': np.array(table['phi_err_low'][mask]),
+        }
+        print(f"Loaded Harikane+2024: {np.sum(mask)} data points (excluded upper limits)")
+    except Exception as e:
+        print(f"Warning: Could not load harikane_lf_2024.ecsv: {e}")
+    
+    # Load Oesch et al. 2018 - multiply by 10^-4, exclude upper limits (phi_star=0)
+    try:
+        table = Table.read(data_dir + 'oesch_lf_2018.ecsv', format='ascii.ecsv')
+        mask = table['phi_star'] > 0
+        obs_data['oesch_2018'] = {
+            'redshifts': np.array(table['redshift'][mask]),
+            'M_UV': np.array(table['M_UV'][mask]),
+            'phi': np.array(table['phi_star'][mask]) * 1e-4,
+            'phi_err_up': np.array(table['phi_star_err_up'][mask]) * 1e-4,
+            'phi_err_low': np.array(table['phi_star_err_low'][mask]) * 1e-4,
+        }
+        print(f"Loaded Oesch+2018: {np.sum(mask)} data points")
+    except Exception as e:
+        print(f"Warning: Could not load oesch_lf_2018.ecsv: {e}")
+    
+    # Load Stefanon et al. 2019 - multiply by 10^-4, exclude upper limits (phi_star=0)
+    try:
+        table = Table.read(data_dir + 'stefanon_lf_2019.ecsv', format='ascii.ecsv')
+        mask = table['phi_star'] > 0
+        obs_data['stefanon_2019'] = {
+            'redshifts': np.array(table['redshift'][mask]),
+            'M_UV': np.array(table['M_UV'][mask]),
+            'phi': np.array(table['phi_star'][mask]) * 1e-4,
+            'phi_err_up': np.array(table['phi_star_err_up'][mask]) * 1e-4,
+            'phi_err_low': np.array(table['phi_star_err_low'][mask]) * 1e-4,
+        }
+        print(f"Loaded Stefanon+2019: {np.sum(mask)} data points")
+    except Exception as e:
+        print(f"Warning: Could not load stefanon_lf_2019.ecsv: {e}")
+    
     return obs_data
 
 def plot_uvlf_grid(models=None):
@@ -1501,21 +1563,37 @@ def plot_uvlf_grid(models=None):
         z_tolerance = 1.5
         obs_count = 0
         # Dataset name mapping for cleaner legend labels and marker styles
+        # Pre-JWST datasets have white face, light gray edge, thick lines
+        pre_jwst_datasets = ['oesch_2018', 'morishita_2018', 'stefanon_2019', 'finkelstein_2022', 'bouwens_2021']
+        
         dataset_styles = {
-            'adams_2024': {'label': 'Adams+24', 'marker': 'o', 'color': 'black'},
-            'bouwens_2021': {'label': 'Bouwens+21', 'marker': 's', 'color': 'black'},
-            'bouwens_2023': {'label': 'Bouwens+23', 'marker': 'D', 'color': 'black'},
-            'donnan_2023': {'label': 'Donnan+23', 'marker': '^', 'color': 'black'},
-            'finkelstein_2022': {'label': 'Finkelstein+22', 'marker': 'v', 'color': 'black'},
-            'harikane_2023': {'label': 'Harikane+23', 'marker': 'p', 'color': 'black'},
-            'mcleod_2024': {'label': 'McLeod+24', 'marker': '*', 'color': 'black'},
-            'morishita_2018': {'label': 'Morishita+18', 'marker': 'h', 'color': 'black'}
+            'adams_2024': {'label': 'Adams+24', 'marker': 'o', 'facecolor': 'black', 'edgecolor': 'black', 'linewidth': 1.5},
+            'bouwens_2021': {'label': '', 'marker': 's', 'facecolor': 'white', 'edgecolor': 'lightgray', 'linewidth': 3},
+            'bouwens_2023': {'label': 'Bouwens+23', 'marker': 'D', 'facecolor': 'black', 'edgecolor': 'black', 'linewidth': 1.5},
+            'donnan_2023': {'label': 'Donnan+23', 'marker': '^', 'facecolor': 'black', 'edgecolor': 'black', 'linewidth': 1.5},
+            'finkelstein_2022': {'label': '', 'marker': 'v', 'facecolor': 'white', 'edgecolor': 'lightgray', 'linewidth': 3},
+            'harikane_2023': {'label': 'Harikane+23', 'marker': 'p', 'facecolor': 'black', 'edgecolor': 'black', 'linewidth': 1.5},
+            'harikane_2024': {'label': 'Harikane+24', 'marker': '+', 'facecolor': 'black', 'edgecolor': 'black', 'linewidth': 1.5},
+            'mcleod_2024': {'label': 'McLeod+24', 'marker': '*', 'facecolor': 'black', 'edgecolor': 'black', 'linewidth': 1.5},
+            'morishita_2018': {'label': '', 'marker': 'h', 'facecolor': 'white', 'edgecolor': 'lightgray', 'linewidth': 3},
+            'oesch_2018': {'label': '', 'marker': '<', 'facecolor': 'white', 'edgecolor': 'lightgray', 'linewidth': 3},
+            'stefanon_2019': {'label': '', 'marker': '>', 'facecolor': 'white', 'edgecolor': 'lightgray', 'linewidth': 3},
+            'yan_2023': {'label': 'Yan+23', 'marker': 'X', 'facecolor': 'black', 'edgecolor': 'black', 'linewidth': 1.5}
         }
+        
+        # Track if pre-JWST legend entry has been added
+        pre_jwst_legend_added = False
         for dataset_name, data in obs_data.items():
             # Find data points within redshift tolerance
             # For Finkelstein data, use tighter tolerance to only show in closest panel
             if dataset_name == 'finkelstein_2022':
                 z_mask = np.abs(data['redshifts'] - z_actual) < 0.5
+            # For Yan data at z=17.3, show in z=15.343 panel
+            elif dataset_name == 'yan_2023':
+                z_mask = np.abs(data['redshifts'] - z_actual) < z_tolerance
+                # Also include z=17.3 data in the z~15.3 panel
+                if np.abs(z_actual - 15.343) < 0.1:
+                    z_mask = z_mask | (np.abs(data['redshifts'] - 17.3) < 0.1)
             else:
                 z_mask = np.abs(data['redshifts'] - z_actual) < z_tolerance
             if np.sum(z_mask) > 0:
@@ -1530,20 +1608,51 @@ def plot_uvlf_grid(models=None):
                 log_phi_err_low = np.log10(phi_obs - phi_err_low)
                 
                 # Get marker style for this dataset
-                style = dataset_styles.get(dataset_name, {'label': dataset_name, 'marker': 'o', 'color': 'black'})
+                style = dataset_styles.get(dataset_name, {'label': dataset_name, 'marker': 'o', 'facecolor': 'black', 'edgecolor': 'black', 'linewidth': 1.5})
                 
                 # Plot with different markers for each dataset (matching SMF grid size)
                 # Add label only the first time this dataset appears across all subplots
                 label = style['label'] if dataset_name not in datasets_in_legend else ''
-                if label:
-                    datasets_in_legend.add(dataset_name)
                 
-                ax.errorbar(M_UV_obs, log_phi_obs,
-                           yerr=[log_phi_obs - log_phi_err_low, log_phi_err_up - log_phi_obs],
-                           fmt=style['marker'], color=style['color'], markersize=10,
-                           markerfacecolor=style['color'], markeredgecolor=style['color'],
-                           ecolor=style['color'], elinewidth=1.5, capsize=2,
-                           alpha=1.0, zorder=5, label=label)
+                # For pre-JWST datasets, add a single "pre JWST" legend entry with circle marker
+                # Use circle marker for legend, but actual marker for plot
+                # Only add legend in first subplot (z=9.278)
+                if dataset_name in pre_jwst_datasets and not pre_jwst_legend_added and idx == 0:
+                    # Plot with actual marker shape but no label
+                    ax.errorbar(M_UV_obs, log_phi_obs,
+                               yerr=[log_phi_obs - log_phi_err_low, log_phi_err_up - log_phi_obs],
+                               fmt=style['marker'], markersize=10,
+                               markerfacecolor=style['facecolor'], markeredgecolor=style['edgecolor'],
+                               markeredgewidth=style['linewidth'],
+                               ecolor=style['edgecolor'], elinewidth=style['linewidth'], capsize=2,
+                               alpha=1.0, zorder=5, label='')
+                    # Add circle marker for legend only in first subplot
+                    ax.plot([], [], 'o', markersize=10, markerfacecolor='white', 
+                           markeredgecolor='lightgray', markeredgewidth=3, 
+                           label='pre JWST')
+                    pre_jwst_legend_added = True
+                    datasets_in_legend.add(dataset_name)
+                elif dataset_name in pre_jwst_datasets:
+                    # Already added legend, just plot without label
+                    ax.errorbar(M_UV_obs, log_phi_obs,
+                               yerr=[log_phi_obs - log_phi_err_low, log_phi_err_up - log_phi_obs],
+                               fmt=style['marker'], markersize=10,
+                               markerfacecolor=style['facecolor'], markeredgecolor=style['edgecolor'],
+                               markeredgewidth=style['linewidth'],
+                               ecolor=style['edgecolor'], elinewidth=style['linewidth'], capsize=2,
+                               alpha=1.0, zorder=5, label='')
+                    datasets_in_legend.add(dataset_name)
+                else:
+                    # Non-pre-JWST datasets - normal plotting
+                    if label:
+                        datasets_in_legend.add(dataset_name)
+                    ax.errorbar(M_UV_obs, log_phi_obs,
+                               yerr=[log_phi_obs - log_phi_err_low, log_phi_err_up - log_phi_obs],
+                               fmt=style['marker'], markersize=10,
+                               markerfacecolor=style['facecolor'], markeredgecolor=style['edgecolor'],
+                               markeredgewidth=style['linewidth'],
+                               ecolor=style['edgecolor'], elinewidth=style['linewidth'], capsize=2,
+                               alpha=1.0, zorder=5, label=label)
                 obs_count += np.sum(z_mask)
         
         if obs_count > 0:

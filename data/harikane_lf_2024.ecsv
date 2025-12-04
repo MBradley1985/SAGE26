@@ -1,0 +1,26 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: redshift_approx, datatype: int64}
+# - {name: M_UV, unit: mag, datatype: float64, description: UV Magnitude}
+# - {name: phi, unit: Mpc-3 mag-1, datatype: float64, description: Number density}
+# - {name: phi_err_up, unit: Mpc-3 mag-1, datatype: float64, description: Upper error bound}
+# - {name: phi_err_low, unit: Mpc-3 mag-1, datatype: float64, description: Lower error bound}
+# - {name: limit_type, datatype: string, description: Detection status (detection, lower_limit, upper_limit)}
+# meta: !!omap
+# - {Table: Spectroscopic Constraints on LF}
+# - {Note: Upper limits set to 0.0}
+# schema: astropy-2.0
+redshift_approx M_UV phi phi_err_up phi_err_low limit_type
+9 -22.0 6.6e-6 7.1e-6 4.7e-6 detection
+9 -21.0 5.1e-6 7.0e-6 3.8e-6 lower_limit
+9 -20.0 2.9e-5 3.2e-5 2.2e-5 lower_limit
+9 -19.0 3.5e-5 3.7e-5 2.4e-5 lower_limit
+10 -21.6 1.0e-6 2.3e-6 0.9e-6 detection
+10 -20.6 8.7e-6 20.5e-6 8.4e-6 lower_limit
+10 -19.6 2.6e-5 2.8e-5 1.8e-5 lower_limit
+10 -18.6 1.9e-4 4.7e-4 1.9e-4 detection
+10 -17.6 6.3e-4 15.8e-4 6.3e-4 detection
+12 -20.1 8.8e-6 9.1e-6 5.5e-6 lower_limit
+12 -18.7 6.6e-5 6.0e-5 4.6e-5 lower_limit
+16 -21.9 0.0 0.0 0.0 upper_limit
