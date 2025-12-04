@@ -298,6 +298,220 @@ def read_hdf_from_model(model_dir, filename, snap_num, param, hubble_h):
         print(f"Error reading {param} from {path}: {e}")
         return np.zeros(1)
 
+def plot_rvir_vs_redshift():
+    """
+    Plot theoretical Rvir vs redshift for several Mvir values using the formula:
+    Rvir = 12.3 kpc * (Mvir/10^10.8 Msun)^(1/3) * ((1+z)/10)^(-1)
+    and compare with SAGE Rvir vs redshift for all galaxies.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    # Theoretical lines for several Mvir values
+    mvir_vals = [1e11, 1e12, 1e13]  # Msun
+    z_arr = np.linspace(0, 16, 100)
+    rvir_theory = []
+    for mvir in mvir_vals:
+        m10_8 = mvir / 10**10.8
+        rvir = 12.3 * m10_8**(1/3) * ((1+z_arr)/10)**(-1)  # kpc
+        rvir_theory.append(rvir)
+
+    # SAGE data: Rvir vs redshift for all galaxies
+    # We'll use the same snapshots/redshifts as other plots
+    snapshots = []
+    actual_redshifts = []
+    for idx, z in enumerate(DEFAULT_REDSHIFTS):
+        if 0 <= z <= 16.5:
+            snapshots.append(f'Snap_{idx}')
+            actual_redshifts.append(z)
+
+    model_dir = './output/millennium_FFB50/'
+    filename = 'model_0.hdf5'
+    hubble_h = MILLENNIUM_HUBBLE_H
+
+    sage_rvir = []
+    sage_z = []
+    for snapshot, z_actual in zip(snapshots, actual_redshifts):
+        try:
+            rvir = read_hdf_from_model(model_dir, filename, snapshot, 'Rvir', hubble_h)  # in kpc/h
+            if rvir is None or np.size(rvir) == 0:
+                print(f"Warning: No Rvir data for {snapshot} at z={z_actual}")
+                continue
+            # Check if Rvir is in Mpc/h (values < 100 likely Mpc)
+            if np.nanmax(rvir) < 100:
+                rvir = rvir * 1000  # Convert Mpc/h to kpc/h
+                print(f"Info: Converted Rvir from Mpc/h to kpc/h for {snapshot} at z={z_actual}")
+            # Convert to physical kpc
+            rvir_phys = rvir / hubble_h / (1.0 + z_actual)
+            valid = np.isfinite(rvir_phys) & (rvir_phys > 0)
+            if np.sum(valid) == 0:
+                print(f"Warning: No valid Rvir values for {snapshot} at z={z_actual}")
+                continue
+            # Print sample values for inspection
+            print(f"Sample Rvir_phys for {snapshot} at z={z_actual}: {rvir_phys[valid][:5]}")
+            # Multiply by (1+z) to get comoving Rvir
+            rvir_comov = rvir_phys[valid] * (1.0 + z_actual)
+            sage_rvir.extend(rvir_comov)
+            sage_z.extend([z_actual] * np.sum(valid))
+        except Exception as e:
+            print(f"Error reading Rvir for {snapshot} at z={z_actual}: {e}")
+            continue
+
+    # Plot
+    plt.figure(figsize=(8, 6))
+    for i, mvir in enumerate(mvir_vals):
+        plt.plot(z_arr, rvir_theory[i], label=f'Theory: $M_{{vir}}={mvir:.0e}$ $M_\odot$', lw=2)
+    if len(sage_rvir) > 0:
+        # Randomly sample up to 5000 galaxies for plotting
+        Nplot = min(5000, len(sage_rvir))
+        idx = np.random.choice(len(sage_rvir), Nplot, replace=False)
+        plt.scatter(np.array(sage_z)[idx], np.array(sage_rvir)[idx], s=8, color='blue', alpha=0.6, label=f'SAGE Galaxies (N={Nplot})')
+        print(f"Plotted {Nplot} SAGE galaxy Rvir points (random sample).")
+    else:
+        print("Warning: No SAGE galaxy Rvir data found for plotting.")
+    plt.xlabel('Redshift $z$')
+    plt.ylabel(r'$R_{\mathrm{vir}}$ (comoving kpc)')
+    plt.yscale('log')
+    plt.xlim(0, 16)
+    plt.ylim(1, 500)
+    plt.legend()
+    plt.title('Virial Radius vs Redshift')
+    plt.tight_layout()
+    OutputDir = DirName + 'plots/'
+    if not os.path.exists(OutputDir):
+        os.makedirs(OutputDir)
+    output_path = OutputDir + 'rvir_vs_redshift' + OutputFormat
+    plt.savefig(output_path, dpi=300)
+    print(f'Plot saved to: {output_path}')
+    plt.close()
+def plot_radius_evolution_all_galaxies():
+    """
+    Plot the evolution of disk and bulge half-mass radii for all galaxies (no FFB threshold cut).
+    Replicates the right panel of the FFB threshold analysis, but for the full galaxy population.
+    """
+    print('\n' + '='*60)
+    print('Creating Radius Evolution Plot for All Galaxies')
+    print('='*60)
+
+    # Use only FFB 50% model (as in threshold analysis)
+    ffb50_model = {
+        'name': 'FFB 50%',
+        'dir': './output/millennium_FFB50/',
+        'color': 'orange',
+        'linestyle': '-',
+        'linewidth': 3,
+        'hubble_h': MILLENNIUM_HUBBLE_H,
+        'boxsize': MILLENNIUM_BOXSIZE,
+        'volume_fraction': 1.0
+    }
+
+    snapshots = []
+    actual_redshifts = []
+    for idx, z in enumerate(DEFAULT_REDSHIFTS):
+        if 4.5 <= z <= 16.5:
+            snapshots.append(f'Snap_{idx}')
+            actual_redshifts.append(z)
+
+    model_dir = ffb50_model['dir']
+    filename = 'model_0.hdf5'
+    hubble_h = ffb50_model['hubble_h']
+
+    if not os.path.exists(model_dir + filename):
+        print(f"Error: {model_dir + filename} not found!")
+        print("This plot requires FFB 50% model output.")
+        return
+
+    redshifts = []
+    median_disk_radius = []
+    disk_radius_low = []
+    disk_radius_high = []
+    median_bulge_radius = []
+    bulge_radius_low = []
+    bulge_radius_high = []
+
+    for snapshot, z_actual in zip(snapshots, actual_redshifts):
+        mvir = read_hdf_from_model(model_dir, filename, snapshot, 'Mvir', hubble_h) * 1.0e10 / hubble_h
+        stellar_mass = read_hdf_from_model(model_dir, filename, snapshot, 'StellarMass', hubble_h) * 1.0e10 / hubble_h
+        bulge_mass = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeMass', hubble_h) * 1.0e10 / hubble_h
+        disk_radius = read_hdf_from_model(model_dir, filename, snapshot, 'DiskRadius', hubble_h) * (1+z_actual)
+        bulge_radius_raw = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeRadius', hubble_h) * (1+z_actual)
+
+        if len(bulge_radius_raw) != len(mvir):
+            bulge_radius = np.zeros_like(disk_radius)
+        else:
+            bulge_radius = bulge_radius_raw
+
+        has_stellar_mass = stellar_mass > 0
+        w = np.where(has_stellar_mass)[0]
+
+        if len(w) > 5:
+            redshifts.append(z_actual)
+            # Disk: where disk_radius > 0
+            valid_disk = disk_radius[w] > 0
+            if np.sum(valid_disk) > 0:
+                disk_radius_kpc = disk_radius[w[valid_disk]] * 1.68 * 1000.0 / hubble_h / (1.0 + z_actual)
+                median_disk_radius.append(np.median(disk_radius_kpc))
+                disk_radius_low.append(np.percentile(disk_radius_kpc, 16))
+                disk_radius_high.append(np.percentile(disk_radius_kpc, 84))
+            else:
+                median_disk_radius.append(np.nan)
+                disk_radius_low.append(np.nan)
+                disk_radius_high.append(np.nan)
+
+            # Bulge: where bulge_radius > 0 and bulge_mass > 0
+            valid_bulge = (bulge_radius[w] > 0) & (bulge_mass[w] > 0)
+            if np.sum(valid_bulge) > 0:
+                bulge_radius_kpc = bulge_radius[w[valid_bulge]] * 1000.0 / hubble_h / (1.0 + z_actual)
+                median_bulge_radius.append(np.median(bulge_radius_kpc))
+                bulge_radius_low.append(np.percentile(bulge_radius_kpc, 16))
+                bulge_radius_high.append(np.percentile(bulge_radius_kpc, 84))
+            else:
+                median_bulge_radius.append(np.nan)
+                bulge_radius_low.append(np.nan)
+                bulge_radius_high.append(np.nan)
+
+    # Plotting
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(7, 5))
+
+    if len(redshifts) > 0:
+        # Disk
+        ax.plot(redshifts, median_disk_radius, color='orange', linestyle='-', linewidth=3, label='Disk Half-Mass Radius', alpha=0.8, marker='o', markersize=6, zorder=3)
+        ax.fill_between(redshifts, disk_radius_low, disk_radius_high, color='orange', alpha=0.2, zorder=2)
+        # Bulge
+        bulge_mask = np.array([r > 0 for r in median_bulge_radius])
+        if np.any(bulge_mask):
+            redshifts_bulge = np.array(redshifts)[bulge_mask]
+            median_bulge_valid = np.array(median_bulge_radius)[bulge_mask]
+            bulge_low_valid = np.array(bulge_radius_low)[bulge_mask]
+            bulge_high_valid = np.array(bulge_radius_high)[bulge_mask]
+            ax.plot(redshifts_bulge, median_bulge_valid, color='royalblue', linestyle='-', linewidth=3, label='Bulge Half-Mass Radius', alpha=0.8, marker='s', markersize=6, zorder=3)
+            ax.fill_between(redshifts_bulge, bulge_low_valid, bulge_high_valid, color='royalblue', alpha=0.2, zorder=2)
+
+        ax.set_xlabel('Redshift z', fontsize=12)
+        ax.set_ylabel(r'$R_{\mathrm{half-mass}}$ (kpc)', fontsize=12)
+        ax.set_xlim(5, 16)
+        ax.set_yscale('log')
+        ax.set_ylim(0.01, 3)
+        ax.set_yticks([0.01, 0.1, 1.0])
+        ax.set_yticklabels(['0.01', '0.1', '1.0'])
+        from matplotlib.ticker import MultipleLocator
+        ax.xaxis.set_major_locator(MultipleLocator(1))
+        ax.xaxis.set_minor_locator(MultipleLocator(0.2))
+        ax.legend(loc='upper right', fontsize=10, frameon=False)
+        ax.text(0.05, 0.95, 'All Galaxies', transform=ax.transAxes, verticalalignment='top', fontsize=11)
+        ax.grid(True, alpha=0.1)
+
+    plt.tight_layout()
+    OutputDir = DirName + 'plots/'
+    if not os.path.exists(OutputDir):
+        os.makedirs(OutputDir)
+    output_path = OutputDir + 'radius_evolution_all_galaxies' + OutputFormat
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f'\nPlot saved to: {output_path}')
+    plt.close()
+    print('='*60 + '\n')
+
 def calculate_smf(stellar_mass, sfr_disk, sfr_bulge, volume, hubble_h, binwidth=0.1, return_errors=False):
     """Calculate stellar mass function with optional Poisson errors
     
@@ -2852,7 +3066,7 @@ def plot_density_evolution(models=None):
             sfr_bulge = read_hdf_from_model(model_dir, filename, snapshot, 'SfrBulge', hubble_h)
             
             # Calculate volume
-            volume = (model['boxsize'] / hubble_h)**3.0 * model.get('volume_fraction', 1.0)
+            volume = (model['boxsize'] / hubble_h)**3.0 * model.get('volume_fraction', 1.0)  # in Mpc^3
             
             # Calculate total SFR and M_UV
             sfr_total = sfr_disk + sfr_bulge
@@ -3266,8 +3480,8 @@ def plot_ffb_threshold_analysis(models=None):
         mvir = read_hdf_from_model(model_dir, filename, snapshot, 'Mvir', hubble_h) * 1.0e10 / hubble_h
         stellar_mass = read_hdf_from_model(model_dir, filename, snapshot, 'StellarMass', hubble_h) * 1.0e10 / hubble_h
         bulge_mass = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeMass', hubble_h) * 1.0e10 / hubble_h
-        disk_radius = read_hdf_from_model(model_dir, filename, snapshot, 'DiskRadius', hubble_h)  # Already in Mpc/h
-        bulge_radius_raw = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeRadius', hubble_h)  # Already in Mpc/h
+        disk_radius = read_hdf_from_model(model_dir, filename, snapshot, 'DiskRadius', hubble_h) * (1+z_actual) # Already in Mpc/h
+        bulge_radius_raw = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeRadius', hubble_h) * (1+z_actual)  # Already in Mpc/h
         galaxy_type = read_hdf_from_model(model_dir, filename, snapshot, 'Type', hubble_h)
         
         # Check if BulgeRadius loaded correctly (should have same length as other arrays)
@@ -3281,24 +3495,56 @@ def plot_ffb_threshold_analysis(models=None):
         M_ffb_threshold = calculate_ffb_threshold_mass(z_actual, hubble_h)
         
         # Left plot: ALL galaxies (using disk half-mass radius)
-        # Right plot: Only disk galaxies near FFB threshold
         is_disk = galaxy_type == 0
         has_stellar_mass = stellar_mass > 0
         near_threshold = (mvir > M_ffb_threshold * 0.8) & (mvir < M_ffb_threshold * 1.2)
         
-        # For left plot: all galaxies with stellar mass (not just disk galaxies)
         w_all = np.where(has_stellar_mass)[0]
         
-        # For right plot: only disk galaxies near FFB threshold
         w = np.where(is_disk & has_stellar_mass & near_threshold)[0]
+        # Right plot: calculate median radii for galaxies near FFB threshold
+        if len(w) > 5:  # Need at least 5 galaxies
+            # Separate disk and bulge radii for all galaxies near threshold
+            # Disk: where disk_radius > 0
+            valid_disk = disk_radius[w] > 0
+            if np.sum(valid_disk) > 0:
+                disk_radius_kpc = disk_radius[w[valid_disk]] * 1.68 * 1000.0 / hubble_h / (1.0 + z_actual)
+                median_disk = np.median(disk_radius_kpc)
+                disk_lower = np.percentile(disk_radius_kpc, 16)
+                disk_upper = np.percentile(disk_radius_kpc, 84)
+            else:
+                median_disk = np.nan
+                disk_lower = np.nan
+                disk_upper = np.nan
+
+            # Bulge: where bulge_radius > 0 and bulge_mass > 0
+            valid_bulge = (bulge_radius[w] > 0) & (bulge_mass[w] > 0)
+            if np.sum(valid_bulge) > 0:
+                bulge_radius_kpc = bulge_radius[w[valid_bulge]] * 1000.0 / hubble_h / (1.0 + z_actual)
+                median_bulge = np.median(bulge_radius_kpc)
+                bulge_lower = np.percentile(bulge_radius_kpc, 16)
+                bulge_upper = np.percentile(bulge_radius_kpc, 84)
+            else:
+                median_bulge = np.nan
+                bulge_lower = np.nan
+                bulge_upper = np.nan
+
+            if not np.isnan(median_disk):
+                redshifts_right.append(z_actual)
+                median_disk_radius.append(median_disk)
+                median_bulge_radius.append(median_bulge if not np.isnan(median_bulge) else 0)
+                disk_radius_lower.append(disk_lower)
+                disk_radius_upper.append(disk_upper)
+                bulge_radius_lower.append(bulge_lower if not np.isnan(bulge_lower) else 0)
+                bulge_radius_upper.append(bulge_upper if not np.isnan(bulge_upper) else 0)
+
+            print(f"  z={z_actual:.1f}: {len(w)} galaxies near FFB threshold (M_ffb={M_ffb_threshold:.2e})")
         
-        # Left plot: collect ALL galaxies
+        # Left plot: collect ALL galaxies (not just disks)
         if len(w_all) > 0:
             all_mvir.extend(mvir[w_all])
             all_redshifts.extend([z_actual] * len(w_all))
-            # Convert disk scale length to half-mass radius: r_half = 1.68 * r_d
-            # Convert from comoving Mpc/h to physical kpc
-            # Mpc/h -> kpc/h: *1000, kpc/h -> kpc: /h, comoving -> physical: /(1+z)
+            # Use disk half-mass radius for all galaxies, even if some are not disks
             radius_kpc = disk_radius[w_all] * 1.68 * 1000.0 / hubble_h / (1.0 + z_actual)
             all_radii.extend(np.log10(radius_kpc))
         
@@ -3318,10 +3564,10 @@ def plot_ffb_threshold_analysis(models=None):
                 disk_lower = np.nan
                 disk_upper = np.nan
             
-            # For bulge radius - convert scale length to half-mass radius, then to physical kpc
-            valid_bulge = bulge_radius[w] > 0
+            # For bulge radius - BulgeRadius is already half-mass radius, just convert to physical kpc
+            valid_bulge = (bulge_radius[w] > 0) & (bulge_mass[w] > 0)
             if np.sum(valid_bulge) > 0:
-                bulge_radius_kpc = bulge_radius[w[valid_bulge]] * 1.68 * 1000.0 / hubble_h / (1.0 + z_actual)
+                bulge_radius_kpc = bulge_radius[w[valid_bulge]] * 1000.0 / hubble_h / (1.0 + z_actual)
                 median_bulge = np.median(bulge_radius_kpc)
                 # Calculate 16th and 84th percentiles for 1-sigma errors
                 bulge_lower = np.percentile(bulge_radius_kpc, 16)
@@ -3618,25 +3864,25 @@ def plot_ffb_threshold_analysis_empirical():
         bulge_mass = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeMass', hubble_h) * 1.0e10 / hubble_h
         
         # SAGE Radius is Comoving Mpc/h
-        sage_disk_radius = read_hdf_from_model(model_dir, filename, snapshot, 'DiskRadius', hubble_h) 
-        sage_bulge_radius = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeRadius', hubble_h)
+        sage_disk_radius = read_hdf_from_model(model_dir, filename, snapshot, 'DiskRadius', hubble_h) * (1+z_actual)
+        sage_bulge_radius = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeRadius', hubble_h) * (1+z_actual)
         
         # --- UNIT CONVERSION (Correcting to Physical kpc) ---
         # 1. Mpc/h -> kpc/h: * 1000
         # 2. kpc/h -> kpc:   / h
         # 3. Comoving -> Physical: / (1+z)
-        # 4. Scale Length -> Half Mass: * 1.68
+        # 4. Disk Scale Length -> Half Mass: * 1.68 (Bulge already has half-mass radius)
         phys_scale_factor = (1000.0 / hubble_h) / (1.0 + z_actual)
         
         r_disk_kpc = sage_disk_radius * 1.68 * phys_scale_factor
-        r_bulge_kpc = sage_bulge_radius * 1.68 * phys_scale_factor
+        r_bulge_kpc = sage_bulge_radius * phys_scale_factor
         
         # Filter for Heatmap
         galaxy_type = read_hdf_from_model(model_dir, filename, snapshot, 'Type', hubble_h)
         is_central = galaxy_type == 0
         has_mass = stellar_mass > 0
         
-        # Collect data for heatmap
+        # Collect data for heatmap (all galaxies, not just disks)
         valid_map = has_mass & (r_disk_kpc > 0)
         if np.sum(valid_map) > 0:
             all_mvir.extend(mvir[valid_map])
@@ -3646,31 +3892,32 @@ def plot_ffb_threshold_analysis_empirical():
         # --- Statistics for Right Plot ---
         M_ffb = calculate_ffb_threshold_mass(z_actual, hubble_h)
         near_threshold = (mvir > M_ffb * 0.8) & (mvir < M_ffb * 1.2)
-        subset = is_central & has_mass & near_threshold
+        # Right plot: all galaxies near FFB threshold (with stellar mass)
+        subset = has_mass & near_threshold
         w_sub = np.where(subset)[0]
-        
+
         if len(w_sub) > 5:
             stats_z.append(z_actual)
-            
-            # Disk
-            radii = r_disk_kpc[w_sub]
-            valid = radii > 0
-            if np.sum(valid) > 0:
-                stats_disk_median.append(np.median(radii[valid]))
-                stats_disk_low.append(np.percentile(radii[valid], 16))
-                stats_disk_high.append(np.percentile(radii[valid], 84))
+
+            # Disk: where disk radius > 0
+            disk_valid = r_disk_kpc[w_sub] > 0
+            if np.sum(disk_valid) > 0:
+                disk_r = r_disk_kpc[w_sub][disk_valid]
+                stats_disk_median.append(np.median(disk_r))
+                stats_disk_low.append(np.percentile(disk_r, 16))
+                stats_disk_high.append(np.percentile(disk_r, 84))
             else:
                 stats_disk_median.append(np.nan)
                 stats_disk_low.append(np.nan)
                 stats_disk_high.append(np.nan)
-                
-            # Bulge
-            radii = r_bulge_kpc[w_sub]
-            valid = (radii > 0) & (bulge_mass[w_sub] > 0)
-            if np.sum(valid) > 0:
-                stats_bulge_median.append(np.median(radii[valid]))
-                stats_bulge_low.append(np.percentile(radii[valid], 16))
-                stats_bulge_high.append(np.percentile(radii[valid], 84))
+
+            # Bulge: where bulge radius > 0 and bulge mass > 0
+            bulge_valid = (r_bulge_kpc[w_sub] > 0) & (bulge_mass[w_sub] > 0)
+            if np.sum(bulge_valid) > 0:
+                bulge_r = r_bulge_kpc[w_sub][bulge_valid]
+                stats_bulge_median.append(np.median(bulge_r))
+                stats_bulge_low.append(np.percentile(bulge_r, 16))
+                stats_bulge_high.append(np.percentile(bulge_r, 84))
             else:
                 stats_bulge_median.append(np.nan)
                 stats_bulge_low.append(np.nan)
@@ -4468,51 +4715,8 @@ def main():
     # Read galaxy properties
     print('Loading galaxy data...')
     
-    CentralMvir = read_hdf(snap_num = Snapshot, param = 'CentralMvir') * 1.0e10 / Hubble_h
     Mvir = read_hdf(snap_num = Snapshot, param = 'Mvir') * 1.0e10 / Hubble_h
     StellarMass = read_hdf(snap_num = Snapshot, param = 'StellarMass') * 1.0e10 / Hubble_h
-    MetalsStellarMass = read_hdf(snap_num = Snapshot, param = 'MetalsStellarMass') * 1.0e10 / Hubble_h
-    BulgeMass = read_hdf(snap_num = Snapshot, param = 'BulgeMass') * 1.0e10 / Hubble_h
-    BlackHoleMass = read_hdf(snap_num = Snapshot, param = 'BlackHoleMass') * 1.0e10 / Hubble_h
-    ColdGas = read_hdf(snap_num = Snapshot, param = 'ColdGas') * 1.0e10 / Hubble_h
-    MetalsColdGas = read_hdf(snap_num = Snapshot, param = 'MetalsColdGas') * 1.0e10 / Hubble_h
-    MetalsEjectedMass = read_hdf(snap_num = Snapshot, param = 'MetalsEjectedMass') * 1.0e10 / Hubble_h
-    HotGas = read_hdf(snap_num = Snapshot, param = 'HotGas') * 1.0e10 / Hubble_h
-    MetalsHotGas = read_hdf(snap_num = Snapshot, param = 'MetalsHotGas') * 1.0e10 / Hubble_h
-    EjectedMass = read_hdf(snap_num = Snapshot, param = 'EjectedMass') * 1.0e10 / Hubble_h
-    CGMgas = read_hdf(snap_num = Snapshot, param = 'CGMgas') * 1.0e10 / Hubble_h
-    MetalsCGMgas = read_hdf(snap_num = Snapshot, param = 'MetalsCGMgas') * 1.0e10 / Hubble_h
-    
-    IntraClusterStars = read_hdf(snap_num = Snapshot, param = 'IntraClusterStars') * 1.0e10 / Hubble_h
-    DiskRadius = read_hdf(snap_num = Snapshot, param = 'DiskRadius')
-    BulgeRadius = read_hdf(snap_num = Snapshot, param = 'BulgeRadius')
-    MergerBulgeRadius = read_hdf(snap_num = Snapshot, param = 'MergerBulgeRadius')
-    InstabilityBulgeRadius = read_hdf(snap_num = Snapshot, param = 'InstabilityBulgeRadius')
-    MergerBulgeMass = read_hdf(snap_num = Snapshot, param = 'MergerBulgeMass') * 1.0e10 / Hubble_h
-    InstabilityBulgeMass = read_hdf(snap_num = Snapshot, param = 'InstabilityBulgeMass') * 1.0e10 / Hubble_h
-    
-    H2gas = read_hdf(snap_num = Snapshot, param = 'H2gas') * 1.0e10 / Hubble_h
-    Vvir = read_hdf(snap_num = Snapshot, param = 'Vvir')
-    Vmax = read_hdf(snap_num = Snapshot, param = 'Vmax')
-    Rvir = read_hdf(snap_num = Snapshot, param = 'Rvir')
-    SfrDisk = read_hdf(snap_num = Snapshot, param = 'SfrDisk')
-    SfrBulge = read_hdf(snap_num = Snapshot, param = 'SfrBulge')
-    
-    CentralGalaxyIndex = read_hdf(snap_num = Snapshot, param = 'CentralGalaxyIndex')
-    Type = read_hdf(snap_num = Snapshot, param = 'Type')
-    Posx = read_hdf(snap_num = Snapshot, param = 'Posx')
-    Posy = read_hdf(snap_num = Snapshot, param = 'Posy')
-    Posz = read_hdf(snap_num = Snapshot, param = 'Posz')
-    
-    OutflowRate = read_hdf(snap_num = Snapshot, param = 'OutflowRate')
-    MassLoading = read_hdf(snap_num = Snapshot, param = 'MassLoading')
-    Cooling = read_hdf(snap_num = Snapshot, param = 'Cooling')
-    TimeOfLastMajorMerger = read_hdf(snap_num = Snapshot, param = 'TimeOfLastMajorMerger')
-    Regime = read_hdf(snap_num = Snapshot, param = 'Regime')
-    
-    # Derived quantities
-    Tvir = 35.9 * (Vvir)**2  # in Kelvin
-    Tmax = 2.5e5  # K, corresponds to Vvir ~52.7 km/s
     
     # Statistics
     w = np.where(StellarMass > 1.0e10)[0]
@@ -4539,6 +4743,8 @@ def main():
     plot_ffb_threshold_analysis()
     plot_ffb_threshold_analysis_empirical()
     plot_gas_fraction_evolution()
+    plot_radius_evolution_all_galaxies()
+    plot_rvir_vs_redshift()
     # plot_ffb_metallicity_limit(use_analytical=True)  # Disabled
     
     print('\nAll plots completed!')
