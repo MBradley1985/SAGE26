@@ -1,30 +1,63 @@
 # %ECSV 1.0
 # ---
 # datatype:
-# - {name: z, unit: redshift, datatype: float64, description: Redshift bin}
-# - {name: M_UV, unit: mag, datatype: float64, description: Absolute UV Magnitude (AB)}
-# - {name: phi, unit: 10^-6 Mpc^-3 mag^-1, datatype: float64, description: Number Density (Average)}
-# - {name: phi_err, unit: 10^-6 Mpc^-3 mag^-1, datatype: float64, description: Number Density Error (Average)}
+# - {name: redshift_approx, datatype: float64}
+# - {name: sample_type, datatype: string, description: Sample ID (S1, S2, or Avg)}
+# - {name: M_UV, unit: mag, datatype: float64, description: UV Magnitude}
+# - {name: phi, unit: 1e-6 Mpc-3 mag-1, datatype: float64, description: Number density}
+# - {name: phi_err, unit: 1e-6 Mpc-3 mag-1, datatype: float64, description: Symmetric error}
 # meta: !!omap
-# - author: Yan et al.
-# - year: 2023
-# - title: Candidate Galaxies at z ≈ 11.3–21.8 and beyond...
-# - table_sources: Table 3 (Avg rows)
-z M_UV phi phi_err
-12.7 -21.63 5.48 2.98
-12.7 -21.13 7.82 4.18
-12.7 -20.63 14.60 5.83
-12.7 -20.13 18.73 6.33
-12.7 -19.63 12.51 7.98
-12.7 -19.13 28.12 18.00
-12.7 -18.63 94.68 49.09
-12.7 -18.13 34.05 20.31
-12.7 -17.63 16.70 12.48
-17.3 -22.07 5.00 2.58
-17.3 -21.57 5.06 2.55
-17.3 -21.07 5.26 3.00
-17.3 -20.57 7.07 4.27
-17.3 -20.07 7.41 4.67
-17.3 -19.57 28.19 30.73
-17.3 -19.07 16.47 12.76
-17.3 -16.07 1225.50 1225.50
+# - {Table: z=12.7 and z=17.3 UV LF from JWST}
+# schema: astropy-2.0
+redshift_approx sample_type M_UV phi phi_err
+12.7 S1 -21.63 6.32 3.16
+12.7 S1 -21.13 9.40 4.10
+12.7 S1 -20.63 21.14 7.40
+12.7 S1 -20.13 19.60 6.32
+12.7 S1 -19.63 14.57 10.05
+12.7 S1 -19.13 20.73 12.23
+12.7 S1 -18.63 100.30 49.95
+12.7 S1 -18.13 32.81 20.06
+12.7 S1 -17.63 14.45 10.09
+12.7 S2 -21.63 4.65 2.80
+12.7 S2 -21.13 6.24 4.25
+12.7 S2 -20.63 8.06 3.63
+12.7 S2 -20.13 17.86 6.35
+12.7 S2 -19.63 10.46 5.12
+12.7 S2 -19.13 35.51 22.33
+12.7 S2 -18.63 89.05 48.21
+12.7 S2 -18.13 35.29 20.55
+12.7 S2 -17.63 18.95 14.49
+12.7 Avg -21.63 5.48 2.98
+12.7 Avg -21.13 7.82 4.18
+12.7 Avg -20.63 14.60 5.83
+12.7 Avg -20.13 18.73 6.33
+12.7 Avg -19.63 12.51 7.98
+12.7 Avg -19.13 28.12 18.00
+12.7 Avg -18.63 94.68 49.09
+12.7 Avg -18.13 34.05 20.31
+12.7 Avg -17.63 16.70 12.48
+17.3 S1 -22.07 2.59 1.84
+17.3 S1 -21.57 4.93 2.63
+17.3 S1 -21.07 4.57 2.79
+17.3 S1 -20.57 6.74 4.24
+17.3 S1 -20.07 4.76 4.04
+17.3 S1 -19.57 41.62 41.62
+17.3 S1 -19.07 13.88 13.88
+17.3 S1 -16.07 1225.50 1225.50
+17.3 S2 -22.07 7.40 3.16
+17.3 S2 -21.57 5.19 2.47
+17.3 S2 -21.07 5.95 3.19
+17.3 S2 -20.57 7.40 4.31
+17.3 S2 -20.07 10.06 5.23
+17.3 S2 -19.57 14.76 12.50
+17.3 S2 -19.07 19.07 11.54
+17.3 S2 -16.07 1225.50 1225.50
+17.3 Avg -22.07 5.00 2.58
+17.3 Avg -21.57 5.06 2.55
+17.3 Avg -21.07 5.26 3.00
+17.3 Avg -20.57 7.07 4.27
+17.3 Avg -20.07 7.41 4.67
+17.3 Avg -19.57 28.19 30.73
+17.3 Avg -19.07 16.47 12.76
+17.3 Avg -16.07 1225.50 1225.50

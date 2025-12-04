@@ -1,20 +1,16 @@
 # %ECSV 1.0
 # ---
 # datatype:
-# - {name: z, unit: redshift, datatype: float64, description: Redshift bin}
-# - {name: M_UV, unit: mag, datatype: float64, description: Absolute UV Magnitude (AB)}
-# - {name: log_phi, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density}
-# - {name: log_phi_upper, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density (Upper 1-sigma)}
-# - {name: log_phi_lower, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density (Lower 1-sigma)}
-# meta: !!omap
-# - author: Oesch et al.
-# - year: 2018
-# - title: The Dearth of z~10 Galaxies in All the CANDELS Fields - The Seceding of the Cosmic Dawn
-# - table_sources: Table 4
-z M_UV log_phi log_phi_upper log_phi_lower
-10.0 -22.50 -6.57 -5.92 -inf
-10.0 -21.50 -5.69 -5.27 -7.03
-10.0 -20.50 -4.96 -4.68 -5.47
-10.0 -19.50 -4.37 -4.13 -4.73
-10.0 -18.50 -3.85 -3.61 -4.26
-10.0 -17.50 -3.37 -3.11 -3.86
+# - {name: redshift, datatype: float64, description: Redshift z~10}
+# - {name: M_UV, unit: mag, datatype: float64, description: UV Magnitude}
+# - {name: phi_star, unit: 1e-4 Mpc-3 mag-1, datatype: float64, description: Normalization}
+# - {name: phi_star_err_up, unit: 1e-4 Mpc-3 mag-1, datatype: float64}
+# - {name: phi_star_err_low, unit: 1e-4 Mpc-3 mag-1, datatype: float64}
+# schema: astropy-2.0
+redshift M_UV phi_star phi_star_err_up phi_star_err_low
+10.0 -22.25 0.0 0.0 0.0
+10.0 -21.25 0.010 0.022 0.008
+10.0 -20.25 0.10 0.10 0.05
+10.0 -19.25 0.34 0.45 0.22
+10.0 -18.25 1.9 2.5 1.2
+10.0 -17.25 6.3 14.9 5.2
