@@ -367,7 +367,7 @@ def calculate_smf(stellar_mass, sfr_disk, sfr_bulge, volume, hubble_h, binwidth=
         return xaxeshisto, smf_log
 
 def load_cosmos2020_smf(redshift):
-    """Load COSMOS2020 (Farmer+) observational SMF data for a given redshift"""
+    """Load COSMOS2020 (Weaver+) observational SMF data for a given redshift"""
     # Map redshift to appropriate file
     if redshift < 0.35:
         filename = './data/COSMOS2020/SMF_Farmer_v2.1_0.2z0.5_total.txt'
@@ -815,7 +815,7 @@ def plot_smf_grid(models=None, redshift_range='high'):
             print(f"  Warning: Could not compute analytical SMF: {e}")
         
         # Add observational data
-        # COSMOS2020 (Farmer+)
+        # COSMOS2020 (Weaver+)
         cosmos_mass, cosmos_phi, cosmos_phi_lower, cosmos_phi_upper = load_cosmos2020_smf(z_actual)
         if cosmos_mass is not None:
             # Filter out invalid values
@@ -830,8 +830,8 @@ def plot_smf_grid(models=None, redshift_range='high'):
                 ax.errorbar(cosmos_mass[valid], cosmos_phi[valid], 
                            yerr=[yerr_low, yerr_high],
                            fmt='s', color='black', markersize=10, alpha=1.0,
-                           label='Farmer+ (COSMOS2020)' if idx == 0 else '', capsize=2, linewidth=1.5)
-                print(f"  Farmer+ (COSMOS2020) data added")
+                           label='Weaver+23' if idx == 0 else '', capsize=2, linewidth=1.5)
+                print(f"  Weaver+23(COSMOS2020) data added")
         
         # Bagpipes (Harvey+24) - for high redshifts
         if z_actual >= 6.0:
@@ -914,6 +914,12 @@ def plot_smf_grid(models=None, redshift_range='high'):
         # Formatting
         ax.set_xlim(8, 12)
         ax.set_ylim(-7, -1)
+        # Set integer ticks with minor ticks at 20% intervals
+        from matplotlib.ticker import MultipleLocator
+        ax.xaxis.set_major_locator(MultipleLocator(1))
+        ax.xaxis.set_minor_locator(MultipleLocator(0.2))
+        ax.yaxis.set_major_locator(MultipleLocator(1))
+        ax.yaxis.set_minor_locator(MultipleLocator(0.2))
         # ax.grid(True, alpha=0.3, linestyle='--')
         
         # Add redshift text to upper right without box
@@ -951,6 +957,198 @@ def plot_smf_grid(models=None, redshift_range='high'):
     
     print('='*60 + '\n')
 
+def load_song2016_cumulative(mass_threshold):
+    """Load Song+2016 SMF data and compute cumulative number density above mass threshold
+    
+    Args:
+        mass_threshold: Mass threshold in solar masses (e.g., 1e9 or 1e10)
+    
+    Returns:
+        redshifts: Array of redshifts
+        n_cumulative: Array of log10(n) in Mpc^-3
+        n_cumulative_lower: Array of log10(n_lower) for error bars
+        n_cumulative_upper: Array of log10(n_upper) for error bars
+    """
+    filename = './data/song_smf_2016.ecsv'
+    
+    if not os.path.exists(filename):
+        print(f"  Warning: {filename} not found")
+        return np.array([]), np.array([]), np.array([]), np.array([])
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        log_mass_threshold = np.log10(mass_threshold)
+        
+        # Redshifts available in the data
+        redshifts_available = [4, 5, 6, 7, 8]
+        
+        redshifts = []
+        n_cumulative = []
+        n_cumulative_lower = []
+        n_cumulative_upper = []
+        
+        for z in redshifts_available:
+            phi_col = f'phi_z{z}'
+            phi_err_up_col = f'phi_z{z}_err_up'
+            phi_err_lo_col = f'phi_z{z}_err_lo'
+            
+            # Get data for this redshift
+            log_mass = table['log_M']
+            phi_log = table[phi_col]  # This is already log(phi)
+            phi_err_up = table[phi_err_up_col]
+            phi_err_lo = table[phi_err_lo_col]
+            
+            # Filter for masses above threshold and valid phi values
+            mask = (log_mass >= log_mass_threshold) & np.isfinite(phi_log)
+            
+            if np.sum(mask) == 0:
+                continue
+            
+            # The data is in log space: log(phi) in units of log(dex^-1 Mpc^-3)
+            # Convert to linear scale for integration
+            log_mass_above = log_mass[mask]
+            phi_linear = 10**phi_log[mask]  # Convert log(phi) to phi in Mpc^-3 dex^-1
+            phi_linear_upper = 10**(phi_log[mask] + phi_err_up[mask])
+            phi_linear_lower = 10**(phi_log[mask] - phi_err_lo[mask])
+            
+            # Integrate phi over d(log M) to get cumulative number density above threshold
+            # n(>M_cut) = integral of phi(M) d(log M) = Σ phi(M_i) × Δ(log M_i)
+            n_total = np.trapz(phi_linear, log_mass_above)
+            n_total_upper = np.trapz(phi_linear_upper, log_mass_above)
+            n_total_lower = np.trapz(phi_linear_lower, log_mass_above)
+            
+            # Only include if we have positive values
+            if n_total > 0 and n_total_lower > 0 and n_total_upper > 0:
+                redshifts.append(z)
+                n_cumulative.append(np.log10(n_total))
+                n_cumulative_lower.append(np.log10(n_total_lower))
+                n_cumulative_upper.append(np.log10(n_total_upper))
+        
+        return np.array(redshifts), np.array(n_cumulative), np.array(n_cumulative_lower), np.array(n_cumulative_upper)
+        
+    except Exception as e:
+        print(f"  Warning: Could not load Song+2016 data: {e}")
+        return np.array([]), np.array([]), np.array([]), np.array([])
+
+def load_stefanon2021_cumulative(mass_threshold):
+    """Load Stefanon+2021 SMF evolution data and extract cumulative densities above mass threshold
+    
+    Args:
+        mass_threshold: Mass threshold in solar masses (e.g., 1e9 or 1e10)
+    
+    Returns:
+        redshifts: Array of redshifts
+        n_cumulative: Array of log10(n) in Mpc^-3
+        n_cumulative_lower: Array of log10(n_lower) for error bars
+        n_cumulative_upper: Array of log10(n_upper) for error bars
+    """
+    filename = './data/stefanon_smfevol_2021.ecsv'
+    
+    if not os.path.exists(filename):
+        print(f"  Warning: {filename} not found")
+        return np.array([]), np.array([]), np.array([]), np.array([])
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        
+        log_mass_threshold = np.log10(mass_threshold)
+        
+        # Filter for points above mass threshold (include both data and limits)
+        mask = table['log_M_star'] >= log_mass_threshold
+        
+        if np.sum(mask) == 0:
+            return np.array([]), np.array([]), np.array([]), np.array([])
+        
+        # Extract the data directly from the table
+        redshifts = np.array(table['redshift'][mask])
+        n_cumulative = np.array(table['log_cum_den'][mask])
+        n_cumulative_lower = np.array(table['log_cum_den'][mask] - table['log_cum_den_err_low'][mask])
+        n_cumulative_upper = np.array(table['log_cum_den'][mask] + table['log_cum_den_err_up'][mask])
+        
+        return redshifts, n_cumulative, n_cumulative_lower, n_cumulative_upper
+        
+    except Exception as e:
+        print(f"  Warning: Could not load Stefanon+2021 data: {e}")
+        return np.array([]), np.array([]), np.array([]), np.array([])
+
+def load_cosmos2020_cumulative(mass_threshold):
+    """Load COSMOS2020 data and compute cumulative number density above mass threshold
+    
+    Args:
+        mass_threshold: Mass threshold in solar masses (e.g., 1e9 or 1e10)
+    
+    Returns:
+        redshifts: Array of mean redshifts for each bin
+        n_cumulative: Array of log10(n) in Mpc^-3
+        n_cumulative_lower: Array of log10(n_lower) for error bars
+        n_cumulative_upper: Array of log10(n_upper) for error bars
+    """
+    # Define redshift bins and their mean values
+    redshift_bins = [
+        (0.2, 0.5, 0.35),
+        (0.5, 0.8, 0.65),
+        (0.8, 1.1, 0.95),
+        (1.1, 1.5, 1.3),
+        (1.5, 2.0, 1.75),
+        (2.0, 2.5, 2.25),
+        (2.5, 3.0, 2.75),
+        (3.0, 3.5, 3.25),
+        (3.5, 4.5, 4.0),
+        (4.5, 5.5, 5.0),
+        (5.5, 6.5, 6.0),
+        (6.5, 7.5, 7.0)
+    ]
+    
+    data_dir = './data/COSMOS2020/'
+    log_mass_threshold = np.log10(mass_threshold)
+    
+    redshifts = []
+    n_cumulative = []
+    n_cumulative_lower = []
+    n_cumulative_upper = []
+    
+    for z_min, z_max, z_mean in redshift_bins:
+        # Construct filename
+        filename = f'{data_dir}SMF_Farmer_v2.1_{z_min}z{z_max}_total.txt'
+        
+        if not os.path.exists(filename):
+            continue
+        
+        # Load data: columns are log10(M*), bin_width, phi, phi_lower_bound, phi_upper_bound
+        data = np.loadtxt(filename)
+        log_mass = data[:, 0]
+        phi_linear = data[:, 2]  # SMF value in linear scale (Mpc^-3 dex^-1)
+        phi_lower_bound = data[:, 3]  # Lower bound VALUE in linear scale
+        phi_upper_bound = data[:, 4]  # Upper bound VALUE in linear scale
+        
+        # Find bins above mass threshold
+        mask = log_mass >= log_mass_threshold
+        
+        if np.sum(mask) == 0:
+            continue
+        
+        # Integrate to get cumulative number density above threshold
+        # phi is in Mpc^-3 dex^-1, so integrate over dex
+        log_mass_above = log_mass[mask]
+        phi_above = phi_linear[mask]
+        phi_lower_above = phi_lower_bound[mask]
+        phi_upper_above = phi_upper_bound[mask]
+        
+        # Use trapezoidal integration
+        n_total = np.trapz(phi_above, log_mass_above)
+        n_total_lower = np.trapz(phi_lower_above, log_mass_above)
+        n_total_upper = np.trapz(phi_upper_above, log_mass_above)
+        
+        # Only include if we have positive values
+        if n_total > 0 and n_total_lower > 0 and n_total_upper > 0:
+            redshifts.append(z_mean)
+            n_cumulative.append(np.log10(n_total))
+            n_cumulative_lower.append(np.log10(n_total_lower))
+            n_cumulative_upper.append(np.log10(n_total_upper))
+    
+    return np.array(redshifts), np.array(n_cumulative), np.array(n_cumulative_lower), np.array(n_cumulative_upper)
+
 def plot_smf_vs_redshift(models=None):
     """Plot stellar mass function vs redshift for two mass thresholds
     
@@ -965,8 +1163,8 @@ def plot_smf_vs_redshift(models=None):
     print('Creating SMF vs Redshift Plot')
     print('='*60)
     
-    # Define redshift range
-    target_redshifts = np.arange(5, 17, 1)  # z=5 to z=16
+    # Define redshift range - extended down to z=0 for continuous data
+    target_redshifts = np.arange(0, 17, 1)  # z=0 to z=16
     
     # Find closest snapshots
     snapshots = []
@@ -1106,8 +1304,80 @@ def plot_smf_vs_redshift(models=None):
         except Exception as e:
             print(f"  Warning: Could not compute analytical prediction: {e}")
         
+        # Add COSMOS2020 observational data (only for 1e10 threshold on right plot)
+        if mass_threshold == 1e10:
+            try:
+                print(f"\n  Loading COSMOS2020 observational data for M* > {mass_threshold:.0e}...")
+                z_cosmos, n_cosmos, n_cosmos_lower, n_cosmos_upper = load_cosmos2020_cumulative(mass_threshold)
+                
+                if len(z_cosmos) > 0:
+                    # Plot error bars with pre-JWST style (white face, light gray edge)
+                    ax.errorbar(z_cosmos, n_cosmos,
+                               yerr=[n_cosmos - n_cosmos_lower, n_cosmos_upper - n_cosmos],
+                               fmt='s', markersize=10,
+                               markerfacecolor='white', markeredgecolor='lightgray',
+                               markeredgewidth=3,
+                               ecolor='lightgray', elinewidth=3, capsize=2,
+                               label='Weaver+23',
+                               alpha=1.0, zorder=5)
+                    print(f"  COSMOS2020: {len(z_cosmos)} redshift bins plotted (z={z_cosmos.min():.1f} to {z_cosmos.max():.1f})")
+            except Exception as e:
+                print(f"  Warning: Could not load COSMOS2020 data: {e}")
+            
+            # Add Stefanon+2021 observational data
+            try:
+                print(f"\n  Loading Stefanon+2021 observational data for M* > {mass_threshold:.0e}...")
+                z_stefanon, n_stefanon, n_stefanon_lower, n_stefanon_upper = load_stefanon2021_cumulative(mass_threshold)
+                
+                if len(z_stefanon) > 0:
+                    # Plot error bars with pre-JWST style (white face, light gray edge)
+                    ax.errorbar(z_stefanon, n_stefanon,
+                               yerr=[n_stefanon - n_stefanon_lower, n_stefanon_upper - n_stefanon],
+                               fmt='o', markersize=10,
+                               markerfacecolor='white', markeredgecolor='lightgray',
+                               markeredgewidth=3,
+                               ecolor='lightgray', elinewidth=3, capsize=2,
+                               label='Stefanon+21',
+                               alpha=1.0, zorder=5)
+                    print(f"  Stefanon+2021: {len(z_stefanon)} redshift bins plotted (z={z_stefanon.min():.1f} to {z_stefanon.max():.1f})")
+            except Exception as e:
+                print(f"  Warning: Could not load Stefanon+2021 data: {e}")
+            
+            # Add Song+2016 observational data
+            try:
+                print(f"\n  Loading Song+2016 observational data for M* > {mass_threshold:.0e}...")
+                z_song, n_song, n_song_lower, n_song_upper = load_song2016_cumulative(mass_threshold)
+                
+                # No filtering - show all available data
+                if len(z_song) > 0:
+                    # Plot error bars with pre-JWST style (white face, light gray edge)
+                    ax.errorbar(z_song, n_song,
+                               yerr=[n_song - n_song_lower, n_song_upper - n_song],
+                               fmt='D', markersize=10,
+                               markerfacecolor='white', markeredgecolor='lightgray',
+                               markeredgewidth=3,
+                               ecolor='lightgray', elinewidth=3, capsize=2,
+                               label='Song+16',
+                               alpha=1.0, zorder=5)
+                    print(f"  Song+2016: {len(z_song)} redshift bins plotted (z={z_song.min():.1f} to {z_song.max():.1f})")
+            except Exception as e:
+                print(f"  Warning: Could not load Song+2016 data: {e}")
+        
         # Formatting
-        ax.set_xlim(5, 16)
+        ax.set_xlim(3, 16)
+        # Extend y-axis for right plot to show Song+2016 data (no mass threshold)
+        if mass_threshold == 1e10:
+            ax.set_ylim(-6.5, -2.5)
+        else:
+            ax.set_ylim(-6.5, -2.5)
+        
+        # Set integer ticks with minor ticks at 20% intervals
+        from matplotlib.ticker import MultipleLocator
+        ax.xaxis.set_major_locator(MultipleLocator(1))
+        ax.xaxis.set_minor_locator(MultipleLocator(0.2))
+        ax.yaxis.set_major_locator(MultipleLocator(1))
+        ax.yaxis.set_minor_locator(MultipleLocator(0.2))
+        
         ax.set_xlabel('Redshift z', fontsize=12)
         # Don't invert x-axis (lower redshift on the left, higher on right)
         
@@ -1125,9 +1395,12 @@ def plot_smf_vs_redshift(models=None):
             # Remove y-axis tick labels from right plot
             ax.tick_params(axis='y', labelleft=False)
         
-        # Only show legend on first subplot in lower left
+        # Show legend on first subplot in lower left, and on right plot in upper right
         if ax_idx == 0:
             ax.legend(loc='lower left', fontsize=10, frameon=False)
+        elif mass_threshold == 1e10:
+            # For right plot with COSMOS data, show observations legend in upper right
+            ax.legend(loc='upper right', fontsize=10, frameon=False, bbox_to_anchor=(0.95, 0.87))
     
     plt.tight_layout()
     
@@ -1663,6 +1936,13 @@ def plot_uvlf_grid(models=None):
         ax.invert_xaxis()  # Flip x-axis (brighter on right, fainter on left)
         ax.set_ylim(-8, -2)
         
+        # Set integer ticks with minor ticks at 20% intervals
+        from matplotlib.ticker import MultipleLocator
+        ax.xaxis.set_major_locator(MultipleLocator(1))
+        ax.xaxis.set_minor_locator(MultipleLocator(0.2))
+        ax.yaxis.set_major_locator(MultipleLocator(1))
+        ax.yaxis.set_minor_locator(MultipleLocator(0.2))
+        
         # Add redshift text to upper right without box
         ax.text(0.95, 0.95, f'z = {z_actual:.2f}', 
                transform=ax.transAxes, 
@@ -1698,6 +1978,185 @@ def plot_uvlf_grid(models=None):
     plt.close()
     
     print('='*60 + '\n')
+
+def load_adams2024_cumulative(M_UV_threshold=-20, tolerance=0.5):
+    """Load Adams+2024 UVLF data and compute cumulative number density
+    
+    Integrates the luminosity function to get n(< M_UV_threshold).
+    Uses trapezoidal integration over available data points.
+    
+    Args:
+        M_UV_threshold: Magnitude threshold (e.g., -20)
+        tolerance: Tolerance in magnitudes for selecting data around threshold
+    
+    Returns:
+        redshifts: Array of mean redshifts
+        n_cumulative: Array of log10(n) in Mpc^-3
+        n_cumulative_lower: Lower error bounds
+        n_cumulative_upper: Upper error bounds
+    """
+    filename = './data/adams_lf_2024.ecsv'
+    
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found")
+        return np.array([]), np.array([]), np.array([]), np.array([])
+    
+    try:
+        # Load data
+        from astropy.table import Table
+        data = Table.read(filename, format='ascii.ecsv')
+        
+        # Parse redshift labels to get numeric redshifts
+        # Labels are like "z=8", "z=9", "z=10.5", etc.
+        redshift_map = {
+            'z=8': 8.0,
+            'z=8-NoNEP': 8.0,
+            'z=9': 9.0,
+            'z=10.5': 10.5,
+            'z=12.5': 12.5
+        }
+        
+        # Group data by redshift
+        unique_labels = set(data['redshift_label'])
+        
+        redshifts = []
+        n_cumulative = []
+        n_cumulative_lower = []
+        n_cumulative_upper = []
+        
+        for label in sorted(unique_labels, key=lambda x: redshift_map.get(x, 999)):
+            if label not in redshift_map:
+                continue
+            
+            z = redshift_map[label]
+            
+            # Get data for this redshift
+            mask = data['redshift_label'] == label
+            M_UV = data['M_UV'][mask]
+            phi = data['phi'][mask] * 1e-5  # Convert from 1e-5 to Mpc^-3 mag^-1
+            phi_err = data['phi_err'][mask] * 1e-5
+            
+            # Sort by M_UV for integration
+            sort_idx = np.argsort(M_UV)
+            M_UV = M_UV[sort_idx]
+            phi = phi[sort_idx]
+            phi_err = phi_err[sort_idx]
+            
+            # Select data points brighter than threshold (M_UV < threshold)
+            bright_mask = M_UV < M_UV_threshold
+            
+            if np.sum(bright_mask) > 0:
+                # Integrate using trapezoidal rule
+                M_bright = M_UV[bright_mask]
+                phi_bright = phi[bright_mask]
+                phi_err_bright = phi_err[bright_mask]
+                
+                # Cumulative number density: integrate phi(M_UV) dM_UV
+                n_cum = np.trapz(phi_bright, M_bright)
+                
+                # Error propagation for integration (sum in quadrature)
+                # For trapezoidal rule: error is roughly sqrt(sum((err_i * dM)^2))
+                dM = np.diff(M_bright)
+                if len(dM) > 0:
+                    # Average errors at bin edges
+                    phi_err_avg = (phi_err_bright[:-1] + phi_err_bright[1:]) / 2
+                    n_cum_err = np.sqrt(np.sum((phi_err_avg * dM)**2))
+                else:
+                    n_cum_err = phi_err_bright[0] * 0.5  # rough estimate
+                
+                if n_cum > 0:
+                    redshifts.append(z)
+                    n_cumulative.append(np.log10(n_cum))
+                    n_cumulative_lower.append(np.log10(max(n_cum - n_cum_err, 1e-10)))
+                    n_cumulative_upper.append(np.log10(n_cum + n_cum_err))
+        
+        return np.array(redshifts), np.array(n_cumulative), np.array(n_cumulative_lower), np.array(n_cumulative_upper)
+        
+    except Exception as e:
+        print(f"Error loading Adams+2024 cumulative UVLF: {e}")
+        return np.array([]), np.array([]), np.array([]), np.array([])
+
+def load_mcleod2024_cumulative(M_UV_threshold=-20, tolerance=0.5):
+    """Load McLeod+2024 UVLF data and compute cumulative number density
+    
+    Integrates the luminosity function to get n(< M_UV_threshold).
+    Uses trapezoidal integration over available data points.
+    
+    Args:
+        M_UV_threshold: Magnitude threshold (e.g., -20)
+        tolerance: Tolerance in magnitudes for selecting data around threshold
+    
+    Returns:
+        redshifts: Array of mean redshifts
+        n_cumulative: Array of log10(n) in Mpc^-3
+        n_cumulative_lower: Lower error bounds
+        n_cumulative_upper: Upper error bounds
+    """
+    filename = './data/mcleod_lf_2024.ecsv'
+    
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found")
+        return np.array([]), np.array([]), np.array([]), np.array([])
+    
+    try:
+        # Load data
+        from astropy.table import Table
+        data = Table.read(filename, format='ascii.ecsv')
+        
+        # Group data by redshift
+        unique_redshifts = np.unique(data['redshift'])
+        
+        redshifts = []
+        n_cumulative = []
+        n_cumulative_lower = []
+        n_cumulative_upper = []
+        
+        for z in sorted(unique_redshifts):
+            # Get data for this redshift
+            mask = data['redshift'] == z
+            M_UV = data['M_1500'][mask]
+            phi = data['phi'][mask] * 1e-5  # Convert from 1e-5 to Mpc^-3 mag^-1
+            phi_err = data['phi_err'][mask] * 1e-5
+            
+            # Sort by M_UV for integration
+            sort_idx = np.argsort(M_UV)
+            M_UV = M_UV[sort_idx]
+            phi = phi[sort_idx]
+            phi_err = phi_err[sort_idx]
+            
+            # Select data points brighter than threshold (M_UV < threshold)
+            bright_mask = M_UV < M_UV_threshold
+            
+            if np.sum(bright_mask) > 0:
+                # Integrate using trapezoidal rule
+                M_bright = M_UV[bright_mask]
+                phi_bright = phi[bright_mask]
+                phi_err_bright = phi_err[bright_mask]
+                
+                # Cumulative number density: integrate phi(M_UV) dM_UV
+                n_cum = np.trapz(phi_bright, M_bright)
+                
+                # Error propagation for integration (sum in quadrature)
+                # For trapezoidal rule: error is roughly sqrt(sum((err_i * dM)^2))
+                dM = np.diff(M_bright)
+                if len(dM) > 0:
+                    # Average errors at bin edges
+                    phi_err_avg = (phi_err_bright[:-1] + phi_err_bright[1:]) / 2
+                    n_cum_err = np.sqrt(np.sum((phi_err_avg * dM)**2))
+                else:
+                    n_cum_err = phi_err_bright[0] * 0.5  # rough estimate
+                
+                if n_cum > 0:
+                    redshifts.append(z)
+                    n_cumulative.append(np.log10(n_cum))
+                    n_cumulative_lower.append(np.log10(max(n_cum - n_cum_err, 1e-10)))
+                    n_cumulative_upper.append(np.log10(n_cum + n_cum_err))
+        
+        return np.array(redshifts), np.array(n_cumulative), np.array(n_cumulative_lower), np.array(n_cumulative_upper)
+        
+    except Exception as e:
+        print(f"Error loading McLeod+2024 cumulative UVLF: {e}")
+        return np.array([]), np.array([]), np.array([]), np.array([])
 
 def plot_uvlf_vs_redshift(models=None):
     """Plot UV luminosity function vs redshift for two M_UV thresholds
@@ -1788,11 +2247,13 @@ def plot_uvlf_vs_redshift(models=None):
             
             # Plot line
             if len(redshifts_data) > 0:
+                # Only show model labels on left plot (ax_idx == 0)
+                model_label = model['name'] if ax_idx == 0 else ''
                 ax.plot(redshifts_data, phi_values,
                        color=model['color'],
                        linestyle=model['linestyle'],
                        linewidth=model['linewidth'],
-                       label=model['name'],
+                       label=model_label,
                        alpha=0.8,
                        zorder=3)
                 # Add error shading
@@ -1863,9 +2324,49 @@ def plot_uvlf_vs_redshift(models=None):
         except Exception as e:
             print(f"  Warning: Could not compute analytical UVLF prediction: {e}")
         
+        # Add observational data for M_UV=-20 (right plot only)
+        if ax_idx == 1 and M_UV_threshold == -20:
+            try:
+                z_adams, n_adams, n_adams_lower, n_adams_upper = load_adams2024_cumulative(M_UV_threshold=-20)
+                if len(z_adams) > 0:
+                    ax.errorbar(z_adams, n_adams,
+                               yerr=[n_adams - n_adams_lower, n_adams_upper - n_adams],
+                               fmt='o', color='black', markersize=8,
+                               markeredgecolor='black', markeredgewidth=1.5,
+                               ecolor='black', elinewidth=2, capsize=4, capthick=2,
+                               label='Adams+ 2024', alpha=0.8, zorder=5)
+                    print(f"  Adams+2024 observational data added for M_UV < {M_UV_threshold}")
+            except Exception as e:
+                print(f"  Warning: Could not load Adams+2024 data: {e}")
+            
+            try:
+                z_mcleod, n_mcleod, n_mcleod_lower, n_mcleod_upper = load_mcleod2024_cumulative(M_UV_threshold=-20)
+                if len(z_mcleod) > 0:
+                    ax.errorbar(z_mcleod, n_mcleod,
+                               yerr=[n_mcleod - n_mcleod_lower, n_mcleod_upper - n_mcleod],
+                               fmt='s', color='black', markersize=8,
+                               markeredgecolor='black', markeredgewidth=1.5,
+                               ecolor='black', elinewidth=2, capsize=4, capthick=2,
+                               label='McLeod+ 2024', alpha=0.8, zorder=5)
+                    print(f"  McLeod+2024 observational data added for M_UV < {M_UV_threshold}")
+            except Exception as e:
+                print(f"  Warning: Could not load McLeod+2024 data: {e}")
+        
         # Formatting
-        ax.set_xlim(5, 16)
-        ax.set_ylim(-5, -1.5)
+        ax.set_xlim(5, 15)
+        
+        # Set different y-axis limits for each plot
+        if ax_idx == 0:
+            ax.set_ylim(-6, -2)  # Left plot (M_UV=-17)
+        else:
+            ax.set_ylim(-6, -3)  # Right plot (M_UV=-20)
+        
+        # Set integer ticks with minor ticks at 20% intervals
+        from matplotlib.ticker import MultipleLocator
+        ax.xaxis.set_major_locator(MultipleLocator(1))
+        ax.xaxis.set_minor_locator(MultipleLocator(0.2))
+        ax.yaxis.set_major_locator(MultipleLocator(1))
+        ax.yaxis.set_minor_locator(MultipleLocator(0.2))
         
         ax.set_xlabel('Redshift z', fontsize=12)
         
@@ -1876,16 +2377,12 @@ def plot_uvlf_vs_redshift(models=None):
                horizontalalignment='right',
                fontsize=14)
         
-        # Only show y-axis label on left plot
+        # Show y-axis label on left plot, legend on both plots
         if ax_idx == 0:
             ax.set_ylabel(r'$\log_{10}(n / \mathrm{Mpc}^{-3})$', fontsize=12)
-        else:
-            # Remove y-axis tick labels from right plot
-            ax.tick_params(axis='y', labelleft=False)
         
-        # Only show legend on first subplot in lower left
-        if ax_idx == 0:
-            ax.legend(loc='lower left', fontsize=10, frameon=False)
+        # Add legend to both plots in lower left corner
+        ax.legend(loc='lower left', fontsize=10, frameon=False)
     
     plt.tight_layout()
     
@@ -2236,6 +2733,13 @@ def plot_cumulative_surface_density(models=None):
         # Formatting
         ax.set_xlim(5, 16)
         ax.set_ylim(-2, 3)
+        
+        # Set integer ticks with minor ticks at 20% intervals
+        from matplotlib.ticker import MultipleLocator
+        ax.xaxis.set_major_locator(MultipleLocator(1))
+        ax.xaxis.set_minor_locator(MultipleLocator(0.2))
+        ax.yaxis.set_major_locator(MultipleLocator(1))
+        ax.yaxis.set_minor_locator(MultipleLocator(0.2))
         
         ax.set_xlabel('Redshift z', fontsize=12)
         
@@ -2644,6 +3148,14 @@ def plot_density_evolution(models=None):
                    horizontalalignment='right',
                    fontsize=12)
             ax.set_ylabel(r'$\log_{10}(\rho_{\mathrm{SFR}} / M_{\odot} \, \mathrm{yr}^{-1} \, \mathrm{Mpc}^{-3})$', fontsize=12)
+            ax.set_ylim(-5, -2)
+        
+        # Set integer ticks with minor ticks at 20% intervals
+        from matplotlib.ticker import MultipleLocator
+        ax.xaxis.set_major_locator(MultipleLocator(1))
+        ax.xaxis.set_minor_locator(MultipleLocator(0.2))
+        ax.yaxis.set_major_locator(MultipleLocator(1))
+        ax.yaxis.set_minor_locator(MultipleLocator(0.2))
     
     plt.tight_layout()
     
@@ -2913,6 +3425,14 @@ def plot_ffb_threshold_analysis(models=None):
         axes[0].set_ylabel(r'$\log_{10} M_{\mathrm{vir}} \, (M_{\odot} \, h^{-1})$', fontsize=12)
         axes[0].set_xlim(5, 20)
         axes[0].set_ylim(9, 13)
+        
+        # Set integer ticks with minor ticks at 20% intervals
+        from matplotlib.ticker import MultipleLocator
+        axes[0].xaxis.set_major_locator(MultipleLocator(1))
+        axes[0].xaxis.set_minor_locator(MultipleLocator(0.2))
+        axes[0].yaxis.set_major_locator(MultipleLocator(1))
+        axes[0].yaxis.set_minor_locator(MultipleLocator(0.2))
+        
         axes[0].legend(loc='upper right', fontsize=10, frameon=False)
         axes[0].text(0.95, 0.88, 'All Disk Galaxies (FFB 50%)',
                     transform=axes[0].transAxes,
@@ -2973,6 +3493,12 @@ def plot_ffb_threshold_analysis(models=None):
         axes[1].set_ylim(0.01, 3)
         axes[1].set_yticks([0.01, 0.1, 1.0])
         axes[1].set_yticklabels(['0.01', '0.1', '1.0'])
+        
+        # Set integer x-ticks with minor ticks at 20% intervals
+        from matplotlib.ticker import MultipleLocator
+        axes[1].xaxis.set_major_locator(MultipleLocator(1))
+        axes[1].xaxis.set_minor_locator(MultipleLocator(0.2))
+        
         axes[1].legend(loc='upper right', fontsize=10, frameon=False)
         axes[1].text(0.05, 0.95, 'Galaxies at FFB Threshold',
                     transform=axes[1].transAxes,
@@ -3210,6 +3736,13 @@ def plot_ffb_threshold_analysis_empirical():
     ax_left.set_ylabel(r'$\log_{10} M_{\rm vir}$', fontsize=14)
     ax_left.set_xlim(5, 20)
     ax_left.set_ylim(9, 13)
+    
+    # Set integer ticks with minor ticks at 20% intervals
+    from matplotlib.ticker import MultipleLocator
+    ax_left.xaxis.set_major_locator(MultipleLocator(1))
+    ax_left.xaxis.set_minor_locator(MultipleLocator(0.2))
+    ax_left.yaxis.set_major_locator(MultipleLocator(1))
+    ax_left.yaxis.set_minor_locator(MultipleLocator(0.2))
     ax_left.legend()
 
     # --- RIGHT PANEL: Evolution ---
@@ -3245,6 +3778,11 @@ def plot_ffb_threshold_analysis_empirical():
     ax_right.set_ylabel(r'$R_{\rm half}$ (physical kpc)', fontsize=14)
     ax_right.set_xlim(5, 20)
     ax_right.set_ylim(0.01, 3.0)
+    
+    # Set integer x-ticks with minor ticks at 20% intervals
+    from matplotlib.ticker import MultipleLocator
+    ax_right.xaxis.set_major_locator(MultipleLocator(1))
+    ax_right.xaxis.set_minor_locator(MultipleLocator(0.2))
     ax_right.yaxis.set_major_formatter(plt.ScalarFormatter())
     ax_right.grid(True, alpha=0.1)
     ax_right.legend(frameon=False)
@@ -3471,6 +4009,14 @@ def plot_gas_fraction_evolution():
         ax.set_ylabel(r'$\log_{10} f_{\mathrm{gas}}$', fontsize=12)
         ax.set_xlim(5, 20)
         ax.set_ylim(-3, 0)
+        
+        # Set integer ticks with minor ticks at 20% intervals
+        from matplotlib.ticker import MultipleLocator
+        ax.xaxis.set_major_locator(MultipleLocator(1))
+        ax.xaxis.set_minor_locator(MultipleLocator(0.2))
+        ax.yaxis.set_major_locator(MultipleLocator(1))
+        ax.yaxis.set_minor_locator(MultipleLocator(0.2))
+        
         ax.legend(loc='lower left', fontsize=10, frameon=False, title='FFB Model Spread (16-84%)', title_fontsize=9)
         
         # Add analytical predictions from Li+2023 (shell mode with 3 epsilon values)
@@ -3837,6 +4383,11 @@ def plot_ffb_metallicity_limit(use_analytical=True):
     ax.set_xlabel('Redshift z', fontsize=12)
     ax.set_ylabel(r'$\log_{10}(Z_{\rm FFB} / Z_{\odot})$', fontsize=12)
     ax.set_xlim(5, 20)
+    
+    # Set integer ticks with minor ticks at 20% intervals
+    from matplotlib.ticker import MultipleLocator
+    ax.xaxis.set_major_locator(MultipleLocator(1))
+    ax.xaxis.set_minor_locator(MultipleLocator(0.2))
     ax.set_yscale('log')
     
     ax.legend(loc='upper right', fontsize=9, frameon=True, framealpha=0.9, ncol=1)
@@ -3983,7 +4534,7 @@ def main():
     plot_smf_vs_redshift()
     plot_uvlf_grid()
     plot_uvlf_vs_redshift()
-    plot_cumulative_surface_density()
+    # plot_cumulative_surface_density()
     plot_density_evolution()
     plot_ffb_threshold_analysis()
     plot_ffb_threshold_analysis_empirical()
