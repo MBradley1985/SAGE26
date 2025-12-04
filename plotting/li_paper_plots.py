@@ -244,7 +244,7 @@ PLOT_MODELS = [
         'volume_fraction': 1.0
     },
     {
-        'name': 'FFB 20%',
+        'name': 'FFB 20% (SAGE26)',
         'dir': './output/millennium/',
         'color': 'orange',
         'linestyle': '-',
@@ -399,10 +399,10 @@ def load_cosmos2020_smf(redshift):
     elif redshift < 5.0:
         filename = './data/COSMOS2020/SMF_Farmer_v2.1_4.5z5.5_total.txt'
         z_label = 'COSMOS 4.5<z<5.5'
-    elif redshift < 6.0:
+    elif redshift < 6.5:
         filename = './data/COSMOS2020/SMF_Farmer_v2.1_5.5z6.5_total.txt'
         z_label = 'COSMOS 5.5<z<6.5'
-    elif redshift < 7.0:
+    elif redshift < 7.5:
         filename = './data/COSMOS2020/SMF_Farmer_v2.1_6.5z7.5_total.txt'
         z_label = 'COSMOS 6.5<z<7.5'
     else:
@@ -411,14 +411,24 @@ def load_cosmos2020_smf(redshift):
     if not os.path.exists(filename):
         return None, None, None, None
     
-    # Load data: columns are log10(M*), bin_width, phi, phi_err_low, phi_err_high
+    # Load data: columns are log10(M*), bin_width, phi, phi_lower_bound, phi_upper_bound
+    # Columns 4 and 5 are the actual lower/upper bound VALUES in linear scale
     data = np.loadtxt(filename)
     log_mass = data[:, 0]
-    phi = np.log10(data[:, 2])  # Convert to log scale
-    phi_err_low = np.log10(data[:, 3])
-    phi_err_high = np.log10(data[:, 4])
+    phi_linear = data[:, 2]  # SMF value in linear scale
+    phi_lower_bound = data[:, 3]  # Lower bound VALUE in linear scale (can be negative)
+    phi_upper_bound = data[:, 4]  # Upper bound VALUE in linear scale
     
-    return log_mass, phi, phi_err_low, phi_err_high
+    # Convert values to log scale
+    phi = np.log10(phi_linear)
+    phi_upper = np.log10(phi_upper_bound)
+    
+    # Handle negative/zero lower bounds by setting to NaN
+    phi_lower = np.full_like(phi, np.nan)
+    valid_lower = phi_lower_bound > 0
+    phi_lower[valid_lower] = np.log10(phi_lower_bound[valid_lower])
+    
+    return log_mass, phi, phi_lower, phi_upper
 
 def load_bagpipes_smf(redshift):
     """Load Bagpipes (Harvey+24) observational SMF data for a given redshift"""
@@ -438,102 +448,28 @@ def load_bagpipes_smf(redshift):
         
         data = table[z_match]
         
+        # Columns: phi_error_low and phi_error_upp are the LOWER and UPPER BOUND values (not deltas!)
         log_mass = np.array(data['log10Mstar'])
-        phi = np.log10(np.array(data['phi']))
-        phi_err_low = np.log10(np.array(data['phi_error_low']))
-        phi_err_high = np.log10(np.array(data['phi_error_upp']))
+        phi_linear = np.array(data['phi'])
+        phi_lower_linear = np.array(data['phi_error_low'])  # Lower bound value
+        phi_upper_linear = np.array(data['phi_error_upp'])  # Upper bound value
         
-        return log_mass, phi, phi_err_low, phi_err_high
+        # Convert ALL values to log scale
+        phi = np.log10(phi_linear)
+        phi_lower = np.log10(phi_lower_linear)
+        phi_upper = np.log10(phi_upper_linear)
+        
+        return log_mass, phi, phi_lower, phi_upper
     except Exception as e:
         print(f"  Warning: Could not load Bagpipes data: {e}")
         return None, None, None, None
 
-def load_weibel_smf(redshift):
-    """Load Weibel et al. 2024 observational SMF data for a given redshift"""
-    filename = './data/weibel_smf_2024.ecsv'
-    
-    if not os.path.exists(filename):
-        return None, None, None, None
-    
-    try:
-        # Read the ECSV file
-        table = Table.read(filename, format='ascii.ecsv')
-        
-        # Filter for redshift closest to target (within ±0.5)
-        z_match = np.abs(table['z'] - redshift) < 0.5
-        if not np.any(z_match):
-            return None, None, None, None
-        
-        data = table[z_match]
-        
-        log_mass = np.array(data['log_M'])
-        phi = np.array(data['log_phi'])
-        phi_err_low = np.array(data['log_phi_lower'])
-        phi_err_high = np.array(data['log_phi_upper'])
-        
-        return log_mass, phi, phi_err_low, phi_err_high
-    except Exception as e:
-        print(f"  Warning: Could not load Weibel data: {e}")
-        return None, None, None, None
-
-def load_navarro_carrera_smf(redshift):
-    """Load Navarro-Carrera et al. 2024 observational SMF data for a given redshift"""
-    filename = './data/navarro_carrera_smf_2023.ecsv'
-    
-    if not os.path.exists(filename):
-        return None, None, None, None
-    
-    try:
-        # Read the ECSV file
-        table = Table.read(filename, format='ascii.ecsv')
-        
-        # Filter for redshift closest to target (within ±0.5)
-        z_match = np.abs(table['z'] - redshift) < 0.5
-        if not np.any(z_match):
-            return None, None, None, None
-        
-        data = table[z_match]
-        
-        log_mass = np.array(data['log_M'])
-        phi = np.array(data['log_phi'])
-        phi_err_low = np.array(data['log_phi_lower'])
-        phi_err_high = np.array(data['log_phi_upper'])
-        
-        return log_mass, phi, phi_err_low, phi_err_high
-    except Exception as e:
-        print(f"  Warning: Could not load Navarro-Carrera data: {e}")
-        return None, None, None, None
-
-def load_kikuchihara_smf(redshift):
-    """Load Kikuchihara et al. 2020 observational SMF data for a given redshift"""
-    filename = './data/kikuchihara_smf_2020.ecsv'
-    
-    if not os.path.exists(filename):
-        return None, None, None, None
-    
-    try:
-        # Read the ECSV file
-        table = Table.read(filename, format='ascii.ecsv')
-        
-        # Filter for redshift closest to target (within ±0.5)
-        z_match = np.abs(table['z'] - redshift) < 0.5
-        if not np.any(z_match):
-            return None, None, None, None
-        
-        data = table[z_match]
-        
-        log_mass = np.array(data['log_M'])
-        phi = np.array(data['log_phi'])
-        phi_err_low = np.array(data['log_phi_lower'])
-        phi_err_high = np.array(data['log_phi_upper'])
-        
-        return log_mass, phi, phi_err_low, phi_err_high
-    except Exception as e:
-        print(f"  Warning: Could not load Kikuchihara data: {e}")
-        return None, None, None, None
-
 def load_stefanon_smf(redshift):
-    """Load Stefanon et al. 2021 observational SMF data for a given redshift"""
+    """Load Stefanon+2021 observational SMF data for a given redshift
+    
+    The phi values in the file are in units of 1e-4 Mpc-3 dex-1,
+    so they are multiplied by 10^-4 before converting to log scale.
+    """
     filename = './data/stefanon_smf_2021.ecsv'
     
     if not os.path.exists(filename):
@@ -543,53 +479,58 @@ def load_stefanon_smf(redshift):
         # Read the ECSV file
         table = Table.read(filename, format='ascii.ecsv')
         
-        # Filter for redshift closest to target (within ±0.5)
-        z_match = np.abs(table['z'] - redshift) < 0.5
+        # Match redshift bin (bins are labeled 6, 7, 8, 9, 10)
+        # Map continuous redshift to appropriate bin
+        if redshift < 6.5:
+            z_bin = 6
+        elif redshift < 7.5:
+            z_bin = 7
+        elif redshift < 8.5:
+            z_bin = 8
+        elif redshift < 9.5:
+            z_bin = 9
+        elif redshift < 11:
+            z_bin = 10
+        else:
+            return None, None, None, None
+        
+        # Filter for matching redshift bin
+        z_match = table['redshift_bin'] == z_bin
         if not np.any(z_match):
             return None, None, None, None
         
         data = table[z_match]
         
+        # Extract data - phi values are in units of 1e-4 Mpc-3 dex-1
         log_mass = np.array(data['log_M'])
-        phi = np.array(data['log_phi'])
-        phi_err_low = np.array(data['log_phi_lower'])
-        phi_err_high = np.array(data['log_phi_upper'])
+        phi_linear = np.array(data['phi']) * 1e-4  # Multiply by 10^-4
+        phi_err_up_linear = np.array(data['phi_err_up']) * 1e-4
+        phi_err_low_linear = np.array(data['phi_err_low']) * 1e-4
         
-        return log_mass, phi, phi_err_low, phi_err_high
+        # Calculate upper and lower bounds
+        phi_upper_linear = phi_linear + phi_err_up_linear
+        phi_lower_linear = phi_linear - phi_err_low_linear
+        
+        # Convert to log scale, handling negative/zero values
+        phi = np.log10(phi_linear)
+        phi_upper = np.log10(phi_upper_linear)
+        
+        phi_lower = np.full_like(phi, np.nan)
+        valid_lower = phi_lower_linear > 0
+        phi_lower[valid_lower] = np.log10(phi_lower_linear[valid_lower])
+        
+        return log_mass, phi, phi_lower, phi_upper
     except Exception as e:
         print(f"  Warning: Could not load Stefanon data: {e}")
         return None, None, None, None
 
-def load_mcleod_uvlf(redshift):
-    """Load McLeod et al. 2016 observational UV luminosity function data for a given redshift"""
-    filename = './data/mcloud_lf_2016.ecsv'
+def load_navarro_carrera_smf(redshift):
+    """Load Navarro-Carrera+2023 observational SMF data for a given redshift
     
-    if not os.path.exists(filename):
-        return None, None, None
-    
-    try:
-        # Read the ECSV file
-        table = Table.read(filename, format='ascii.ecsv')
-        
-        # Filter for redshift closest to target (within ±0.5)
-        z_match = np.abs(table['z'] - redshift) < 0.5
-        if not np.any(z_match):
-            return None, None, None
-        
-        data = table[z_match]
-        
-        M_UV = np.array(data['M_UV'])
-        log_phi = np.array(data['log_phi'])
-        log_phi_err = np.array(data['log_phi_error'])
-        
-        return M_UV, log_phi, log_phi_err
-    except Exception as e:
-        print(f"  Warning: Could not load McLeod UVLF data: {e}")
-        return None, None, None
-
-def load_oesch_uvlf(redshift):
-    """Load Oesch et al. 2018 observational UV luminosity function data for a given redshift"""
-    filename = './data/oesch_lf_2018.ecsv'
+    The phi values in the file are in units of 1e-4 Mpc-3 dex-1,
+    so they are multiplied by 10^-4 before converting to log scale.
+    """
+    filename = './data/navarro_carrera_smf_2023.ecsv'
     
     if not os.path.exists(filename):
         return None, None, None, None
@@ -598,26 +539,53 @@ def load_oesch_uvlf(redshift):
         # Read the ECSV file
         table = Table.read(filename, format='ascii.ecsv')
         
-        # Filter for redshift closest to target (within ±0.5)
-        z_match = np.abs(table['z'] - redshift) < 0.5
+        # Match redshift bin (bins are labeled 6, 7, 8)
+        # Map continuous redshift to appropriate bin
+        if redshift < 6.5:
+            z_bin = 6
+        elif redshift < 7.5:
+            z_bin = 7
+        elif redshift < 8.5:
+            z_bin = 8
+        else:
+            return None, None, None, None
+        
+        # Filter for matching redshift bin
+        z_match = table['redshift_bin'] == z_bin
         if not np.any(z_match):
             return None, None, None, None
         
         data = table[z_match]
         
-        M_UV = np.array(data['M_UV'])
-        log_phi = np.array(data['log_phi'])
-        log_phi_err_low = np.array(data['log_phi_lower'])
-        log_phi_err_high = np.array(data['log_phi_upper'])
+        # Extract data - phi values are in units of 1e-4 Mpc-3 dex-1
+        log_mass = np.array(data['log_M'])
+        phi_linear = np.array(data['phi']) * 1e-4  # Multiply by 10^-4
+        phi_err_up_linear = np.array(data['phi_err_up']) * 1e-4
+        phi_err_low_linear = np.array(data['phi_err_low']) * 1e-4
         
-        return M_UV, log_phi, log_phi_err_low, log_phi_err_high
+        # Calculate upper and lower bounds
+        phi_upper_linear = phi_linear + phi_err_up_linear
+        phi_lower_linear = phi_linear - phi_err_low_linear
+        
+        # Convert to log scale, handling negative/zero values
+        phi = np.log10(phi_linear)
+        phi_upper = np.log10(phi_upper_linear)
+        
+        phi_lower = np.full_like(phi, np.nan)
+        valid_lower = phi_lower_linear > 0
+        phi_lower[valid_lower] = np.log10(phi_lower_linear[valid_lower])
+        
+        return log_mass, phi, phi_lower, phi_upper
     except Exception as e:
-        print(f"  Warning: Could not load Oesch UVLF data: {e}")
+        print(f"  Warning: Could not load Navarro-Carrera data: {e}")
         return None, None, None, None
 
-def load_morishita_uvlf(redshift):
-    """Load Morishita et al. 2018 observational UV luminosity function data for a given redshift"""
-    filename = './data/morishita_lf_2018.ecsv'
+def load_weibel_smf(redshift):
+    """Load Weibel+2024 observational SMF data for a given redshift
+    
+    The data is already in log scale, no conversion needed.
+    """
+    filename = './data/weibel_smf_2024.ecsv'
     
     if not os.path.exists(filename):
         return None, None, None, None
@@ -626,26 +594,52 @@ def load_morishita_uvlf(redshift):
         # Read the ECSV file
         table = Table.read(filename, format='ascii.ecsv')
         
-        # Filter for redshift closest to target (within ±0.5)
-        z_match = np.abs(table['z'] - redshift) < 0.5
+        # Match redshift bin (bins are labeled 6, 7, 8, 9)
+        # Map continuous redshift to appropriate bin
+        if redshift < 6.5:
+            z_bin = 6
+        elif redshift < 7.5:
+            z_bin = 7
+        elif redshift < 8.5:
+            z_bin = 8
+        elif redshift < 9.5:
+            z_bin = 9
+        else:
+            return None, None, None, None
+        
+        # Filter for matching redshift bin
+        z_match = table['redshift_bin'] == z_bin
         if not np.any(z_match):
             return None, None, None, None
         
         data = table[z_match]
         
-        M_UV = np.array(data['M_UV'])
+        # Extract data - already in log scale
+        log_mass = np.array(data['log_M'])
         log_phi = np.array(data['log_phi'])
-        log_phi_err_low = np.array(data['log_phi_lower'])
-        log_phi_err_high = np.array(data['log_phi_upper'])
+        log_phi_err_up = np.array(data['log_phi_err_up'])
+        log_phi_err_low = np.array(data['log_phi_err_low'])
         
-        return M_UV, log_phi, log_phi_err_low, log_phi_err_high
+        # Calculate upper and lower bounds
+        log_phi_upper = log_phi + log_phi_err_up
+        log_phi_lower = log_phi - log_phi_err_low
+        
+        # Handle zero errors (converted from infinities) by setting to NaN
+        log_phi_lower[log_phi_err_low == 0] = np.nan
+        
+        return log_mass, log_phi, log_phi_lower, log_phi_upper
     except Exception as e:
-        print(f"  Warning: Could not load Morishita UVLF data: {e}")
+        print(f"  Warning: Could not load Weibel data: {e}")
         return None, None, None, None
 
-def load_stefanon_uvlf(redshift):
-    """Load Stefanon et al. 2019 observational UV luminosity function data for a given redshift"""
-    filename = './data/stefanon_lf_2019.ecsv'
+def load_kikuchihara_smf(redshift):
+    """Load Kikuchihara+2020 observational SMF data for a given redshift
+    
+    This dataset contains Schechter function parameters. Returns the raw
+    parameters as a single point at M_star. The phi_star values are in units of
+    1e-5 Mpc-3 dex-1, so they are multiplied by 10^-5.
+    """
+    filename = './data/kikuchihara_smf_2020.ecsv'
     
     if not os.path.exists(filename):
         return None, None, None, None
@@ -654,276 +648,48 @@ def load_stefanon_uvlf(redshift):
         # Read the ECSV file
         table = Table.read(filename, format='ascii.ecsv')
         
-        # Filter for redshift closest to target (within ±0.5)
-        z_match = np.abs(table['z'] - redshift) < 0.5
+        # Match redshift (approximate bins are 6, 7, 8, 9)
+        if redshift < 6.5:
+            z_bin = 6
+        elif redshift < 7.5:
+            z_bin = 7
+        elif redshift < 8.5:
+            z_bin = 8
+        elif redshift < 9.5:
+            z_bin = 9
+        else:
+            return None, None, None, None
+        
+        # Filter for matching redshift
+        z_match = table['redshift_approx'] == z_bin
         if not np.any(z_match):
             return None, None, None, None
         
         data = table[z_match]
         
-        M_UV = np.array(data['M_UV'])
-        log_phi = np.array(data['log_phi'])
-        log_phi_err_low = np.array(data['log_phi_lower'])
-        log_phi_err_high = np.array(data['log_phi_upper'])
+        # Get all available data points for this redshift
+        log_mass = np.array(data['log_M_star'])
+        phi_star = np.array(data['phi_star']) * 1e-5  # Multiply by 10^-5
+        phi_star_err_up = np.array(data['phi_star_err_up']) * 1e-5
+        phi_star_err_low = np.array(data['phi_star_err_low']) * 1e-5
         
-        return M_UV, log_phi, log_phi_err_low, log_phi_err_high
+        # Convert to log scale
+        log_phi = np.log10(phi_star)
+        
+        # Calculate upper and lower bounds
+        phi_upper_linear = phi_star + phi_star_err_up
+        phi_lower_linear = phi_star - phi_star_err_low
+        
+        log_phi_upper = np.log10(phi_upper_linear)
+        
+        log_phi_lower = np.full_like(log_phi, np.nan)
+        valid_lower = phi_lower_linear > 0
+        log_phi_lower[valid_lower] = np.log10(phi_lower_linear[valid_lower])
+        
+        return log_mass, log_phi, log_phi_lower, log_phi_upper
     except Exception as e:
-        print(f"  Warning: Could not load Stefanon UVLF data: {e}")
+        print(f"  Warning: Could not load Kikuchihara data: {e}")
         return None, None, None, None
-
-def load_bouwens_uvlf(redshift):
-    """Load Bouwens et al. 2021 observational UV luminosity function data for a given redshift"""
-    filename = './data/bouwens_lf_2021.ecsv'
-    
-    if not os.path.exists(filename):
-        return None, None, None, None
-    
-    try:
-        # Read the ECSV file
-        table = Table.read(filename, format='ascii.ecsv')
-        
-        # Filter for redshift closest to target (within ±0.5)
-        z_match = np.abs(table['z'] - redshift) < 0.5
-        if not np.any(z_match):
-            return None, None, None, None
-        
-        data = table[z_match]
-        
-        M_UV = np.array(data['M_UV'])
-        log_phi = np.array(data['log_phi'])
-        log_phi_err_low = np.array(data['log_phi_lower'])
-        log_phi_err_high = np.array(data['log_phi_upper'])
-        
-        return M_UV, log_phi, log_phi_err_low, log_phi_err_high
-    except Exception as e:
-        print(f"  Warning: Could not load Bouwens UVLF data: {e}")
-        return None, None, None, None
-
-def load_finkelstein_uvlf(redshift):
-    """Load Finkelstein et al. 2022 observational UV luminosity function data for a given redshift"""
-    filename = './data/finkelstein_lf_2022.ecsv'
-    
-    if not os.path.exists(filename):
-        return None, None, None, None
-    
-    try:
-        # Read the ECSV file
-        table = Table.read(filename, format='ascii.ecsv')
-        
-        # Use z=9 data for z=9,10,11 panels (within ±2.5 for very broad match)
-        z_match = np.abs(table['z'] - 9.0) < 0.5
-        if not np.any(z_match):
-            return None, None, None, None
-        
-        data = table[z_match]
-        
-        M_UV = np.array(data['M_UV'])
-        log_phi = np.array(data['log_phi'])
-        log_phi_err_low = np.array(data['log_phi_lower'])
-        log_phi_err_high = np.array(data['log_phi_upper'])
-        
-        return M_UV, log_phi, log_phi_err_low, log_phi_err_high
-    except Exception as e:
-        print(f"  Warning: Could not load Finkelstein UVLF data: {e}")
-        return None, None, None, None
-
-def load_adams_uvlf(redshift):
-    """Load Adams et al. 2024 observational UV luminosity function data for a given redshift"""
-    filename = './data/adams_lf_2024.ecsv'
-    
-    if not os.path.exists(filename):
-        return None, None, None
-    
-    try:
-        # Read the ECSV file
-        table = Table.read(filename, format='ascii.ecsv')
-        
-        # Filter for redshift closest to target (within ±1.0)
-        z_match = np.abs(table['z'] - redshift) < 1.0
-        if not np.any(z_match):
-            return None, None, None
-        
-        data = table[z_match]
-        
-        M_UV = np.array(data['M_UV'])
-        log_phi = np.array(data['log_phi'])
-        # Convert error values to log bounds
-        log_phi_err_upper = np.array(data['log_phi_error_upper'])
-        log_phi_err_lower = np.array(data['log_phi_error_lower'])
-        
-        return M_UV, log_phi, (log_phi_err_lower, log_phi_err_upper)
-    except Exception as e:
-        print(f"  Warning: Could not load Adams UVLF data: {e}")
-        return None, None, None
-
-def load_bouwens23a_uvlf(redshift):
-    """Load Bouwens et al. 2023a observational UV luminosity function data for a given redshift"""
-    filename = './data/bouwens_lf_2023a.ecsv'
-    
-    if not os.path.exists(filename):
-        return None, None, None
-    
-    try:
-        # Read the ECSV file
-        table = Table.read(filename, format='ascii.ecsv')
-        
-        # Filter for redshift closest to target (within ±1.0)
-        z_match = np.abs(table['z'] - redshift) < 1.0
-        if not np.any(z_match):
-            return None, None, None
-        
-        data = table[z_match]
-        
-        M_UV = np.array(data['M_UV'])
-        log_phi = np.array(data['log_phi'])
-        log_phi_err = np.array(data['log_phi_error'])
-        
-        return M_UV, log_phi, log_phi_err
-    except Exception as e:
-        print(f"  Warning: Could not load Bouwens 2023a UVLF data: {e}")
-        return None, None, None
-
-def load_bouwens23b_uvlf(redshift):
-    """Load Bouwens et al. 2023b observational UV luminosity function data for a given redshift"""
-    filename = './data/bouwens_lf_2023b.ecsv'
-    
-    if not os.path.exists(filename):
-        return None, None, None
-    
-    try:
-        # Read the ECSV file
-        table = Table.read(filename, format='ascii.ecsv')
-        
-        # Filter for redshift closest to target (within ±0.5)
-        z_match = np.abs(table['z'] - redshift) < 0.5
-        if not np.any(z_match):
-            return None, None, None
-        
-        data = table[z_match]
-        
-        M_UV = np.array(data['M_UV'])
-        log_phi = np.array(data['log_phi'])
-        log_phi_err = np.array(data['log_phi_error'])
-        
-        return M_UV, log_phi, log_phi_err
-    except Exception as e:
-        print(f"  Warning: Could not load Bouwens 2023b UVLF data: {e}")
-        return None, None, None
-
-def load_donnan_uvlf(redshift):
-    """Load Donnan et al. 2023 observational UV luminosity function data for a given redshift"""
-    filename = './data/donnan_lf_2023.ecsv'
-    
-    if not os.path.exists(filename):
-        return None, None, None
-    
-    try:
-        # Read the ECSV file
-        table = Table.read(filename, format='ascii.ecsv')
-        
-        # Filter for redshift closest to target (within ±0.5)
-        z_match = np.abs(table['z'] - redshift) < 0.5
-        if not np.any(z_match):
-            return None, None, None
-        
-        data = table[z_match]
-        
-        M_UV = np.array(data['M_UV'])
-        log_phi = np.array(data['log_phi'])
-        log_phi_err = np.array(data['log_phi_error'])
-        
-        return M_UV, log_phi, log_phi_err
-    except Exception as e:
-        print(f"  Warning: Could not load Donnan UVLF data: {e}")
-        return None, None, None
-
-def load_harikane_uvlf(redshift):
-    """Load Harikane et al. 2023 observational UV luminosity function data for a given redshift"""
-    filename = './data/harikane_lf_2023.ecsv'
-    
-    if not os.path.exists(filename):
-        return None, None, None
-    
-    try:
-        # Read the ECSV file
-        table = Table.read(filename, format='ascii.ecsv')
-        
-        # Filter for redshift closest to target (within ±1.5 for z=16)
-        z_match = np.abs(table['z'] - redshift) < 1.5
-        if not np.any(z_match):
-            return None, None, None
-        
-        data = table[z_match]
-        
-        M_UV = np.array(data['M_UV'])
-        log_phi = np.array(data['log_phi'])
-        log_phi_err_upper = np.array(data['log_phi_error_upper'])
-        log_phi_err_lower = np.array(data['log_phi_error_lower'])
-        
-        return M_UV, log_phi, (log_phi_err_lower, log_phi_err_upper)
-    except Exception as e:
-        print(f"  Warning: Could not load Harikane UVLF data: {e}")
-        return None, None, None
-
-def load_mcleod24_uvlf(redshift):
-    """Load McLeod et al. 2024 observational UV luminosity function data for a given redshift"""
-    filename = './data/mcleod_lf_2024.ecsv'
-    
-    if not os.path.exists(filename):
-        return None, None, None
-    
-    try:
-        # Read the ECSV file
-        table = Table.read(filename, format='ascii.ecsv')
-        
-        # Filter for redshift closest to target (within ±1.5)
-        z_match = np.abs(table['z'] - redshift) < 1.5
-        if not np.any(z_match):
-            return None, None, None
-        
-        data = table[z_match]
-        
-        M_UV = np.array(data['M_UV'])
-        log_phi = np.array(data['log_phi'])
-        log_phi_err = np.array(data['log_phi_error'])
-        
-        return M_UV, log_phi, log_phi_err
-    except Exception as e:
-        print(f"  Warning: Could not load McLeod 2024 UVLF data: {e}")
-        return None, None, None
-
-def load_yan_uvlf(redshift):
-    """Load Yan et al. 2023 observational UV luminosity function data for a given redshift"""
-    filename = './data/yan_lf_2023.ecsv'
-    
-    if not os.path.exists(filename):
-        return None, None, None
-    
-    try:
-        # Read the ECSV file
-        table = Table.read(filename, format='ascii.ecsv')
-        
-        # Filter for redshift closest to target (within ±2.5 for high-z)
-        z_match = np.abs(table['z'] - redshift) < 2.5
-        if not np.any(z_match):
-            return None, None, None
-        
-        data = table[z_match]
-        
-        M_UV = np.array(data['M_UV'])
-        # Convert from 10^-6 Mpc^-3 mag^-1 to log10(Mpc^-3 mag^-1)
-        phi = np.array(data['phi']) * 1e-6  # Convert to Mpc^-3 mag^-1
-        phi_err = np.array(data['phi_err']) * 1e-6
-        
-        # Convert to log space
-        log_phi = np.log10(phi)
-        # Propagate errors to log space: delta(log10(x)) = delta(x) / (x * ln(10))
-        log_phi_err = phi_err / (phi * np.log(10))
-        
-        return M_UV, log_phi, log_phi_err
-    except Exception as e:
-        print(f"  Warning: Could not load Yan UVLF data: {e}")
-        return None, None, None
 
 def plot_smf_grid(models=None, redshift_range='high'):
     """Plot SMF grid for different redshifts comparing different FFB models
@@ -1050,96 +816,100 @@ def plot_smf_grid(models=None, redshift_range='high'):
         
         # Add observational data
         # COSMOS2020 (Farmer+)
-        cosmos_mass, cosmos_phi, cosmos_err_low, cosmos_err_high = load_cosmos2020_smf(z_actual)
+        cosmos_mass, cosmos_phi, cosmos_phi_lower, cosmos_phi_upper = load_cosmos2020_smf(z_actual)
         if cosmos_mass is not None:
             # Filter out invalid values
-            valid = np.isfinite(cosmos_phi) & (cosmos_phi > -9)
+            valid = np.isfinite(cosmos_phi) & (cosmos_phi > -9) & np.isfinite(cosmos_phi_upper)
             if np.any(valid):
-                # Calculate error bars (already in log space)
-                yerr_low = np.abs(cosmos_phi[valid] - cosmos_err_low[valid])
-                yerr_high = np.abs(cosmos_err_high[valid] - cosmos_phi[valid])
+                # Calculate error bar magnitudes from actual bound values
+                # For lower errors, use phi_lower if available, otherwise use large value to show only upper cap
+                yerr_low = np.where(np.isfinite(cosmos_phi_lower[valid]), 
+                                   cosmos_phi[valid] - cosmos_phi_lower[valid],
+                                   0)  # No lower error bar when bound is invalid
+                yerr_high = cosmos_phi_upper[valid] - cosmos_phi[valid]
                 ax.errorbar(cosmos_mass[valid], cosmos_phi[valid], 
                            yerr=[yerr_low, yerr_high],
                            fmt='s', color='black', markersize=10, alpha=1.0,
-                           label='COSMOS2020' if idx == 0 else '', capsize=2, linewidth=1.5)
+                           label='Farmer+ (COSMOS2020)' if idx == 0 else '', capsize=2, linewidth=1.5)
                 print(f"  Farmer+ (COSMOS2020) data added")
         
         # Bagpipes (Harvey+24) - for high redshifts
         if z_actual >= 6.0:
-            bagpipes_mass, bagpipes_phi, bagpipes_err_low, bagpipes_err_high = load_bagpipes_smf(z_actual)
+            bagpipes_mass, bagpipes_phi, bagpipes_phi_lower, bagpipes_phi_upper = load_bagpipes_smf(z_actual)
             if bagpipes_mass is not None:
-                valid = np.isfinite(bagpipes_phi) & (bagpipes_phi > -9)
+                valid = np.isfinite(bagpipes_phi) & (bagpipes_phi > -9) & np.isfinite(bagpipes_phi_lower) & np.isfinite(bagpipes_phi_upper)
                 if np.any(valid):
-                    # Calculate error bars (already in log space)
-                    yerr_low = np.abs(bagpipes_phi[valid] - bagpipes_err_low[valid])
-                    yerr_high = np.abs(bagpipes_err_high[valid] - bagpipes_phi[valid])
+                    # Calculate error bar magnitudes from actual bound values, set negative errors to zero
+                    yerr_low = np.maximum(0, bagpipes_phi[valid] - bagpipes_phi_lower[valid])
+                    yerr_high = np.maximum(0, bagpipes_phi_upper[valid] - bagpipes_phi[valid])
                     ax.errorbar(bagpipes_mass[valid], bagpipes_phi[valid],
                                yerr=[yerr_low, yerr_high],
                                fmt='D', color='black', markersize=10, alpha=1.0,
                                label='Harvey+24' if idx == 0 else '', capsize=2, linewidth=1.5)
                     print(f"  Harvey+24 (Bagpipes) data added")
         
-        # Weibel et al. 2024 - for z=4-9
-        if 4.0 <= z_actual <= 9.0:
-            weibel_mass, weibel_phi, weibel_err_low, weibel_err_high = load_weibel_smf(z_actual)
-            if weibel_mass is not None:
-                valid = np.isfinite(weibel_phi) & (weibel_phi > -9)
+        # Stefanon+2021 - for high redshifts (z=6-10)
+        if z_actual >= 6.0:
+            stefanon_mass, stefanon_phi, stefanon_phi_lower, stefanon_phi_upper = load_stefanon_smf(z_actual)
+            if stefanon_mass is not None:
+                valid = np.isfinite(stefanon_phi) & (stefanon_phi > -9) & np.isfinite(stefanon_phi_upper)
                 if np.any(valid):
-                    # Calculate error bars (already in log space)
-                    yerr_low = np.abs(weibel_phi[valid] - weibel_err_low[valid])
-                    yerr_high = np.abs(weibel_err_high[valid] - weibel_phi[valid])
-                    ax.errorbar(weibel_mass[valid], weibel_phi[valid],
+                    # Calculate error bar magnitudes from actual bound values
+                    yerr_low = np.where(np.isfinite(stefanon_phi_lower[valid]), 
+                                       np.maximum(0, stefanon_phi[valid] - stefanon_phi_lower[valid]),
+                                       0)  # No lower error bar when bound is invalid
+                    yerr_high = np.maximum(0, stefanon_phi_upper[valid] - stefanon_phi[valid])
+                    ax.errorbar(stefanon_mass[valid], stefanon_phi[valid],
                                yerr=[yerr_low, yerr_high],
-                               fmt='^', color='black', markersize=10, alpha=1.0,
-                               label='Weibel+24' if idx == 0 else '', capsize=2, linewidth=1.5)
-                    print(f"  Weibel+24 data added")
+                               fmt='o', color='black', markersize=8, alpha=0.8,
+                               label='Stefanon+21' if idx == 0 else '', capsize=2, linewidth=1.5)
+                    print(f"  Stefanon+2021 data added")
         
-        # Navarro-Carrera et al. 2024 - for z=4-8
-        if 4.0 <= z_actual <= 8.0:
-            nc_mass, nc_phi, nc_err_low, nc_err_high = load_navarro_carrera_smf(z_actual)
+        # Navarro-Carrera+2023 - for high redshifts (z=6-8)
+        if z_actual >= 6.0 and z_actual <= 8.5:
+            nc_mass, nc_phi, nc_phi_lower, nc_phi_upper = load_navarro_carrera_smf(z_actual)
             if nc_mass is not None:
-                valid = np.isfinite(nc_phi) & (nc_phi > -9)
+                valid = np.isfinite(nc_phi) & (nc_phi > -9) & np.isfinite(nc_phi_upper)
                 if np.any(valid):
-                    # Calculate error bars (already in log space)
-                    yerr_low = np.abs(nc_phi[valid] - nc_err_low[valid])
-                    yerr_high = np.abs(nc_err_high[valid] - nc_phi[valid])
+                    # Calculate error bar magnitudes from actual bound values
+                    yerr_low = np.where(np.isfinite(nc_phi_lower[valid]), 
+                                       np.maximum(0, nc_phi[valid] - nc_phi_lower[valid]),
+                                       0)  # No lower error bar when bound is invalid
+                    yerr_high = np.maximum(0, nc_phi_upper[valid] - nc_phi[valid])
                     ax.errorbar(nc_mass[valid], nc_phi[valid],
                                yerr=[yerr_low, yerr_high],
-                               fmt='o', color='black', markersize=10, alpha=1.0,
-                               label='Navarro-Carrera+24' if idx == 0 else '', capsize=2, linewidth=1.5)
-                    print(f"  Navarro-Carrera+24 data added")
+                               fmt='^', color='black', markersize=8, alpha=0.8,
+                               label='Navarro-Carrera+23' if idx == 0 else '', capsize=2, linewidth=1.5)
+                    print(f"  Navarro-Carrera+2023 data added")
         
-        # Kikuchihara et al. 2020 - for z=6-9
-        if 6.0 <= z_actual <= 9.0:
-            kik_mass, kik_phi, kik_err_low, kik_err_high = load_kikuchihara_smf(z_actual)
-            if kik_mass is not None:
-                valid = np.isfinite(kik_phi) & (kik_phi > -9)
+        # Weibel+2024 - for high redshifts (z=6-9)
+        if z_actual >= 6.0 and z_actual <= 9.5:
+            weibel_mass, weibel_phi, weibel_phi_lower, weibel_phi_upper = load_weibel_smf(z_actual)
+            if weibel_mass is not None:
+                valid = np.isfinite(weibel_phi) & (weibel_phi > -9) & np.isfinite(weibel_phi_upper)
                 if np.any(valid):
-                    # Calculate error bars (already in log space)
-                    yerr_low = np.abs(kik_phi[valid] - kik_err_low[valid])
-                    yerr_high = np.abs(kik_err_high[valid] - kik_phi[valid])
-                    ax.errorbar(kik_mass[valid], kik_phi[valid],
+                    # Calculate error bar magnitudes from actual bound values
+                    yerr_low = np.where(np.isfinite(weibel_phi_lower[valid]), 
+                                       np.maximum(0, weibel_phi[valid] - weibel_phi_lower[valid]),
+                                       0)  # No lower error bar when bound is invalid
+                    yerr_high = np.maximum(0, weibel_phi_upper[valid] - weibel_phi[valid])
+                    ax.errorbar(weibel_mass[valid], weibel_phi[valid],
                                yerr=[yerr_low, yerr_high],
-                               fmt='v', markerfacecolor='white', markeredgecolor='black', 
-                               markersize=10, markeredgewidth=1.5, ecolor='black',
-                               label='Kikuchihara+20' if idx == 0 else '', capsize=2, linewidth=1.5)
-                    print(f"  Kikuchihara+20 data added")
+                               fmt='v', color='black', markersize=8, alpha=0.8,
+                               label='Weibel+24' if idx == 0 else '', capsize=2, linewidth=1.5)
+                    print(f"  Weibel+2024 data added")
         
-        # Stefanon et al. 2021 - for z=6-10
-        if 6.0 <= z_actual <= 10.0:
-            stef_mass, stef_phi, stef_err_low, stef_err_high = load_stefanon_smf(z_actual)
-            if stef_mass is not None:
-                valid = np.isfinite(stef_phi) & (stef_phi > -9)
+        # Kikuchihara+2020 - Schechter function fits (z=6-9)
+        if z_actual >= 6.0 and z_actual <= 9.5:
+            kiku_mass, kiku_phi, kiku_phi_lower, kiku_phi_upper = load_kikuchihara_smf(z_actual)
+            if kiku_mass is not None:
+                valid = np.isfinite(kiku_phi) & (kiku_phi > -9)
                 if np.any(valid):
-                    # Calculate error bars (already in log space)
-                    yerr_low = np.abs(stef_phi[valid] - stef_err_low[valid])
-                    yerr_high = np.abs(stef_err_high[valid] - stef_phi[valid])
-                    ax.errorbar(stef_mass[valid], stef_phi[valid],
-                               yerr=[yerr_low, yerr_high],
-                               fmt='<', markerfacecolor='white', markeredgecolor='black',
-                               markersize=10, markeredgewidth=1.5, ecolor='black',
-                               label='Stefanon+21' if idx == 0 else '', capsize=2, linewidth=1.5)
-                    print(f"  Stefanon+21 data added")
+                    # Plot as markers
+                    ax.plot(kiku_mass[valid], kiku_phi[valid],
+                           marker='<', color='black', linestyle='', markersize=8, alpha=0.8,
+                           label='Kikuchihara+20' if idx == 0 else '')
+                    print(f"  Kikuchihara+2020 data added")
         
         # Formatting
         ax.set_xlim(8, 12)
@@ -1159,41 +929,9 @@ def plot_smf_grid(models=None, redshift_range='high'):
         else:  # Top row - hide x-axis tick labels
             ax.tick_params(axis='x', labelbottom=False)
         
-        # Only show legends in first subplot
+        # Only show legend in first subplot
         if idx == 0:
-            # Get all handles and labels
-            handles, labels = ax.get_legend_handles_labels()
-            
-            # Separate models/simulations from observations
-            model_handles = []
-            model_labels = []
-            obs_handles = []
-            obs_labels = []
-            
-            for handle, label in zip(handles, labels):
-                # Observations have specific marker styles (errorbar plots)
-                if label in ['COSMOS2020', 'Harvey+24', 'Weibel+24', 'Navarro-Carrera+24', 'Kikuchihara+20', 'Stefanon+21']:
-                    obs_handles.append(handle)
-                    obs_labels.append(label)
-                else:
-                    # Models and Li+ 2024 analytical predictions
-                    model_handles.append(handle)
-                    model_labels.append(label)
-            
-            # Create observations legend in lower left
-            if obs_handles:
-                obs_legend = ax.legend(obs_handles, obs_labels, 
-                                      loc='lower left', fontsize=9, 
-                                      ncol=1, frameon=False)
-                ax.add_artist(obs_legend)
-            
-            # Create models legend in upper right (below redshift text)
-            if model_handles:
-                model_legend = ax.legend(model_handles, model_labels,
-                                        loc='upper right', fontsize=9,
-                                        ncol=1, frameon=False,
-                                        bbox_to_anchor=(0.98, 0.88))
-                ax.add_artist(model_legend)
+            ax.legend(loc='lower left', fontsize=9, ncol=1, frameon=False)
     
     # Add common y-axis label before tight_layout
     fig.text(0.04, 0.5, r'$\log_{10}(\Phi / \mathrm{Mpc}^{-3} \, \mathrm{dex}^{-1})$', 
@@ -1462,6 +1200,172 @@ def calculate_uv_luminosity_function(stellar_mass, sfr_disk, sfr_bulge, volume, 
     
     return xaxeshisto, uvlf_log, uvlf_log_lower, uvlf_log_upper
 
+def load_observational_uvlf_data():
+    """Load and process all observational UV luminosity function data.
+    
+    Applies necessary scaling factors to phi values and errors:
+    - adams_lf_2024: multiply phi by 10^-5
+    - bouwens_lf_2021: raw values (already in Mpc^-3 mag^-1)
+    - bouwens_lf_2023: raw values (already in Mpc^-3 mag^-1)
+    - donnan_lf_2023: multiply phi by 10^-6
+    - finkelstein_lf_2022: multiply phi by 10^-6
+    - harikane_lf_2023: raw values (already in Mpc^-3 mag^-1)
+    
+    Returns:
+        dict: Dictionary with keys as dataset names, values are dicts with:
+              'redshifts', 'M_UV', 'phi', 'phi_err_up', 'phi_err_low'
+    """
+    # Data directory is in the main SAGE26 folder, not in output
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(script_dir, '..', 'data') + '/'
+    obs_data = {}
+    
+    # Load Adams et al. 2024 - multiply by 10^-5
+    try:
+        table = Table.read(data_dir + 'adams_lf_2024.ecsv', format='ascii.ecsv')
+        # Parse redshift from label (e.g., 'z=8' -> 8.0)
+        redshifts = []
+        for label in table['redshift_label']:
+            # Extract first number from label (handles 'z=8', 'z=10.5', 'z=8-NoNEP')
+            z_str = label.split('=')[1].split('-')[0]
+            redshifts.append(float(z_str))
+        
+        obs_data['adams_2024'] = {
+            'redshifts': np.array(redshifts),
+            'M_UV': np.array(table['M_UV']),
+            'phi': np.array(table['phi']) * 1e-5,
+            'phi_err_up': np.array(table['phi_err']) * 1e-5,
+            'phi_err_low': np.array(table['phi_err']) * 1e-5,
+        }
+        print(f"Loaded Adams+2024: {len(table)} data points")
+    except Exception as e:
+        print(f"Warning: Could not load adams_lf_2024.ecsv: {e}")
+    
+    # Load Bouwens et al. 2021 - raw values
+    try:
+        table = Table.read(data_dir + 'bouwens_lf_2021.ecsv', format='ascii.ecsv')
+        obs_data['bouwens_2021'] = {
+            'redshifts': np.array(table['redshift_bin'], dtype=float),
+            'M_UV': np.array(table['M_1600']),
+            'phi': np.array(table['phi']),
+            'phi_err_up': np.array(table['phi_err']),
+            'phi_err_low': np.array(table['phi_err']),
+        }
+        print(f"Loaded Bouwens+2021: {len(table)} data points")
+    except Exception as e:
+        print(f"Warning: Could not load bouwens_lf_2021.ecsv: {e}")
+    
+    # Load Bouwens et al. 2023 - raw values
+    try:
+        table = Table.read(data_dir + 'bouwens_lf_2023.ecsv', format='ascii.ecsv')
+        # Parse redshift from label (e.g., 'z~8' -> 8.0, 'z~8-9' -> 8.5)
+        redshifts = []
+        for label in table['redshift_label']:
+            z_str = label.replace('z~', '').replace('z=', '')
+            if '-' in z_str:
+                # Average of range
+                z_parts = z_str.split('-')
+                z = (float(z_parts[0]) + float(z_parts[1])) / 2.0
+            else:
+                z = float(z_str)
+            redshifts.append(z)
+        
+        obs_data['bouwens_2023'] = {
+            'redshifts': np.array(redshifts),
+            'M_UV': np.array(table['M_UV']),
+            'phi': np.array(table['phi_star']),
+            'phi_err_up': np.array(table['phi_star_err']),
+            'phi_err_low': np.array(table['phi_star_err']),
+        }
+        print(f"Loaded Bouwens+2023: {len(table)} data points")
+    except Exception as e:
+        print(f"Warning: Could not load bouwens_lf_2023.ecsv: {e}")
+    
+    # Load Donnan et al. 2023 - multiply by 10^-6
+    try:
+        table = Table.read(data_dir + 'donnan_lf_2023.ecsv', format='ascii.ecsv')
+        obs_data['donnan_2023'] = {
+            'redshifts': np.array(table['redshift']),
+            'M_UV': np.array(table['M_UV']),
+            'phi': np.array(table['phi']) * 1e-6,
+            'phi_err_up': np.array(table['phi_err_up']) * 1e-6,
+            'phi_err_low': np.array(table['phi_err_low']) * 1e-6,
+        }
+        print(f"Loaded Donnan+2023: {len(table)} data points")
+    except Exception as e:
+        print(f"Warning: Could not load donnan_lf_2023.ecsv: {e}")
+    
+    # Load Finkelstein et al. 2022 - multiply by 10^-6
+    try:
+        table = Table.read(data_dir + 'finkelstein_lf_2022.ecsv', format='ascii.ecsv')
+        obs_data['finkelstein_2022'] = {
+            'redshifts': np.array(table['redshift']),
+            'M_UV': np.array(table['mag_bin']),
+            'phi': np.array(table['number_density']) * 1e-6,
+            'phi_err_up': np.array(table['density_err_up']) * 1e-6,
+            'phi_err_low': np.array(table['density_err_low']) * 1e-6,
+        }
+        print(f"Loaded Finkelstein+2022: {len(table)} data points")
+    except Exception as e:
+        print(f"Warning: Could not load finkelstein_lf_2022.ecsv: {e}")
+    
+    # Load Harikane et al. 2023 - raw values
+    try:
+        table = Table.read(data_dir + 'harikane_lf_2023.ecsv', format='ascii.ecsv')
+        # Filter out upper limits (phi == 0.0)
+        mask = table['phi'] > 0.0
+        obs_data['harikane_2023'] = {
+            'redshifts': np.array(table['redshift_approx'][mask], dtype=float),
+            'M_UV': np.array(table['M_UV'][mask]),
+            'phi': np.array(table['phi'][mask]),
+            'phi_err_up': np.array(table['phi_err_up'][mask]),
+            'phi_err_low': np.array(table['phi_err_low'][mask]),
+        }
+        print(f"Loaded Harikane+2023: {np.sum(mask)} data points (excluded upper limits)")
+    except Exception as e:
+        print(f"Warning: Could not load harikane_lf_2023.ecsv: {e}")
+    
+    # Load McLeod et al. 2024 - multiply by 10^-5
+    try:
+        table = Table.read(data_dir + 'mcleod_lf_2024.ecsv', format='ascii.ecsv')
+        obs_data['mcleod_2024'] = {
+            'redshifts': np.array(table['redshift']),
+            'M_UV': np.array(table['M_1500']),
+            'phi': np.array(table['phi']) * 1e-5,
+            'phi_err_up': np.array(table['phi_err']) * 1e-5,
+            'phi_err_low': np.array(table['phi_err']) * 1e-5,
+        }
+        print(f"Loaded McLeod+2024: {len(table)} data points")
+    except Exception as e:
+        print(f"Warning: Could not load mcleod_lf_2024.ecsv: {e}")
+    
+    # Load Morishita et al. 2018 - data already in log space, filter upper limits
+    try:
+        table = Table.read(data_dir + 'morishita_lf_2018.ecsv', format='ascii.ecsv')
+        # Filter out upper limits
+        mask = ~table['is_upper_limit']
+        # Convert from log space to linear space
+        phi = 10**np.array(table['log_phi'][mask])
+        # Asymmetric errors in log space -> linear space
+        log_phi_vals = np.array(table['log_phi'][mask])
+        log_phi_err_up = np.array(table['log_phi_err_up'][mask])
+        log_phi_err_low = np.array(table['log_phi_err_low'][mask])
+        phi_upper = 10**(log_phi_vals + log_phi_err_up)
+        phi_lower = 10**(log_phi_vals - log_phi_err_low)
+        
+        obs_data['morishita_2018'] = {
+            'redshifts': np.array(table['redshift_approx'][mask], dtype=float),
+            'M_UV': np.array(table['M_UV'][mask]),
+            'phi': phi,
+            'phi_err_up': phi_upper - phi,
+            'phi_err_low': phi - phi_lower,
+        }
+        print(f"Loaded Morishita+2018: {np.sum(mask)} data points (excluded upper limits)")
+    except Exception as e:
+        print(f"Warning: Could not load morishita_lf_2018.ecsv: {e}")
+    
+    return obs_data
+
 def plot_uvlf_grid(models=None):
     """Plot UV Luminosity Function grid for different redshifts
     
@@ -1475,6 +1379,10 @@ def plot_uvlf_grid(models=None):
     print('\n' + '='*60)
     print('Creating UV Luminosity Function Grid Plot')
     print('='*60)
+    
+    # Load observational data
+    print('\nLoading observational data...')
+    obs_data = load_observational_uvlf_data()
     
     # Define redshifts for the grid (2 rows x 3 columns = 6 plots)
     target_redshifts = [9.0, 10.0, 11.0, 12.0, 13.0, 16.0]
@@ -1493,6 +1401,9 @@ def plot_uvlf_grid(models=None):
     
     # Flatten axes for easier iteration
     axes_flat = axes.flatten()
+    
+    # Track which datasets have been added to legend
+    datasets_in_legend = set()
     
     # Loop through each subplot
     for idx, (snapshot, z_actual, ax) in enumerate(zip(snapshots, actual_redshifts, axes_flat)):
@@ -1523,13 +1434,14 @@ def plot_uvlf_grid(models=None):
             # Plot
             valid = uvlf > -9  # Only plot non-zero bins
             
-            # Plot line - exclude legend for z > 9.28
-            show_legend = idx == 0 and z_actual <= 9.28
+            # Plot line
+            # Only add label in first subplot (z=9.278)
+            label = model['name'] if idx == 0 else ''
             ax.plot(M_UV_bins[valid], uvlf[valid], 
                    color=model['color'], 
                    linestyle=model['linestyle'],
                    linewidth=model['linewidth'],
-                   label=model['name'] if show_legend else '',
+                   label=label,
                    alpha=0.8,
                    zorder=3)
             
@@ -1543,232 +1455,99 @@ def plot_uvlf_grid(models=None):
             
             print(f"  {model['name']}: {len(stellar_mass[stellar_mass>0])} galaxies")
         
-        # Add analytical predictions from Li+2023 (three lines) - only for z <= 9.28
-        if z_actual <= 9.28:
-            try:
-                MUV_analytical = np.linspace(-24, -16, 100)
+        # Add analytical predictions from Li+2023 (three lines)
+        try:
+            MUV_analytical = np.linspace(-24, -16, 100)
+            
+            # FFB eps_max=1.0
+            set_option(FFB_SFE_MAX=1.0)
+            MUV_bins, dNdMUV_ffb1 = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
+            log_phi_ffb1 = np.log10(dNdMUV_ffb1)
+            valid = np.isfinite(log_phi_ffb1) & (log_phi_ffb1 > -9)
+            ax.plot(MUV_bins[valid], log_phi_ffb1[valid],
+                   color='dodgerblue', linestyle='--', linewidth=2,
+                   label='Li+ 2024' if idx == 0 else '',
+                   alpha=0.7, zorder=4)
+            
+            # FFB eps_max=0.2
+            set_option(FFB_SFE_MAX=0.2)
+            MUV_bins, dNdMUV_ffb02 = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
+            log_phi_ffb02 = np.log10(dNdMUV_ffb02)
+            valid = np.isfinite(log_phi_ffb02) & (log_phi_ffb02 > -9)
+            ax.plot(MUV_bins[valid], log_phi_ffb02[valid],
+                   color='orange', linestyle='--', linewidth=2,
+                   label='',
+                   alpha=0.7, zorder=4)
+            
+            # UM model (no FFB)
+            set_option(FFB_SFE_MAX=0.0)
+            MUV_bins, dNdMUV_um = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
+            log_phi_um = np.log10(dNdMUV_um)
+            valid = np.isfinite(log_phi_um) & (log_phi_um > -9)
+            ax.plot(MUV_bins[valid], log_phi_um[valid],
+                   color='gray', linestyle='--', linewidth=2,
+                   label='',
+                   alpha=0.7, zorder=4)
+            
+            # Reset to default
+            set_option(FFB_SFE_MAX=1.0)
+            print(f"  Li+2023 analytical UVLF predictions added (3 lines)")
+        except Exception as e:
+            print(f"  Warning: Could not compute analytical UVLF: {e}")
+        
+        # Plot observational data for this redshift
+        # Match observations within ±1.5 redshift of current panel
+        # Exception: Finkelstein data should only appear in closest panel
+        z_tolerance = 1.5
+        obs_count = 0
+        # Dataset name mapping for cleaner legend labels and marker styles
+        dataset_styles = {
+            'adams_2024': {'label': 'Adams+24', 'marker': 'o', 'color': 'black'},
+            'bouwens_2021': {'label': 'Bouwens+21', 'marker': 's', 'color': 'black'},
+            'bouwens_2023': {'label': 'Bouwens+23', 'marker': 'D', 'color': 'black'},
+            'donnan_2023': {'label': 'Donnan+23', 'marker': '^', 'color': 'black'},
+            'finkelstein_2022': {'label': 'Finkelstein+22', 'marker': 'v', 'color': 'black'},
+            'harikane_2023': {'label': 'Harikane+23', 'marker': 'p', 'color': 'black'},
+            'mcleod_2024': {'label': 'McLeod+24', 'marker': '*', 'color': 'black'},
+            'morishita_2018': {'label': 'Morishita+18', 'marker': 'h', 'color': 'black'}
+        }
+        for dataset_name, data in obs_data.items():
+            # Find data points within redshift tolerance
+            # For Finkelstein data, use tighter tolerance to only show in closest panel
+            if dataset_name == 'finkelstein_2022':
+                z_mask = np.abs(data['redshifts'] - z_actual) < 0.5
+            else:
+                z_mask = np.abs(data['redshifts'] - z_actual) < z_tolerance
+            if np.sum(z_mask) > 0:
+                M_UV_obs = data['M_UV'][z_mask]
+                phi_obs = data['phi'][z_mask]
+                phi_err_up = data['phi_err_up'][z_mask]
+                phi_err_low = data['phi_err_low'][z_mask]
                 
-                # FFB eps_max=1.0
-                set_option(FFB_SFE_MAX=1.0)
-                MUV_bins, dNdMUV_ffb1 = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
-                log_phi_ffb1 = np.log10(dNdMUV_ffb1)
-                valid = np.isfinite(log_phi_ffb1) & (log_phi_ffb1 > -9)
-                ax.plot(MUV_bins[valid], log_phi_ffb1[valid],
-                       color='dodgerblue', linestyle='--', linewidth=2,
-                       label='Li+ 2024' if idx == 0 else '',
-                       alpha=0.7, zorder=4)
+                # Convert to log10 for plotting
+                log_phi_obs = np.log10(phi_obs)
+                log_phi_err_up = np.log10(phi_obs + phi_err_up)
+                log_phi_err_low = np.log10(phi_obs - phi_err_low)
                 
-                # FFB eps_max=0.2
-                set_option(FFB_SFE_MAX=0.2)
-                MUV_bins, dNdMUV_ffb02 = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
-                log_phi_ffb02 = np.log10(dNdMUV_ffb02)
-                valid = np.isfinite(log_phi_ffb02) & (log_phi_ffb02 > -9)
-                ax.plot(MUV_bins[valid], log_phi_ffb02[valid],
-                       color='orange', linestyle='--', linewidth=2,
-                       label='',
-                       alpha=0.7, zorder=4)
+                # Get marker style for this dataset
+                style = dataset_styles.get(dataset_name, {'label': dataset_name, 'marker': 'o', 'color': 'black'})
                 
-                # UM model (no FFB)
-                set_option(FFB_SFE_MAX=0.0)
-                MUV_bins, dNdMUV_um = compute_dNdMUV_Ms(z_actual, MUV=MUV_analytical, attenuation=None)
-                log_phi_um = np.log10(dNdMUV_um)
-                valid = np.isfinite(log_phi_um) & (log_phi_um > -9)
-                ax.plot(MUV_bins[valid], log_phi_um[valid],
-                       color='gray', linestyle='--', linewidth=2,
-                       label='',
-                       alpha=0.7, zorder=4)
+                # Plot with different markers for each dataset (matching SMF grid size)
+                # Add label only the first time this dataset appears across all subplots
+                label = style['label'] if dataset_name not in datasets_in_legend else ''
+                if label:
+                    datasets_in_legend.add(dataset_name)
                 
-                # Reset to default
-                set_option(FFB_SFE_MAX=1.0)
-                print(f"  Li+2023 analytical UVLF predictions added (3 lines)")
-            except Exception as e:
-                print(f"  Warning: Could not compute analytical UVLF: {e}")
+                ax.errorbar(M_UV_obs, log_phi_obs,
+                           yerr=[log_phi_obs - log_phi_err_low, log_phi_err_up - log_phi_obs],
+                           fmt=style['marker'], color=style['color'], markersize=10,
+                           markerfacecolor=style['color'], markeredgecolor=style['color'],
+                           ecolor=style['color'], elinewidth=1.5, capsize=2,
+                           alpha=1.0, zorder=5, label=label)
+                obs_count += np.sum(z_mask)
         
-        # Add observational data
-        # McLeod et al. 2016 - for z~9
-        if 8.5 <= z_actual <= 9.5:
-            mcleod_muv, mcleod_phi, mcleod_err = load_mcleod_uvlf(z_actual)
-            if mcleod_muv is not None:
-                valid = np.isfinite(mcleod_phi) & (mcleod_phi > -9)
-                if np.any(valid):
-                    ax.errorbar(mcleod_muv[valid], mcleod_phi[valid],
-                               yerr=mcleod_err[valid],
-                               fmt='s', markerfacecolor='white', markeredgecolor='gainsboro',
-                               markersize=10, markeredgewidth=2.5, ecolor='gainsboro',
-                               label='pre-JWST' if idx == 0 else '', capsize=2, linewidth=2.5)
-                    print(f"  McLeod+16 UVLF data added")
-        
-        # Oesch et al. 2018 - for z~10
-        if 9.5 <= z_actual <= 10.5:
-            oesch_muv, oesch_phi, oesch_err_low, oesch_err_high = load_oesch_uvlf(z_actual)
-            if oesch_muv is not None:
-                valid = np.isfinite(oesch_phi) & (oesch_phi > -9)
-                if np.any(valid):
-                    # Calculate error bars (already in log space)
-                    yerr_low = np.abs(oesch_phi[valid] - oesch_err_low[valid])
-                    yerr_high = np.abs(oesch_err_high[valid] - oesch_phi[valid])
-                    ax.errorbar(oesch_muv[valid], oesch_phi[valid],
-                               yerr=[yerr_low, yerr_high],
-                               fmt='D', markerfacecolor='white', markeredgecolor='gainsboro',
-                               markersize=10, markeredgewidth=2.5, ecolor='gainsboro',
-                               label='', capsize=2, linewidth=2.5)
-                    print(f"  Oesch+18 UVLF data added")
-        
-        # Morishita et al. 2018 - for z~9 and z~10
-        if 8.5 <= z_actual <= 10.5:
-            morishita_muv, morishita_phi, morishita_err_low, morishita_err_high = load_morishita_uvlf(z_actual)
-            if morishita_muv is not None:
-                valid = np.isfinite(morishita_phi) & (morishita_phi > -9)
-                if np.any(valid):
-                    # Calculate error bars (already in log space)
-                    yerr_low = np.abs(morishita_phi[valid] - morishita_err_low[valid])
-                    yerr_high = np.abs(morishita_err_high[valid] - morishita_phi[valid])
-                    ax.errorbar(morishita_muv[valid], morishita_phi[valid],
-                               yerr=[yerr_low, yerr_high],
-                               fmt='^', markerfacecolor='white', markeredgecolor='gainsboro',
-                               markersize=10, markeredgewidth=2.5, ecolor='gainsboro',
-                               label='', capsize=2, linewidth=2.5)
-                    print(f"  Morishita+18 UVLF data added")
-        
-        # Stefanon et al. 2019 - for z~9
-        if 8.5 <= z_actual <= 9.5:
-            stefanon_muv, stefanon_phi, stefanon_err_low, stefanon_err_high = load_stefanon_uvlf(z_actual)
-            if stefanon_muv is not None:
-                valid = np.isfinite(stefanon_phi) & (stefanon_phi > -9)
-                if np.any(valid):
-                    # Calculate error bars (already in log space)
-                    yerr_low = np.abs(stefanon_phi[valid] - stefanon_err_low[valid])
-                    yerr_high = np.abs(stefanon_err_high[valid] - stefanon_phi[valid])
-                    ax.errorbar(stefanon_muv[valid], stefanon_phi[valid],
-                               yerr=[yerr_low, yerr_high],
-                               fmt='o', markerfacecolor='white', markeredgecolor='gainsboro',
-                               markersize=10, markeredgewidth=2.5, ecolor='gainsboro',
-                               label='', capsize=2, linewidth=2.5)
-                    print(f"  Stefanon+19 UVLF data added")
-        
-        # Bouwens et al. 2021 - for z~9
-        if 8.5 <= z_actual <= 9.5:
-            bouwens_muv, bouwens_phi, bouwens_err_low, bouwens_err_high = load_bouwens_uvlf(z_actual)
-            if bouwens_muv is not None:
-                valid = np.isfinite(bouwens_phi) & (bouwens_phi > -9)
-                if np.any(valid):
-                    # Calculate error bars (already in log space)
-                    yerr_low = np.abs(bouwens_phi[valid] - bouwens_err_low[valid])
-                    yerr_high = np.abs(bouwens_err_high[valid] - bouwens_phi[valid])
-                    ax.errorbar(bouwens_muv[valid], bouwens_phi[valid],
-                               yerr=[yerr_low, yerr_high],
-                               fmt='v', markerfacecolor='white', markeredgecolor='gainsboro',
-                               markersize=10, markeredgewidth=2.5, ecolor='gainsboro',
-                               label='', capsize=2, linewidth=2.5)
-                    print(f"  Bouwens+21 UVLF data added")
-        
-        # Finkelstein et al. 2022 (JWST CEERS) - for z~10 only
-        if 9.5 <= z_actual <= 10.5:
-            finkelstein_muv, finkelstein_phi, finkelstein_err_low, finkelstein_err_high = load_finkelstein_uvlf(z_actual)
-            if finkelstein_muv is not None:
-                valid = np.isfinite(finkelstein_phi) & (finkelstein_phi > -9)
-                if np.any(valid):
-                    # Calculate error bars (already in log space)
-                    yerr_low = np.abs(finkelstein_phi[valid] - finkelstein_err_low[valid])
-                    yerr_high = np.abs(finkelstein_err_high[valid] - finkelstein_phi[valid])
-                    ax.errorbar(finkelstein_muv[valid], finkelstein_phi[valid],
-                               yerr=[yerr_low, yerr_high],
-                               fmt='<', markerfacecolor='white', markeredgecolor='gainsboro',
-                               markersize=10, markeredgewidth=2.5, ecolor='gainsboro',
-                               label='', capsize=2, linewidth=2.5)
-                    print(f"  Finkelstein+22 UVLF data added")
-        
-        # Adams et al. 2024 (JWST) - for z~9, 10.5, 12.5
-        adams_result = load_adams_uvlf(z_actual)
-        if adams_result[0] is not None:
-            adams_muv, adams_phi, adams_err = adams_result
-            valid = np.isfinite(adams_phi) & (adams_phi > -9)
-            if np.any(valid):
-                # Error is provided as (lower, upper) - these are already error magnitudes
-                yerr_lower, yerr_upper = adams_err
-                # Filter out invalid errors (negative or inf)
-                valid_err = valid & np.isfinite(yerr_lower) & np.isfinite(yerr_upper) & (yerr_lower >= 0) & (yerr_upper >= 0)
-                if np.any(valid_err):
-                    ax.errorbar(adams_muv[valid_err], adams_phi[valid_err],
-                               yerr=[yerr_lower[valid_err], yerr_upper[valid_err]],
-                               fmt='s', color='black', markersize=10, alpha=1.0,
-                               label='Adams+24' if idx == 0 else '', capsize=2, linewidth=1.5)
-                    print(f"  Adams+24 UVLF data added")
-        
-        # Bouwens et al. 2023a (JWST) - for z~8.5, 10.5, 12.5
-        bouwens23a_result = load_bouwens23a_uvlf(z_actual)
-        if bouwens23a_result[0] is not None:
-            b23a_muv, b23a_phi, b23a_err = bouwens23a_result
-            valid = np.isfinite(b23a_phi) & (b23a_phi > -9) & np.isfinite(b23a_err) & (b23a_err >= 0)
-            if np.any(valid):
-                ax.errorbar(b23a_muv[valid], b23a_phi[valid],
-                           yerr=b23a_err[valid],
-                           fmt='D', color='black', markersize=10, alpha=1.0,
-                           label='Bouwens+23' if idx == 1 else '', capsize=2, linewidth=1.5)
-                print(f"  Bouwens+23a UVLF data added")
-        
-        # Bouwens et al. 2023b (JWST) - for z~9, 10, 12
-        bouwens23b_result = load_bouwens23b_uvlf(z_actual)
-        if bouwens23b_result[0] is not None:
-            b23b_muv, b23b_phi, b23b_err = bouwens23b_result
-            valid = np.isfinite(b23b_phi) & (b23b_phi > -9) & np.isfinite(b23b_err) & (b23b_err >= 0)
-            if np.any(valid):
-                ax.errorbar(b23b_muv[valid], b23b_phi[valid],
-                           yerr=b23b_err[valid],
-                           fmt='^', color='black', markersize=10, alpha=1.0,
-                           label='', capsize=2, linewidth=1.5)
-                print(f"  Bouwens+23b UVLF data added")
-        
-        # Donnan et al. 2023 (JWST) - for z~9, 10, 12
-        donnan_result = load_donnan_uvlf(z_actual)
-        if donnan_result[0] is not None:
-            don_muv, don_phi, don_err = donnan_result
-            valid = np.isfinite(don_phi) & (don_phi > -9) & np.isfinite(don_err) & (don_err >= 0)
-            if np.any(valid):
-                ax.errorbar(don_muv[valid], don_phi[valid],
-                           yerr=don_err[valid],
-                           fmt='v', color='black', markersize=10, alpha=1.0,
-                           label='Donnan+23' if idx == 0 else '', capsize=2, linewidth=1.5)
-                print(f"  Donnan+23 UVLF data added")
-        
-        # Harikane et al. 2023 (JWST) - for z~9, 12, 16
-        harikane_result = load_harikane_uvlf(z_actual)
-        if harikane_result[0] is not None:
-            har_muv, har_phi, har_err = harikane_result
-            valid = np.isfinite(har_phi) & (har_phi > -9)
-            if np.any(valid):
-                yerr_lower, yerr_upper = har_err
-                valid_err = valid & np.isfinite(yerr_lower) & np.isfinite(yerr_upper) & (yerr_lower >= 0) & (yerr_upper >= 0)
-                if np.any(valid_err):
-                    ax.errorbar(har_muv[valid_err], har_phi[valid_err],
-                               yerr=[yerr_lower[valid_err], yerr_upper[valid_err]],
-                               fmt='<', color='black', markersize=10, alpha=1.0,
-                               label='Harikane+23' if idx == 0 else '', capsize=2, linewidth=1.5)
-                    print(f"  Harikane+23 UVLF data added")
-        
-        # McLeod et al. 2024 (JWST) - for z~11, 13.5 (first appears at idx=2)
-        mcleod24_result = load_mcleod24_uvlf(z_actual)
-        if mcleod24_result[0] is not None:
-            mcl_muv, mcl_phi, mcl_err = mcleod24_result
-            valid = np.isfinite(mcl_phi) & (mcl_phi > -9) & np.isfinite(mcl_err) & (mcl_err >= 0)
-            if np.any(valid):
-                ax.errorbar(mcl_muv[valid], mcl_phi[valid],
-                           yerr=mcl_err[valid],
-                           fmt='>', color='black', markersize=10, alpha=1.0,
-                           label='McLeod+24' if idx == 2 else '', capsize=2, linewidth=1.5)
-                print(f"  McLeod+24 UVLF data added")
-        
-        # Yan et al. 2023 (JWST) - for z~12.7, 17.3 (first appears at idx=3)
-        yan_result = load_yan_uvlf(z_actual)
-        if yan_result[0] is not None:
-            yan_muv, yan_phi, yan_err = yan_result
-            valid = np.isfinite(yan_phi) & (yan_phi > -9) & np.isfinite(yan_err) & (yan_err >= 0)
-            if np.any(valid):
-                ax.errorbar(yan_muv[valid], yan_phi[valid],
-                           yerr=yan_err[valid],
-                           fmt='p', color='black', markersize=10, alpha=1.0,
-                           label='Yan+23' if idx == 3 else '', capsize=2, linewidth=1.5)
-                print(f"  Yan+23 UVLF data added")
+        if obs_count > 0:
+            print(f"  Added {obs_count} observational data points")
         
         # Formatting
         ax.set_xlim(-24, -16)
@@ -1788,46 +1567,10 @@ def plot_uvlf_grid(models=None):
         else:  # Top row - hide x-axis tick labels
             ax.tick_params(axis='x', labelbottom=False)
         
-        # Show legend for panels that have new datasets appearing
-        # idx=0 (z~9): pre-JWST, Adams, Donnan, Harikane
-        # idx=1 (z~10): Bouwens
-        # idx=2 (z~11): McLeod
-        # idx=3 (z~12): Yan
-        if idx in [0, 1, 2, 3]:
-            # Get existing handles and labels
-            handles, labels = ax.get_legend_handles_labels()
-            
-            # Create custom handle for pre-JWST with circle marker (only for idx=0)
-            if idx == 0:
-                from matplotlib.lines import Line2D
-                prejwst_handle = Line2D([0], [0], marker='o', color='w', 
-                                       markerfacecolor='white', markeredgecolor='gainsboro',
-                                       markersize=10, markeredgewidth=2.5,
-                                       label='pre-JWST')
-                
-                # Find and replace the pre-JWST entry if it exists
-                new_handles = []
-                new_labels = []
-                prejwst_added = False
-                for handle, label in zip(handles, labels):
-                    if label == 'pre-JWST' and not prejwst_added:
-                        new_handles.append(prejwst_handle)
-                        new_labels.append('pre-JWST')
-                        prejwst_added = True
-                    elif label != 'pre-JWST':
-                        new_handles.append(handle)
-                        new_labels.append(label)
-                
-                # If pre-JWST wasn't in the list, add it
-                if not prejwst_added:
-                    new_handles.append(prejwst_handle)
-                    new_labels.append('pre-JWST')
-                
-                ax.legend(new_handles, new_labels, loc='lower left', fontsize=9, ncol=1)
-            else:
-                # For other panels, just show the legend normally
-                if handles:
-                    ax.legend(handles, labels, loc='lower left', fontsize=9, ncol=1)
+        # Show legend in each subplot that has labeled data
+        handles, labels = ax.get_legend_handles_labels()
+        if len(labels) > 0:
+            ax.legend(loc='lower left', fontsize=9, ncol=1)
     
     # Add common y-axis label before tight_layout
     fig.text(0.04, 0.5, r'$\log_{10}(\Phi / \mathrm{Mpc}^{-3} \, \mathrm{mag}^{-1})$', 

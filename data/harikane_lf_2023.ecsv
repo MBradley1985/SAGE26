@@ -1,24 +1,27 @@
 # %ECSV 1.0
 # ---
 # datatype:
-# - {name: z, unit: redshift, datatype: float64, description: Redshift bin}
-# - {name: M_UV, unit: mag, datatype: float64, description: Absolute UV Magnitude (AB)}
-# - {name: log_phi, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density}
-# - {name: log_phi_error_upper, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density Error (Upper)}
-# - {name: log_phi_error_lower, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density Error (Lower)}
+# - {name: redshift_approx, datatype: int64, description: Approximate Redshift}
+# - {name: M_UV, unit: mag, datatype: float64, description: UV Magnitude (AB)}
+# - {name: phi, unit: Mpc-3 mag-1, datatype: float64, description: Number density}
+# - {name: phi_err_up, unit: Mpc-3 mag-1, datatype: float64, description: Upper error bound}
+# - {name: phi_err_low, unit: Mpc-3 mag-1, datatype: float64, description: Lower error bound}
 # meta: !!omap
-# - author: Harikane et al.
-# - year: 2023
-# - title: A Comprehensive Study of Galaxies at z ~ 9–16...
-# - table_sources: Table 7
-z M_UV log_phi log_phi_error_upper log_phi_error_lower
-9.0 -22.50 -6.13 0.23 0.50
-9.0 -21.50 -5.19 0.10 0.13
-9.0 -20.50 -4.43 0.05 0.06
-9.0 -19.50 -3.83 0.04 0.04
-9.0 -18.50 -3.42 0.04 0.04
-12.0 -22.50 -7.22 -inf -inf
-12.0 -21.50 -6.22 0.35 0.98
-12.0 -20.50 -5.33 0.17 0.28
-12.0 -19.50 -4.67 0.17 0.28
-16.0 -21.50 -6.52 0.30 0.73
+# - {Table: Obtained Luminosity Function at each Redshift (Dropouts)}
+# - {Note: Upper limits set to 0.0}
+# schema: astropy-2.0
+redshift_approx M_UV phi phi_err_up phi_err_low
+9 -23.03 0.0 0.0 0.0
+9 -22.03 0.0 0.0 0.0
+9 -21.03 4.00e-5 9.42e-5 3.85e-5
+9 -20.03 4.08e-5 9.60e-5 3.92e-5
+9 -19.03 2.24e-4 1.87e-4 1.46e-4
+9 -18.03 1.12e-3 1.03e-3 0.90e-3
+12 -23.21 0.0 0.0 0.0
+12 -22.21 0.0 0.0 0.0
+12 -21.21 5.00e-6 11.56e-6 4.27e-6
+12 -20.21 1.31e-5 1.75e-5 0.89e-5
+12 -19.21 2.40e-5 2.38e-5 1.40e-5
+12 -18.21 1.42e-4 1.97e-4 1.10e-4
+16 -23.59 0.0 0.0 0.0
+16 -20.59 6.62e-6 8.84e-6 4.49e-6

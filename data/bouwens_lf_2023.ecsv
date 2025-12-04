@@ -1,0 +1,25 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: redshift_label, datatype: string, description: Redshift bin or sample label}
+# - {name: M_UV, unit: mag, datatype: float64, description: UV Magnitude}
+# - {name: phi_star, unit: mag-1 Mpc-3, datatype: float64, description: Normalization}
+# - {name: phi_star_err, unit: mag-1 Mpc-3, datatype: float64, description: Error}
+# meta: !!omap
+# - {Table: phi* estimates for high-z galaxies}
+# schema: astropy-2.0
+redshift_label M_UV phi_star phi_star_err
+z~8 -21.13 0.000046 0.000036
+z~8 -20.13 0.000044 0.000036
+z~8 -19.13 0.001050 0.000414
+z~10 -20.49 0.000018 0.000016
+z~10 -19.49 0.000130 0.000068
+z~13 -20.96 0.000010 0.000008
+z~13 -19.96 0.000032 0.000032
+z~17 -21.96 0.000018 0.000014
+z~8-9 -20.02 0.000166 0.000132
+z~8-9 -18.77 0.000252 0.000250
+z~10-11 -18.90 0.000086 0.000120
+z~10-11 -17.90 0.000746 0.000738
+z~12-13 -20.06 0.000078 0.000062
+z~12-13 -18.81 0.000190 0.000152

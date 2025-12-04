@@ -1,26 +1,30 @@
 # %ECSV 1.0
 # ---
 # datatype:
-# - {name: z, unit: redshift, datatype: float64, description: Redshift bin}
-# - {name: M_UV, unit: mag, datatype: float64, description: Absolute UV Magnitude (AB)}
-# - {name: log_phi, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density}
-# - {name: log_phi_upper, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density (Upper 1-sigma)}
-# - {name: log_phi_lower, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density (Lower 1-sigma)}
+# - {name: redshift_bin, datatype: int64}
+# - {name: M_1600, unit: mag, datatype: float64, description: Absolute Magnitude AB}
+# - {name: phi, unit: Mpc-3 mag-1, datatype: float64, description: Number density}
+# - {name: phi_err, unit: Mpc-3 mag-1, datatype: float64, description: Error}
 # meta: !!omap
-# - author: Bouwens et al.
-# - year: 2021
-# - title: New Determinations of the UV Luminosity Functions from z~9 to z~2
-# - table_sources: Table 4
-z M_UV log_phi log_phi_upper log_phi_lower
-9.0 -22.39 -6.10 -5.62 -7.07
-9.0 -21.89 -5.20 -4.92 -5.62
-9.0 -21.39 -5.02 -4.77 -5.42
-9.0 -20.89 -4.67 -4.43 -5.02
-9.0 -20.39 -4.31 -4.15 -4.51
-9.0 -19.89 -3.89 -3.76 -4.04
-9.0 -19.39 -3.75 -3.61 -3.93
-9.0 -18.89 -3.68 -3.53 -3.87
-9.0 -18.39 -3.37 -3.21 -3.57
-9.0 -17.89 -3.22 -3.06 -3.42
-9.0 -17.39 -2.97 -2.77 -3.23
-9.0 -16.89 -2.77 -2.57 -3.07
+# - {Table: Search Fields LF (z>=6)}
+# - {Note: z<5.5 excluded as per previous instruction}
+# schema: astropy-2.0
+redshift_bin M_1600 phi phi_err
+8 -21.85 0.000003 0.000002
+8 -21.35 0.000012 0.000004
+8 -20.85 0.000041 0.000011
+8 -20.10 0.000120 0.000040
+8 -19.35 0.000657 0.000233
+8 -18.60 0.001100 0.000340
+8 -17.60 0.003020 0.001140
+9 -21.92 0.000001 0.000001
+9 -21.12 0.000007 0.000003
+9 -20.32 0.000026 0.000009
+9 -19.12 0.000187 0.000150
+9 -17.92 0.000923 0.000501
+10 -22.25 0.0 0.0
+10 -21.25 0.000001 0.000001
+10 -20.25 0.000010 0.000005
+10 -19.25 0.000034 0.000022
+10 -18.25 0.000190 0.000120
+10 -17.25 0.000630 0.000520

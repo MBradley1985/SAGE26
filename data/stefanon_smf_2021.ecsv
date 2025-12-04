@@ -1,39 +1,41 @@
 # %ECSV 1.0
 # ---
 # datatype:
-# - {name: z, unit: redshift, datatype: float64, description: Central redshift of the bin}
-# - {name: log_M, unit: dex(Msun), datatype: float64, description: Log10 Stellar Mass}
-# - {name: log_phi, unit: dex(Mpc-3 dex-1), datatype: float64, description: Log10 Number Density}
-# - {name: log_phi_upper, unit: dex(Mpc-3 dex-1), datatype: float64, description: Log10 Number Density (Upper 1-sigma)}
-# - {name: log_phi_lower, unit: dex(Mpc-3 dex-1), datatype: float64, description: Log10 Number Density (Lower 1-sigma)}
+# - {name: redshift_bin, datatype: int64}
+# - {name: log_M, unit: log(solMass), datatype: float64, description: Stellar Mass center}
+# - {name: log_M_width, unit: log(solMass), datatype: float64, description: Bin half-width}
+# - {name: phi, unit: 1e-4 Mpc-3 dex-1, datatype: float64, description: Number density}
+# - {name: phi_err_up, unit: 1e-4 Mpc-3 dex-1, datatype: float64, description: Upper error bound}
+# - {name: phi_err_low, unit: 1e-4 Mpc-3 dex-1, datatype: float64, description: Lower error bound}
 # meta: !!omap
-# - author: Stefanon et al.
-# - year: 2021
-# - title: Galaxy Stellar Mass Functions from z~6 to z~10
-# - table_sources: Table 4
-z log_M log_phi log_phi_upper log_phi_lower
-6.0 8.25 -2.44 -2.32 -2.59
-6.0 8.75 -2.71 -2.62 -2.81
-6.0 9.25 -3.22 -3.12 -3.33
-6.0 9.75 -3.61 -3.49 -3.75
-6.0 10.25 -4.22 -4.05 -4.43
-6.0 10.75 -4.83 -4.56 -5.24
-6.0 11.25 -5.26 -5.26 -inf
-7.0 8.25 -2.56 -2.33 -2.92
-7.0 8.75 -2.93 -2.76 -3.15
-7.0 9.25 -3.47 -3.31 -3.66
-7.0 9.75 -3.95 -3.76 -4.19
-7.0 10.25 -4.55 -4.25 -4.98
-7.0 10.75 -5.26 -5.26 -inf
-8.0 8.25 -2.85 -2.41 -4.20
-8.0 8.75 -3.29 -2.99 -3.76
-8.0 9.25 -3.90 -3.58 -4.41
-8.0 9.75 -4.66 -4.18 -5.62
-8.0 10.25 -5.26 -5.26 -inf
-9.0 8.25 -3.29 -2.59 -inf
-9.0 8.75 -3.83 -3.22 -inf
-9.0 9.25 -4.31 -3.62 -inf
-9.0 9.75 -5.26 -5.26 -inf
-10.0 8.25 -4.39 -3.22 -inf
-10.0 8.75 -4.29 -3.33 -inf
-10.0 9.25 -5.26 -5.26 -inf
+# - {Table: Vmax Determinations of the SMF}
+# schema: astropy-2.0
+redshift_bin log_M log_M_width phi phi_err_up phi_err_low
+6 7.80 0.20 225.0 42.0 37.0
+6 8.20 0.20 159.0 23.0 21.0
+6 8.60 0.20 42.9 6.3 5.9
+6 9.00 0.20 25.3 3.8 3.5
+6 9.40 0.20 7.85 1.50 1.40
+6 9.80 0.20 4.93 1.36 1.21
+6 10.20 0.20 1.01 0.43 0.35
+6 10.60 0.20 0.0601 0.1381 0.0517
+7 7.75 0.25 71.7 23.7 18.3
+7 8.25 0.25 39.4 6.9 6.3
+7 8.70 0.20 13.2 2.7 2.4
+7 9.10 0.20 7.70 1.67 1.49
+7 9.50 0.20 3.18 0.88 0.78
+7 9.90 0.20 1.68 0.63 0.53
+7 10.30 0.20 0.104 0.240 0.090
+8 7.90 0.25 41.9 20.6 14.5
+8 8.40 0.25 8.91 2.49 2.08
+8 8.90 0.25 3.56 1.19 0.95
+8 9.35 0.20 1.11 0.57 0.42
+8 9.75 0.20 0.591 0.371 0.262
+8 10.15 0.20 0.0711 0.1637 0.0617
+9 7.50 0.50 29.1 23.0 13.9
+9 8.25 0.25 3.67 2.93 1.81
+9 8.75 0.25 0.738 0.348 0.256
+9 9.50 0.50 0.0764 0.1016 0.0517
+10 7.65 0.35 12.0 15.8 7.8
+10 8.25 0.25 0.264 0.258 0.146
+10 8.75 0.25 0.0872 0.1997 0.0729

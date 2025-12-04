@@ -1,38 +1,38 @@
 # %ECSV 1.0
 # ---
 # datatype:
-# - {name: z, unit: redshift, datatype: float64, description: Redshift bin}
-# - {name: M_UV, unit: mag, datatype: float64, description: Absolute UV Magnitude (AB)}
-# - {name: log_phi, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density}
-# - {name: log_phi_error_upper, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density Error (Upper)}
-# - {name: log_phi_error_lower, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density Error (Lower)}
+# - {name: redshift_label, datatype: string, description: Redshift bin label}
+# - {name: M_UV, unit: mag, datatype: float64, description: Rest-frame UV Magnitude}
+# - {name: phi, unit: 1e-5 mag-1 Mpc-3, datatype: float64, description: Number density}
+# - {name: phi_err, unit: 1e-5 mag-1 Mpc-3, datatype: float64, description: Error in number density}
 # meta: !!omap
-# - author: Adams et al.
-# - year: 2024
-# - title: Evolution of the Galaxy Luminosity Function from z ~ 9-15
-# - table_sources: Table 3
-z M_UV log_phi log_phi_error_upper log_phi_error_lower
-9.0 -22.30 -6.22 0.35 0.59
-9.0 -21.80 -5.20 0.17 0.22
-9.0 -21.30 -4.96 0.14 0.17
-9.0 -20.80 -4.59 0.10 0.12
-9.0 -20.30 -4.33 0.08 0.09
-9.0 -19.80 -3.93 0.06 0.06
-9.0 -19.30 -3.63 0.05 0.05
-9.0 -18.80 -3.42 0.06 0.07
-9.0 -18.30 -3.12 0.05 0.05
-10.5 -22.05 -5.87 0.30 0.73
-10.5 -21.55 -5.57 0.23 0.44
-10.5 -21.05 -5.22 0.17 0.23
-10.5 -20.55 -4.84 0.12 0.16
-10.5 -20.05 -4.67 0.11 0.14
-10.5 -19.55 -4.32 0.09 0.11
-10.5 -19.05 -4.05 0.09 0.11
-10.5 -18.55 -3.75 0.12 0.15
-12.5 -22.05 -6.70 -inf -inf
-12.5 -21.55 -6.22 0.35 0.98
-12.5 -21.05 -5.70 0.23 0.44
-12.5 -20.55 -5.62 0.21 0.39
-12.5 -20.05 -5.22 0.17 0.23
-12.5 -19.55 -4.87 0.13 0.18
-12.5 -19.05 -4.33 0.12 0.16
+# - {Table: Measured Rest-frame UV LF and Error Margin}
+# schema: astropy-2.0
+redshift_label M_UV phi phi_err
+z=8 -21.35 2.277 1.226
+z=8 -20.85 9.974 3.137
+z=8 -20.35 13.12 3.840
+z=8 -19.85 28.64 7.247
+z=8 -19.35 54.04 22.19
+z=8 -18.60 69.35 28.41
+z=8-NoNEP -21.35 0.837 0.711
+z=8-NoNEP -20.85 7.935 3.086
+z=8-NoNEP -20.35 9.090 3.409
+z=8-NoNEP -19.85 20.39 5.967
+z=8-NoNEP -19.35 45.46 19.97
+z=8-NoNEP -18.60 67.41 27.73
+z=9 -22.05 0.628 0.536
+z=9 -21.55 0.628 0.536
+z=9 -21.05 1.257 0.851
+z=9 -20.55 6.427 2.534
+z=9 -20.05 10.76 5.825
+z=9 -19.55 18.22 9.442
+z=9 -18.80 42.45 20.32
+z=10.5 -20.95 0.721 0.480
+z=10.5 -20.45 1.855 0.888
+z=10.5 -19.75 3.331 1.314
+z=10.5 -19.45 6.674 3.960
+z=10.5 -18.70 9.996 6.155
+z=12.5 -20.75 0.852 0.570
+z=12.5 -20.25 2.148 1.375
+z=12.5 -19.50 5.923 3.884

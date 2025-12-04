@@ -1,25 +1,29 @@
 # %ECSV 1.0
 # ---
 # datatype:
-# - {name: z, unit: redshift, datatype: float64, description: Redshift bin}
-# - {name: M_UV, unit: mag, datatype: float64, description: Absolute UV Magnitude (AB)}
-# - {name: log_phi, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density}
-# - {name: log_phi_upper, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density (Upper 1-sigma)}
-# - {name: log_phi_lower, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density (Lower 1-sigma)}
+# - {name: redshift, datatype: float64}
+# - {name: mag_bin, unit: mag, datatype: float64, description: Magnitude Bin}
+# - {name: number_density, unit: 1e-6 Mpc-3, datatype: float64, description: Number Density}
+# - {name: density_err_up, unit: 1e-6 Mpc-3, datatype: float64}
+# - {name: density_err_low, unit: 1e-6 Mpc-3, datatype: float64}
 # meta: !!omap
-# - author: Finkelstein et al.
-# - year: 2022
-# - title: A Long Time Ago in a Galaxy Far, Far Away - A Candidate z ~ 12 Galaxy in Early JWST CEERS Imaging
-# - table_sources: Table 10
-z M_UV log_phi log_phi_upper log_phi_lower
-9.0 -22.50 -7.22 -6.10 -inf
-9.0 -22.00 -5.55 -5.19 -6.37
-9.0 -21.50 -5.13 -4.83 -5.70
-9.0 -21.00 -4.95 -4.72 -5.30
-9.0 -20.50 -4.27 -4.13 -4.43
-9.0 -20.00 -4.05 -3.93 -4.18
-9.0 -19.50 -3.81 -3.70 -3.93
-9.0 -19.00 -3.55 -3.42 -3.70
-9.0 -18.50 -3.47 -3.32 -3.65
-9.0 -18.00 -3.19 -2.99 -3.46
-9.0 -17.50 -3.22 -2.97 -3.58
+# - {Table: Measured Number Densities for z=9-11 (Assigned z=10)}
+# schema: astropy-2.0
+redshift mag_bin number_density density_err_up density_err_low
+10.0 -22.6 1.050 1.115 0.666
+10.0 -22.5 1.373 1.270 0.712
+10.0 -22.4 1.674 1.338 0.835
+10.0 -22.3 1.985 1.715 0.959
+10.0 -22.2 2.389 1.857 1.020
+10.0 -22.1 2.681 1.936 1.180
+10.0 -22.0 2.511 1.657 1.113
+10.0 -21.9 2.617 1.700 1.248
+10.0 -21.8 2.414 1.593 1.220
+10.0 -21.7 2.827 1.738 1.517
+10.0 -21.6 2.864 1.981 1.459
+10.0 -21.5 3.306 2.300 1.483
+10.0 -21.4 3.789 2.560 1.641
+10.0 -21.3 4.798 3.705 2.151
+10.0 -21.2 4.824 4.075 2.181
+10.0 -21.1 5.125 4.664 2.497
+10.0 -21.0 5.218 3.922 2.590

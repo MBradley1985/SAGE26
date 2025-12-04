@@ -1,23 +1,17 @@
 # %ECSV 1.0
 # ---
 # datatype:
-# - {name: z, unit: redshift, datatype: float64, description: Redshift bin}
-# - {name: M_UV, unit: mag, datatype: float64, description: Absolute UV Magnitude (AB)}
-# - {name: log_phi, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density}
-# - {name: log_phi_upper, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density (Upper 1-sigma)}
-# - {name: log_phi_lower, unit: dex(Mpc-3 mag-1), datatype: float64, description: Log10 Number Density (Lower 1-sigma)}
-# meta: !!omap
-# - author: Morishita et al.
-# - year: 2018
-# - title: The Hubble Legacy Fields (HLF-GOODS-S) v2.0
-# - table_sources: Table 3
-z M_UV log_phi log_phi_upper log_phi_lower
-9.0 -21.5 -5.19 -4.96 -5.57
-9.0 -20.5 -4.31 -4.15 -4.51
-9.0 -19.5 -3.89 -3.76 -4.04
-9.0 -18.5 -3.63 -3.45 -3.89
-9.0 -17.5 -3.32 -2.89 -inf
-10.0 -21.5 -6.32 -5.73 -inf
-10.0 -20.5 -5.20 -4.92 -5.62
-10.0 -19.5 -4.67 -4.43 -5.02
-10.0 -18.5 -4.10 -3.83 -4.48
+# - {name: redshift_approx, datatype: int64}
+# - {name: M_UV, unit: mag, datatype: float64, description: UV Magnitude}
+# - {name: log_phi, unit: log(Mpc-3 mag-1), datatype: float64, description: Log Number density}
+# - {name: log_phi_err_up, unit: log(Mpc-3 mag-1), datatype: float64, description: Upper error bound}
+# - {name: log_phi_err_low, unit: log(Mpc-3 mag-1), datatype: float64, description: Lower error bound}
+# - {name: is_upper_limit, datatype: bool, description: True if value is an upper limit}
+# schema: astropy-2.0
+redshift_approx M_UV log_phi log_phi_err_up log_phi_err_low is_upper_limit
+10 -23.0 -6.1 0.5 0.8 False
+10 -22.0 -5.9 0.0 0.0 True
+10 -21.0 -4.6 0.0 0.0 True
+9 -23.0 -5.9 0.0 0.0 True
+9 -22.0 -5.9 0.5 0.8 False
+9 -21.0 -5.4 0.5 0.8 False
