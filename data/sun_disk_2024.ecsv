@@ -1,0 +1,42 @@
+# %ECSV 1.0
+# ---
+# datatype:
+#   - {name: Name, datatype: string}
+#   - {name: RA, datatype: float64, unit: deg, description: Right Ascension}
+#   - {name: Dec, datatype: float64, unit: deg, description: Declination}
+#   - {name: z, datatype: float64, description: Redshift}
+#   - {name: log_M_star, datatype: float64, unit: log(Msun), description: Log Stellar Mass}
+#   - {name: log_M_star_err, datatype: float64, unit: log(Msun)}
+#   - {name: m_F115W, datatype: float64, unit: mag}
+#   - {name: m_F115W_err, datatype: float64, unit: mag}
+#   - {name: m_F150W, datatype: float64, unit: mag}
+#   - {name: m_F150W_err, datatype: float64, unit: mag}
+#   - {name: m_F200W, datatype: float64, unit: mag}
+#   - {name: m_F200W_err, datatype: float64, unit: mag}
+#   - {name: m_F277W, datatype: float64, unit: mag}
+#   - {name: m_F277W_err, datatype: float64, unit: mag}
+#   - {name: m_F356W, datatype: float64, unit: mag}
+#   - {name: m_F356W_err, datatype: float64, unit: mag}
+#   - {name: m_F410M, datatype: float64, unit: mag}
+#   - {name: m_F410M_err, datatype: float64, unit: mag}
+#   - {name: m_F444W, datatype: float64, unit: mag}
+#   - {name: m_F444W_err, datatype: float64, unit: mag}
+#   - {name: Rest_frame_Optical_Band, datatype: string}
+#   - {name: n_Sersic, datatype: float64, description: Sersic Index}
+#   - {name: n_Sersic_err, datatype: float64}
+#   - {name: Re, datatype: float64, unit: kpc, description: Effective Radius}
+#   - {name: Re_err, datatype: float64, unit: kpc}
+#   - {name: q, datatype: float64, description: Axis Ratio}
+#   - {name: q_err, datatype: float64}
+#   - {name: Theta, datatype: float64, unit: deg, description: Position Angle}
+#   - {name: Theta_err, datatype: float64, unit: deg}
+#   - {name: Quality_Flag, datatype: int64}
+# meta: !!map
+#   title: Measurements of Magnitudes and Structural Parameters
+# schema: astropy-2.0
+Name RA Dec z log_M_star log_M_star_err m_F115W m_F115W_err m_F150W m_F150W_err m_F200W m_F200W_err m_F277W m_F277W_err m_F356W m_F356W_err m_F410M m_F410M_err m_F444W m_F444W_err Rest_frame_Optical_Band n_Sersic n_Sersic_err Re Re_err q q_err Theta Theta_err Quality_Flag
+EGS-20901 215.04927 52.99757 4.87 8.69 0.67 25.97 0.08 25.86 0.06 26.02 0.05 25.34 0.04 25.65 0.04 25.24 0.05 25.39 0.06 F356W 1.77 0.45 1.05 0.10 0.33 0.08 81.8 9.7 1
+EGS-21112 215.02291 52.98007 5.32 10.65 0.12 25.93 0.14 25.51 0.08 24.83 0.03 24.29 0.01 24.00 0.01 23.65 0.01 23.45 0.01 F356W 1.07 0.92 0.78 0.37 0.85 0.14 74.6 10.0 2
+EGS-21844 215.02935 52.98810 4.55 9.66 0.24 24.90 0.02 24.70 0.01 24.42 0.01 24.18 0.01 24.11 0.01 24.22 0.01 24.25 0.01 F356W 1.18 1.00 0.90 0.03 0.74 0.05 166.8 2.2 1
+EGS-21879 215.02867 52.98805 4.43 9.28 0.19 25.57 0.09 25.67 0.07 25.49 0.04 25.30 0.03 25.26 0.03 25.38 0.05 25.38 0.07 F356W 1.56 0.62 2.03 0.94 0.17 0.09 175.3 8.9 1
+EGS-21944 214.98304 52.95601 6.47 10.51 0.14 26.58 0.14 25.97 0.10 25.74 0.07 25.55 0.04 24.39 0.03 23.86 0.02 24.03 0.02 F444W 6.93 2.64 0.03 0.16 0.53 0.17 137.2 13.5 2

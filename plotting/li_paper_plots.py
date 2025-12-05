@@ -1043,7 +1043,7 @@ def plot_smf_grid(models=None, redshift_range='high'):
                 yerr_high = cosmos_phi_upper[valid] - cosmos_phi[valid]
                 ax.errorbar(cosmos_mass[valid], cosmos_phi[valid], 
                            yerr=[yerr_low, yerr_high],
-                           fmt='s', color='black', markersize=10, alpha=1.0,
+                           fmt='s', color='black', markersize=8, alpha=1.0,
                            label='Weaver+23' if idx == 0 else '', capsize=2, linewidth=1.5)
                 print(f"  Weaver+23(COSMOS2020) data added")
         
@@ -1058,7 +1058,7 @@ def plot_smf_grid(models=None, redshift_range='high'):
                     yerr_high = np.maximum(0, bagpipes_phi_upper[valid] - bagpipes_phi[valid])
                     ax.errorbar(bagpipes_mass[valid], bagpipes_phi[valid],
                                yerr=[yerr_low, yerr_high],
-                               fmt='D', color='black', markersize=10, alpha=1.0,
+                               fmt='D', color='black', markersize=8, alpha=1.0,
                                label='Harvey+24' if idx == 0 else '', capsize=2, linewidth=1.5)
                     print(f"  Harvey+24 (Bagpipes) data added")
         
@@ -1528,10 +1528,8 @@ def plot_smf_vs_redshift(models=None):
                     # Plot error bars with pre-JWST style (white face, light gray edge)
                     ax.errorbar(z_cosmos, n_cosmos,
                                yerr=[n_cosmos - n_cosmos_lower, n_cosmos_upper - n_cosmos],
-                               fmt='s', markersize=10,
-                               markerfacecolor='white', markeredgecolor='lightgray',
-                               markeredgewidth=3,
-                               ecolor='lightgray', elinewidth=3, capsize=2,
+                               fmt='s', markersize=8,
+                               color='black', linewidth=3, capsize=2,
                                label='Weaver+23',
                                alpha=1.0, zorder=5)
                     print(f"  COSMOS2020: {len(z_cosmos)} redshift bins plotted (z={z_cosmos.min():.1f} to {z_cosmos.max():.1f})")
@@ -1547,10 +1545,8 @@ def plot_smf_vs_redshift(models=None):
                     # Plot error bars with pre-JWST style (white face, light gray edge)
                     ax.errorbar(z_stefanon, n_stefanon,
                                yerr=[n_stefanon - n_stefanon_lower, n_stefanon_upper - n_stefanon],
-                               fmt='o', markersize=10,
-                               markerfacecolor='white', markeredgecolor='lightgray',
-                               markeredgewidth=3,
-                               ecolor='lightgray', elinewidth=3, capsize=2,
+                               fmt='o', markersize=8,
+                               color='black', linewidth=3, capsize=2,
                                label='Stefanon+21',
                                alpha=1.0, zorder=5)
                     print(f"  Stefanon+2021: {len(z_stefanon)} redshift bins plotted (z={z_stefanon.min():.1f} to {z_stefanon.max():.1f})")
@@ -1567,10 +1563,8 @@ def plot_smf_vs_redshift(models=None):
                     # Plot error bars with pre-JWST style (white face, light gray edge)
                     ax.errorbar(z_song, n_song,
                                yerr=[n_song - n_song_lower, n_song_upper - n_song],
-                               fmt='D', markersize=10,
-                               markerfacecolor='white', markeredgecolor='lightgray',
-                               markeredgewidth=3,
-                               ecolor='lightgray', elinewidth=3, capsize=2,
+                               fmt='D', markersize=8,
+                               color='black', linewidth=3, capsize=2,
                                label='Song+16',
                                alpha=1.0, zorder=5)
                     print(f"  Song+2016: {len(z_song)} redshift bins plotted (z={z_song.min():.1f} to {z_song.max():.1f})")
@@ -2108,13 +2102,13 @@ def plot_uvlf_grid(models=None):
                     # Plot with actual marker shape but no label
                     ax.errorbar(M_UV_obs, log_phi_obs,
                                yerr=[log_phi_obs - log_phi_err_low, log_phi_err_up - log_phi_obs],
-                               fmt=style['marker'], markersize=10,
+                               fmt=style['marker'], markersize=8,
                                markerfacecolor=style['facecolor'], markeredgecolor=style['edgecolor'],
                                markeredgewidth=style['linewidth'],
                                ecolor=style['edgecolor'], elinewidth=style['linewidth'], capsize=2,
                                alpha=1.0, zorder=5, label='')
                     # Add circle marker for legend only in first subplot
-                    ax.plot([], [], 'o', markersize=10, markerfacecolor='white', 
+                    ax.plot([], [], 'o', markersize=8, markerfacecolor='white', 
                            markeredgecolor='lightgray', markeredgewidth=3, 
                            label='pre JWST')
                     pre_jwst_legend_added = True
@@ -2123,7 +2117,7 @@ def plot_uvlf_grid(models=None):
                     # Already added legend, just plot without label
                     ax.errorbar(M_UV_obs, log_phi_obs,
                                yerr=[log_phi_obs - log_phi_err_low, log_phi_err_up - log_phi_obs],
-                               fmt=style['marker'], markersize=10,
+                               fmt=style['marker'], markersize=8,
                                markerfacecolor=style['facecolor'], markeredgecolor=style['edgecolor'],
                                markeredgewidth=style['linewidth'],
                                ecolor=style['edgecolor'], elinewidth=style['linewidth'], capsize=2,
@@ -2135,7 +2129,7 @@ def plot_uvlf_grid(models=None):
                         datasets_in_legend.add(dataset_name)
                     ax.errorbar(M_UV_obs, log_phi_obs,
                                yerr=[log_phi_obs - log_phi_err_low, log_phi_err_up - log_phi_obs],
-                               fmt=style['marker'], markersize=10,
+                               fmt=style['marker'], markersize=8,
                                markerfacecolor=style['facecolor'], markeredgecolor=style['edgecolor'],
                                markeredgewidth=style['linewidth'],
                                ecolor=style['edgecolor'], elinewidth=style['linewidth'], capsize=2,
@@ -4235,8 +4229,42 @@ def plot_ffb_threshold_analysis_empirical_all():
     ax_right.xaxis.set_major_locator(MultipleLocator(1))
     ax_right.xaxis.set_minor_locator(MultipleLocator(0.2))
     ax_right.yaxis.set_major_formatter(plt.ScalarFormatter())
-    ax_right.grid(True, alpha=0.1)
-    ax_right.legend(frameon=False, loc='lower left')
+    # ax_right.grid(True, alpha=0.1)
+    # ax_right.legend(frameon=False, loc='lower right')
+
+    # --- Add Baggen+2023 observational data ---
+    z_baggen, re_baggen, re_err_plus_baggen, re_err_minus_baggen = load_baggen2023_data()
+    if z_baggen is not None:
+        ax_right.errorbar(z_baggen, re_baggen, 
+                         yerr=[re_err_minus_baggen, re_err_plus_baggen],
+                         fmt='^', color='black', markersize=8, alpha=0.8,
+                         label='Baggen+23', capsize=2, linewidth=1.5, zorder=5)
+
+    # --- Add Casey+2024 observational data ---
+    z_casey, re_casey, re_err_plus_casey, re_err_minus_casey = load_casey2024_data()
+    if z_casey is not None:
+        ax_right.errorbar(z_casey, re_casey, 
+                         yerr=[re_err_minus_casey, re_err_plus_casey],
+                         fmt='s', color='black', markersize=8, alpha=0.8,
+                         label='Casey+24', capsize=2, linewidth=1.5, zorder=5)
+
+    # --- Add Sun+2024 observational data ---
+    z_sun, re_sun, re_err_plus_sun, re_err_minus_sun = load_sun2024_data()
+    if z_sun is not None:
+        ax_right.errorbar(z_sun, re_sun, 
+                         yerr=[re_err_minus_sun, re_err_plus_sun],
+                         fmt='d', color='black', markersize=8, alpha=0.8,
+                         label='Sun+24', capsize=2, linewidth=1.5, zorder=5)
+        
+    # --- Add Finkelstein+2023 observational data ---
+    z_finkelstein, re_finkelstein, re_err_plus_finkelstein, re_err_minus_finkelstein = load_finkelstein2023_data()
+    if z_finkelstein is not None:
+        ax_right.errorbar(z_finkelstein, re_finkelstein, 
+                         yerr=[re_err_minus_finkelstein, re_err_plus_finkelstein],
+                         fmt='o', color='black', markersize=4, alpha=0.8,
+                         label='Finkelstein+23', capsize=2, linewidth=1.5, zorder=5)
+        
+    ax_right.legend(frameon=False, loc='lower right')
 
     plt.tight_layout()
     out_path = DirName + 'plots/ffb_threshold_analysis_empirical_all' + OutputFormat
@@ -4531,6 +4559,86 @@ def plot_gas_fraction_evolution():
     
     print('='*60 + '\n')
 
+
+def load_baggen2023_data():
+    """Load Baggen+2023 disk size data."""
+    filename = './data/baggen_disk_2023.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z_phot']
+        # Convert re from physical pc to comoving kpc
+        re_kpc_phys = table['re'] / 1000.0
+        re_err_plus_kpc_phys = table['re_err_plus'] / 1000.0
+        re_err_minus_kpc_phys = table['re_err_minus'] / 1000.0
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Baggen+2023 data: {e}")
+    return None, None, None, None
+
+def load_casey2024_data():
+    """Load Casey+2024 disk size data."""
+    filename = './data/casey_disk_2024.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z_phot_BAGPIPES']
+        # Convert re from physical pc to comoving kpc
+        re_kpc_phys = table['Reff_GALFIT'] / 1000.0
+        re_err_plus_kpc_phys = table['Reff_GALFIT_err'] / 1000.0
+        re_err_minus_kpc_phys = table['Reff_GALFIT_err'] / 1000.0
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Casey+2024 data: {e}")
+    return None, None, None, None
+
+def load_sun2024_data():
+    """Load Sun+2024 disk size data."""
+    filename = './data/sun_disk_2024.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z']
+
+        re_kpc_phys = table['Re']
+        re_err_plus_kpc_phys = table['Re_err']
+        re_err_minus_kpc_phys = table['Re_err']
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Sun+2024 data: {e}")
+    return None, None, None, None
+
+def load_finkelstein2023_data():
+    """Load Finkelstein+2023 disk size data."""
+    filename = './data/finkelstein_disk_2023.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z_phot']
+
+        re_kpc_phys = table['Rh_phys_kpc']
+        re_err_plus_kpc_phys = table['Rh_phys_err_kpc']
+        re_err_minus_kpc_phys = table['Rh_phys_err_kpc']
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Finkelstein+2023 data: {e}")
+    return None, None, None, None
 
 def plot_ffb_metallicity_limit(use_analytical=True):
     """
