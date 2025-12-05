@@ -325,7 +325,7 @@ def plot_rvir_vs_redshift():
             snapshots.append(f'Snap_{idx}')
             actual_redshifts.append(z)
 
-    model_dir = './output/millennium_FFB50/'
+    model_dir = './output/millennium/'
     filename = 'model_0.hdf5'
     hubble_h = MILLENNIUM_HUBBLE_H
 
@@ -3415,7 +3415,7 @@ def plot_ffb_threshold_analysis(models=None):
     """Plot FFB threshold galaxy properties
     
     Left: Mvir vs redshift for disk galaxies at FFB threshold, colored by half-mass radius
-    Right: Half-mass radius evolution for galaxies at FFB threshold (disk and bulge separately)
+    Right: Half-mass radius evolution for galaxies at FFB threshold (disk only)
     
     Args:
         models: List of model dictionaries to plot. If None, uses FFB 50% model only.
@@ -3427,8 +3427,8 @@ def plot_ffb_threshold_analysis(models=None):
     
     # Use only FFB 50% model
     ffb50_model = {
-        'name': 'FFB 50%',
-        'dir': './output/millennium_FFB50/',
+        'name': 'SAGE26',
+        'dir': './output/millennium/',
         'color': 'orange',
         'linestyle': '-',
         'linewidth': 3,
@@ -3468,28 +3468,16 @@ def plot_ffb_threshold_analysis(models=None):
     # Arrays for right plot (lines)
     redshifts_right = []
     median_disk_radius = []
-    median_bulge_radius = []
     disk_radius_lower = []
     disk_radius_upper = []
-    bulge_radius_lower = []
-    bulge_radius_upper = []
     
     # Loop through snapshots
     for snapshot, z_actual in zip(snapshots, actual_redshifts):
         # Read data
         mvir = read_hdf_from_model(model_dir, filename, snapshot, 'Mvir', hubble_h) * 1.0e10 / hubble_h
         stellar_mass = read_hdf_from_model(model_dir, filename, snapshot, 'StellarMass', hubble_h) * 1.0e10 / hubble_h
-        bulge_mass = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeMass', hubble_h) * 1.0e10 / hubble_h
         disk_radius = read_hdf_from_model(model_dir, filename, snapshot, 'DiskRadius', hubble_h)  # Already in Mpc/h
-        bulge_radius_raw = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeRadius', hubble_h)  # Already in Mpc/h
         galaxy_type = read_hdf_from_model(model_dir, filename, snapshot, 'Type', hubble_h)
-        
-        # Check if BulgeRadius loaded correctly (should have same length as other arrays)
-        if len(bulge_radius_raw) != len(mvir):
-            # BulgeRadius doesn't exist, use BulgeScaleRadius instead or set to zeros
-            bulge_radius = np.zeros_like(disk_radius)
-        else:
-            bulge_radius = bulge_radius_raw
         
         # Calculate FFB threshold mass for this redshift
         M_ffb_threshold = calculate_ffb_threshold_mass(z_actual, hubble_h)
@@ -3502,43 +3490,6 @@ def plot_ffb_threshold_analysis(models=None):
         w_all = np.where(has_stellar_mass)[0]
         
         w = np.where(is_disk & has_stellar_mass & near_threshold)[0]
-        # Right plot: calculate median radii for galaxies near FFB threshold
-        if len(w) > 5:  # Need at least 5 galaxies
-            # Separate disk and bulge radii for all galaxies near threshold
-            # Disk: where disk_radius > 0
-            valid_disk = disk_radius[w] > 0
-            if np.sum(valid_disk) > 0:
-                disk_radius_kpc_comov = disk_radius[w[valid_disk]] * 1.68 * 1000.0 / hubble_h
-                median_disk = np.median(disk_radius_kpc_comov)
-                disk_lower = np.percentile(disk_radius_kpc_comov, 16)
-                disk_upper = np.percentile(disk_radius_kpc_comov, 84)
-            else:
-                median_disk = np.nan
-                disk_lower = np.nan
-                disk_upper = np.nan
-
-            # Bulge: where bulge_radius > 0 and bulge_mass > 0
-            valid_bulge = (bulge_radius[w] > 0) & (bulge_mass[w] > 0)
-            if np.sum(valid_bulge) > 0:
-                bulge_radius_kpc_comov = bulge_radius[w[valid_bulge]] * 1000.0 / hubble_h
-                median_bulge = np.median(bulge_radius_kpc_comov)
-                bulge_lower = np.percentile(bulge_radius_kpc_comov, 16)
-                bulge_upper = np.percentile(bulge_radius_kpc_comov, 84)
-            else:
-                median_bulge = np.nan
-                bulge_lower = np.nan
-                bulge_upper = np.nan
-
-            if not np.isnan(median_disk):
-                redshifts_right.append(z_actual)
-                median_disk_radius.append(median_disk)
-                median_bulge_radius.append(median_bulge if not np.isnan(median_bulge) else 0)
-                disk_radius_lower.append(disk_lower)
-                disk_radius_upper.append(disk_upper)
-                bulge_radius_lower.append(bulge_lower if not np.isnan(bulge_lower) else 0)
-                bulge_radius_upper.append(bulge_upper if not np.isnan(bulge_upper) else 0)
-
-            print(f"  z={z_actual:.1f}: {len(w)} galaxies near FFB threshold (M_ffb={M_ffb_threshold:.2e})")
         
         # Left plot: collect ALL galaxies (not just disks)
         if len(w_all) > 0:
@@ -3550,7 +3501,6 @@ def plot_ffb_threshold_analysis(models=None):
         
         # Right plot: calculate median radii for galaxies near FFB threshold
         if len(w) > 5:  # Need at least 5 galaxies
-            # Right plot: calculate median radii
             # For disk radius - convert scale length to half-mass radius, then to physical kpc
             valid_disk = disk_radius[w] > 0
             if np.sum(valid_disk) > 0:
@@ -3564,27 +3514,11 @@ def plot_ffb_threshold_analysis(models=None):
                 disk_lower = np.nan
                 disk_upper = np.nan
             
-            # For bulge radius - BulgeRadius is already half-mass radius, just convert to physical kpc
-            valid_bulge = (bulge_radius[w] > 0) & (bulge_mass[w] > 0)
-            if np.sum(valid_bulge) > 0:
-                bulge_radius_kpc_comov = bulge_radius[w[valid_bulge]] * 1000.0 / hubble_h
-                median_bulge = np.median(bulge_radius_kpc_comov)
-                # Calculate 16th and 84th percentiles for 1-sigma errors
-                bulge_lower = np.percentile(bulge_radius_kpc_comov, 16)
-                bulge_upper = np.percentile(bulge_radius_kpc_comov, 84)
-            else:
-                median_bulge = np.nan
-                bulge_lower = np.nan
-                bulge_upper = np.nan
-            
             if not np.isnan(median_disk):
                 redshifts_right.append(z_actual)
                 median_disk_radius.append(median_disk)
-                median_bulge_radius.append(median_bulge if not np.isnan(median_bulge) else 0)
                 disk_radius_lower.append(disk_lower)
                 disk_radius_upper.append(disk_upper)
-                bulge_radius_lower.append(bulge_lower if not np.isnan(bulge_lower) else 0)
-                bulge_radius_upper.append(bulge_upper if not np.isnan(bulge_upper) else 0)
             
             print(f"  z={z_actual:.1f}: {len(w)} disk galaxies near FFB threshold (M_ffb={M_ffb_threshold:.2e})")
     
@@ -3669,7 +3603,7 @@ def plot_ffb_threshold_analysis(models=None):
         
         axes[0].set_xlabel('Redshift z', fontsize=12)
         axes[0].set_ylabel(r'$\log_{10} M_{\mathrm{vir}} \, (M_{\odot} \, h^{-1})$', fontsize=12)
-        axes[0].set_xlim(5, 20)
+        axes[0].set_xlim(5, 16)
         axes[0].set_ylim(9, 13)
         
         # Set integer ticks with minor ticks at 20% intervals
@@ -3687,7 +3621,7 @@ def plot_ffb_threshold_analysis(models=None):
                     fontsize=11,
                     color='black')
     
-    # RIGHT PLOT: Half-mass radius vs redshift
+    # RIGHT PLOT: Half-mass radius vs redshift (disk only)
     if len(redshifts_right) > 0:
         # Keep data in linear scale (kpc)
         # Plot disk radius with error band
@@ -3707,34 +3641,9 @@ def plot_ffb_threshold_analysis(models=None):
                             alpha=0.2,
                             zorder=2)
         
-        # Only plot bulge where we have valid data (bulge_radius > 0)
-        # Filter to only redshifts with actual bulges
-        bulge_mask = np.array([r > 0 for r in median_bulge_radius])
-        if np.any(bulge_mask):
-            redshifts_bulge = np.array(redshifts_right)[bulge_mask]
-            median_bulge_valid = np.array(median_bulge_radius)[bulge_mask]
-            bulge_lower_valid = np.array(bulge_radius_lower)[bulge_mask]
-            bulge_upper_valid = np.array(bulge_radius_upper)[bulge_mask]
-            
-            axes[1].plot(redshifts_bulge, median_bulge_valid,
-                        color='royalblue',
-                        linestyle='-',
-                        linewidth=3,
-                        label='Bulge Half-Mass Radius',
-                        alpha=0.8,
-                        marker='s',
-                        markersize=6,
-                        zorder=3)
-            
-            # Add error shading for bulge (only where valid)
-            axes[1].fill_between(redshifts_bulge, bulge_lower_valid, bulge_upper_valid,
-                                color='royalblue',
-                                alpha=0.2,
-                                zorder=2)
-        
         axes[1].set_xlabel('Redshift z', fontsize=12)
         axes[1].set_ylabel(r'$R_{\mathrm{half-mass}}$ (comoving kpc)', fontsize=12)
-        axes[1].set_xlim(5, 16)
+        axes[1].set_xlim(5, 13)
         axes[1].set_yscale('log')
         axes[1].set_ylim(0.01, 3)
         axes[1].set_yticks([0.01, 0.1, 1.0])
@@ -3816,11 +3725,11 @@ def plot_ffb_threshold_analysis_empirical():
     """
     Create FFB threshold analysis plot.
     Left: Smoothed 2D heatmap of Mvir vs redshift colored by Physical SAGE Disk Radius.
-    Right: Evolution of Half-mass radius (Physical) comparing SAGE vs Theory.
+    Right: Evolution of Half-mass radius (Physical) - SAGE disk data with rolling median and Poisson errors.
     """
     
     print('\n' + '='*60)
-    print('Creating FFB Threshold Analysis Plot (Physical Units + Smoothing)')
+    print('Creating FFB Threshold Analysis Plot (Physical Units + Rolling Medians)')
     print('='*60)
     
     # Use only FFB 50% model
@@ -3848,60 +3757,26 @@ def plot_ffb_threshold_analysis_empirical():
     all_redshifts = []
     all_radii = [] 
     
-    # Arrays for Right Plot
-    stats_z = []
-    stats_disk_median = []
-    stats_disk_low = []
-    stats_disk_high = []
-    stats_bulge_median = []
-    stats_bulge_low = []
-    stats_bulge_high = []
-    stats_lambda_median = []
+    # Arrays for Right Plot (individual data points)
+    disk_z = []
+    disk_r = []
     
     for snapshot, z_actual in zip(snapshots, actual_redshifts):
         # Read Data
         mvir = read_hdf_from_model(model_dir, filename, snapshot, 'Mvir', hubble_h) * 1.0e10 / hubble_h
         stellar_mass = read_hdf_from_model(model_dir, filename, snapshot, 'StellarMass', hubble_h) * 1.0e10 / hubble_h
-        bulge_mass = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeMass', hubble_h) * 1.0e10 / hubble_h
         
         # SAGE Radius is Comoving Mpc/h
         sage_disk_radius = read_hdf_from_model(model_dir, filename, snapshot, 'DiskRadius', hubble_h) 
-        sage_bulge_radius = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeRadius', hubble_h)
-
-        sage_spin_x = read_hdf_from_model(model_dir, filename, snapshot, 'Spinx', hubble_h)
-        sage_spin_y = read_hdf_from_model(model_dir, filename, snapshot, 'Spiny', hubble_h)
-        sage_spin_z = read_hdf_from_model(model_dir, filename, snapshot, 'Spinz', hubble_h)
-        Vvir = read_hdf_from_model(model_dir, filename, snapshot, 'Vvir', hubble_h)  # km/s
-        Rvir_native = read_hdf_from_model(model_dir, filename, snapshot, 'Rvir', hubble_h)  # Mpc/h
-
-        # Calculate lambda (dimensionless)
-        sage_spin_magnitude = np.sqrt(sage_spin_x**2 + sage_spin_y**2 + sage_spin_z**2)
-        Rvir_physical = Rvir_native / (1 + z_actual)
-
-        # Calculate lambda with PHYSICAL Rvir
-        lambda_spin = sage_spin_magnitude / (1.414 * Vvir * Rvir_physical)
-
-        # Calculate shell radius using Li et al. equation (gives physical kpc)
-        z_10 = (1 + z_actual) / 10.0
-        f_e_half = 1.0  # halo shape factor
-        r_shell_kpc = 0.56 * f_e_half * lambda_spin * (z_10 ** -1.78)  # Already in physical kpc!
-
-        # Convert disk radius to physical kpc
-        # r_disk_kpc = sage_disk_radius * 1.68 * 1000.0 / hubble_h  # Physical kpc
-
 
         # --- UNIT CONVERSION (Comoving kpc) ---
         # 1. Mpc/h -> kpc/h: * 1000
         # 2. kpc/h -> kpc:   / h
-        # 3. Disk Scale Length -> Half Mass: * 1.68 (Bulge already has half-mass radius)
-        comov_scale_factor = 1000.0 / hubble_h
-
+        # 3. Disk Scale Length -> Half Mass: * 1.68
         r_disk_kpc_comov = sage_disk_radius * 1.68 * 1000.0 / hubble_h
-        # r_bulge_kpc_comov = r_shell_kpc
         
         # Filter for Heatmap
         galaxy_type = read_hdf_from_model(model_dir, filename, snapshot, 'Type', hubble_h)
-        is_central = galaxy_type == 0
         has_mass = stellar_mass > 0
         
         # Collect data for heatmap (all galaxies, not just disks)
@@ -3918,40 +3793,12 @@ def plot_ffb_threshold_analysis_empirical():
         subset = has_mass & near_threshold
         w_sub = np.where(subset)[0]
 
-        print(f"z={z_actual:.1f}: median λ = {np.median(lambda_spin[subset]):.3f}")
-
-        if len(w_sub) > 5:
-            stats_z.append(z_actual)
-
+        if len(w_sub) > 0:
             # Disk: where disk radius > 0
             disk_valid = r_disk_kpc_comov[w_sub] > 0
             if np.sum(disk_valid) > 0:
-                disk_r = r_disk_kpc_comov[w_sub][disk_valid]
-                stats_disk_median.append(np.median(disk_r))
-                stats_disk_low.append(np.percentile(disk_r, 16))
-                stats_disk_high.append(np.percentile(disk_r, 84))
-            else:
-                stats_disk_median.append(np.nan)
-                stats_disk_low.append(np.nan)
-                stats_disk_high.append(np.nan)
-
-            # Bulge: where bulge radius > 0 and bulge mass > 0
-            bulge_valid = (r_shell_kpc[w_sub] > 0)
-            if np.sum(bulge_valid) > 0:
-                bulge_r = r_shell_kpc[w_sub]
-                stats_bulge_median.append(np.median(bulge_r))
-                stats_bulge_low.append(np.percentile(bulge_r, 16))
-                stats_bulge_high.append(np.percentile(bulge_r, 84))
-            else:
-                stats_bulge_median.append(np.nan)
-                stats_bulge_low.append(np.nan)
-                stats_bulge_high.append(np.nan)
-
-            lambda_valid = lambda_spin[w_sub] > 0
-            if np.sum(lambda_valid) > 0:
-                stats_lambda_median.append(np.median(lambda_spin[w_sub][lambda_valid]))
-            else:
-                stats_lambda_median.append(np.nan)
+                disk_z.extend([z_actual] * np.sum(disk_valid))
+                disk_r.extend(r_disk_kpc_comov[w_sub][disk_valid])
 
     # ================= PLOTTING =================
     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
@@ -3962,7 +3809,7 @@ def plot_ffb_threshold_analysis_empirical():
     if len(all_mvir) > 0:
         a_mvir = np.array(all_mvir)
         a_z = np.array(all_redshifts)
-        a_radii = np.array(all_radii) # already log10
+        a_radii = np.array(all_radii)  # already log10
         
         # Define bins
         z_bins = np.linspace(5, 20, 60)
@@ -3975,7 +3822,7 @@ def plot_ffb_threshold_analysis_empirical():
             statistic='median', bins=[z_bins, m_bins]
         )
         
-        # 2. YOUR SMOOTHING LOGIC (Restored)
+        # 2. Smoothing
         from scipy.ndimage import gaussian_filter, distance_transform_edt
         
         mask = ~np.isnan(median_radius)
@@ -4011,7 +3858,266 @@ def plot_ffb_threshold_analysis_empirical():
     
     ax_left.set_xlabel('Redshift z', fontsize=14)
     ax_left.set_ylabel(r'$\log_{10} M_{\rm vir}$', fontsize=14)
-    ax_left.set_xlim(5, 20)
+    ax_left.set_xlim(5, 16)
+    ax_left.set_ylim(9, 13)
+    
+    # Set integer ticks with minor ticks at 20% intervals
+    from matplotlib.ticker import MultipleLocator
+    ax_left.xaxis.set_major_locator(MultipleLocator(1))
+    ax_left.xaxis.set_minor_locator(MultipleLocator(0.2))
+    ax_left.yaxis.set_major_locator(MultipleLocator(1))
+    ax_left.yaxis.set_minor_locator(MultipleLocator(0.2))
+    ax_left.legend()
+
+    # --- RIGHT PANEL: Rolling Median Evolution ---
+    ax_right = axes[1]
+
+    if len(disk_z) > 0:
+        # Convert to arrays
+        disk_z_arr = np.array(disk_z)
+        disk_r_arr = np.array(disk_r)
+        
+        # Define redshift bins
+        z_bin_edges = np.arange(5, 20.5, 0.5)  # Bins every 0.5 in redshift
+        z_bin_centers = (z_bin_edges[:-1] + z_bin_edges[1:]) / 2
+        
+        # Calculate median in each bin
+        z_plot = []
+        r_median_plot = []
+        r_lower_plot = []
+        r_upper_plot = []
+        
+        for i in range(len(z_bin_edges) - 1):
+            # Find galaxies in this redshift bin
+            in_bin = (disk_z_arr >= z_bin_edges[i]) & (disk_z_arr < z_bin_edges[i+1])
+            
+            if np.sum(in_bin) > 10:  # Need at least 10 galaxies
+                r_in_bin = disk_r_arr[in_bin]
+                
+                # Calculate median and percentiles to show scatter
+                median_r = np.median(r_in_bin)
+                lower_r = np.percentile(r_in_bin, 16)  # 16th percentile (1-sigma lower)
+                upper_r = np.percentile(r_in_bin, 84)  # 84th percentile (1-sigma upper)
+                
+                z_plot.append(z_bin_centers[i])
+                r_median_plot.append(median_r)
+                r_lower_plot.append(lower_r)
+                r_upper_plot.append(upper_r)
+        
+        # Convert to arrays
+        z_plot = np.array(z_plot)
+        r_median_plot = np.array(r_median_plot)
+        r_lower_plot = np.array(r_lower_plot)
+        r_upper_plot = np.array(r_upper_plot)
+        
+        # Plot median
+        ax_right.plot(z_plot, r_median_plot,
+                     color='darkorange',
+                     linestyle='-',
+                     linewidth=3,
+                     label='SAGE Disk (Median)',
+                     alpha=0.8,
+                     marker='o',
+                     markersize=5,
+                     zorder=3)
+        
+        # Add error shading
+        ax_right.fill_between(z_plot, r_lower_plot, r_upper_plot,
+                             color='darkorange',
+                             alpha=0.3,
+                             label='16th-84th percentile',
+                             zorder=2)
+
+    # Theory lines
+    z_t = np.linspace(5, 20, 100)
+    z_10 = (1 + z_t) / 10.0
+    r_th_disk = 0.31 * (z_10 ** -3.07)
+
+    ax_right.plot(z_t, r_th_disk, color='darkorange', ls='--', lw=2, label='Li+24 (Disk)', zorder=4)
+
+    ax_right.set_yscale('log')
+    ax_right.set_xlabel('Redshift z', fontsize=14)
+    ax_right.set_ylabel(r'$R_{\rm \frac{1}{2}}$ (kpc)', fontsize=14)
+    ax_right.set_xlim(5, 13)
+    
+    # Set integer x-ticks with minor ticks at 20% intervals
+    from matplotlib.ticker import MultipleLocator
+    ax_right.xaxis.set_major_locator(MultipleLocator(1))
+    ax_right.xaxis.set_minor_locator(MultipleLocator(0.2))
+    ax_right.yaxis.set_major_formatter(plt.ScalarFormatter())
+    # ax_right.grid(True, alpha=0.1)
+    ax_right.legend(frameon=False)
+
+    plt.tight_layout()
+    out_path = DirName + 'plots/ffb_threshold_analysis_empirical' + OutputFormat
+    plt.savefig(out_path, dpi=300)
+    print(f'Plot saved to: {out_path}')
+    plt.close()
+    print('='*60 + '\n')
+
+def plot_ffb_threshold_analysis_empirical_all():
+    """
+    Create FFB threshold analysis plot for ALL FFB galaxies (above threshold).
+    Left: Smoothed 2D heatmap of Mvir vs redshift colored by Physical SAGE Disk Radius.
+    Right: Evolution of Half-mass radius (Physical) - SAGE disk data for all galaxies above FFB threshold.
+    """
+    
+    print('\n' + '='*60)
+    print('Creating FFB Analysis Plot - ALL Galaxies Above Threshold')
+    print('='*60)
+    
+    # Use only FFB 50% model
+    target_model_name = 'SAGE26' 
+    model_config = next((item for item in MODEL_CONFIGS if item["name"] == target_model_name), MODEL_CONFIGS[0])
+    
+    # Define redshift range
+    snapshots = []
+    actual_redshifts = []
+    for idx, z in enumerate(DEFAULT_REDSHIFTS):
+        if 4.5 <= z <= 20.0:
+            snapshots.append(f'Snap_{idx}')
+            actual_redshifts.append(z)
+    
+    model_dir = model_config['dir']
+    filename = 'model_0.hdf5'
+    hubble_h = model_config['hubble_h']
+    
+    if not os.path.exists(model_dir + filename):
+        print(f"Error: {model_dir + filename} not found!")
+        return
+
+    # Arrays for Left Plot
+    all_mvir = []
+    all_redshifts = []
+    all_radii = [] 
+    
+    # Arrays for Right Plot (individual data points) - three populations
+    disk_z_above = []  # All galaxies above threshold
+    disk_r_above = []
+    disk_z_threshold = []  # Galaxies near threshold (0.8-1.2x)
+    disk_r_threshold = []
+    disk_z_all = []  # All galaxies
+    disk_r_all = []
+    
+    for snapshot, z_actual in zip(snapshots, actual_redshifts):
+        # Read Data
+        mvir = read_hdf_from_model(model_dir, filename, snapshot, 'Mvir', hubble_h) * 1.0e10 / hubble_h
+        stellar_mass = read_hdf_from_model(model_dir, filename, snapshot, 'StellarMass', hubble_h) * 1.0e10 / hubble_h
+        bulge_mass = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeMass', hubble_h) * 1.0e10 / hubble_h
+        
+        # SAGE Radius is Comoving Mpc/h
+        sage_disk_radius = read_hdf_from_model(model_dir, filename, snapshot, 'DiskRadius', hubble_h) 
+
+        # --- UNIT CONVERSION (Comoving kpc) ---
+        # 1. Mpc/h -> kpc/h: * 1000
+        # 2. kpc/h -> kpc:   / h
+        # 3. Disk Scale Length -> Half Mass: * 1.68
+        r_disk_kpc_comov = sage_disk_radius * 1.68 * 1000.0 / hubble_h
+        
+        # Filter for Heatmap
+        galaxy_type = read_hdf_from_model(model_dir, filename, snapshot, 'Type', hubble_h)
+        has_mass = stellar_mass > 0
+        
+        # Collect data for heatmap (all galaxies, not just disks)
+        valid_map = has_mass & (r_disk_kpc_comov > 0)
+        if np.sum(valid_map) > 0:
+            all_mvir.extend(mvir[valid_map])
+            all_redshifts.extend([z_actual] * np.sum(valid_map))
+            all_radii.extend(np.log10(r_disk_kpc_comov[valid_map]))
+
+        # --- Statistics for Right Plot - THREE POPULATIONS ---
+        M_ffb = calculate_ffb_threshold_mass(z_actual, hubble_h)
+        
+        # Population 1: All galaxies above FFB threshold
+        above_threshold = mvir > M_ffb
+        subset_above = has_mass & above_threshold
+        w_above = np.where(subset_above)[0]
+        if len(w_above) > 0:
+            disk_valid = r_disk_kpc_comov[w_above] > 0
+            if np.sum(disk_valid) > 0:
+                disk_z_above.extend([z_actual] * np.sum(disk_valid))
+                disk_r_above.extend(r_disk_kpc_comov[w_above][disk_valid])
+        
+        # Population 2: Galaxies near FFB threshold (0.8-1.2x)
+        # near_threshold = (mvir > M_ffb * 0.8) & (mvir < M_ffb * 1.2)
+        near_threshold = (mvir > M_ffb * 0.9) & (mvir < M_ffb * 1.1)
+
+        subset_threshold = has_mass & near_threshold
+        w_threshold = np.where(subset_threshold)[0]
+        if len(w_threshold) > 0:
+            disk_valid = r_disk_kpc_comov[w_threshold] > 0
+            if np.sum(disk_valid) > 0:
+                disk_z_threshold.extend([z_actual] * np.sum(disk_valid))
+                disk_r_threshold.extend(r_disk_kpc_comov[w_threshold][disk_valid])
+        
+        # Population 3: All galaxies (no mass cut)
+        subset_all = has_mass
+        w_all = np.where(subset_all)[0]
+        if len(w_all) > 0:
+            disk_valid = r_disk_kpc_comov[w_all] > 0
+            if np.sum(disk_valid) > 0:
+                disk_z_all.extend([z_actual] * np.sum(disk_valid))
+                disk_r_all.extend(r_disk_kpc_comov[w_all][disk_valid])
+
+    # ================= PLOTTING =================
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+    
+    # --- LEFT PANEL: Heatmap ---
+    ax_left = axes[0]
+    
+    if len(all_mvir) > 0:
+        a_mvir = np.array(all_mvir)
+        a_z = np.array(all_redshifts)
+        a_radii = np.array(all_radii)  # already log10
+        
+        # Define bins
+        z_bins = np.linspace(5, 20, 60)
+        m_bins = np.linspace(9, 13, 60)
+        
+        # 1. Bin statistics
+        from scipy.stats import binned_statistic_2d
+        median_radius, z_edges, mvir_edges, _ = binned_statistic_2d(
+            a_z, np.log10(a_mvir), a_radii,
+            statistic='median', bins=[z_bins, m_bins]
+        )
+        
+        # 2. Smoothing
+        from scipy.ndimage import gaussian_filter, distance_transform_edt
+        
+        mask = ~np.isnan(median_radius)
+        if np.sum(mask) > 0:
+            # Fill NaN with nearest valid values
+            ind = distance_transform_edt(~mask, return_distances=False, return_indices=True)
+            median_radius_filled = median_radius[tuple(ind)]
+            
+            # Gaussian smoothing
+            median_radius_smooth = gaussian_filter(median_radius_filled, sigma=1.0)
+            
+            # Fade out far from data
+            distances = distance_transform_edt(~mask)
+            weight_mask = np.exp(-distances / 3.0)
+            median_radius_smooth = median_radius_smooth * weight_mask + median_radius_filled * (1 - weight_mask)
+            
+            # Cutoff
+            median_radius_smooth[distances > 2.5] = np.nan
+            heatmap = median_radius_smooth.T
+        else:
+            heatmap = median_radius.T
+        
+        # Plot
+        im = ax_left.pcolormesh(z_edges, mvir_edges, heatmap, cmap='coolwarm_r', 
+                                vmin=-1.5, vmax=0.5, shading='auto')
+        cbar = plt.colorbar(im, ax=ax_left)
+        cbar.set_label(r'$\log_{10} R_{\rm \frac{1}{2}}$ (kpc)', fontsize=12)
+
+    # FFB Threshold Line
+    z_line = np.linspace(5, 20, 100)
+    m_ffb = [calculate_ffb_threshold_mass(z, hubble_h) for z in z_line]
+    ax_left.plot(z_line, np.log10(m_ffb), 'k-', lw=3, label='FFB Threshold')
+    
+    ax_left.set_xlabel('Redshift z', fontsize=14)
+    ax_left.set_ylabel(r'$\log_{10} M_{\rm vir}$', fontsize=14)
+    ax_left.set_xlim(5, 16)
     ax_left.set_ylim(9, 13)
     
     # Set integer ticks with minor ticks at 20% intervals
@@ -4024,50 +4130,105 @@ def plot_ffb_threshold_analysis_empirical():
 
     # --- RIGHT PANEL: Evolution ---
     ax_right = axes[1]
+
+    # Helper function to calculate binned statistics
+    def calculate_binned_stats(z_arr, r_arr, z_bin_edges):
+        """Calculate median and percentiles in redshift bins"""
+        z_bin_centers = (z_bin_edges[:-1] + z_bin_edges[1:]) / 2
+        z_plot = []
+        r_median_plot = []
+        r_lower_plot = []
+        r_upper_plot = []
+        
+        for i in range(len(z_bin_edges) - 1):
+            in_bin = (z_arr >= z_bin_edges[i]) & (z_arr < z_bin_edges[i+1])
+            
+            if np.sum(in_bin) > 10:
+                r_in_bin = r_arr[in_bin]
+                median_r = np.median(r_in_bin)
+                lower_r = np.percentile(r_in_bin, 16)
+                upper_r = np.percentile(r_in_bin, 84)
+                
+                z_plot.append(z_bin_centers[i])
+                r_median_plot.append(median_r)
+                r_lower_plot.append(lower_r)
+                r_upper_plot.append(upper_r)
+        
+        return (np.array(z_plot), np.array(r_median_plot), 
+                np.array(r_lower_plot), np.array(r_upper_plot))
     
-    # Theory Lines
+    # Define redshift bins (shared for all populations)
+    z_bin_edges = np.arange(5, 20.5, 0.5)
+    
+    # Plot 1: All galaxies (gray, lightest)
+    if len(disk_z_all) > 0:
+        z_all, r_all, r_all_lower, r_all_upper = calculate_binned_stats(
+            np.array(disk_z_all), np.array(disk_r_all), z_bin_edges)
+        
+        ax_right.plot(z_all, r_all,
+                     color='gray',
+                     linestyle='-',
+                     linewidth=2,
+                     label='All Galaxies',
+                     alpha=0.8,
+                     zorder=1)
+        
+        ax_right.fill_between(z_all, r_all_lower, r_all_upper,
+                             color='gray',
+                             alpha=0.2,
+                             zorder=0)
+    
+    # Plot 2: Galaxies above threshold (orange, medium)
+    if len(disk_z_above) > 0:
+        z_above, r_above, r_above_lower, r_above_upper = calculate_binned_stats(
+            np.array(disk_z_above), np.array(disk_r_above), z_bin_edges)
+        
+        ax_right.plot(z_above, r_above,
+                     color='darkorange',
+                     linestyle='-',
+                     linewidth=2.5,
+                     label='Above FFB Threshold',
+                     alpha=0.6,
+                     marker='o',
+                     markersize=4,
+                     zorder=2)
+        
+        ax_right.fill_between(z_above, r_above_lower, r_above_upper,
+                             color='darkorange',
+                             alpha=0.3,
+                             zorder=1)
+    
+    # Plot 3: Galaxies at threshold (red, darkest/most prominent)
+    if len(disk_z_threshold) > 0:
+        z_thresh, r_thresh, r_thresh_lower, r_thresh_upper = calculate_binned_stats(
+            np.array(disk_z_threshold), np.array(disk_r_threshold), z_bin_edges)
+        
+        ax_right.plot(z_thresh, r_thresh,
+                     color='dodgerblue',
+                     linestyle='-',
+                     linewidth=3,
+                     label='At FFB Threshold (±10%)',
+                     alpha=0.7,
+                     marker='s',
+                     markersize=5,
+                     zorder=3)
+        
+        ax_right.fill_between(z_thresh, r_thresh_lower, r_thresh_upper,
+                             color='dodgerblue',
+                             alpha=0.25,
+                             zorder=2)
+
+    # Theory lines
     z_t = np.linspace(5, 20, 100)
     z_10 = (1 + z_t) / 10.0
-    # Eq 31 (Shell): Re ~ 0.5 * R_sh
-    r_th_shell = 0.5 * 0.56 * (z_10 ** -1.78)
-    # Eq 33 (Disk)
     r_th_disk = 0.31 * (z_10 ** -3.07)
-    
-    ax_right.plot(z_t, r_th_shell, color='royalblue', ls='--', lw=2, label='Theory (Shell)')
-    ax_right.plot(z_t, r_th_disk, color='darkorange', ls='--', lw=2, label='Theory (Disk)')
 
-    # Simulation Data
-    if len(stats_z) > 0:
-        ax_right.plot(stats_z, stats_disk_median, 'o-', color='darkorange', lw=2, label='SAGE Disk')
-        ax_right.fill_between(stats_z, stats_disk_low, stats_disk_high, color='darkorange', alpha=0.2)
-        
-        valid_b = ~np.isnan(stats_bulge_median)
-        if np.any(valid_b):
-            ax_right.plot(np.array(stats_z)[valid_b], np.array(stats_bulge_median)[valid_b], 
-                         's-', color='royalblue', lw=2, label='SAGE "Shell""')
-            ax_right.fill_between(np.array(stats_z)[valid_b], 
-                                 np.array(stats_bulge_low)[valid_b], 
-                                 np.array(stats_bulge_high)[valid_b], 
-                                 color='royalblue', alpha=0.2)
-            
-    if len(stats_z) > 0 and len(stats_lambda_median) > 0:
-        z_sage = np.array(stats_z)
-        lambda_sage = np.array(stats_lambda_median)
-        valid = ~np.isnan(lambda_sage)
-        
-        if np.any(valid):
-            z_10_sage = (1 + z_sage[valid]) / 10.0
-            f_e_half = 1.0
-            r_th_shell_sage = 0.56 * f_e_half * lambda_sage[valid] * (z_10_sage ** -1.78)
-            
-            ax_right.plot(z_sage[valid], r_th_shell_sage, color='green', 
-                        ls='--', lw=3, label='Theory (Shell, SAGE λ)')
+    ax_right.plot(z_t, r_th_disk, color='darkorange', ls='--', lw=2, label='Li+24 (Disk)', zorder=4)
 
     ax_right.set_yscale('log')
     ax_right.set_xlabel('Redshift z', fontsize=14)
     ax_right.set_ylabel(r'$R_{\rm \frac{1}{2}}$ (kpc)', fontsize=14)
-    ax_right.set_xlim(5, 20)
-    # ax_right.set_ylim(0.01, 3.0)
+    ax_right.set_xlim(5, 13)
     
     # Set integer x-ticks with minor ticks at 20% intervals
     from matplotlib.ticker import MultipleLocator
@@ -4075,10 +4236,10 @@ def plot_ffb_threshold_analysis_empirical():
     ax_right.xaxis.set_minor_locator(MultipleLocator(0.2))
     ax_right.yaxis.set_major_formatter(plt.ScalarFormatter())
     ax_right.grid(True, alpha=0.1)
-    ax_right.legend(frameon=False)
+    ax_right.legend(frameon=False, loc='lower left')
 
     plt.tight_layout()
-    out_path = DirName + 'plots/ffb_threshold_analysis_empirical' + OutputFormat
+    out_path = DirName + 'plots/ffb_threshold_analysis_empirical_all' + OutputFormat
     plt.savefig(out_path, dpi=300)
     print(f'Plot saved to: {out_path}')
     plt.close()
@@ -4783,11 +4944,13 @@ def main():
     plot_uvlf_vs_redshift()
     # plot_cumulative_surface_density()
     plot_density_evolution()
-    plot_ffb_threshold_analysis()
+    # plot_ffb_threshold_analysis()
     plot_ffb_threshold_analysis_empirical()
+    plot_ffb_threshold_analysis_empirical_all()
     plot_gas_fraction_evolution()
-    plot_radius_evolution_all_galaxies()
+    # plot_radius_evolution_all_galaxies()
     plot_rvir_vs_redshift()
+
     # plot_ffb_metallicity_limit(use_analytical=True)  # Disabled
     
     print('\nAll plots completed!')
