@@ -4152,7 +4152,7 @@ def plot_ffb_threshold_analysis_empirical_all():
                 np.array(r_lower_plot), np.array(r_upper_plot))
     
     # Define redshift bins (shared for all populations)
-    z_bin_edges = np.arange(5, 20.5, 0.5)
+    z_bin_edges = np.arange(1, 20.5, 0.5)
     
     # Plot 1: All galaxies (gray, lightest)
     if len(disk_z_all) > 0:
@@ -4216,8 +4216,10 @@ def plot_ffb_threshold_analysis_empirical_all():
     z_t = np.linspace(5, 20, 100)
     z_10 = (1 + z_t) / 10.0
     r_th_disk = 0.31 * (z_10 ** -3.07)
+    r_th_disk_2 = 2 * (0.31 * (z_10 ** -3.07))
 
     ax_right.plot(z_t, r_th_disk, color='darkorange', ls='--', lw=2, label='Li+24 (Disk)', zorder=4)
+    ax_right.plot(z_t, r_th_disk_2, color='darkred', ls=':', lw=2, label='Li+24 (2*Disk)', zorder=4)
 
     ax_right.set_yscale('log')
     ax_right.set_xlabel('Redshift z', fontsize=14)
@@ -4230,7 +4232,7 @@ def plot_ffb_threshold_analysis_empirical_all():
     ax_right.xaxis.set_minor_locator(MultipleLocator(0.2))
     ax_right.yaxis.set_major_formatter(plt.ScalarFormatter())
     # ax_right.grid(True, alpha=0.1)
-    # ax_right.legend(frameon=False, loc='lower right')
+    ax_right.legend(frameon=False, loc='lower right')
 
     # --- Add Baggen+2023 observational data ---
     z_baggen, re_baggen, re_err_plus_baggen, re_err_minus_baggen = load_baggen2023_data()
@@ -4264,7 +4266,7 @@ def plot_ffb_threshold_analysis_empirical_all():
                          fmt='o', color='black', markersize=4, alpha=0.8,
                          label='Finkelstein+23', capsize=2, linewidth=1.5, zorder=5)
         
-    ax_right.legend(frameon=False, loc='lower right')
+    # ax_right.legend(frameon=False, loc='lower right')
 
     plt.tight_layout()
     out_path = DirName + 'plots/ffb_threshold_analysis_empirical_all' + OutputFormat
