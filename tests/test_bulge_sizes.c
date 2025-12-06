@@ -194,44 +194,77 @@ void test_zero_mass_bulges() {
 
 void test_disk_shrinking_after_instability() {
     BEGIN_TEST("Disk Radius Shrinks After Instability");
-    
+
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
     run_params.Hubble_h = 0.7;
     run_params.BulgeSizeOn = 3;  // Tonini mode
-    
-    struct GALAXY gal;
-    memset(&gal, 0, sizeof(struct GALAXY));
-    
-    // Set up an unstable disk
-    gal.ColdGas = 0.3;
-    gal.StellarMass = 1.0;
-    gal.DiskScaleRadius = 0.015;  // 15 kpc/h
-    gal.Vmax = 100.0;  // Low Vmax → unstable
-    gal.Mvir = 50.0;
-    
-    double initial_disk_radius = gal.DiskScaleRadius;
-    
-    // Simulate disk instability transferring mass to bulge
-    double mass_transferred = 0.4;  // Transfer significant mass
-    gal.InstabilityBulgeMass += mass_transferred;
-    gal.StellarMass -= mass_transferred;  // Disk stars → bulge
-    
-    // Disk radius should shrink when mass is removed
-    // Using standard disk radius formula: R_disk = lambda * J / (sqrt(2) * M * Vvir)
-    // When mass decreases, radius shrinks (assuming J/M ratio stays roughly constant)
-    double new_disk_mass = gal.ColdGas + gal.StellarMass;
-    double old_disk_mass = new_disk_mass + mass_transferred;
-    
-    // Simple approximation: radius scales with mass
-    double expected_radius_ratio = new_disk_mass / old_disk_mass;
-    gal.DiskScaleRadius = initial_disk_radius * expected_radius_ratio;
-    
-    ASSERT_LESS_THAN(gal.DiskScaleRadius, initial_disk_radius,
-                    "Disk radius shrinks after instability removes mass");
-    
-    ASSERT_GREATER_THAN(gal.InstabilityBulgeMass, 0.0,
-                       "Instability created bulge mass");
+    run_params.AGNrecipeOn = 0;  // Disable AGN to simplify test
+    run_params.G = 43.0;         // Gravitational constant in code units
+
+    // Set up galaxy array (check_disk_instability expects array)
+    struct GALAXY gal[2];
+    memset(gal, 0, sizeof(struct GALAXY) * 2);
+
+    // Set up an unstable disk:
+    // Mcrit = Vmax^2 * 3 * R_disk / G
+    // For instability: disk_mass > Mcrit
+    // With Vmax=50, R_disk=0.01, G=43: Mcrit = 50^2 * 3 * 0.01 / 43 = 1.74
+    // So disk_mass=3.0 > Mcrit=1.74 → unstable
+    gal[0].ColdGas = 0.0;           // No cold gas (avoid starburst complexity)
+    gal[0].StellarMass = 3.0;       // All in disk initially
+    gal[0].BulgeMass = 0.0;         // No existing bulge
+    gal[0].InstabilityBulgeMass = 0.0;
+    gal[0].DiskScaleRadius = 0.01;  // 10 kpc/h
+    gal[0].Vmax = 50.0;             // Low Vmax → makes disk unstable
+    gal[0].Rvir = 0.2;              // 200 kpc/h - for safety bounds
+    gal[0].MetalsStellarMass = 0.06; // 2% metallicity
+    gal[0].MetalsBulgeMass = 0.0;
+
+    // Record initial values
+    double initial_disk_radius = gal[0].DiskScaleRadius;
+    double initial_disk_mass = gal[0].StellarMass - gal[0].BulgeMass + gal[0].ColdGas;
+    double initial_bulge_mass = gal[0].BulgeMass;
+    double initial_instability_bulge = gal[0].InstabilityBulgeMass;
+
+    // Calculate expected Mcrit to verify instability will occur
+    double Mcrit = gal[0].Vmax * gal[0].Vmax * 3.0 * gal[0].DiskScaleRadius / run_params.G;
+    double expected_unstable = initial_disk_mass - Mcrit;
+
+    // Verify our setup creates instability
+    ASSERT_GREATER_THAN(initial_disk_mass, Mcrit,
+                       "Test setup: disk mass exceeds Mcrit (unstable)");
+
+    // Call the REAL check_disk_instability function
+    check_disk_instability(0, 0, 0, 0.0, 0.001, 0, gal, &run_params);
+
+    // Verify disk radius shrunk
+    ASSERT_LESS_THAN(gal[0].DiskScaleRadius, initial_disk_radius,
+                    "Disk radius shrinks after instability");
+
+    // Verify bulge mass increased
+    ASSERT_GREATER_THAN(gal[0].BulgeMass, initial_bulge_mass,
+                       "Bulge mass increased from instability");
+
+    // Verify instability bulge specifically increased (Tonini tracking)
+    ASSERT_GREATER_THAN(gal[0].InstabilityBulgeMass, initial_instability_bulge,
+                       "InstabilityBulgeMass tracks transferred mass");
+
+    // Verify mass conservation: total stellar mass unchanged
+    double final_stellar = gal[0].StellarMass;
+    ASSERT_CLOSE(initial_disk_mass + initial_bulge_mass, final_stellar, 1e-6,
+                "Total stellar mass conserved during instability");
+
+    // Verify the amount transferred is approximately correct
+    double transferred = gal[0].InstabilityBulgeMass - initial_instability_bulge;
+    ASSERT_CLOSE(expected_unstable, transferred, 0.01,
+                "Transferred mass matches (disk_mass - Mcrit)");
+
+    printf("  ℹ Mcrit=%.3f, disk_mass=%.3f, transferred=%.3f\n",
+           Mcrit, initial_disk_mass, transferred);
+    printf("  ℹ Disk radius: %.4f → %.4f (%.1f%% reduction)\n",
+           initial_disk_radius, gal[0].DiskScaleRadius,
+           100.0 * (1.0 - gal[0].DiskScaleRadius / initial_disk_radius));
 }
 
 int main() {
