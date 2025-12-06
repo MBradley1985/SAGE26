@@ -160,7 +160,7 @@ void set_and_print_highwater_mark(void)
         HighMarkMem = TotMem;
         if(HighMarkMem > OldPrintedHighMark + 10 * 1024.0 * 1024.0) {
 #ifdef VERBOSE
-            fprintf(stderr, "\nnew high mark = %g MB\n", HighMarkMem / (1024.0 * 1024.0));
+            // fprintf(stderr, "\nnew high mark = %g MB\n", HighMarkMem / (1024.0 * 1024.0));
 #endif
             OldPrintedHighMark = HighMarkMem;
         }
