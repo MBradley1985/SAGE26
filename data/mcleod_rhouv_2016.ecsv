@@ -1,0 +1,15 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: z, datatype: int64, description: Redshift}
+# - {name: rho_uv, datatype: float64, unit: log(erg s^-1 Hz^-1 Mpc^-3), description: UV Luminosity Density (log10)}
+# - {name: rho_uv_err_up, datatype: float64, unit: log(erg s^-1 Hz^-1 Mpc^-3), description: Upper error on log density}
+# - {name: rho_uv_err_low, datatype: float64, unit: log(erg s^-1 Hz^-1 Mpc^-3), description: Lower error on log density}
+# schema: astropy-2.0
+z rho_uv rho_uv_err_up rho_uv_err_low
+5 26.37 0.03 0.03
+6 26.24 0.06 0.06
+7 26.09 0.07 0.07
+8 25.93 0.09 0.09
+9 25.74 0.10 0.12
+10 25.61 0.21 0.21

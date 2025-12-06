@@ -1,0 +1,21 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: z_bin, datatype: float64, description: Redshift Range}
+# - {name: alpha, datatype: float64, description: Faint-end slope}
+# - {name: e_alpha_upper, datatype: float64, description: Upper error on alpha}
+# - {name: e_alpha_lower, datatype: float64, description: Lower error on alpha}
+# - {name: M_star, datatype: float64, unit: mag, description: Characteristic Absolute Magnitude (AB)}
+# - {name: e_M_star_upper, datatype: float64, unit: mag, description: Upper error on M_star}
+# - {name: e_M_star_lower, datatype: float64, unit: mag, description: Lower error on M_star}
+# - {name: phi_star_10_5, datatype: float64, unit: 1e-5 Mpc-3 mag-1, description: Normalization density (scaled by 1e-5)}
+# - {name: e_phi_star_upper, datatype: float64, unit: 1e-5 Mpc-3 mag-1, description: Upper error on phi_star}
+# - {name: e_phi_star_lower, datatype: float64, unit: 1e-5 Mpc-3 mag-1, description: Lower error on phi_star}
+# - {name: rho_UV_10_25, datatype: float64, unit: 1e25 erg s-1 Hz-1 Mpc-3, description: UV Luminosity Density (scaled by 1e25)}
+# - {name: e_rho_UV_upper, datatype: float64, unit: 1e25 erg s-1 Hz-1 Mpc-3, description: Upper error on rho_UV}
+# - {name: e_rho_UV_lower, datatype: float64, unit: 1e25 erg s-1 Hz-1 Mpc-3, description: Lower error on rho_UV}
+# schema: astropy-2.0
+z_bin alpha e_alpha_upper e_alpha_lower M_star e_M_star_upper e_M_star_lower phi_star_10_5 e_phi_star_upper e_phi_star_lower rho_UV_10_25 e_rho_UV_upper e_rho_UV_lower
+8.00 -2.30 0.16 0.24 -21.00 0.34 0.45 1.8 1.1 1.7 1.51 1.56 0.39
+10.0 -2.14 0.24 0.38 -20.74 0.57 0.54 3.9 4.0 3.1 1.34 0.45 0.29
+11.5 -2.19 0.26 0.39 -20.81 0.77 0.67 1.6 1.6 0.9 0.50 0.21 0.18

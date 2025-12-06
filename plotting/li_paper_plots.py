@@ -1906,6 +1906,20 @@ def load_observational_uvlf_data():
         print(f"Loaded Stefanon+2019: {np.sum(mask)} data points")
     except Exception as e:
         print(f"Warning: Could not load stefanon_lf_2019.ecsv: {e}")
+
+    # Load Finkelstein et al. 2024 - multiply by 10^-4, exclude upper limits (phi_star=0)
+    try:
+        table = Table.read(data_dir + 'finkelstein_lf_2024.ecsv', format='ascii.ecsv')
+        obs_data['finkelstein_2024'] = {
+            'redshifts': np.array(table['z_bin']),
+            'M_UV': np.array(table['M_UV']),
+            'phi': np.array(table['Phi_10_5']) * 1e-5,
+            'phi_err_up': np.array(table['e_Phi_upper']) * 1e-5,
+            'phi_err_low': np.array(table['e_Phi_lower']) * 1e-5,
+        }
+        print(f"Loaded Finkelstein+2024: {np.sum(mask)} data points")
+    except Exception as e:
+        print(f"Warning: Could not load finkelstein_lf_2024.ecsv: {e}")
     
     return obs_data
 
@@ -2059,7 +2073,8 @@ def plot_uvlf_grid(models=None):
             'morishita_2018': {'label': '', 'marker': 'h', 'facecolor': 'white', 'edgecolor': 'lightgray', 'linewidth': 3},
             'oesch_2018': {'label': '', 'marker': '<', 'facecolor': 'white', 'edgecolor': 'lightgray', 'linewidth': 3},
             'stefanon_2019': {'label': '', 'marker': '>', 'facecolor': 'white', 'edgecolor': 'lightgray', 'linewidth': 3},
-            'yan_2023': {'label': 'Yan+23', 'marker': 'X', 'facecolor': 'black', 'edgecolor': 'black', 'linewidth': 1.5}
+            'yan_2023': {'label': 'Yan+23', 'marker': 'X', 'facecolor': 'black', 'edgecolor': 'black', 'linewidth': 1.5},
+            'finkelstein_2024': {'label': 'Finkelstein+24', 'marker': 'P', 'facecolor': 'black', 'edgecolor': 'black', 'linewidth': 1.5}
         }
         
         # Track if pre-JWST legend entry has been added
@@ -3150,6 +3165,8 @@ def plot_density_evolution(models=None):
                                 color=model['color'],
                                 alpha=0.2,
                                 zorder=2)
+            # Madau & Dickinson 2014 plotting moved outside loop
+            print(f"  {model['name']}: SMD density plotted")
             print(f"  {model['name']}: Stellar mass density plotted")
         
         # Plot Panel 2: UV Luminosity Density
@@ -3184,6 +3201,7 @@ def plot_density_evolution(models=None):
                                 color=model['color'],
                                 alpha=0.2,
                                 zorder=2)
+            # Madau & Dickinson 2014 plotting moved outside loop
             print(f"  {model['name']}: SFR density plotted")
     
     # Add analytical predictions from Li+2023 to all three panels
@@ -3248,7 +3266,7 @@ def plot_density_evolution(models=None):
             axes[1].plot(redshifts_ffb1, rho_UV_ffb1,
                         color='dodgerblue', linestyle='--', linewidth=2,
                         label='', alpha=0.7, zorder=4)
-        
+
         # FFB eps_max=0.2
         set_option(FFB_SFE_MAX=0.2)
         redshifts_ffb02, rho_UV_ffb02 = [], []
@@ -3261,7 +3279,7 @@ def plot_density_evolution(models=None):
             axes[1].plot(redshifts_ffb02, rho_UV_ffb02,
                         color='orange', linestyle='--', linewidth=2,
                         label='', alpha=0.7, zorder=4)
-        
+
         # UM model (no FFB)
         set_option(FFB_SFE_MAX=0.0)
         redshifts_um, rho_UV_um = [], []
@@ -3274,10 +3292,24 @@ def plot_density_evolution(models=None):
             axes[1].plot(redshifts_um, rho_UV_um,
                         color='gray', linestyle='--', linewidth=2,
                         label='', alpha=0.7, zorder=4)
-        
+
         # Reset to default
         set_option(FFB_SFE_MAX=1.0)
         print(f"  Li+2023 analytical UV luminosity density added (3 lines)")
+
+        # --- Add Finkelstein et al. 2024 rho_UV data ---
+        # Redshifts
+        z_fink = np.array([9.0, 11.0, 14.0])
+        # log10(rho_UV) values [erg s^-1 Hz^-1 Mpc^-3]
+        log_rho_uv_fink = np.array([25.4, 25.0, 24.9])
+        # Errors: [Lower Error, Upper Error]
+        # Lower: [0.1, 0.2, 0.7], Upper: [0.1, 0.2, 1.1]
+        err_lower = np.array([0.1, 0.2, 0.7])
+        err_upper = np.array([0.1, 0.2, 1.1])
+        axes[1].errorbar(z_fink, log_rho_uv_fink, yerr=[err_lower, err_upper],
+                        fmt='P', color='black', markersize=8,
+                        label='Finkelstein+24', capsize=3, linewidth=2, zorder=10)
+        print("  Finkelstein+2024 rho_UV data added to UV density panel")
     except Exception as e:
         print(f"  Warning: Could not compute analytical UV luminosity density: {e}")
     
@@ -3328,6 +3360,86 @@ def plot_density_evolution(models=None):
     except Exception as e:
         print(f"  Warning: Could not compute analytical SFR density: {e}")
     
+    # Plot Madau & Dickinson 2014 observational data ONCE per relevant axis (after model loop)
+    z_madau, re_madau, re_err_plus_madau, re_err_minus_madau = load_madau_dickinson_smd_2014_data()
+    if z_madau is not None:
+        axes[0].errorbar(z_madau, re_madau,
+                        yerr=[re_err_minus_madau, re_err_plus_madau],
+                        fmt='o', color='black', markersize=8, alpha=0.8,
+                        label='Madau & Dickinson 2014', capsize=2, linewidth=1.5, zorder=5)
+        
+    # Plot Kikuchihara 2020 observational data ONCE per relevant axis (after model loop)
+    z_kikuchihara, re_kikuchihara, re_err_plus_kikuchihara, re_err_minus_kikuchihara = load_kikuchihara_smd_2020_data()
+    if z_kikuchihara is not None:
+        axes[0].errorbar(z_kikuchihara, re_kikuchihara,
+                        yerr=[re_err_minus_kikuchihara, re_err_plus_kikuchihara],
+                        fmt='d', color='black', markersize=8, alpha=0.8,
+                        label='Kikuchihara+20', capsize=2, linewidth=1.5, zorder=3)
+        
+    # Plot Papovich 2023 observational data ONCE per relevant axis (after model loop)
+    z_papovich, re_papovich, re_err_plus_papovich, re_err_minus_papovich = load_papovich_smd_2023_data()
+    if z_papovich is not None:
+        axes[0].errorbar(z_papovich, re_papovich,
+                        yerr=[re_err_minus_papovich, re_err_plus_papovich],
+                        fmt='s', color='black', markersize=8, alpha=0.8,
+                        label='Papovich+23', capsize=2, linewidth=1.5, zorder=3)
+        
+    z_mcleod, re_mcleod, re_err_plus_mcleod, re_err_minus_mcleod = load_mcleod_rho_uv_2016_data()
+    if z_mcleod is not None:
+        axes[1].errorbar(z_mcleod, re_mcleod,
+                        yerr=[re_err_minus_mcleod, re_err_plus_mcleod],
+                        fmt='^', color='black', markersize=8, alpha=0.8,
+                        label='Mcleod+16', capsize=2, linewidth=1.5, zorder=5)
+        
+    z_mcleod2, re_mcleod2, re_err_plus_mcleod2, re_err_minus_mcleod2 = load_mcleod_rho_uv_2024_data()
+    if z_mcleod2 is not None:
+        axes[1].errorbar(z_mcleod2, re_mcleod2,
+                        yerr=[re_err_minus_mcleod2, re_err_plus_mcleod2],
+                        fmt='v', color='black', markersize=8, alpha=0.8,
+                        label='Mcleod+24', capsize=2, linewidth=1.5, zorder=5)
+        
+    z_perez, re_perez, re_err_plus_perez, re_err_minus_perez = load_perez_rho_uv_2023_data()
+    if z_perez is not None:
+        axes[1].errorbar(z_perez, re_perez,
+                        yerr=[re_err_minus_perez, re_err_plus_perez],
+                        fmt='s', color='black', markersize=8, alpha=0.8,
+                        label='Perez+23', capsize=2, linewidth=1.5, zorder=5)
+        
+    z_harikane, re_harikane, re_err_plus_harikane, re_err_minus_harikane = load_harikane_uv_density_2023_data()
+    if z_harikane is not None:
+        axes[1].errorbar(z_harikane, re_harikane,
+                        yerr=[re_err_minus_harikane, re_err_plus_harikane],
+                        fmt='D', color='black', markersize=8, alpha=0.8,
+                        label='Harikane+23', capsize=2, linewidth=1.5, zorder=5)
+
+    z_madau, re_madau, re_err_plus_madau, re_err_minus_madau = load_madau_dickinson_2014_data()
+    if z_madau is not None:
+        axes[2].errorbar(z_madau, re_madau,
+                        yerr=[re_err_minus_madau, re_err_plus_madau],
+                        fmt='o', color='black', markersize=8, alpha=0.8,
+                        label='Madau & Dickinson 2014', capsize=2, linewidth=1.5, zorder=5)
+        
+    z_oesch, re_oesch, re_err_plus_oesch, re_err_minus_oesch = load_oesch_sfrd_2018_data()
+    if z_oesch is not None:
+        axes[2].errorbar(z_oesch, re_oesch,
+                        yerr=[re_err_minus_oesch, re_err_plus_oesch],
+                        fmt='*', color='black', markersize=8, alpha=0.8,
+                        label='Oesch+18', capsize=2, linewidth=1.5, zorder=5)
+        
+    z_mcleod3, re_mcleod3, re_err_plus_mcleod3, re_err_minus_mcleod3 = load_mcleod_rho_sfr_2024_data()
+    if z_mcleod3 is not None:
+        axes[2].errorbar(z_mcleod3, re_mcleod3,
+                        yerr=[re_err_minus_mcleod3, re_err_plus_mcleod3],
+                        fmt='v', color='black', markersize=8, alpha=0.8,
+                        label='Mcleod+24', capsize=2, linewidth=1.5, zorder=5)
+        
+    z_harikane2, re_harikane2, re_err_plus_harikane2, re_err_minus_harikane2 = load_harikane_sfr_density_2023_data()
+    if z_harikane2 is not None:
+        axes[2].errorbar(z_harikane2, re_harikane2,
+                        yerr=[re_err_minus_harikane2, re_err_plus_harikane2],
+                        fmt='D', color='black', markersize=8, alpha=0.8,
+                        label='Harikane+23', capsize=2, linewidth=1.5, zorder=5)
+
     # Formatting for each panel
     for idx, ax in enumerate(axes):
         ax.set_xlim(5, 16)
@@ -3341,6 +3453,7 @@ def plot_density_evolution(models=None):
                    horizontalalignment='right',
                    fontsize=12)
             ax.set_ylabel(r'$\log_{10}(\rho_* / M_{\odot} \, \mathrm{Mpc}^{-3})$', fontsize=12)
+            ax.set_ylim(3, 7.6)
             ax.legend(loc='lower left', fontsize=10, frameon=False)
         elif idx == 1:
             ax.text(0.95, 0.95, rf'$M_{{\mathrm{{UV}}}} < {M_UV_threshold_uv}$',
@@ -3348,6 +3461,7 @@ def plot_density_evolution(models=None):
                    verticalalignment='top',
                    horizontalalignment='right',
                    fontsize=12)
+            ax.legend(loc='lower left', fontsize=10, frameon=False)
             ax.set_ylabel(r'$\log_{10}(\rho_{\mathrm{UV}} / \mathrm{erg} \, \mathrm{s}^{-1} \, \mathrm{Hz}^{-1} \, \mathrm{Mpc}^{-3})$', fontsize=12)
         else:
             ax.text(0.95, 0.95, rf'$M_{{\mathrm{{UV}}}} < {M_UV_threshold_sfr}$',
@@ -3357,7 +3471,8 @@ def plot_density_evolution(models=None):
                    fontsize=12)
             ax.set_ylabel(r'$\log_{10}(\rho_{\mathrm{SFR}} / M_{\odot} \, \mathrm{yr}^{-1} \, \mathrm{Mpc}^{-3})$', fontsize=12)
             ax.set_ylim(-5, -2)
-        
+            ax.legend(loc='lower left', fontsize=10, frameon=False)
+
         # Set integer ticks with minor ticks at 20% intervals
         from matplotlib.ticker import MultipleLocator
         ax.xaxis.set_major_locator(MultipleLocator(1))
@@ -4640,6 +4755,230 @@ def load_finkelstein2023_data():
         return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
     except Exception as e:
         print(f"Error loading Finkelstein+2023 data: {e}")
+    return None, None, None, None
+
+def load_madau_dickinson_2014_data():
+    """Load Madau and Dickinson 2014 SFRD data."""
+    filename = './data/MandD_sfrd_2014.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z_min']
+
+        re_kpc_phys = table['log_psi']
+        re_err_plus_kpc_phys = table['e_log_psi_up']
+        re_err_minus_kpc_phys = table['e_log_psi_lo']
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Madau and Dickinson 2014 data: {e}")
+    return None, None, None, None
+
+def load_madau_dickinson_smd_2014_data():
+    """Load Madau and Dickinson 2014 SMD data."""
+    filename = './data/MandD_smd_2014.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z_min']
+
+        re_kpc_phys = table['log_rho']
+        re_err_plus_kpc_phys = table['e_log_rho_up']
+        re_err_minus_kpc_phys = table['e_log_rho_lo']
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Madau and Dickinson 2014 data: {e}")
+    return None, None, None, None
+
+def load_kikuchihara_smd_2020_data():
+    """Load Kikuchihara et al. 2020 SMD data."""
+    filename = './data/kikuchihara_smd_2020.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z']
+
+        re_kpc_phys = table['log_rho_star']
+        re_err_plus_kpc_phys = table['e_log_rho_star_upper']
+        re_err_minus_kpc_phys = table['e_log_rho_star_lower']
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Madau and Dickinson 2014 data: {e}")
+    return None, None, None, None
+
+def load_mcleod_rho_uv_2016_data():
+    """Load Mcleod et al. 2016 UV density data."""
+    filename = './data/mcleod_rhouv_2016.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z']
+
+        re_kpc_phys = table['rho_uv']
+        re_err_plus_kpc_phys = table['rho_uv_err_up']
+        re_err_minus_kpc_phys = table['rho_uv_err_low']
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Madau and Dickinson 2014 data: {e}")
+    return None, None, None, None
+
+def load_oesch_sfrd_2018_data():
+    """Load Oesch et al. 2018 SFRD data."""
+    filename = './data/oesch_sfrd_2018.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z']
+
+        re_kpc_phys = table['log_rho_sfr']
+        re_err_plus_kpc_phys = table['e_log_rho_sfr_upper']
+        re_err_minus_kpc_phys = table['e_log_rho_sfr_lower']
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Madau and Dickinson 2014 data: {e}")
+    return None, None, None, None
+
+def load_papovich_smd_2023_data():
+    """Load Papovich et al. 2023 SMDdata."""
+    filename = './data/papovich_smd_2023.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z']
+
+        re_kpc_phys = table['log_rho_star']
+        re_err_plus_kpc_phys = table['e_log_rho_star_upper']
+        re_err_minus_kpc_phys = table['e_log_rho_star_lower']
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Madau and Dickinson 2014 data: {e}")
+    return None, None, None, None
+
+def load_mcleod_rho_uv_2024_data():
+    """Load Mcleod et al. 2024 UV density data."""
+    filename = './data/mcleod_rhouv_2024.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z']
+
+        re_kpc_phys = table['log_rho_uv']
+        re_err_plus_kpc_phys = table['e_log_rho_uv_upper']
+        re_err_minus_kpc_phys = table['e_log_rho_uv_lower']
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Madau and Dickinson 2014 data: {e}")
+    return None, None, None, None
+
+def load_mcleod_rho_sfr_2024_data():
+    """Load Mcleod et al. 2024 SFR density data."""
+    filename = './data/mcleod_rhouv_2024.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z']
+
+        re_kpc_phys = table['log_rho_sfr']
+        re_err_plus_kpc_phys = np.zeros_like(re_kpc_phys)
+        re_err_minus_kpc_phys = np.zeros_like(re_kpc_phys)
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Madau and Dickinson 2014 data: {e}")
+    return None, None, None, None
+
+def load_perez_rho_uv_2023_data():
+    """Load Perez et al. 2023 UV density data."""
+    filename = './data/perez_rho_uv_2023.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z_bin']
+
+        re_kpc_phys = table['rho_UV_10_25']
+        re_err_plus_kpc_phys = np.zeros_like(re_kpc_phys)
+        re_err_minus_kpc_phys = np.zeros_like(re_kpc_phys)
+
+        re_kpc_phys = np.log10(re_kpc_phys*10e25)
+        re_err_plus_kpc_phys = re_err_plus_kpc_phys / (re_kpc_phys * np.log(10))
+        re_err_minus_kpc_phys = re_err_minus_kpc_phys / (re_kpc_phys * np.log(10))
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Madau and Dickinson 2014 data: {e}")
+    return None, None, None, None
+
+def load_harikane_uv_density_2023_data():
+    """Load Harizane et al. 2023 density data."""
+    filename = './data/harikane_density_2023.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z']
+
+        re_kpc_phys = table['log_rho_UV']
+        re_err_plus_kpc_phys = table['e_log_rho_UV_upper']
+        re_err_minus_kpc_phys = table['e_log_rho_UV_lower']
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Madau and Dickinson 2014 data: {e}")
+    return None, None, None, None
+
+def load_harikane_sfr_density_2023_data():
+    """Load Harizane et al. 2023 SFR density data."""
+    filename = './data/harikane_density_2023.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+    
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z']
+
+        re_kpc_phys = table['log_rho_SFR_UV']
+        re_err_plus_kpc_phys = table['e_log_rho_SFR_UV_upper']
+        re_err_minus_kpc_phys = table['e_log_rho_SFR_UV_lower']
+        
+        return z, re_kpc_phys, re_err_plus_kpc_phys, re_err_minus_kpc_phys
+    except Exception as e:
+        print(f"Error loading Madau and Dickinson 2014 data: {e}")
     return None, None, None, None
 
 def plot_ffb_metallicity_limit(use_analytical=True):

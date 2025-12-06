@@ -1,0 +1,12 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: z, datatype: float64, description: Redshift or Redshift Range}
+# - {name: log_rho_star, datatype: float64, unit: log(Msun / Mpc3), description: Galaxy Stellar-mass Density}
+# - {name: e_log_rho_star_upper, datatype: float64, unit: log(Msun / Mpc3), description: Upper error on log density}
+# - {name: e_log_rho_star_lower, datatype: float64, unit: log(Msun / Mpc3), description: Lower error on log density}
+# schema: astropy-2.0
+z log_rho_star e_log_rho_star_upper e_log_rho_star_lower
+6.00 6.37 0.35 0.34
+8.00 6.16 0.56 0.48
+9.00 6.32 0.76 0.64

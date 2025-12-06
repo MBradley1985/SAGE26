@@ -1,0 +1,31 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: z_bin, datatype: int64, description: Redshift bin}
+# - {name: M_UV, datatype: float64, unit: mag, description: Absolute UV Magnitude}
+# - {name: Number, datatype: int64, description: Number of sources}
+# - {name: Phi_10_5, datatype: float64, unit: 1e-5 mag-1 Mpc-3, description: Number Density (scaled by 1e-5)}
+# - {name: e_Phi_upper, datatype: float64, unit: 1e-5 mag-1 Mpc-3, description: Upper error on Number Density}
+# - {name: e_Phi_lower, datatype: float64, unit: 1e-5 mag-1 Mpc-3, description: Lower error on Number Density}
+# - {name: is_upper_limit, datatype: bool, description: True if Phi is an upper limit (<)}
+# - {name: Eff_Vol, datatype: int64, unit: Mpc3, description: Effective Volume}
+# schema: astropy-2.0
+z_bin M_UV Number Phi_10_5 e_Phi_upper e_Phi_lower is_upper_limit Eff_Vol
+9 -22.5 0 0.9 0.0 0.0 True 187000
+9 -22.0 1 1.1 0.7 0.6 False 187000
+9 -21.5 0 0.9 0.0 0.0 True 187000
+9 -21.0 2 2.2 1.3 1.0 False 193000
+9 -20.5 7 8.2 4.0 3.2 False 177000
+9 -20.0 7 9.6 4.8 3.6 False 161000
+9 -19.5 17 28.6 11.5 9.1 False 120000
+9 -19.0 10 26.8 12.4 10.0 False 77900
+9 -18.5 13 136.0 61.0 49.9 False 18600
+11 -21.0 0 0.5 0.0 0.0 True 373000
+11 -20.5 3 1.8 1.2 0.9 False 354000
+11 -20.0 8 5.4 2.7 2.1 False 306000
+11 -19.5 8 7.6 3.9 3.0 False 220000
+11 -19.0 5 17.6 10.3 7.9 False 62100
+11 -18.5 3 26.3 18.2 13.3 False 23800
+14 -20.5 0 1.8 0.0 0.0 True 147000
+14 -20.0 1 2.6 3.3 1.8 False 85400
+14 -19.5 2 7.3 6.9 4.4 False 60600

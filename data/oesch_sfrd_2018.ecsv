@@ -1,0 +1,26 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: Source, datatype: string, description: Reference/Author from plot legend}
+# - {name: z, datatype: float64, description: Redshift}
+# - {name: e_z, datatype: float64, description: Approximate error or bin width in Redshift (0 if not visible)}
+# - {name: log_rho_sfr, datatype: float64, unit: log(Msun / yr / Mpc3), description: Star Formation Rate Density}
+# - {name: e_log_rho_sfr_upper, datatype: float64, unit: log(Msun / yr / Mpc3), description: Upper error on log SFR density}
+# - {name: e_log_rho_sfr_lower, datatype: float64, unit: log(Msun / yr / Mpc3), description: Lower error on log SFR density}
+# schema: astropy-2.0
+Source z e_z log_rho_sfr e_log_rho_sfr_upper e_log_rho_sfr_lower
+"Combined HST (Red Circle)" 10.2 0.6 -3.27 0.20 0.20
+"Oesch+13/14 (Green Square)" 9.0 0.5 -2.68 0.20 0.20
+"Oesch+13/14 (Green Square)" 10.0 0.5 -3.15 0.20 0.20
+"McLeod+16 (Blue Triangle)" 9.0 0.0 -2.48 0.15 0.15
+"McLeod+16 (Blue Triangle)" 10.0 0.0 -2.62 0.20 0.20
+"Ishigaki+17 (Pink Marker)" 8.4 0.2 -2.65 0.10 0.10
+"Ishigaki+17 (Pink Marker)" 10.4 0.2 -3.25 0.20 0.20
+"Bouwens+16 (Purple Marker)" 10.5 0.0 -3.20 0.30 0.30
+"Reference (Black Circles)" 2.3 0.0 -1.10 0.10 0.10
+"Reference (Black Circles)" 3.0 0.0 -1.10 0.10 0.10
+"Reference (Black Circles)" 3.8 0.0 -1.40 0.10 0.10
+"Reference (Black Circles)" 5.0 0.0 -1.65 0.10 0.10
+"Reference (Black Circles)" 6.0 0.0 -1.90 0.10 0.10
+"Reference (Black Circles)" 7.0 0.0 -2.10 0.10 0.10
+"Reference (Black Circles)" 8.0 0.0 -2.20 0.10 0.10

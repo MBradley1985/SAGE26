@@ -1,0 +1,63 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: Reference, datatype: string}
+# - {name: z_min, datatype: float64}
+# - {name: z_max, datatype: float64}
+# - {name: A_FUV, unit: mag, datatype: float64, description: FUV attenuation}
+# - {name: log_psi, unit: Msun / (yr Mpc3), datatype: float64, description: Log star formation rate density}
+# - {name: e_log_psi_up, unit: Msun / (yr Mpc3), datatype: float64, description: Upper error on log_psi}
+# - {name: e_log_psi_lo, unit: Msun / (yr Mpc3), datatype: float64, description: Lower error on log_psi}
+# schema: astropy-2.0
+Reference z_min z_max A_FUV log_psi e_log_psi_up e_log_psi_lo
+"Wyder et al. (2005)" 0.01 0.10 1.80 -1.82 0.09 0.02
+"Schiminovich et al. (2005)" 0.20 0.40 1.80 -1.50 0.05 0.05
+"Schiminovich et al. (2005)" 0.40 0.60 1.80 -1.39 0.15 0.08
+"Schiminovich et al. (2005)" 0.60 0.80 1.80 -1.20 0.31 0.13
+"Schiminovich et al. (2005)" 0.80 1.20 1.80 -1.25 0.31 0.13
+"Robotham & Driver (2011)" 0.05 0.05 1.57 -1.77 0.08 0.09
+"Cucciati et al. (2012)" 0.05 0.20 1.11 -1.75 0.18 0.18
+"Cucciati et al. (2012)" 0.20 0.40 1.35 -1.55 0.12 0.12
+"Cucciati et al. (2012)" 0.40 0.60 1.64 -1.44 0.10 0.10
+"Cucciati et al. (2012)" 0.60 0.80 1.92 -1.24 0.10 0.10
+"Cucciati et al. (2012)" 0.80 1.00 2.22 -0.99 0.09 0.08
+"Cucciati et al. (2012)" 1.00 1.20 2.21 -0.94 0.09 0.09
+"Cucciati et al. (2012)" 1.20 1.70 2.17 -0.95 0.15 0.08
+"Cucciati et al. (2012)" 1.70 2.50 1.94 -0.75 0.49 0.09
+"Cucciati et al. (2012)" 2.50 3.50 1.47 -1.04 0.26 0.15
+"Cucciati et al. (2012)" 3.50 4.50 0.97 -1.69 0.22 0.32
+"Dahlen et al. (2007)" 0.92 1.33 2.03 -1.02 0.08 0.08
+"Dahlen et al. (2007)" 1.62 1.88 2.03 -0.75 0.12 0.12
+"Dahlen et al. (2007)" 2.08 2.37 2.03 -0.87 0.09 0.09
+"Reddy & Steidel (2009)" 1.90 2.70 1.36 -0.75 0.09 0.11
+"Reddy & Steidel (2009)" 2.70 3.40 1.07 -0.97 0.11 0.15
+"Bouwens et al. (2012a),(2012b)" 3.80 3.80 0.58 -1.29 0.05 0.05
+"Bouwens et al. (2012a),(2012b)" 4.90 4.90 0.44 -1.42 0.06 0.06
+"Bouwens et al. (2012a),(2012b)" 5.90 5.90 0.20 -1.65 0.08 0.08
+"Bouwens et al. (2012a),(2012b)" 7.00 7.00 0.10 -1.79 0.10 0.10
+"Bouwens et al. (2012a),(2012b)" 7.90 7.90 0.00 -2.09 0.11 0.11
+"Schenker et al. (2013)" 7.00 7.00 0.10 -2.00 0.10 0.11
+"Schenker et al. (2013)" 8.00 8.00 0.00 -2.21 0.14 0.14
+"Sanders et al. (2003)" 0.03 0.03 nan -1.72 0.02 0.03
+"Takeuchi et al. (2003)" 0.03 0.03 nan -1.95 0.20 0.20
+"Magnelli et al. (2011)" 0.40 0.70 nan -1.34 0.22 0.11
+"Magnelli et al. (2011)" 0.70 1.00 nan -0.96 0.15 0.19
+"Magnelli et al. (2011)" 1.00 1.30 nan -0.89 0.27 0.21
+"Magnelli et al. (2011)" 1.30 1.80 nan -0.91 0.17 0.21
+"Magnelli et al. (2011)" 1.80 2.30 nan -0.89 0.21 0.25
+"Magnelli et al. (2013)" 0.40 0.70 nan -1.22 0.08 0.11
+"Magnelli et al. (2013)" 0.70 1.00 nan -1.10 0.10 0.13
+"Magnelli et al. (2013)" 1.00 1.30 nan -0.96 0.13 0.20
+"Magnelli et al. (2013)" 1.30 1.80 nan -0.94 0.13 0.18
+"Magnelli et al. (2013)" 1.80 2.30 nan -0.80 0.18 0.15
+"Gruppioni et al. (2013)" 0.00 0.30 nan -1.64 0.09 0.11
+"Gruppioni et al. (2013)" 0.30 0.45 nan -1.42 0.03 0.04
+"Gruppioni et al. (2013)" 0.45 0.60 nan -1.32 0.05 0.05
+"Gruppioni et al. (2013)" 0.60 0.80 nan -1.14 0.06 0.06
+"Gruppioni et al. (2013)" 0.80 1.00 nan -0.94 0.05 0.06
+"Gruppioni et al. (2013)" 1.00 1.20 nan -0.81 0.04 0.05
+"Gruppioni et al. (2013)" 1.20 1.70 nan -0.84 0.04 0.04
+"Gruppioni et al. (2013)" 1.70 2.00 nan -0.86 0.02 0.03
+"Gruppioni et al. (2013)" 2.00 2.50 nan -0.91 0.09 0.12
+"Gruppioni et al. (2013)" 2.50 3.00 nan -0.86 0.15 0.23
+"Gruppioni et al. (2013)" 3.00 4.20 nan -1.36 0.23 0.50

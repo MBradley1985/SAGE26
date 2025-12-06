@@ -1,0 +1,22 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: Source, datatype: string, description: Reference ID}
+# - {name: z, datatype: float64, description: Redshift}
+# - {name: log_rho_uv, datatype: float64, unit: log(erg s^-1 Hz^-1 Mpc^-3), description: UV Luminosity Density}
+# - {name: e_log_rho_uv_upper, datatype: float64, unit: log(erg s^-1 Hz^-1 Mpc^-3), description: Upper error}
+# - {name: e_log_rho_uv_lower, datatype: float64, unit: log(erg s^-1 Hz^-1 Mpc^-3), description: Lower error}
+# - {name: log_rho_sfr, datatype: float64, unit: log(Msun yr^-1 Mpc^-3), description: Derived SFR Density (approx. UV - 28.0)}
+# schema: astropy-2.0
+Source z log_rho_uv e_log_rho_uv_upper e_log_rho_uv_lower log_rho_sfr
+"Donnan et al. (2023a)" 7.9 25.60 0.10 0.10 -2.40
+"Harikane et al. (2023)" 9.0 25.30 0.10 0.10 -2.70
+"Pérez-González et al. (2023)" 9.0 25.20 0.15 0.15 -2.80
+"Oesch et al. (2018)" 10.0 24.65 0.15 0.15 -3.35
+"Donnan et al. (2023a)" 10.1 25.15 0.15 0.15 -2.85
+"Donnan et al. (2023b)" 10.5 25.10 0.15 0.15 -2.90
+"This study" 11.0 25.15 0.15 0.15 -2.85
+"Donnan et al. (2023b)" 11.2 25.00 0.30 0.40 -3.00
+"Harikane et al. (2023)" 12.0 24.60 0.25 0.25 -3.40
+"Pérez-González et al. (2023)" 12.2 24.70 0.20 0.20 -3.30
+"Donnan et al. (2023a)" 13.2 24.30 0.25 0.40 -3.70
