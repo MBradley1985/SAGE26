@@ -1,4 +1,4 @@
-![SAGE26 logo](./SAGElogo.png)
+![SAGE26 logo](/SAGElogo.png)
 *************************************
 Semi-Analytic Galaxy Evolution (SAGE)
 *************************************
