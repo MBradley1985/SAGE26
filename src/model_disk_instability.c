@@ -85,7 +85,8 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
         }
 
         // burst excess gas and feed black hole (really need a dedicated model for bursts and BH growth here)
-        if(unstable_gas > 0.0) {
+        // BUG FIX: Also check ColdGas > 0 to avoid division by zero
+        if(unstable_gas > 0.0 && galaxies[p].ColdGas > 0.0) {
 #ifdef VERBOSE
             if(unstable_gas > 1.0001 * galaxies[p].ColdGas ) {
                 fprintf(stdout, "unstable_gas > galaxies[p].ColdGas\t%e\t%e\n", unstable_gas, galaxies[p].ColdGas);

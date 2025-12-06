@@ -14,6 +14,9 @@
 void starformation_and_feedback(const int p, const int centralgal, const double time, const double dt, const int halonr, const int step,
                                 struct GALAXY *galaxies, const struct params *run_params)
 {
+    // BUG FIX: Validate step is within array bounds
+    XASSERT(step >= 0 && step < STEPS, -1,
+            "Error: step = %d is out of bounds [0, %d)\n", step, STEPS);
 
     // ========================================================================
     // CHECK FOR FFB REGIME - EARLY EXIT IF FFB
@@ -34,121 +37,133 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     if(run_params->SFprescription == 0) {
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
         reff = 3.0 * galaxies[p].DiskScaleRadius;
-        tdyn = reff / galaxies[p].Vvir;
 
-        // from Kauffmann (1996) eq7 x piR^2, (Vvir in km/s, reff in Mpc/h) in units of 10^10Msun/h
-        const double cold_crit = 0.19 * galaxies[p].Vvir * reff;
-        if(galaxies[p].ColdGas > cold_crit && tdyn > 0.0) {
-            strdot = run_params->SfrEfficiency * (galaxies[p].ColdGas - cold_crit) / tdyn;
-        } else {
+        // BUG FIX: Check Vvir > 0 before division to avoid NaN/Inf
+        if(galaxies[p].Vvir <= 0.0) {
             strdot = 0.0;
+        } else {
+            tdyn = reff / galaxies[p].Vvir;
+
+            // from Kauffmann (1996) eq7 x piR^2, (Vvir in km/s, reff in Mpc/h) in units of 10^10Msun/h
+            const double cold_crit = 0.19 * galaxies[p].Vvir * reff;
+            if(galaxies[p].ColdGas > cold_crit && tdyn > 0.0) {
+                strdot = run_params->SfrEfficiency * (galaxies[p].ColdGas - cold_crit) / tdyn;
+            } else {
+                strdot = 0.0;
+            }
         }
     } else if(run_params->SFprescription == 1) {
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
         reff = 3.0 * galaxies[p].DiskScaleRadius;
-        tdyn = reff / galaxies[p].Vvir;
-        // BR06 model
-        const float h = run_params->Hubble_h;
-        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-        if (rs_pc <= 0.0) {
+
+        // BUG FIX: Check Vvir > 0 before division
+        if(galaxies[p].Vvir <= 0.0) {
             galaxies[p].H2gas = 0.0;
             strdot = 0.0;
-            return;
-        }
-        // float disk_area_pc2 = M_PI * rs_pc * rs_pc; 
-        float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2); // 3× scale radius captures ~95% of mass 
-        float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
-        float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
-
-        total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density, 
-                                                               rs_pc) * galaxies[p].ColdGas;
-
-        // total_molecular_gas = calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
-
-        galaxies[p].H2gas = total_molecular_gas;
-
-        // const double cold_crit = 0.19 * galaxies[p].Vvir * reff;
-        // if(galaxies[p].ColdGas > cold_crit) {
-            // make stars only from H2
-            // float area = M_PI * 9.0 * galaxies[p].DiskScaleRadius * galaxies[p].DiskScaleRadius;
-            // strdot = run_params->UnitTime_in_s / SEC_PER_MEGAYEAR * run_params->SfrEfficiency * galaxies[p].H2gas;
-        
-            // strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
-        if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
-             strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
         } else {
-            strdot = 0.0;
+            tdyn = reff / galaxies[p].Vvir;
+            // BR06 model
+            const float h = run_params->Hubble_h;
+            const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+            if (rs_pc <= 0.0) {
+                galaxies[p].H2gas = 0.0;
+                strdot = 0.0;
+            } else {
+                // float disk_area_pc2 = M_PI * rs_pc * rs_pc;
+                float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2); // 3× scale radius captures ~95% of mass
+                float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
+                float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
+
+                total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
+                                                                       rs_pc) * galaxies[p].ColdGas;
+
+                galaxies[p].H2gas = total_molecular_gas;
+
+                if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
+                    strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
+                } else {
+                    strdot = 0.0;
+                }
+            }
         }
     } else if(run_params->SFprescription == 2) {
         // Somerville et al. 2025: Density Modulated Star Formation Efficiency
         // Using Equation 3 for efficiency: epsilon = (Sigma/Sigma_crit)/(1 + Sigma/Sigma_crit)
-        
+
         reff = 3.0 * galaxies[p].DiskScaleRadius;
-        tdyn = reff / galaxies[p].Vvir;
-        const float h = run_params->Hubble_h;
-        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-        float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2); // pc^2
-        float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // Msun/pc^2
-        
-        // Critical surface density from Equation 2
-        // Sigma_crit = <p_dot/m_star> / (pi * G)
-        // <p_dot/m_star> ~ 30 km/s/Myr, G = 4.302e-3 pc (km/s)^2/Msun
-        const double Sigma_crit = 30.0 / (M_PI * 4.302e-3); // ~2176 Msun/pc^2
-        
-        // Cloud-scale star formation efficiency from Equation 3
-        double epsilon_cl = (gas_surface_density / Sigma_crit) / (1.0 + gas_surface_density / Sigma_crit);
-        
-        // Fraction of gas in dense clouds (f_dense from Equation 8)
-        const double f_dense = 0.5; // Paper explores 0.1, 0.5, 1.0
-        
-        // Star formation rate: SFR ~ epsilon_cl * f_dense * m_gas / tdyn
-        // This is the key: efficiency scales with density, but we use tdyn as the timescale
-        if(tdyn > 0.0 && gas_surface_density > 0.0) {
-            strdot = epsilon_cl * f_dense * galaxies[p].ColdGas / tdyn;
-        } else {
+
+        // BUG FIX: Check Vvir > 0 before division
+        if(galaxies[p].Vvir <= 0.0) {
             strdot = 0.0;
+        } else {
+            tdyn = reff / galaxies[p].Vvir;
+            const float h = run_params->Hubble_h;
+            const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+            float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2); // pc^2
+            float gas_surface_density = (disk_area_pc2 > 0.0) ?
+                (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2 : 0.0; // Msun/pc^2
+
+            // Critical surface density from Equation 2
+            const double Sigma_crit = 30.0 / (M_PI * 4.302e-3); // ~2176 Msun/pc^2
+
+            // Cloud-scale star formation efficiency from Equation 3
+            double epsilon_cl = (gas_surface_density / Sigma_crit) / (1.0 + gas_surface_density / Sigma_crit);
+
+            // Fraction of gas in dense clouds (f_dense from Equation 8)
+            const double f_dense = 0.5;
+
+            // Star formation rate: SFR ~ epsilon_cl * f_dense * m_gas / tdyn
+            if(tdyn > 0.0 && gas_surface_density > 0.0) {
+                strdot = epsilon_cl * f_dense * galaxies[p].ColdGas / tdyn;
+            } else {
+                strdot = 0.0;
+            }
         }
     } else if(run_params->SFprescription == 3) {
         // Somerville et al. 2025: Density Modulated Star Formation Efficiency with H2
         // Using Equation 3 for efficiency: epsilon = (Sigma/Sigma_crit)/(1 + Sigma/Sigma_crit)
         // But replacing cold gas with H2 gas using Blitz & Rosolowsky 2006
-        
+
         reff = 3.0 * galaxies[p].DiskScaleRadius;
-        tdyn = reff / galaxies[p].Vvir;
-        const float h = run_params->Hubble_h;
-        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-        
-        if (rs_pc <= 0.0) {
+
+        // BUG FIX: Check Vvir > 0 before division
+        if(galaxies[p].Vvir <= 0.0) {
             galaxies[p].H2gas = 0.0;
             strdot = 0.0;
         } else {
-            float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2); // pc^2
-            float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // Msun/pc^2
-            float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2; // Msun/pc^2
-            
-            // Calculate molecular fraction using Blitz & Rosolowsky 2006
-            total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density, 
-                                                                   rs_pc) * galaxies[p].ColdGas;
-            
-            galaxies[p].H2gas = total_molecular_gas;
-            
-            // Critical surface density from Equation 2
-            // Sigma_crit = <p_dot/m_star> / (pi * G)
-            // <p_dot/m_star> ~ 30 km/s/Myr, G = 4.302e-3 pc (km/s)^2/Msun
-            const double Sigma_crit = 30.0 / (M_PI * 4.302e-3); // ~2176 Msun/pc^2
-            
-            // Cloud-scale star formation efficiency from Equation 3
-            double epsilon_cl = (gas_surface_density / Sigma_crit) / (1.0 + gas_surface_density / Sigma_crit);
-            
-            // Fraction of gas in dense clouds (f_dense from Equation 8)
-            const double f_dense = 0.5; // Paper explores 0.1, 0.5, 1.0
-            
-            // Star formation rate using H2 gas instead of total cold gas
-            // SFR ~ epsilon_cl * f_dense * H2_gas / tdyn
-            if(tdyn > 0.0 && gas_surface_density > 0.0 && galaxies[p].H2gas > 0.0) {
-                strdot = epsilon_cl * f_dense * galaxies[p].H2gas / tdyn;
-            } else {
+            tdyn = reff / galaxies[p].Vvir;
+            const float h = run_params->Hubble_h;
+            const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+
+            if (rs_pc <= 0.0) {
+                galaxies[p].H2gas = 0.0;
                 strdot = 0.0;
+            } else {
+                float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2); // pc^2
+                float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // Msun/pc^2
+                float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2; // Msun/pc^2
+
+                // Calculate molecular fraction using Blitz & Rosolowsky 2006
+                total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
+                                                                       rs_pc) * galaxies[p].ColdGas;
+
+                galaxies[p].H2gas = total_molecular_gas;
+
+                // Critical surface density from Equation 2
+                const double Sigma_crit = 30.0 / (M_PI * 4.302e-3); // ~2176 Msun/pc^2
+
+                // Cloud-scale star formation efficiency from Equation 3
+                double epsilon_cl = (gas_surface_density / Sigma_crit) / (1.0 + gas_surface_density / Sigma_crit);
+
+                // Fraction of gas in dense clouds (f_dense from Equation 8)
+                const double f_dense = 0.5;
+
+                // Star formation rate using H2 gas instead of total cold gas
+                if(tdyn > 0.0 && gas_surface_density > 0.0 && galaxies[p].H2gas > 0.0) {
+                    strdot = epsilon_cl * f_dense * galaxies[p].H2gas / tdyn;
+                } else {
+                    strdot = 0.0;
+                }
             }
         }
     } else {
@@ -207,7 +222,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
     // determine ejection
     if(run_params->SupernovaRecipeOn == 1) {
-        if(galaxies[centralgal].Vvir > 0.0) {
+        // BUG FIX: Check galaxies[p].Vvir consistently (was checking centralgal but using p)
+        if(galaxies[p].Vvir > 0.0) {
             if(run_params->FIREmodeOn == 1) {
                 // FIRE model: Energy-based ejection following Hirschmann+2016
                 // Energy from supernovae (with Muratov scaling)
@@ -543,7 +559,8 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
 
     // determine ejection
     if(run_params->SupernovaRecipeOn == 1) {
-        if(galaxies[centralgal].Vvir > 0.0) {
+        // BUG FIX: Check galaxies[p].Vvir consistently (was checking centralgal but using p)
+        if(galaxies[p].Vvir > 0.0) {
             if(run_params->FIREmodeOn == 1) {
                 // FIRE model: Energy-based ejection following Hirschmann+2016
                 // Energy from supernovae (with Muratov scaling)

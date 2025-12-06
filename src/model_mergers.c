@@ -111,6 +111,13 @@ double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GAL
     // E_final = E_init + E_orb + E_rad
     double E_final = E_init + E_orb + E_rad;
 
+    // BUG FIX: Check E_final > 0 to avoid division by zero or negative
+    // This can happen with high gas fractions where E_rad dominates
+    if(E_final <= 0.0) {
+        // Fallback: use mass-weighted average of progenitor radii
+        return (M1 * R1 + M2 * R2) / M_tot;
+    }
+
     // 5. Final Radius (Eq 17 rearranged)
     // R_final = M_tot^2 / E_final
     double R_final = (M_tot * M_tot) / E_final;
@@ -134,10 +141,16 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         ma = galaxies[p].StellarMass + galaxies[p].ColdGas;
     }
 
+    // BUG FIX: Handle zero-mass edge case properly
+    // If both galaxies have zero mass, skip merger physics
     if(ma > 0) {
         mass_ratio = mi / ma;
-    } else {
+    } else if(mi > 0) {
+        // Edge case: mi > 0 but ma = 0 (shouldn't happen normally)
         mass_ratio = 1.0;
+    } else {
+        // Both zero mass - treat as minor merger to avoid triggering major merger physics
+        mass_ratio = 0.0;
     }
 
     // 1. Calculate the New Merger Radius via Energy Conservation
@@ -365,6 +378,12 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                                   const double time, const double dt, const int halonr, const int mode, const int step,
                                   struct GALAXY *galaxies, const struct params *run_params)
 {
+    // BUG FIX: Validate step bounds and dt > 0
+    XASSERT(step >= 0 && step < STEPS, -1,
+            "Error: step = %d is out of bounds [0, %d)\n", step, STEPS);
+    XASSERT(dt > 0.0, -1,
+            "Error: dt = %g must be > 0 for SFR calculation\n", dt);
+
     double stars, reheated_mass, ejected_mass, fac, metallicity, eburst;
 
     // This is the major and minor merger starburst recipe of Somerville et al. 2001.
