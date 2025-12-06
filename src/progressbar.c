@@ -21,6 +21,38 @@ static int64_t total_steps = 0;
 static struct timeval tstart;
 static int prev_percent = -1;
 
+/* ASCII art for SAGE26 */
+static const char *SAGE26_ART[] = {
+    " ███████  █████   ██████  ███████ ██████   ██████ ",
+    "██       ██   ██ ██       ██           ██ ██      ",
+    "███████  ███████ ██   ███ █████    █████  ███████ ",
+    "     ██ ██   ██ ██    ██ ██      ██       ██   ██ ",
+    "███████ ██   ██  ██████  ███████ ███████   ██████ "
+};
+#define SAGE26_LINES 5
+
+/* Helper function to print the ASCII art with progressive reveal */
+static void print_sage26_progress(FILE *stream, double percent)
+{
+    const char *colors[] = {"\033[1;31m", "\033[1;33m", "\033[1;32m", "\033[1;36m", "\033[1;34m"};
+    
+    for (int line = 0; line < SAGE26_LINES; line++) {
+        const char *art_line = SAGE26_ART[line];
+        int len = strlen(art_line);
+        int reveal_up_to = (int)((len * percent) / 100.0);
+        
+        fprintf(stream, "%s", colors[line]);  // Different color per line
+        for (int i = 0; i < len; i++) {
+            if (i < reveal_up_to) {
+                fprintf(stream, "%c", art_line[i]);
+            } else {
+                fprintf(stream, "\033[2m%c\033[0m%s", art_line[i] == ' ' ? ' ' : '.', colors[line]);
+            }
+        }
+        fprintf(stream, "\033[0m\033[K\n");
+    }
+}
+
 void init_my_progressbar(FILE *stream, const int64_t N, int *interrupted)
 {
     if (N <= 0) {
@@ -50,8 +82,6 @@ void my_progressbar(FILE *stream, const int64_t curr_index, int *interrupted)
 
     // Only update if percentage changed or it's the first time
     if (integer_percent != prev_percent) {
-        prev_percent = integer_percent;
-
         struct timeval tnow;
         gettimeofday(&tnow, NULL);
         
@@ -66,17 +96,27 @@ void my_progressbar(FILE *stream, const int64_t curr_index, int *interrupted)
         int eta_m = (int)((remaining - eta_h * 3600) / 60);
         int eta_s = (int)(remaining - eta_h * 3600 - eta_m * 60);
 
-        // Create bar
+        // Move cursor up to redraw the entire display (except on first draw)
+        if (prev_percent >= 0) {
+            fprintf(stream, "\033[%dA", SAGE26_LINES + 1);  // Move up N+1 lines
+        }
+        
+        prev_percent = integer_percent;
+        
+        // Print the ASCII art with current progress
+        print_sage26_progress(stream, percent);
+        
+        // Print the regular progress bar below
         int bar_width = 30;
         int pos = (int)((bar_width * percent) / 100.0);
         
-        fprintf(stream, "\rProgress: [");
+        fprintf(stream, "Progress: [");
         for (int i = 0; i < bar_width; ++i) {
             if (i < pos) fprintf(stream, "=");
             else if (i == pos) fprintf(stream, ">");
             else fprintf(stream, " ");
         }
-        fprintf(stream, "] %3d%% | ETA: %02d:%02d:%02d", integer_percent, eta_h, eta_m, eta_s);
+        fprintf(stream, "] %3d%% | ETA: %02d:%02d:%02d\n", integer_percent, eta_h, eta_m, eta_s);
         fflush(stream);
     }
 }
@@ -84,8 +124,14 @@ void my_progressbar(FILE *stream, const int64_t curr_index, int *interrupted)
 void finish_myprogressbar(FILE *stream, int *interrupted)
 {
     if (total_steps > 0) {
-        // Ensure 100% is shown
-        fprintf(stream, "\rProgress: [");
+        // Move cursor up to redraw final state
+        fprintf(stream, "\033[%dA", SAGE26_LINES + 1);
+        
+        // Print final SAGE26 art (100% revealed)
+        print_sage26_progress(stream, 100.0);
+        
+        // Ensure 100% is shown on progress bar
+        fprintf(stream, "Progress: [");
         for (int i = 0; i < 30; ++i) fprintf(stream, "=");
         fprintf(stream, "] 100%% | ETA: 00:00:00");
         fprintf(stream, "\n");
