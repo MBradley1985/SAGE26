@@ -3842,7 +3842,7 @@ def plot_ffb_threshold_analysis_empirical():
     print('='*60)
     
     # Use only FFB 50% model
-    target_model_name = 'SAGE26' 
+    target_model_name = 'FFB 50%' 
     model_config = next((item for item in MODEL_CONFIGS if item["name"] == target_model_name), MODEL_CONFIGS[0])
     
     # Define redshift range
@@ -4076,7 +4076,7 @@ def plot_ffb_threshold_analysis_empirical_all():
     print('='*60)
     
     # Use only FFB 50% model
-    target_model_name = 'SAGE26' 
+    target_model_name = 'FFB 50%' 
     model_config = next((item for item in MODEL_CONFIGS if item["name"] == target_model_name), MODEL_CONFIGS[0])
     
     # Define redshift range
