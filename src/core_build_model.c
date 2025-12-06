@@ -312,6 +312,13 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
     struct GALAXY *halogal = *ptr_to_halogal;
 
     const int centralgal = galaxies[0].CentralGal;
+
+    // BUG FIX: Validate centralgal is within bounds before accessing
+    XRETURN(centralgal >= 0 && centralgal < ngal,
+            EXIT_FAILURE,
+            "Error: centralgal = %d is out of bounds [0, %d)\n",
+            centralgal, ngal);
+
     XRETURN(galaxies[centralgal].Type == 0 && galaxies[centralgal].HaloNr == halonr,
             EXIT_FAILURE,
             "Error: For centralgal, halonr = %d, %d.\n"
@@ -328,14 +335,16 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
     const int halo_snapnum = halos[halonr].SnapNum;
     const double Zcurr = run_params->ZZ[halo_snapnum];
     const double halo_age = run_params->Age[halo_snapnum];
-    const double infallingGas = infall_recipe(centralgal, ngal, Zcurr, galaxies, run_params);
 
+    // BUG FIX: Determine regimes BEFORE infall_recipe, as infall uses Regime field
     if (run_params->CGMrecipeOn == 1) {
         determine_and_store_regime(ngal, galaxies, run_params);
     }
     if (run_params->FeedbackFreeModeOn == 1) {
         determine_and_store_ffb_regime(ngal, galaxies, run_params);
     }
+
+    const double infallingGas = infall_recipe(centralgal, ngal, Zcurr, galaxies, run_params);
 
     // We integrate things forward by using a number of intervals equal to STEPS
     for(int step = 0; step < STEPS; step++) {

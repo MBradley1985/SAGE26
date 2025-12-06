@@ -156,14 +156,15 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
                 galaxies[gal].MetalsCGMgas -= strippedGasMetals;
                 
                 // Add to central galaxy's correct reservoir
+                // BUG FIX: Use bounds-checked strippedGasMetals, not recalculated metallicity * strippedGas
                 if(galaxies[centralgal].Regime == 0) {
                     // Central is CGM regime
                     galaxies[centralgal].CGMgas += strippedGas;
-                    galaxies[centralgal].MetalsCGMgas += strippedGas * metallicity;
+                    galaxies[centralgal].MetalsCGMgas += strippedGasMetals;
                 } else {
                     // Central is HOT regime
                     galaxies[centralgal].HotGas += strippedGas;
-                    galaxies[centralgal].MetalsHotGas += strippedGas * metallicity;
+                    galaxies[centralgal].MetalsHotGas += strippedGasMetals;
                 }
             } else {
                 // HOT regime satellite: strip from HotGas  
@@ -175,15 +176,16 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
 
                 galaxies[gal].HotGas -= strippedGas;
                 galaxies[gal].MetalsHotGas -= strippedGasMetals;
-                
+
+                // BUG FIX: Use bounds-checked strippedGasMetals, not recalculated metallicity * strippedGas
                 if(galaxies[centralgal].Regime == 0) {
                     // Central is CGM regime
                     galaxies[centralgal].CGMgas += strippedGas;
-                    galaxies[centralgal].MetalsCGMgas += strippedGas * metallicity;
+                    galaxies[centralgal].MetalsCGMgas += strippedGasMetals;
                 } else {
                     // Central is HOT regime
                     galaxies[centralgal].HotGas += strippedGas;
-                    galaxies[centralgal].MetalsHotGas += strippedGas * metallicity;
+                    galaxies[centralgal].MetalsHotGas += strippedGasMetals;
                 }
             }
         } else {
@@ -197,8 +199,9 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
             galaxies[gal].HotGas -= strippedGas;
             galaxies[gal].MetalsHotGas -= strippedGasMetals;
 
+            // BUG FIX: Use bounds-checked strippedGasMetals, not recalculated metallicity * strippedGas
             galaxies[centralgal].HotGas += strippedGas;
-            galaxies[centralgal].MetalsHotGas += strippedGas * metallicity;
+            galaxies[centralgal].MetalsHotGas += strippedGasMetals;
         }
     }
 
