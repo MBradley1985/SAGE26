@@ -132,8 +132,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     double mi, ma, mass_ratio;
 
     // calculate mass ratio of merging galaxies
-    if(galaxies[p].StellarMass + galaxies[p].ColdGas <
-       galaxies[merger_centralgal].StellarMass + galaxies[merger_centralgal].ColdGas) {
+    if(galaxies[p].StellarMass + galaxies[p].ColdGas < galaxies[merger_centralgal].StellarMass + galaxies[merger_centralgal].ColdGas) {
         mi = galaxies[p].StellarMass + galaxies[p].ColdGas;
         ma = galaxies[merger_centralgal].StellarMass + galaxies[merger_centralgal].ColdGas;
     } else {
@@ -142,39 +141,55 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     }
 
     // BUG FIX: Handle zero-mass edge case properly
-    // If both galaxies have zero mass, skip merger physics
     if(ma > 0) {
         mass_ratio = mi / ma;
     } else if(mi > 0) {
-        // Edge case: mi > 0 but ma = 0 (shouldn't happen normally)
         mass_ratio = 1.0;
     } else {
-        // Both zero mass - treat as minor merger to avoid triggering major merger physics
         mass_ratio = 0.0;
     }
 
-    // 1. Calculate the New Merger Radius via Energy Conservation
-    // We calculate this regardless of merger type, but apply it selectively
-    double new_merger_radius = calculate_merger_remnant_radius(&galaxies[merger_centralgal], &galaxies[p]);
-    
-    // Determine Central Morphology (Tonini 2016 Section 5.2)
-    // Is the central galaxy Disc-dominated or Bulge-dominated?
+    // Determine Central Morphology BEFORE adding satellite
+    // This determines where burst stars will go
     double central_disk_mass = galaxies[merger_centralgal].StellarMass - galaxies[merger_centralgal].BulgeMass;
     int is_disk_dominated = (central_disk_mass > 0.5 * galaxies[merger_centralgal].StellarMass);
+    
+    // Save disc radius BEFORE merger for instability bulge radius update
+    const double old_disk_radius = galaxies[merger_centralgal].DiskScaleRadius;
 
     add_galaxies_together(merger_centralgal, p, galaxies, run_params);
 
-    // grow black hole through accretion from cold disk during mergers, a la Kauffmann & Haehnelt (2000)
+    // grow black hole through accretion from cold disk during mergers
     if(run_params->AGNrecipeOn) {
         grow_black_hole(merger_centralgal, mass_ratio, galaxies, run_params);
     }
 
-    // starburst recipe similar to Somerville et al. 2001
-    collisional_starburst_recipe(mass_ratio, merger_centralgal, centralgal, time, dt, halonr, 0, step, galaxies, run_params);
-
-    if(mass_ratio > 0.1) {
-		galaxies[merger_centralgal].TimeOfLastMinorMerger = time;
+    // Determine which bulge component will receive burst stars
+    // This must be decided BEFORE the starburst
+    int burst_to_merger_bulge = 0;  // 0 = instability, 1 = merger
+    
+    if(mass_ratio > run_params->ThreshMajorMerger) {
+        // Major merger: all stars go to merger-driven bulge
+        burst_to_merger_bulge = 1;
+    } else {
+        // Minor merger: depends on morphology
+        if(is_disk_dominated) {
+            // Disc-dominated: burst goes to instability bulge
+            burst_to_merger_bulge = 0;
+        } else {
+            // Spheroid-dominated: burst goes to merger bulge
+            burst_to_merger_bulge = 1;
+        }
     }
+
+    // starburst recipe - now tracks which bulge component receives the stars
+    collisional_starburst_recipe(mass_ratio, merger_centralgal, centralgal, time, dt, halonr, 
+                                 0, step, burst_to_merger_bulge, old_disk_radius, 
+                                 galaxies, run_params);
+
+    // 1. Calculate the merger remnant radius via Energy Conservation
+    // We do this AFTER the starburst so the energy budget includes burst stars
+    double new_merger_radius = calculate_merger_remnant_radius(&galaxies[merger_centralgal], &galaxies[p]);
 
     if(mass_ratio > run_params->ThreshMajorMerger) {
         // CASE 1: MAJOR MERGER (Section 5.2.3)
@@ -183,7 +198,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         
         // Apply the Energy Conservation Radius
         galaxies[merger_centralgal].MergerBulgeRadius = new_merger_radius;
-        galaxies[merger_centralgal].BulgeRadius = new_merger_radius; // It is now a pure spheroid
+        galaxies[merger_centralgal].BulgeRadius = new_merger_radius;
         
         galaxies[merger_centralgal].TimeOfLastMajorMerger = time;
         galaxies[p].mergeType = 2; 
@@ -194,25 +209,14 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
 
         if (is_disk_dominated) {
             // Minor merger on DISC (Section 5.2.1)
-            // Satellite absorbed by disc, triggers instability.
-            // Radius logic handled inside add_galaxies_together -> update_instability_bulge_radius
-            // DO NOT update MergerBulgeRadius here.
+            // Radius already updated in add_galaxies_together and collisional_starburst_recipe
+            // Do nothing here
         } else {
             // Minor merger on SPHEROID (Section 5.2.3)
-            // Satellite adds directly to the Merger Bulge.
-            // We use the energy conservation radius calculated above.
+            // Update merger bulge radius with energy conservation
             galaxies[merger_centralgal].MergerBulgeRadius = new_merger_radius;
         }
     }
-
-    // if(mass_ratio > run_params->ThreshMajorMerger) {
-    //     make_bulge_from_burst(merger_centralgal, galaxies, run_params);
-    //     galaxies[merger_centralgal].TimeOfLastMajorMerger = time;
-    //     galaxies[p].mergeType = 2;  // mark as major merger
-    // } else {
-    //     galaxies[p].mergeType = 1;  // mark as minor merger
-    // }
-
 }
 
 
@@ -377,6 +381,7 @@ void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
 
 void collisional_starburst_recipe(const double mass_ratio, const int merger_centralgal, const int centralgal,
                                   const double time, const double dt, const int halonr, const int mode, const int step,
+                                  const int burst_to_merger_bulge, const double old_disk_radius,
                                   struct GALAXY *galaxies, const struct params *run_params)
 {
     // BUG FIX: Validate step bounds and dt > 0
@@ -399,7 +404,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
 
     double gas_for_starburst;
     if(run_params->SFprescription == 1) {
-        // For H2-based prescriptions (BR06, DarkSAGE, GD14), use molecular gas
+        // For H2-based prescriptions, use molecular gas
         gas_for_starburst = galaxies[merger_centralgal].H2gas;
     } else {
         // For traditional prescription, use total cold gas
@@ -411,15 +416,17 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         stars = 0.0;
     }
 
-    // this bursting results in SN feedback on the cold/hot gas - use FIRE model if enabled
+    // [... keep all the feedback calculation code the same ...]
+    // [lines for reheated_mass and ejected_mass calculation - unchanged]
+    
+    // this bursting results in SN feedback on the cold/hot gas
     if(run_params->SupernovaRecipeOn == 1) {
         if(run_params->FIREmodeOn == 1) {
-            // FIRE: Calculate velocity/redshift scaling from Muratov et al. 2015
+            // [FIRE model code - unchanged]
             const double z = run_params->ZZ[galaxies[merger_centralgal].SnapNum];
             const double vc = galaxies[merger_centralgal].Vvir;
             const double V_CRIT = 60.0;
             
-            // Check for valid inputs to avoid NaN
             if(vc <= 0.0 || z < 0.0) {
                 reheated_mass = 0.0;
             } else {
@@ -431,8 +438,6 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                     v_term = pow(vc / V_CRIT, -1.0);
                 }
                 double scaling_factor = z_term * v_term;
-                
-                // Reheating with Muratov scaling: η = 2.9 × (1+z)^α × (V/60)^β
                 double eta_reheat = run_params->FeedbackReheatingEpsilon * scaling_factor;
                 reheated_mass = eta_reheat * stars;
             }
@@ -443,27 +448,25 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         reheated_mass = 0.0;
     }
 
-	XASSERT(reheated_mass >= 0.0, -1,
-            "Error: Reheated mass = %g should be >= 0.0",
-            reheated_mass);
+    XASSERT(reheated_mass >= 0.0, -1, "Error: Reheated mass = %g should be >= 0.0", reheated_mass);
 
-    // can't use more cold gas than is available! so balance SF and feedback
+    // can't use more cold gas than is available!
     if((stars + reheated_mass) > galaxies[merger_centralgal].ColdGas) {
         fac = galaxies[merger_centralgal].ColdGas / (stars + reheated_mass);
         stars *= fac;
         reheated_mass *= fac;
     }
 
+    // [... ejected_mass calculation - unchanged ...]
     // determine ejection
     if(run_params->SupernovaRecipeOn == 1) {
         if(galaxies[merger_centralgal].Vvir > 0.0) {
             if(run_params->FIREmodeOn == 1) {
-                // FIRE model: Energy-based ejection following Hirschmann+2016
+                // [FIRE ejection code - unchanged]
                 const double z = run_params->ZZ[galaxies[merger_centralgal].SnapNum];
                 const double vc = galaxies[merger_centralgal].Vvir;
                 const double V_CRIT = 60.0;
                 
-                // Check for valid inputs to avoid NaN
                 if(vc <= 0.0 || z < 0.0) {
                     ejected_mass = 0.0;
                 } else {
@@ -476,15 +479,10 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                     }
                     double scaling_factor = z_term * v_term;
                     
-                    // Total feedback energy: E_FB = ε_eject × scaling × 0.5 × M_* × (η_SN × E_SN)
                     double E_FB = run_params->FeedbackEjectionEfficiency * scaling_factor * 
                                   0.5 * stars * (run_params->EtaSNcode * run_params->EnergySNcode);
-                    
-                    // Energy needed to lift reheated gas to virial radius: E_lift = 0.5 × M_reheat × V_vir²
                     double E_lift = 0.5 * reheated_mass * vc * vc;
                     
-                    // Leftover energy ejects additional gas: E_eject = E_FB - E_lift
-                    // Ejected mass: M_eject = E_eject / (0.5 × V_vir²)
                     if(E_FB > E_lift) {
                         ejected_mass = (E_FB - E_lift) / (0.5 * vc * vc);
                     } else {
@@ -493,7 +491,8 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                 }
             } else {
                 ejected_mass =
-                    (run_params->FeedbackEjectionEfficiency * (run_params->EtaSNcode * run_params->EnergySNcode) / (galaxies[merger_centralgal].Vvir * galaxies[merger_centralgal].Vvir) -
+                    (run_params->FeedbackEjectionEfficiency * (run_params->EtaSNcode * run_params->EnergySNcode) / 
+                     (galaxies[merger_centralgal].Vvir * galaxies[merger_centralgal].Vvir) -
                      run_params->FeedbackReheatingEpsilon) * stars;
             }
         } else {
@@ -515,8 +514,23 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     metallicity = get_metallicity(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].MetalsColdGas);
     update_from_star_formation(merger_centralgal, stars, metallicity, galaxies, run_params);
 
-    galaxies[merger_centralgal].BulgeMass += (1 - run_params->RecycleFraction) * stars;
-    galaxies[merger_centralgal].MetalsBulgeMass += metallicity * (1 - run_params->RecycleFraction) * stars;
+    // FIX: Track burst stars in the appropriate bulge component
+    const double recycled_stars = (1 - run_params->RecycleFraction) * stars;
+    
+    galaxies[merger_centralgal].BulgeMass += recycled_stars;
+    galaxies[merger_centralgal].MetalsBulgeMass += metallicity * recycled_stars;
+    
+    if(burst_to_merger_bulge) {
+        // Add to merger-driven bulge
+        galaxies[merger_centralgal].MergerBulgeMass += recycled_stars;
+        // Radius will be recalculated in deal_with_galaxy_merger using energy conservation
+    } else {
+        // Add to instability-driven bulge
+        galaxies[merger_centralgal].InstabilityBulgeMass += recycled_stars;
+        // Update radius using Tonini equation (15)
+        update_instability_bulge_radius(merger_centralgal, recycled_stars, old_disk_radius, 
+                                       galaxies, run_params);
+    }
 
     // recompute the metallicity of the cold phase
     metallicity = get_metallicity(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].MetalsColdGas);
@@ -533,9 +547,10 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
 
     // formation of new metals - instantaneous recycling approximation - only SNII
     if(galaxies[merger_centralgal].ColdGas > 1e-8 && mass_ratio < run_params->ThreshMajorMerger) {
-        const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / 30.0);  // Krumholz & Dekel 2011 Eq. 22
+        // MINOR MERGER with sufficient cold gas: some metals stay in disk
+        const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / 30.0);
         
-        // Metals that stay in disk (same for all regimes)
+        // Metals that stay in disk
         galaxies[merger_centralgal].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
         
         // Metals that leave disk - regime dependent
@@ -553,9 +568,9 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
             // Original SAGE behavior: metals go to HotGas
             galaxies[centralgal].MetalsHotGas += metals_leaving_disk;
         }
-        
     } else {
-        // Major merger or low cold gas: all metals leave disk - regime dependent
+        // MAJOR MERGER or very low cold gas: ALL metals leave disk
+        // No functional disk left, so all metals go directly to CGM/HotGas
         const double all_metals = run_params->Yield * stars;
         
         if(run_params->CGMrecipeOn == 1) {

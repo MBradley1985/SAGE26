@@ -105,7 +105,9 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
                 grow_black_hole(p, unstable_gas_fraction, galaxies, run_params);
             }
 
-            collisional_starburst_recipe(unstable_gas_fraction, p, centralgal, time, dt, halonr, 1, step, galaxies, run_params);
+            collisional_starburst_recipe(unstable_gas_fraction, p, centralgal, time, dt, halonr, 1, step, 
+                             0, galaxies[p].DiskScaleRadius,  // burst_to_merger_bulge=0, use current disc radius
+                             galaxies, run_params);
         }
     }
 }
