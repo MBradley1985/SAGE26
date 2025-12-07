@@ -1264,8 +1264,8 @@ if __name__ == '__main__':
     plt.scatter(HaloMass, np.log10(ColdGas[w]), marker='o', s=0.3, color='blue', alpha=0.5, label='Cold gas')
     plt.scatter(HaloMass, np.log10(HotGas[w]), marker='o', s=0.3, color='red', alpha=0.5, label='Hot gas')
     plt.scatter(HaloMass, np.log10(EjectedMass[w]), marker='o', s=0.3, color='green', alpha=0.5, label='Ejected gas')
-    plt.scatter(HaloMass, np.log10(IntraClusterStars[w]), marker='o', s=10, color='yellow', alpha=0.5, label='Intracluster stars')
-    plt.scatter(HaloMass, np.log10(CGMgas[w]), marker='o', s=10, color='orange', alpha=0.5, label='CGM gas')
+    plt.scatter(HaloMass, np.log10(IntraClusterStars[w]), marker='o', s=0.3, color='yellow', alpha=0.5, label='Intracluster stars')
+    plt.scatter(HaloMass, np.log10(CGMgas[w]), marker='o', s=0.3, color='orange', alpha=0.5, label='CGM gas')
 
     plt.ylabel(r'$\mathrm{stellar,\ cold,\ hot,\ ejected,\ CGM,\ ICS\ mass}$')  # Set the y...
     plt.xlabel(r'$\log\ M_{\mathrm{vir}}\ (h^{-1}\ M_{\odot})$')  # and the x-axis labels
@@ -2220,41 +2220,6 @@ if __name__ == '__main__':
     plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
 
     outputFile = OutputDir + '29.mass_ratios_vs_stellar_mass' + OutputFormat
-    plt.savefig(outputFile)
-    print('Saved file to', outputFile, '\n')
-    plt.close()
-
-    # -------------------------------------------------------
-
-    print('Plotting Disk Scale Radius vs Disk Mass')
-
-    plt.figure()
-    w = np.where((StellarMass > 1e9) & (DiskRadius > 0.0))[0]
-    if(len(w) > dilute): w = sample(list(w), dilute)
-
-    disk_mass = StellarMass[w] - BulgeMass[w]
-    # Ensure positive values for log
-    w_pos = np.where(disk_mass > 0)[0]
-    disk_mass = disk_mass[w_pos]
-    disk_radius = DiskRadius[w][w_pos]
-    stellar_mass = StellarMass[w][w_pos]
-
-    log10_disk_mass = np.log10(disk_mass)
-    log10_disk_radius = np.log10(disk_radius / 0.001) # Convert to kpc
-    log10_stellar_mass = np.log10(stellar_mass)
-
-    # Create 2D histogram
-    h = plt.hist2d(log10_disk_mass, log10_disk_radius, bins=150, cmap='viridis', cmin=1)
-    plt.colorbar(h[3], label='Number of Galaxies')
-
-    plt.ylabel(r'$\log_{10} R_{\mathrm{disk}}\ (\mathrm{kpc})$')
-    plt.xlabel(r'$\log_{10} M_{\mathrm{disk}}\ (M_{\odot})$')
-    plt.xlim(9.0, 12.0)
-    plt.ylim(1.0e-3, 1.0e2)
-    plt.yscale('log')
-    plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5, color='white')
-
-    outputFile = OutputDir + '30.disk_mass_vs_disk_radius' + OutputFormat
     plt.savefig(outputFile)
     print('Saved file to', outputFile, '\n')
     plt.close()
