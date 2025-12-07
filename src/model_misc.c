@@ -246,10 +246,14 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
 
 
 void update_instability_bulge_radius(const int p, const double delta_mass, 
+                                     const double old_disk_radius,
                                      struct GALAXY *galaxies, const struct params *run_params)
 {
     // Tonini+2016 equation (15): incremental radius evolution
     // R_i = (R_i,OLD * M_i,OLD + δM * 0.2 * R_D) / (M_i,OLD + δM)
+    //
+    // IMPORTANT: old_disk_radius should be the disc radius BEFORE the instability event
+    // This ensures we use the correct R_D value as prescribed in the paper
     
     if(run_params->BulgeSizeOn != 3) return;  // Only for Tonini mode
     if(delta_mass <= 0.0) return;
@@ -258,10 +262,11 @@ void update_instability_bulge_radius(const int p, const double delta_mass,
     const double M_old = galaxies[p].InstabilityBulgeMass - delta_mass;  // Mass before addition
     const double R_old = galaxies[p].InstabilityBulgeRadius;
     
-    // Current disc radius in kpc
-    const double R_disc_kpc = galaxies[p].DiskScaleRadius * 1.0e3 / h;
+    // Use the OLD disc radius (pre-instability) passed as parameter
+    // Convert to kpc for calculation
+    const double R_disc_kpc = old_disk_radius * 1.0e3 / h;
     
-    // New mass contribution scales with 0.2 * R_disc
+    // New mass contribution scales with 0.2 * R_disc (Tonini+2016 eq. 15)
     const double R_new_contribution_kpc = 0.2 * R_disc_kpc;
     const double R_new_contribution = R_new_contribution_kpc * 1.0e-3 * h;  // to Mpc/h
     

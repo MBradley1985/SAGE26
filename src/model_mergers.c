@@ -334,9 +334,10 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
         // Disc-dominated: minor merger triggers instability
         const double added_mass = galaxies[p].StellarMass;
         galaxies[t].InstabilityBulgeMass += added_mass;
+        const double old_disk_radius = galaxies[t].DiskScaleRadius;
         
         // UPDATE: Tonini incremental radius evolution (equation 16)
-        update_instability_bulge_radius(t, added_mass, galaxies, run_params);
+        update_instability_bulge_radius(t, added_mass, old_disk_radius, galaxies, run_params);
     } else {
         // Spheroid-dominated: grows merger bulge
         galaxies[t].MergerBulgeMass += galaxies[p].StellarMass;

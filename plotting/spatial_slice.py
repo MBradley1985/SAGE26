@@ -4,10 +4,8 @@ import h5py as h5
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from scipy.ndimage import gaussian_filter, sobel
-from scipy.spatial import Delaunay
+from scipy.ndimage import gaussian_filter
 from matplotlib.colors import LinearSegmentedColormap
-from matplotlib.collections import LineCollection
 import os
 
 # ========================== USER OPTIONS ==========================
@@ -24,12 +22,6 @@ slice_thickness = 62.5  # Thick slice to get enough matter
 grid_resolution = 4096   # Higher res for finer detail
 smoothing_sigma = 1.0    # Less blur preserves filamentary structure
 floor_value = 1e6        # Lower floor to show fainter structures
-
-# --- FILAMENT STRAND SETTINGS ---
-max_edge_length = 1.5    # Mpc/h - max length for Delaunay edges (filters long void-crossing edges)
-subsample_factor = 1     # Use every Nth galaxy (1 = all, increase if too slow/dense)
-line_alpha = 0.15        # Transparency of strands
-line_width = 0.3         # Width of strands
 
 OutputDir = DirName + 'plots/'
 OutputFormat = '.png'
@@ -92,104 +84,66 @@ if __name__ == '__main__':
     
     print(f"Projecting {len(mass)} galaxies...")
 
-    # 3. BUILD COSMIC WEB USING DELAUNAY TRIANGULATION
-    # This connects nearby galaxies to form strand-like filaments
+    # 3. DTFE - Delaunay Tessellation Field Estimator
+    # Estimates density at each galaxy, then interpolates across triangles
+    from scipy.spatial import Delaunay
+    from scipy.interpolate import LinearNDInterpolator
 
-    # Subsample if needed (for performance)
-    if subsample_factor > 1:
-        idx = np.arange(0, len(pos_x), subsample_factor)
-        pos_x_sub = pos_x[idx]
-        pos_y_sub = pos_y[idx]
-        mass_sub = mass[idx]
-    else:
-        pos_x_sub = pos_x
-        pos_y_sub = pos_y
-        mass_sub = mass
-
-    print(f"Building Delaunay triangulation with {len(pos_x_sub)} points...")
-    points = np.column_stack([pos_x_sub, pos_y_sub])
+    print("Building Delaunay tessellation for DTFE...")
+    points = np.column_stack([pos_x, pos_y])
     tri = Delaunay(points)
 
-    # Extract all edges from triangulation
-    edges = set()
+    # Calculate area of each triangle
+    def triangle_area(p1, p2, p3):
+        return 0.5 * abs((p2[0] - p1[0]) * (p3[1] - p1[1]) - (p3[0] - p1[0]) * (p2[1] - p1[1]))
+
+    # Calculate density at each point (sum of mass / sum of adjacent triangle areas)
+    print("Calculating DTFE densities...")
+    point_density = np.zeros(len(points))
+    point_area = np.zeros(len(points))
+
     for simplex in tri.simplices:
-        for i in range(3):
-            edge = tuple(sorted([simplex[i], simplex[(i+1) % 3]]))
-            edges.add(edge)
-    edges = np.array(list(edges))
+        i, j, k = simplex
+        area = triangle_area(points[i], points[j], points[k])
+        # Each vertex gets 1/3 of the triangle area
+        point_area[i] += area / 3
+        point_area[j] += area / 3
+        point_area[k] += area / 3
 
-    # Calculate edge lengths and filter out long edges (these cross voids)
-    p1 = points[edges[:, 0]]
-    p2 = points[edges[:, 1]]
-    edge_lengths = np.sqrt(np.sum((p1 - p2)**2, axis=1))
+    # Density = mass / area (avoid division by zero)
+    point_area = np.maximum(point_area, 1e-10)
+    point_density = mass / point_area
 
-    # Keep only short edges (these trace filaments)
-    short_mask = edge_lengths < max_edge_length
-    filtered_edges = edges[short_mask]
-    filtered_lengths = edge_lengths[short_mask]
+    # Interpolate density field onto grid
+    print("Interpolating density field...")
+    grid_size = 16384
+    x_grid = np.linspace(0, BoxSize, grid_size)
+    y_grid = np.linspace(0, BoxSize, grid_size)
+    X, Y = np.meshgrid(x_grid, y_grid)
 
-    print(f"Kept {len(filtered_edges)}/{len(edges)} edges (max length {max_edge_length} Mpc/h)")
+    # Use linear interpolation within triangles
+    # Take log of density BEFORE interpolating to reduce peaks
+    log_density = np.log10(point_density + floor_value)
+    interp = LinearNDInterpolator(points, log_density, fill_value=np.log10(floor_value))
+    hist_log = interp(X, Y)
 
-    # Build line segments for plotting
-    segments = []
-    edge_masses = []  # For coloring by mass
-    for edge in filtered_edges:
-        i, j = edge
-        segments.append([[points[i, 0], points[i, 1]],
-                         [points[j, 0], points[j, 1]]])
-        # Color by average mass of connected galaxies
-        edge_masses.append((mass_sub[i] + mass_sub[j]) / 2)
+    # Smoothing for continuous look (scaled with grid size)
+    hist_log = gaussian_filter(hist_log, sigma=200.0)
 
-    segments = np.array(segments)
-    edge_masses = np.array(edge_masses)
-    edge_masses_log = np.log10(edge_masses + 1e6)
-
-    # 4. Also create density field for background glow
-    H, xedges, yedges = np.histogram2d(
-        pos_x,
-        pos_y,
-        bins=grid_resolution,
-        range=[[0, BoxSize], [0, BoxSize]],
-        weights=mass
-    )
-
-    # Log-transform and smooth for background
-    H_log = np.log10(H + floor_value)
-    H_smooth = gaussian_filter(H_log, sigma=smoothing_sigma * 3)  # More smoothing for glow
-
-    # 5. Plotting
+    # 4. Plotting
     fig = plt.figure(figsize=(12, 12), facecolor='black')
     ax = fig.add_subplot(111)
+    ax.set_facecolor('black')
 
-    # 5a. Background glow layer (smoothed density field)
-    vmin_bg = np.percentile(H_smooth, 50)
-    vmax_bg = np.percentile(H_smooth, 99.5)
-
-    im = ax.imshow(
-        H_smooth.T,
-        origin='lower',
-        extent=[0, BoxSize, 0, BoxSize],
-        cmap=uchuu_cmap,
-        aspect='auto',
-        interpolation='bicubic',
-        vmin=vmin_bg,
-        vmax=vmax_bg,
-        alpha=0.6  # Semi-transparent background
-    )
-
-    # 5b. STRAND LAYER - the actual cosmic web filaments
-    # Normalize edge masses for coloring
-    norm = plt.Normalize(vmin=np.percentile(edge_masses_log, 10),
-                         vmax=np.percentile(edge_masses_log, 99))
-
-    # Create line collection with colors based on mass
-    lc = LineCollection(segments, cmap=uchuu_cmap, norm=norm,
-                        linewidths=line_width, alpha=line_alpha)
-    lc.set_array(edge_masses_log)
-    ax.add_collection(lc)
+    im = ax.imshow(hist_log, origin='lower', cmap=uchuu_cmap,
+                   extent=[0, BoxSize, 0, BoxSize],
+                   interpolation='bilinear',
+                   vmin=np.percentile(hist_log, 2),
+                   vmax=np.percentile(hist_log, 99.5))
 
     ax.set_xlim(0, BoxSize)
     ax.set_ylim(0, BoxSize)
+    ax.set_aspect('equal')
 
     # Clean up axes like the snippet
     ax.set_xticks([])

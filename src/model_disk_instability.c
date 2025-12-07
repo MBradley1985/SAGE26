@@ -31,6 +31,10 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
         const double star_fraction  = 1.0 - gas_fraction;
         const double unstable_stars = star_fraction * (diskmass - Mcrit);
 
+        // CRITICAL: Save the disc radius BEFORE any mass transfers or updates
+        // This is the R_D used in Tonini+2016 equation (15)
+        const double old_disk_radius = galaxies[p].DiskScaleRadius;
+
         // add excess stars to the bulge
         if(unstable_stars > 0.0) {
             // Use disk metallicity here
@@ -41,7 +45,8 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
             galaxies[p].MetalsBulgeMass += metallicity * unstable_stars;
             
             // UPDATE: Tonini incremental radius evolution (equation 15)
-            update_instability_bulge_radius(p, unstable_stars, galaxies, run_params);
+            // Pass the OLD disc radius explicitly to ensure we use pre-instability value
+            update_instability_bulge_radius(p, unstable_stars, old_disk_radius, galaxies, run_params);
 
             // Need to fix this. Excluded for now.
             // galaxies[p].mergeType = 3;  // mark as disk instability partial mass transfer
