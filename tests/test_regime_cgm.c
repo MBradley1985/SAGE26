@@ -18,72 +18,111 @@
 #include "../src/model_starformation_and_feedback.h"
 
 void test_regime_boundary() {
-    BEGIN_TEST("Regime Boundary Determination (Voit 2015)");
-    
+    BEGIN_TEST("Regime Boundary Determination (Voit 2015) - Statistical");
+
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
     run_params.Hubble_h = 0.7;
-    
-    // Test cases around the shock mass threshold
-    // M_shock = 6e11 Msun
-    // Criterion: (M/Mshock)^(4/3) >= 1
-    
+
+    // Test that regime assignment follows sigmoid probability around Mshock
+    // With probabilistic assignment, we test statistical behavior
+
+    const int N_trials = 1000;
+    const double Mshock = 6.0e11;  // Msun
+
     struct {
         double Mvir_physical;  // Msun
-        int expected_regime;
+        double expected_hot_frac_min;
+        double expected_hot_frac_max;
         const char *description;
     } test_cases[] = {
-        {1e11, 0, "Well below threshold (1e11 Msun)"},
-        {3e11, 0, "Below threshold (3e11 Msun)"},
-        {6e11, 1, "At threshold (6e11 Msun)"},
-        {1e12, 1, "Above threshold (1e12 Msun)"},
-        {1e13, 1, "Well above threshold (1e13 Msun)"},
+        {1e11,  0.00, 0.05, "Well below threshold (1e11 Msun) -> <5% Hot"},
+        {3e11,  0.00, 0.15, "Below threshold (3e11 Msun) -> <15% Hot"},
+        {6e11,  0.35, 0.65, "At threshold (6e11 Msun) -> ~50% Hot"},
+        {1e12,  0.85, 1.00, "Above threshold (1e12 Msun) -> >85% Hot"},
+        {1e13,  0.99, 1.00, "Well above threshold (1e13 Msun) -> >99% Hot"},
     };
-    
+
     for(size_t i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); i++) {
-        struct GALAXY gal;
-        memset(&gal, 0, sizeof(struct GALAXY));
-        
-        // Convert to code units: 10^10 Msun/h
-        gal.Mvir = test_cases[i].Mvir_physical / (1e10 / run_params.Hubble_h);
-        
-        // Determine regime
-        determine_and_store_regime(1, &gal, &run_params);
-        
-        ASSERT_EQUAL_INT(test_cases[i].expected_regime, gal.Regime, 
+        int hot_count = 0;
+
+        for(int j = 0; j < N_trials; j++) {
+            struct GALAXY gal;
+            memset(&gal, 0, sizeof(struct GALAXY));
+
+            // Convert to code units: 10^10 Msun/h
+            gal.Mvir = test_cases[i].Mvir_physical / (1e10 / run_params.Hubble_h);
+
+            // Determine regime
+            determine_and_store_regime(1, &gal, &run_params);
+
+            if(gal.Regime == 1) hot_count++;
+        }
+
+        double hot_frac = (double)hot_count / N_trials;
+
+        ASSERT_IN_RANGE(hot_frac, test_cases[i].expected_hot_frac_min,
+                        test_cases[i].expected_hot_frac_max,
                         test_cases[i].description);
+
+        printf("  ℹ %s: %.1f%% Hot\n", test_cases[i].description, 100.0 * hot_frac);
     }
 }
 
-void test_regime_criterion_power_law() {
-    BEGIN_TEST("Regime Criterion Power Law (4/3)");
-    
+void test_regime_sigmoid_transition() {
+    BEGIN_TEST("Regime Sigmoid Transition (delta_log_M = 0.1)");
+
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
     run_params.Hubble_h = 0.7;
-    
-    // The transition should happen when (M/Mshock)^(4/3) = 1
-    // So M = Mshock at the transition
-    
-    double Mshock = 6.0e11;  // Msun
-    
-    // Test that the power law is correctly implemented
-    struct GALAXY gal;
-    memset(&gal, 0, sizeof(struct GALAXY));
-    
-    // Set Mvir slightly below Mshock
-    double Mvir_physical = 0.99 * Mshock;
-    gal.Mvir = Mvir_physical / (1e10 / run_params.Hubble_h);
-    
-    determine_and_store_regime(1, &gal, &run_params);
-    ASSERT_EQUAL_INT(0, gal.Regime, "Just below threshold → Regime 0");
-    
-    // Set Mvir slightly above Mshock
-    Mvir_physical = 1.01 * Mshock;
-    gal.Mvir = Mvir_physical / (1e10 / run_params.Hubble_h);
-    
-    determine_and_store_regime(1, &gal, &run_params);
-    ASSERT_EQUAL_INT(1, gal.Regime, "Just above threshold → Regime 1");
+
+    // Test that the sigmoid transition is correctly centered at Mshock
+    // and has the expected width (delta_log_M = 0.1 dex)
+
+    const double Mshock = 6.0e11;  // Msun
+    const double delta_log_M = 0.1;
+    const int N_trials = 1000;
+
+    // At M = Mshock, sigmoid gives 50% probability
+    // At M = Mshock * 10^(delta_log_M), sigmoid gives ~73% (1/(1+exp(-1)))
+    // At M = Mshock * 10^(-delta_log_M), sigmoid gives ~27%
+
+    struct {
+        double mass_factor;  // multiplier on Mshock
+        double expected_hot_frac;
+        double tolerance;
+        const char *description;
+    } test_cases[] = {
+        {1.0,                    0.50, 0.08, "At Mshock -> 50% Hot"},
+        {pow(10, delta_log_M),   0.73, 0.08, "At Mshock * 10^0.1 -> ~73% Hot"},
+        {pow(10, -delta_log_M),  0.27, 0.08, "At Mshock * 10^-0.1 -> ~27% Hot"},
+    };
+
+    for(size_t i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); i++) {
+        int hot_count = 0;
+
+        for(int j = 0; j < N_trials; j++) {
+            struct GALAXY gal;
+            memset(&gal, 0, sizeof(struct GALAXY));
+
+            double Mvir_physical = test_cases[i].mass_factor * Mshock;
+            gal.Mvir = Mvir_physical / (1e10 / run_params.Hubble_h);
+
+            determine_and_store_regime(1, &gal, &run_params);
+
+            if(gal.Regime == 1) hot_count++;
+        }
+
+        double hot_frac = (double)hot_count / N_trials;
+        double expected = test_cases[i].expected_hot_frac;
+        double tol = test_cases[i].tolerance;
+
+        ASSERT_IN_RANGE(hot_frac, expected - tol, expected + tol,
+                        test_cases[i].description);
+
+        printf("  ℹ %s: %.1f%% Hot (expected %.0f%%)\n",
+               test_cases[i].description, 100.0 * hot_frac, 100.0 * expected);
+    }
 }
 
 void test_precipitation_criterion() {
@@ -222,39 +261,40 @@ void test_gas_routing_to_correct_reservoir() {
 }
 
 void test_regime_transition() {
-    BEGIN_TEST("Regime Transition Handling");
-    
+    BEGIN_TEST("Regime Transition Preserves Gas Reservoirs");
+
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
     run_params.Hubble_h = 0.7;
     run_params.CGMrecipeOn = 1;
-    
+
+    // Test that gas reservoirs are preserved when regime changes
+    // (regardless of which regime is assigned probabilistically)
+
     struct GALAXY gal;
     memset(&gal, 0, sizeof(struct GALAXY));
-    
-    // Start just below threshold
+
     double Mshock = 6.0e11;
-    gal.Mvir = 0.9 * Mshock / (1e10 / run_params.Hubble_h);
-    
-    determine_and_store_regime(1, &gal, &run_params);
-    int initial_regime = gal.Regime;
-    
-    // Add some gas to each reservoir
+
+    // Set up galaxy with gas in both reservoirs
+    gal.Mvir = Mshock / (1e10 / run_params.Hubble_h);  // At threshold
     gal.CGMgas = 0.5;
     gal.HotGas = 0.3;
-    
-    // Grow the halo past the threshold
-    gal.Mvir = 1.1 * Mshock / (1e10 / run_params.Hubble_h);
-    
-    determine_and_store_regime(1, &gal, &run_params);
-    int final_regime = gal.Regime;
-    
-    ASSERT_EQUAL_INT(0, initial_regime, "Started in Regime 0");
-    ASSERT_EQUAL_INT(1, final_regime, "Transitioned to Regime 1");
-    
-    // Both reservoirs should still exist (no instantaneous transfer)
-    ASSERT_EQUAL_FLOAT(0.5, gal.CGMgas, "CGM gas preserved during transition");
-    ASSERT_EQUAL_FLOAT(0.3, gal.HotGas, "Hot gas preserved during transition");
+
+    double initial_cgm = gal.CGMgas;
+    double initial_hot = gal.HotGas;
+
+    // Call regime determination multiple times
+    // Gas should be preserved regardless of regime assignment
+    for(int i = 0; i < 10; i++) {
+        determine_and_store_regime(1, &gal, &run_params);
+
+        // Gas reservoirs must be unchanged by regime determination
+        ASSERT_EQUAL_FLOAT(initial_cgm, gal.CGMgas, "CGM gas preserved");
+        ASSERT_EQUAL_FLOAT(initial_hot, gal.HotGas, "Hot gas preserved");
+    }
+
+    printf("  ℹ Gas reservoirs preserved across regime determinations\n");
 }
 
 void test_cold_stream_fraction() {
@@ -307,16 +347,16 @@ void test_cold_stream_fraction() {
 
 int main() {
     BEGIN_TEST_SUITE("Regime Determination & CGM Physics");
-    
+
     test_regime_boundary();
-    test_regime_criterion_power_law();
+    test_regime_sigmoid_transition();
     test_precipitation_criterion();
     test_gas_routing_to_correct_reservoir();
     test_regime_transition();
     test_cold_stream_fraction();
-    
+
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();
-    
+
     return TEST_EXIT_CODE();
 }

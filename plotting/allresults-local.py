@@ -1741,10 +1741,10 @@ if __name__ == '__main__':
     if(len(w) > dilute): w = sample(list(w), dilute)
 
     log10_stellar_mass = np.log10(StellarMass[w])
-    log10_CGM_mass = np.log10(CGMgas[w])
-    Z = np.log10((MetalsCGMgas[w] / CGMgas[w]) / 0.02) + 9.0
+    log10_ejected_mass = np.log10(EjectedMass[w])
+    Z = np.log10((MetalsEjectedMass[w] / EjectedMass[w]) / 0.02) + 9.0
 
-    plt.scatter(log10_stellar_mass, log10_CGM_mass, c=Z, cmap='plasma', s=5, vmin=7, vmax=9)
+    plt.scatter(log10_stellar_mass, log10_ejected_mass, c=Z, cmap='plasma', s=5, vmin=7, vmax=9)
     plt.colorbar(label=r'$12\ +\ \log_{10}[\mathrm{O/H}]$')
 
     plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')

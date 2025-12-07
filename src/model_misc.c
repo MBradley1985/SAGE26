@@ -340,25 +340,38 @@ double get_virial_radius(const int halonr, const struct halo_data *halos, const 
   return cbrt(get_virial_mass(halonr, halos, run_params) * fac);
 }
 
-void determine_and_store_regime(const int ngal, struct GALAXY *galaxies, 
+void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
                                 const struct params *run_params)
 {
     for(int p = 0; p < ngal; p++) {
         if(galaxies[p].mergeType > 0) continue;
-        
+
         // Convert Mvir to physical units (Msun)
         // Mvir is stored in units of 10^10 Msun/h
         const double Mvir_physical = galaxies[p].Mvir * 1.0e10 / run_params->Hubble_h;
-        
-        // Shock mass threshold
-        const double Mshock = 6.0e11;  // Msun
-        
-        // Calculate (Mvir/Mshock)^(4/3)
-        const double mass_ratio = Mvir_physical / Mshock;
-        const double regime_criterion = pow(mass_ratio, 4.0/3.0);
 
-        galaxies[p].Regime = (regime_criterion >= 1.0) ? 1 : 0;
-        
+        // Shock mass threshold (Voit et al. 2015)
+        const double Mshock = 6.0e11;  // Msun
+
+        // Calculate mass ratio for sigmoid
+        const double mass_ratio = Mvir_physical / Mshock;
+
+        // Smooth sigmoid transition (consistent with FFB approach)
+        // Width of transition in dex
+        const double delta_log_M = 0.1;
+
+        // Sigmoid argument: x = log10(M/Mshock) / width
+        const double x = log10(mass_ratio) / delta_log_M;
+
+        // Sigmoid function: probability of being in Hot regime
+        // Smoothly varies from 0 (well below Mshock) to 1 (well above Mshock)
+        const double hot_fraction = 1.0 / (1.0 + exp(-x));
+
+        // Probabilistic assignment based on sigmoid
+        const double random_uniform = (double)rand() / (double)RAND_MAX;
+
+        galaxies[p].Regime = (random_uniform < hot_fraction) ? 1 : 0;
+
     }
 }
 
