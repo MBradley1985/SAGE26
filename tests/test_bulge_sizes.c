@@ -148,12 +148,13 @@ void test_instability_bulge_growth() {
     
     double M_old = gal.InstabilityBulgeMass;
     double R_old = gal.InstabilityBulgeRadius;
-    
+    double old_disk_radius = gal.DiskScaleRadius;
+
     // Add mass from disk instability
     double delta_mass = 0.05;
     gal.InstabilityBulgeMass += delta_mass;
-    
-    update_instability_bulge_radius(0, delta_mass, &gal, &run_params);
+
+    update_instability_bulge_radius(0, delta_mass, old_disk_radius, &gal, &run_params);
     
     // Expected: R_new = (R_old × M_old + ΔM × 0.2 × R_disk) / M_new
     double expected_R = (R_old * M_old + delta_mass * 0.2 * gal.DiskScaleRadius) / 
