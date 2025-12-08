@@ -37,27 +37,24 @@ warnings.filterwarnings("ignore")
 
 def func_MUV_sfr(SFR, z):
     """
-    Convert SFR to UV absolute magnitude using Behroozi+2020, eq B3.
-    This is the correct conversion from the Li+2023 paper (ffb_predict.py).
+    Convert stellar mass to UV absolute magnitude using:
+    median{M_UV|M_s} = -2.3 * log10(M_s/1e9 Msun) - 20.5
     
     Parameters:
     -----------
-    SFR : array-like
-        Star formation rate in Msun/yr
+    SFR : array-like or float
+        Star formation rate in Msun/yr (ignored, kept for compatibility)
     z : float
-        Redshift
+        Redshift (ignored, kept for compatibility)
     
     Returns:
     --------
-    MUV : array-like
+    MUV : array-like or float
         Absolute UV magnitude at 1500 Angstrom
     """
-    # Behroozi+2020, eq B3 - redshift-dependent conversion factor
-    kappa_UV = 5.1e-29 * (1 + np.exp(-20.79 / (1 + z) + 0.98))
-    lum = SFR / kappa_UV * (u.erg / u.s / u.Hz)
-    dist_lum = 10 * u.pc
-    flux = lum / (4 * np.pi * dist_lum**2)
-    MUV = flux.to(u.ABmag).value
+    # This function now expects SFR to be the stellar mass (Msun)
+    Ms = np.asarray(SFR)  # SFR argument is now interpreted as stellar mass
+    MUV = -2.3 * np.log10(Ms / 1e9) - 20.5
     return MUV
 
 # ========================== FFB METALLICITY ANALYTICAL FUNCTIONS ==========================
@@ -1624,27 +1621,47 @@ def plot_smf_vs_redshift(models=None):
     
     print('='*60 + '\n')
 
-def calculate_uv_luminosity_function(stellar_mass, sfr_disk, sfr_bulge, volume, hubble_h, redshift, binwidth=0.5):
+def calculate_uv_luminosity_function(stellar_mass, sfr_disk, sfr_bulge, volume, hubble_h, redshift, binwidth=0.5, use_stellar_mass=True):
     """Calculate UV luminosity function with Poisson errors
-    
-    Uses conversion from SFR to UV luminosity following Behroozi+2020 (eq B3):
-    kappa_UV = 5.1e-29 * (1 + exp(-20.79 / (1 + z) + 0.98))
-    
-    This is the correct conversion from Li+2023 paper (ffb_predict.py).
-    
+
+    Args:
+        stellar_mass: Stellar mass in Msun
+        sfr_disk: Disk star formation rate in Msun/yr
+        sfr_bulge: Bulge star formation rate in Msun/yr
+        volume: Comoving volume in Mpc^3
+        hubble_h: Hubble parameter h
+        redshift: Redshift
+        binwidth: Magnitude bin width (default 0.5)
+        use_stellar_mass: If True, use Li+24 stellar mass-based M_UV relation (func_MUV_lgMs).
+                         If False, use Behroozi+2020 SFR-based conversion.
+
+    The stellar mass method matches the Li+24 analytical UVLF normalization better
+    because it captures cumulative star formation rather than instantaneous SFR.
+
     Returns: M_UV bins, log(phi), log(phi_lower), log(phi_upper)
     """
-    # Total star formation rate
-    sfr_total = sfr_disk + sfr_bulge
-    
-    # Select galaxies with SFR > 0
-    w = np.where(sfr_total > 0.0)[0]
-    if len(w) == 0:
-        return np.array([]), np.array([]), np.array([]), np.array([])
-    
-    # Convert SFR to UV magnitude at 1500Å using Behroozi+2020 formula
-    # This includes redshift-dependent conversion factor
-    M_UV = func_MUV_sfr(sfr_total[w], redshift)
+    if use_stellar_mass:
+        # Use Li+24 stellar mass-based M_UV relation (Yung+2023)
+        # MUV = -2.3 * (log10(Ms) - 9) - 20.5
+        # Select galaxies with stellar mass > 0
+        w = np.where(stellar_mass > 0.0)[0]
+        if len(w) == 0:
+            return np.array([]), np.array([]), np.array([]), np.array([])
+
+        lgMs = np.log10(stellar_mass[w])
+        M_UV = func_MUV_lgMs(lgMs, redshift)
+    else:
+        # Original method: SFR to UV using Behroozi+2020 (eq B3)
+        # Total star formation rate
+        sfr_total = sfr_disk + sfr_bulge
+
+        # Select galaxies with SFR > 0
+        w = np.where(sfr_total > 0.0)[0]
+        if len(w) == 0:
+            return np.array([]), np.array([]), np.array([]), np.array([])
+
+        # Convert SFR to UV magnitude at 1500Å using Behroozi+2020 formula
+        M_UV = func_MUV_sfr(sfr_total[w], redshift)
     
     # Create histogram in UV magnitude space
     mi = np.floor(M_UV.min()) - 2
@@ -2450,17 +2467,18 @@ def plot_uvlf_vs_redshift(models=None):
                 w = np.where(sfr_total > 0.0)[0]
                 if len(w) > 0:
                     # Convert SFR to UV magnitude using Behroozi+2020 (correct formula from Li+2023 paper)
-                    M_UV = func_MUV_sfr(sfr_total[w], z_actual)
+                    M_UV = func_MUV_sfr(stellar_mass[w], z_actual)
                     
-                    # Count galaxies brighter than threshold (M_UV < threshold, i.e., more negative)
-                    n_brighter = np.sum(M_UV < M_UV_threshold)
-                    
-                    # Calculate number density (Mpc^-3) with Poisson errors
-                    n_density = n_brighter / volume
-                    
+                    # Count galaxies in bin centered on threshold (differential UVLF at M_UV = threshold)
+                    bin_width = 0.5  # magnitude bin width
+                    n_in_bin = np.sum((M_UV >= M_UV_threshold - bin_width/2) & (M_UV < M_UV_threshold + bin_width/2))
+
+                    # Calculate number density (Mpc^-3 mag^-1) with Poisson errors
+                    n_density = n_in_bin / volume / bin_width
+
                     # Poisson errors: N ± sqrt(N)
-                    n_upper = (n_brighter + np.sqrt(n_brighter)) / volume
-                    n_lower = max((n_brighter - np.sqrt(n_brighter)), 1) / volume
+                    n_upper = (n_in_bin + np.sqrt(n_in_bin)) / volume / bin_width
+                    n_lower = max((n_in_bin - np.sqrt(n_in_bin)), 1) / volume / bin_width
                     
                     if n_density > 0:
                         redshifts_data.append(z_actual)
@@ -2489,61 +2507,65 @@ def plot_uvlf_vs_redshift(models=None):
                 print(f"  {model['name']}: plotted")
         
         # Add analytical predictions from Li+2023 (three lines)
+        # Interpolate to get differential UVLF at exactly M_UV = threshold
         try:
+            from scipy.interpolate import interp1d
+
             # FFB eps_max=1.0
             set_option(FFB_SFE_MAX=1.0)
             redshifts_ffb1, phi_ffb1 = [], []
             for z_actual in actual_redshifts:
                 MUV_bins, dNdMUV = compute_dNdMUV_Ms(z_actual, attenuation=None)
-                mask = MUV_bins < M_UV_threshold
-                if np.sum(mask) > 0:
-                    n_cumulative = np.abs(np.trapz(dNdMUV[mask], MUV_bins[mask]))
-                    if n_cumulative > 0:
+                # Interpolate to get value at exactly M_UV_threshold
+                if M_UV_threshold >= MUV_bins.min() and M_UV_threshold <= MUV_bins.max():
+                    interp_func = interp1d(MUV_bins, dNdMUV, kind='linear')
+                    phi_at_threshold = interp_func(M_UV_threshold)
+                    if phi_at_threshold > 0:
                         redshifts_ffb1.append(z_actual)
-                        phi_ffb1.append(np.log10(n_cumulative))
+                        phi_ffb1.append(np.log10(phi_at_threshold))
             if len(redshifts_ffb1) > 0:
                 ax.plot(redshifts_ffb1, phi_ffb1,
                        color='dodgerblue', linestyle='--', linewidth=2,
                        label='Li+ 2024' if ax_idx == 0 else '',
                        alpha=0.7, zorder=4)
-            
+
             # FFB eps_max=0.2
             set_option(FFB_SFE_MAX=0.2)
             redshifts_ffb02, phi_ffb02 = [], []
             for z_actual in actual_redshifts:
                 MUV_bins, dNdMUV = compute_dNdMUV_Ms(z_actual, attenuation=None)
-                mask = MUV_bins < M_UV_threshold
-                if np.sum(mask) > 0:
-                    n_cumulative = np.abs(np.trapz(dNdMUV[mask], MUV_bins[mask]))
-                    if n_cumulative > 0:
+                if M_UV_threshold >= MUV_bins.min() and M_UV_threshold <= MUV_bins.max():
+                    interp_func = interp1d(MUV_bins, dNdMUV, kind='linear')
+                    phi_at_threshold = interp_func(M_UV_threshold)
+                    if phi_at_threshold > 0:
                         redshifts_ffb02.append(z_actual)
-                        phi_ffb02.append(np.log10(n_cumulative))
+                        phi_ffb02.append(np.log10(phi_at_threshold))
             if len(redshifts_ffb02) > 0:
                 ax.plot(redshifts_ffb02, phi_ffb02,
                        color='orange', linestyle='--', linewidth=2,
                        label='',
                        alpha=0.7, zorder=4)
-            
+
             # UM model (no FFB)
             set_option(FFB_SFE_MAX=0.0)
             redshifts_um, phi_um = [], []
             for z_actual in actual_redshifts:
                 MUV_bins, dNdMUV = compute_dNdMUV_Ms(z_actual, attenuation=None)
-                mask = MUV_bins < M_UV_threshold
-                if np.sum(mask) > 0:
-                    n_cumulative = np.abs(np.trapz(dNdMUV[mask], MUV_bins[mask]))
-                    if n_cumulative > 0:
+                if M_UV_threshold >= MUV_bins.min() and M_UV_threshold <= MUV_bins.max():
+                    interp_func = interp1d(MUV_bins, dNdMUV, kind='linear')
+                    phi_at_threshold = interp_func(M_UV_threshold)
+                    if phi_at_threshold > 0:
                         redshifts_um.append(z_actual)
-                        phi_um.append(np.log10(n_cumulative))
+                        phi_um.append(np.log10(phi_at_threshold))
             if len(redshifts_um) > 0:
                 ax.plot(redshifts_um, phi_um,
                        color='gray', linestyle='--', linewidth=2,
                        label='',
                        alpha=0.7, zorder=4)
-            
+
             # Reset to default
             set_option(FFB_SFE_MAX=1.0)
-            print(f"  Li+2023 analytical predictions added (3 lines) for M_UV < {M_UV_threshold}")
+            print(f"  Li+2023 analytical predictions added (3 lines) for M_UV = {M_UV_threshold}")
         except Exception as e:
             print(f"  Warning: Could not compute analytical UVLF prediction: {e}")
         
@@ -2594,7 +2616,7 @@ def plot_uvlf_vs_redshift(models=None):
         ax.set_xlabel('Redshift z', fontsize=12)
         
         # Add M_UV threshold text in upper right corner
-        ax.text(0.95, 0.95, rf'$M_{{\mathrm{{UV}}}} < {M_UV_threshold}$',
+        ax.text(0.95, 0.95, rf'$M_{{\mathrm{{UV}}}} = {M_UV_threshold}$',
                transform=ax.transAxes,
                verticalalignment='top',
                horizontalalignment='right',
@@ -2755,7 +2777,7 @@ def plot_cumulative_surface_density(models=None):
                 w = np.where(sfr_total > 0.0)[0]
                 if len(w) > 0:
                     # Convert SFR to UV magnitude using Behroozi+2020 (correct formula from Li+2023 paper)
-                    M_UV = func_MUV_sfr(sfr_total[w], z_actual)
+                    M_UV = func_MUV_sfr(stellar_mass[w], z_actual)
                     
                     # Convert M_UV to m_F277W
                     m_F277W = convert_MUV_to_mF277W(M_UV, z_actual)
@@ -4103,19 +4125,27 @@ def plot_ffb_threshold_analysis_empirical_all():
     # Arrays for Right Plot (individual data points) - three populations
     disk_z_above = []  # All galaxies above threshold
     disk_r_above = []
+    disk_z_below = []  # All galaxies below threshold
+    disk_r_below = []
     disk_z_threshold = []  # Galaxies near threshold (0.8-1.2x)
     disk_r_threshold = []
     disk_z_all = []  # All galaxies
     disk_r_all = []
-    
+
+    # Statistics tracking
+    stats_by_redshift = []
+
     for snapshot, z_actual in zip(snapshots, actual_redshifts):
         # Read Data
         mvir = read_hdf_from_model(model_dir, filename, snapshot, 'Mvir', hubble_h) * 1.0e10 / hubble_h
         stellar_mass = read_hdf_from_model(model_dir, filename, snapshot, 'StellarMass', hubble_h) * 1.0e10 / hubble_h
         bulge_mass = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeMass', hubble_h) * 1.0e10 / hubble_h
-        
+        cold_gas = read_hdf_from_model(model_dir, filename, snapshot, 'ColdGas', hubble_h) * 1.0e10 / hubble_h
+        hot_gas = read_hdf_from_model(model_dir, filename, snapshot, 'HotGas', hubble_h) * 1.0e10 / hubble_h
+
         # SAGE Radius is Comoving Mpc/h
-        sage_disk_radius = read_hdf_from_model(model_dir, filename, snapshot, 'DiskRadius', hubble_h) 
+        sage_disk_radius = read_hdf_from_model(model_dir, filename, snapshot, 'DiskRadius', hubble_h)
+        bulge_radius = read_hdf_from_model(model_dir, filename, snapshot, 'BulgeRadius', hubble_h) 
 
         # --- UNIT CONVERSION (Comoving kpc) ---
         # 1. Mpc/h -> kpc/h: * 1000
@@ -4136,8 +4166,11 @@ def plot_ffb_threshold_analysis_empirical_all():
 
         # --- Statistics for Right Plot - THREE POPULATIONS ---
         M_ffb = calculate_ffb_threshold_mass(z_actual, hubble_h)
-        
-        # Population 1: All galaxies above FFB threshold
+
+        # Read FFBRegime flag
+        ffb_regime = read_hdf_from_model(model_dir, filename, snapshot, 'FFBRegime', hubble_h)
+
+        # Population 1: Galaxies above FFB threshold mass
         above_threshold = mvir > M_ffb
         subset_above = has_mass & above_threshold
         w_above = np.where(subset_above)[0]
@@ -4146,11 +4179,19 @@ def plot_ffb_threshold_analysis_empirical_all():
             if np.sum(disk_valid) > 0:
                 disk_z_above.extend([z_actual] * np.sum(disk_valid))
                 disk_r_above.extend(r_disk_kpc_comov[w_above][disk_valid])
-        
-        # Population 2: Galaxies near FFB threshold (0.8-1.2x)
-        # near_threshold = (mvir > M_ffb * 0.8) & (mvir < M_ffb * 1.2)
-        near_threshold = (mvir > M_ffb * 0.9) & (mvir < M_ffb * 1.1)
 
+        # Population 1b: Galaxies below FFB threshold mass
+        below_threshold = mvir <= M_ffb
+        subset_below = has_mass & below_threshold
+        w_below = np.where(subset_below)[0]
+        if len(w_below) > 0:
+            disk_valid = r_disk_kpc_comov[w_below] > 0
+            if np.sum(disk_valid) > 0:
+                disk_z_below.extend([z_actual] * np.sum(disk_valid))
+                disk_r_below.extend(r_disk_kpc_comov[w_below][disk_valid])
+
+        # Population 2: Galaxies near FFB threshold mass (0.9-1.1x)
+        near_threshold = (mvir > M_ffb * 0.9) & (mvir < M_ffb * 1.1)
         subset_threshold = has_mass & near_threshold
         w_threshold = np.where(subset_threshold)[0]
         if len(w_threshold) > 0:
@@ -4158,15 +4199,123 @@ def plot_ffb_threshold_analysis_empirical_all():
             if np.sum(disk_valid) > 0:
                 disk_z_threshold.extend([z_actual] * np.sum(disk_valid))
                 disk_r_threshold.extend(r_disk_kpc_comov[w_threshold][disk_valid])
-        
-        # Population 3: All galaxies (no mass cut)
-        subset_all = has_mass
+
+        # Population 3: All galaxies (FFBRegime == 0 and FFBRegime == 1)
+        all_galaxies = (ffb_regime == 0) | (ffb_regime == 1)
+        subset_all = has_mass & all_galaxies
         w_all = np.where(subset_all)[0]
         if len(w_all) > 0:
             disk_valid = r_disk_kpc_comov[w_all] > 0
             if np.sum(disk_valid) > 0:
                 disk_z_all.extend([z_actual] * np.sum(disk_valid))
                 disk_r_all.extend(r_disk_kpc_comov[w_all][disk_valid])
+
+        # --- Collect statistics for this redshift ---
+        n_total = len(mvir)
+        n_with_mass = np.sum(has_mass)
+        n_ffb_regime_1 = np.sum(ffb_regime == 1)
+
+        # --- DIAGNOSTIC: Disk size statistics by population ---
+        # Population: Above FFB threshold
+        above_mask = has_mass & above_threshold & (r_disk_kpc_comov > 0)
+        r_above_this_z = r_disk_kpc_comov[above_mask] if np.sum(above_mask) > 0 else np.array([])
+        mvir_above_this_z = mvir[above_mask] if np.sum(above_mask) > 0 else np.array([])
+
+        # Population: Below FFB threshold
+        below_threshold = mvir <= M_ffb
+        below_mask = has_mass & below_threshold & (r_disk_kpc_comov > 0)
+        r_below_this_z = r_disk_kpc_comov[below_mask] if np.sum(below_mask) > 0 else np.array([])
+        mvir_below_this_z = mvir[below_mask] if np.sum(below_mask) > 0 else np.array([])
+
+        # Population: All with valid disk
+        all_valid_mask = has_mass & (r_disk_kpc_comov > 0)
+        r_all_this_z = r_disk_kpc_comov[all_valid_mask] if np.sum(all_valid_mask) > 0 else np.array([])
+        mvir_all_this_z = mvir[all_valid_mask] if np.sum(all_valid_mask) > 0 else np.array([])
+
+        # Count galaxies with zero disk radius
+        n_zero_disk_above = np.sum(has_mass & above_threshold & (r_disk_kpc_comov == 0))
+        n_zero_disk_below = np.sum(has_mass & below_threshold & (r_disk_kpc_comov == 0))
+        n_zero_disk_total = np.sum(has_mass & (r_disk_kpc_comov == 0))
+        n_ffb_regime_0 = np.sum(ffb_regime == 0)
+        n_ffb_regime_neg1 = np.sum(ffb_regime == -1)
+
+        # --- DIAGNOSTIC: Bulge-to-total ratio ---
+        # B/T = BulgeMass / StellarMass (where stellar mass > 0)
+        bt_ratio = np.where(stellar_mass > 0, bulge_mass / stellar_mass, 0.0)
+        bt_above = bt_ratio[above_mask] if np.sum(above_mask) > 0 else np.array([])
+        bt_below = bt_ratio[below_mask] if np.sum(below_mask) > 0 else np.array([])
+
+        # --- DIAGNOSTIC: Gas fractions ---
+        # Cold gas fraction: f_cold = ColdGas / (ColdGas + StellarMass)
+        total_baryons = cold_gas + stellar_mass
+        f_cold = np.where(total_baryons > 0, cold_gas / total_baryons, 0.0)
+        f_cold_above = f_cold[above_mask] if np.sum(above_mask) > 0 else np.array([])
+        f_cold_below = f_cold[below_mask] if np.sum(below_mask) > 0 else np.array([])
+
+        # --- DIAGNOSTIC: FFBRegime breakdown for above/below threshold ---
+        n_above_in_ffb = np.sum(above_threshold & (ffb_regime == 1))
+        n_above_not_ffb = np.sum(above_threshold & (ffb_regime == 0))
+        n_below_in_ffb = np.sum(below_threshold & (ffb_regime == 1))
+        n_below_not_ffb = np.sum(below_threshold & (ffb_regime == 0))
+
+        # --- DIAGNOSTIC: Disk vs Bulge radius comparison ---
+        r_bulge_kpc = bulge_radius * 1000.0 / hubble_h  # Convert to kpc (no 1.68 factor for bulge)
+        r_bulge_above = r_bulge_kpc[above_mask] if np.sum(above_mask) > 0 else np.array([])
+        r_bulge_below = r_bulge_kpc[below_mask] if np.sum(below_mask) > 0 else np.array([])
+
+        # --- DIAGNOSTIC: Stellar mass comparison ---
+        mstar_above = stellar_mass[above_mask] if np.sum(above_mask) > 0 else np.array([])
+        mstar_below = stellar_mass[below_mask] if np.sum(below_mask) > 0 else np.array([])
+        n_above_mass_threshold = np.sum(mvir > M_ffb)
+        n_below_mass_threshold = np.sum(mvir <= M_ffb)
+        n_at_threshold = np.sum(near_threshold)
+        n_ffb_with_mass = np.sum(has_mass & (ffb_regime == 1))
+        n_normal_with_mass = np.sum(has_mass & (ffb_regime == 0))
+
+        stats_by_redshift.append({
+            'z': z_actual,
+            'M_ffb': M_ffb,
+            'n_total': n_total,
+            'n_with_mass': n_with_mass,
+            'n_ffb_regime_1': n_ffb_regime_1,
+            'n_ffb_regime_0': n_ffb_regime_0,
+            'n_ffb_regime_neg1': n_ffb_regime_neg1,
+            'n_above_mass_threshold': n_above_mass_threshold,
+            'n_below_mass_threshold': n_below_mass_threshold,
+            'n_at_threshold': n_at_threshold,
+            'n_ffb_with_mass': n_ffb_with_mass,
+            'n_normal_with_mass': n_normal_with_mass,
+            # Diagnostic: disk size stats
+            'n_above_valid_disk': len(r_above_this_z),
+            'n_below_valid_disk': len(r_below_this_z),
+            'n_all_valid_disk': len(r_all_this_z),
+            'n_zero_disk_above': n_zero_disk_above,
+            'n_zero_disk_below': n_zero_disk_below,
+            'n_zero_disk_total': n_zero_disk_total,
+            'median_r_above': np.median(r_above_this_z) if len(r_above_this_z) > 0 else np.nan,
+            'median_r_below': np.median(r_below_this_z) if len(r_below_this_z) > 0 else np.nan,
+            'median_r_all': np.median(r_all_this_z) if len(r_all_this_z) > 0 else np.nan,
+            'median_mvir_above': np.median(mvir_above_this_z) if len(mvir_above_this_z) > 0 else np.nan,
+            'median_mvir_below': np.median(mvir_below_this_z) if len(mvir_below_this_z) > 0 else np.nan,
+            'median_mvir_all': np.median(mvir_all_this_z) if len(mvir_all_this_z) > 0 else np.nan,
+            # Diagnostic: Bulge-to-total ratio
+            'median_bt_above': np.median(bt_above) if len(bt_above) > 0 else np.nan,
+            'median_bt_below': np.median(bt_below) if len(bt_below) > 0 else np.nan,
+            # Diagnostic: Cold gas fraction
+            'median_fcold_above': np.median(f_cold_above) if len(f_cold_above) > 0 else np.nan,
+            'median_fcold_below': np.median(f_cold_below) if len(f_cold_below) > 0 else np.nan,
+            # Diagnostic: FFBRegime breakdown
+            'n_above_in_ffb': n_above_in_ffb,
+            'n_above_not_ffb': n_above_not_ffb,
+            'n_below_in_ffb': n_below_in_ffb,
+            'n_below_not_ffb': n_below_not_ffb,
+            # Diagnostic: Bulge radius
+            'median_rbulge_above': np.median(r_bulge_above) if len(r_bulge_above) > 0 else np.nan,
+            'median_rbulge_below': np.median(r_bulge_below) if len(r_bulge_below) > 0 else np.nan,
+            # Diagnostic: Stellar mass
+            'median_mstar_above': np.median(mstar_above) if len(mstar_above) > 0 else np.nan,
+            'median_mstar_below': np.median(mstar_below) if len(mstar_below) > 0 else np.nan,
+        })
 
     # ================= PLOTTING =================
     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
@@ -4287,16 +4436,16 @@ def plot_ffb_threshold_analysis_empirical_all():
                              alpha=0.2,
                              zorder=0)
     
-    # Plot 2: Galaxies above threshold (orange, medium)
+    # Plot 2: Galaxies above FFB threshold mass (orange, medium)
     if len(disk_z_above) > 0:
         z_above, r_above, r_above_lower, r_above_upper = calculate_binned_stats(
             np.array(disk_z_above), np.array(disk_r_above), z_bin_edges)
-        
+
         ax_right.plot(z_above, r_above,
                      color='darkorange',
                      linestyle='-',
                      linewidth=2.5,
-                     label='Above FFB Threshold',
+                     label=r'$M_{\rm vir} > M_{\rm FFB}$',
                      alpha=0.6,
                      marker='o',
                      markersize=4,
@@ -4388,7 +4537,281 @@ def plot_ffb_threshold_analysis_empirical_all():
     plt.savefig(out_path, dpi=300)
     print(f'Plot saved to: {out_path}')
     plt.close()
+
+    # ================= STATISTICS =================
+    print('\n' + '-'*100)
+    print('GALAXY STATISTICS BY REDSHIFT')
+    print('-'*100)
+    print(f'{"z":>6} {"M_ffb":>12} {"N_total":>10} {"N_mass>0":>10} {"FFB=1":>8} {"FFB=0":>8} {"FFB=-1":>8} {"M>M_ffb":>10} {"M<=M_ffb":>10} {"At thresh":>10} {"f_above":>8}')
+    print('-'*100)
+
+    totals = {
+        'n_total': 0,
+        'n_with_mass': 0,
+        'n_ffb_regime_1': 0,
+        'n_ffb_regime_0': 0,
+        'n_ffb_regime_neg1': 0,
+        'n_above_mass_threshold': 0,
+        'n_below_mass_threshold': 0,
+        'n_at_threshold': 0,
+        'n_ffb_with_mass': 0,
+        'n_normal_with_mass': 0,
+    }
+
+    for s in stats_by_redshift:
+        # Calculate fraction of halos above FFB threshold
+        f_above = 100.0 * s["n_above_mass_threshold"] / s["n_total"] if s["n_total"] > 0 else 0.0
+        print(f'{s["z"]:>6.2f} {s["M_ffb"]:>12.2e} {s["n_total"]:>10} {s["n_with_mass"]:>10} '
+              f'{s["n_ffb_regime_1"]:>8} {s["n_ffb_regime_0"]:>8} {s["n_ffb_regime_neg1"]:>8} '
+              f'{s["n_above_mass_threshold"]:>10} {s["n_below_mass_threshold"]:>10} {s["n_at_threshold"]:>10} {f_above:>7.1f}%')
+        for key in totals:
+            totals[key] += s[key]
+
+    print('-'*100)
+    total_f_above = 100.0 * totals["n_above_mass_threshold"] / totals["n_total"] if totals["n_total"] > 0 else 0.0
+    print(f'{"TOTAL":>6} {"":>12} {totals["n_total"]:>10} {totals["n_with_mass"]:>10} '
+          f'{totals["n_ffb_regime_1"]:>8} {totals["n_ffb_regime_0"]:>8} {totals["n_ffb_regime_neg1"]:>8} '
+          f'{totals["n_above_mass_threshold"]:>10} {totals["n_below_mass_threshold"]:>10} {totals["n_at_threshold"]:>10} {total_f_above:>7.1f}%')
+
+    print('\n' + '-'*60)
+    print('SUMMARY')
+    print('-'*60)
+    print(f'Total galaxies across all snapshots:        {totals["n_total"]:>10}')
+    print(f'Galaxies with stellar mass > 0:             {totals["n_with_mass"]:>10}')
+    print(f'FFB regime galaxies (FFBRegime=1):          {totals["n_ffb_regime_1"]:>10}')
+    print(f'Normal regime galaxies (FFBRegime=0):       {totals["n_ffb_regime_0"]:>10}')
+    print(f'Unassigned galaxies (FFBRegime=-1):         {totals["n_ffb_regime_neg1"]:>10}')
+    print(f'Galaxies above M_ffb threshold:             {totals["n_above_mass_threshold"]:>10}')
+    print(f'Fraction of halos above M_ffb threshold:    {total_f_above:>9.1f}%')
+    print(f'Galaxies at threshold (0.9-1.1x M_ffb):     {totals["n_at_threshold"]:>10}')
+    print(f'FFB galaxies with stellar mass:             {totals["n_ffb_with_mass"]:>10}')
+    print(f'Normal galaxies with stellar mass:          {totals["n_normal_with_mass"]:>10}')
+
+    if totals["n_with_mass"] > 0:
+        ffb_frac = 100.0 * totals["n_ffb_with_mass"] / totals["n_with_mass"]
+        print(f'\nFraction of galaxies (with mass) in FFB regime: {ffb_frac:.1f}%')
+
     print('='*60 + '\n')
+
+    # ================= DIAGNOSTIC: Disk size comparison =================
+    print('\n' + '='*120)
+    print('DIAGNOSTIC: DISK SIZE COMPARISON BY POPULATION')
+    print('='*120)
+    print(f'{"z":>6} {"N_above":>10} {"N_below":>10} {"N_all":>10} | '
+          f'{"R_med_above":>12} {"R_med_below":>12} {"R_med_all":>12} | '
+          f'{"Mvir_above":>12} {"Mvir_below":>12} {"Mvir_all":>12} | '
+          f'{"zero_above":>10} {"zero_below":>10}')
+    print('-'*120)
+
+    for s in stats_by_redshift:
+        print(f'{s["z"]:>6.2f} {s["n_above_valid_disk"]:>10} {s["n_below_valid_disk"]:>10} {s["n_all_valid_disk"]:>10} | '
+              f'{s["median_r_above"]:>12.4f} {s["median_r_below"]:>12.4f} {s["median_r_all"]:>12.4f} | '
+              f'{s["median_mvir_above"]:>12.2e} {s["median_mvir_below"]:>12.2e} {s["median_mvir_all"]:>12.2e} | '
+              f'{s["n_zero_disk_above"]:>10} {s["n_zero_disk_below"]:>10}')
+
+    print('-'*120)
+    print('\nKEY QUESTIONS:')
+    print('  1. Is R_med_above > R_med_below? (Expected if disk size scales with halo mass)')
+    print('  2. Is R_med_all closer to R_med_below? (Expected if most galaxies are below threshold)')
+    print('  3. Are there many zero-disk galaxies being excluded?')
+    print('  4. What fraction of below-threshold galaxies have valid disks?')
+    print('='*120 + '\n')
+
+    # ================= DIAGNOSTIC: Bulge-to-Total and Gas Fractions =================
+    print('\n' + '='*140)
+    print('DIAGNOSTIC: BULGE-TO-TOTAL RATIO AND COLD GAS FRACTION')
+    print('='*140)
+    print(f'{"z":>6} | {"B/T_above":>10} {"B/T_below":>10} | '
+          f'{"f_cold_above":>12} {"f_cold_below":>12} | '
+          f'{"R_bulge_above":>14} {"R_bulge_below":>14} | '
+          f'{"M*_above":>12} {"M*_below":>12}')
+    print('-'*140)
+
+    for s in stats_by_redshift:
+        bt_above_str = f'{s["median_bt_above"]:>10.3f}' if not np.isnan(s["median_bt_above"]) else f'{"nan":>10}'
+        bt_below_str = f'{s["median_bt_below"]:>10.3f}' if not np.isnan(s["median_bt_below"]) else f'{"nan":>10}'
+        fc_above_str = f'{s["median_fcold_above"]:>12.3f}' if not np.isnan(s["median_fcold_above"]) else f'{"nan":>12}'
+        fc_below_str = f'{s["median_fcold_below"]:>12.3f}' if not np.isnan(s["median_fcold_below"]) else f'{"nan":>12}'
+        rb_above_str = f'{s["median_rbulge_above"]:>14.4f}' if not np.isnan(s["median_rbulge_above"]) else f'{"nan":>14}'
+        rb_below_str = f'{s["median_rbulge_below"]:>14.4f}' if not np.isnan(s["median_rbulge_below"]) else f'{"nan":>14}'
+        ms_above_str = f'{s["median_mstar_above"]:>12.2e}' if not np.isnan(s["median_mstar_above"]) else f'{"nan":>12}'
+        ms_below_str = f'{s["median_mstar_below"]:>12.2e}' if not np.isnan(s["median_mstar_below"]) else f'{"nan":>12}'
+
+        print(f'{s["z"]:>6.2f} | {bt_above_str} {bt_below_str} | '
+              f'{fc_above_str} {fc_below_str} | '
+              f'{rb_above_str} {rb_below_str} | '
+              f'{ms_above_str} {ms_below_str}')
+
+    print('-'*140)
+    print('\nINTERPRETATION:')
+    print('  - B/T: Higher = more bulge-dominated (mergers, instabilities)')
+    print('  - f_cold: Cold gas fraction. Lower = less gas available for disk growth')
+    print('  - R_bulge: Bulge radius. Compare to disk radius.')
+    print('  - M*: Stellar mass. Above-threshold should be more massive.')
+    print('='*140 + '\n')
+
+    # ================= DIAGNOSTIC: FFBRegime breakdown =================
+    print('\n' + '='*100)
+    print('DIAGNOSTIC: FFBRegime FLAG vs MASS THRESHOLD')
+    print('='*100)
+    print(f'{"z":>6} | {"Above threshold":>40} | {"Below threshold":>40}')
+    print(f'{"":>6} | {"FFB=1":>12} {"FFB=0":>12} {"%FFB":>12} | {"FFB=1":>12} {"FFB=0":>12} {"%FFB":>12}')
+    print('-'*100)
+
+    for s in stats_by_redshift:
+        n_above_total = s["n_above_in_ffb"] + s["n_above_not_ffb"]
+        n_below_total = s["n_below_in_ffb"] + s["n_below_not_ffb"]
+        pct_above_ffb = 100.0 * s["n_above_in_ffb"] / n_above_total if n_above_total > 0 else 0.0
+        pct_below_ffb = 100.0 * s["n_below_in_ffb"] / n_below_total if n_below_total > 0 else 0.0
+
+        print(f'{s["z"]:>6.2f} | {s["n_above_in_ffb"]:>12} {s["n_above_not_ffb"]:>12} {pct_above_ffb:>11.1f}% | '
+              f'{s["n_below_in_ffb"]:>12} {s["n_below_not_ffb"]:>12} {pct_below_ffb:>11.1f}%')
+
+    print('-'*100)
+    print('\nINTERPRETATION:')
+    print('  - "Above threshold" = halos with Mvir > M_ffb at this redshift')
+    print('  - "Below threshold" = halos with Mvir <= M_ffb at this redshift')
+    print('  - %FFB = fraction of that population flagged as FFBRegime=1')
+    print('  - If %FFB is high for "below threshold", these halos were above threshold earlier')
+    print('='*100 + '\n')
+
+    # ================= PLOT: FFB vs All galaxy counts by redshift =================
+    fig_hist, ax_hist = plt.subplots(figsize=(10, 6))
+
+    # Extract data for plotting
+    z_plot = np.array([s['z'] for s in stats_by_redshift])
+    n_total_plot = np.array([s['n_total'] for s in stats_by_redshift])
+    n_ffb_plot = np.array([s['n_ffb_regime_1'] for s in stats_by_redshift])
+
+    # Bar width
+    bar_width = 0.35
+
+    # Create bar positions
+    x_pos = np.arange(len(z_plot))
+
+    # Plot bars
+    bars_all = ax_hist.bar(x_pos - bar_width/2, n_total_plot, bar_width,
+                           color='gray', alpha=0.7, label='All Halos')
+    bars_ffb = ax_hist.bar(x_pos + bar_width/2, n_ffb_plot, bar_width,
+                           color='darkorange', alpha=0.8, label='FFB Galaxies')
+
+    # Add percentage labels on FFB bars
+    for i, (n_ffb, n_total) in enumerate(zip(n_ffb_plot, n_total_plot)):
+        if n_total > 0:
+            pct = 100.0 * n_ffb / n_total
+            ax_hist.text(x_pos[i] + bar_width/2, n_ffb + max(n_total_plot)*0.01,
+                        f'{pct:.1f}%', ha='center', va='bottom', fontsize=8, rotation=90)
+
+    ax_hist.set_xlabel('Redshift z', fontsize=14)
+    ax_hist.set_ylabel('Number of Halos', fontsize=14)
+    ax_hist.set_yscale('log')
+
+    # Set x-tick labels to redshift values
+    ax_hist.set_xticks(x_pos)
+    ax_hist.set_xticklabels([f'{z:.1f}' for z in z_plot], rotation=45, ha='right')
+
+    ax_hist.legend(frameon=False, loc='upper right', fontsize=12)
+    ax_hist.set_title('FFB Galaxy Counts by Redshift', fontsize=14)
+
+    plt.tight_layout()
+    frac_out_path = DirName + 'plots/ffb_counts_by_redshift' + OutputFormat
+    plt.savefig(frac_out_path, dpi=300)
+    print(f'FFB counts plot saved to: {frac_out_path}')
+    plt.close()
+
+    # ================= PLOT: Disk sizes for above vs below threshold =================
+    fig_disk, ax_disk = plt.subplots(figsize=(10, 7))
+
+    # Helper function to calculate binned statistics (reuse from earlier)
+    def calculate_binned_stats_local(z_arr, r_arr, z_bin_edges):
+        """Calculate median and percentiles in redshift bins"""
+        z_bin_centers = (z_bin_edges[:-1] + z_bin_edges[1:]) / 2
+        z_plot_out = []
+        r_median_plot = []
+        r_lower_plot = []
+        r_upper_plot = []
+
+        for i in range(len(z_bin_edges) - 1):
+            in_bin = (z_arr >= z_bin_edges[i]) & (z_arr < z_bin_edges[i+1])
+
+            if np.sum(in_bin) > 5:  # Need at least 5 galaxies
+                r_in_bin = r_arr[in_bin]
+                median_r = np.median(r_in_bin)
+                lower_r = np.percentile(r_in_bin, 16)
+                upper_r = np.percentile(r_in_bin, 84)
+
+                z_plot_out.append(z_bin_centers[i])
+                r_median_plot.append(median_r)
+                r_lower_plot.append(lower_r)
+                r_upper_plot.append(upper_r)
+
+        return (np.array(z_plot_out), np.array(r_median_plot),
+                np.array(r_lower_plot), np.array(r_upper_plot))
+
+    # Define redshift bins
+    z_bin_edges = np.arange(4, 21, 0.5)
+
+    # Plot above-threshold galaxies (orange)
+    if len(disk_z_above) > 0:
+        z_above_arr, r_above_arr, r_above_lower, r_above_upper = calculate_binned_stats_local(
+            np.array(disk_z_above), np.array(disk_r_above), z_bin_edges)
+
+        if len(z_above_arr) > 0:
+            ax_disk.plot(z_above_arr, r_above_arr,
+                        color='darkorange', linestyle='-', linewidth=2.5,
+                        label=r'Above threshold ($M_{\rm vir} > M_{\rm FFB}$)',
+                        marker='o', markersize=6, zorder=3)
+            ax_disk.fill_between(z_above_arr, r_above_lower, r_above_upper,
+                                color='darkorange', alpha=0.3, zorder=2)
+
+    # Plot below-threshold galaxies (blue)
+    if len(disk_z_below) > 0:
+        z_below_arr, r_below_arr, r_below_lower, r_below_upper = calculate_binned_stats_local(
+            np.array(disk_z_below), np.array(disk_r_below), z_bin_edges)
+
+        if len(z_below_arr) > 0:
+            ax_disk.plot(z_below_arr, r_below_arr,
+                        color='dodgerblue', linestyle='-', linewidth=2.5,
+                        label=r'Below threshold ($M_{\rm vir} \leq M_{\rm FFB}$)',
+                        marker='s', markersize=6, zorder=3)
+            ax_disk.fill_between(z_below_arr, r_below_lower, r_below_upper,
+                                color='dodgerblue', alpha=0.3, zorder=2)
+
+    # Plot all galaxies (gray, for reference)
+    if len(disk_z_all) > 0:
+        z_all_arr, r_all_arr, r_all_lower, r_all_upper = calculate_binned_stats_local(
+            np.array(disk_z_all), np.array(disk_r_all), z_bin_edges)
+
+        if len(z_all_arr) > 0:
+            ax_disk.plot(z_all_arr, r_all_arr,
+                        color='gray', linestyle='--', linewidth=2,
+                        label='All galaxies', alpha=0.7, zorder=1)
+
+    # Add theory line from Li+24
+    z_t = np.linspace(5, 20, 100)
+    z_10 = (1 + z_t) / 10.0
+    r_th_disk = 0.31 * (z_10 ** -3.07)
+    ax_disk.plot(z_t, r_th_disk, color='darkred', ls=':', lw=2, label='Li+24 (Disk)', zorder=4)
+
+    ax_disk.set_yscale('log')
+    ax_disk.set_xlabel('Redshift z', fontsize=14)
+    ax_disk.set_ylabel(r'$R_{\rm 1/2}$ (kpc)', fontsize=14)
+    ax_disk.set_xlim(5, 16)
+    ax_disk.set_ylim(0.1, 10)
+
+    # Set integer x-ticks
+    from matplotlib.ticker import MultipleLocator
+    ax_disk.xaxis.set_major_locator(MultipleLocator(1))
+    ax_disk.xaxis.set_minor_locator(MultipleLocator(0.2))
+
+    ax_disk.legend(frameon=False, loc='upper right', fontsize=11)
+    ax_disk.set_title('Disk Size: Above vs Below FFB Threshold', fontsize=14)
+
+    plt.tight_layout()
+    disk_compare_path = DirName + 'plots/ffb_disk_size_above_vs_below' + OutputFormat
+    plt.savefig(disk_compare_path, dpi=300)
+    print(f'Disk size comparison plot saved to: {disk_compare_path}')
+    plt.close()
 
 
 def plot_gas_fraction_evolution():
@@ -5303,8 +5726,224 @@ def plot_ffb_metallicity_limit(use_analytical=True):
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f'\nPlot saved to: {output_path}')
     plt.close()
-    
+
     print('='*60 + '\n')
+
+# ==================================================================
+# SPIN PARAMETER ANALYSIS
+# ==================================================================
+
+def plot_spin_vs_mass(models=None):
+    """Plot median spin parameter as a function of halo mass at different redshifts.
+
+    Args:
+        models: List of model dictionaries to plot. If None, uses first model in PLOT_MODELS.
+    """
+    print('\n' + '='*60)
+    print('Creating Spin Parameter vs Halo Mass Plot')
+    print('='*60)
+
+    if models is None:
+        models = [PLOT_MODELS[0]]
+
+    model = models[0]
+    model_dir = model['dir']
+    filename = 'model_0.hdf5'
+    hubble_h = model['hubble_h']
+
+    # Check if file exists
+    if not os.path.exists(model_dir + filename):
+        print(f"Error: {model_dir + filename} not found")
+        return
+
+    # Select redshifts to plot
+    target_redshifts = [0.0, 2.0, 4.0, 6.0, 8.0, 10.0]
+    colors = plt.cm.plasma(np.linspace(0, 0.9, len(target_redshifts)))
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+
+    for z_target, color in zip(target_redshifts, colors):
+        # Find closest snapshot
+        idx = np.argmin(np.abs(np.array(DEFAULT_REDSHIFTS) - z_target))
+        snapshot = f'Snap_{idx}'
+        z_actual = DEFAULT_REDSHIFTS[idx]
+
+        # Read data
+        mvir = read_hdf_from_model(model_dir, filename, snapshot, 'Mvir', hubble_h) * 1.0e10 / hubble_h
+        spinx = read_hdf_from_model(model_dir, filename, snapshot, 'Spinx', hubble_h)
+        spiny = read_hdf_from_model(model_dir, filename, snapshot, 'Spiny', hubble_h)
+        spinz = read_hdf_from_model(model_dir, filename, snapshot, 'Spinz', hubble_h)
+        rvir = read_hdf_from_model(model_dir, filename, snapshot, 'Rvir', hubble_h)  # Mpc/h
+        vvir = read_hdf_from_model(model_dir, filename, snapshot, 'Vvir', hubble_h)  # km/s
+
+        # Calculate angular momentum magnitude |J| in (Mpc/h)*(km/s)
+        J_mag = np.sqrt(spinx**2 + spiny**2 + spinz**2)
+
+        # Calculate dimensionless spin parameter: λ = |J| / (sqrt(2) * Vvir * Rvir)
+        # Rvir is in Mpc/h, Vvir in km/s, J in (Mpc/h)*(km/s)
+        spin = J_mag / (np.sqrt(2) * vvir * rvir)
+
+        # Select central galaxies with valid mass and non-zero spin
+        galaxy_type = read_hdf_from_model(model_dir, filename, snapshot, 'Type', hubble_h)
+        w = np.where((mvir > 0) & (galaxy_type == 0) & (vvir > 0) & (rvir > 0))[0]
+
+        if len(w) < 10:
+            print(f"  z={z_actual:.2f}: insufficient data ({len(w)} galaxies)")
+            continue
+
+        mvir_sel = mvir[w]
+        spin_sel = spin[w]
+
+        # Bin by mass and compute median
+        mass_bins = np.logspace(np.log10(mvir_sel.min()), np.log10(mvir_sel.max()), 15)
+        mass_centers = 0.5 * (mass_bins[:-1] + mass_bins[1:])
+
+        median_spin = np.zeros(len(mass_centers))
+        spin_16 = np.zeros(len(mass_centers))
+        spin_84 = np.zeros(len(mass_centers))
+        valid_bins = np.zeros(len(mass_centers), dtype=bool)
+
+        for i in range(len(mass_centers)):
+            in_bin = (mvir_sel >= mass_bins[i]) & (mvir_sel < mass_bins[i+1])
+            if np.sum(in_bin) >= 5:
+                median_spin[i] = np.median(spin_sel[in_bin])
+                spin_16[i] = np.percentile(spin_sel[in_bin], 16)
+                spin_84[i] = np.percentile(spin_sel[in_bin], 84)
+                valid_bins[i] = True
+
+        # Plot
+        ax.plot(mass_centers[valid_bins], median_spin[valid_bins],
+                color=color, linewidth=2, label=f'z = {z_actual:.1f}')
+        ax.fill_between(mass_centers[valid_bins], spin_16[valid_bins], spin_84[valid_bins],
+                       color=color, alpha=0.2)
+
+        print(f"  z={z_actual:.2f}: {len(w)} centrals, median λ = {np.median(spin_sel):.4f}")
+
+    # Theoretical expectation (λ ~ 0.035 from N-body simulations)
+    ax.axhline(0.05, color='gray', linestyle='--', linewidth=1.5, label='λ = 0.05 (theory)')
+    ax.axhline(0.025, color='red', linestyle='--', linewidth=1.5, label='λ = 0.025 (Li+24)')
+
+    ax.set_xscale('log')
+    ax.set_xlabel(r'$M_{\rm vir}$ [$M_\odot$]', fontsize=14)
+    ax.set_ylabel(r'Spin Parameter $\lambda$', fontsize=14)
+    ax.set_ylim(0, 0.15)
+    ax.legend(loc='upper right', fontsize=10)
+    ax.set_title('Median Spin Parameter vs Halo Mass', fontsize=14)
+
+    plt.tight_layout()
+
+    # Save
+    OutputDir = DirName + 'plots/'
+    if not os.path.exists(OutputDir):
+        os.makedirs(OutputDir)
+    output_path = OutputDir + 'spin_vs_mass' + OutputFormat
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f'\nPlot saved to: {output_path}')
+    plt.close()
+
+    print('='*60 + '\n')
+
+
+def plot_spin_vs_redshift(models=None):
+    """Plot median spin parameter as a function of redshift for different mass bins.
+
+    Args:
+        models: List of model dictionaries to plot. If None, uses first model in PLOT_MODELS.
+    """
+    print('\n' + '='*60)
+    print('Creating Spin Parameter vs Redshift Plot')
+    print('='*60)
+
+    if models is None:
+        models = [PLOT_MODELS[0]]
+
+    model = models[0]
+    model_dir = model['dir']
+    filename = 'model_0.hdf5'
+    hubble_h = model['hubble_h']
+
+    # Check if file exists
+    if not os.path.exists(model_dir + filename):
+        print(f"Error: {model_dir + filename} not found")
+        return
+
+    # Define mass bins
+    mass_bins = [(1e10, 1e11, r'$10^{10} < M_{\rm vir} < 10^{11}$'),
+                 (1e11, 1e12, r'$10^{11} < M_{\rm vir} < 10^{12}$'),
+                 (1e12, 1e13, r'$10^{12} < M_{\rm vir} < 10^{13}$')]
+    colors = ['C0', 'C1', 'C2']
+
+    # Redshift range
+    redshifts_to_plot = []
+    snapshots_to_plot = []
+    for i, z in enumerate(DEFAULT_REDSHIFTS):
+        if z <= 15:
+            redshifts_to_plot.append(z)
+            snapshots_to_plot.append(f'Snap_{i}')
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+
+    for (m_min, m_max, label), color in zip(mass_bins, colors):
+        median_spins = []
+        spin_16_list = []
+        spin_84_list = []
+        valid_redshifts = []
+
+        for snapshot, z_actual in zip(snapshots_to_plot, redshifts_to_plot):
+            # Read data
+            mvir = read_hdf_from_model(model_dir, filename, snapshot, 'Mvir', hubble_h) * 1.0e10 / hubble_h
+            spinx = read_hdf_from_model(model_dir, filename, snapshot, 'Spinx', hubble_h)
+            spiny = read_hdf_from_model(model_dir, filename, snapshot, 'Spiny', hubble_h)
+            spinz = read_hdf_from_model(model_dir, filename, snapshot, 'Spinz', hubble_h)
+            rvir = read_hdf_from_model(model_dir, filename, snapshot, 'Rvir', hubble_h)  # Mpc/h
+            vvir = read_hdf_from_model(model_dir, filename, snapshot, 'Vvir', hubble_h)  # km/s
+
+            # Calculate angular momentum magnitude |J| in (Mpc/h)*(km/s)
+            J_mag = np.sqrt(spinx**2 + spiny**2 + spinz**2)
+
+            # Calculate dimensionless spin parameter: λ = |J| / (sqrt(2) * Vvir * Rvir)
+            # Rvir is in Mpc/h, Vvir in km/s, J in (Mpc/h)*(km/s)
+            spin = J_mag / (np.sqrt(2) * vvir * rvir)
+
+            # Select central galaxies in mass bin
+            galaxy_type = read_hdf_from_model(model_dir, filename, snapshot, 'Type', hubble_h)
+            w = np.where((mvir >= m_min) & (mvir < m_max) & (galaxy_type == 0) & (vvir > 0) & (rvir > 0))[0]
+
+            if len(w) >= 5:
+                median_spins.append(np.median(spin[w]))
+                spin_16_list.append(np.percentile(spin[w], 16))
+                spin_84_list.append(np.percentile(spin[w], 84))
+                valid_redshifts.append(z_actual)
+
+        if len(valid_redshifts) > 0:
+            ax.plot(valid_redshifts, median_spins, color=color, linewidth=2, label=label)
+            ax.fill_between(valid_redshifts, spin_16_list, spin_84_list, color=color, alpha=0.2)
+            print(f"  {label}: {len(valid_redshifts)} redshifts with data")
+
+    # Theoretical expectation
+    ax.axhline(0.05, color='gray', linestyle='--', linewidth=1.5, label='λ = 0.05 (theory)')
+    ax.axhline(0.025, color='red', linestyle='--', linewidth=1.5, label='λ = 0.025 (Li+24)')
+
+    ax.set_xlabel('Redshift', fontsize=14)
+    ax.set_ylabel(r'Spin Parameter $\lambda$', fontsize=14)
+    ax.set_xlim(0, 15)
+    ax.set_ylim(0, 0.15)
+    ax.legend(loc='upper right', fontsize=10)
+    ax.set_title('Median Spin Parameter vs Redshift', fontsize=14)
+
+    plt.tight_layout()
+
+    # Save
+    OutputDir = DirName + 'plots/'
+    if not os.path.exists(OutputDir):
+        os.makedirs(OutputDir)
+    output_path = OutputDir + 'spin_vs_redshift' + OutputFormat
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f'\nPlot saved to: {output_path}')
+    plt.close()
+
+    print('='*60 + '\n')
+
 
 # ==================================================================
 
@@ -5393,12 +6032,15 @@ def main():
     plot_uvlf_vs_redshift()
     # plot_cumulative_surface_density()
     plot_density_evolution()
-    # plot_ffb_threshold_analysis()
+    plot_ffb_threshold_analysis()
     plot_ffb_threshold_analysis_empirical()
     plot_ffb_threshold_analysis_empirical_all()
     plot_gas_fraction_evolution()
-    # plot_radius_evolution_all_galaxies()
+    plot_radius_evolution_all_galaxies()
     plot_rvir_vs_redshift()
+
+    plot_spin_vs_mass()
+    plot_spin_vs_redshift()
 
     # plot_ffb_metallicity_limit(use_analytical=True)  # Disabled
     
