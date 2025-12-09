@@ -21,7 +21,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // ========================================================================
     // CHECK FOR FFB REGIME - EARLY EXIT IF FFB
     // ========================================================================
-    if(galaxies[p].FFBRegime == 1) {
+    if(run_params->FeedbackFreeModeOn == 1 && galaxies[p].FFBRegime == 1) {
         // This is a Feedback-Free Burst halo
         // Use specialized FFB star formation (no feedback)
         starformation_ffb(p, centralgal, dt, step, galaxies, run_params);

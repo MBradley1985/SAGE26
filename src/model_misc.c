@@ -18,7 +18,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
 
     galaxies[p].Type = 0;
     galaxies[p].Regime = -1; // undefined at initialization
-    galaxies[p].FFBRegime = -1;
+    galaxies[p].FFBRegime = 0;
 
     galaxies[p].GalaxyNr = *galaxycounter;
     (*galaxycounter)++;

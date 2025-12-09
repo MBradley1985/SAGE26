@@ -61,7 +61,7 @@ MODEL_CONFIGS = [
     {
         'name': 'SAGE C16',           # Display name for legend
         'dir': '../SAGE-VANILLA/sage-model/output/millennium/',  # Second directory path
-        'color': 'blue',             # Color for plotting
+        'color': 'firebrick',             # Color for plotting
         'linestyle': '--',           # Dashed line style
         'linewidth': 2,              # Thin line for Vanilla SAGE
         'alpha': 0.8,                # Transparency
@@ -106,41 +106,41 @@ MODEL_CONFIGS = [
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
         'redshifts': DEFAULT_REDSHIFTS
     },
-    {
-        'name': '30% FFB', 'dir': './output/millennium_FFB30/', 
-        'color': 'purple', 'linestyle': '-', 'alpha': 0.8, 
-        'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
-        'hubble_h': MILLENNIUM_HUBBLE_H, 
-        'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
-        'redshifts': DEFAULT_REDSHIFTS
-    },
-    {
-        'name': '40% FFB', 'dir': './output/millennium_FFB40/', 
-        'color': 'red', 'linestyle': '-', 'alpha': 0.8, 
-        'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
-        'hubble_h': MILLENNIUM_HUBBLE_H, 
-        'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
-        'redshifts': DEFAULT_REDSHIFTS
-    },
-    {
-        'name': '50% FFB', 'dir': './output/millennium_FFB50/', 
-        'color': 'orange', 'linestyle': '-', 'alpha': 0.8, 
-        'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
-        'hubble_h': MILLENNIUM_HUBBLE_H, 
-        'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
-        'redshifts': DEFAULT_REDSHIFTS
-    },
-    {
-        'name': '80% FFB', 'dir': './output/millennium_FFB80/', 
-        'color': 'yellow', 'linestyle': '-', 'alpha': 0.8, 
-        'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
-        'hubble_h': MILLENNIUM_HUBBLE_H, 
-        'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
-        'redshifts': DEFAULT_REDSHIFTS
-    },
+    # {
+    #     'name': '30% FFB', 'dir': './output/millennium_FFB30/', 
+    #     'color': 'purple', 'linestyle': '-', 'alpha': 0.8, 
+    #     'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
+    #     'hubble_h': MILLENNIUM_HUBBLE_H, 
+    #     'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
+    #     'redshifts': DEFAULT_REDSHIFTS
+    # },
+    # {
+    #     'name': '40% FFB', 'dir': './output/millennium_FFB40/', 
+    #     'color': 'red', 'linestyle': '-', 'alpha': 0.8, 
+    #     'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
+    #     'hubble_h': MILLENNIUM_HUBBLE_H, 
+    #     'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
+    #     'redshifts': DEFAULT_REDSHIFTS
+    # },
+    # {
+    #     'name': '50% FFB', 'dir': './output/millennium_FFB50/', 
+    #     'color': 'orange', 'linestyle': '-', 'alpha': 0.8, 
+    #     'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
+    #     'hubble_h': MILLENNIUM_HUBBLE_H, 
+    #     'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
+    #     'redshifts': DEFAULT_REDSHIFTS
+    # },
+    # {
+    #     'name': '80% FFB', 'dir': './output/millennium_FFB80/', 
+    #     'color': 'yellow', 'linestyle': '-', 'alpha': 0.8, 
+    #     'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
+    #     'hubble_h': MILLENNIUM_HUBBLE_H, 
+    #     'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
+    #     'redshifts': DEFAULT_REDSHIFTS
+    # },
     {
         'name': '100% FFB', 'dir': './output/millennium_FFB100/', 
-        'color': 'purple', 'linestyle': '-', 'alpha': 0.8, 
+        'color': 'dodgerblue', 'linestyle': '-', 'alpha': 0.8, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
