@@ -3941,7 +3941,7 @@ if __name__ == "__main__":
     ]
     
     all_z_model_names = [
-        'SAGE26', 'SAGE C16', 'evilSAGE'
+        'SAGE26', 'SAGE C16', 'evilSAGE', 'no FFB'
     ]
     
     # Helper to filter models
