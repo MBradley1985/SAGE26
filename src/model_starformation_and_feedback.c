@@ -461,7 +461,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         // Safety check on cold_crit
         if(isnan(cold_crit) || isinf(cold_crit) || cold_crit < 0.0) {
             stars = 0.0;
-        } else if(galaxies[p].ColdGas > cold_crit) {
+        } else if(galaxies[p].ColdGas > 0.0) {
             // Only form stars if above critical density
             strdot = epsilon_ffb * (galaxies[p].ColdGas) / tdyn;
             

@@ -100,7 +100,7 @@ MODEL_CONFIGS = [
     },
     {
         'name': 'no FFB', 'dir': './output/millennium_noffb/', 
-        'color': 'green', 'linestyle': '-', 'alpha': 0.8, 
+        'color': 'magenta', 'linestyle': '-', 'alpha': 0.8, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
