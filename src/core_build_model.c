@@ -338,7 +338,35 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
     }
 
     // We integrate things forward by using a number of intervals equal to STEPS
-    for(int step = 0; step < STEPS; step++) {
+    // Adaptive timesteps: at high-z, snapshot spacing can exceed dynamical time
+    // so we use more substeps when needed
+    const double deltaT_total = run_params->Age[galaxies[0].SnapNum] - halo_age;
+
+    // Dynamical time ~ Rvir / Vvir
+    // Rvir is in Mpc/h, Vvir is in km/s, so t_dyn = Rvir/Vvir is in (Mpc/h)/(km/s)
+    // Convert to code units (same as Age): multiply by UnitVelocity/UnitLength
+    // which equals 1/UnitTime_in_s * (Mpc_in_cm / km_in_cm) = 1/UnitTime * 1e24/1e5 = 1e19/UnitTime
+    // Simpler: t_dyn [Mpc/km*s] * (3.086e19 km/Mpc) = t_dyn [s], then divide by UnitTime_in_s
+    double t_dyn_seconds = (galaxies[centralgal].Rvir / (galaxies[centralgal].Vvir + 1e-10)) * 3.086e19;
+    double t_dyn = t_dyn_seconds / run_params->UnitTime_in_s;
+
+    // Scale steps proportionally: ensure we resolve evolution within each dynamical time
+    // If deltaT/t_dyn > 1, the snapshot spans multiple dynamical times and we need finer resolution
+    // (minimum STEPS, maximum MAX_STEPS)
+    int effective_steps = STEPS;
+    if(t_dyn > 0.0) {
+        double ratio = deltaT_total / t_dyn;
+        int needed = (int)ceil(STEPS * ratio);
+        if(needed > STEPS) {
+            effective_steps = needed;
+        }
+    }
+    const int MAX_STEPS = 30;
+    if(effective_steps > MAX_STEPS) {
+        effective_steps = MAX_STEPS;
+    }
+
+    for(int step = 0; step < effective_steps; step++) {
 
         // Loop over all galaxies in the halo
         for(int p = 0; p < ngal; p++) {
@@ -348,7 +376,7 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
             }
 
             const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
-            const double time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / STEPS);
+            const double time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
 
             if(galaxies[p].dT < 0.0) {
                 galaxies[p].dT = deltaT;
@@ -356,10 +384,10 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
 
             // For the central galaxy only
             if(p == centralgal) {
-                add_infall_to_hot(centralgal, infallingGas / STEPS, galaxies, run_params);
+                add_infall_to_hot(centralgal, infallingGas / effective_steps, galaxies, run_params);
 
                 if(run_params->ReIncorporationFactor > 0.0) {
-                    reincorporate_gas(centralgal, deltaT / STEPS, galaxies, run_params);
+                    reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
                 }
             } else {
                 if(galaxies[p].Type == 1 && galaxies[p].HotGas > 0.0) {
@@ -371,15 +399,18 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
             double coolingGas;
             if(run_params->CGMrecipeOn == 1) {
 
-                cooling_recipe_regime_aware(p, deltaT / STEPS, galaxies, run_params);
+                cooling_recipe_regime_aware(p, deltaT / effective_steps, galaxies, run_params);
                 // cool_gas_onto_galaxy_regime_aware(p, coolingGas, galaxies);
             } else {
-                coolingGas = cooling_recipe(p, deltaT / STEPS, galaxies, run_params);
+                coolingGas = cooling_recipe(p, deltaT / effective_steps, galaxies, run_params);
                 cool_gas_onto_galaxy(p, coolingGas, galaxies);
             }
 
             // stars form and then explode!
-            starformation_and_feedback(p, centralgal, time, deltaT / STEPS, halonr, step, galaxies, run_params);
+            // Map adaptive step to fixed STEPS bins for SFR arrays
+            int step_bin = (step * STEPS) / effective_steps;
+            if(step_bin >= STEPS) step_bin = STEPS - 1;
+            starformation_and_feedback(p, centralgal, time, deltaT / effective_steps, halonr, step_bin, galaxies, run_params);
         }
 
         // check for satellite disruption and merger events
@@ -393,11 +424,11 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
                         p, galaxies[p].MergTime);
 
                 const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
-                galaxies[p].MergTime -= deltaT / STEPS;
+                galaxies[p].MergTime -= deltaT / effective_steps;
 
                 // only consider mergers or disruption for halo-to-baryonic mass ratios below the threshold
                 // or for satellites with no baryonic mass (they don't grow and will otherwise hang around forever)
-                double currentMvir = galaxies[p].Mvir - galaxies[p].deltaMvir * (1.0 - ((double)step + 1.0) / (double)STEPS);
+                double currentMvir = galaxies[p].Mvir - galaxies[p].deltaMvir * (1.0 - ((double)step + 1.0) / (double)effective_steps);
                 double galaxyBaryons = galaxies[p].StellarMass + galaxies[p].ColdGas;
                 if((galaxyBaryons == 0.0) || (galaxyBaryons > 0.0 && (currentMvir / galaxyBaryons <= run_params->ThresholdSatDisruption))) {
 
@@ -415,8 +446,11 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
                             disrupt_satellite_to_ICS(merger_centralgal, p, galaxies, run_params);
                         } else {
                             // a merger has occured!
-                            double time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / STEPS);
-                            deal_with_galaxy_merger(p, merger_centralgal, centralgal, time, deltaT / STEPS, halonr, step, galaxies, run_params);
+                            double time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
+                            // Map adaptive step to fixed STEPS bins for SFR arrays
+                            int step_bin = (step * STEPS) / effective_steps;
+                            if(step_bin >= STEPS) step_bin = STEPS - 1;
+                            deal_with_galaxy_merger(p, merger_centralgal, centralgal, time, deltaT / effective_steps, halonr, step_bin, galaxies, run_params);
                         }
                     }
                 }
