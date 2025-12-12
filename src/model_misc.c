@@ -380,7 +380,7 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
     }
 }
 
-void determine_and_store_ffb_regime(const int ngal, struct GALAXY *galaxies,
+void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct GALAXY *galaxies,
                                      const struct params *run_params)
 {
     // Only apply FFB if the mode is enabled
@@ -391,20 +391,19 @@ void determine_and_store_ffb_regime(const int ngal, struct GALAXY *galaxies,
         }
         return;
     }
-    
+
     // Counter for diagnostics
     // static int total_galaxies_checked = 0;
     // static int ffb_galaxies_assigned = 0;
-    
+
     // Classify each galaxy as FFB or normal based on equation (2)
     for(int p = 0; p < ngal; p++) {
         if(galaxies[p].mergeType > 0) continue;
-        
-        const double z = run_params->ZZ[galaxies[p].SnapNum];
-        const double Mvir = galaxies[p].Mvir;  // in 10^10 Mâ˜‰/h
-        
+
+        const double Mvir = galaxies[p].Mvir;  // in 10^10 M☉/h
+
         // Calculate smooth FFB fraction using sigmoid transition (Li et al. 2024, eq. 3)
-        const double f_ffb = calculate_ffb_fraction(Mvir, z, run_params);
+        const double f_ffb = calculate_ffb_fraction(Mvir, Zcurr, run_params);
         
         // Probabilistic assignment based on smooth sigmoid function
         // Galaxies near threshold have intermediate probability of being FFB
@@ -580,20 +579,17 @@ double calculate_ffb_threshold_mass(const double z, const struct params *run_par
 {
     // Equation (2) from Li et al. 2024
     // M_v,ffb / 10^10.8 M_sun ~ ((1+z)/10)^-6.2
-    
-    const double z_norm = (1.0 + z) / 10.0;  // Normalized redshift
-    const double M_norm = 10.8;               // log10(M_sun)
-    const double z_exponent = -6.2;
-    
-    // Calculate log10(M_v,ffb) in units of M_sun
-    const double log_Mvir_ffb_Msun = M_norm + z_exponent * log10(z_norm);
-    
-    // Convert to code units (10^10 M_sun/h) by subtracting 10.0
-    // This converts from log10(Msun) to log10(10^10 Msun/h)
-    const double log_Mvir_ffb_code = log_Mvir_ffb_Msun - 10.0;
-    
+    //
+    // In code units (10^10 M_sun/h):
+    // log(M_code) = log(M_sun) - 10 + log(h)
+    //             = 10.8 - 6.2*log((1+z)/10) - 10 + log(h)
+    //             = 0.8 + log(h) - 6.2*log((1+z)/10)
+
     const double h = run_params->Hubble_h;
-    return pow(10.0, log_Mvir_ffb_code) / h;    
+    const double z_norm = (1.0 + z) / 10.0;
+    const double log_Mvir_ffb_code = 0.8 + log10(h) - 6.2 * log10(z_norm);
+
+    return pow(10.0, log_Mvir_ffb_code);
 }
 
 

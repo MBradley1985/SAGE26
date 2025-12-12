@@ -17,8 +17,8 @@ DirName_noFFB = './output/millennium_noffb/'
 FileName = 'model_0.hdf5'
 # List of snapshots to plot
 # Snapshots = ['Snap_10', 'Snap_12', 'Snap_15', 'Snap_18', 'Snap_20', 'Snap_22']
-# Snapshots = ['Snap_20', 'Snap_15', 'Snap_12', 'Snap_10', 'Snap_9', 'Snap_8']
-Snapshots = ['Snap_22', 'Snap_20', 'Snap_18', 'Snap_15', 'Snap_12', 'Snap_11']
+Snapshots = ['Snap_18', 'Snap_15', 'Snap_12', 'Snap_10', 'Snap_9', 'Snap_8']
+# Snapshots = ['Snap_22', 'Snap_20', 'Snap_18', 'Snap_15', 'Snap_12', 'Snap_11']
 # Simulation details
 Hubble_h = 0.73        # Hubble parameter
 BoxSize = 62.5         # h-1 Mpc
@@ -381,10 +381,173 @@ def plot_metallicity_distribution():
     plt.close()
 
 
+def calculate_ffb_threshold_mass(z):
+    """Calculate FFB threshold mass from Li et al. 2024, eq. 2.
+
+    M_v,ffb / 10^10.8 M_sun ~ ((1+z)/10)^-6.2
+
+    Returns mass in M_sun (matching how load_data converts Mvir).
+
+    Note: SAGE uses code units (10^10 M_sun/h) internally, but load_data
+    converts to M_sun by doing * 1e10 / h. So we return in M_sun here.
+    The h factors cancel: M_code = M_sun * h / 1e10, and load_data gives
+    M_sun = M_code * 1e10 / h.
+    """
+    z_norm = (1.0 + z) / 10.0
+    log_Mvir_ffb_Msun = 10.8 - 6.2 * np.log10(z_norm)
+    return 10.0**log_Mvir_ffb_Msun
+
+
+def calculate_ffb_fraction(Mvir, z, delta_log_M=0.15):
+    """Calculate f_ffb using sigmoid transition.
+
+    Mvir should be in M_sun.
+    """
+    Mvir_ffb = calculate_ffb_threshold_mass(z)
+    x = np.log10(Mvir / Mvir_ffb) / delta_log_M
+    return 1.0 / (1.0 + np.exp(-x))
+
+
+def plot_ffb_sigmoid():
+    """Plot f_ffb sigmoid function for different smoothing widths."""
+
+    OutputDir = DirName_FFB + 'plots/'
+    if not os.path.exists(OutputDir): os.makedirs(OutputDir)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Mass ratio range (log scale around threshold)
+    # x-axis: log10(Mvir / Mvir_ffb)
+    log_mass_ratio = np.linspace(-1.0, 1.0, 500)
+
+    # Different smoothing widths (delta_log_M in dex)
+    smoothing_widths = [0.05, 0.10, 0.15]
+    colors = ['C2', 'C1', 'C0']
+    linestyles = ['--', '-.', '-']
+
+    for delta, color, ls in zip(smoothing_widths, colors, linestyles):
+        # Sigmoid argument: x = log10(M/M_ffb) / delta
+        x = log_mass_ratio / delta
+        # Sigmoid: f_ffb = 1 / (1 + exp(-x))
+        f_ffb = 1.0 / (1.0 + np.exp(-x))
+        ax.plot(log_mass_ratio, f_ffb, color=color, linestyle=ls, linewidth=2,
+                label=rf'$\Delta \log M = {delta}$ dex')
+
+    # Add reference lines
+    ax.axhline(0.5, color='gray', linestyle=':', alpha=0.5, linewidth=1)
+    ax.axvline(0.0, color='gray', linestyle=':', alpha=0.5, linewidth=1)
+
+    ax.set_xlabel(r'$\log_{10}(M_{\mathrm{vir}} / M_{\mathrm{vir,ffb}})$', fontsize=14)
+    ax.set_ylabel(r'$f_{\mathrm{ffb}}$', fontsize=14)
+    ax.set_title('FFB Sigmoid Transition Function')
+    ax.set_xlim(-1.0, 1.0)
+    ax.set_ylim(0, 1)
+    ax.legend(loc='lower right', fontsize=12)
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(OutputDir + 'ffb_sigmoid' + OutputFormat)
+    plt.close()
+    print(f"Saved: {OutputDir}ffb_sigmoid{OutputFormat}")
+
+
+def plot_ffb_vs_redshift():
+    """Plot f_ffb as a function of halo mass at different redshifts,
+    with SAGE simulation data overlaid."""
+
+    OutputDir = DirName_FFB + 'plots/'
+    if not os.path.exists(OutputDir): os.makedirs(OutputDir)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Halo mass range (log10 M_sun)
+    log_Mvir = np.linspace(8, 14, 500)
+    Mvir = 10.0**log_Mvir
+
+    # Different target redshifts
+    redshift_targets = [5, 6, 7, 8, 8, 10, 11, 12, 13, 14]
+    cmap = plt.cm.plasma
+    colors = [cmap(i / (len(redshift_targets) - 1)) for i in range(len(redshift_targets))]
+
+    delta_log_M = 0.15  # Current model smoothing width
+
+    # Load SAGE data and compute binned FFB fractions
+    # Use actual snapshot redshifts for theoretical curves
+    for z_target, color in zip(redshift_targets, colors):
+        # Find closest snapshot
+        snap_idx = np.argmin(np.abs(np.array(redshifts) - z_target))
+        snap_name = f'Snap_{snap_idx}'
+        actual_z = redshifts[snap_idx]
+
+        # Plot theoretical curve at the ACTUAL snapshot redshift
+        f_ffb_theory = calculate_ffb_fraction(Mvir, actual_z, delta_log_M)
+        Mvir_ffb = calculate_ffb_threshold_mass(actual_z)
+        ax.plot(log_Mvir, f_ffb_theory, color=color, linewidth=2, label=f'z = {actual_z:.2f}')
+        # Mark threshold mass
+        ax.axvline(np.log10(Mvir_ffb), color=color, linestyle=':', alpha=0.5, linewidth=1)
+
+        try:
+            data = load_data(DirName_FFB, snap_name)
+        except:
+            continue  # Skip if snapshot doesn't exist
+
+        # Get Mvir (convert to M_sun) and FFBRegime
+        # Filter to centrals only (Type == 0) since satellites have subhalo masses
+        central_mask = data['Type'] == 0
+        Mvir_data = data['Mvir'][central_mask]  # Already in M_sun from load_data
+        ffb_regime = data['FFBRegime'][central_mask]
+
+        # Bin by log Mvir and compute FFB fraction in each bin
+        log_Mvir_data = np.log10(Mvir_data[Mvir_data > 0])
+        ffb_data = ffb_regime[Mvir_data > 0]
+
+        # Create mass bins
+        bin_edges = np.linspace(8, 14, 17)  # 16 bins
+        bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+        ffb_fractions = []
+        ffb_errors = []
+        valid_bins = []
+
+        for i in range(len(bin_edges) - 1):
+            in_bin = (log_Mvir_data >= bin_edges[i]) & (log_Mvir_data < bin_edges[i+1])
+            n_in_bin = np.sum(in_bin)
+
+            if n_in_bin >= 10:  # Require at least 10 galaxies per bin
+                frac = np.mean(ffb_data[in_bin])
+                # Binomial error
+                err = np.sqrt(frac * (1 - frac) / n_in_bin)
+                ffb_fractions.append(frac)
+                ffb_errors.append(err)
+                valid_bins.append(bin_centers[i])
+
+        if len(valid_bins) > 0:
+            ax.errorbar(valid_bins, ffb_fractions, yerr=ffb_errors,
+                       fmt='o', color=color, markersize=6, capsize=3,
+                       alpha=0.7, markeredgecolor='white', markeredgewidth=0.5)
+
+    ax.axhline(0.5, color='gray', linestyle='--', alpha=0.5, linewidth=1)
+
+    ax.set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_{\odot}])$', fontsize=14)
+    ax.set_ylabel(r'$f_{\mathrm{ffb}}$', fontsize=14)
+    ax.set_title(rf'FFB Fraction vs Halo Mass ($\Delta \log M = {delta_log_M}$ dex)')
+    ax.set_xlim(8, 13)
+    ax.set_ylim(0, 1)
+    ax.legend(loc='upper left', fontsize=12, title='Theory (lines) + SAGE (points)', frameon=False)
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(OutputDir + 'ffb_vs_redshift' + OutputFormat)
+    plt.close()
+    print(f"Saved: {OutputDir}ffb_vs_redshift{OutputFormat}")
+
+
 # ==================================================================
 
 if __name__ == "__main__":
 
+    plot_ffb_sigmoid()
+    plot_ffb_vs_redshift()
     plot_sfr_distribution()
     plot_sfr_distribution_scatter()
-    plot_metallicity_distribution()
+    # plot_metallicity_distribution()

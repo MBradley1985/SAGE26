@@ -27,7 +27,7 @@ extern "C" {
     extern double calculate_ffb_threshold_mass(const double z, const struct params *run_params);
     extern double calculate_ffb_fraction(const double Mvir, const double z, const struct params *run_params);
 
-    extern void determine_and_store_ffb_regime(const int ngal, struct GALAXY *galaxies,
+    extern void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct GALAXY *galaxies,
                                             const struct params *run_params);
     extern void update_instability_bulge_radius(const int p, const double delta_mass, 
                                      const double old_disk_radius,
