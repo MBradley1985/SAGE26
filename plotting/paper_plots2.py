@@ -1951,29 +1951,86 @@ def plot_h2_fraction_vs_stellar_mass(sim_configs, snapshot, output_dir):
             logger.error(f'Error processing {label}: {e}')
             continue
     
+    # =============== SAGE z~1 DATA ===============
+    # Add SAGE model data at z~1 (Snap_41, z=0.989) for comparison with Tacconi
+    z1_snapshot = 'Snap_41'
+    z1_redshift = 0.989
+
+    # Use first sim_config for z~1 data
+    if len(sim_configs) > 0:
+        sim_config = sim_configs[0]
+        directory = sim_config['path']
+        hubble_h = sim_config['Hubble_h']
+
+        try:
+            logger.info(f'Processing SAGE z~1 data (Snap_41, z={z1_redshift:.3f})...')
+
+            # Read required galaxy properties at z~1
+            StellarMass_z1 = read_hdf_ultra_optimized(snap_num=z1_snapshot, param='StellarMass', directory=directory) * 1.0e10 / hubble_h
+            H2Gas_z1 = read_hdf_ultra_optimized(snap_num=z1_snapshot, param='H2gas', directory=directory) * 1.0e10 / hubble_h
+            ColdGas_z1 = read_hdf_ultra_optimized(snap_num=z1_snapshot, param='ColdGas', directory=directory) * 1.0e10 / hubble_h
+
+            # Select galaxies with valid data
+            w_z1 = np.where((StellarMass_z1 > 0) & (H2Gas_z1 > 0) & (ColdGas_z1 > H2Gas_z1))[0]
+
+            if len(w_z1) > 0:
+                logger.info(f'  Galaxies with H2 at z~1: {len(w_z1)}')
+
+                stellar_mass_z1 = StellarMass_z1[w_z1]
+                h2_gas_z1 = H2Gas_z1[w_z1]
+                hi_gas_z1 = ColdGas_z1[w_z1] - H2Gas_z1[w_z1]
+                h2_fraction_z1 = h2_gas_z1 / (h2_gas_z1 + hi_gas_z1)
+
+                # Bin by stellar mass
+                log_stellar_mass_z1 = np.log10(stellar_mass_z1)
+                mass_bins = np.arange(8.0, 12.0, 0.25)
+                mass_centers = (mass_bins[:-1] + mass_bins[1:]) / 2
+
+                median_h2_frac_z1 = []
+                for j in range(len(mass_bins)-1):
+                    mask = (log_stellar_mass_z1 >= mass_bins[j]) & (log_stellar_mass_z1 < mass_bins[j+1])
+                    if np.sum(mask) > 20:
+                        median_h2_frac_z1.append(np.median(h2_fraction_z1[mask]))
+                    else:
+                        median_h2_frac_z1.append(np.nan)
+
+                median_h2_frac_z1 = np.array(median_h2_frac_z1)
+                valid_bins_z1 = ~np.isnan(median_h2_frac_z1)
+
+                if np.any(valid_bins_z1):
+                    z1_line = ax.plot(mass_centers[valid_bins_z1], median_h2_frac_z1[valid_bins_z1],
+                                     color='red', linestyle='--', linewidth=2,
+                                     label=f'SAGE (z={z1_redshift:.2f})', zorder=7)[0]
+                    model_handles.append(z1_line)
+                    model_labels.append(f'SAGE (z={z1_redshift:.2f})')
+                    logger.info(f'  Median H2 fraction at z~1: {np.nanmedian(median_h2_frac_z1):.3f}')
+
+        except Exception as e:
+            logger.error(f'Error processing z~1 SAGE data: {e}')
+
     # =============== FORMATTING ===============
-    
+
     # Set axis limits and formatting
     ax.set_xlim(8.0, 12.2)
     ax.set_ylim(0.0, 0.5)
     ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
     ax.yaxis.set_minor_locator(plt.MultipleLocator(0.05))
-    
+
     ax.set_xlabel(r'$\log_{10} M_\star\ (M_{\odot})$')
     ax.set_ylabel(r'$f_{\mathrm{H_2}} = M_{\mathrm{H_2}} / (M_{\mathrm{H_2}} + M_{\mathrm{HI}})$')
-    
+
     # Create two separate legends with new locations
     # First legend: Observations (lower left)
     obs_legend = ax.legend(obs_handles, obs_labels, loc='upper left', fontsize=16, frameon=False)
     ax.add_artist(obs_legend)
-    
+
     # Second legend: Models (upper right)
     model_legend = ax.legend(model_handles, model_labels, loc='upper right', fontsize=16, frameon=False)
-    
+
     # Save plot
     output_filename = output_dir + 'h2_fraction_vs_stellar_mass' + OutputFormat
     finalize_plot(fig, output_filename)
-    
+
     logger.info('H2 fraction vs stellar mass analysis complete')
 
 def plot_h2_fraction_vs_halo_mass(sim_configs, snapshot, output_dir):
