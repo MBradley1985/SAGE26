@@ -22,15 +22,31 @@ from random import sample, seed
 import warnings
 warnings.filterwarnings("ignore")
 
+try:
+    from astropy.table import Table
+    HAS_ASTROPY = True
+except ImportError:
+    HAS_ASTROPY = False
+    print("Warning: astropy not available, observational data will not be loaded")
+
 # ========================== USER OPTIONS ==========================
 
 DirName_FFB = './output/millennium/'
 DirName_noFFB = './output/millennium_noffb/'
 FileName = 'model_0.hdf5'
 
-# Snapshots from z~14 to z~5
-Snapshots = ['Snap_8', 'Snap_9', 'Snap_10', 'Snap_11', 'Snap_12', 'Snap_13',
-             'Snap_14', 'Snap_15', 'Snap_16', 'Snap_17', 'Snap_18', 'Snap_19', 'Snap_20']
+# Snapshots from z~18 to z~5
+Snapshots = ['Snap_5', 'Snap_6', 'Snap_7', 'Snap_8', 'Snap_9', 'Snap_10', 'Snap_11', 'Snap_12', 'Snap_13',
+             'Snap_14', 'Snap_15', 'Snap_16', 'Snap_17', 'Snap_18', 'Snap_19', 'Snap_20', 'Snap_21']
+
+# Additional FFB models with different star formation efficiencies for density plots
+FFB_Models = [
+    {'name': 'FFB 30%', 'dir': './output/millennium_FFB30/', 'sfe': 0.30},
+    {'name': 'FFB 40%', 'dir': './output/millennium_FFB40/', 'sfe': 0.40},
+    {'name': 'FFB 50%', 'dir': './output/millennium_FFB50/', 'sfe': 0.50},
+    {'name': 'FFB 80%', 'dir': './output/millennium_FFB80/', 'sfe': 0.80},
+    {'name': 'FFB 100%', 'dir': './output/millennium_FFB100/', 'sfe': 1.00},
+]
 
 # Simulation details
 Hubble_h = 0.73
@@ -152,6 +168,148 @@ def get_snapshot_redshift(snapshot):
     """Get redshift for a given snapshot string."""
     snapnum = int(snapshot.split('_')[1])
     return redshifts[snapnum]
+
+# ==================== OBSERVATIONAL DATA LOADING ====================
+
+def load_madau_dickinson_2014_data():
+    """Load Madau and Dickinson 2014 SFRD data."""
+    if not HAS_ASTROPY:
+        return None, None, None, None
+    filename = './data/MandD_sfrd_2014.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z_min']
+        re = table['log_psi']
+        re_err_plus = table['e_log_psi_up']
+        re_err_minus = table['e_log_psi_lo']
+        return z, re, re_err_plus, re_err_minus
+    except Exception as e:
+        print(f"Error loading Madau and Dickinson 2014 SFRD data: {e}")
+    return None, None, None, None
+
+def load_madau_dickinson_smd_2014_data():
+    """Load Madau and Dickinson 2014 SMD data."""
+    if not HAS_ASTROPY:
+        return None, None, None, None
+    filename = './data/MandD_smd_2014.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z_min']
+        re = table['log_rho']
+        re_err_plus = table['e_log_rho_up']
+        re_err_minus = table['e_log_rho_lo']
+        return z, re, re_err_plus, re_err_minus
+    except Exception as e:
+        print(f"Error loading Madau and Dickinson 2014 SMD data: {e}")
+    return None, None, None, None
+
+def load_kikuchihara_smd_2020_data():
+    """Load Kikuchihara et al. 2020 SMD data."""
+    if not HAS_ASTROPY:
+        return None, None, None, None
+    filename = './data/kikuchihara_smd_2020.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z']
+        re = table['log_rho_star']
+        re_err_plus = table['e_log_rho_star_upper']
+        re_err_minus = table['e_log_rho_star_lower']
+        return z, re, re_err_plus, re_err_minus
+    except Exception as e:
+        print(f"Error loading Kikuchihara 2020 SMD data: {e}")
+    return None, None, None, None
+
+def load_papovich_smd_2023_data():
+    """Load Papovich et al. 2023 SMD data."""
+    if not HAS_ASTROPY:
+        return None, None, None, None
+    filename = './data/papovich_smd_2023.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z']
+        re = table['log_rho_star']
+        re_err_plus = table['e_log_rho_star_upper']
+        re_err_minus = table['e_log_rho_star_lower']
+        return z, re, re_err_plus, re_err_minus
+    except Exception as e:
+        print(f"Error loading Papovich 2023 SMD data: {e}")
+    return None, None, None, None
+
+def load_oesch_sfrd_2018_data():
+    """Load Oesch et al. 2018 SFRD data."""
+    if not HAS_ASTROPY:
+        return None, None, None, None
+    filename = './data/oesch_sfrd_2018.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z']
+        re = table['log_rho_sfr']
+        re_err_plus = table['e_log_rho_sfr_upper']
+        re_err_minus = table['e_log_rho_sfr_lower']
+        return z, re, re_err_plus, re_err_minus
+    except Exception as e:
+        print(f"Error loading Oesch 2018 SFRD data: {e}")
+    return None, None, None, None
+
+def load_mcleod_rho_sfr_2024_data():
+    """Load McLeod et al. 2024 SFR density data."""
+    if not HAS_ASTROPY:
+        return None, None, None, None
+    filename = './data/mcleod_rhouv_2024.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z']
+        re = table['log_rho_sfr']
+        re_err_plus = np.zeros_like(re)
+        re_err_minus = np.zeros_like(re)
+        return z, re, re_err_plus, re_err_minus
+    except Exception as e:
+        print(f"Error loading McLeod 2024 SFRD data: {e}")
+    return None, None, None, None
+
+def load_harikane_sfr_density_2023_data():
+    """Load Harikane et al. 2023 SFR density data."""
+    if not HAS_ASTROPY:
+        return None, None, None, None
+    filename = './data/harikane_density_2023.ecsv'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None
+
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+        z = table['z']
+        re = table['log_rho_SFR_UV']
+        re_err_plus = table['e_log_rho_SFR_UV_upper']
+        re_err_minus = table['e_log_rho_SFR_UV_lower']
+        return z, re, re_err_plus, re_err_minus
+    except Exception as e:
+        print(f"Error loading Harikane 2023 SFRD data: {e}")
+    return None, None, None, None
 
 def plot_ffb_comparison_grid():
     """Create 2x2 grid comparing FFB vs no-FFB galaxy properties."""
@@ -615,8 +773,8 @@ def plot_ffb_comparison_grid_6panel():
     """Create 2x3 grid comparing FFB vs no-FFB galaxy properties vs Mvir.
 
     Panels:
-    Row 1: SFR vs Mvir | sSFR vs Mvir | Metallicity vs Mvir
-    Row 2: Quiescent fraction vs Mvir | SHMR | Half-mass radius vs stellar mass
+    Row 1: SFR vs Mvir | sSFR vs Mvir | SFRD vs redshift
+    Row 2: Quiescent fraction vs Mvir | SHMR | SMD vs redshift
     """
 
     seed(2222)
@@ -634,14 +792,22 @@ def plot_ffb_comparison_grid_6panel():
 
     # Mvir bins for computing medians (log10 Mvir in Msun)
     mvir_bins = np.arange(9.5, 12.5, 0.3)
-    # Stellar mass bins for half-mass radius panel
-    sm_bins = np.arange(7.5, 11.5, 0.3)
+
+    # Volume for density calculations
+    volume = (BoxSize / Hubble_h)**3.0 * VolumeFraction  # Mpc^3
 
     # Collect data for all snapshots
     print("Loading data from all snapshots...")
 
     # Data storage for each snapshot
     all_data = []
+
+    # Arrays to store density evolution data for panels (0,2) and (1,2)
+    redshifts_density = []
+    sfrd_ffb_list = []
+    sfrd_noffb_list = []
+    smd_ffb_list = []
+    smd_noffb_list = []
 
     for Snapshot in Snapshots:
         snapnum = int(Snapshot.split('_')[1])
@@ -652,7 +818,7 @@ def plot_ffb_comparison_grid_6panel():
         data_FFB = load_data(DirName_FFB, Snapshot)
         data_noFFB = load_data(DirName_noFFB, Snapshot)
 
-        # Identify FFB galaxies
+        # Identify FFB galaxies in FFB model
         ffb_mask = data_FFB['FFBRegime'] == 1
         n_ffb = np.sum(ffb_mask)
 
@@ -672,10 +838,6 @@ def plot_ffb_comparison_grid_6panel():
         metals_coldgas_ffb = data_FFB['MetalsColdGas'][ffb_mask]
         sfr_ffb = data_FFB['SfrDisk'][ffb_mask] + data_FFB['SfrBulge'][ffb_mask]
         type_ffb = data_FFB['Type'][ffb_mask]
-        disk_mass_ffb = data_FFB['DiskMass'][ffb_mask]
-        bulge_mass_ffb = data_FFB['BulgeMass'][ffb_mask]
-        disk_radius_ffb = data_FFB['DiskRadius'][ffb_mask]
-        bulge_radius_ffb = data_FFB['BulgeRadius'][ffb_mask]
 
         # Extract properties for Mvir-matched no-FFB galaxies
         stellar_mass_noffb = data_noFFB['StellarMass'][matched_indices]
@@ -683,12 +845,8 @@ def plot_ffb_comparison_grid_6panel():
         metals_coldgas_noffb = data_noFFB['MetalsColdGas'][matched_indices]
         sfr_noffb = data_noFFB['SfrDisk'][matched_indices] + data_noFFB['SfrBulge'][matched_indices]
         type_noffb = data_noFFB['Type'][matched_indices]
-        disk_mass_noffb = data_noFFB['DiskMass'][matched_indices]
-        bulge_mass_noffb = data_noFFB['BulgeMass'][matched_indices]
-        disk_radius_noffb = data_noFFB['DiskRadius'][matched_indices]
-        bulge_radius_noffb = data_noFFB['BulgeRadius'][matched_indices]
 
-        # Store for plotting
+        # Store for plotting (panels 0,0; 0,1; 1,0; 1,1)
         all_data.append({
             'z': z,
             'snapshot': Snapshot,
@@ -699,10 +857,6 @@ def plot_ffb_comparison_grid_6panel():
                 'sfr': sfr_ffb,
                 'type': type_ffb,
                 'mvir': mvir_ffb,
-                'disk_mass': disk_mass_ffb,
-                'bulge_mass': bulge_mass_ffb,
-                'disk_radius': disk_radius_ffb,
-                'bulge_radius': bulge_radius_ffb
             },
             'noffb': {
                 'stellar_mass': stellar_mass_noffb,
@@ -711,14 +865,45 @@ def plot_ffb_comparison_grid_6panel():
                 'sfr': sfr_noffb,
                 'type': type_noffb,
                 'mvir': data_noFFB['Mvir'][matched_indices],
-                'disk_mass': disk_mass_noffb,
-                'bulge_mass': bulge_mass_noffb,
-                'disk_radius': disk_radius_noffb,
-                'bulge_radius': bulge_radius_noffb
             }
         })
 
-    # Now plot all data
+        # Compute SFRD and SMD for density panels (0,2) and (1,2)
+        # For FFB galaxies
+        total_sfr_ffb = np.sum(sfr_ffb)
+        total_sm_ffb = np.sum(stellar_mass_ffb)
+
+        # For Mvir-matched no-FFB galaxies
+        total_sfr_noffb = np.sum(sfr_noffb)
+        total_sm_noffb = np.sum(stellar_mass_noffb)
+
+        # Store density data
+        redshifts_density.append(z)
+        if total_sfr_ffb > 0:
+            sfrd_ffb_list.append(np.log10(total_sfr_ffb / volume))
+        else:
+            sfrd_ffb_list.append(np.nan)
+        if total_sfr_noffb > 0:
+            sfrd_noffb_list.append(np.log10(total_sfr_noffb / volume))
+        else:
+            sfrd_noffb_list.append(np.nan)
+        if total_sm_ffb > 0:
+            smd_ffb_list.append(np.log10(total_sm_ffb / volume))
+        else:
+            smd_ffb_list.append(np.nan)
+        if total_sm_noffb > 0:
+            smd_noffb_list.append(np.log10(total_sm_noffb / volume))
+        else:
+            smd_noffb_list.append(np.nan)
+
+    # Convert density lists to arrays
+    redshifts_density = np.array(redshifts_density)
+    sfrd_ffb_arr = np.array(sfrd_ffb_list)
+    sfrd_noffb_arr = np.array(sfrd_noffb_list)
+    smd_ffb_arr = np.array(smd_ffb_list)
+    smd_noffb_arr = np.array(smd_noffb_list)
+
+    # Now plot all data for panels (0,0), (0,1), (1,0), (1,1)
     print("\nGenerating plots...")
 
     for data in all_data:
@@ -735,23 +920,11 @@ def plot_ffb_comparison_grid_6panel():
         # Extract masked data
         sm_ffb = data['ffb']['stellar_mass'][mask_ffb]
         sfr_ffb = data['ffb']['sfr'][mask_ffb]
-        cg_ffb = data['ffb']['coldgas'][mask_ffb]
-        mcg_ffb = data['ffb']['metals_coldgas'][mask_ffb]
         mvir_ffb = data['ffb']['mvir'][mask_ffb]
-        disk_mass_ffb = data['ffb']['disk_mass'][mask_ffb]
-        bulge_mass_ffb = data['ffb']['bulge_mass'][mask_ffb]
-        disk_radius_ffb = data['ffb']['disk_radius'][mask_ffb]
-        bulge_radius_ffb = data['ffb']['bulge_radius'][mask_ffb]
 
         sm_noffb = data['noffb']['stellar_mass'][mask_noffb]
         sfr_noffb = data['noffb']['sfr'][mask_noffb]
-        cg_noffb = data['noffb']['coldgas'][mask_noffb]
-        mcg_noffb = data['noffb']['metals_coldgas'][mask_noffb]
         mvir_noffb = data['noffb']['mvir'][mask_noffb]
-        disk_mass_noffb = data['noffb']['disk_mass'][mask_noffb]
-        bulge_mass_noffb = data['noffb']['bulge_mass'][mask_noffb]
-        disk_radius_noffb = data['noffb']['disk_radius'][mask_noffb]
-        bulge_radius_noffb = data['noffb']['bulge_radius'][mask_noffb]
 
         log_mvir_ffb = np.log10(mvir_ffb)
         log_mvir_noffb = np.log10(mvir_noffb)
@@ -788,23 +961,714 @@ def plot_ffb_comparison_grid_6panel():
         if np.sum(valid_noffb) > 1:
             axes[0, 1].plot(bc_noffb[valid_noffb], med_noffb[valid_noffb], '--', color=color, linewidth=1.5)
 
-        # ----- Panel (0,2): Metallicity vs Mvir -----
-        valid_gas_ffb = (cg_ffb > 0) & (mcg_ffb > 0)
-        valid_gas_noffb = (cg_noffb > 0) & (mcg_noffb > 0)
+        # ----- Panel (1,0): Quiescent fraction vs Mvir -----
+        bc_ffb, fq_ffb = compute_quiescent_fraction_mvir(mvir_ffb, sm_ffb, sfr_ffb, mvir_bins, ssfr_cut=sSFRcut)
+        bc_noffb, fq_noffb = compute_quiescent_fraction_mvir(mvir_noffb, sm_noffb, sfr_noffb, mvir_bins, ssfr_cut=sSFRcut)
 
-        if np.sum(valid_gas_ffb) >= 3:
-            Z_ffb = np.log10((mcg_ffb[valid_gas_ffb] / cg_ffb[valid_gas_ffb]) / 0.02) + 9.0
-            bc_ffb, med_ffb = compute_medians(log_mvir_ffb[valid_gas_ffb], Z_ffb, mvir_bins)
-            valid = ~np.isnan(med_ffb)
-            if np.sum(valid) > 1:
-                axes[0, 2].plot(bc_ffb[valid], med_ffb[valid], '-', color=color, linewidth=1.5)
+        valid_ffb = ~np.isnan(fq_ffb)
+        valid_noffb = ~np.isnan(fq_noffb)
 
-        if np.sum(valid_gas_noffb) >= 3:
-            Z_noffb = np.log10((mcg_noffb[valid_gas_noffb] / cg_noffb[valid_gas_noffb]) / 0.02) + 9.0
-            bc_noffb, med_noffb = compute_medians(log_mvir_noffb[valid_gas_noffb], Z_noffb, mvir_bins)
-            valid = ~np.isnan(med_noffb)
-            if np.sum(valid) > 1:
-                axes[0, 2].plot(bc_noffb[valid], med_noffb[valid], '--', color=color, linewidth=1.5)
+        if np.sum(valid_ffb) > 1:
+            axes[1, 0].plot(bc_ffb[valid_ffb], fq_ffb[valid_ffb], '-', color=color, linewidth=1.5)
+        if np.sum(valid_noffb) > 1:
+            axes[1, 0].plot(bc_noffb[valid_noffb], fq_noffb[valid_noffb], '--', color=color, linewidth=1.5)
+
+        # ----- Panel (1,1): SHMR (Stellar Mass vs Mvir) -----
+        bc_ffb, med_ffb = compute_medians(log_mvir_ffb, log_sm_ffb, mvir_bins)
+        bc_noffb, med_noffb = compute_medians(log_mvir_noffb, log_sm_noffb, mvir_bins)
+
+        valid_ffb = ~np.isnan(med_ffb)
+        valid_noffb = ~np.isnan(med_noffb)
+
+        if np.sum(valid_ffb) > 1:
+            axes[1, 1].plot(bc_ffb[valid_ffb], med_ffb[valid_ffb], '-', color=color, linewidth=1.5)
+        if np.sum(valid_noffb) > 1:
+            axes[1, 1].plot(bc_noffb[valid_noffb], med_noffb[valid_noffb], '--', color=color, linewidth=1.5)
+
+    # ----- Panel (0,2): SFRD vs Redshift -----
+    # Sort by redshift for clean plotting
+    sort_idx = np.argsort(redshifts_density)
+    z_sorted = redshifts_density[sort_idx]
+    sfrd_ffb_sorted = sfrd_ffb_arr[sort_idx]
+    sfrd_noffb_sorted = sfrd_noffb_arr[sort_idx]
+
+    # Plot SFRD for FFB and non-FFB galaxies (main model)
+    valid_ffb = ~np.isnan(sfrd_ffb_sorted)
+    valid_noffb = ~np.isnan(sfrd_noffb_sorted)
+
+    if np.sum(valid_ffb) > 1:
+        axes[0, 2].plot(z_sorted[valid_ffb], sfrd_ffb_sorted[valid_ffb], '-',
+                       color='black', linewidth=2.5, label='FFB galaxies')
+    if np.sum(valid_noffb) > 1:
+        axes[0, 2].plot(z_sorted[valid_noffb], sfrd_noffb_sorted[valid_noffb], '--',
+                       color='firebrick', linewidth=2.5, label='No-FFB (Mvir-matched)')
+
+    # Add additional FFB models with different SFE values (jet_r colormap, no legend)
+    cmap_sfe = cm.jet_r
+    sfe_min, sfe_max = 0.2, 1.0
+    for model in FFB_Models:
+        model_dir = model['dir']
+        sfe = model['sfe']
+        model_color = cmap_sfe((sfe - sfe_min) / (sfe_max - sfe_min))
+
+        # Check if model exists
+        if not os.path.exists(model_dir + FileName):
+            print(f"  Warning: {model_dir + FileName} not found, skipping {model['name']}")
+            continue
+
+        # Compute SFRD for this model
+        model_redshifts = []
+        model_sfrd = []
+
+        for Snapshot in Snapshots:
+            snapnum = int(Snapshot.split('_')[1])
+            z = redshifts[snapnum]
+
+            try:
+                # Load data for this model
+                with h5.File(model_dir + FileName, 'r') as f:
+                    sfr_disk = np.array(f[Snapshot]['SfrDisk'])
+                    sfr_bulge = np.array(f[Snapshot]['SfrBulge'])
+                    ffb_regime = np.array(f[Snapshot]['FFBRegime'])
+
+                # Select FFB galaxies
+                ffb_mask = ffb_regime == 1
+                if np.sum(ffb_mask) == 0:
+                    continue
+
+                sfr_total = sfr_disk[ffb_mask] + sfr_bulge[ffb_mask]
+                total_sfr = np.sum(sfr_total)
+
+                if total_sfr > 0:
+                    model_redshifts.append(z)
+                    model_sfrd.append(np.log10(total_sfr / volume))
+            except Exception as e:
+                continue
+
+        # Plot this model (no label for legend)
+        if len(model_redshifts) > 1:
+            sort_idx_model = np.argsort(model_redshifts)
+            axes[0, 2].plot(np.array(model_redshifts)[sort_idx_model],
+                          np.array(model_sfrd)[sort_idx_model], '-',
+                          color=model_color, linewidth=1.5, alpha=0.7)
+
+    # Add SFRD observational data
+    z_madau, re_madau, re_err_plus_madau, re_err_minus_madau = load_madau_dickinson_2014_data()
+    if z_madau is not None:
+        mask = (z_madau >= 5) & (z_madau <= 16)
+        if np.sum(mask) > 0:
+            axes[0, 2].errorbar(z_madau[mask], re_madau[mask],
+                               yerr=[re_err_minus_madau[mask], re_err_plus_madau[mask]],
+                               fmt='o', color='black', markersize=6, alpha=0.8,
+                               label='Madau & Dickinson 14', capsize=2, linewidth=1.5, zorder=5)
+
+    z_oesch, re_oesch, re_err_plus_oesch, re_err_minus_oesch = load_oesch_sfrd_2018_data()
+    if z_oesch is not None:
+        mask = (z_oesch >= 5) & (z_oesch <= 16)
+        if np.sum(mask) > 0:
+            axes[0, 2].errorbar(z_oesch[mask], re_oesch[mask],
+                               yerr=[re_err_minus_oesch[mask], re_err_plus_oesch[mask]],
+                               fmt='*', color='black', markersize=8, alpha=0.8,
+                               label='Oesch+18', capsize=2, linewidth=1.5, zorder=5)
+
+    z_mcleod, re_mcleod, re_err_plus_mcleod, re_err_minus_mcleod = load_mcleod_rho_sfr_2024_data()
+    if z_mcleod is not None:
+        mask = (z_mcleod >= 5) & (z_mcleod <= 16)
+        if np.sum(mask) > 0:
+            axes[0, 2].errorbar(z_mcleod[mask], re_mcleod[mask],
+                               yerr=[re_err_minus_mcleod[mask], re_err_plus_mcleod[mask]],
+                               fmt='v', color='black', markersize=6, alpha=0.8,
+                               label='McLeod+24', capsize=2, linewidth=1.5, zorder=5)
+
+    z_harikane, re_harikane, re_err_plus_harikane, re_err_minus_harikane = load_harikane_sfr_density_2023_data()
+    if z_harikane is not None:
+        mask = (z_harikane >= 5) & (z_harikane <= 16)
+        if np.sum(mask) > 0:
+            axes[0, 2].errorbar(z_harikane[mask], re_harikane[mask],
+                               yerr=[re_err_minus_harikane[mask], re_err_plus_harikane[mask]],
+                               fmt='D', color='black', markersize=6, alpha=0.8,
+                               label='Harikane+23', capsize=2, linewidth=1.5, zorder=5)
+
+    # ----- Panel (1,2): SMD vs Redshift -----
+    smd_ffb_sorted = smd_ffb_arr[sort_idx]
+    smd_noffb_sorted = smd_noffb_arr[sort_idx]
+
+    # Plot SMD for FFB and non-FFB galaxies (main model)
+    valid_ffb = ~np.isnan(smd_ffb_sorted)
+    valid_noffb = ~np.isnan(smd_noffb_sorted)
+
+    if np.sum(valid_ffb) > 1:
+        axes[1, 2].plot(z_sorted[valid_ffb], smd_ffb_sorted[valid_ffb], '-',
+                       color='black', linewidth=2.5, label='FFB galaxies')
+    if np.sum(valid_noffb) > 1:
+        axes[1, 2].plot(z_sorted[valid_noffb], smd_noffb_sorted[valid_noffb], '--',
+                       color='firebrick', linewidth=2.5, label='No-FFB (Mvir-matched)')
+
+    # Add additional FFB models with different SFE values (jet colormap, no legend)
+    for model in FFB_Models:
+        model_dir = model['dir']
+        sfe = model['sfe']
+        model_color = cmap_sfe((sfe - sfe_min) / (sfe_max - sfe_min))
+
+        # Check if model exists
+        if not os.path.exists(model_dir + FileName):
+            continue
+
+        # Compute SMD for this model
+        model_redshifts = []
+        model_smd = []
+
+        for Snapshot in Snapshots:
+            snapnum = int(Snapshot.split('_')[1])
+            z = redshifts[snapnum]
+
+            try:
+                # Load data for this model
+                with h5.File(model_dir + FileName, 'r') as f:
+                    stellar_mass = np.array(f[Snapshot]['StellarMass']) * 1.0e10 / Hubble_h
+                    ffb_regime = np.array(f[Snapshot]['FFBRegime'])
+
+                # Select FFB galaxies
+                ffb_mask = ffb_regime == 1
+                if np.sum(ffb_mask) == 0:
+                    continue
+
+                total_sm = np.sum(stellar_mass[ffb_mask])
+
+                if total_sm > 0:
+                    model_redshifts.append(z)
+                    model_smd.append(np.log10(total_sm / volume))
+            except Exception as e:
+                continue
+
+        # Plot this model (no label for legend)
+        if len(model_redshifts) > 1:
+            sort_idx_model = np.argsort(model_redshifts)
+            axes[1, 2].plot(np.array(model_redshifts)[sort_idx_model],
+                          np.array(model_smd)[sort_idx_model], '-',
+                          color=model_color, linewidth=1.5, alpha=0.7)
+
+    # Add SMD observational data
+    z_madau_smd, re_madau_smd, re_err_plus_madau_smd, re_err_minus_madau_smd = load_madau_dickinson_smd_2014_data()
+    if z_madau_smd is not None:
+        mask = (z_madau_smd >= 5) & (z_madau_smd <= 16)
+        if np.sum(mask) > 0:
+            axes[1, 2].errorbar(z_madau_smd[mask], re_madau_smd[mask],
+                               yerr=[re_err_minus_madau_smd[mask], re_err_plus_madau_smd[mask]],
+                               fmt='o', color='black', markersize=6, alpha=0.8,
+                               label='Madau & Dickinson 14', capsize=2, linewidth=1.5, zorder=5)
+
+    z_kiku, re_kiku, re_err_plus_kiku, re_err_minus_kiku = load_kikuchihara_smd_2020_data()
+    if z_kiku is not None:
+        mask = (z_kiku >= 5) & (z_kiku <= 16)
+        if np.sum(mask) > 0:
+            axes[1, 2].errorbar(z_kiku[mask], re_kiku[mask],
+                               yerr=[re_err_minus_kiku[mask], re_err_plus_kiku[mask]],
+                               fmt='d', color='black', markersize=6, alpha=0.8,
+                               label='Kikuchihara+20', capsize=2, linewidth=1.5, zorder=5)
+
+    z_papovich, re_papovich, re_err_plus_papovich, re_err_minus_papovich = load_papovich_smd_2023_data()
+    if z_papovich is not None:
+        mask = (z_papovich >= 5) & (z_papovich <= 16)
+        if np.sum(mask) > 0:
+            axes[1, 2].errorbar(z_papovich[mask], re_papovich[mask],
+                               yerr=[re_err_minus_papovich[mask], re_err_plus_papovich[mask]],
+                               fmt='s', color='black', markersize=6, alpha=0.8,
+                               label='Papovich+23', capsize=2, linewidth=1.5, zorder=5)
+
+    # Configure axes
+    # Panel (0,0): SFR vs Mvir
+    axes[0, 0].set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_\odot])$')
+    axes[0, 0].set_ylabel(r'$\log_{10}(\mathrm{SFR}\ [M_\odot/\mathrm{yr}])$')
+    axes[0, 0].set_xlim(10, 12.5)
+    axes[0, 0].set_ylim(-1, 3)
+    axes[0, 0].set_title('SFR vs. Halo Mass')
+
+    # Panel (0,1): sSFR vs Mvir
+    axes[0, 1].set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_\odot])$')
+    axes[0, 1].set_ylabel(r'$\log_{10}(\mathrm{sSFR}\ [\mathrm{yr}^{-1}])$')
+    axes[0, 1].set_xlim(10, 12.5)
+    axes[0, 1].set_ylim(-9, -7)
+    axes[0, 1].axhline(y=sSFRcut, color='gray', linestyle=':', alpha=0.5, linewidth=1)
+    axes[0, 1].set_title('sSFR vs. Halo Mass')
+
+    # Panel (0,2): SFRD vs Redshift
+    axes[0, 2].set_xlabel(r'Redshift $z$')
+    axes[0, 2].set_ylabel(r'$\log_{10}(\rho_{\mathrm{SFR}}\ [M_\odot\,\mathrm{yr}^{-1}\,\mathrm{Mpc}^{-3}])$')
+    axes[0, 2].set_xlim(5, 16)
+    axes[0, 2].set_ylim(-5, -1)
+    axes[0, 2].set_title('SFR Density vs. Redshift')
+    axes[0, 2].legend(loc='upper right', fontsize=8, frameon=False)
+
+    # Panel (1,0): Quiescent fraction vs Mvir
+    axes[1, 0].set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_\odot])$')
+    axes[1, 0].set_ylabel(r'$f_{\mathrm{quiescent}}$')
+    axes[1, 0].set_xlim(10, 12.5)
+    axes[1, 0].set_ylim(0.0, 0.1)
+    axes[1, 0].set_title('Quiescent Fraction vs. Halo Mass')
+
+    # Panel (1,1): SHMR
+    axes[1, 1].set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_\odot])$')
+    axes[1, 1].set_ylabel(r'$\log_{10}(M_\star\ [M_\odot])$')
+    axes[1, 1].set_xlim(10, 12.5)
+    axes[1, 1].set_ylim(7, 11)
+    axes[1, 1].set_title('Stellar-Halo Mass Relation')
+
+    # Panel (1,2): SMD vs Redshift
+    axes[1, 2].set_xlabel(r'Redshift $z$')
+    axes[1, 2].set_ylabel(r'$\log_{10}(\rho_\star\ [M_\odot\,\mathrm{Mpc}^{-3}])$')
+    axes[1, 2].set_xlim(5, 16)
+    axes[1, 2].set_ylim(3, 8)
+    axes[1, 2].set_title('Stellar Mass Density vs. Redshift')
+    axes[1, 2].legend(loc='upper right', fontsize=8, frameon=False)
+
+    # Add legend for line styles (for panels with colormap)
+    legend_elements = [
+        Line2D([0], [0], color='black', linestyle='-', linewidth=1.5, label='FFB'),
+        Line2D([0], [0], color='black', linestyle='--', linewidth=1.5, label='No-FFB (Mvir-matched)')
+    ]
+    fig.legend(handles=legend_elements, loc='upper center', ncol=2, bbox_to_anchor=(0.35, 0.98), fontsize=12)
+
+    plt.tight_layout(rect=[0, 0.02, 1.0, 0.95])
+
+    # Shift the 3rd column (right panels) to the right to make room for colorbar
+    for ax in [axes[0, 2], axes[1, 2]]:
+        pos = ax.get_position()
+        ax.set_position([pos.x0 + 0.05, pos.y0, pos.width, pos.height])
+
+    # Add colorbar between columns 1 and 2 (between middle and right panels)
+    # Position: [left, bottom, width, height] in figure coordinates
+    cbar_ax = fig.add_axes([0.68, 0.12, 0.012, 0.76])
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=z_min, vmax=z_max))
+    sm.set_array([])
+    cbar = fig.colorbar(sm, cax=cbar_ax, orientation='vertical')
+    cbar.set_label('Redshift', fontsize=14)
+
+    output_file = OutputDir + 'ffb_comparison_2x3_grid' + OutputFormat
+    plt.savefig(output_file, bbox_inches='tight')
+    print(f"\nSaved: {output_file}")
+    plt.close()
+
+
+def plot_density_evolution():
+    """Create 2x1 figure with SFRD and SMD vs redshift (stacked vertically).
+
+    Top panel: SFRD vs redshift
+    Bottom panel: SMD vs redshift
+
+    Shows FFB galaxies, Mvir-matched no-FFB galaxies, and additional FFB models
+    with different star formation efficiencies.
+    """
+
+    seed(2222)
+
+    OutputDir = DirName_FFB + 'plots/'
+    if not os.path.exists(OutputDir):
+        os.makedirs(OutputDir)
+
+    # Create 2x1 figure (stacked vertically)
+    fig, axes = plt.subplots(2, 1, figsize=(8, 10))
+
+    # Volume for density calculations
+    volume = (BoxSize / Hubble_h)**3.0 * VolumeFraction  # Mpc^3
+
+    # Colormap for additional FFB models
+    cmap_sfe = cm.jet_r
+    sfe_min, sfe_max = 0.2, 1.0
+
+    # Collect data for all snapshots
+    print("Loading data for density evolution plots...")
+
+    # Arrays to store density evolution data
+    redshifts_density = []
+    sfrd_ffb_list = []
+    sfrd_noffb_list = []
+    smd_ffb_list = []
+    smd_noffb_list = []
+
+    for Snapshot in Snapshots:
+        snapnum = int(Snapshot.split('_')[1])
+        z = redshifts[snapnum]
+        print(f'Processing {Snapshot} (z = {z:.2f})')
+
+        # Load data
+        data_FFB = load_data(DirName_FFB, Snapshot)
+        data_noFFB = load_data(DirName_noFFB, Snapshot)
+
+        # Identify FFB galaxies in FFB model
+        ffb_mask = data_FFB['FFBRegime'] == 1
+        n_ffb = np.sum(ffb_mask)
+
+        if n_ffb == 0:
+            print(f"  No FFB galaxies at {Snapshot}, skipping.")
+            continue
+
+        # Get Mvir of FFB galaxies and match to no-FFB catalogue
+        mvir_ffb = data_FFB['Mvir'][ffb_mask]
+        matched_indices = match_by_mvir(mvir_ffb, data_noFFB['Mvir'])
+
+        # Extract properties for FFB galaxies
+        stellar_mass_ffb = data_FFB['StellarMass'][ffb_mask]
+        sfr_ffb = data_FFB['SfrDisk'][ffb_mask] + data_FFB['SfrBulge'][ffb_mask]
+
+        # Extract properties for Mvir-matched no-FFB galaxies
+        stellar_mass_noffb = data_noFFB['StellarMass'][matched_indices]
+        sfr_noffb = data_noFFB['SfrDisk'][matched_indices] + data_noFFB['SfrBulge'][matched_indices]
+
+        # Compute SFRD and SMD
+        total_sfr_ffb = np.sum(sfr_ffb)
+        total_sm_ffb = np.sum(stellar_mass_ffb)
+        total_sfr_noffb = np.sum(sfr_noffb)
+        total_sm_noffb = np.sum(stellar_mass_noffb)
+
+        # Store density data
+        redshifts_density.append(z)
+        sfrd_ffb_list.append(np.log10(total_sfr_ffb / volume) if total_sfr_ffb > 0 else np.nan)
+        sfrd_noffb_list.append(np.log10(total_sfr_noffb / volume) if total_sfr_noffb > 0 else np.nan)
+        smd_ffb_list.append(np.log10(total_sm_ffb / volume) if total_sm_ffb > 0 else np.nan)
+        smd_noffb_list.append(np.log10(total_sm_noffb / volume) if total_sm_noffb > 0 else np.nan)
+
+    # Convert to arrays and sort by redshift
+    redshifts_density = np.array(redshifts_density)
+    sfrd_ffb_arr = np.array(sfrd_ffb_list)
+    sfrd_noffb_arr = np.array(sfrd_noffb_list)
+    smd_ffb_arr = np.array(smd_ffb_list)
+    smd_noffb_arr = np.array(smd_noffb_list)
+
+    sort_idx = np.argsort(redshifts_density)
+    z_sorted = redshifts_density[sort_idx]
+    sfrd_ffb_sorted = sfrd_ffb_arr[sort_idx]
+    sfrd_noffb_sorted = sfrd_noffb_arr[sort_idx]
+    smd_ffb_sorted = smd_ffb_arr[sort_idx]
+    smd_noffb_sorted = smd_noffb_arr[sort_idx]
+
+    print("\nGenerating density evolution plots...")
+
+    # ----- Top Panel: SFRD vs Redshift -----
+    valid_ffb = ~np.isnan(sfrd_ffb_sorted)
+    valid_noffb = ~np.isnan(sfrd_noffb_sorted)
+
+    if np.sum(valid_ffb) > 1:
+        axes[0].plot(z_sorted[valid_ffb], sfrd_ffb_sorted[valid_ffb], '-',
+                    color='black', linewidth=2.5, label='FFB galaxies')
+    if np.sum(valid_noffb) > 1:
+        axes[0].plot(z_sorted[valid_noffb], sfrd_noffb_sorted[valid_noffb], '--',
+                    color='firebrick', linewidth=2.5, label='No-FFB (Mvir-matched)')
+
+    # Add additional FFB models (jet_r colormap, no legend)
+    for model in FFB_Models:
+        model_dir = model['dir']
+        sfe = model['sfe']
+        model_color = cmap_sfe((sfe - sfe_min) / (sfe_max - sfe_min))
+
+        if not os.path.exists(model_dir + FileName):
+            print(f"  Warning: {model_dir + FileName} not found, skipping {model['name']}")
+            continue
+
+        model_redshifts = []
+        model_sfrd = []
+
+        for Snapshot in Snapshots:
+            snapnum = int(Snapshot.split('_')[1])
+            z = redshifts[snapnum]
+
+            try:
+                with h5.File(model_dir + FileName, 'r') as f:
+                    sfr_disk = np.array(f[Snapshot]['SfrDisk'])
+                    sfr_bulge = np.array(f[Snapshot]['SfrBulge'])
+                    ffb_regime = np.array(f[Snapshot]['FFBRegime'])
+
+                ffb_mask = ffb_regime == 1
+                if np.sum(ffb_mask) == 0:
+                    continue
+
+                total_sfr = np.sum(sfr_disk[ffb_mask] + sfr_bulge[ffb_mask])
+                if total_sfr > 0:
+                    model_redshifts.append(z)
+                    model_sfrd.append(np.log10(total_sfr / volume))
+            except:
+                continue
+
+        if len(model_redshifts) > 1:
+            sort_idx_model = np.argsort(model_redshifts)
+            axes[0].plot(np.array(model_redshifts)[sort_idx_model],
+                        np.array(model_sfrd)[sort_idx_model], '-',
+                        color=model_color, linewidth=1.5, alpha=0.7)
+
+    # Add SFRD observational data
+    z_madau, re_madau, re_err_plus_madau, re_err_minus_madau = load_madau_dickinson_2014_data()
+    if z_madau is not None:
+        mask = (z_madau >= 5) & (z_madau <= 16)
+        if np.sum(mask) > 0:
+            axes[0].errorbar(z_madau[mask], re_madau[mask],
+                            yerr=[re_err_minus_madau[mask], re_err_plus_madau[mask]],
+                            fmt='o', color='black', markersize=6, alpha=0.8,
+                            label='Madau & Dickinson 14', capsize=2, linewidth=1.5, zorder=5)
+
+    z_oesch, re_oesch, re_err_plus_oesch, re_err_minus_oesch = load_oesch_sfrd_2018_data()
+    if z_oesch is not None:
+        mask = (z_oesch >= 5) & (z_oesch <= 16)
+        if np.sum(mask) > 0:
+            axes[0].errorbar(z_oesch[mask], re_oesch[mask],
+                            yerr=[re_err_minus_oesch[mask], re_err_plus_oesch[mask]],
+                            fmt='*', color='black', markersize=8, alpha=0.8,
+                            label='Oesch+18', capsize=2, linewidth=1.5, zorder=5)
+
+    z_mcleod, re_mcleod, re_err_plus_mcleod, re_err_minus_mcleod = load_mcleod_rho_sfr_2024_data()
+    if z_mcleod is not None:
+        mask = (z_mcleod >= 5) & (z_mcleod <= 16)
+        if np.sum(mask) > 0:
+            axes[0].errorbar(z_mcleod[mask], re_mcleod[mask],
+                            yerr=[re_err_minus_mcleod[mask], re_err_plus_mcleod[mask]],
+                            fmt='v', color='black', markersize=6, alpha=0.8,
+                            label='McLeod+24', capsize=2, linewidth=1.5, zorder=5)
+
+    z_harikane, re_harikane, re_err_plus_harikane, re_err_minus_harikane = load_harikane_sfr_density_2023_data()
+    if z_harikane is not None:
+        mask = (z_harikane >= 5) & (z_harikane <= 16)
+        if np.sum(mask) > 0:
+            axes[0].errorbar(z_harikane[mask], re_harikane[mask],
+                            yerr=[re_err_minus_harikane[mask], re_err_plus_harikane[mask]],
+                            fmt='D', color='black', markersize=6, alpha=0.8,
+                            label='Harikane+23', capsize=2, linewidth=1.5, zorder=5)
+
+    # ----- Bottom Panel: SMD vs Redshift -----
+    valid_ffb = ~np.isnan(smd_ffb_sorted)
+    valid_noffb = ~np.isnan(smd_noffb_sorted)
+
+    if np.sum(valid_ffb) > 1:
+        axes[1].plot(z_sorted[valid_ffb], smd_ffb_sorted[valid_ffb], '-',
+                    color='black', linewidth=2.5, label='FFB galaxies')
+    if np.sum(valid_noffb) > 1:
+        axes[1].plot(z_sorted[valid_noffb], smd_noffb_sorted[valid_noffb], '--',
+                    color='firebrick', linewidth=2.5, label='No-FFB (Mvir-matched)')
+
+    # Add additional FFB models (jet_r colormap, no legend)
+    for model in FFB_Models:
+        model_dir = model['dir']
+        sfe = model['sfe']
+        model_color = cmap_sfe((sfe - sfe_min) / (sfe_max - sfe_min))
+
+        if not os.path.exists(model_dir + FileName):
+            continue
+
+        model_redshifts = []
+        model_smd = []
+
+        for Snapshot in Snapshots:
+            snapnum = int(Snapshot.split('_')[1])
+            z = redshifts[snapnum]
+
+            try:
+                with h5.File(model_dir + FileName, 'r') as f:
+                    stellar_mass = np.array(f[Snapshot]['StellarMass']) * 1.0e10 / Hubble_h
+                    ffb_regime = np.array(f[Snapshot]['FFBRegime'])
+
+                ffb_mask = ffb_regime == 1
+                if np.sum(ffb_mask) == 0:
+                    continue
+
+                total_sm = np.sum(stellar_mass[ffb_mask])
+                if total_sm > 0:
+                    model_redshifts.append(z)
+                    model_smd.append(np.log10(total_sm / volume))
+            except:
+                continue
+
+        if len(model_redshifts) > 1:
+            sort_idx_model = np.argsort(model_redshifts)
+            axes[1].plot(np.array(model_redshifts)[sort_idx_model],
+                        np.array(model_smd)[sort_idx_model], '-',
+                        color=model_color, linewidth=1.5, alpha=0.7)
+
+    # Add SMD observational data
+    z_madau_smd, re_madau_smd, re_err_plus_madau_smd, re_err_minus_madau_smd = load_madau_dickinson_smd_2014_data()
+    if z_madau_smd is not None:
+        mask = (z_madau_smd >= 5) & (z_madau_smd <= 16)
+        if np.sum(mask) > 0:
+            axes[1].errorbar(z_madau_smd[mask], re_madau_smd[mask],
+                            yerr=[re_err_minus_madau_smd[mask], re_err_plus_madau_smd[mask]],
+                            fmt='o', color='black', markersize=6, alpha=0.8,
+                            label='Madau & Dickinson 14', capsize=2, linewidth=1.5, zorder=5)
+
+    z_kiku, re_kiku, re_err_plus_kiku, re_err_minus_kiku = load_kikuchihara_smd_2020_data()
+    if z_kiku is not None:
+        mask = (z_kiku >= 5) & (z_kiku <= 16)
+        if np.sum(mask) > 0:
+            axes[1].errorbar(z_kiku[mask], re_kiku[mask],
+                            yerr=[re_err_minus_kiku[mask], re_err_plus_kiku[mask]],
+                            fmt='d', color='black', markersize=6, alpha=0.8,
+                            label='Kikuchihara+20', capsize=2, linewidth=1.5, zorder=5)
+
+    z_papovich, re_papovich, re_err_plus_papovich, re_err_minus_papovich = load_papovich_smd_2023_data()
+    if z_papovich is not None:
+        mask = (z_papovich >= 5) & (z_papovich <= 16)
+        if np.sum(mask) > 0:
+            axes[1].errorbar(z_papovich[mask], re_papovich[mask],
+                            yerr=[re_err_minus_papovich[mask], re_err_plus_papovich[mask]],
+                            fmt='s', color='black', markersize=6, alpha=0.8,
+                            label='Papovich+23', capsize=2, linewidth=1.5, zorder=5)
+
+    # Configure axes
+    # Top panel: SFRD
+    axes[0].set_xlabel(r'Redshift $z$')
+    axes[0].set_ylabel(r'$\log_{10}(\rho_{\mathrm{SFR}}\ [M_\odot\,\mathrm{yr}^{-1}\,\mathrm{Mpc}^{-3}])$')
+    axes[0].set_xlim(5, 16)
+    axes[0].set_ylim(-5, -1)
+    axes[0].set_title('SFR Density vs. Redshift')
+    axes[0].legend(loc='upper right', fontsize=9, frameon=False)
+
+    # Bottom panel: SMD
+    axes[1].set_xlabel(r'Redshift $z$')
+    axes[1].set_ylabel(r'$\log_{10}(\rho_\star\ [M_\odot\,\mathrm{Mpc}^{-3}])$')
+    axes[1].set_xlim(5, 16)
+    axes[1].set_ylim(3, 8)
+    axes[1].set_title('Stellar Mass Density vs. Redshift')
+    axes[1].legend(loc='upper right', fontsize=9, frameon=False)
+
+    plt.tight_layout()
+
+    output_file = OutputDir + 'ffb_density_evolution' + OutputFormat
+    plt.savefig(output_file, bbox_inches='tight')
+    print(f"\nSaved: {output_file}")
+    plt.close()
+
+
+def plot_ffb_comparison_4panel():
+    """Create 2x2 grid comparing FFB vs no-FFB galaxy properties vs Mvir.
+
+    Panels:
+    Row 1: SFR vs Mvir | sSFR vs Mvir
+    Row 2: Quiescent fraction vs Mvir | SHMR
+
+    Lines colored by redshift using plasma colormap.
+    """
+
+    seed(2222)
+
+    OutputDir = DirName_FFB + 'plots/'
+    if not os.path.exists(OutputDir):
+        os.makedirs(OutputDir)
+
+    # Create 2x2 figure
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+
+    # Color map: plasma from z=5 (dark) to z=14 (bright)
+    cmap = cm.plasma
+    z_min, z_max = 5.0, 14.5
+
+    # Mvir bins for computing medians (log10 Mvir in Msun)
+    mvir_bins = np.arange(9.5, 12.5, 0.3)
+
+    # Collect data for all snapshots
+    print("Loading data for 4-panel comparison plot...")
+
+    all_data = []
+
+    for Snapshot in Snapshots:
+        snapnum = int(Snapshot.split('_')[1])
+        z = redshifts[snapnum]
+        print(f'Processing {Snapshot} (z = {z:.2f})')
+
+        # Load data
+        data_FFB = load_data(DirName_FFB, Snapshot)
+        data_noFFB = load_data(DirName_noFFB, Snapshot)
+
+        # Identify FFB galaxies in FFB model
+        ffb_mask = data_FFB['FFBRegime'] == 1
+        n_ffb = np.sum(ffb_mask)
+
+        if n_ffb == 0:
+            print(f"  No FFB galaxies at {Snapshot}, skipping.")
+            continue
+
+        # Get Mvir of FFB galaxies and match to no-FFB catalogue
+        mvir_ffb = data_FFB['Mvir'][ffb_mask]
+        matched_indices = match_by_mvir(mvir_ffb, data_noFFB['Mvir'])
+
+        print(f"  Matched {n_ffb} FFB galaxies to no-FFB catalogue by Mvir")
+
+        # Extract properties for FFB galaxies
+        stellar_mass_ffb = data_FFB['StellarMass'][ffb_mask]
+        sfr_ffb = data_FFB['SfrDisk'][ffb_mask] + data_FFB['SfrBulge'][ffb_mask]
+
+        # Extract properties for Mvir-matched no-FFB galaxies
+        stellar_mass_noffb = data_noFFB['StellarMass'][matched_indices]
+        sfr_noffb = data_noFFB['SfrDisk'][matched_indices] + data_noFFB['SfrBulge'][matched_indices]
+
+        # Store for plotting
+        all_data.append({
+            'z': z,
+            'snapshot': Snapshot,
+            'ffb': {
+                'stellar_mass': stellar_mass_ffb,
+                'sfr': sfr_ffb,
+                'mvir': mvir_ffb,
+            },
+            'noffb': {
+                'stellar_mass': stellar_mass_noffb,
+                'sfr': sfr_noffb,
+                'mvir': data_noFFB['Mvir'][matched_indices],
+            }
+        })
+
+    # Plot all data
+    print("\nGenerating 4-panel comparison plot...")
+
+    for data in all_data:
+        z = data['z']
+        color = cmap((z - z_min) / (z_max - z_min))
+
+        # Apply selection: stellar mass cut only
+        mask_ffb = data['ffb']['stellar_mass'] > 1.0e8
+        mask_noffb = data['noffb']['stellar_mass'] > 1.0e8
+
+        if np.sum(mask_ffb) < 2 or np.sum(mask_noffb) < 2:
+            continue
+
+        # Extract masked data
+        sm_ffb = data['ffb']['stellar_mass'][mask_ffb]
+        sfr_ffb = data['ffb']['sfr'][mask_ffb]
+        mvir_ffb = data['ffb']['mvir'][mask_ffb]
+
+        sm_noffb = data['noffb']['stellar_mass'][mask_noffb]
+        sfr_noffb = data['noffb']['sfr'][mask_noffb]
+        mvir_noffb = data['noffb']['mvir'][mask_noffb]
+
+        log_mvir_ffb = np.log10(mvir_ffb)
+        log_mvir_noffb = np.log10(mvir_noffb)
+        log_sm_ffb = np.log10(sm_ffb)
+        log_sm_noffb = np.log10(sm_noffb)
+
+        # ----- Panel (0,0): SFR vs Mvir -----
+        log_sfr_ffb = np.log10(sfr_ffb + 1e-10)
+        log_sfr_noffb = np.log10(sfr_noffb + 1e-10)
+
+        bc_ffb, med_ffb = compute_medians(log_mvir_ffb, log_sfr_ffb, mvir_bins)
+        bc_noffb, med_noffb = compute_medians(log_mvir_noffb, log_sfr_noffb, mvir_bins)
+
+        valid_ffb = ~np.isnan(med_ffb)
+        valid_noffb = ~np.isnan(med_noffb)
+
+        if np.sum(valid_ffb) > 1:
+            axes[0, 0].plot(bc_ffb[valid_ffb], med_ffb[valid_ffb], '-', color=color, linewidth=1.5)
+        if np.sum(valid_noffb) > 1:
+            axes[0, 0].plot(bc_noffb[valid_noffb], med_noffb[valid_noffb], '--', color=color, linewidth=1.5)
+
+        # ----- Panel (0,1): sSFR vs Mvir -----
+        log_ssfr_ffb = np.log10(sfr_ffb / sm_ffb + 1e-15)
+        log_ssfr_noffb = np.log10(sfr_noffb / sm_noffb + 1e-15)
+
+        bc_ffb, med_ffb = compute_medians(log_mvir_ffb, log_ssfr_ffb, mvir_bins)
+        bc_noffb, med_noffb = compute_medians(log_mvir_noffb, log_ssfr_noffb, mvir_bins)
+
+        valid_ffb = ~np.isnan(med_ffb)
+        valid_noffb = ~np.isnan(med_noffb)
+
+        if np.sum(valid_ffb) > 1:
+            axes[0, 1].plot(bc_ffb[valid_ffb], med_ffb[valid_ffb], '-', color=color, linewidth=1.5)
+        if np.sum(valid_noffb) > 1:
+            axes[0, 1].plot(bc_noffb[valid_noffb], med_noffb[valid_noffb], '--', color=color, linewidth=1.5)
 
         # ----- Panel (1,0): Quiescent fraction vs Mvir -----
         bc_ffb, fq_ffb = compute_quiescent_fraction_mvir(mvir_ffb, sm_ffb, sfr_ffb, mvir_bins, ssfr_cut=sSFRcut)
@@ -830,109 +1694,57 @@ def plot_ffb_comparison_grid_6panel():
         if np.sum(valid_noffb) > 1:
             axes[1, 1].plot(bc_noffb[valid_noffb], med_noffb[valid_noffb], '--', color=color, linewidth=1.5)
 
-        # ----- Panel (1,2): Half-mass radius vs stellar mass -----
-        # Compute half-mass radius as mass-weighted combination of disk and bulge
-        # For disk: half-mass radius ~ 1.68 * scale radius (for exponential disk)
-        total_mass_ffb = disk_mass_ffb + bulge_mass_ffb
-        total_mass_noffb = disk_mass_noffb + bulge_mass_noffb
-
-        # Only compute for galaxies with valid radii
-        valid_radius_ffb = (disk_radius_ffb > 0) & (total_mass_ffb > 0)
-        valid_radius_noffb = (disk_radius_noffb > 0) & (total_mass_noffb > 0)
-
-        if np.sum(valid_radius_ffb) >= 3:
-            # Half-mass radius: mass-weighted average
-            # Disk half-mass ~ 1.68 * disk scale radius, bulge assumed to be bulge radius
-            disk_half_ffb = 1.68 * disk_radius_ffb[valid_radius_ffb]
-            # bulge_half_ffb = bulge_radius_ffb[valid_radius_ffb]
-            # For galaxies with no bulge, use disk only
-            # bulge_half_ffb = np.where(bulge_half_ffb > 0, bulge_half_ffb, disk_half_ffb)
-
-            half_mass_ffb = disk_half_ffb
-            log_rhalf_ffb = np.log10(half_mass_ffb + 1e-10)
-
-            bc_ffb, med_ffb = compute_medians(log_sm_ffb[valid_radius_ffb], log_rhalf_ffb, sm_bins)
-            valid = ~np.isnan(med_ffb)
-            if np.sum(valid) > 1:
-                axes[1, 2].plot(bc_ffb[valid], med_ffb[valid], '-', color=color, linewidth=1.5)
-
-        if np.sum(valid_radius_noffb) >= 3:
-            disk_half_noffb = 1.68 * disk_radius_noffb[valid_radius_noffb]
-            # bulge_half_noffb = bulge_radius_noffb[valid_radius_noffb]
-            # bulge_half_noffb = np.where(bulge_half_noffb > 0, bulge_half_noffb, disk_half_noffb)
-
-            half_mass_noffb = disk_half_noffb
-            log_rhalf_noffb = np.log10(half_mass_noffb + 1e-10)
-
-            bc_noffb, med_noffb = compute_medians(log_sm_noffb[valid_radius_noffb], log_rhalf_noffb, sm_bins)
-            valid = ~np.isnan(med_noffb)
-            if np.sum(valid) > 1:
-                axes[1, 2].plot(bc_noffb[valid], med_noffb[valid], '--', color=color, linewidth=1.5)
-
     # Configure axes
     # Panel (0,0): SFR vs Mvir
     axes[0, 0].set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_\odot])$')
     axes[0, 0].set_ylabel(r'$\log_{10}(\mathrm{SFR}\ [M_\odot/\mathrm{yr}])$')
     axes[0, 0].set_xlim(10, 12.5)
-    axes[0, 0].set_ylim(-1, 3)
+    axes[0, 0].set_ylim(-0.5, 2.5)
     axes[0, 0].set_title('SFR vs. Halo Mass')
 
     # Panel (0,1): sSFR vs Mvir
     axes[0, 1].set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_\odot])$')
     axes[0, 1].set_ylabel(r'$\log_{10}(\mathrm{sSFR}\ [\mathrm{yr}^{-1}])$')
     axes[0, 1].set_xlim(10, 12.5)
-    axes[0, 1].set_ylim(-9, -7)
+    axes[0, 1].set_ylim(-8.5, -7.25)
     axes[0, 1].axhline(y=sSFRcut, color='gray', linestyle=':', alpha=0.5, linewidth=1)
     axes[0, 1].set_title('sSFR vs. Halo Mass')
-
-    # Panel (0,2): Metallicity vs Mvir
-    axes[0, 2].set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_\odot])$')
-    axes[0, 2].set_ylabel(r'$12 + \log_{10}(\mathrm{O/H})$')
-    axes[0, 2].set_xlim(10, 12.5)
-    axes[0, 2].set_ylim(7.5, 9.5)
-    axes[0, 2].set_title('Metallicity vs. Halo Mass')
 
     # Panel (1,0): Quiescent fraction vs Mvir
     axes[1, 0].set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_\odot])$')
     axes[1, 0].set_ylabel(r'$f_{\mathrm{quiescent}}$')
     axes[1, 0].set_xlim(10, 12.5)
-    axes[1, 0].set_ylim(0.0, 0.1)
+    axes[1, 0].set_ylim(0.0, 0.01)
     axes[1, 0].set_title('Quiescent Fraction vs. Halo Mass')
 
     # Panel (1,1): SHMR
     axes[1, 1].set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_\odot])$')
     axes[1, 1].set_ylabel(r'$\log_{10}(M_\star\ [M_\odot])$')
     axes[1, 1].set_xlim(10, 12.5)
-    axes[1, 1].set_ylim(7, 11)
+    axes[1, 1].set_ylim(8, 10.5)
     axes[1, 1].set_title('Stellar-Halo Mass Relation')
-
-    # Panel (1,2): Half-mass radius vs stellar mass
-    axes[1, 2].set_xlabel(r'$\log_{10}(M_\star\ [M_\odot])$')
-    axes[1, 2].set_ylabel(r'$\log_{10}(R_{1/2}\ [\mathrm{kpc}])$')
-    axes[1, 2].set_xlim(8, 11)
-    axes[1, 2].set_ylim(-1, 0.5)
-    axes[1, 2].set_title('Size-Mass Relation')
 
     # Add legend for line styles
     legend_elements = [
         Line2D([0], [0], color='black', linestyle='-', linewidth=1.5, label='FFB'),
         Line2D([0], [0], color='black', linestyle='--', linewidth=1.5, label='No-FFB (Mvir-matched)')
     ]
-    fig.legend(handles=legend_elements, loc='upper center', ncol=2, bbox_to_anchor=(0.5, 0.98), fontsize=12)
+    fig.legend(handles=legend_elements, loc='lower center', ncol=2, fontsize=12)
 
-    plt.tight_layout(rect=[0, 0.02, 0.92, 0.95])
+    plt.tight_layout(rect=[0, 0.02, 0.88, 0.95])
 
     # Add colorbar outside the plots on the right
-    cbar_ax = fig.add_axes([0.94, 0.15, 0.015, 0.7])
+    cbar_ax = fig.add_axes([0.91, 0.15, 0.02, 0.7])
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=z_min, vmax=z_max))
     sm.set_array([])
     cbar = fig.colorbar(sm, cax=cbar_ax, orientation='vertical')
     cbar.set_label('Redshift', fontsize=14)
 
-    output_file = OutputDir + 'ffb_comparison_2x3_grid' + OutputFormat
+    output_file = OutputDir + 'ffb_comparison_2x2_grid_properties' + OutputFormat
     plt.savefig(output_file, bbox_inches='tight')
     print(f"\nSaved: {output_file}")
     plt.close()
+
 
 def plot_sfr_mvir_contours_grid():
     """Create 2x3 grid of SFR vs Mvir contour plots at different redshifts.
@@ -1113,7 +1925,9 @@ def plot_sfr_mvir_contours_grid():
 # ==================================================================
 
 if __name__ == "__main__":
-    plot_ffb_comparison_grid()
-    plot_ffb_comparison_grid_shmr()
-    plot_ffb_comparison_grid_6panel()
-    plot_sfr_mvir_contours_grid()
+    # plot_ffb_comparison_grid()
+    # plot_ffb_comparison_grid_shmr()
+    # plot_ffb_comparison_grid_6panel()
+    # plot_sfr_mvir_contours_grid()
+    plot_density_evolution()
+    plot_ffb_comparison_4panel()
