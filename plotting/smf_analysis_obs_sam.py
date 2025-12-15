@@ -49,7 +49,7 @@ MODEL_CONFIGS = [
         'dir': './output/millennium/',  # Directory path
         'color': 'black',            # Color for plotting
         'linestyle': '-',            # Line style
-        'linewidth': 3,              # Thick line for SAGE25
+        'linewidth': 3,              # Thick line for SAGE26
         'alpha': 0.8,                # Transparency
         'boxsize': MILLENNIUM_BOXSIZE,             # Box size in h^-1 Mpc for this model
         'volume_fraction': 1.0,      # Fraction of the full volume output by the model
@@ -107,42 +107,42 @@ MODEL_CONFIGS = [
         'redshifts': DEFAULT_REDSHIFTS
     },
     {
-        'name': '30% FFB', 'dir': './output/millennium_FFB30/', 
-        'color': 'purple', 'linestyle': '-', 'alpha': 0.8, 
-        'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
-        'hubble_h': MILLENNIUM_HUBBLE_H, 
+        'name': '30% FFB', 'dir': './output/millennium_FFB30/',
+        'color': 'purple', 'linestyle': '-', 'alpha': 0.8,
+        'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0,
+        'hubble_h': MILLENNIUM_HUBBLE_H,
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
         'redshifts': DEFAULT_REDSHIFTS
     },
     {
-        'name': '40% FFB', 'dir': './output/millennium_FFB40/', 
-        'color': 'red', 'linestyle': '-', 'alpha': 0.8, 
-        'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
-        'hubble_h': MILLENNIUM_HUBBLE_H, 
+        'name': '40% FFB', 'dir': './output/millennium_FFB40/',
+        'color': 'red', 'linestyle': '-', 'alpha': 0.8,
+        'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0,
+        'hubble_h': MILLENNIUM_HUBBLE_H,
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
         'redshifts': DEFAULT_REDSHIFTS
     },
     {
-        'name': '50% FFB', 'dir': './output/millennium_FFB50/', 
-        'color': 'orange', 'linestyle': '-', 'alpha': 0.8, 
-        'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
-        'hubble_h': MILLENNIUM_HUBBLE_H, 
+        'name': '50% FFB', 'dir': './output/millennium_FFB50/',
+        'color': 'orange', 'linestyle': '-', 'alpha': 0.8,
+        'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0,
+        'hubble_h': MILLENNIUM_HUBBLE_H,
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
         'redshifts': DEFAULT_REDSHIFTS
     },
     {
-        'name': '80% FFB', 'dir': './output/millennium_FFB80/', 
-        'color': 'yellow', 'linestyle': '-', 'alpha': 0.8, 
-        'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
-        'hubble_h': MILLENNIUM_HUBBLE_H, 
+        'name': '80% FFB', 'dir': './output/millennium_FFB80/',
+        'color': 'yellow', 'linestyle': '-', 'alpha': 0.8,
+        'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0,
+        'hubble_h': MILLENNIUM_HUBBLE_H,
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
         'redshifts': DEFAULT_REDSHIFTS
     },
     {
-        'name': '100% FFB', 'dir': './output/millennium_FFB100/', 
-        'color': 'dodgerblue', 'linestyle': '-', 'alpha': 0.8, 
-        'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
-        'hubble_h': MILLENNIUM_HUBBLE_H, 
+        'name': '100% FFB', 'dir': './output/millennium_FFB100/',
+        'color': 'dodgerblue', 'linestyle': '-', 'alpha': 0.8,
+        'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0,
+        'hubble_h': MILLENNIUM_HUBBLE_H,
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
         'redshifts': DEFAULT_REDSHIFTS
     }
@@ -2174,14 +2174,30 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
                         model_label = f'{model_name}'
                         models_in_legend.add(model_name)
                     
-                    # SAGE models: LINES ONLY, NO POINTS
-                    sage_plot = ax.plot(xaxeshisto[mask_plot], phi_log, 
-                           color=color, linestyle=linestyle, linewidth=linewidth,
-                           label=model_label, alpha=alpha)
-                    
-                    # Add to simulation legend if labeled
-                    if model_label is not None:
-                        panel_sim_legend_items.append((sage_plot[0], model_label))
+                    # Check if this model should be plotted as shaded region
+                    plot_as_shading = model_config.get('plot_as_shading', False)
+
+                    if plot_as_shading:
+                        # Plot as shaded 1-sigma region only (no center line)
+                        phi_upper_shade = phi_log + phi_err_log
+                        phi_lower_shade = phi_log - phi_err_log
+                        sage_fill = ax.fill_between(xaxeshisto[mask_plot], phi_lower_shade, phi_upper_shade,
+                                                    color=color, alpha=0.3, linewidth=0)
+
+                        # Add to simulation legend if labeled (use a patch for the legend)
+                        if model_label is not None:
+                            from matplotlib.patches import Patch
+                            legend_patch = Patch(facecolor=color, alpha=0.3, label=model_label)
+                            panel_sim_legend_items.append((legend_patch, model_label))
+                    else:
+                        # SAGE models: LINES ONLY, NO POINTS
+                        sage_plot = ax.plot(xaxeshisto[mask_plot], phi_log,
+                               color=color, linestyle=linestyle, linewidth=linewidth,
+                               label=model_label, alpha=alpha)
+
+                        # Add to simulation legend if labeled
+                        if model_label is not None:
+                            panel_sim_legend_items.append((sage_plot[0], model_label))
                 
                 # Add upper limits for zero counts
                 mask_upper = phi == 0
@@ -2623,14 +2639,30 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
                         model_label = f'{model_name}'
                         models_in_legend.add(model_name)
                     
-                    # SAGE models: LINES ONLY, NO POINTS
-                    sage_plot = ax.plot(xaxeshisto[mask_plot], phi_log, 
-                           color=color, linestyle=linestyle, linewidth=linewidth,
-                           label=model_label, alpha=alpha)
-                    
-                    # Add to simulation legend if labeled
-                    if model_label is not None:
-                        panel_sim_legend_items.append((sage_plot[0], model_label))
+                    # Check if this model should be plotted as shaded region
+                    plot_as_shading = model_config.get('plot_as_shading', False)
+
+                    if plot_as_shading:
+                        # Plot as shaded 1-sigma region only (no center line)
+                        phi_upper_shade = phi_log + phi_err_log
+                        phi_lower_shade = phi_log - phi_err_log
+                        sage_fill = ax.fill_between(xaxeshisto[mask_plot], phi_lower_shade, phi_upper_shade,
+                                                    color=color, alpha=0.3, linewidth=0)
+
+                        # Add to simulation legend if labeled (use a patch for the legend)
+                        if model_label is not None:
+                            from matplotlib.patches import Patch
+                            legend_patch = Patch(facecolor=color, alpha=0.3, label=model_label)
+                            panel_sim_legend_items.append((legend_patch, model_label))
+                    else:
+                        # SAGE models: LINES ONLY, NO POINTS
+                        sage_plot = ax.plot(xaxeshisto[mask_plot], phi_log,
+                               color=color, linestyle=linestyle, linewidth=linewidth,
+                               label=model_label, alpha=alpha)
+
+                        # Add to simulation legend if labeled
+                        if model_label is not None:
+                            panel_sim_legend_items.append((sage_plot[0], model_label))
                 
                 # Add upper limits for zero counts
                 mask_upper = phi == 0
@@ -3404,14 +3436,30 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
                         model_label = f'{model_name}'
                         models_in_legend.add(model_name)
                     
-                    # SAGE models: LINES ONLY, NO POINTS
-                    sage_plot = ax.plot(xaxeshisto[mask_plot], phi_log, 
-                           color=color, linestyle=linestyle, linewidth=linewidth,
-                           label=model_label, alpha=alpha)
-                    
-                    # Add to simulation legend if labeled
-                    if model_label is not None:
-                        panel_sim_legend_items.append((sage_plot[0], model_label))
+                    # Check if this model should be plotted as shaded region
+                    plot_as_shading = model_config.get('plot_as_shading', False)
+
+                    if plot_as_shading:
+                        # Plot as shaded 1-sigma region only (no center line)
+                        phi_upper_shade = phi_log + phi_err_log
+                        phi_lower_shade = phi_log - phi_err_log
+                        sage_fill = ax.fill_between(xaxeshisto[mask_plot], phi_lower_shade, phi_upper_shade,
+                                                    color=color, alpha=0.3, linewidth=0)
+
+                        # Add to simulation legend if labeled (use a patch for the legend)
+                        if model_label is not None:
+                            from matplotlib.patches import Patch
+                            legend_patch = Patch(facecolor=color, alpha=0.3, label=model_label)
+                            panel_sim_legend_items.append((legend_patch, model_label))
+                    else:
+                        # SAGE models: LINES ONLY, NO POINTS
+                        sage_plot = ax.plot(xaxeshisto[mask_plot], phi_log,
+                               color=color, linestyle=linestyle, linewidth=linewidth,
+                               label=model_label, alpha=alpha)
+
+                        # Add to simulation legend if labeled
+                        if model_label is not None:
+                            panel_sim_legend_items.append((sage_plot[0], model_label))
                 
                 # Add upper limits for zero counts
                 mask_upper = phi == 0
@@ -3735,14 +3783,30 @@ def plot_smf_all_redshift_bins(galaxy_types='all', mass_range=(7, 12),
                         model_label = f'{model_name}'
                         models_in_legend.add(model_name)
                     
-                    # SAGE models: LINES ONLY, NO POINTS
-                    sage_plot = ax.plot(xaxeshisto[mask_plot], phi_log, 
-                           color=color, linestyle=linestyle, linewidth=linewidth,
-                           label=model_label, alpha=alpha)
-                    
-                    # Add to simulation legend if labeled
-                    if model_label is not None:
-                        panel_sim_legend_items.append((sage_plot[0], model_label))
+                    # Check if this model should be plotted as shaded region
+                    plot_as_shading = model_config.get('plot_as_shading', False)
+
+                    if plot_as_shading:
+                        # Plot as shaded 1-sigma region only (no center line)
+                        phi_upper_shade = phi_log + phi_err_log
+                        phi_lower_shade = phi_log - phi_err_log
+                        sage_fill = ax.fill_between(xaxeshisto[mask_plot], phi_lower_shade, phi_upper_shade,
+                                                    color=color, alpha=0.3, linewidth=0)
+
+                        # Add to simulation legend if labeled (use a patch for the legend)
+                        if model_label is not None:
+                            from matplotlib.patches import Patch
+                            legend_patch = Patch(facecolor=color, alpha=0.3, label=model_label)
+                            panel_sim_legend_items.append((legend_patch, model_label))
+                    else:
+                        # SAGE models: LINES ONLY, NO POINTS
+                        sage_plot = ax.plot(xaxeshisto[mask_plot], phi_log,
+                               color=color, linestyle=linestyle, linewidth=linewidth,
+                               label=model_label, alpha=alpha)
+
+                        # Add to simulation legend if labeled
+                        if model_label is not None:
+                            panel_sim_legend_items.append((sage_plot[0], model_label))
                 
                 # Add upper limits for zero counts
                 mask_upper = phi == 0
@@ -3936,7 +4000,7 @@ if __name__ == "__main__":
     ]
     
     high_z_model_names = [
-        'SAGE26', 'SAGE C16', 'no FFB', '30% FFB', 
+        'SAGE26', 'SAGE C16', 'no FFB', '30% FFB',
         '40% FFB', '50% FFB', '80% FFB', '100% FFB'
     ]
     
@@ -4014,6 +4078,43 @@ if __name__ == "__main__":
         if not high_z_models:
             print(f"Warning: No models found for High-Z grid. Expected: {high_z_model_names}")
 
+        # Create custom model configs for high-z plot with modified styles and names
+        # FFB models will be plotted as shaded 1-sigma regions with jet_r colormap
+        from matplotlib import cm
+        jet_r = cm.get_cmap('jet_r')
+        ffb_models = ['30% FFB', '40% FFB', '50% FFB', '80% FFB', '100% FFB']
+        ffb_values = [0.30, 0.40, 0.50, 0.80, 1.0]  # For colormap normalization
+
+        high_z_models_custom = []
+        for model in high_z_models:
+            m = model.copy()
+            if m['name'] == 'SAGE26':
+                m['name'] = r'SAGE26 ($\epsilon_{\mathrm{max}}$=.20)'
+                m['linewidth'] = 4  # Thicker line
+            elif m['name'] == 'SAGE C16':
+                m['color'] = 'firebrick'
+                m['linestyle'] = '-'    # Solid like noFFB
+            elif m['name'] == 'no FFB':
+                m['name'] = 'SAGE26 (no FFB)'
+            elif m['name'] in ffb_models:
+                idx = ffb_models.index(m['name'])
+                # Normalize to 0-1 range for colormap (0.3 to 1.0 mapped to colormap)
+                norm_val = (ffb_values[idx] - 0.3) / (1.0 - 0.3)
+                m['color'] = jet_r(norm_val)
+                m['plot_as_shading'] = True  # Flag to plot as shaded region
+                # Update name to epsilon notation
+                if m['name'] == '30% FFB':
+                    m['name'] = r'$\epsilon_{\mathrm{max}}$=.30'
+                elif m['name'] == '40% FFB':
+                    m['name'] = r'$\epsilon_{\mathrm{max}}$=.40'
+                elif m['name'] == '50% FFB':
+                    m['name'] = r'$\epsilon_{\mathrm{max}}$=.50'
+                elif m['name'] == '80% FFB':
+                    m['name'] = r'$\epsilon_{\mathrm{max}}$=.80'
+                elif m['name'] == '100% FFB':
+                    m['name'] = r'$\epsilon_{\mathrm{max}}$=1.0'
+            high_z_models_custom.append(m)
+
         # Create the main SMF grid plot for high redshifts
         fig2, axes2 = plot_smf_redshift_grid(
             galaxy_types='all',
@@ -4021,7 +4122,8 @@ if __name__ == "__main__":
             z_range=(5.5, 13),
             save_path=OutputDir + 'sage_smf_redshift_grid_high_z_all' + OutputFormat,
             figure_title="(z = 5.5-13)",
-            model_configs=high_z_models
+            model_configs=high_z_models_custom,
+            show_observations=False
         )
         
         # All galaxies (already included in main script)

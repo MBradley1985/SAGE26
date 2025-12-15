@@ -439,11 +439,11 @@ def plot_ffb_sigmoid():
 
     ax.set_xlabel(r'$\log_{10}(M_{\mathrm{vir}} / M_{\mathrm{vir,ffb}})$', fontsize=14)
     ax.set_ylabel(r'$f_{\mathrm{ffb}}$', fontsize=14)
-    ax.set_title('FFB Sigmoid Transition Function')
+    # ax.set_title('FFB Sigmoid Transition Function')
     ax.set_xlim(-1.0, 1.0)
     ax.set_ylim(0, 1)
-    ax.legend(loc='lower right', fontsize=12)
-    ax.grid(True, alpha=0.3)
+    ax.legend(loc='lower right', fontsize=12, frameon=False)
+    # ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
     plt.savefig(OutputDir + 'ffb_sigmoid' + OutputFormat)
@@ -530,11 +530,11 @@ def plot_ffb_vs_redshift():
 
     ax.set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_{\odot}])$', fontsize=14)
     ax.set_ylabel(r'$f_{\mathrm{ffb}}$', fontsize=14)
-    ax.set_title(rf'FFB Fraction vs Halo Mass ($\Delta \log M = {delta_log_M}$ dex)')
+    # ax.set_title(rf'FFB Fraction vs Halo Mass ($\Delta \log M = {delta_log_M}$ dex)')
     ax.set_xlim(8, 13)
     ax.set_ylim(0, 1)
-    ax.legend(loc='upper left', fontsize=12, title='Theory (lines) + SAGE (points)', frameon=False)
-    ax.grid(True, alpha=0.3)
+    ax.legend(loc='upper left', fontsize=10, frameon=False)
+    # ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
     plt.savefig(OutputDir + 'ffb_vs_redshift' + OutputFormat)
@@ -548,6 +548,6 @@ if __name__ == "__main__":
 
     plot_ffb_sigmoid()
     plot_ffb_vs_redshift()
-    plot_sfr_distribution()
-    plot_sfr_distribution_scatter()
+    # plot_sfr_distribution()
+    # plot_sfr_distribution_scatter()
     # plot_metallicity_distribution()
