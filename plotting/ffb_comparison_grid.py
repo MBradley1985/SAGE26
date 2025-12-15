@@ -1256,8 +1256,8 @@ def plot_density_evolution():
     Top panel: SFRD vs redshift
     Bottom panel: SMD vs redshift
 
-    Shows FFB galaxies, Mvir-matched no-FFB galaxies, and additional FFB models
-    with different star formation efficiencies.
+    Shows entire galaxy populations from FFB and no-FFB models, plus additional
+    FFB models with different star formation efficiencies.
     """
 
     seed(2222)
@@ -1295,27 +1295,16 @@ def plot_density_evolution():
         data_FFB = load_data(DirName_FFB, Snapshot)
         data_noFFB = load_data(DirName_noFFB, Snapshot)
 
-        # Identify FFB galaxies in FFB model
-        ffb_mask = data_FFB['FFBRegime'] == 1
-        n_ffb = np.sum(ffb_mask)
+        # Use entire galaxy population from both models
+        # Extract properties for ALL galaxies in FFB model
+        stellar_mass_ffb = data_FFB['StellarMass']
+        sfr_ffb = data_FFB['SfrDisk'] + data_FFB['SfrBulge']
 
-        if n_ffb == 0:
-            print(f"  No FFB galaxies at {Snapshot}, skipping.")
-            continue
+        # Extract properties for ALL galaxies in no-FFB model
+        stellar_mass_noffb = data_noFFB['StellarMass']
+        sfr_noffb = data_noFFB['SfrDisk'] + data_noFFB['SfrBulge']
 
-        # Get Mvir of FFB galaxies and match to no-FFB catalogue
-        mvir_ffb = data_FFB['Mvir'][ffb_mask]
-        matched_indices = match_by_mvir(mvir_ffb, data_noFFB['Mvir'])
-
-        # Extract properties for FFB galaxies
-        stellar_mass_ffb = data_FFB['StellarMass'][ffb_mask]
-        sfr_ffb = data_FFB['SfrDisk'][ffb_mask] + data_FFB['SfrBulge'][ffb_mask]
-
-        # Extract properties for Mvir-matched no-FFB galaxies
-        stellar_mass_noffb = data_noFFB['StellarMass'][matched_indices]
-        sfr_noffb = data_noFFB['SfrDisk'][matched_indices] + data_noFFB['SfrBulge'][matched_indices]
-
-        # Compute SFRD and SMD
+        # Compute SFRD and SMD for entire populations
         total_sfr_ffb = np.sum(sfr_ffb)
         total_sm_ffb = np.sum(stellar_mass_ffb)
         total_sfr_noffb = np.sum(sfr_noffb)
@@ -1350,12 +1339,12 @@ def plot_density_evolution():
 
     if np.sum(valid_ffb) > 1:
         axes[0].plot(z_sorted[valid_ffb], sfrd_ffb_sorted[valid_ffb], '-',
-                    color='black', linewidth=2.5, label='FFB galaxies')
+                    color='black', linewidth=2.5, label='FFB model')
     if np.sum(valid_noffb) > 1:
         axes[0].plot(z_sorted[valid_noffb], sfrd_noffb_sorted[valid_noffb], '--',
-                    color='firebrick', linewidth=2.5, label='No-FFB (Mvir-matched)')
+                    color='firebrick', linewidth=2.5, label='No-FFB model')
 
-    # Add additional FFB models (jet_r colormap, no legend)
+    # Add additional FFB models (jet_r colormap, no legend) - use entire population
     for model in FFB_Models:
         model_dir = model['dir']
         sfe = model['sfe']
@@ -1376,13 +1365,9 @@ def plot_density_evolution():
                 with h5.File(model_dir + FileName, 'r') as f:
                     sfr_disk = np.array(f[Snapshot]['SfrDisk'])
                     sfr_bulge = np.array(f[Snapshot]['SfrBulge'])
-                    ffb_regime = np.array(f[Snapshot]['FFBRegime'])
 
-                ffb_mask = ffb_regime == 1
-                if np.sum(ffb_mask) == 0:
-                    continue
-
-                total_sfr = np.sum(sfr_disk[ffb_mask] + sfr_bulge[ffb_mask])
+                # Use all galaxies in the model
+                total_sfr = np.sum(sfr_disk + sfr_bulge)
                 if total_sfr > 0:
                     model_redshifts.append(z)
                     model_sfrd.append(np.log10(total_sfr / volume))
@@ -1438,12 +1423,12 @@ def plot_density_evolution():
 
     if np.sum(valid_ffb) > 1:
         axes[1].plot(z_sorted[valid_ffb], smd_ffb_sorted[valid_ffb], '-',
-                    color='black', linewidth=2.5, label='FFB galaxies')
+                    color='black', linewidth=2.5, label='FFB model')
     if np.sum(valid_noffb) > 1:
         axes[1].plot(z_sorted[valid_noffb], smd_noffb_sorted[valid_noffb], '--',
-                    color='firebrick', linewidth=2.5, label='No-FFB (Mvir-matched)')
+                    color='firebrick', linewidth=2.5, label='No-FFB model')
 
-    # Add additional FFB models (jet_r colormap, no legend)
+    # Add additional FFB models (jet_r colormap, no legend) - use entire population
     for model in FFB_Models:
         model_dir = model['dir']
         sfe = model['sfe']
@@ -1462,13 +1447,9 @@ def plot_density_evolution():
             try:
                 with h5.File(model_dir + FileName, 'r') as f:
                     stellar_mass = np.array(f[Snapshot]['StellarMass']) * 1.0e10 / Hubble_h
-                    ffb_regime = np.array(f[Snapshot]['FFBRegime'])
 
-                ffb_mask = ffb_regime == 1
-                if np.sum(ffb_mask) == 0:
-                    continue
-
-                total_sm = np.sum(stellar_mass[ffb_mask])
+                # Use all galaxies in the model
+                total_sm = np.sum(stellar_mass)
                 if total_sm > 0:
                     model_redshifts.append(z)
                     model_smd.append(np.log10(total_sm / volume))
@@ -1515,7 +1496,7 @@ def plot_density_evolution():
     axes[0].set_ylabel(r'$\log_{10}(\rho_{\mathrm{SFR}}\ [M_\odot\,\mathrm{yr}^{-1}\,\mathrm{Mpc}^{-3}])$')
     axes[0].set_xlim(5, 16)
     axes[0].set_ylim(-5, -1)
-    axes[0].set_title('SFR Density vs. Redshift')
+    # axes[0].set_title('SFR Density vs. Redshift')
     axes[0].legend(loc='upper right', fontsize=9, frameon=False)
 
     # Bottom panel: SMD
@@ -1523,7 +1504,7 @@ def plot_density_evolution():
     axes[1].set_ylabel(r'$\log_{10}(\rho_\star\ [M_\odot\,\mathrm{Mpc}^{-3}])$')
     axes[1].set_xlim(5, 16)
     axes[1].set_ylim(3, 8)
-    axes[1].set_title('Stellar Mass Density vs. Redshift')
+    # axes[1].set_title('Stellar Mass Density vs. Redshift')
     axes[1].legend(loc='upper right', fontsize=9, frameon=False)
 
     plt.tight_layout()
@@ -1620,8 +1601,8 @@ def plot_ffb_comparison_4panel():
         color = cmap((z - z_min) / (z_max - z_min))
 
         # Apply selection: stellar mass cut only
-        mask_ffb = data['ffb']['stellar_mass'] > 1.0e8
-        mask_noffb = data['noffb']['stellar_mass'] > 1.0e8
+        mask_ffb = data['ffb']['stellar_mass'] > 1.0e6
+        mask_noffb = data['noffb']['stellar_mass'] > 1.0e6
 
         if np.sum(mask_ffb) < 2 or np.sum(mask_noffb) < 2:
             continue
@@ -1700,7 +1681,7 @@ def plot_ffb_comparison_4panel():
     axes[0, 0].set_ylabel(r'$\log_{10}(\mathrm{SFR}\ [M_\odot/\mathrm{yr}])$')
     axes[0, 0].set_xlim(10, 12.5)
     axes[0, 0].set_ylim(-0.5, 2.5)
-    axes[0, 0].set_title('SFR vs. Halo Mass')
+    # axes[0, 0].set_title('SFR vs. Halo Mass')
 
     # Panel (0,1): sSFR vs Mvir
     axes[0, 1].set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_\odot])$')
@@ -1708,21 +1689,21 @@ def plot_ffb_comparison_4panel():
     axes[0, 1].set_xlim(10, 12.5)
     axes[0, 1].set_ylim(-8.5, -7.25)
     axes[0, 1].axhline(y=sSFRcut, color='gray', linestyle=':', alpha=0.5, linewidth=1)
-    axes[0, 1].set_title('sSFR vs. Halo Mass')
+    # axes[0, 1].set_title('sSFR vs. Halo Mass')
 
     # Panel (1,0): Quiescent fraction vs Mvir
     axes[1, 0].set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_\odot])$')
     axes[1, 0].set_ylabel(r'$f_{\mathrm{quiescent}}$')
     axes[1, 0].set_xlim(10, 12.5)
     axes[1, 0].set_ylim(0.0, 0.01)
-    axes[1, 0].set_title('Quiescent Fraction vs. Halo Mass')
+    # axes[1, 0].set_title('Quiescent Fraction vs. Halo Mass')
 
     # Panel (1,1): SHMR
     axes[1, 1].set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_\odot])$')
     axes[1, 1].set_ylabel(r'$\log_{10}(M_\star\ [M_\odot])$')
     axes[1, 1].set_xlim(10, 12.5)
     axes[1, 1].set_ylim(8, 10.5)
-    axes[1, 1].set_title('Stellar-Halo Mass Relation')
+    # axes[1, 1].set_title('Stellar-Halo Mass Relation')
 
     # Add legend for line styles
     legend_elements = [
@@ -1928,6 +1909,6 @@ if __name__ == "__main__":
     # plot_ffb_comparison_grid()
     # plot_ffb_comparison_grid_shmr()
     # plot_ffb_comparison_grid_6panel()
-    # plot_sfr_mvir_contours_grid()
+    plot_sfr_mvir_contours_grid()
     plot_density_evolution()
     plot_ffb_comparison_4panel()
