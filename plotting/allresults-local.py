@@ -1971,12 +1971,11 @@ if __name__ == '__main__':
 
     # Plot quiescent population (red) - clip above -11
     if len(mass_q) > 0:
-        plot_density_contours(mass_q, sSFR_q, 'red', 'Quiescent', clip_above=sSFRcut)
+        plot_density_contours(mass_q, sSFR_q, 'firebrick', 'Quiescent', clip_above=sSFRcut)
 
     # Plot star-forming population (blue) - clip below -11
     if len(mass_sf) > 0:
-        plot_density_contours(mass_sf, sSFR_sf, 'blue', 'Star-forming', clip_below=sSFRcut)
-
+        plot_density_contours(mass_sf, sSFR_sf, 'dodgerblue', 'Star-forming', clip_below=sSFRcut)
     # Add the sSFR cut line
     plt.axhline(y=sSFRcut, color='black', linestyle='--', linewidth=2, 
             label=f'sSFR cut = {sSFRcut}', zorder=10)

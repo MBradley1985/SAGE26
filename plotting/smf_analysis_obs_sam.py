@@ -19,6 +19,7 @@ Author: Analysis script for SAGE semi-analytic model
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import h5py as h5
 import glob
 import os
@@ -49,7 +50,7 @@ MODEL_CONFIGS = [
         'dir': './output/millennium/',  # Directory path
         'color': 'black',            # Color for plotting
         'linestyle': '-',            # Line style
-        'linewidth': 3,              # Thick line for SAGE26
+        'linewidth': 4,              # Thick line for SAGE26 (matches high-z grid)
         'alpha': 0.8,                # Transparency
         'boxsize': MILLENNIUM_BOXSIZE,             # Box size in h^-1 Mpc for this model
         'volume_fraction': 1.0,      # Fraction of the full volume output by the model
@@ -62,7 +63,7 @@ MODEL_CONFIGS = [
         'name': 'SAGE C16',           # Display name for legend
         'dir': '../SAGE-VANILLA/sage-model/output/millennium/',  # Second directory path
         'color': 'firebrick',             # Color for plotting
-        'linestyle': '--',           # Dashed line style
+        'linestyle': '-',           # Solid line style
         'linewidth': 2,              # Thin line for Vanilla SAGE
         'alpha': 0.8,                # Transparency
         'boxsize': MILLENNIUM_BOXSIZE,             # Box size in h^-1 Mpc for this model
@@ -91,7 +92,7 @@ MODEL_CONFIGS = [
     {
         'name': 'C16 feedback',
         'dir': './output/millennium_c16feedback/', 
-        'color': 'cyan', 
+        'color': 'dodgerblue', 
         'linestyle': '-', 'alpha': 0.8, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
@@ -99,8 +100,8 @@ MODEL_CONFIGS = [
         'redshifts': DEFAULT_REDSHIFTS
     },
     {
-        'name': 'no FFB', 'dir': './output/millennium_noffb/', 
-        'color': 'magenta', 'linestyle': '-', 'alpha': 0.8, 
+        'name': 'SAGE26 (no FFB)', 'dir': './output/millennium_noffb/',
+        'color': 'dodgerblue', 'linestyle': '-', 'alpha': 0.8, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
@@ -151,15 +152,15 @@ MODEL_CONFIGS = [
 # List of observational CSV files, one per redshift
 # Note: SMFvals data will be plotted as symbols only (no lines), using squares by default
 OBSERVATIONAL_FILES = [
-    {'file': './data/SHARK_smf_z0.csv', 'z': 0.0, 'color': 'orange', 'label': 'SHARK', 'linestyle': ':', 'linewidth': 1, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z05.csv', 'z': 0.5, 'color': 'orange', 'label': 'SHARK', 'linestyle': ':', 'linewidth': 1, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z1.csv', 'z': 1.0, 'color': 'orange', 'label': 'SHARK', 'linestyle': ':', 'linewidth': 1, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z2.csv', 'z': 2.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': ':', 'linewidth': 1, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z3.csv', 'z': 3.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': ':', 'linewidth': 1, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z4.csv', 'z': 4.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': ':', 'linewidth': 1, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z5.csv', 'z': 5.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': ':', 'linewidth': 1, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z6.csv', 'z': 6.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': ':', 'linewidth': 1, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z7.csv', 'z': 7.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': ':', 'linewidth': 1, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z0.csv', 'z': 0.0, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z05.csv', 'z': 0.5, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z1.csv', 'z': 1.0, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z2.csv', 'z': 2.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z3.csv', 'z': 3.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z4.csv', 'z': 4.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z5.csv', 'z': 5.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z6.csv', 'z': 6.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z7.csv', 'z': 7.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
     # Add your new SMFvals files here (plotted as symbols only)
     {'file': './data/Thorne21/SMFvals_z2.csv', 'z': 2.0, 'color': 'grey', 'label': 'Thorne+21', 'marker': 's', 'markersize': 4, 'type': 'smfvals'},
     {'file': './data/Thorne21/SMFvals_z2.4.csv', 'z': 2.4, 'color': 'grey', 'label': 'Thorne+21', 'marker': 's', 'markersize': 4, 'type': 'smfvals'},
@@ -1176,9 +1177,10 @@ def create_redshift_bins(available_snapshots, model_config=None, z_range=None):
     list : List of (z_low, z_high, z_center, snapshots_in_bin) tuples
     """
     # Define redshift bin edges to match observational figure
+    # Comprehensive plot uses all bins; low-z/high-z grids filter by z_range
     all_redshift_bins = [
         (0.0, 0.5),    # z ~ 0.25 (combined low-z bin for Baldry data)
-        (0.5, 0.8),    # z ~ 0.65  
+        (0.5, 0.8),    # z ~ 0.65
         (0.8, 1.1),    # z ~ 0.95
         (1.1, 1.5),    # z ~ 1.3
         (1.5, 2.0),    # z ~ 1.75
@@ -1194,19 +1196,30 @@ def create_redshift_bins(available_snapshots, model_config=None, z_range=None):
         (9.5, 12.0),   # z ~ 10-12
         (12.0, 13.0),  # z ~ 12.5
     ]
-    
-    # Filter bins by redshift range if specified
-    if z_range is not None:
+
+    # For low-z 2x3 grid, use coarser bins
+    low_z_bins = [
+        (0.0, 0.5),    # z ~ 0.25
+        (0.5, 1.0),    # z ~ 0.75
+        (1.0, 1.5),    # z ~ 1.25
+        (1.5, 2.0),    # z ~ 1.75
+        (2.0, 2.75),   # z ~ 2.375
+        (2.75, 3.5),   # z ~ 3.125
+    ]
+
+    # Select appropriate bins based on z_range
+    if z_range is not None and z_range[1] <= 3.5:
+        # Use coarser bins for low-z 2x3 grid
+        redshift_bins = low_z_bins
+    elif z_range is not None:
+        # Filter all_redshift_bins for other z_ranges
         z_min, z_max = z_range
-        filtered_bins = []
-        for z_low, z_high in all_redshift_bins:
-            z_center = (z_low + z_high) / 2
-            if z_min <= z_center <= z_max:
-                filtered_bins.append((z_low, z_high))
-        redshift_bins = filtered_bins
+        redshift_bins = [(z_low, z_high) for z_low, z_high in all_redshift_bins
+                        if z_min <= (z_low + z_high) / 2 <= z_max]
     else:
+        # Use all bins for comprehensive plot
         redshift_bins = all_redshift_bins
-    
+
     bins_with_data = []
     
     # Get redshift list from model config or use default
@@ -1349,7 +1362,7 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
                            facecolor='purple', alpha=0.25, label=baldry_label)
             
             # Plot center line for legend
-            ax.plot(Baldry_xval, log_phi_center, color='purple', alpha=0.7, linewidth=1)
+            ax.plot(Baldry_xval, log_phi_center, color='purple', alpha=0.8, linewidth=1)
             
             obs_added_info['baldry'] = True
             if baldry_label is not None:
@@ -1901,8 +1914,115 @@ def is_lowest_redshift_bin(z_low, z_high):
     return z_low <= 0.1 and z_high >= 0.4  # Covers the combined low-z range (0.0 < z < 0.5)
 
 
-def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12), 
-                          save_path=None, show_observations=True, z_range=None, figure_title="", model_configs=None):
+def plot_ffb_gradient_envelope(ax, ffb_data, mass_bins, cmap='plasma_r', alpha=1.0):
+    """
+    Plot FFB models as a combined gradient-filled envelope showing efficiency variation.
+
+    Parameters:
+    -----------
+    ax : matplotlib axes
+        The axes to plot on
+    ffb_data : dict
+        Dictionary mapping efficiency values (0.3, 0.4, etc.) to tuples of (phi_log, phi_err_log, mask, xaxes)
+        Note: phi_log and phi_err_log are already masked arrays (only valid values)
+    mass_bins : array
+        Unused (kept for API compatibility)
+    cmap : str
+        Colormap name to use for the gradient
+    alpha : float
+        Overall alpha for the fill
+
+    Returns:
+    --------
+    bool : True if envelope was plotted successfully
+    """
+    from matplotlib.colors import Normalize
+    from scipy import interpolate
+
+    if not ffb_data:
+        return False
+
+    # Sort efficiencies
+    efficiencies = sorted(ffb_data.keys())
+    if len(efficiencies) < 2:
+        return False
+
+    # Get the colormap - use new API to avoid deprecation warning
+    colormap = plt.get_cmap(cmap)
+    norm = Normalize(vmin=min(efficiencies), vmax=max(efficiencies))
+
+    # The data comes in as (phi_log, phi_err_log, mask, xaxes) where:
+    # - phi_log is already masked (only valid phi > 0 values)
+    # - mask is the boolean mask that was applied
+    # - xaxes is the full mass bin array
+    # So xaxes[mask] gives the mass values corresponding to phi_log
+
+    # Find common mass range by getting min/max across all models
+    all_mass_min = -np.inf
+    all_mass_max = np.inf
+
+    for eff in efficiencies:
+        phi_log, phi_err_log, mask, xaxes = ffb_data[eff]
+        mass_vals = xaxes[mask]
+        if len(mass_vals) > 0:
+            all_mass_min = max(all_mass_min, mass_vals.min())
+            all_mass_max = min(all_mass_max, mass_vals.max())
+
+    if all_mass_min >= all_mass_max:
+        return False
+
+    # Create common mass grid for interpolation
+    common_mass = np.linspace(all_mass_min, all_mass_max, 50)
+
+    # Interpolate all models onto common mass grid
+    interpolated_data = {}
+    for eff in efficiencies:
+        phi_log, phi_err_log, mask, xaxes = ffb_data[eff]
+        mass_vals = xaxes[mask]
+
+        if len(mass_vals) < 2:
+            continue
+
+        # Create interpolation function
+        f = interpolate.interp1d(mass_vals, phi_log, kind='linear',
+                                  bounds_error=False, fill_value=np.nan)
+        interpolated_data[eff] = f(common_mass)
+
+    # Check we have enough valid data
+    valid_effs = [e for e in efficiencies if e in interpolated_data]
+    if len(valid_effs) < 2:
+        return False
+
+    # Find mass range where all models have valid interpolated data
+    valid_mask = np.ones(len(common_mass), dtype=bool)
+    for eff in valid_effs:
+        valid_mask &= ~np.isnan(interpolated_data[eff])
+
+    if not np.any(valid_mask):
+        return False
+
+    mass_values = common_mass[valid_mask]
+
+    # Plot gradient bands between adjacent efficiency levels (no lines)
+    # Use the color of the HIGHER efficiency for each band so 100% FFB color appears
+    for i, eff in enumerate(valid_effs):
+        phi_center = interpolated_data[eff][valid_mask]
+
+        # Fill between this efficiency and the next, using the next efficiency's color
+        if i < len(valid_effs) - 1:
+            next_eff = valid_effs[i + 1]
+            next_phi_center = interpolated_data[next_eff][valid_mask]
+            # Use the higher efficiency's color for the band
+            color = colormap(norm(next_eff))
+            ax.fill_between(mass_values, phi_center, next_phi_center,
+                          color=color, alpha=alpha, linewidth=0)
+
+    return True
+
+
+def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
+                          save_path=None, show_observations=True, z_range=None, figure_title="", model_configs=None,
+                          phi_range=(-6, -1), integer_xticks=True):
     """
     Create a grid plot of stellar mass functions for redshift bins - ENHANCED with all observational datasets
     and FIXED legend handling to only show new data
@@ -2006,11 +2126,11 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
 
     if z_range and z_range[1] <= 3.5:  # Low-z figure (z=0-3.5)
         n_rows = 2
-        n_cols = 4
-        figsize = (24, 12)
-        sim_legend_loc = 'center left'
+        n_cols = 3
+        figsize = (18, 12)
+        sim_legend_loc = 'lower left'
     else:  # High-z figure (z=3.5-10)
-        n_rows = 2  
+        n_rows = 2
         n_cols = 3
         figsize = (18, 12)
         sim_legend_loc = 'upper right'
@@ -2026,15 +2146,18 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
     for i, (z_low, z_high, z_center, snapshots) in enumerate(redshift_bins):
         if i >= len(axes_flat):
             break
-            
+
         ax = axes_flat[i]
-        
+
         print(f"Processing redshift bin {z_low:.1f} < z < {z_high:.1f} with {len(snapshots)} snapshots")
-        
+
         # Track what gets plotted in this panel for legends
         panel_sim_legend_items = []  # For simulations legend (upper right)
         panel_obs_legend_items = []  # For observations legend (lower left)
-        
+
+        # NEW: Collect FFB gradient data for combined plotting
+        ffb_gradient_data = {}  # Dict mapping efficiency -> (phi_log, phi_err_log, mask, xaxes)
+
         # Add observational data first (so it appears behind SAGE data)
         if show_observations:
             obs_legend_items, sim_legend_items = add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data, santini_data, wright_data, harvey_data, obs_datasets_in_legend, sim_datasets_in_legend)
@@ -2047,20 +2170,62 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
             gaea_zs = np.array(list(gaea_data.keys()))
             z_center_bin = (z_low + z_high) / 2
             closest_gaea_z = gaea_zs[np.argmin(np.abs(gaea_zs - z_center_bin))]
-            
+
             if closest_gaea_z <= 4.0:
                 gaea_bin = gaea_data[closest_gaea_z]
                 # Plot only intrinsic data
                 # Only show legend for GAEA on the first subplot
                 if i == 0:
-                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='-', linewidth=2, alpha=0.8, label=f'GAEA')
+                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=f'GAEA')
                     panel_sim_legend_items.append((gaea_plot[0], f'GAEA'))
                 else:
-                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='-', linewidth=2, alpha=0.8, label=None)
-        
+                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=None)
+
+        # Add SHARK data (always shown, regardless of show_observations)
+        # Find the best matching SHARK redshift for this bin
+        search_z_low_shark = z_low
+        search_z_high_shark = z_high
+        z_center_shark = (search_z_low_shark + search_z_high_shark) / 2
+        best_shark_z = None
+        best_distance_shark = float('inf')
+
+        # Look for SHARK data only
+        shark_data_dict = {z: data for z, data in obs_data_by_z.items() if data.get('type') == 'shark'}
+
+        for obs_z in shark_data_dict.keys():
+            matches = find_closest_redshift_in_range(obs_z, search_z_low_shark, search_z_high_shark)
+            if matches:
+                distance = abs(obs_z - z_center_shark)
+                if distance < best_distance_shark:
+                    best_distance_shark = distance
+                    best_shark_z = obs_z
+
+        if best_shark_z is not None:
+            obs_info = obs_data_by_z[best_shark_z]
+            try:
+                obs_masses = obs_info['x']
+                obs_phi = obs_info['y']  # SHARK data already in log space
+
+                # Only add label if SHARK dataset type hasn't been labeled anywhere in the figure yet
+                shark_label = f"{obs_info['label']}" if not sim_datasets_in_legend['shark'] else None
+
+                # Plot SHARK as dashed lines
+                shark_plot = ax.plot(obs_masses, obs_phi,
+                       linestyle=obs_info.get('linestyle', ':'), color=obs_info['color'],
+                       linewidth=obs_info.get('linewidth', 1),
+                       label=shark_label, alpha=0.8)
+
+                if shark_label is not None:
+                    sim_datasets_in_legend['shark'] = True
+                    panel_sim_legend_items.append((shark_plot[0], shark_label))
+                print(f"  ✓ Added SHARK (z={best_shark_z}) to bin {z_low:.1f} < z < {z_high:.1f}")
+
+            except Exception as e:
+                print(f"Warning: Could not add SHARK data: {e}")
+
         # Process each model
         model_redshifts_used = {}  # Track which redshift each model used in this panel
-        
+
         for model_idx, model_config in enumerate(model_configs_valid):
             model_name = model_config['name']
             directory = model_config['dir']
@@ -2153,31 +2318,43 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
                 # Only keep galaxies with positive stellar mass and correct type
                 combined_mask = (stellar_mass > 0) & mask
                 filtered_masses = stellar_mass[combined_mask]
-                
+
                 print(f"  {model_name}: Using Snap_{best_snap} (z={z_best:.2f}): {len(filtered_masses)} galaxies, Volume={volume:.2e} (Mpc/h)^3")
-                
+
                 if len(filtered_masses) == 0:
                     continue
-                
+
                 # Calculate SMF with model-specific volume
                 xaxeshisto, phi, phi_err = calculate_smf(filtered_masses, volume=volume)
-                
+
                 # Plot SAGE data
                 mask_plot = phi > 0
                 if np.any(mask_plot):
                     phi_log = np.log10(phi[mask_plot])
                     phi_err_log = phi_err[mask_plot] / (phi[mask_plot] * np.log(10))
-                    
+
                     # MODIFIED: Only create label for models that haven't appeared in any previous legend
                     model_label = None
                     if model_name not in models_in_legend:
                         model_label = f'{model_name}'
                         models_in_legend.add(model_name)
-                    
-                    # Check if this model should be plotted as shaded region
+
+                    # Check if this model should be plotted as part of FFB gradient
+                    ffb_efficiency = model_config.get('ffb_efficiency', None)
                     plot_as_shading = model_config.get('plot_as_shading', False)
 
-                    if plot_as_shading:
+                    if ffb_efficiency is not None:
+                        # Collect data for FFB gradient plotting (will be plotted after loop)
+                        # Store the full arrays for proper interpolation
+                        ffb_gradient_data[ffb_efficiency] = (phi_log, phi_err_log, mask_plot, xaxeshisto)
+                        # Check if this model should ALSO be plotted as an individual line
+                        if model_config.get('plot_line_too', False):
+                            sage_plot = ax.plot(xaxeshisto[mask_plot], phi_log,
+                                   color=color, linestyle=linestyle, linewidth=linewidth,
+                                   label=model_label, alpha=alpha)
+                            if model_label is not None:
+                                panel_sim_legend_items.append((sage_plot[0], model_label))
+                    elif plot_as_shading:
                         # Plot as shaded 1-sigma region only (no center line)
                         phi_upper_shade = phi_log + phi_err_log
                         phi_lower_shade = phi_log - phi_err_log
@@ -2198,67 +2375,83 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
                         # Add to simulation legend if labeled
                         if model_label is not None:
                             panel_sim_legend_items.append((sage_plot[0], model_label))
-                
+
                 # Add upper limits for zero counts
                 mask_upper = phi == 0
                 if np.any(mask_upper):
                     phi_upper = np.log10(phi_err[mask_upper])
-                    ax.plot(xaxeshisto[mask_upper], phi_upper, 'v', 
+                    ax.plot(xaxeshisto[mask_upper], phi_upper, 'v',
                            color=color, markersize=4, alpha=alpha*0.7)
-                
+
                 # NEW: Add scaled halo mass function line
                 if mvir is not None:
                     # Calculate baryonic mass from halo mass
                     baryon_fraction = model_config.get('baryon_fraction', 0.17)
                     baryonic_mass = mvir * 1.0e10 / model_config['hubble_h'] * baryon_fraction
-                    
+
                     # Filter same as stellar mass (positive mass and correct galaxy type)
                     # Note: mvir should be positive for all halos, but good to check
                     combined_mask_halo = (baryonic_mass > 0) & mask
                     filtered_halo_masses = baryonic_mass[combined_mask_halo]
-                    
+
                     if len(filtered_halo_masses) > 0:
                         # Calculate HMF
                         xaxeshisto_halo, phi_halo, _ = calculate_smf(filtered_halo_masses, volume=volume)
-                        
+
                         # Plot scaled HMF
                         mask_plot_halo = phi_halo > 0
                         if np.any(mask_plot_halo):
                             phi_halo_log = np.log10(phi_halo[mask_plot_halo])
-                            
+
                             # Create label only if not already in legend
                             hmf_label = None
                             hmf_key = f'{model_name}_hmf'
                             if hmf_key not in models_in_legend:
                                 hmf_label = f'{model_name} (Mvir * {baryon_fraction})'
                                 models_in_legend.add(hmf_key)
-                            
+
                             # Plot as thick line
-                            # hmf_plot = ax.plot(xaxeshisto_halo[mask_plot_halo], phi_halo_log, 
+                            # hmf_plot = ax.plot(xaxeshisto_halo[mask_plot_halo], phi_halo_log,
                             #        color=color, linestyle='-', linewidth=linewidth+1.5,
                             #        label=hmf_label, alpha=alpha) # Made slightly thicker than main line
-                            
+
                             # Add to simulation legend if labeled
                             # if hmf_label is not None:
                             #     panel_sim_legend_items.append((hmf_plot[0], hmf_label))
-                
+
             except Exception as e:
                 print(f"Warning: Could not process {model_name} for this redshift bin: {e}")
                 continue
-        
+
+        # NEW: Plot FFB gradient envelope after all models processed
+        if ffb_gradient_data:
+            ffb_plotted = plot_ffb_gradient_envelope(ax, ffb_gradient_data, None, cmap='plasma_r', alpha=0.8)
+            # Only add legend entry in the first panel (top-left)
+            if ffb_plotted and i == 0:
+                from matplotlib.patches import Patch
+                # Create a gradient-like patch for legend (use middle color)
+                ffb_patch = Patch(facecolor=plt.get_cmap('plasma_r')(0.5), alpha=0.5,
+                                 label=r'FFB $\epsilon_{\mathrm{max}}$ (0.3-1.0)')
+                panel_sim_legend_items.append((ffb_patch, r'FFB $\epsilon_{\mathrm{max}}$ (0.3-1.0)'))
+
         # Formatting
         ax.set_title(f'{z_low:.1f} < z < {z_high:.1f}', fontsize=14)
         ax.set_xlim(mass_range)
-        ax.set_ylim(-6, -1)
-        
+        ax.set_ylim(phi_range)
+
+        # Set integer ticks if requested
+        if integer_xticks:
+            ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+            ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+
         # MODIFIED LEGEND HANDLING: Create two separate legends
         # Clear any automatic labels to avoid conflicts
         ax.legend().set_visible(False) if ax.get_legend() else None
-        
+
         # Create simulations legend (upper right) - SAGE models + SHARK
         if panel_sim_legend_items:
             sim_handles, sim_labels = zip(*panel_sim_legend_items)
-            sim_legend = ax.legend(sim_handles, sim_labels, fontsize=12, loc=sim_legend_loc, 
+            sim_legend = ax.legend(sim_handles, sim_labels, fontsize=12, loc=sim_legend_loc,
                                  frameon=False)
             # Add the legend to the plot
             ax.add_artist(sim_legend)
@@ -2274,26 +2467,52 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
     # Remove empty subplots
     for i in range(n_bins, len(axes_flat)):
         fig.delaxes(axes_flat[i])
-    
+
     # Set common labels
     for i in range(min(n_bins, len(axes_flat))):
         row = i // n_cols
         col = i % n_cols
-        
+
         # Bottom row gets x-labels
         if row == n_rows - 1 or i >= n_bins - n_cols:
             axes_flat[i].set_xlabel(r'$\log_{10}(M_*/M_{\odot})$', fontsize=16)
-        
+
         # Left column gets y-labels
         if col == 0:
             axes_flat[i].set_ylabel(r'$\log_{10}(\phi/\mathrm{Mpc}^{-3}\,\mathrm{dex}^{-1})$', fontsize=16)
-    
+
+    # Check if any model has ffb_efficiency set (for colorbar)
+    has_ffb_models = any(m.get('ffb_efficiency') is not None for m in model_configs)
+
+    if has_ffb_models:
+        # Add colorbar for FFB efficiency
+        from matplotlib.colors import Normalize
+        from matplotlib.cm import ScalarMappable
+
+        # Get min/max efficiency values
+        ffb_effs = [m.get('ffb_efficiency') for m in model_configs if m.get('ffb_efficiency') is not None]
+        if ffb_effs:
+            vmin, vmax = min(ffb_effs), max(ffb_effs)
+            norm = Normalize(vmin=vmin, vmax=vmax)
+            sm = ScalarMappable(cmap='plasma_r', norm=norm)
+            sm.set_array([])
+
+            # Create colorbar axes on the right side of the figure
+            cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
+            cbar = fig.colorbar(sm, cax=cbar_ax)
+            cbar.set_label(r'$\epsilon_{\mathrm{max}}$', fontsize=14)
+            cbar.ax.tick_params(labelsize=12)
+
     plt.tight_layout()
-    
+
+    # Adjust layout to make room for colorbar if present
+    if has_ffb_models:
+        plt.subplots_adjust(right=0.90)
+
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Saved plot to {save_path}")
-    
+
     return fig, axes
 
 
@@ -3110,7 +3329,7 @@ def plot_smf_all_redshift_bins_with_residuals(galaxy_types='all', mass_range=(7,
             if len(residuals) > 0:
                 # Plot residuals
                 residual_ax.plot(common_masses, residuals, 'o-', color='red', 
-                               markersize=3, alpha=0.7, linewidth=1)
+                               markersize=3, alpha=0.8, linewidth=1)
                 residual_ax.axhline(y=0, color='black', linestyle='--', alpha=0.5, linewidth=1)
                 
                 # Set residual plot limits and labels
@@ -3662,14 +3881,14 @@ def plot_smf_all_redshift_bins(galaxy_types='all', mass_range=(7, 12),
                 # Plot only intrinsic data
                 # Only show legend for GAEA on the first subplot
                 if i == 0:
-                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='-', linewidth=2, alpha=0.8, label=f'GAEA')
+                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=f'GAEA')
                     panel_sim_legend_items.append((gaea_plot[0], f'GAEA'))
                 else:
-                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='-', linewidth=2, alpha=0.8, label=None)
-        
+                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=None)
+
         # Process each model
         model_redshifts_used = {}  # Track which redshift each model used in this panel
-        
+
         for model_idx, model_config in enumerate(model_configs_valid):
             model_name = model_config['name']
             directory = model_config['dir']
@@ -3859,7 +4078,9 @@ def plot_smf_all_redshift_bins(galaxy_types='all', mass_range=(7, 12),
         ax.set_title(f'{z_low:.1f} < z < {z_high:.1f}', fontsize=12)
         ax.set_xlim(8, 12)
         ax.set_ylim(-6, -1)
-        
+        ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+        ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+
         # MODIFIED LEGEND HANDLING: Create two separate legends
         # Clear any automatic labels to avoid conflicts
         ax.legend().set_visible(False) if ax.get_legend() else None
@@ -4000,12 +4221,12 @@ if __name__ == "__main__":
     ]
     
     high_z_model_names = [
-        'SAGE26', 'SAGE C16', 'no FFB', '30% FFB',
+        'SAGE26', 'SAGE C16', 'SAGE26 (no FFB)', '30% FFB',
         '40% FFB', '50% FFB', '80% FFB', '100% FFB'
     ]
-    
+
     all_z_model_names = [
-        'SAGE26', 'SAGE C16', 'evilSAGE', 'no FFB'
+        'SAGE26', 'SAGE C16', 'evilSAGE', 'SAGE26 (no FFB)'
     ]
     
     # Helper to filter models
@@ -4070,7 +4291,7 @@ if __name__ == "__main__":
             z_range=(0, 3.5),
             save_path=OutputDir + 'sage_smf_redshift_grid_low_z_all' + OutputFormat,
             figure_title="(z = 0-3.5)",
-            model_configs=low_z_models
+            model_configs=low_z_models, show_observations=False
         )
         
         print("\nCreating HIGH-Z SMF grid (z=5.5-13)...")
@@ -4079,11 +4300,10 @@ if __name__ == "__main__":
             print(f"Warning: No models found for High-Z grid. Expected: {high_z_model_names}")
 
         # Create custom model configs for high-z plot with modified styles and names
-        # FFB models will be plotted as shaded 1-sigma regions with jet_r colormap
-        from matplotlib import cm
-        jet_r = cm.get_cmap('jet_r')
-        ffb_models = ['30% FFB', '40% FFB', '50% FFB', '80% FFB', '100% FFB']
-        ffb_values = [0.30, 0.40, 0.50, 0.80, 1.0]  # For colormap normalization
+        # FFB models will be plotted as a combined gradient envelope (including SAGE26 as 20%)
+        ffb_models = ['SAGE26', '30% FFB', '40% FFB', '50% FFB', '80% FFB', '100% FFB']
+        ffb_efficiencies = {'SAGE26': 0.20, '30% FFB': 0.30, '40% FFB': 0.40, '50% FFB': 0.50,
+                           '80% FFB': 0.80, '100% FFB': 1.0}
 
         high_z_models_custom = []
         for model in high_z_models:
@@ -4091,39 +4311,28 @@ if __name__ == "__main__":
             if m['name'] == 'SAGE26':
                 m['name'] = r'SAGE26 ($\epsilon_{\mathrm{max}}$=.20)'
                 m['linewidth'] = 4  # Thicker line
+                m['ffb_efficiency'] = ffb_efficiencies['SAGE26']  # Include in gradient
+                m['plot_line_too'] = True  # Also plot as individual line
             elif m['name'] == 'SAGE C16':
                 m['color'] = 'firebrick'
                 m['linestyle'] = '-'    # Solid like noFFB
-            elif m['name'] == 'no FFB':
-                m['name'] = 'SAGE26 (no FFB)'
             elif m['name'] in ffb_models:
-                idx = ffb_models.index(m['name'])
-                # Normalize to 0-1 range for colormap (0.3 to 1.0 mapped to colormap)
-                norm_val = (ffb_values[idx] - 0.3) / (1.0 - 0.3)
-                m['color'] = jet_r(norm_val)
-                m['plot_as_shading'] = True  # Flag to plot as shaded region
-                # Update name to epsilon notation
-                if m['name'] == '30% FFB':
-                    m['name'] = r'$\epsilon_{\mathrm{max}}$=.30'
-                elif m['name'] == '40% FFB':
-                    m['name'] = r'$\epsilon_{\mathrm{max}}$=.40'
-                elif m['name'] == '50% FFB':
-                    m['name'] = r'$\epsilon_{\mathrm{max}}$=.50'
-                elif m['name'] == '80% FFB':
-                    m['name'] = r'$\epsilon_{\mathrm{max}}$=.80'
-                elif m['name'] == '100% FFB':
-                    m['name'] = r'$\epsilon_{\mathrm{max}}$=1.0'
+                # Set ffb_efficiency for gradient plotting
+                m['ffb_efficiency'] = ffb_efficiencies[m['name']]
+                # Keep original name for internal tracking, display handled by gradient legend
             high_z_models_custom.append(m)
 
         # Create the main SMF grid plot for high redshifts
         fig2, axes2 = plot_smf_redshift_grid(
             galaxy_types='all',
-            mass_range=(8, 12),
+            mass_range=(8, 11.5),
             z_range=(5.5, 13),
             save_path=OutputDir + 'sage_smf_redshift_grid_high_z_all' + OutputFormat,
             figure_title="(z = 5.5-13)",
             model_configs=high_z_models_custom,
-            show_observations=False
+            show_observations=False,
+            phi_range=(-6, -2),
+            integer_xticks=True
         )
         
         # All galaxies (already included in main script)
