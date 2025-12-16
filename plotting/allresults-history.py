@@ -1074,18 +1074,22 @@ if __name__ == '__main__':
         hot_hist, _ = np.histogram(hot_regime_masses, bins=halo_mass_bins)
         
         # Plot stacked histograms showing actual galaxy counts
-        ax.bar(bin_centers, cgm_hist, width=0.18, color='blue', alpha=0.7, 
+        ax.bar(bin_centers, cgm_hist, width=0.18, color='dodgerblue', alpha=0.7, 
                label='CGM Regime', bottom=0)
-        ax.bar(bin_centers, hot_hist, width=0.18, color='red', alpha=0.7, 
+        ax.bar(bin_centers, hot_hist, width=0.18, color='firebrick', alpha=0.7, 
                label='Hot Regime', bottom=cgm_hist)
         
         # Formatting
         ax.set_title(f'z = {regime_redshifts[i]:.1f}', fontsize=12, fontweight='bold')
         ax.set_xlabel(r'$\log_{10} M_{\mathrm{vir}}\ (M_{\odot})$', fontsize=10)
         ax.set_ylabel('Galaxy Count', fontsize=10)
+        if i % 2 == 1:  # indices 1 and 3 are the right column
+            ax.set_ylabel('')
+            ax.tick_params(labelleft=True)
         ax.set_xlim(10.0, 15.0)
-        ax.set_ylim(0, None)  # Auto-scale based on actual counts
-        ax.grid(True, alpha=0.3)
+        # ax.set_ylim(0, None)  # Auto-scale based on actual counts
+        ax.set_yscale('log')
+        # ax.grid(True, alpha=0.3)
         
         # Add regime statistics as text
         total_galaxies = len(w)
@@ -1094,15 +1098,15 @@ if __name__ == '__main__':
         cgm_percent = (cgm_count / total_galaxies * 100) if total_galaxies > 0 else 0
         hot_percent = (hot_count / total_galaxies * 100) if total_galaxies > 0 else 0
         
-        ax.text(0.02, 0.95, f'CGM: {cgm_percent:.1f}%\nHot: {hot_percent:.1f}%', 
-                transform=ax.transAxes, verticalalignment='top', fontsize=9,
-                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        # ax.text(0.02, 0.95, f'CGM: {cgm_percent:.1f}%\nHot: {hot_percent:.1f}%', 
+        #         transform=ax.transAxes, verticalalignment='top', fontsize=9,
+        #         bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
     # Add legend to the first subplot
     axes[0].legend(loc='upper right', frameon=False, fontsize=10)
     
     plt.tight_layout()
-    plt.suptitle('Regime Distribution vs Halo Mass Across Redshift', fontsize=14, y=0.98)
+    # plt.suptitle('Regime Distribution vs Halo Mass Across Redshift', fontsize=14, y=0.98)
     
     outputFile = OutputDir + 'S.regime_distribution_histograms_redshift' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
