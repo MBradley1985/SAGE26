@@ -969,20 +969,12 @@ def process_simulation_sfr_evolution(sim_path, sim_label, redshifts, FirstSnap, 
 
     return median_sfr_evolution, mass_bin_mean_masses, lookback_times, mass_bin_centers
 
-# Create custom colormap from red (most massive) to navy (least massive)
+# Create custom colormap using plasma (truncated to avoid lightest yellow)
 def create_red_to_navy_colormap(n_colors):
-    """Create colormap from red to navy"""
-    # Define colors: red -> orange -> yellow -> green -> blue -> navy
-    colors_list = ['#8B0000', '#B22222', '#DC143C', '#FF4500', '#FF8C00', '#FFA500', 
-                   '#FFD700', '#ADFF2F', '#32CD32', '#00CED1', '#4169E1', '#000080']
-    
-    # Select colors based on number needed
-    if n_colors <= len(colors_list):
-        selected_colors = [colors_list[int(i * (len(colors_list)-1) / (n_colors-1))] for i in range(n_colors)]
-    else:
-        # Interpolate if we need more colors
-        selected_colors = plt.cm.Spectral_r(np.linspace(0, 1, n_colors))
-    
+    """Create colormap using plasma, truncated at 0.85 to avoid lightest yellow"""
+    cmap = plt.cm.plasma
+    # Sample from 0 to 0.85 of the colormap range
+    selected_colors = [cmap(i / (n_colors - 1) * 0.85) for i in range(n_colors)]
     return selected_colors
 
 # Process both simulations

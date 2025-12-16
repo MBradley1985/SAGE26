@@ -467,7 +467,8 @@ def plot_ffb_vs_redshift():
     # Different target redshifts
     redshift_targets = [5, 6, 7, 8, 8, 10, 11, 12, 13, 14]
     cmap = plt.cm.plasma
-    colors = [cmap(i / (len(redshift_targets) - 1)) for i in range(len(redshift_targets))]
+    # Truncate colormap to avoid lightest yellow (use 0 to 0.85 range)
+    colors = [cmap(i / (len(redshift_targets) - 1) * 0.85) for i in range(len(redshift_targets))]
 
     delta_log_M = 0.15  # Current model smoothing width
 
@@ -507,6 +508,7 @@ def plot_ffb_vs_redshift():
 
         ffb_fractions = []
         ffb_errors = []
+        mass_errors = []
         valid_bins = []
 
         for i in range(len(bin_edges) - 1):
@@ -514,15 +516,58 @@ def plot_ffb_vs_redshift():
             n_in_bin = np.sum(in_bin)
 
             if n_in_bin >= 10:  # Require at least 10 galaxies per bin
-                frac = np.mean(ffb_data[in_bin])
-                # Binomial error
-                err = np.sqrt(frac * (1 - frac) / n_in_bin)
+                bin_data = ffb_data[in_bin]
+                frac = np.mean(bin_data)
+
+                # Handle degenerate cases (all 0s or all 1s)
+                if frac == 0.0 or frac == 1.0:
+                    # Use Wilson score interval for edge cases
+                    z = 1.0  # 1-sigma
+                    n = n_in_bin
+                    denom = 1 + z**2 / n
+                    centre = (frac + z**2 / (2*n)) / denom
+                    margin = z * np.sqrt((frac*(1-frac) + z**2/(4*n)) / n) / denom
+                    err_low = max(0, frac - (centre - margin))
+                    err_high = max(0, (centre + margin) - frac)
+                else:
+                    # Bootstrap confidence interval using scipy
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        res = stats.bootstrap(
+                            (bin_data,),
+                            np.mean,
+                            n_resamples=1000,
+                            confidence_level=0.6827,  # 1-sigma (68.27%)
+                            method='BCa'
+                        )
+                    err_low = max(0, frac - res.confidence_interval.low)
+                    err_high = max(0, res.confidence_interval.high - frac)
+
                 ffb_fractions.append(frac)
-                ffb_errors.append(err)
-                valid_bins.append(bin_centers[i])
+                ffb_errors.append([err_low, err_high])
+
+                # Mass: use mean of log masses in bin with bootstrap error
+                bin_masses = log_Mvir_data[in_bin]
+                mean_mass = np.mean(bin_masses)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    mass_res = stats.bootstrap(
+                        (bin_masses,),
+                        np.mean,
+                        n_resamples=1000,
+                        confidence_level=0.6827,
+                        method='BCa'
+                    )
+                mass_err_low = max(0, mean_mass - mass_res.confidence_interval.low)
+                mass_err_high = max(0, mass_res.confidence_interval.high - mean_mass)
+                mass_errors.append([mass_err_low, mass_err_high])
+                valid_bins.append(mean_mass)
 
         if len(valid_bins) > 0:
-            ax.errorbar(valid_bins, ffb_fractions, yerr=ffb_errors,
+            # Convert to 2xN arrays for asymmetric errors
+            ffb_errors = np.array(ffb_errors).T
+            mass_errors = np.array(mass_errors).T
+            ax.errorbar(valid_bins, ffb_fractions, xerr=mass_errors, yerr=ffb_errors,
                        fmt='o', color=color, markersize=6, capsize=3,
                        alpha=0.7, markeredgecolor='white', markeredgewidth=0.5)
 

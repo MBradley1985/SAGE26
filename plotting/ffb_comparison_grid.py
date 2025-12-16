@@ -1804,16 +1804,19 @@ def plot_sfr_mvir_contours_grid():
         log_sfr_noffb = np.log10(sfr_noffb[mask_noffb] + 1e-10)
         
         # Define grid for histograms
-        mvir_range = [10, 13]
-        sfr_range = [-2, 3.5]
+        mvir_range = [9, 15]
+        sfr_range = [-2, 4.5]
         nbins = 40
         
         # Helper function to plot sigma contours
         def plot_sigma_contours(x, y, color, label):
             """Plot 1, 2, 3 sigma filled contours for given data."""
             try:
+                # Reduce bins for sparse data
+                adaptive_nbins = nbins if len(x) > 5000 else 30 if len(x) > 1000 else 20
+
                 # Create 2D histogram
-                H, xedges, yedges = np.histogram2d(x, y, bins=nbins, 
+                H, xedges, yedges = np.histogram2d(x, y, bins=adaptive_nbins,
                                                    range=[mvir_range, sfr_range])
                 
                 # Smooth the histogram
@@ -1877,10 +1880,10 @@ def plot_sfr_mvir_contours_grid():
                 print(f"  Error plotting contours: {e}")
         
         # Plot contours for both populations
-        plot_sigma_contours(log_mvir_ffb, log_sfr_ffb, 'dodgerblue', 'FFB')
-        plot_sigma_contours(log_mvir_noffb, log_sfr_noffb, 'firebrick', 'No-FFB')
+        plot_sigma_contours(log_mvir_ffb, log_sfr_ffb, 'purple', 'FFB')
+        plot_sigma_contours(log_mvir_noffb, log_sfr_noffb, 'dodgerblue', 'No-FFB')
         
-        # Configure axes
+        # Configure axes with fixed limits across all panels
         ax.set_xlabel(r'$\log_{10}(M_{\mathrm{vir}}\ [M_\odot])$')
         ax.set_ylabel(r'$\log_{10}(\mathrm{SFR}\ [M_\odot/\mathrm{yr}])$')
         ax.set_xlim(mvir_range)

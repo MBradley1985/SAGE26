@@ -947,6 +947,194 @@ def load_harvey_data(filename):
         print(f"Error loading Harvey data: {e}")
         return {}
 
+def load_stefanon_smf(redshift):
+    """Load Stefanon+2021 observational SMF data for a given redshift"""
+    filename = './data/stefanon_smf_2021.ecsv'
+
+    if not os.path.exists(filename):
+        return None, None, None, None
+
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+
+        # Match redshift bin (bins are labeled 6, 7, 8, 9, 10)
+        if redshift < 6.5:
+            z_bin = 6
+        elif redshift < 7.5:
+            z_bin = 7
+        elif redshift < 8.5:
+            z_bin = 8
+        elif redshift < 9.5:
+            z_bin = 9
+        elif redshift < 11:
+            z_bin = 10
+        else:
+            return None, None, None, None
+
+        z_match = table['redshift_bin'] == z_bin
+        if not np.any(z_match):
+            return None, None, None, None
+
+        data = table[z_match]
+
+        # Extract data - phi values are in units of 1e-4 Mpc-3 dex-1
+        log_mass = np.array(data['log_M'])
+        phi_linear = np.array(data['phi']) * 1e-4
+        phi_err_up_linear = np.array(data['phi_err_up']) * 1e-4
+        phi_err_low_linear = np.array(data['phi_err_low']) * 1e-4
+
+        phi_upper_linear = phi_linear + phi_err_up_linear
+        phi_lower_linear = phi_linear - phi_err_low_linear
+
+        phi = np.log10(phi_linear)
+        phi_upper = np.log10(phi_upper_linear)
+
+        phi_lower = np.full_like(phi, np.nan)
+        valid_lower = phi_lower_linear > 0
+        phi_lower[valid_lower] = np.log10(phi_lower_linear[valid_lower])
+
+        return log_mass, phi, phi_lower, phi_upper
+    except Exception as e:
+        print(f"  Warning: Could not load Stefanon data: {e}")
+        return None, None, None, None
+
+def load_navarro_carrera_smf(redshift):
+    """Load Navarro-Carrera+2023 observational SMF data for a given redshift"""
+    filename = './data/navarro_carrera_smf_2023.ecsv'
+
+    if not os.path.exists(filename):
+        return None, None, None, None
+
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+
+        # Match redshift bin (bins are labeled 6, 7, 8)
+        if redshift < 6.5:
+            z_bin = 6
+        elif redshift < 7.5:
+            z_bin = 7
+        elif redshift < 8.5:
+            z_bin = 8
+        else:
+            return None, None, None, None
+
+        z_match = table['redshift_bin'] == z_bin
+        if not np.any(z_match):
+            return None, None, None, None
+
+        data = table[z_match]
+
+        log_mass = np.array(data['log_M'])
+        phi_linear = np.array(data['phi']) * 1e-4
+        phi_err_up_linear = np.array(data['phi_err_up']) * 1e-4
+        phi_err_low_linear = np.array(data['phi_err_low']) * 1e-4
+
+        phi_upper_linear = phi_linear + phi_err_up_linear
+        phi_lower_linear = phi_linear - phi_err_low_linear
+
+        phi = np.log10(phi_linear)
+        phi_upper = np.log10(phi_upper_linear)
+
+        phi_lower = np.full_like(phi, np.nan)
+        valid_lower = phi_lower_linear > 0
+        phi_lower[valid_lower] = np.log10(phi_lower_linear[valid_lower])
+
+        return log_mass, phi, phi_lower, phi_upper
+    except Exception as e:
+        print(f"  Warning: Could not load Navarro-Carrera data: {e}")
+        return None, None, None, None
+
+def load_weibel_smf(redshift):
+    """Load Weibel+2024 observational SMF data for a given redshift"""
+    filename = './data/weibel_smf_2024.ecsv'
+
+    if not os.path.exists(filename):
+        return None, None, None, None
+
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+
+        # Match redshift bin (bins are labeled 6, 7, 8, 9)
+        if redshift < 6.5:
+            z_bin = 6
+        elif redshift < 7.5:
+            z_bin = 7
+        elif redshift < 8.5:
+            z_bin = 8
+        elif redshift < 9.5:
+            z_bin = 9
+        else:
+            return None, None, None, None
+
+        z_match = table['redshift_bin'] == z_bin
+        if not np.any(z_match):
+            return None, None, None, None
+
+        data = table[z_match]
+
+        log_mass = np.array(data['log_M'])
+        log_phi = np.array(data['log_phi'])
+        log_phi_err_up = np.array(data['log_phi_err_up'])
+        log_phi_err_low = np.array(data['log_phi_err_low'])
+
+        log_phi_upper = log_phi + log_phi_err_up
+        log_phi_lower = log_phi - log_phi_err_low
+
+        log_phi_lower[log_phi_err_low == 0] = np.nan
+
+        return log_mass, log_phi, log_phi_lower, log_phi_upper
+    except Exception as e:
+        print(f"  Warning: Could not load Weibel data: {e}")
+        return None, None, None, None
+
+def load_kikuchihara_smf(redshift):
+    """Load Kikuchihara+2020 observational SMF data for a given redshift"""
+    filename = './data/kikuchihara_smf_2020.ecsv'
+
+    if not os.path.exists(filename):
+        return None, None, None, None
+
+    try:
+        table = Table.read(filename, format='ascii.ecsv')
+
+        if redshift < 6.5:
+            z_bin = 6
+        elif redshift < 7.5:
+            z_bin = 7
+        elif redshift < 8.5:
+            z_bin = 8
+        elif redshift < 9.5:
+            z_bin = 9
+        else:
+            return None, None, None, None
+
+        z_match = table['redshift_approx'] == z_bin
+        if not np.any(z_match):
+            return None, None, None, None
+
+        data = table[z_match]
+
+        log_mass = np.array(data['log_M_star'])
+        phi_star = np.array(data['phi_star']) * 1e-5
+        phi_star_err_up = np.array(data['phi_star_err_up']) * 1e-5
+        phi_star_err_low = np.array(data['phi_star_err_low']) * 1e-5
+
+        log_phi = np.log10(phi_star)
+
+        phi_upper_linear = phi_star + phi_star_err_up
+        phi_lower_linear = phi_star - phi_star_err_low
+
+        log_phi_upper = np.log10(phi_upper_linear)
+
+        log_phi_lower = np.full_like(log_phi, np.nan)
+        valid_lower = phi_lower_linear > 0
+        log_phi_lower[valid_lower] = np.log10(phi_lower_linear[valid_lower])
+
+        return log_mass, log_phi, log_phi_lower, log_phi_upper
+    except Exception as e:
+        print(f"  Warning: Could not load Kikuchihara data: {e}")
+        return None, None, None, None
+
 def load_observational_data(filename=None):
     """
     Load observational stellar mass function data from ECSV file
@@ -1332,7 +1520,11 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
         'cosmos': None,
         'wright': None,
         'smfvals': None,
-        'farmer': None
+        'farmer': None,
+        'stefanon': None,
+        'navarro_carrera': None,
+        'weibel': None,
+        'kikuchihara': None
     }
     
     # Determine search range for observations
@@ -1358,11 +1550,11 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
             baldry_label = 'Baldry et al. 2008 (z~0.1)' if not obs_datasets_in_legend['baldry'] else None
             
             # Plot filled region
-            filled_plot = ax.fill_between(Baldry_xval, log_phi_upper, log_phi_lower, 
-                           facecolor='purple', alpha=0.25, label=baldry_label)
+            filled_plot = ax.fill_between(Baldry_xval, log_phi_upper, log_phi_lower,
+                           facecolor='purple', alpha=0.25, label=baldry_label, zorder=2)
             
             # Plot center line for legend
-            ax.plot(Baldry_xval, log_phi_center, color='purple', alpha=0.8, linewidth=1)
+            ax.plot(Baldry_xval, log_phi_center, color='purple', alpha=0.8, linewidth=1, zorder=2)
             
             obs_added_info['baldry'] = True
             if baldry_label is not None:
@@ -1395,9 +1587,9 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
                 muzzin_label = 'Muzzin+2013' if not obs_datasets_in_legend['muzzin'] else None
                 
                 # Plot Muzzin 2013 data - POINTS ONLY, NO LINES
-                muzzin_plot = ax.plot(muzzin_masses_plot, muzzin_logphi_plot, 
-                       's', color='grey', markersize=6, 
-                       label=muzzin_label, alpha=0.8)
+                muzzin_plot = ax.plot(muzzin_masses_plot, muzzin_logphi_plot,
+                       's', color='grey', markersize=6,
+                       label=muzzin_label, alpha=0.8, zorder=2)
                 
                 obs_added_info['muzzin'] = muzzin_bin
                 if muzzin_label is not None:
@@ -1439,10 +1631,10 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
                 santini_label = 'Santini+2012' if not obs_datasets_in_legend['santini'] else None
                 
                 # Plot Santini 2012 data - POINTS WITH ERROR BARS, NO LINES
-                santini_plot = ax.errorbar(santini_masses_plot, santini_logphi_plot, 
+                santini_plot = ax.errorbar(santini_masses_plot, santini_logphi_plot,
                            yerr=[santini_error_lo_plot, santini_error_hi_plot],
-                           fmt='^', color='grey', markersize=5, 
-                           label=santini_label, alpha=0.8, capsize=2)
+                           fmt='^', color='grey', markersize=5,
+                           label=santini_label, alpha=0.8, capsize=2, zorder=2)
                 
                 obs_added_info['santini'] = santini_bin
                 if santini_label is not None:
@@ -1507,10 +1699,10 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
                 harvey_label = 'Harvey+2024' if not obs_datasets_in_legend.get('harvey', False) else None
                 
                 # Plot Harvey 2024 data - POINTS WITH ERROR BARS
-                harvey_plot = ax.errorbar(h_mass, h_log_phi, 
+                harvey_plot = ax.errorbar(h_mass, h_log_phi,
                            yerr=[h_yerr_low, h_yerr_upp],
-                           fmt='D', color='gray', markersize=4, 
-                           label=harvey_label, alpha=0.8, capsize=2)
+                           fmt='D', color='gray', markersize=4,
+                           label=harvey_label, alpha=0.8, capsize=2, zorder=2)
                 
                 obs_added_info['harvey'] = best_harvey_z
                 if harvey_label is not None:
@@ -1570,10 +1762,10 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
             shark_label = f"{obs_info['label']}" if not sim_datasets_in_legend['shark'] else None
             
             # Plot observational data - SHARK as DASHED LINES ONLY
-            shark_plot = ax.plot(obs_masses, obs_phi, 
-                   linestyle=obs_info.get('linestyle', '--'), color=obs_info['color'], 
+            shark_plot = ax.plot(obs_masses, obs_phi,
+                   linestyle=obs_info.get('linestyle', '--'), color=obs_info['color'],
                    linewidth=obs_info.get('linewidth', 2),
-                   label=shark_label, alpha=0.8)
+                   label=shark_label, alpha=0.8, zorder=5)
             
             obs_added_info['shark'] = best_shark_z
             if shark_label is not None:
@@ -1646,12 +1838,12 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
                     marker_size = obs_info.get('markersize', 6)
                     
                     # Plot with VERTICAL error bars (yerr parameter) - SYMBOLS ONLY, NO LINES
-                    smfvals_plot = ax.errorbar(obs_masses_plot, obs_phi_log, 
+                    smfvals_plot = ax.errorbar(obs_masses_plot, obs_phi_log,
                                yerr=[yerr_lower, yerr_upper],  # VERTICAL error bars for phi uncertainty
                                xerr=None,  # NO horizontal error bars
                                fmt=marker_style, color=obs_info['color'], markersize=marker_size,
                                label=smfvals_label, alpha=0.8, capsize=3, linewidth=0,
-                               elinewidth=1.5)  # Make error bar lines a bit thicker
+                               elinewidth=1.5, zorder=2)  # Make error bar lines a bit thicker
                     
                     if smfvals_label is not None:
                         obs_datasets_in_legend['smfvals'] = True
@@ -1672,9 +1864,9 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
                     marker_size = obs_info.get('markersize', 6)
                     
                     # Plot as symbols only - NO LINES
-                    smfvals_plot = ax.plot(obs_masses_plot, obs_phi_log, 
-                           marker_style, color=obs_info['color'], 
-                           label=smfvals_label, alpha=0.8, markersize=marker_size)
+                    smfvals_plot = ax.plot(obs_masses_plot, obs_phi_log,
+                           marker_style, color=obs_info['color'],
+                           label=smfvals_label, alpha=0.8, markersize=marker_size, zorder=2)
                     
                     if smfvals_label is not None:
                         obs_datasets_in_legend['smfvals'] = True
@@ -1748,12 +1940,12 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
                     marker_size = obs_info.get('markersize', 5)
                     
                     # Plot with VERTICAL error bars (yerr parameter) - SYMBOLS ONLY, NO LINES
-                    farmer_plot = ax.errorbar(obs_masses_plot, obs_phi_log, 
+                    farmer_plot = ax.errorbar(obs_masses_plot, obs_phi_log,
                                yerr=[yerr_lower, yerr_upper],  # VERTICAL error bars for phi uncertainty
                                xerr=None,  # NO horizontal error bars
                                fmt=marker_style, color=obs_info['color'], markersize=marker_size,
                                label=farmer_label, alpha=0.8, capsize=3, linewidth=0,
-                               elinewidth=1.5)  # Make error bar lines a bit thicker
+                               elinewidth=1.5, zorder=2)  # Make error bar lines a bit thicker
                     
                     if farmer_label is not None:
                         obs_datasets_in_legend['farmer'] = True
@@ -1774,9 +1966,9 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
                     marker_size = obs_info.get('markersize', 5)
                     
                     # Plot as symbols only - NO LINES
-                    farmer_plot = ax.plot(obs_masses_plot, obs_phi_log, 
-                           marker_style, color=obs_info['color'], 
-                           label=farmer_label, alpha=0.8, markersize=marker_size)
+                    farmer_plot = ax.plot(obs_masses_plot, obs_phi_log,
+                           marker_style, color=obs_info['color'],
+                           label=farmer_label, alpha=0.8, markersize=marker_size, zorder=2)
                     
                     if farmer_label is not None:
                         obs_datasets_in_legend['farmer'] = True
@@ -1818,10 +2010,10 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
             cosmos_label = 'COSMOS Web' if not obs_datasets_in_legend['cosmos'] else None
             
             # Plot observational data - POINTS ONLY, NO LINES
-            cosmos_plot = ax.errorbar(obs_masses_plot, log_phi, 
+            cosmos_plot = ax.errorbar(obs_masses_plot, log_phi,
                        yerr=log_phi_err,
                        fmt='o', color='grey', markersize=4,
-                       label=cosmos_label, alpha=0.8, capsize=2)
+                       label=cosmos_label, alpha=0.8, capsize=2, zorder=2)
             
             obs_added_info['cosmos'] = obs_bin
             if cosmos_label is not None:
@@ -1876,10 +2068,10 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
                 wright_label = 'Wright+2018' if not obs_datasets_in_legend['wright'] else None
                 
                 # Plot Wright 2018 data - DIAMONDS WITH ERROR BARS
-                wright_plot = ax.errorbar(wright_masses_plot, wright_logphi_plot, 
+                wright_plot = ax.errorbar(wright_masses_plot, wright_logphi_plot,
                            yerr=[wright_error_lo_plot, wright_error_hi_plot],
-                           fmt='D', color='grey', markersize=4, 
-                           label=wright_label, alpha=0.8, capsize=2)
+                           fmt='D', color='grey', markersize=4,
+                           label=wright_label, alpha=0.8, capsize=2, zorder=2)
                 
                 obs_added_info['wright'] = best_wright_z
                 if wright_label is not None:
@@ -1894,7 +2086,80 @@ def add_observational_data_with_baldry(ax, z_low, z_high, obs_data, muzzin_data,
             traceback.print_exc()
     else:
         print(f"    No Wright 2018 data matches bin {z_low:.1f} < z < {z_high:.1f}")
-    
+
+    # Add Stefanon+2021 data for high-z (z=6-10)
+    z_center = (search_z_low + search_z_high) / 2
+    if z_center >= 6.0:
+        stef_mass, stef_phi, stef_phi_lower, stef_phi_upper = load_stefanon_smf(z_center)
+        if stef_mass is not None:
+            valid = np.isfinite(stef_phi) & (stef_phi > -9) & np.isfinite(stef_phi_upper)
+            if np.any(valid):
+                yerr_low = np.where(np.isfinite(stef_phi_lower[valid]),
+                                   np.maximum(0, stef_phi[valid] - stef_phi_lower[valid]), 0)
+                yerr_high = np.maximum(0, stef_phi_upper[valid] - stef_phi[valid])
+                stef_label = 'Stefanon+21' if not obs_datasets_in_legend.get('stefanon', False) else None
+                stef_plot = ax.errorbar(stef_mass[valid], stef_phi[valid],
+                           yerr=[yerr_low, yerr_high],
+                           fmt='o', color='gray', markersize=6, alpha=0.8,
+                           label=stef_label, capsize=2, linewidth=1.5, zorder=2)
+                if stef_label is not None:
+                    obs_datasets_in_legend['stefanon'] = True
+                    obs_legend_items.append((stef_plot, stef_label))
+                print(f"  ✓ Added Stefanon+2021 data for z~{z_center:.1f}")
+
+    # Add Navarro-Carrera+2023 data for high-z (z=6-8)
+    if z_center >= 6.0 and z_center <= 8.5:
+        nc_mass, nc_phi, nc_phi_lower, nc_phi_upper = load_navarro_carrera_smf(z_center)
+        if nc_mass is not None:
+            valid = np.isfinite(nc_phi) & (nc_phi > -9) & np.isfinite(nc_phi_upper)
+            if np.any(valid):
+                yerr_low = np.where(np.isfinite(nc_phi_lower[valid]),
+                                   np.maximum(0, nc_phi[valid] - nc_phi_lower[valid]), 0)
+                yerr_high = np.maximum(0, nc_phi_upper[valid] - nc_phi[valid])
+                nc_label = 'Navarro-Carrera+23' if not obs_datasets_in_legend.get('navarro_carrera', False) else None
+                nc_plot = ax.errorbar(nc_mass[valid], nc_phi[valid],
+                           yerr=[yerr_low, yerr_high],
+                           fmt='^', color='gray', markersize=6, alpha=0.8,
+                           label=nc_label, capsize=2, linewidth=1.5, zorder=2)
+                if nc_label is not None:
+                    obs_datasets_in_legend['navarro_carrera'] = True
+                    obs_legend_items.append((nc_plot, nc_label))
+                print(f"  ✓ Added Navarro-Carrera+2023 data for z~{z_center:.1f}")
+
+    # Add Weibel+2024 data for high-z (z=6-9)
+    if z_center >= 6.0 and z_center <= 9.5:
+        weibel_mass, weibel_phi, weibel_phi_lower, weibel_phi_upper = load_weibel_smf(z_center)
+        if weibel_mass is not None:
+            valid = np.isfinite(weibel_phi) & (weibel_phi > -9) & np.isfinite(weibel_phi_upper)
+            if np.any(valid):
+                yerr_low = np.where(np.isfinite(weibel_phi_lower[valid]),
+                                   np.maximum(0, weibel_phi[valid] - weibel_phi_lower[valid]), 0)
+                yerr_high = np.maximum(0, weibel_phi_upper[valid] - weibel_phi[valid])
+                weibel_label = 'Weibel+24' if not obs_datasets_in_legend.get('weibel', False) else None
+                weibel_plot = ax.errorbar(weibel_mass[valid], weibel_phi[valid],
+                           yerr=[yerr_low, yerr_high],
+                           fmt='v', color='gray', markersize=6, alpha=0.8,
+                           label=weibel_label, capsize=2, linewidth=1.5, zorder=2)
+                if weibel_label is not None:
+                    obs_datasets_in_legend['weibel'] = True
+                    obs_legend_items.append((weibel_plot, weibel_label))
+                print(f"  ✓ Added Weibel+2024 data for z~{z_center:.1f}")
+
+    # Add Kikuchihara+2020 data for high-z (z=6-9)
+    if z_center >= 6.0 and z_center <= 9.5:
+        kiku_mass, kiku_phi, kiku_phi_lower, kiku_phi_upper = load_kikuchihara_smf(z_center)
+        if kiku_mass is not None:
+            valid = np.isfinite(kiku_phi) & (kiku_phi > -9)
+            if np.any(valid):
+                kiku_label = 'Kikuchihara+20' if not obs_datasets_in_legend.get('kikuchihara', False) else None
+                kiku_plot = ax.plot(kiku_mass[valid], kiku_phi[valid],
+                       marker='<', color='gray', linestyle='', markersize=6, alpha=0.8,
+                       label=kiku_label, zorder=2)
+                if kiku_label is not None:
+                    obs_datasets_in_legend['kikuchihara'] = True
+                    obs_legend_items.append((kiku_plot[0], kiku_label))
+                print(f"  ✓ Added Kikuchihara+2020 data for z~{z_center:.1f}")
+
     return obs_legend_items, sim_legend_items
 
 
@@ -2015,7 +2280,7 @@ def plot_ffb_gradient_envelope(ax, ffb_data, mass_bins, cmap='plasma_r', alpha=1
             # Use the higher efficiency's color for the band
             color = colormap(norm(next_eff))
             ax.fill_between(mass_values, phi_center, next_phi_center,
-                          color=color, alpha=alpha, linewidth=0)
+                          color=color, alpha=alpha * 0.5, linewidth=0)
 
     return True
 
@@ -2055,7 +2320,11 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
         'wright': False,
         'smfvals': False,
         'farmer': False,
-        'harvey': False
+        'harvey': False,
+        'stefanon': False,
+        'navarro_carrera': False,
+        'weibel': False,
+        'kikuchihara': False
     }
     
     # Track which simulation models have appeared in legends globally
@@ -2176,10 +2445,10 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
                 # Plot only intrinsic data
                 # Only show legend for GAEA on the first subplot
                 if i == 0:
-                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=f'GAEA')
+                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=f'GAEA', zorder=5)
                     panel_sim_legend_items.append((gaea_plot[0], f'GAEA'))
                 else:
-                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=None)
+                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=None, zorder=5)
 
         # Add SHARK data (always shown, regardless of show_observations)
         # Find the best matching SHARK redshift for this bin
@@ -2359,7 +2628,7 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
                         phi_upper_shade = phi_log + phi_err_log
                         phi_lower_shade = phi_log - phi_err_log
                         sage_fill = ax.fill_between(xaxeshisto[mask_plot], phi_lower_shade, phi_upper_shade,
-                                                    color=color, alpha=0.3, linewidth=0)
+                                                    color=color, alpha=0.3, linewidth=0, zorder=4)
 
                         # Add to simulation legend if labeled (use a patch for the legend)
                         if model_label is not None:
@@ -2370,7 +2639,7 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
                         # SAGE models: LINES ONLY, NO POINTS
                         sage_plot = ax.plot(xaxeshisto[mask_plot], phi_log,
                                color=color, linestyle=linestyle, linewidth=linewidth,
-                               label=model_label, alpha=alpha)
+                               label=model_label, alpha=alpha, zorder=5)
 
                         # Add to simulation legend if labeled
                         if model_label is not None:
@@ -2653,7 +2922,11 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
         'wright': False,
         'smfvals': False,
         'farmer': False,
-        'harvey': False
+        'harvey': False,
+        'stefanon': False,
+        'navarro_carrera': False,
+        'weibel': False,
+        'kikuchihara': False
     }
     
     # Track which simulation models have appeared in legends globally
@@ -2866,7 +3139,7 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
                         phi_upper_shade = phi_log + phi_err_log
                         phi_lower_shade = phi_log - phi_err_log
                         sage_fill = ax.fill_between(xaxeshisto[mask_plot], phi_lower_shade, phi_upper_shade,
-                                                    color=color, alpha=0.3, linewidth=0)
+                                                    color=color, alpha=0.3, linewidth=0, zorder=4)
 
                         # Add to simulation legend if labeled (use a patch for the legend)
                         if model_label is not None:
@@ -2877,7 +3150,7 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
                         # SAGE models: LINES ONLY, NO POINTS
                         sage_plot = ax.plot(xaxeshisto[mask_plot], phi_log,
                                color=color, linestyle=linestyle, linewidth=linewidth,
-                               label=model_label, alpha=alpha)
+                               label=model_label, alpha=alpha, zorder=5)
 
                         # Add to simulation legend if labeled
                         if model_label is not None:
@@ -3038,7 +3311,11 @@ def plot_smf_all_redshift_bins_with_residuals(galaxy_types='all', mass_range=(7,
         'wright': False,
         'smfvals': False,
         'farmer': False,
-        'harvey': False
+        'harvey': False,
+        'stefanon': False,
+        'navarro_carrera': False,
+        'weibel': False,
+        'kikuchihara': False
     }
     
     # Track which simulation models have appeared in legends globally
@@ -3450,7 +3727,11 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
         'wright': False,
         'smfvals': False,
         'farmer': False,
-        'harvey': False
+        'harvey': False,
+        'stefanon': False,
+        'navarro_carrera': False,
+        'weibel': False,
+        'kikuchihara': False
     }
     
     # Track which simulation models have appeared in legends globally
@@ -3663,7 +3944,7 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
                         phi_upper_shade = phi_log + phi_err_log
                         phi_lower_shade = phi_log - phi_err_log
                         sage_fill = ax.fill_between(xaxeshisto[mask_plot], phi_lower_shade, phi_upper_shade,
-                                                    color=color, alpha=0.3, linewidth=0)
+                                                    color=color, alpha=0.3, linewidth=0, zorder=4)
 
                         # Add to simulation legend if labeled (use a patch for the legend)
                         if model_label is not None:
@@ -3674,7 +3955,7 @@ def plot_smf_selected_bins(galaxy_types='all', mass_range=(7, 12),
                         # SAGE models: LINES ONLY, NO POINTS
                         sage_plot = ax.plot(xaxeshisto[mask_plot], phi_log,
                                color=color, linestyle=linestyle, linewidth=linewidth,
-                               label=model_label, alpha=alpha)
+                               label=model_label, alpha=alpha, zorder=5)
 
                         # Add to simulation legend if labeled
                         if model_label is not None:
@@ -3779,7 +4060,11 @@ def plot_smf_all_redshift_bins(galaxy_types='all', mass_range=(7, 12),
         'wright': False,
         'smfvals': False,
         'farmer': False,
-        'harvey': False
+        'harvey': False,
+        'stefanon': False,
+        'navarro_carrera': False,
+        'weibel': False,
+        'kikuchihara': False
     }
     
     # Track which simulation models have appeared in legends globally
@@ -3881,10 +4166,10 @@ def plot_smf_all_redshift_bins(galaxy_types='all', mass_range=(7, 12),
                 # Plot only intrinsic data
                 # Only show legend for GAEA on the first subplot
                 if i == 0:
-                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=f'GAEA')
+                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=f'GAEA', zorder=5)
                     panel_sim_legend_items.append((gaea_plot[0], f'GAEA'))
                 else:
-                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=None)
+                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=None, zorder=5)
 
         # Process each model
         model_redshifts_used = {}  # Track which redshift each model used in this panel
@@ -4010,7 +4295,7 @@ def plot_smf_all_redshift_bins(galaxy_types='all', mass_range=(7, 12),
                         phi_upper_shade = phi_log + phi_err_log
                         phi_lower_shade = phi_log - phi_err_log
                         sage_fill = ax.fill_between(xaxeshisto[mask_plot], phi_lower_shade, phi_upper_shade,
-                                                    color=color, alpha=0.3, linewidth=0)
+                                                    color=color, alpha=0.3, linewidth=0, zorder=4)
 
                         # Add to simulation legend if labeled (use a patch for the legend)
                         if model_label is not None:
@@ -4021,7 +4306,7 @@ def plot_smf_all_redshift_bins(galaxy_types='all', mass_range=(7, 12),
                         # SAGE models: LINES ONLY, NO POINTS
                         sage_plot = ax.plot(xaxeshisto[mask_plot], phi_log,
                                color=color, linestyle=linestyle, linewidth=linewidth,
-                               label=model_label, alpha=alpha)
+                               label=model_label, alpha=alpha, zorder=5)
 
                         # Add to simulation legend if labeled
                         if model_label is not None:
