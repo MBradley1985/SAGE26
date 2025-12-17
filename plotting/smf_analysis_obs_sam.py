@@ -152,15 +152,15 @@ MODEL_CONFIGS = [
 # List of observational CSV files, one per redshift
 # Note: SMFvals data will be plotted as symbols only (no lines), using squares by default
 OBSERVATIONAL_FILES = [
-    {'file': './data/SHARK_smf_z0.csv', 'z': 0.0, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z05.csv', 'z': 0.5, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z1.csv', 'z': 1.0, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z2.csv', 'z': 2.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z3.csv', 'z': 3.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z4.csv', 'z': 4.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z5.csv', 'z': 5.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z6.csv', 'z': 6.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z7.csv', 'z': 7.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z0.csv', 'z': 0.0, 'color': 'darkmagenta', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z05.csv', 'z': 0.5, 'color': 'darkmagenta', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z1.csv', 'z': 1.0, 'color': 'darkmagenta', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z2.csv', 'z': 2.01, 'color': 'darkmagenta', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z3.csv', 'z': 3.01, 'color': 'darkmagenta', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z4.csv', 'z': 4.01, 'color': 'darkmagenta', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z5.csv', 'z': 5.01, 'color': 'darkmagenta', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z6.csv', 'z': 6.01, 'color': 'darkmagenta', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z7.csv', 'z': 7.01, 'color': 'darkmagenta', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
     # Add your new SMFvals files here (plotted as symbols only)
     {'file': './data/Thorne21/SMFvals_z2.csv', 'z': 2.0, 'color': 'grey', 'label': 'Thorne+21', 'marker': 's', 'markersize': 4, 'type': 'smfvals'},
     {'file': './data/Thorne21/SMFvals_z2.4.csv', 'z': 2.4, 'color': 'grey', 'label': 'Thorne+21', 'marker': 's', 'markersize': 4, 'type': 'smfvals'},
