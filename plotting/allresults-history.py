@@ -555,24 +555,24 @@ if __name__ == '__main__':
             
         # Plot the main curve
         label = f'{z_min:.1f} < z < {z_max:.1f}'
-        ax.plot(halo_mass_centers[valid], stellar_mass_mean[valid], 
+        ax.plot(halo_mass_centers[valid], np.log10(stellar_mass_mean[valid]), 
                 color=colors[i], linewidth=2, linestyle=line_styles[i], label=label)
         
         # Add shaded error region
         ax.fill_between(halo_mass_centers[valid], 
-                       stellar_mass_mean[valid] - stellar_mass_err[valid], 
-                       stellar_mass_mean[valid] + stellar_mass_err[valid],
+                       np.log10(stellar_mass_mean[valid] - stellar_mass_err[valid]), 
+                       np.log10(stellar_mass_mean[valid] + stellar_mass_err[valid]),
                        color=colors[i], alpha=0.3)
 
     # Set log scale and limits
-    ax.set_yscale('log')
-    ax.set_xscale('linear')  # x-axis is already log10 halo mass values
+    # ax.set_yscale('log')
+    # ax.set_xscale('linear')  # x-axis is already log10 halo mass values
     ax.set_xlim(10.0, 15.0)
-    ax.set_ylim(1e7, 1e12)
+    ax.set_ylim(7.0, 12.0)
 
     # Labels and formatting
-    ax.set_xlabel(r'$M_{\rm vir}$ [$M_\odot$]', fontsize=14)
-    ax.set_ylabel(r'$M_*$ [$M_\odot$]', fontsize=14)
+    ax.set_xlabel(r'$\log_{10} M_{\rm vir}$ [$M_\odot$]', fontsize=14)
+    ax.set_ylabel(r'$\log_{10} M_*$ [$M_\odot$]', fontsize=14)
 
     # Set minor ticks
     ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
@@ -672,23 +672,23 @@ if __name__ == '__main__':
             
         # Plot the main curve
         label = f'{z_min:.1f} < z < {z_max:.1f}'
-        ax.plot(mass_centers[valid], phi[valid], 
+        ax.plot(mass_centers[valid], np.log10(phi[valid]), 
                 color=colors[i], linewidth=2, label=label)
         
         # Add shaded error region
         ax.fill_between(mass_centers[valid], 
-                       phi[valid] - phi_err[valid], 
-                       phi[valid] + phi_err[valid],
+                       np.log10(phi[valid] - phi_err[valid]), 
+                       np.log10(phi[valid] + phi_err[valid]),
                        color=colors[i], alpha=0.3)
 
     # Set log scale and limits to match the figure and other SMF plots
-    ax.set_yscale('log')
+    # ax.set_yscale('log')
     ax.set_xlim(7.2, 12.0)
-    ax.set_ylim(1e-6, 1e-1)
+    ax.set_ylim(-6, -1)
 
     # Labels and formatting
     ax.set_xlabel(r'$\log_{10} M_* [M_\odot]$', fontsize=14)
-    ax.set_ylabel(r'$\phi$ [Mpc$^{-3}$ dex$^{-1}$]', fontsize=14)
+    ax.set_ylabel(r'$\log_{10}\phi$ [Mpc$^{-3}$ dex$^{-1}$]', fontsize=14)
 
     # Set minor ticks
     ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
