@@ -1,0 +1,31 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: log_M, unit: dex(M_sun/h70^2), datatype: float64, description: Log10 of Stellar Mass}
+# - {name: E_HE, datatype: float64, description: Log number density E+HE}
+# - {name: E_HE_err, datatype: float64, description: Error in E+HE}
+# - {name: cBD, datatype: float64, description: Log number density cBD}
+# - {name: cBD_err, datatype: float64, description: Error in cBD}
+# - {name: dBD, datatype: float64, description: Log number density dBD}
+# - {name: dBD_err, datatype: float64, description: Error in dBD}
+# - {name: D, datatype: float64, description: Log number density D}
+# - {name: D_err, datatype: float64, description: Error in D}
+# meta: {comments: [Number-density of galaxies per dex per Mpc^3 h70^-3]}
+# schema: astropy-2.0
+log_M E_HE E_HE_err cBD cBD_err dBD dBD_err D D_err
+11.625 -4.623 0.146 nan nan nan nan nan nan
+11.375 -3.483 0.048 -4.146 0.103 -5.021 0.176 nan nan
+11.125 -3.164 0.035 -3.383 0.043 -4.281 0.105 -4.845 0.222
+10.875 -3.074 0.031 -2.746 0.021 -3.669 0.063 -4.322 0.114
+10.625 -2.992 0.029 -2.543 0.017 -3.354 0.044 -3.766 0.067
+10.375 -3.008 0.029 -2.549 0.017 -3.084 0.031 -3.318 0.041
+10.125 -3.077 0.031 -2.667 0.020 -2.819 0.024 -3.039 0.031
+9.875 -3.202 0.035 -2.909 0.026 -2.576 0.018 -2.824 0.024
+9.625 -3.323 0.041 -3.166 0.035 -2.502 0.016 -2.537 0.017
+9.375 -3.491 0.075 -3.138 0.047 -2.453 0.020 -2.401 0.016
+9.125 -3.334 0.087 -3.125 0.074 -2.372 0.027 -2.222 0.019
+8.875 -3.157 0.097 -3.081 0.103 -2.278 0.037 -2.129 0.026
+8.625 nan nan -3.015 0.155 -2.183 0.047 -1.878 0.030
+8.375 nan nan nan nan -2.186 0.077 -1.837 0.043
+7.375 nan nan nan nan -1.629 0.222 -0.838 0.077
+6.625 nan nan nan nan nan nan -1.080 0.301

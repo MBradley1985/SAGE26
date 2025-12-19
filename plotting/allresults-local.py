@@ -38,7 +38,9 @@ plt.rcParams["font.size"] = 14
 
 def read_hdf(filename = None, snap_num = None, param = None):
 
-    property = h5.File(DirName+FileName,'r')
+    if filename is None:
+        filename = DirName + FileName
+    property = h5.File(filename,'r')
     return np.array(property[snap_num][param])
 
 
@@ -113,342 +115,125 @@ if __name__ == '__main__':
 
 # --------------------------------------------------------
 
-    print('Plotting the stellar mass function')
-
-    def load_li_white_2009(filepath, hubble_h=0.73, whichimf=1):
-        """Load Li & White 2009 z~0 SMF data with FIXED error handling"""
-        try:
-            data = np.genfromtxt(filepath, comments='#')
-            
-            # Column 1: log stellar mass in Msun/h^2
-            log_mass = data[:, 0] + 2.0 * np.log10(hubble_h)
-            
-            # Column 2: log(phi)
-            log_phi = data[:, 1]
-            
-            # Columns 3, 4: error_lower, error_upper (in log space)
-            err_lower = np.abs(data[:, 2])  # Ensure positive
-            err_upper = np.abs(data[:, 3])  # Ensure positive
-            
-            # Convert to linear phi
-            phi = 10**log_phi
-            phi_upper = 10**(log_phi + err_upper)
-            phi_lower = 10**(log_phi - err_lower)
-            
-            # Calculate error bar magnitudes (always positive)
-            yerr_lower = np.abs(phi - phi_lower)
-            yerr_upper = np.abs(phi_upper - phi)
-            
-            # Filter valid points
-            mask = np.isfinite(log_mass) & np.isfinite(phi) & (phi > 0)
-            mask &= np.isfinite(yerr_lower) & np.isfinite(yerr_upper)
-            
-            return log_mass[mask], phi[mask], yerr_lower[mask], yerr_upper[mask]
-            
-        except Exception as e:
-            print(f"Error loading Li & White 2009 data: {e}")
-            import traceback
-            traceback.print_exc()
-            return None, None, None, None
-
-
-    def load_muzzin_2013(filepath, z_low=0.2, z_high=0.5, hubble_h=0.73, whichimf=1):
-        """Load Muzzin et al. 2013 SMF data with FIXED error handling"""
-        try:
-            data = np.genfromtxt(filepath, comments='#')
-            
-            # Filter for redshift bin
-            mask_z = (data[:, 0] == z_low) & (data[:, 1] == z_high)
-            
-            if not np.any(mask_z):
-                print(f"No Muzzin+13 data for z={z_low}-{z_high}")
-                return None, None, None, None
-            
-            stellar_mass = data[mask_z, 2]
-            log_phi = data[mask_z, 4]
-            err_upper = np.abs(data[mask_z, 5])  # Ensure positive
-            err_lower = np.abs(data[mask_z, 6])  # Ensure positive
-            
-            # Filter out -99 (no data)
-            mask_valid = (log_phi > -90)
-            
-            stellar_mass = stellar_mass[mask_valid]
-            log_phi = log_phi[mask_valid]
-            err_upper = err_upper[mask_valid]
-            err_lower = err_lower[mask_valid]
-            
-            # Cosmology correction
-            h_muzzin = 0.7
-            h_ours = hubble_h
-            
-            # Convert phi
-            phi = 10**log_phi * (h_muzzin / h_ours)**3
-            phi_upper = 10**(log_phi + err_upper) * (h_muzzin / h_ours)**3
-            phi_lower = 10**(log_phi - err_lower) * (h_muzzin / h_ours)**3
-            
-            # Calculate error bar magnitudes
-            yerr_lower = np.abs(phi - phi_lower)
-            yerr_upper = np.abs(phi_upper - phi)
-            
-            # IMF correction
-            if whichimf == 1:
-                stellar_mass = stellar_mass - 0.04
-            
-            return stellar_mass, phi, yerr_lower, yerr_upper
-            
-        except Exception as e:
-            print(f"Error loading Muzzin+13 data: {e}")
-            import traceback
-            traceback.print_exc()
-            return None, None, None, None
-
-
-    def load_santini_2012(filepath, z_low=0.6, z_high=1.0, hubble_h=0.73, whichimf=1):
-        """Load Santini et al. 2012 SMF data with FIXED error handling"""
-        try:
-            data = np.genfromtxt(filepath, comments='#')
-            
-            # Filter for redshift bin
-            mask_z = (data[:, 0] == z_low) & (data[:, 1] == z_high)
-            
-            if not np.any(mask_z):
-                print(f"No Santini+12 data for z={z_low}-{z_high}")
-                return None, None, None, None
-            
-            log_mass = data[mask_z, 2]
-            log_phi = data[mask_z, 3]
-            err_hi = np.abs(data[mask_z, 4])  # Ensure positive
-            err_lo = np.abs(data[mask_z, 5])  # Ensure positive
-            
-            # Cosmology correction
-            h_santini = 0.7
-            h_ours = hubble_h
-            
-            # Convert phi
-            phi = 10**log_phi * (h_santini / h_ours)**3
-            phi_upper = 10**(log_phi + err_hi) * (h_santini / h_ours)**3
-            phi_lower = 10**(log_phi - err_lo) * (h_santini / h_ours)**3
-            
-            # Calculate error bar magnitudes
-            yerr_lower = np.abs(phi - phi_lower)
-            yerr_upper = np.abs(phi_upper - phi)
-            
-            # IMF correction
-            if whichimf == 1:
-                log_mass = log_mass - 0.24
-            
-            return log_mass, phi, yerr_lower, yerr_upper
-            
-        except Exception as e:
-            print(f"Error loading Santini+12 data: {e}")
-            import traceback
-            traceback.print_exc()
-            return None, None, None, None
-
-
-    def load_wright_2018(filepath, target_z=0.5):
-        """Load Wright et al. 2018 SMF data with FIXED error handling"""
-        try:
-            data = np.genfromtxt(filepath, comments='#')
-            mask = data[:, 0] == target_z
-            
-            if not np.any(mask):
-                print(f"No Wright+18 data for z={target_z}")
-                return None, None, None, None
-            
-            stellar_mass = data[mask, 1]
-            log_phi = data[mask, 2]
-            err_upper = np.abs(data[mask, 3])  # Ensure positive
-            err_lower = np.abs(data[mask, 4])  # Ensure positive
-            
-            # Convert from 0.25 dex bins to per dex
-            log_phi_per_dex = log_phi + np.log10(4.0)
-            phi = 10**log_phi_per_dex
-            phi_upper = 10**(log_phi_per_dex + err_upper)
-            phi_lower = 10**(log_phi_per_dex - err_lower)
-            
-            # Calculate error bar magnitudes
-            yerr_lower = np.abs(phi - phi_lower)
-            yerr_upper = np.abs(phi_upper - phi)
-            
-            return stellar_mass, phi, yerr_lower, yerr_upper
-            
-        except Exception as e:
-            print(f"Error loading Wright+18 data: {e}")
-            import traceback
-            traceback.print_exc()
-            return None, None, None, None
-
-
-    def load_shark_z0(filepath):
-        """Load SHARK z=0 SMF data"""
-        try:
-            data = []
-            with open(filepath, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith('﻿'):  # Remove BOM
-                        line = line[1:]
-                    values = line.split(',')
-                    if len(values) >= 2:
-                        mass = float(values[0])
-                        phi = float(values[1])
-                        data.append([mass, phi])
-            data = np.array(data)
-            x = data[:, 0]
-            y = 10**data[:, 1]  # Convert from log to linear
-            mask = np.isfinite(x) & np.isfinite(y) & (y > 0)
-            return x[mask], y[mask]
-        except Exception as e:
-            print(f"Error loading SHARK data: {e}")
-            import traceback
-            traceback.print_exc()
-            return None, None
+    print('Plotting the stellar mass function, divided by sSFR')
 
     plt.figure()  # New figure
     ax = plt.subplot(111)  # 1 plot on the figure
 
     binwidth = 0.1  # mass function histogram bin width
+    DirName2 = './output/millennium_vanilla/'
+
+    # Load GAMA morphological SMF data
+    # Columns: log_M, E_HE, E_HE_err, cBD, cBD_err, dBD, dBD_err, D, D_err
+    gama = np.genfromtxt('./data/gama_smf_morph.ecsv', comments='#', skip_header=1)
+    gama_mass = gama[:, 0]
+    gama_E_HE = gama[:, 1]
+    gama_E_HE_err = gama[:, 2]
+    gama_D = gama[:, 7]
+    gama_D_err = gama[:, 8]
+
+    # Load Baldry et al. blue/red SMF data
+    # Columns: SF_mass, SF_phi, Q_mass, Q_phi (all in log)
+    baldry = np.genfromtxt('./data/baldry_blue_red.csv', delimiter=',', skip_header=2)
+    baldry_sf_mass = baldry[:, 0]
+    baldry_sf_phi = baldry[:, 1]
+    baldry_q_mass = baldry[:, 2]
+    baldry_q_phi = baldry[:, 3]
+
+    smass_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'StellarMass') * 1.0e10 / Hubble_h
+    sfrdisk_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'SfrDisk')
+    sfrbulge_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'SfrBulge')
 
     # calculate all
     w = np.where(StellarMass > 0.0)[0]
     mass = np.log10(StellarMass[w])
     sSFR = np.log10( (SfrDisk[w] + SfrBulge[w]) / StellarMass[w] )
 
+    w2 = np.where(smass_vanilla > 0.0)[0]
+    mass_vanilla = np.log10(smass_vanilla[w2])
+    sSFR_vanilla = np.log10( (sfrdisk_vanilla[w2] + sfrbulge_vanilla[w2]) / smass_vanilla[w2] )
+
+    # Bin parameters for original model
     mi = np.floor(min(mass)) - 2
     ma = np.floor(max(mass)) + 2
     NB = int((ma - mi) / binwidth)
     (counts, binedges) = np.histogram(mass, range=(mi, ma), bins=NB)
     xaxeshisto = binedges[:-1] + 0.5 * binwidth  # Set the x-axis values to be the centre of the bins
-    
-    # additionally calculate red
+
+    # additionally calculate red for original model
     w = np.where(sSFR < sSFRcut)[0]
     massRED = mass[w]
     (countsRED, binedges) = np.histogram(massRED, range=(mi, ma), bins=NB)
 
-    # additionally calculate blue
+    # additionally calculate blue for original model
     w = np.where(sSFR > sSFRcut)[0]
     massBLU = mass[w]
     (countsBLU, binedges) = np.histogram(massBLU, range=(mi, ma), bins=NB)
 
-    # Baldry+ 2008 modified data used for the MCMC fitting
-    Baldry = np.array([
-        [7.05, 1.3531e-01, 6.0741e-02],
-        [7.15, 1.3474e-01, 6.0109e-02],
-        [7.25, 2.0971e-01, 7.7965e-02],
-        [7.35, 1.7161e-01, 3.1841e-02],
-        [7.45, 2.1648e-01, 5.7832e-02],
-        [7.55, 2.1645e-01, 3.9988e-02],
-        [7.65, 2.0837e-01, 4.8713e-02],
-        [7.75, 2.0402e-01, 7.0061e-02],
-        [7.85, 1.5536e-01, 3.9182e-02],
-        [7.95, 1.5232e-01, 2.6824e-02],
-        [8.05, 1.5067e-01, 4.8824e-02],
-        [8.15, 1.3032e-01, 2.1892e-02],
-        [8.25, 1.2545e-01, 3.5526e-02],
-        [8.35, 9.8472e-02, 2.7181e-02],
-        [8.45, 8.7194e-02, 2.8345e-02],
-        [8.55, 7.0758e-02, 2.0808e-02],
-        [8.65, 5.8190e-02, 1.3359e-02],
-        [8.75, 5.6057e-02, 1.3512e-02],
-        [8.85, 5.1380e-02, 1.2815e-02],
-        [8.95, 4.4206e-02, 9.6866e-03],
-        [9.05, 4.1149e-02, 1.0169e-02],
-        [9.15, 3.4959e-02, 6.7898e-03],
-        [9.25, 3.3111e-02, 8.3704e-03],
-        [9.35, 3.0138e-02, 4.7741e-03],
-        [9.45, 2.6692e-02, 5.5029e-03],
-        [9.55, 2.4656e-02, 4.4359e-03],
-        [9.65, 2.2885e-02, 3.7915e-03],
-        [9.75, 2.1849e-02, 3.9812e-03],
-        [9.85, 2.0383e-02, 3.2930e-03],
-        [9.95, 1.9929e-02, 2.9370e-03],
-        [10.05, 1.8865e-02, 2.4624e-03],
-        [10.15, 1.8136e-02, 2.5208e-03],
-        [10.25, 1.7657e-02, 2.4217e-03],
-        [10.35, 1.6616e-02, 2.2784e-03],
-        [10.45, 1.6114e-02, 2.1783e-03],
-        [10.55, 1.4366e-02, 1.8819e-03],
-        [10.65, 1.2588e-02, 1.8249e-03],
-        [10.75, 1.1372e-02, 1.4436e-03],
-        [10.85, 9.1213e-03, 1.5816e-03],
-        [10.95, 6.1125e-03, 9.6735e-04],
-        [11.05, 4.3923e-03, 9.6254e-04],
-        [11.15, 2.5463e-03, 5.0038e-04],
-        [11.25, 1.4298e-03, 4.2816e-04],
-        [11.35, 6.4867e-04, 1.6439e-04],
-        [11.45, 2.8294e-04, 9.9799e-05],
-        [11.55, 1.0617e-04, 4.9085e-05],
-        [11.65, 3.2702e-05, 2.4546e-05],
-        [11.75, 1.2571e-05, 1.2571e-05],
-        [11.85, 8.4589e-06, 8.4589e-06],
-        [11.95, 7.4764e-06, 7.4764e-06],
-        ], dtype=np.float32)
+    # Bin parameters for vanilla model
+    mi_v = np.floor(min(mass_vanilla)) - 2
+    ma_v = np.floor(max(mass_vanilla)) + 2
+    NB_v = int((ma_v - mi_v) / binwidth)
+    (counts_vanilla, binedges) = np.histogram(mass_vanilla, range=(mi_v, ma_v), bins=NB_v)
+    xaxeshisto_vanilla = binedges[:-1] + 0.5 * binwidth  # Set the x-axis values to be the centre of the bins
 
-    Baldry_xval = np.log10(10 ** Baldry[:, 0]  /Hubble_h/Hubble_h)
-    if(whichimf == 1):  Baldry_xval = Baldry_xval - 0.26  # convert back to Chabrier IMF
-    Baldry_yvalU = (Baldry[:, 1]+Baldry[:, 2]) * Hubble_h*Hubble_h*Hubble_h
-    Baldry_yvalL = (Baldry[:, 1]-Baldry[:, 2]) * Hubble_h*Hubble_h*Hubble_h
-    plt.fill_between(Baldry_xval, Baldry_yvalU, Baldry_yvalL, 
-        facecolor='purple', alpha=0.25)
-    
-    # This next line is just to get the shaded region to appear correctly in the legend
-    plt.plot(xaxeshisto, counts / volume / binwidth, label='Baldry et al. 2008', color='purple', alpha=0.3)
+    # additionally calculate red for vanilla
+    w2 = np.where(sSFR_vanilla < sSFRcut)[0]
+    massRED_vanilla = mass_vanilla[w2]
+    (countsRED_vanilla, binedges) = np.histogram(massRED_vanilla, range=(mi_v, ma_v), bins=NB_v)
 
-    # 2. Muzzin 2013
-    muz_x, muz_y, muz_err_lower, muz_err_upper = load_muzzin_2013(
-        './data/SMF_Muzzin2013.dat', z_low=0.2, z_high=0.5,
-        hubble_h=Hubble_h, whichimf=whichimf)
+    # additionally calculate blue for vanilla
+    w2 = np.where(sSFR_vanilla > sSFRcut)[0]
+    massBLU_vanilla = mass_vanilla[w2]
+    (countsBLU_vanilla, binedges) = np.histogram(massBLU_vanilla, range=(mi_v, ma_v), bins=NB_v)
 
-    if muz_x is not None:
-        plt.errorbar(muz_x, muz_y, yerr=[muz_err_lower, muz_err_upper],
-                    fmt='o', color='grey', markersize=5, 
-                    label='Muzzin+13 (0.2<z<0.5)', alpha=0.7,
-                    capsize=3, elinewidth=1.5, zorder=2)
-        print(f'  ✓ Muzzin+13: {len(muz_x)} points')
 
-    # 3. Santini 2012
-    san_x, san_y, san_err_lower, san_err_upper = load_santini_2012(
-        './data/SMF_Santini2012.dat', z_low=0.6, z_high=1.0,
-        hubble_h=Hubble_h, whichimf=whichimf)
+    # Overplot the model histograms (in log10 space)
+    # plt.plot(xaxeshisto, np.log10(counts / volume / binwidth), 'k-', label='SAGE26')
+    plt.plot(xaxeshisto, np.log10(countsRED / volume / binwidth), color='firebrick', lw=4, label='SAGE26 Quiescent')
+    plt.plot(xaxeshisto, np.log10(countsBLU / volume / binwidth), color='dodgerblue', lw=4, label='SAGE26 Star Forming')
 
-    if san_x is not None:
-        plt.errorbar(san_x, san_y, yerr=[san_err_lower, san_err_upper],
-                    fmt='^', color='grey', markersize=5, 
-                    label='Santini+12 (0.6<z<1.0)', alpha=0.7,
-                    capsize=3, elinewidth=1.5, zorder=2)
-        print(f'  ✓ Santini+12: {len(san_x)} points')
+    plt.plot(xaxeshisto_vanilla, np.log10(countsRED_vanilla / volume / binwidth), color='firebrick', lw=2, ls='--', label='C16 Quiescent')
+    plt.plot(xaxeshisto_vanilla, np.log10(countsBLU_vanilla / volume / binwidth), color='dodgerblue', lw=2, ls='--', label='C16 Star Forming')
 
-    # 4. SHARK z=0
-    shark_x, shark_y = load_shark_z0('./data/SHARK_smf_z0.csv')
-    if shark_x is not None:
-        plt.plot(shark_x, shark_y, ':', color='orange', linewidth=2.5, 
-                label='SHARK', alpha=0.9, zorder=3)
-        print(f'  ✓ SHARK z=0: {len(shark_x)} points')
+    # Create shaded regions from observations (GAMA + Baldry combined)
+    from scipy import interpolate
 
-    # 5. Wright+18
-    wri_x, wri_y, wri_err_lower, wri_err_upper = load_wright_2018(
-        './data/Wright18_CombinedSMF.dat', target_z=0.5)
+    # Common mass grid for interpolation
+    mass_grid = np.linspace(8, 12, 100)
 
-    if wri_x is not None:
-        plt.errorbar(wri_x, wri_y, yerr=[wri_err_lower, wri_err_upper],
-                    fmt='D', color='grey', markersize=5, 
-                    label='Wright+18 (z=0.5)', alpha=0.7,
-                    capsize=3, elinewidth=1.5, zorder=2)
-        print(f'  ✓ Wright+18: {len(wri_x)} points')
+    # Star-forming: combine GAMA D and Baldry SF
+    valid_D = ~np.isnan(gama_D)
+    gama_sf_interp = interpolate.interp1d(gama_mass[valid_D], gama_D[valid_D],
+                                           bounds_error=False, fill_value=np.nan)
+    baldry_sf_interp = interpolate.interp1d(baldry_sf_mass, baldry_sf_phi,
+                                             bounds_error=False, fill_value=np.nan)
+    sf_gama = gama_sf_interp(mass_grid)
+    sf_baldry = baldry_sf_interp(mass_grid)
+    sf_lower = np.nanmin([sf_gama, sf_baldry], axis=0)
+    sf_upper = np.nanmax([sf_gama, sf_baldry], axis=0)
 
-        
-    # Overplot the model histograms
-    plt.plot(xaxeshisto, counts    / volume / binwidth, 'k-', label='SAGE26')
-    # plt.plot(xaxeshisto, countsRED / volume / binwidth, 'r:', lw=2, label='Model - Red')
-    # plt.plot(xaxeshisto, countsBLU / volume / binwidth, 'b:', lw=2, label='Model - Blue')
+    # Quiescent: combine GAMA E+HE and Baldry Q
+    valid_E = ~np.isnan(gama_E_HE)
+    gama_q_interp = interpolate.interp1d(gama_mass[valid_E], gama_E_HE[valid_E],
+                                          bounds_error=False, fill_value=np.nan)
+    baldry_q_interp = interpolate.interp1d(baldry_q_mass, baldry_q_phi,
+                                            bounds_error=False, fill_value=np.nan)
+    q_gama = gama_q_interp(mass_grid)
+    q_baldry = baldry_q_interp(mass_grid)
+    q_lower = np.nanmin([q_gama, q_baldry], axis=0)
+    q_upper = np.nanmax([q_gama, q_baldry], axis=0)
 
-    plt.yscale('log')
-    plt.axis([8.0, 12.2, 1.0e-6, 1.0e-1])
-    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
+    # Plot shaded regions
+    plt.fill_between(mass_grid, sf_lower, sf_upper, color='dodgerblue', alpha=0.3, edgecolor='none', label='Observations SF')
+    plt.fill_between(mass_grid, q_lower, q_upper, color='firebrick', alpha=0.3, edgecolor='none', label='Observations Q')
 
-    plt.ylabel(r'$\phi\ (\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1})$')  # Set the y...
-    plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')  # and the x-axis labels
+    plt.axis([8, 12, -6, -1])
+    ax.xaxis.set_major_locator(plt.MultipleLocator(1))
+    ax.yaxis.set_major_locator(plt.MultipleLocator(1))
+
+    plt.ylabel(r'$\log_{10}\ \phi\ (\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1})$')
+    plt.xlabel(r'$\log_{10} M_{\mathrm{*}}\ (M_{\odot})$')
 
     leg = plt.legend(loc='lower left', numpoints=1, labelspacing=0.1)
     leg.draw_frame(False)  # Don't want a box frame
