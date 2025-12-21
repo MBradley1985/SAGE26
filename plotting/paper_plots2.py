@@ -4814,7 +4814,7 @@ if __name__ == '__main__':
 
     # plot_baryon_fraction_vs_halo_mass(GAS_SimConfigs, Snapshot, OutputDir)
     # plot_cgm_vs_stellar_mass(GAS_SimConfigs, Snapshot, OutputDir)
-    plot_mass_fraction_vs_stellar_mass(GAS_SimConfigs, Snapshot, OutputDir)
+    # plot_mass_fraction_vs_stellar_mass(GAS_SimConfigs, Snapshot, OutputDir)
     
     logger.info(f'Total execution time: {time.time() - start_time:.2f} seconds')
     logger.info('Analysis complete!')
