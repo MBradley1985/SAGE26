@@ -180,10 +180,28 @@ SFR_SimDirs = [
         'BHMFsnaps': [63, 40, 32, 27, 23, 20, 18, 16]
     },
     {
-        'path': '../SAGE-VANILLA/sage-model/output/millennium/', 
+        'path': './output/millennium_vanilla/', 
         'label': 'SAGE C16', 
         'color': 'blue', 
         'linestyle': '--',
+        'BoxSize': 62.5,  # h-1 Mpc
+        'Hubble_h': 0.73,
+        'VolumeFraction': 1.0,
+        'FirstSnap': 0,
+        'LastSnap': 63,
+        'redshifts': [127.000, 79.998, 50.000, 30.000, 19.916, 18.244, 16.725, 15.343, 14.086, 12.941, 11.897, 10.944, 10.073, 
+                     9.278, 8.550, 7.883, 7.272, 6.712, 6.197, 5.724, 5.289, 4.888, 4.520, 4.179, 3.866, 3.576, 3.308, 3.060, 
+                     2.831, 2.619, 2.422, 2.239, 2.070, 1.913, 1.766, 1.630, 1.504, 1.386, 1.276, 1.173, 1.078, 0.989, 0.905, 
+                     0.828, 0.755, 0.687, 0.624, 0.564, 0.509, 0.457, 0.408, 0.362, 0.320, 0.280, 0.242, 0.208, 0.175, 0.144, 
+                     0.116, 0.089, 0.064, 0.041, 0.020, 0.000],
+        'SMFsnaps': [63, 40, 32, 27, 23, 20, 18, 16],
+        'BHMFsnaps': [63, 40, 32, 27, 23, 20, 18, 16]
+    },
+    {
+        'path': './output/millennium_kd12/', 
+        'label': 'SAGE26 (KD12)', 
+        'color': 'green', 
+        'linestyle': '-',
         'BoxSize': 62.5,  # h-1 Mpc
         'Hubble_h': 0.73,
         'VolumeFraction': 1.0,
@@ -211,20 +229,29 @@ SMF_SimConfigs = [
         'Hubble_h': 0.73,
         'VolumeFraction': 1.0
     },
+    # {
+    #     'path': '/Users/mbradley/Documents/PhD/SAGE_BROKEN/sage-model/output/millennium/', 
+    #     'label': 'evilSAGE', 
+    #     'color': 'blue', 
+    #     'linestyle': '-',  # solid line
+    #     'BoxSize': 62.5,  # h-1 Mpc
+    #     'Hubble_h': 0.73,
+    #     'VolumeFraction': 1.0
+    # },
     {
-        'path': '/Users/mbradley/Documents/PhD/SAGE_BROKEN/sage-model/output/millennium/', 
-        'label': 'evilSAGE', 
+        'path': './output/millennium_vanilla/', 
+        'label': 'SAGE C16', 
         'color': 'blue', 
-        'linestyle': '-',  # solid line
+        'linestyle': '--',  # dashed line
         'BoxSize': 62.5,  # h-1 Mpc
         'Hubble_h': 0.73,
         'VolumeFraction': 1.0
     },
     {
-        'path': '../SAGE-VANILLA/sage-model/output/millennium/', 
-        'label': 'SAGE C16', 
-        'color': 'blue', 
-        'linestyle': '--',  # dashed line
+        'path': './output/millennium_kd12/', 
+        'label': 'SAGE26 (KD12)', 
+        'color': 'green', 
+        'linestyle': '-',  # solid line
         'BoxSize': 62.5,  # h-1 Mpc
         'Hubble_h': 0.73,
         'VolumeFraction': 1.0
@@ -244,19 +271,19 @@ GAS_SimConfigs = [
         'linewidth': 3,
         'alpha': 0.9
     },
+    # {
+    #     'path': '/Users/mbradley/Documents/PhD/SAGE_BROKEN/sage-model/output/millennium/', 
+    #     'label': 'evilSAGE', 
+    #     'color': 'blue', 
+    #     'linestyle': ':',
+    #     'BoxSize': 62.5,
+    #     'Hubble_h': 0.73,
+    #     'VolumeFraction': 1.0,
+    #     'linewidth': 3,
+    #     'alpha': 0.9
+    # },
     {
-        'path': '/Users/mbradley/Documents/PhD/SAGE_BROKEN/sage-model/output/millennium/', 
-        'label': 'evilSAGE', 
-        'color': 'blue', 
-        'linestyle': ':',
-        'BoxSize': 62.5,
-        'Hubble_h': 0.73,
-        'VolumeFraction': 1.0,
-        'linewidth': 3,
-        'alpha': 0.9
-    },
-    {
-        'path': '../SAGE-VANILLA/sage-model/output/millennium/', 
+        'path': './output/millennium_vanilla/', 
         'label': 'SAGE C16', 
         'color': 'blue', 
         'linestyle': '--',
@@ -265,7 +292,19 @@ GAS_SimConfigs = [
         'VolumeFraction': 1.0,
         'linewidth': 3,
         'alpha': 0.9
+    },
+    {
+        'path': './output/millennium_kd12/', 
+        'label': 'SAGE26 (KD12)', 
+        'color': 'green', 
+        'linestyle': '-',
+        'BoxSize': 62.5,
+        'Hubble_h': 0.73,
+        'VolumeFraction': 1.0,
+        'linewidth': 3,
+        'alpha': 0.9
     }
+
 ]
 
 # Plotting options
@@ -1861,7 +1900,7 @@ def plot_h2_fraction_vs_stellar_mass(sim_configs, snapshot, output_dir):
             # h2_fraction_2 = H2Gas / (H2Gas + HI_Gas)  # Alternative fraction
             
             # Alternative: H2 fraction relative to cold gas
-            h2_frac_cold = h2_gas_sel / cold_gas_sel
+            # h2_frac_cold = h2_gas_sel / cold_gas_sel
             
             # Bin by stellar mass
             log_stellar_mass = np.log10(stellar_mass_sel)
@@ -4764,17 +4803,17 @@ if __name__ == '__main__':
     
     # plot_stellar_mass_function_comparison(SMF_SimConfigs, Snapshot, OutputDir)
     plot_h2_fraction_vs_stellar_mass(GAS_SimConfigs, Snapshot, OutputDir)
-    plot_h2_fraction_vs_halo_mass(GAS_SimConfigs, Snapshot, OutputDir)
-    plot_h1_fraction_vs_halo_mass(GAS_SimConfigs, Snapshot, OutputDir)
+    # plot_h2_fraction_vs_halo_mass(GAS_SimConfigs, Snapshot, OutputDir)
+    # plot_h1_fraction_vs_halo_mass(GAS_SimConfigs, Snapshot, OutputDir)
     # plot_h2_fraction_vs_stellar_mass_with_selection(GAS_SimConfigs, Snapshot, OutputDir)
 
     # Add this line to your main execution section after the other plotting calls:
-    plot_bh_bulge_mass_relation(SMF_SimConfigs, Snapshot, OutputDir)
-    plot_mass_metallicity_relation(SMF_SimConfigs, Snapshot, OutputDir)
-    plot_mass_bulge_fraction(SMF_SimConfigs, Snapshot, OutputDir)
+    # plot_bh_bulge_mass_relation(SMF_SimConfigs, Snapshot, OutputDir)
+    # plot_mass_metallicity_relation(SMF_SimConfigs, Snapshot, OutputDir)
+    # plot_mass_bulge_fraction(SMF_SimConfigs, Snapshot, OutputDir)
 
-    plot_baryon_fraction_vs_halo_mass(GAS_SimConfigs, Snapshot, OutputDir)
-    plot_cgm_vs_stellar_mass(GAS_SimConfigs, Snapshot, OutputDir)
+    # plot_baryon_fraction_vs_halo_mass(GAS_SimConfigs, Snapshot, OutputDir)
+    # plot_cgm_vs_stellar_mass(GAS_SimConfigs, Snapshot, OutputDir)
     plot_mass_fraction_vs_stellar_mass(GAS_SimConfigs, Snapshot, OutputDir)
     
     logger.info(f'Total execution time: {time.time() - start_time:.2f} seconds')
