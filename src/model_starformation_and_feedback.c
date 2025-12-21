@@ -32,6 +32,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
     // Initialise variables
     strdot = 0.0;
+    metallicity = 0.0;
 
     // star formation recipes
     if(run_params->SFprescription == 0) {
@@ -177,26 +178,26 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             galaxies[p].H2gas = 0.0;
             strdot = 0.0;
         } else {
-            const float disk_area = M_PI * galaxies[p].DiskScaleRadius * galaxies[p].DiskScaleRadius;; // pc^2
+            float disk_area = M_PI * galaxies[p].DiskScaleRadius * galaxies[p].DiskScaleRadius;; // pc^2
+            // float disk_area =  M_PI * pow(3.0 * rs_pc, 2);
             if(disk_area <= 0.0) {
                 galaxies[p].H2gas = 0.0;
                 return;
             }
-            const float surface_density = galaxies[p].ColdGas / disk_area;
-            float metallicity = 0.0;
+            float surface_density = galaxies[p].ColdGas / disk_area;
+            // double metallicity = 0.0;
             if(galaxies[p].ColdGas > 0.0) {
                 metallicity = galaxies[p].MetalsColdGas / galaxies[p].ColdGas; // absolute fraction
             }
-            float clumping_factor = 5.0;
+            const float clumping_factor = 5.0;
             // if (metallicity < 0.01) {
             //     clumping_factor = 0.5 * pow(0.01, -0.05);
             // } else if (metallicity < 1.0) {
             //     clumping_factor = 0.5 * pow(metallicity, -0.05);
             // }
             
-            float f_H2 = calculate_H2_fraction_KD12(surface_density, metallicity, clumping_factor);
+            total_molecular_gas = calculate_H2_fraction_KD12(surface_density, metallicity, clumping_factor) * galaxies[p].ColdGas;
 
-            total_molecular_gas = f_H2 * galaxies[p].ColdGas;
             galaxies[p].H2gas = total_molecular_gas;
 
             if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
@@ -670,6 +671,30 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
             float f_mol = calculate_molecular_fraction_BR06(gas_surface_density, 
                                                             stellar_surface_density, rs_pc);
             galaxies[p].H2gas = f_mol * galaxies[p].ColdGas;
+        } else {
+            galaxies[p].H2gas = 0.0;
+        }
+    }
+
+    if(run_params->SFprescription == 4 && galaxies[p].ColdGas > 0.0) {
+        const float h = run_params->Hubble_h;
+        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+        
+        if(rs_pc > 0.0) {
+            const float disk_area = M_PI * galaxies[p].DiskScaleRadius * galaxies[p].DiskScaleRadius;; // pc^2
+            if(disk_area > 0.0) {
+                const float surface_density = galaxies[p].ColdGas / disk_area;
+                // double metallicity = 0.0;
+                if(galaxies[p].ColdGas > 0.0) {
+                    metallicity = galaxies[p].MetalsColdGas / galaxies[p].ColdGas; // absolute fraction
+                }
+                float clumping_factor = 5.0;
+                
+                float f_mol = calculate_H2_fraction_KD12(surface_density, metallicity, clumping_factor);
+                galaxies[p].H2gas = f_mol * galaxies[p].ColdGas;
+            } else {
+                galaxies[p].H2gas = 0.0;
+            }
         } else {
             galaxies[p].H2gas = 0.0;
         }
