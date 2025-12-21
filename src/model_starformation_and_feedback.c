@@ -187,12 +187,12 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             if(galaxies[p].ColdGas > 0.0) {
                 metallicity = galaxies[p].MetalsColdGas / galaxies[p].ColdGas; // absolute fraction
             }
-            float clumping_factor = 0.5;
-            if (metallicity < 0.01) {
-                clumping_factor = 0.5 * pow(0.01, -0.05);
-            } else if (metallicity < 1.0) {
-                clumping_factor = 0.5 * pow(metallicity, -0.05);
-            }
+            float clumping_factor = 5.0;
+            // if (metallicity < 0.01) {
+            //     clumping_factor = 0.5 * pow(0.01, -0.05);
+            // } else if (metallicity < 1.0) {
+            //     clumping_factor = 0.5 * pow(metallicity, -0.05);
+            // }
             
             float f_H2 = calculate_H2_fraction_KD12(surface_density, metallicity, clumping_factor);
 
