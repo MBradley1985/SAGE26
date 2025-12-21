@@ -617,3 +617,41 @@ double calculate_ffb_fraction(const double Mvir, const double z, const struct pa
     
     return f_ffb;
 }
+
+// Calculate molecular fraction using Krumholz & Dekel (2012) model
+float calculate_H2_fraction_KD12(const float surface_density, const float metallicity, const float clumping_factor) 
+{
+    if (surface_density <= 0.0) {
+        return 0.0;
+    }
+    
+    // Metallicity normalized to solar (assuming solar metallicity = 0.02)
+    float Zp = metallicity / 0.02;
+    // if (Zp < 0.01) Zp = 0.01;  // Set floor to prevent numerical issues
+    
+    // Apply clumping factor to get the compressed surface density
+    float Sigma_comp = clumping_factor * surface_density;
+    
+    // Calculate dust optical depth parameter
+    float tau_c = 0.066 * Sigma_comp * Zp;
+    
+    // Self-shielding parameter chi (from Krumholz & Dekel 2012, Eq. 2)
+    float chi = 0.77 * (1.0 + 3.1 * pow(Zp, 0.365));
+    
+    // Compute s parameter (from Krumholz, McKee & Tumlinson 2009, Eq. 91)
+    float s = log(1.0 + 0.6 * chi) / (0.6 * tau_c);
+    
+    // Molecular fraction (Krumholz, McKee & Tumlinson 2009, Eq. 93)
+    float f_H2;
+    if (s < 2.0) {
+        f_H2 = 1.0 - 0.75 * s / (1.0 + 0.25 * s);
+    } else {
+        f_H2 = 0.0;
+    }
+    
+    // Ensure fraction stays within bounds
+    if (f_H2 < 0.0) f_H2 = 0.0;
+    if (f_H2 > 1.0) f_H2 = 1.0;
+    
+    return f_H2;
+}

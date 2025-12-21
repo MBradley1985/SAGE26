@@ -590,12 +590,12 @@ if __name__ == '__main__':
         # plt.plot(np.log10((10**w *1.5 /1.8)), Zobs, 'b-', lw=2.0, label='Tremonti et al. 2003')
         plt.fill_between(np.log10((10**w *1.5 /1.8)), Zobs+0.1, Zobs-0.1, color='blue', alpha=0.2)
         
-    plt.ylabel(r'$12\ +\ \log_{10}[\mathrm{O/H}]$')  # Set the y...
-    plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')  # and the x-axis labels
+    plt.ylabel(r'$12\ +\ \log_{10}(\mathrm{O/H})$')  # Set the y...
+    plt.xlabel(r'$\log_{10} M_{\mathrm{*}}\ (M_{\odot})$')  # and the x-axis labels
         
     # Set the x and y axis minor ticks
-    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.05))
-    ax.yaxis.set_minor_locator(plt.MultipleLocator(0.25))
+    ax.xaxis.set_minor_locator(plt.MultipleLocator(1))
+    ax.yaxis.set_minor_locator(plt.MultipleLocator(1))
         
     plt.axis([8.0, 12.0, 8.0, 9.5])
         

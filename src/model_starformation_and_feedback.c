@@ -166,6 +166,45 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 }
             }
         }
+
+    } else if(run_params->SFprescription == 4) {
+
+        // KD12 model
+        tdyn = 3.0 * galaxies[p].DiskScaleRadius / galaxies[p].Vvir;
+        const float h = run_params->Hubble_h;
+        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+        if (rs_pc <= 0.0) {
+            galaxies[p].H2gas = 0.0;
+            strdot = 0.0;
+        } else {
+            const float disk_area = M_PI * galaxies[p].DiskScaleRadius * galaxies[p].DiskScaleRadius;; // pc^2
+            if(disk_area <= 0.0) {
+                galaxies[p].H2gas = 0.0;
+                return;
+            }
+            const float surface_density = galaxies[p].ColdGas / disk_area;
+            float metallicity = 0.0;
+            if(galaxies[p].ColdGas > 0.0) {
+                metallicity = galaxies[p].MetalsColdGas / galaxies[p].ColdGas; // absolute fraction
+            }
+            float clumping_factor = 0.5;
+            if (metallicity < 0.01) {
+                clumping_factor = 0.5 * pow(0.01, -0.05);
+            } else if (metallicity < 1.0) {
+                clumping_factor = 0.5 * pow(metallicity, -0.05);
+            }
+            
+            float f_H2 = calculate_H2_fraction_KD12(surface_density, metallicity, clumping_factor);
+
+            total_molecular_gas = f_H2 * galaxies[p].ColdGas;
+            galaxies[p].H2gas = total_molecular_gas;
+
+            if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
+                strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
+            } else {
+                strdot = 0.0;
+            }
+        }
     } else {
         fprintf(stderr, "No star formation prescription selected!\n");
         ABORT(0);

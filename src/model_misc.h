@@ -33,6 +33,8 @@ extern "C" {
                                      const double old_disk_radius,
                                      struct GALAXY *galaxies, const struct params *run_params);
 
+    extern float calculate_H2_fraction_KD12(const float surface_density, const float metallicity, const float clumping_factor);
+
 
 #ifdef __cplusplus
 }
