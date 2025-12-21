@@ -619,29 +619,45 @@ double calculate_ffb_fraction(const double Mvir, const double z, const struct pa
 }
 
 // Calculate molecular fraction using Krumholz & Dekel (2012) model
+// Based on equations 18-21 from Krumholz & Dekel 2012, ApJ 753:16
+
 float calculate_H2_fraction_KD12(const float surface_density, const float metallicity, const float clumping_factor) 
 {
     if (surface_density <= 0.0) {
         return 0.0;
     }
     
-    // Metallicity normalized to solar (assuming solar metallicity = 0.02)
-    float Zp = metallicity / 0.02;
-    // if (Zp < 0.01) Zp = 0.01;  // Set floor to prevent numerical issues
+    // Metallicity normalized to solar (Z_sun = 0.02)
+    // Z0 = (M_Z/M_g)/Z_sun as defined in KD12 equation after (17)
+    float Z0 = metallicity / 0.02;
     
-    // Apply clumping factor to get the compressed surface density
-    float Sigma_comp = clumping_factor * surface_density;
+    // Convert surface density from M_sun/pc^2 to g/cm^2
+    // Conversion: 1 M_sun/pc^2 = 2.088 × 10^-4 g/cm^2
+    float Sigma_gcm2 = surface_density * 2.088e-4;
     
-    // Calculate dust optical depth parameter
-    float tau_c = 0.066 * Sigma_comp * Zp;
+    // Surface density normalized to 1 g/cm^2 (as defined after KD12 Eq. 16)
+    // Sigma_0 = Sigma / (1 g cm^-2)
+    float Sigma_0 = Sigma_gcm2;  // dimensionless, in units of 1 g/cm^2
     
-    // Self-shielding parameter chi (from Krumholz & Dekel 2012, Eq. 2)
-    float chi = 0.77 * (1.0 + 3.1 * pow(Zp, 0.365));
+    // Calculate dust optical depth parameter (KD12 Eq. 21)
+    // tau_c = 320 * c * Z0 * Sigma_0
+    // where c is the clumping factor:
+    //   c ≈ 1 for Sigma measured on 100 pc scales
+    //   c ≈ 5 for Sigma measured on ~1 kpc scales (from text after Eq. 21)
+    float tau_c = 320.0 * clumping_factor * Z0 * Sigma_0;
     
-    // Compute s parameter (from Krumholz, McKee & Tumlinson 2009, Eq. 91)
-    float s = log(1.0 + 0.6 * chi) / (0.6 * tau_c);
+    // Self-shielding parameter chi (KD12 Eq. 20)
+    // chi = 3.1 * (1 + Z0^0.365) / 4.1
+    float chi = 3.1 * (1.0 + pow(Z0, 0.365)) / 4.1;
     
-    // Molecular fraction (Krumholz, McKee & Tumlinson 2009, Eq. 93)
+    // Compute s parameter (KD12 Eq. 19)
+    // s = ln(1 + 0.6*chi + 0.01*chi^2) / (0.6 * tau_c)
+    float chi_sq = chi * chi;
+    float s = log(1.0 + 0.6 * chi + 0.01 * chi_sq) / (0.6 * tau_c);
+    
+    // Molecular fraction (KD12 Eq. 18)
+    // f_H2 = 1 - (3/4) * s/(1 + 0.25*s)  for s < 2
+    // f_H2 = 0                            for s >= 2
     float f_H2;
     if (s < 2.0) {
         f_H2 = 1.0 - 0.75 * s / (1.0 + 0.25 * s);
