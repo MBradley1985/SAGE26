@@ -325,6 +325,10 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].CGMgas += galaxies[p].CGMgas;
     galaxies[t].MetalsCGMgas += galaxies[p].MetalsCGMgas;
 
+    if(run_params->SFprescription == 1 || run_params->SFprescription == 3 || run_params->SFprescription == 4) {
+        galaxies[t].H2gas += galaxies[p].H2gas;
+    }
+
     // add merger to bulge
     galaxies[t].BulgeMass += galaxies[p].StellarMass;
     galaxies[t].MetalsBulgeMass += galaxies[p].MetalsStellarMass;
@@ -390,7 +394,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     XASSERT(dt > 0.0, -1,
             "Error: dt = %g must be > 0 for SFR calculation\n", dt);
 
-    double stars, reheated_mass, ejected_mass, fac, metallicity, eburst;
+    double stars, reheated_mass, ejected_mass, fac, metallicity, eburst, gas_for_starburst;
 
     // This is the major and minor merger starburst recipe of Somerville et al. 2001.
     // The coefficients in eburst are taken from TJ Cox's PhD thesis and should be more accurate then previous.
@@ -402,14 +406,16 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         eburst = 0.56 * pow(mass_ratio, 0.7);
     }
 
-    double gas_for_starburst;
-    if(run_params->SFprescription == 1) {
-        // For H2-based prescriptions, use molecular gas
-        gas_for_starburst = galaxies[merger_centralgal].H2gas;
-    } else {
-        // For traditional prescription, use total cold gas
-        gas_for_starburst = galaxies[merger_centralgal].ColdGas;
-    }
+    // double gas_for_starburst;
+    // if(run_params->SFprescription == 1 || run_params->SFprescription == 3 || run_params->SFprescription == 4) {
+    //     // For H2-based prescriptions, use molecular gas
+    //     gas_for_starburst = galaxies[merger_centralgal].H2gas;
+    // } else {
+    //     // For traditional prescription, use total cold gas
+    //     gas_for_starburst = galaxies[merger_centralgal].ColdGas;
+    // }
+
+    gas_for_starburst = galaxies[merger_centralgal].ColdGas;
 
     stars = eburst * gas_for_starburst;
     if(stars < 0.0) {
