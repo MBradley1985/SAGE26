@@ -4809,7 +4809,7 @@ if __name__ == '__main__':
 
     # Add this line to your main execution section after the other plotting calls:
     # plot_bh_bulge_mass_relation(SMF_SimConfigs, Snapshot, OutputDir)
-    # plot_mass_metallicity_relation(SMF_SimConfigs, Snapshot, OutputDir)
+    plot_mass_metallicity_relation(SMF_SimConfigs, Snapshot, OutputDir)
     # plot_mass_bulge_fraction(SMF_SimConfigs, Snapshot, OutputDir)
 
     # plot_baryon_fraction_vs_halo_mass(GAS_SimConfigs, Snapshot, OutputDir)
