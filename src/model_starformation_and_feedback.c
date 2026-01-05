@@ -80,7 +80,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
                 float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
 
-                float total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
+                total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
                                                                        rs_pc) * galaxies[p].ColdGas;
 
                 galaxies[p].H2gas = total_molecular_gas;
