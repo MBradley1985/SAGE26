@@ -325,7 +325,9 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].CGMgas += galaxies[p].CGMgas;
     galaxies[t].MetalsCGMgas += galaxies[p].MetalsCGMgas;
 
-    if(run_params->SFprescription == 1 || run_params->SFprescription == 3 || run_params->SFprescription == 4) {
+    if (run_params->SFprescription == 1 || run_params->SFprescription == 3 ||
+        run_params->SFprescription == 4 || run_params->SFprescription == 5 ||
+        run_params->SFprescription == 6 || run_params->SFprescription == 7) {
         galaxies[t].H2gas += galaxies[p].H2gas;
     }
 
@@ -405,15 +407,6 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     } else {
         eburst = 0.56 * pow(mass_ratio, 0.7);
     }
-
-    // double gas_for_starburst;
-    // if(run_params->SFprescription == 1 || run_params->SFprescription == 3 || run_params->SFprescription == 4) {
-    //     // For H2-based prescriptions, use molecular gas
-    //     gas_for_starburst = galaxies[merger_centralgal].H2gas;
-    // } else {
-    //     // For traditional prescription, use total cold gas
-    //     gas_for_starburst = galaxies[merger_centralgal].ColdGas;
-    // }
 
     gas_for_starburst = galaxies[merger_centralgal].ColdGas;
 

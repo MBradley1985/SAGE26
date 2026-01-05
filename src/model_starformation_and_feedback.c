@@ -59,6 +59,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // Blitz and Rosolowsky (2006) - BR06 Model
         // ========================================================================
 
+        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
+        reff = 3.0 * galaxies[p].DiskScaleRadius;
+
         // BUG FIX: Check Vvir > 0 before division
         if(galaxies[p].Vvir <= 0.0) {
             galaxies[p].H2gas = 0.0;
@@ -77,7 +80,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
                 float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
 
-                total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
+                float total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
                                                                        rs_pc) * galaxies[p].ColdGas;
 
                 galaxies[p].H2gas = total_molecular_gas;
@@ -93,6 +96,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
         // Somerville et al. 2025: Density Modulated Star Formation Efficiency
         // Using Equation 3 for efficiency: epsilon = (Sigma/Sigma_crit)/(1 + Sigma/Sigma_crit)
+
+        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
+        reff = 3.0 * galaxies[p].DiskScaleRadius;
 
         // BUG FIX: Check Vvir > 0 before division
         if(galaxies[p].Vvir <= 0.0) {
@@ -126,6 +132,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // Somerville et al. 2025: Density Modulated Star Formation Efficiency with H2
         // Using Equation 3 for efficiency: epsilon = (Sigma/Sigma_crit)/(1 + Sigma/Sigma_crit)
         // But replacing cold gas with H2 gas using Blitz & Rosolowsky 2006
+
+        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
+        reff = 3.0 * galaxies[p].DiskScaleRadius;
 
         // BUG FIX: Check Vvir > 0 before division
         if(galaxies[p].Vvir <= 0.0) {
@@ -174,6 +183,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // Krumholz and Dekel (2012) - KD12 Model
         // ========================================================================
 
+        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
+        reff = 3.0 * galaxies[p].DiskScaleRadius;
+
         tdyn = 3.0 * galaxies[p].DiskScaleRadius / galaxies[p].Vvir;
         const float h = run_params->Hubble_h;
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
@@ -214,6 +226,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // ========================================================================
         // Krumholz, McKee, & Tumlinson (2009) - KMT09 Model
         // ========================================================================
+
+        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
+        reff = 3.0 * galaxies[p].DiskScaleRadius;
         
         // 1. Geometry and Units [cite: 60-64]
         reff = 3.0 * galaxies[p].DiskScaleRadius;
@@ -315,6 +330,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             }
         }
     } else if(run_params->SFprescription == 6) {
+
+        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
+        reff = 3.0 * galaxies[p].DiskScaleRadius;
 
         // ========================================================================
         // Krumholz 2013 (KMT+) Model
@@ -451,6 +469,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // Implemented using the "more accurate and simpler fit" from the 
         // 2016 Erratum (ApJ, 830, 54)
         // ========================================================================
+
+        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
+        reff = 3.0 * galaxies[p].DiskScaleRadius;
 
         reff = 3.0 * galaxies[p].DiskScaleRadius;
 
