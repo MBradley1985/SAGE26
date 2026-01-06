@@ -1039,195 +1039,195 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
 
 
     // H2 for merger-compatibility, but isn't used for stars
-    // if(run_params->SFprescription == 1 && galaxies[p].ColdGas > 0.0) {
-    //     const float h = run_params->Hubble_h;
-    //     const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+    if(run_params->SFprescription == 1 && galaxies[p].ColdGas > 0.0) {
+        const float h = run_params->Hubble_h;
+        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
-    //     if(rs_pc > 0.0) {
-    //         float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
-    //         float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
-    //         float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2;
+        if(rs_pc > 0.0) {
+            float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+            float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
+            float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2;
             
-    //         float f_mol = calculate_molecular_fraction_BR06(gas_surface_density, 
-    //                                                         stellar_surface_density, rs_pc);
-    //         galaxies[p].H2gas = f_mol * galaxies[p].ColdGas;
-    //     } else {
-    //         galaxies[p].H2gas = 0.0;
-    //     }
-    // }
+            float f_mol = calculate_molecular_fraction_BR06(gas_surface_density, 
+                                                            stellar_surface_density, rs_pc);
+            galaxies[p].H2gas = f_mol * galaxies[p].ColdGas;
+        } else {
+            galaxies[p].H2gas = 0.0;
+        }
+    }
 
-    // if(run_params->SFprescription == 4 && galaxies[p].ColdGas > 0.0) {
-    //     const float h = run_params->Hubble_h;
-    //     const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+    if(run_params->SFprescription == 4 && galaxies[p].ColdGas > 0.0) {
+        const float h = run_params->Hubble_h;
+        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
-    //     if(rs_pc > 0.0) {
-    //         const float disk_area = M_PI * galaxies[p].DiskScaleRadius * galaxies[p].DiskScaleRadius;; // pc^2
-    //         if(disk_area > 0.0) {
-    //             const float surface_density = galaxies[p].ColdGas / disk_area;
-    //             // double metallicity = 0.0;
-    //             if(galaxies[p].ColdGas > 0.0) {
-    //                 metallicity = galaxies[p].MetalsColdGas / galaxies[p].ColdGas; // absolute fraction
-    //             }
-    //             float clumping_factor = 5.0;
+        if(rs_pc > 0.0) {
+            const float disk_area = M_PI * galaxies[p].DiskScaleRadius * galaxies[p].DiskScaleRadius;; // pc^2
+            if(disk_area > 0.0) {
+                const float surface_density = galaxies[p].ColdGas / disk_area;
+                // double metallicity = 0.0;
+                if(galaxies[p].ColdGas > 0.0) {
+                    metallicity = galaxies[p].MetalsColdGas / galaxies[p].ColdGas; // absolute fraction
+                }
+                float clumping_factor = 5.0;
                 
-    //             float f_mol = calculate_H2_fraction_KD12(surface_density, metallicity, clumping_factor);
-    //             galaxies[p].H2gas = f_mol * galaxies[p].ColdGas;
-    //         } else {
-    //             galaxies[p].H2gas = 0.0;
-    //         }
-    //     } else {
-    //         galaxies[p].H2gas = 0.0;
-    //     }
-    // }
+                float f_mol = calculate_H2_fraction_KD12(surface_density, metallicity, clumping_factor);
+                galaxies[p].H2gas = f_mol * galaxies[p].ColdGas;
+            } else {
+                galaxies[p].H2gas = 0.0;
+            }
+        } else {
+            galaxies[p].H2gas = 0.0;
+        }
+    }
 
-    // if(run_params->SFprescription == 5 && galaxies[p].ColdGas > 0.0) {
-    //     const float h = run_params->Hubble_h;
-    //     const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+    if(run_params->SFprescription == 5 && galaxies[p].ColdGas > 0.0) {
+        const float h = run_params->Hubble_h;
+        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
-    //     if(rs_pc > 0.0) {
-    //         const float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
-    //         const float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
+        if(rs_pc > 0.0) {
+            const float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+            const float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
             
-    //         float metallicity_abs = 0.0;
-    //         if(galaxies[p].ColdGas > 0.0) {
-    //             metallicity_abs = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
-    //         }
-    //         float Z_prime = metallicity_abs / 0.02;
-    //         if(Z_prime < 0.01) Z_prime = 0.01;
+            float metallicity_abs = 0.0;
+            if(galaxies[p].ColdGas > 0.0) {
+                metallicity_abs = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
+            }
+            float Z_prime = metallicity_abs / 0.02;
+            if(Z_prime < 0.01) Z_prime = 0.01;
             
-    //         const float clumping_factor = 5.0;
-    //         float Sigma_comp = clumping_factor * gas_surface_density;
-    //         float chi = 0.77 * (1.0 + 3.1 * pow(Z_prime, 0.365));
+            const float clumping_factor = 5.0;
+            float Sigma_comp = clumping_factor * gas_surface_density;
+            float chi = 0.77 * (1.0 + 3.1 * pow(Z_prime, 0.365));
             
-    //         float s = 0.0;
-    //         if(Sigma_comp > 0.0) {
-    //             s = log(1.0 + 0.6 * chi) / (0.04 * Sigma_comp * Z_prime);
-    //         } else {
-    //             s = 1.0e5;
-    //         }
+            float s = 0.0;
+            if(Sigma_comp > 0.0) {
+                s = log(1.0 + 0.6 * chi) / (0.04 * Sigma_comp * Z_prime);
+            } else {
+                s = 1.0e5;
+            }
             
-    //         float delta = 0.0712 * pow(0.1/s + 0.675, -2.8);
-    //         float term_inner = 0.75 * s / (1.0 + delta);
-    //         float f_H2 = 1.0 - pow(1.0 + pow(term_inner, -5.0), -0.2);
+            float delta = 0.0712 * pow(0.1/s + 0.675, -2.8);
+            float term_inner = 0.75 * s / (1.0 + delta);
+            float f_H2 = 1.0 - pow(1.0 + pow(term_inner, -5.0), -0.2);
             
-    //         if(f_H2 < 0.0) f_H2 = 0.0;
-    //         if(f_H2 > 1.0) f_H2 = 1.0;
+            if(f_H2 < 0.0) f_H2 = 0.0;
+            if(f_H2 > 1.0) f_H2 = 1.0;
             
-    //         galaxies[p].H2gas = f_H2 * galaxies[p].ColdGas;
-    //     } else {
-    //         galaxies[p].H2gas = 0.0;
-    //     }
-    // }
+            galaxies[p].H2gas = f_H2 * galaxies[p].ColdGas;
+        } else {
+            galaxies[p].H2gas = 0.0;
+        }
+    }
 
-    // if(run_params->SFprescription == 6 && galaxies[p].ColdGas > 0.0) {
-    //     const float h = run_params->Hubble_h;
-    //     const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+    if(run_params->SFprescription == 6 && galaxies[p].ColdGas > 0.0) {
+        const float h = run_params->Hubble_h;
+        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
-    //     if(rs_pc > 0.0) {
-    //         const float area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+        if(rs_pc > 0.0) {
+            const float area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
             
-    //         if(area_pc2 > 0.0) {
-    //             double Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / area_pc2;
+            if(area_pc2 > 0.0) {
+                double Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / area_pc2;
                 
-    //             double Z_gas = (galaxies[p].ColdGas > 0.0) ? (galaxies[p].MetalsColdGas / galaxies[p].ColdGas) : 0.0;
-    //             double Z_prime = Z_gas / 0.014;
-    //             if(Z_prime < 0.01) Z_prime = 0.01;
+                double Z_gas = (galaxies[p].ColdGas > 0.0) ? (galaxies[p].MetalsColdGas / galaxies[p].ColdGas) : 0.0;
+                double Z_prime = Z_gas / 0.014;
+                if(Z_prime < 0.01) Z_prime = 0.01;
                 
-    //             double fc = 5.0;
-    //             double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime, 0.365)) / 4.1;
-    //             double tau_c = 0.066 * fc * Z_prime * Sigma_gas;
-    //             double s = (tau_c > 0.0) ? log(1.0 + 0.6 * chi_2p + 0.01 * chi_2p * chi_2p) / (0.6 * tau_c) : 100.0;
+                double fc = 5.0;
+                double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime, 0.365)) / 4.1;
+                double tau_c = 0.066 * fc * Z_prime * Sigma_gas;
+                double s = (tau_c > 0.0) ? log(1.0 + 0.6 * chi_2p + 0.01 * chi_2p * chi_2p) / (0.6 * tau_c) : 100.0;
                 
-    //             double f_H2_2p = 0.0;
-    //             if(s < 2.0) {
-    //                 f_H2_2p = 1.0 - (0.75 * s) / (1.0 + 0.25 * s);
-    //             }
-    //             if(f_H2_2p < 0.0) f_H2_2p = 0.0;
+                double f_H2_2p = 0.0;
+                if(s < 2.0) {
+                    f_H2_2p = 1.0 - (0.75 * s) / (1.0 + 0.25 * s);
+                }
+                if(f_H2_2p < 0.0) f_H2_2p = 0.0;
                 
-    //             double t_dep_2p_Gyr;
-    //             if(f_H2_2p > 1e-6) {
-    //                 t_dep_2p_Gyr = 3.1 / (f_H2_2p * pow(Sigma_gas, 0.25));
-    //             } else {
-    //                 t_dep_2p_Gyr = 1.0e5;
-    //             }
+                double t_dep_2p_Gyr;
+                if(f_H2_2p > 1e-6) {
+                    t_dep_2p_Gyr = 3.1 / (f_H2_2p * pow(Sigma_gas, 0.25));
+                } else {
+                    t_dep_2p_Gyr = 1.0e5;
+                }
                 
-    //             double Sigma_star = (galaxies[p].StellarMass * 1.0e10 / h) / area_pc2;
-    //             double h_z = 0.1 * rs_pc;
-    //             double rho_sd_2 = 0.0;
-    //             if(h_z > 0.0) {
-    //                 double rho_star = Sigma_star / (2.0 * h_z);
-    //                 rho_sd_2 = rho_star / 0.01;
-    //             }
-    //             if(rho_sd_2 < 1e-4) rho_sd_2 = 1e-4;
+                double Sigma_star = (galaxies[p].StellarMass * 1.0e10 / h) / area_pc2;
+                double h_z = 0.1 * rs_pc;
+                double rho_sd_2 = 0.0;
+                if(h_z > 0.0) {
+                    double rho_star = Sigma_star / (2.0 * h_z);
+                    rho_sd_2 = rho_star / 0.01;
+                }
+                if(rho_sd_2 < 1e-4) rho_sd_2 = 1e-4;
                 
-    //             double t_hydro_star_Gyr = 3.1 / pow(Sigma_gas, 0.25) + 
-    //                                       100.0 / ((fc/5.0) * Z_prime * sqrt(rho_sd_2) * Sigma_gas);
-    //             double t_hydro_gas_Gyr = 3.1 / pow(Sigma_gas, 0.25) + 
-    //                                      360.0 / ((fc/5.0) * Z_prime * pow(Sigma_gas, 2.0));
+                double t_hydro_star_Gyr = 3.1 / pow(Sigma_gas, 0.25) + 
+                                          100.0 / ((fc/5.0) * Z_prime * sqrt(rho_sd_2) * Sigma_gas);
+                double t_hydro_gas_Gyr = 3.1 / pow(Sigma_gas, 0.25) + 
+                                         360.0 / ((fc/5.0) * Z_prime * pow(Sigma_gas, 2.0));
                 
-    //             double t_dep_Gyr = t_dep_2p_Gyr;
-    //             if(t_hydro_star_Gyr < t_dep_Gyr) t_dep_Gyr = t_hydro_star_Gyr;
-    //             if(t_hydro_gas_Gyr < t_dep_Gyr) t_dep_Gyr = t_hydro_gas_Gyr;
+                double t_dep_Gyr = t_dep_2p_Gyr;
+                if(t_hydro_star_Gyr < t_dep_Gyr) t_dep_Gyr = t_hydro_star_Gyr;
+                if(t_hydro_gas_Gyr < t_dep_Gyr) t_dep_Gyr = t_hydro_gas_Gyr;
                 
-    //             double f_H2_eff = 3.1 / (t_dep_Gyr * pow(Sigma_gas, 0.25));
-    //             if(f_H2_eff > 1.0) f_H2_eff = 1.0;
-    //             if(f_H2_eff < 0.0) f_H2_eff = 0.0;
+                double f_H2_eff = 3.1 / (t_dep_Gyr * pow(Sigma_gas, 0.25));
+                if(f_H2_eff > 1.0) f_H2_eff = 1.0;
+                if(f_H2_eff < 0.0) f_H2_eff = 0.0;
                 
-    //             galaxies[p].H2gas = f_H2_eff * galaxies[p].ColdGas;
-    //         } else {
-    //             galaxies[p].H2gas = 0.0;
-    //         }
-    //     } else {
-    //         galaxies[p].H2gas = 0.0;
-    //     }
-    // }
+                galaxies[p].H2gas = f_H2_eff * galaxies[p].ColdGas;
+            } else {
+                galaxies[p].H2gas = 0.0;
+            }
+        } else {
+            galaxies[p].H2gas = 0.0;
+        }
+    }
 
-    // if(run_params->SFprescription == 7 && galaxies[p].ColdGas > 0.0) {
-    //     const float h = run_params->Hubble_h;
-    //     const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+    if(run_params->SFprescription == 7 && galaxies[p].ColdGas > 0.0) {
+        const float h = run_params->Hubble_h;
+        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
-    //     if(rs_pc > 0.0) {
-    //         const float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+        if(rs_pc > 0.0) {
+            const float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
             
-    //         double Sigma_gas = 0.0;
-    //         if(disk_area_pc2 > 0.0) {
-    //             Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
-    //         }
+            double Sigma_gas = 0.0;
+            if(disk_area_pc2 > 0.0) {
+                Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
+            }
             
-    //         double metallicity_abs = 0.0;
-    //         if(galaxies[p].ColdGas > 0.0) {
-    //             metallicity_abs = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
-    //         }
-    //         double D_MW = metallicity_abs / 0.02;
-    //         if(D_MW < 1e-4) D_MW = 1e-4;
+            double metallicity_abs = 0.0;
+            if(galaxies[p].ColdGas > 0.0) {
+                metallicity_abs = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
+            }
+            double D_MW = metallicity_abs / 0.02;
+            if(D_MW < 1e-4) D_MW = 1e-4;
             
-    //         double U_MW = 1.0;
-    //         double L_pc = 3.0 * rs_pc;
-    //         double S = L_pc / 100.0;
+            double U_MW = 1.0;
+            double L_pc = 3.0 * rs_pc;
+            double S = L_pc / 100.0;
             
-    //         double s_param = pow(0.001 + 0.1 * U_MW, 0.7);
-    //         double D_star = 0.17 * (2.0 + pow(S, 5.0)) / (1.0 + pow(S, 5.0));
-    //         double g = sqrt(D_MW * D_MW + D_star * D_star);
-    //         double Sigma_R1 = (40.0 / g) * (s_param / (1.0 + s_param));
-    //         double alpha = 1.0 + 0.7 * sqrt(s_param) / (1.0 + s_param);
+            double s_param = pow(0.001 + 0.1 * U_MW, 0.7);
+            double D_star = 0.17 * (2.0 + pow(S, 5.0)) / (1.0 + pow(S, 5.0));
+            double g = sqrt(D_MW * D_MW + D_star * D_star);
+            double Sigma_R1 = (40.0 / g) * (s_param / (1.0 + s_param));
+            double alpha = 1.0 + 0.7 * sqrt(s_param) / (1.0 + s_param);
             
-    //         double q = 0.0;
-    //         if(Sigma_R1 > 0.0 && Sigma_gas > 0.0) {
-    //             q = pow(Sigma_gas / Sigma_R1, alpha);
-    //         }
+            double q = 0.0;
+            if(Sigma_R1 > 0.0 && Sigma_gas > 0.0) {
+                q = pow(Sigma_gas / Sigma_R1, alpha);
+            }
             
-    //         double eta = 0.0;
-    //         double R = q * (1.0 + eta * q) / (1.0 + eta);
-    //         double f_H2 = R / (1.0 + R);
+            double eta = 0.0;
+            double R = q * (1.0 + eta * q) / (1.0 + eta);
+            double f_H2 = R / (1.0 + R);
             
-    //         if(f_H2 > 1.0) f_H2 = 1.0;
-    //         if(f_H2 < 0.0) f_H2 = 0.0;
+            if(f_H2 > 1.0) f_H2 = 1.0;
+            if(f_H2 < 0.0) f_H2 = 0.0;
             
-    //         galaxies[p].H2gas = f_H2 * galaxies[p].ColdGas;
-    //     } else {
-    //         galaxies[p].H2gas = 0.0;
-    //     }
-    // }
+            galaxies[p].H2gas = f_H2 * galaxies[p].ColdGas;
+        } else {
+            galaxies[p].H2gas = 0.0;
+        }
+    }
     
     // ========================================================================
     // METAL PRODUCTION (instantaneous recycling approximation - SNII only)

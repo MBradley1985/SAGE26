@@ -27,7 +27,7 @@ MODELS = [
     },
     {
         'name': 'SAGE C16',
-        'dir': './output/millennium_vanilla_vanilla/',
+        'dir': './output/millennium_vanilla/',
         'box_size': 62.5,
         'volume_fraction': 1.0,
         'hubble_h': 0.73,
@@ -238,6 +238,41 @@ def plot_behroozi13(ax, z, labels=True, label='Behroozi+13'):
         ax.plot(xmf, m, 'r', linestyle='dashdot', linewidth=1.5)
     else:
         ax.plot(xmf, m, 'r', linestyle='dashdot', linewidth=1.5, label=label)
+
+def calculate_median_bootstrap(log_mvir_data, log_stellar_data, bin_edges, label_prefix="", n_bootstrap=1000):
+    """Calculate median and bootstrap errors in bins"""
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    medians = []
+    bootstrap_errors = []
+    valid_bins = []
+    
+    for i in range(len(bin_edges) - 1):
+        bin_mask = (log_mvir_data >= bin_edges[i]) & (log_mvir_data < bin_edges[i+1])
+        bin_stellar = log_stellar_data[bin_mask]
+        
+        min_galaxies = 5
+        
+        if len(bin_stellar) >= min_galaxies:
+            median_val = np.median(bin_stellar)
+            
+            # Bootstrap resampling
+            bootstrap_medians = []
+            for _ in range(n_bootstrap):
+                resample = np.random.choice(bin_stellar, size=len(bin_stellar), replace=True)
+                bootstrap_medians.append(np.median(resample))
+            
+            bootstrap_error = np.std(bootstrap_medians)
+            
+            if bootstrap_error < 0.05:
+                bootstrap_error = 0.05
+            
+            medians.append(median_val)
+            bootstrap_errors.append(bootstrap_error)
+            valid_bins.append(bin_centers[i])
+            
+        print(f"{label_prefix}Bin {bin_edges[i]:.1f}-{bin_edges[i+1]:.1f}: {len(bin_stellar)} galaxies")
+    
+    return np.array(valid_bins), np.array(medians), np.array(bootstrap_errors)
 
 def calculate_median_std(log_mvir_data, log_stellar_data, bin_edges, label_prefix=""):
     """Calculate median and standard error in bins"""
@@ -1061,6 +1096,191 @@ def simple_smhm_plot(log_mvir, log_stellar, title="SMHM Relation",
     print(f"Saved: {save_path}")
     plt.close()
 
+def plot_shmr_ratio_quenched_vs_sf():
+    """
+    Plot the ratio of stellar mass for quenched (red) vs star-forming (blue) 
+    galaxies as a function of halo mass at z=0 for all models
+    
+    This shows how quenched galaxies are more/less massive than star-forming
+    galaxies in the same halo mass bin.
+    """
+    print("\n" + "="*60)
+    print("Creating SHMR Ratio Plot (Quenched/Star-forming)")
+    print("="*60)
+    
+    snap_name = Snapshot  # z=0
+    
+    # Define bins
+    bin_edges = np.linspace(10.5, 14.5, 20)
+    
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(10, 7))
+    
+    # Loop through all models
+    for model in MODELS:
+        if not os.path.exists(model['dir']):
+            print(f"\nSkipping {model['name']} - directory not found")
+            continue
+            
+        print(f"\n{'='*60}")
+        print(f"Processing {model['name']}")
+        print(f"{'='*60}")
+        
+        try:
+            # Load model data
+            StellarMass = load_model_data(model, snap_name, 'StellarMass')
+            Mvir = load_model_data(model, snap_name, 'Mvir')
+            Type = load_model_data(model, snap_name, 'Type')
+            SfrDisk = load_model_data(model, snap_name, 'SfrDisk')
+            SfrBulge = load_model_data(model, snap_name, 'SfrBulge')
+            
+            if any(x is None for x in [StellarMass, Mvir, Type, SfrDisk, SfrBulge]):
+                print(f"Error: Could not load data for {model['name']}")
+                continue
+            
+            # Filter for centrals only (Type == 0)
+            central_mask = (Type == 0)
+            
+            # Calculate sSFR
+            stellar_mass_nonzero = np.where(StellarMass > 0, StellarMass, 1e-10)
+            sSFR = np.log10((SfrDisk + SfrBulge) / stellar_mass_nonzero)
+            
+            # Separate star-forming and quenched galaxies
+            sf_indices, quenched_indices = smart_sampling_strategy_sf_passive(
+                Mvir, StellarMass, Type, sSFR, sSFRcut)
+            
+            # Apply central-only filter
+            sf_indices = sf_indices[central_mask[sf_indices]]
+            quenched_indices = quenched_indices[central_mask[quenched_indices]]
+            
+            print(f"Centrals only:")
+            print(f"  Star-forming galaxies: {len(sf_indices)}")
+            print(f"  Quenched galaxies: {len(quenched_indices)}")
+            
+            if len(sf_indices) < 10 or len(quenched_indices) < 10:
+                print(f"Not enough galaxies for {model['name']}")
+                continue
+            
+            # Calculate median stellar mass in each halo mass bin for SF galaxies
+            log_mvir_sf = np.log10(Mvir[sf_indices])
+            log_stellar_sf = np.log10(StellarMass[sf_indices])
+            valid_bins_sf, medians_sf, std_errors_sf = calculate_median_bootstrap(
+                log_mvir_sf, log_stellar_sf, bin_edges, f"{model['name']} SF ")
+            
+            # Calculate median stellar mass in each halo mass bin for quenched galaxies
+            log_mvir_quenched = np.log10(Mvir[quenched_indices])
+            log_stellar_quenched = np.log10(StellarMass[quenched_indices])
+            valid_bins_quenched, medians_quenched, std_errors_quenched = calculate_median_bootstrap(
+                log_mvir_quenched, log_stellar_quenched, bin_edges, f"{model['name']} Quenched ")
+            
+            # Find common bins
+            common_bins = np.intersect1d(valid_bins_sf, valid_bins_quenched)
+            
+            if len(common_bins) == 0:
+                print(f"Error: No overlapping bins for {model['name']}")
+                continue
+            
+            # Calculate ratio for common bins
+            ratios = []
+            ratio_errors = []
+            for bin_center in common_bins:
+                idx_sf = np.where(valid_bins_sf == bin_center)[0][0]
+                idx_quenched = np.where(valid_bins_quenched == bin_center)[0][0]
+                
+                # Ratio in linear space: M*_quenched / M*_SF
+                ratio = 10**(medians_quenched[idx_quenched] - medians_sf[idx_sf])
+                
+                # Error propagation for ratio
+                error = ratio * np.sqrt(
+                    (std_errors_quenched[idx_quenched] * np.log(10))**2 + 
+                    (std_errors_sf[idx_sf] * np.log(10))**2
+                )
+                
+                ratios.append(ratio)
+                ratio_errors.append(error)
+            
+            ratios = np.array(ratios)
+            ratio_errors = np.array(ratio_errors)
+            
+            print(f"Found {len(common_bins)} overlapping bins")
+            print(f"Ratio range: {ratios.min():.3f} to {ratios.max():.3f}")
+            
+            # Plot the ratio with error bars for primary model only
+            if model == PRIMARY_MODEL:
+                ax.errorbar(common_bins, ratios, yerr=ratio_errors,
+                           fmt='o-', color=model['color'], linewidth=model['linewidth'], 
+                           markersize=6, capsize=3, capthick=1.5, 
+                           label=model['name'], zorder=model['zorder'])
+            else:
+                ax.plot(common_bins, ratios, 
+                       linestyle=model['linestyle'], color=model['color'],
+                       linewidth=model['linewidth'], label=model['name'], 
+                       alpha=0.8, zorder=model['zorder'])
+                       
+        except Exception as e:
+            print(f"Error processing {model['name']}: {e}")
+            import traceback
+            traceback.print_exc()
+            continue
+    
+    # Load and plot observational data
+    obs_data_path = 'data/SHMR_red_blue.csv'
+    if os.path.exists(obs_data_path):
+        try:
+            import pandas as pd
+            df = pd.read_csv(obs_data_path)
+            
+            # Define colors for each dataset
+            obs_colors = ['orange', 'green', 'brown', 'cyan', 'magenta']
+            
+            # Each pair of columns is X and Y
+            col_pairs = []
+            cols = df.columns.tolist()
+            for i in range(0, len(cols), 2):
+                if i+1 < len(cols):
+                    col_pairs.append((cols[i], cols[i+1]))
+            
+            print(f"\nPlotting {len(col_pairs)} observational datasets")
+            
+            for idx, (x_col, y_col) in enumerate(col_pairs):
+                # Get data and convert to numeric, coercing errors to NaN
+                x_data = pd.to_numeric(df[x_col], errors='coerce').values
+                y_data = pd.to_numeric(df[y_col], errors='coerce').values
+                
+                # Filter out NaN values
+                mask = ~(np.isnan(x_data) | np.isnan(y_data))
+                x_clean = x_data[mask]
+                y_clean = y_data[mask]
+                
+                if len(x_clean) > 0:
+                    color = obs_colors[idx % len(obs_colors)]
+                    ax.plot(x_clean, y_clean, linestyle=':', linewidth=1.5, 
+                           color=color, alpha=0.7, zorder=3)
+                    
+        except Exception as e:
+            print(f"Warning: Could not load observational data: {e}")
+    
+    # Formatting
+    ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/M_\odot)$', fontsize=14)
+    ax.set_ylabel(r'$M_*^{\rm quenched} / M_*^{\rm SF}$ (at fixed $M_{\rm vir}$)', fontsize=14)
+    
+    ax.set_xlim(10.5, 14.5)
+    
+    # Set y-axis to log scale
+    ax.set_yscale('log')
+    ax.set_yticks([0.1, 1, 10])
+    ax.set_yticklabels(['0.1', '1', '10'])
+    
+    ax.legend(loc='best', fontsize=11, frameon=False)
+    # ax.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+    
+    plt.tight_layout()
+    
+    save_path = OutputDir + 'shmr_ratio_quenched_vs_sf' + OutputFormat
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    print(f"\nSaved: {save_path}")
+    plt.close()
+
 # ==================================================================
 
 if __name__ == '__main__':
@@ -1114,5 +1334,8 @@ if __name__ == '__main__':
     
     sfms_plot_three_populations_single_redshift(snapshot=Snapshot, compare_old_model=True)
     print(f"SFMS single redshift plot saved as: {OutputDir}sfms_three_populations_{Snapshot}{OutputFormat}")
+    
+    plot_shmr_ratio_quenched_vs_sf()
+    print(f"SHMR ratio plot saved as: {OutputDir}shmr_ratio_quenched_vs_sf{OutputFormat}")
     
     print("\nDone.")
