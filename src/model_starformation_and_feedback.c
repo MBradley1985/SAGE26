@@ -694,6 +694,11 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // recompute the metallicity of the cold phase
     metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
 
+    // Safety check: ensure reheated_mass doesn't exceed remaining ColdGas (floating-point precision)
+    if(reheated_mass > galaxies[p].ColdGas) {
+        reheated_mass = galaxies[p].ColdGas;
+    }
+
     // update from SN feedback
     update_from_feedback(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 
@@ -1016,6 +1021,11 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         }
     } else {
         ejected_mass = 0.0;
+    }
+
+    // Safety check: ensure reheated_mass doesn't exceed remaining ColdGas (floating-point precision)
+    if(reheated_mass > galaxies[p].ColdGas) {
+        reheated_mass = galaxies[p].ColdGas;
     }
 
      // update from SN feedback
