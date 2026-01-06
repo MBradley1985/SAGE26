@@ -763,9 +763,15 @@ void update_from_star_formation(const int p, const double stars, const double me
 
 
 
-void update_from_feedback(const int p, const int centralgal, const double reheated_mass, double ejected_mass, const double metallicity,
+void update_from_feedback(const int p, const int centralgal, double reheated_mass, double ejected_mass, const double metallicity,
                           struct GALAXY *galaxies, const struct params *run_params)
 {
+    // Safety: Clamp reheated_mass to available ColdGas to handle floating-point precision errors
+    // This can occur when dealing with very small masses (e.g., 1e-44) where rounding errors
+    // cause reheated_mass to slightly exceed ColdGas after star formation has consumed gas
+    if(reheated_mass > galaxies[p].ColdGas) {
+        reheated_mass = galaxies[p].ColdGas;
+    }
 
     XASSERT(reheated_mass >= 0.0, -1,
             "Error: For galaxy = %d (halonr = %d, centralgal = %d) with MostBoundID = %lld, the reheated mass = %g should be >=0.0",
