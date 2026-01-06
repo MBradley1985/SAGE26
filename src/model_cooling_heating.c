@@ -351,14 +351,14 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     //            galaxies[gal].CGMgas > 0 ? coolingGas/galaxies[gal].CGMgas : 0.0);
         
     //     // Depletion timescale
-    //     if(coolingGas > 0.0) {
-    //         const float depletion_time = galaxies[gal].CGMgas * tff / (precipitation_fraction * galaxies[gal].CGMgas);
-    //         const float depletion_time_myr = depletion_time * run_params->UnitTime_in_s / (1e6 * SEC_PER_YEAR);
+        if(coolingGas > 0.0) {
+            const float depletion_time = galaxies[gal].CGMgas * tff / (precipitation_fraction * galaxies[gal].CGMgas);
+            // const float depletion_time_myr = depletion_time * run_params->UnitTime_in_s / (1e6 * SEC_PER_YEAR);
 
     //         // Store depletion time for diagnostics
-    //         galaxies[gal].tdeplete = depletion_time;
+            galaxies[gal].tdeplete = depletion_time;
     //         printf("  Depletion t: %.2f Myr\n", depletion_time_myr);
-    //     }
+        }
         
     //     printf("============================================\n\n");
     // }
