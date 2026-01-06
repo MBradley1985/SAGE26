@@ -408,7 +408,15 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         eburst = 0.56 * pow(mass_ratio, 0.7);
     }
 
-    gas_for_starburst = galaxies[merger_centralgal].ColdGas;
+    if (run_params->SFprescription == 1 || run_params->SFprescription == 3 || run_params->SFprescription == 4 ||
+        run_params->SFprescription == 5 || run_params->SFprescription == 6 ||
+        run_params->SFprescription == 7) {
+        // Use H2 gas for starburst if applicable
+        gas_for_starburst = galaxies[merger_centralgal].H2gas;
+    } else {
+        // Otherwise use cold gas
+        gas_for_starburst = galaxies[merger_centralgal].ColdGas;
+    }
 
     stars = eburst * gas_for_starburst;
     if(stars < 0.0) {
