@@ -46,7 +46,7 @@ BoxSize         62.5 % Size of the simulation box in Mpc/h.
 %------------------------------------------
 
 SFprescription        1   %0: original Croton et al. 2006; 1: BR06 H2 Stars; 2: Somerville et al. 2025 SFR; 3: Somerville et al. 2025 SFR + H2; 4: KD12 H2 Stars; 5: KMT09; 6: K13; 7: GD14
-AGNrecipeOn           4   %0: switch off; 1: empirical model; 2: Bondi-Hoyle model; 3: cold cloud accretion model; 4: Bondi-Hoyle with BH seeding
+AGNrecipeOn           2   %0: switch off; 1: empirical model; 2: Bondi-Hoyle model; 3: cold cloud accretion model; 4: Bondi-Hoyle with BH seeding
 SupernovaRecipeOn     1   %0: switch off; 1: original Croton et al. 2016
 ReionizationOn        1   %0: switch off
 DiskInstabilityOn     1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
