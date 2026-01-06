@@ -94,16 +94,6 @@ If you're following the above, these scripts can run as-is to produce a series o
 Near the top of both scripts, there is a "USER OPTIONS" section where you can modify the simulation and plotting details for your own needs. 
 These scripts can be used as a template to read the hdf5 ``SAGE`` model output and to make your own custom figures.
 
-Plotting the output (many plots method)
-==================================
-
-Alternatively, you can use the more comprehensive plotting scripts located in the ``plotting/`` directory, by running the ``plotting.sh`` script.
-This will generate a large number of plots for both z=0 and higher redshift results.
-
-.. code::
-
-    $ ./plotting.sh
-
 Parameter Optimization with PSO
 ================================
 
