@@ -446,8 +446,8 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
 
 	// now calculate the new heating rate
     if(galaxies[centralgal].HotGas > 0.0) {
-        if(run_params->AGNrecipeOn == 2) {
-            // Bondi-Hoyle accretion recipe
+        if(run_params->AGNrecipeOn == 2 || run_params->AGNrecipeOn == 4) {
+            // Bondi-Hoyle accretion recipe (AGNrecipeOn==4 uses seeded BHs)
             AGNrate = (2.5 * M_PI * run_params->G) * (0.375 * 0.6 * x) * galaxies[centralgal].BlackHoleMass * run_params->RadioModeEfficiency;
         } else if(run_params->AGNrecipeOn == 3) {
             // Cold cloud accretion: trigger: rBH > 1.0e-4 Rsonic, and accretion rate = 0.01% cooling rate
@@ -542,8 +542,8 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
 
 	// now calculate the new heating rate
     if(galaxies[centralgal].CGMgas > 0.0) {
-        if(run_params->AGNrecipeOn == 2) {
-            // Bondi-Hoyle accretion recipe
+        if(run_params->AGNrecipeOn == 2 || run_params->AGNrecipeOn == 4) {
+            // Bondi-Hoyle accretion recipe (AGNrecipeOn==4 uses seeded BHs)
             AGNrate = (2.5 * M_PI * run_params->G) * (0.375 * 0.6 * x) * galaxies[centralgal].BlackHoleMass * run_params->RadioModeEfficiency;
         } else if(run_params->AGNrecipeOn == 3) {
             // Cold cloud accretion: trigger: rBH > 1.0e-4 Rsonic, and accretion rate = 0.01% cooling rate

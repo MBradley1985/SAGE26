@@ -53,6 +53,12 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].HotGas = 0.0;
     galaxies[p].EjectedMass = 0.0;
     galaxies[p].BlackHoleMass = 0.0;
+    
+    // AGNrecipeOn==4: Seed black holes in halos with Mvir > 10^10 Msun/h
+    if(run_params->AGNrecipeOn == 4 && galaxies[p].Mvir > 10.0) {
+        galaxies[p].BlackHoleMass = 1.0e-6;  // 10^4 Msun/h in units of 10^10 Msun/h
+    }
+    
     galaxies[p].ICS = 0.0;
     galaxies[p].CGMgas = 0.0;
     galaxies[p].H2gas = 0.0;
