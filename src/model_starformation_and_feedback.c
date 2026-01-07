@@ -94,8 +94,10 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         }
     } else if(run_params->SFprescription == 2) {
 
+        // =======================================================================
         // Somerville et al. 2025: Density Modulated Star Formation Efficiency
         // Using Equation 3 for efficiency: epsilon = (Sigma/Sigma_crit)/(1 + Sigma/Sigma_crit)
+        // =======================================================================
 
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
         reff = 3.0 * galaxies[p].DiskScaleRadius;
@@ -129,9 +131,11 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         }
     } else if(run_params->SFprescription == 3) {
 
+        // =======================================================================
         // Somerville et al. 2025: Density Modulated Star Formation Efficiency with H2
         // Using Equation 3 for efficiency: epsilon = (Sigma/Sigma_crit)/(1 + Sigma/Sigma_crit)
         // But replacing cold gas with H2 gas using Blitz & Rosolowsky 2006
+        // =======================================================================
 
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
         reff = 3.0 * galaxies[p].DiskScaleRadius;
@@ -330,9 +334,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             }
         }
     } else if(run_params->SFprescription == 6) {
-
-        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
-        reff = 3.0 * galaxies[p].DiskScaleRadius;
 
         // ========================================================================
         // Krumholz 2013 (KMT+) Model
@@ -769,6 +770,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
     // Safety: Clamp reheated_mass to available ColdGas to handle floating-point precision errors
     // This can occur when dealing with very small masses (e.g., 1e-44) where rounding errors
     // cause reheated_mass to slightly exceed ColdGas after star formation has consumed gas
+
     if(reheated_mass > galaxies[p].ColdGas) {
         reheated_mass = galaxies[p].ColdGas;
     }
@@ -900,14 +902,6 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
             // Below critical density - no star formation
             stars = 0.0;
         }
-        
-        // Debug output (only on first step to avoid spam)
-        // if(step == 0) {
-        //     const double z = run_params->ZZ[galaxies[p].SnapNum];
-        //     printf("FFB SF: z=%.2f, Mvir=%.2e, eps=%.1f%%, M_gas=%.2e, t_dyn=%.3f Gyr, SFR=%.2e Msun/yr\n",
-        //            z, galaxies[p].Mvir, epsilon_ffb*100, galaxies[p].ColdGas, 
-        //            tdyn * run_params->UnitTime_in_Megayears / 1000.0, strdot);
-        // }
     } else {
         stars = 0.0;
     }

@@ -289,20 +289,6 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         }
     }
 
-    // if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
-    //         // Calculate x parameter (same as hot halo case)
-    //         double x = PROTONMASS * BOLTZMANN * temp / lambda;
-    //         x /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);
-            
-    //         // For CGM, use free-fall time as characteristic radius scale
-    //         // (analogous to cooling radius in hot halo case)
-    //         const double rcool_cgm = sqrt(galaxies[gal].CGMgas / (4 * M_PI * galaxies[gal].Rvir));
-            
-    //         // Call the existing AGN heating function (works for CGM too!)
-    //         coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x, rcool_cgm, 
-    //                                        galaxies, run_params);
-    //     }
-
     // ========================================================================
     // STEP 5: TRACK COOLING ENERGY
     // ========================================================================
@@ -314,51 +300,17 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     }
 
     // ========================================================================
-    // DIAGNOSTIC OUTPUT (every 50,000 galaxies)
+    // STEP 6: CALCULATE DEPLETION TIMESCALE (DIAGNOSTIC)
     // ========================================================================
-    
-    // if(precipitation_debug_counter % 50000 == 0) {
-    //     printf("\n=== PRECIPITATION COOLING DEBUG [Galaxy #%ld] ===\n", precipitation_debug_counter);
-        
-    //     printf("BASIC PROPERTIES:\n");
-    //     printf("  CGMgas:      %.3e (10^10 Msun/h)\n", galaxies[gal].CGMgas);
-    //     printf("  CGM density: %.3e g/cm^3\n", mass_density_cgs);
-    //     printf("  Mvir:        %.3e (10^10 Msun/h)\n", galaxies[gal].Mvir);
-    //     printf("  Vvir:        %.2f km/s\n", galaxies[gal].Vvir);
-    //     printf("  Rvir:        %.3e Mpc/h\n", galaxies[gal].Rvir);
-    //     printf("  T_vir:       %.2e K\n", temp);
-    //     printf("  Metallicity: log10(Z/Zsun) = %.2f\n", logZ);
-        
-    //     printf("\nCOOLING PHYSICS:\n");
-    //     printf("  Lambda:      %.3e erg cm^3 s^-1\n", lambda);
-    //     printf("  n_gas:       %.3e cm^-3\n", number_density);
-    //     printf("  t_cool:      %.2f Myr\n", tcool * run_params->UnitTime_in_s / (1e6 * SEC_PER_YEAR));
-    //     printf("  t_ff:        %.2f Myr\n", tff * run_params->UnitTime_in_s / (1e6 * SEC_PER_YEAR));
-    //     printf("  t_cool/t_ff: %.2f", tcool_over_tff);
-        
-    //     if(tcool_over_tff < precipitation_threshold) {
-    //         printf(" [THERMALLY UNSTABLE - FULL PRECIPITATION]\n");
-    //     } else if(tcool_over_tff < precipitation_threshold + transition_width) {
-    //         printf(" [TRANSITION REGIME - PARTIAL PRECIPITATION]\n");
-    //     } else {
-    //         printf(" [THERMALLY STABLE - NO PRECIPITATION]\n");
-    //     }
-        
-    //     printf("\nPRECIPITATION RESULTS:\n");
-    //     printf("  Precip frac: %.4f\n", precipitation_fraction);
-    //     printf("  Cooling:     %.3e Msun (this timestep)\n", coolingGas);
-    //     printf("  Fraction:    %.4f (of total CGM)\n", 
-    //            galaxies[gal].CGMgas > 0 ? coolingGas/galaxies[gal].CGMgas : 0.0);
-        
-    //     // Depletion timescale
-        if(coolingGas > 0.0) {
-            const float depletion_time = galaxies[gal].CGMgas * tff / (precipitation_fraction * galaxies[gal].CGMgas);
-            // const float depletion_time_myr = depletion_time * run_params->UnitTime_in_s / (1e6 * SEC_PER_YEAR);
 
-    //         // Store depletion time for diagnostics
-            galaxies[gal].tdeplete = depletion_time;
-    //         printf("  Depletion t: %.2f Myr\n", depletion_time_myr);
-        }
+    // Depletion timescale
+    if(coolingGas > 0.0) {
+        const float depletion_time = galaxies[gal].CGMgas * tff / (precipitation_fraction * galaxies[gal].CGMgas);
+        // const float depletion_time_myr = depletion_time * run_params->UnitTime_in_s / (1e6 * SEC_PER_YEAR);
+
+        // Store depletion time for diagnostics
+        galaxies[gal].tdeplete = depletion_time;
+    }
         
     //     printf("============================================\n\n");
     // }
@@ -384,10 +336,6 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
             cgm_cooling = cooling_recipe_cgm(gal, dt, galaxies, run_params);
         }
         
-        // Secondary: Traditional cooling from HotGas  
-        // if(galaxies[gal].HotGas > 0.0) {
-        //     hot_cooling = cooling_recipe_hot(gal, dt, galaxies, run_params);
-        // }
     
     } else {
         // HOT REGIME: Traditional physics dominates

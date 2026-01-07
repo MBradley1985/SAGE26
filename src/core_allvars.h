@@ -172,16 +172,17 @@ struct GALAXY
 
     float MassLoading;
 
-    // Diagnostic variables for CGM precipitation model
+    /* CGM properties */
     float tcool;
     float tff;
     float tcool_over_tff;
     float tdeplete;
 
-    float MergerBulgeMass;     // For size calculation only
-    float InstabilityBulgeMass; // For size calculation only
-    float MergerBulgeRadius;       // Classical bulge radius (post-processing)
-    float InstabilityBulgeRadius;  // Pseudo-bulge radius (post-processing)
+    /* bulge properties */
+    float MergerBulgeMass;     
+    float InstabilityBulgeMass; 
+    float MergerBulgeRadius;      
+    float InstabilityBulgeRadius;
 };
 
 
