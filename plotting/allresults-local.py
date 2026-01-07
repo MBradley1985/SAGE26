@@ -2007,3 +2007,120 @@ if __name__ == '__main__':
     plt.savefig(outputFile)
     print('Saved file to', outputFile, '\n')
     plt.close()
+    
+    # -------------------------------------------------------
+
+    print('Plotting stellar to halo mass relation')
+
+    plt.figure()
+    w = np.where((Mvir > 0.0) & (StellarMass > 0.0))[0]
+    if(len(w) > dilute): w = sample(list(w), dilute)
+
+    log10_halo_mass = np.log10(Mvir[w])
+    log10_stellar_mass = np.log10(StellarMass[w])
+
+    plt.scatter(log10_halo_mass, log10_stellar_mass, c='dodgerblue', s=5, alpha=0.2)
+
+    plt.xlabel(r'$\log_{10} M_{\mathrm{vir}}\ (M_{\odot})$')
+    plt.ylabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
+    plt.xlim(10, 15)
+    plt.ylim(7, 12)
+    plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+
+    outputFile = OutputDir + '30.stellar_to_halo_mass_relation' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+    # -------------------------------------------------------
+
+    print('Plotting stellar to halo mass ratio')
+
+    plt.figure()
+    w = np.where((Mvir > 0.0) & (StellarMass > 0.0))[0]
+
+    log10_halo_mass = np.log10(Mvir[w])
+    stellar_to_halo_ratio = StellarMass[w] / Mvir[w]
+
+    # Create halo mass bins
+    halo_mass_bins = np.arange(10.0, 15.5, 0.2)
+    bin_centers = (halo_mass_bins[:-1] + halo_mass_bins[1:]) / 2
+    
+    # Calculate median and bootstrap errors for each bin
+    n_bootstrap = 1000
+    medians = []
+    lower_errors = []
+    upper_errors = []
+    
+    for i in range(len(halo_mass_bins) - 1):
+        mask = (log10_halo_mass >= halo_mass_bins[i]) & (log10_halo_mass < halo_mass_bins[i+1])
+        bin_data = stellar_to_halo_ratio[mask]
+        
+        if len(bin_data) > 10:  # Only calculate if we have enough data points
+            median = np.median(bin_data)
+            medians.append(median)
+            
+            # Bootstrap to estimate errors
+            bootstrap_medians = []
+            for _ in range(n_bootstrap):
+                resample = np.random.choice(bin_data, size=len(bin_data), replace=True)
+                bootstrap_medians.append(np.median(resample))
+            
+            # 16th and 84th percentiles for 1-sigma equivalent errors
+            lower = np.percentile(bootstrap_medians, 16)
+            upper = np.percentile(bootstrap_medians, 84)
+            lower_errors.append(lower)
+            upper_errors.append(upper)
+        else:
+            medians.append(np.nan)
+            lower_errors.append(np.nan)
+            upper_errors.append(np.nan)
+    
+    medians = np.array(medians)
+    lower_errors = np.array(lower_errors)
+    upper_errors = np.array(upper_errors)
+    
+    # Remove NaN values
+    valid = ~np.isnan(medians)
+    bin_centers_valid = bin_centers[valid]
+    medians_valid = medians[valid]
+    lower_errors_valid = lower_errors[valid]
+    upper_errors_valid = upper_errors[valid]
+    
+    # Plot median line
+    plt.plot(bin_centers_valid, medians_valid, color='dodgerblue', linewidth=2, label='Median')
+    
+    # Plot shaded area for bootstrap errors
+    plt.fill_between(bin_centers_valid, lower_errors_valid, upper_errors_valid, 
+                     color='dodgerblue', alpha=0.3, label='Bootstrap 1σ')
+
+    # Load and plot observational data
+    import pandas as pd
+    obs_data = pd.read_csv('./data/SHMratio_data.csv', skiprows=1)
+    
+    # Each pair of columns is X and Y
+    for i in range(0, len(obs_data.columns), 2):
+        x_col = obs_data.iloc[:, i]
+        y_col = obs_data.iloc[:, i+1]
+        
+        # Remove NaN values
+        valid_obs = ~(pd.isna(x_col) | pd.isna(y_col))
+        x_valid = x_col[valid_obs].values
+        y_valid = 10**y_col[valid_obs].values  # Convert from log10 to linear
+        
+        plt.plot(x_valid, y_valid, linestyle='--', linewidth=1.5, alpha=0.7)
+
+    plt.xlabel(r'$\log_{10} M_{\mathrm{vir}}\ (M_{\odot})$')
+    plt.ylabel(r'$M_{\mathrm{stars}} / M_{\mathrm{vir}}$')
+    plt.xlim(10, 15)
+    # plt.ylim(0, 0.5)
+    plt.yscale('log')
+    plt.legend(loc='best', frameon=False)
+    plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+
+    outputFile = OutputDir + '31.stellar_to_halo_mass_ratio' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+    print('\nAll plots completed!')

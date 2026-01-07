@@ -967,20 +967,6 @@ if __name__ == '__main__':
     plt.xlim(10.5, 13.5)
     plt.ylim(-0.05, 1.05)
     plt.legend(loc='best', frameon=False, fontsize=11)
-    plt.grid(True, alpha=0.3)
-    
-    # Add text annotations
-    plt.text(11.0, 0.1, 'CGM Regime', fontsize=12, color='darkgreen', 
-            ha='center', bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.3))
-    plt.text(13.0, 0.9, 'Hot-ICM Regime', fontsize=12, color='darkred',
-            ha='center', bbox=dict(boxstyle='round', facecolor='lightcoral', alpha=0.3))
-
-    plt.tight_layout()
-    outputFile = OutputDir + 'N.RegimeTransitionFunction' + OutputFormat
-    plt.savefig(outputFile, dpi=300, bbox_inches='tight')
-    print('Saved file to', outputFile, '\n')
-    plt.close()
-    
     # --------------------------------------------------------
     
     print('Plotting stellar mass vs halo mass colored by regime across redshifts')
@@ -1015,13 +1001,13 @@ if __name__ == '__main__':
         # Plot CGM regime (blue shades)
         if np.any(cgm_regime):
             plt.scatter(log10_halo_mass[cgm_regime], log10_stellar_mass[cgm_regime], 
-                       c=blue_colors[i], s=8, alpha=0.7, 
+                       c=blue_colors[i], s=8, alpha=0.3, 
                        label=f'CGM z={regime_redshifts[i]:.1f}')
         
         # Plot Hot regime (red shades)
         if np.any(hot_regime):
             plt.scatter(log10_halo_mass[hot_regime], log10_stellar_mass[hot_regime], 
-                       c=red_colors[i], s=8, alpha=0.7, 
+                       c=red_colors[i], s=8, alpha=0.3, 
                        label=f'Hot z={regime_redshifts[i]:.1f}')
 
     plt.xlabel(r'$\log_{10} M_{\mathrm{vir}}\ (M_{\odot})$', fontsize=14)
@@ -1149,35 +1135,22 @@ if __name__ == '__main__':
         hot_hist, _ = np.histogram(hot_regime_masses, bins=stellar_mass_bins)
         
         # Plot stacked histograms showing actual galaxy counts
-        ax.bar(bin_centers, cgm_hist, width=0.18, color='blue', alpha=0.7, 
+        ax.bar(bin_centers, cgm_hist, width=0.18, color='dodgerblue', alpha=0.7, 
                label='CGM Regime', bottom=0)
-        ax.bar(bin_centers, hot_hist, width=0.18, color='red', alpha=0.7, 
+        ax.bar(bin_centers, hot_hist, width=0.18, color='firebrick', alpha=0.7, 
                label='Hot Regime', bottom=cgm_hist)
         
         # Formatting
-        ax.set_title(f'z = {regime_redshifts[i]:.1f}', fontsize=12, fontweight='bold')
         ax.set_xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$', fontsize=10)
         ax.set_ylabel('Galaxy Count', fontsize=10)
         ax.set_xlim(8.0, 12.0)
         ax.set_ylim(0, None)  # Auto-scale based on actual counts
         ax.grid(True, alpha=0.3)
-        
-        # Add regime statistics as text
-        total_galaxies = len(w)
-        cgm_count = np.sum(regime_values == 0)
-        hot_count = np.sum(regime_values == 1)
-        cgm_percent = (cgm_count / total_galaxies * 100) if total_galaxies > 0 else 0
-        hot_percent = (hot_count / total_galaxies * 100) if total_galaxies > 0 else 0
-        
-        ax.text(0.02, 0.95, f'CGM: {cgm_percent:.1f}%\nHot: {hot_percent:.1f}%', 
-                transform=ax.transAxes, verticalalignment='top', fontsize=9,
-                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
     # Add legend to the first subplot
     axes[0].legend(loc='upper right', frameon=False, fontsize=10)
     
     plt.tight_layout()
-    plt.suptitle('Regime Distribution vs Stellar Mass Across Redshift', fontsize=14, y=0.98)
     
     outputFile = OutputDir + 'T.regime_distribution_stellar_mass_histograms_redshift' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
