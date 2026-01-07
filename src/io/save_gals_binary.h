@@ -50,6 +50,7 @@ extern "C" {
       float EjectedMass;
       float BlackHoleMass;
       float ICS;
+      float H2gas;
 
       /* metals */
       float MetalsColdGas;
@@ -58,6 +59,7 @@ extern "C" {
       float MetalsHotGas;
       float MetalsEjectedMass;
       float MetalsICS;
+      float MassLoading;
 
       /* to calculate magnitudes */
       float SfrDisk;
@@ -67,6 +69,11 @@ extern "C" {
 
       /* misc */
       float DiskScaleRadius;
+      float BulgeRadius;
+      float MergerBulgeRadius;
+      float InstabilityBulgeRadius;
+      float MergerBulgeMass;
+      float InstabilityBulgeMass;
       float Cooling;
       float Heating;
       float QuasarModeBHaccretionMass;
@@ -78,6 +85,19 @@ extern "C" {
       float infallMvir;
       float infallVvir;
       float infallVmax;
+      float TimeOfInfall;
+
+      /* CGM properties */
+      int Regime;
+      float CGMgas;
+      float MetalsCGMgas;
+      float tcool;
+      float tff;
+      float tcool_over_tff;
+      float tdeplete;
+      float RcoolToRvir;
+
+      int FFBRegime;
     };
 
     /* Proto-Types */
