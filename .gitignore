@@ -31,7 +31,6 @@ codecov
 xx*
 yy*
 *.hdf5
-*.csv
 
 # Large CSV files #
 data/COSMOS.csv
