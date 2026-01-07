@@ -17,7 +17,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
             halonr, halos[halonr].FirstHaloInFOFgroup);
 
     galaxies[p].Type = 0;
-    galaxies[p].Regime = -1; // undefined at initialization
+    galaxies[p].Regime = -1;
     galaxies[p].FFBRegime = 0;
 
     galaxies[p].GalaxyNr = *galaxycounter;
@@ -48,8 +48,8 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].ColdGas = 0.0;
     galaxies[p].StellarMass = 0.0;
     galaxies[p].BulgeMass = 0.0;
-    galaxies[p].MergerBulgeMass = 0.0;      // Track how bulge formed
-    galaxies[p].InstabilityBulgeMass = 0.0; // Track how bulge formed
+    galaxies[p].MergerBulgeMass = 0.0;   
+    galaxies[p].InstabilityBulgeMass = 0.0; 
     galaxies[p].HotGas = 0.0;
     galaxies[p].EjectedMass = 0.0;
     galaxies[p].BlackHoleMass = 0.0;
@@ -419,31 +419,10 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
         
         if(random_uniform < f_ffb) {
             galaxies[p].FFBRegime = 1;  // FFB halo
-            // ffb_galaxies_assigned++;
-            
-            // Debug output for first few FFB halos at high-z
-            // if(ffb_galaxies_assigned <= 10 && z > 8.0) {
-            //     const double Mvir_ffb = calculate_ffb_threshold_mass(z, run_params);
-            //     printf("=== FFB HALO #%d DETECTED ===\n", ffb_galaxies_assigned);
-            //     printf("  Galaxy %d at z=%.4f\n", p, z);
-            //     printf("  Mvir = %.4e (10^10 Msun/h)\n", Mvir);
-            //     printf("  Threshold = %.4e (10^10 Msun/h)\n", Mvir_ffb);
-            //     printf("  Mass ratio = %.4f\n", Mvir / Mvir_ffb);
-            //     printf("  FFB fraction (f_ffb) = %.4f\n", f_ffb);
-            //     printf("  --> FFB MODE ACTIVATED\n");
-            //     printf("============================\n\n");
-            // }
         } else {
             galaxies[p].FFBRegime = 0;  // Normal halo
         }
     }
-    
-    // Print summary every 10000 galaxies
-    // if(total_galaxies_checked % 10000 == 0 && total_galaxies_checked > 0) {
-    //     printf("FFB SUMMARY: %d/%d galaxies (%.1f%%) assigned FFB regime\n", 
-    //            ffb_galaxies_assigned, total_galaxies_checked, 
-    //            100.0 * ffb_galaxies_assigned / total_galaxies_checked);
-    // }
 }
 
 
@@ -489,9 +468,6 @@ float calculate_midplane_pressure_BR06(float sigma_gas, float sigma_stars, float
     // P_ext/k = 272 cm⁻³ K × (Σ_gas/M_⊙ pc⁻²) × (Σ_*/M_⊙ pc⁻²)^0.5 × (v_g/km s⁻¹) × (h_*/pc)^-0.5
     float pressure = 272.0 * sigma_gas * sqrt(effective_sigma_stars) * v_g / sqrt(h_star_pc);
 
-    // if (pressure > 6e5) {
-    //     pressure = 6e5; // K cm^-3
-    // }
 
     return pressure; // K cm⁻³
 }

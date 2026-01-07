@@ -73,7 +73,7 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
     }
 
     // ========================================================================
-    // FIX: Transfer satellite CGMgas to appropriate reservoir based on regime
+    // Transfer satellite CGMgas to appropriate reservoir based on regime
     // ========================================================================
     if(run_params->CGMrecipeOn == 1) {
         if(galaxies[centralgal].Regime == 0) {
