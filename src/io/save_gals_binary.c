@@ -273,6 +273,7 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
     o->EjectedMass = g->EjectedMass;
     o->BlackHoleMass = g->BlackHoleMass;
     o->ICS = g->ICS;
+    o->H2gas = g->H2gas;
 
     o->MetalsColdGas = g->MetalsColdGas;
     o->MetalsStellarMass = g->MetalsStellarMass;
@@ -280,6 +281,7 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
     o->MetalsHotGas = g->MetalsHotGas;
     o->MetalsEjectedMass = g->MetalsEjectedMass;
     o->MetalsICS = g->MetalsICS;
+    o->MassLoading = g->MassLoading;
 
     o->SfrDisk = 0.0;
     o->SfrBulge = 0.0;
@@ -301,6 +303,11 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
     }
 
     o->DiskScaleRadius = g->DiskScaleRadius;
+    o->BulgeRadius = g->BulgeRadius;
+    o->MergerBulgeRadius = g->MergerBulgeRadius;
+    o->InstabilityBulgeRadius = g->InstabilityBulgeRadius;
+    o->MergerBulgeMass = g->MergerBulgeMass;
+    o->InstabilityBulgeMass = g->InstabilityBulgeMass;
 
     if (g->Cooling > 0.0) {
         o->Cooling = log10(g->Cooling * run_params->UnitEnergy_in_cgs / run_params->UnitTime_in_s);
@@ -326,11 +333,25 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
         o->infallMvir = g->infallMvir;
         o->infallVvir = g->infallVvir;
         o->infallVmax = g->infallVmax;
+        o->TimeOfInfall = g->TimeOfInfall * run_params->UnitTime_in_Megayears;
     } else {
         o->infallMvir = 0.0;
         o->infallVvir = 0.0;
         o->infallVmax = 0.0;
+        o->TimeOfInfall = 0.0;
     }
+
+    // CGM properties
+    o->Regime = g->Regime;
+    o->CGMgas = g->CGMgas;
+    o->MetalsCGMgas = g->MetalsCGMgas;
+    o->tcool = g->tcool;
+    o->tff = g->tff;
+    o->tcool_over_tff = g->tcool_over_tff;
+    o->tdeplete = g->tdeplete;
+    o->RcoolToRvir = g->RcoolToRvir;
+
+    o->FFBRegime = g->FFBRegime;
 
     return EXIT_SUCCESS;
 }
