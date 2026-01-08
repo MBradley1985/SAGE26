@@ -1775,7 +1775,7 @@ if __name__ == '__main__':
     plt.ylim(-13, -8)
 
     plt.legend(loc='upper right', fontsize=12, framealpha=0.9)
-    plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+    # plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
     plt.tight_layout()
 
     plt.savefig(OutputDir + '23.specific_star_formation_rate' + OutputFormat, dpi=150)
@@ -1881,7 +1881,7 @@ if __name__ == '__main__':
     plt.xlim(8, 12)
     plt.ylim(-0.5, 2.0)
     plt.legend(loc='upper left', frameon=False)
-    plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+    # plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
 
     outputFile = OutputDir + '26.bulge_size_mass_relation' + OutputFormat
     plt.savefig(outputFile)
@@ -1940,7 +1940,7 @@ if __name__ == '__main__':
     plt.xlim(-0.5, 2.5)
     plt.ylim(-1.5, 2.0)
     plt.legend(loc='upper left', frameon=False)
-    plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+    # plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
 
     outputFile = OutputDir + '27.bulge_vs_disk_size' + OutputFormat
     plt.savefig(outputFile)
@@ -1972,7 +1972,7 @@ if __name__ == '__main__':
     plt.xlim(9, 12)
     plt.ylim(8, 12)
     plt.legend(loc='upper left', frameon=False)
-    plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+    # plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
 
     outputFile = OutputDir + '28.mass_components_vs_stellar_mass' + OutputFormat
     plt.savefig(outputFile)
@@ -2025,7 +2025,7 @@ if __name__ == '__main__':
     plt.ylabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
     plt.xlim(10, 15)
     plt.ylim(7, 12)
-    plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+    # plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
 
     outputFile = OutputDir + '30.stellar_to_halo_mass_relation' + OutputFormat
     plt.savefig(outputFile)
@@ -2116,9 +2116,446 @@ if __name__ == '__main__':
     # plt.ylim(0, 0.5)
     plt.yscale('log')
     plt.legend(loc='best', frameon=False)
-    plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+    # plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
 
     outputFile = OutputDir + '31.stellar_to_halo_mass_ratio' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# --------------------------------------------------------
+
+    print('Plotting central stellar density within 1 kpc vs stellar mass')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    # Calculate disk mass (total stellar mass - bulge mass)
+    DiskMass = StellarMass - BulgeMass
+    
+    # Filter for galaxies with positive stellar mass and valid disk radius
+    w = np.where((StellarMass > 0.0) & (DiskRadius > 0.0) & (Type == 0))[0]
+    
+    if len(w) > 0:
+        # Calculate disk contribution to central density
+        # For an exponential disk profile: Sigma(R) = Sigma_0 * exp(-R/R_d)
+        R_d_kpc = DiskRadius[w] * 1000.0  # Convert from Mpc/h to kpc
+        R_inner = 1.0  # kpc
+        
+        # Disk contribution (only if DiskMass > 0)
+        disk_enclosed_mass = np.zeros(len(w))
+        disk_mask = DiskMass[w] > 0.0
+        if np.any(disk_mask):
+            ratio_disk = R_inner / R_d_kpc[disk_mask]
+            enclosed_mass_fraction_disk = 1.0 - np.exp(-ratio_disk) * (1.0 + ratio_disk)
+            disk_enclosed_mass[disk_mask] = DiskMass[w][disk_mask] * enclosed_mass_fraction_disk
+        
+        # Bulge contribution to central density
+        # Assuming a Hernquist or Sersic profile, bulge is very concentrated
+        # For simplicity, assume bulge with scale radius R_b
+        # Mass within radius r for Hernquist: M(<r) = M_bulge * r^2 / (r + R_b)^2
+        bulge_enclosed_mass = np.zeros(len(w))
+        bulge_mask = BulgeMass[w] > 0.0
+        if np.any(bulge_mask):
+            R_b_kpc = BulgeRadius[w][bulge_mask] * 1000.0  # Convert to kpc
+            # For Hernquist profile
+            bulge_enclosed_mass[bulge_mask] = BulgeMass[w][bulge_mask] * R_inner**2 / (R_inner + R_b_kpc)**2
+        
+        # Total enclosed mass within 1 kpc
+        total_enclosed_mass = disk_enclosed_mass + bulge_enclosed_mass
+        area_1kpc = np.pi * R_inner**2
+        Sigma_1kpc = total_enclosed_mass / area_1kpc
+        
+        # Calculate sSFR for these galaxies
+        sSFR_filtered = np.log10((SfrDisk[w] + SfrBulge[w]) / StellarMass[w])
+        
+        # Define green valley boundaries (typically -11 to -10.5 or similar)
+        green_valley_upper = sSFRcut  # -11.0
+        green_valley_lower = sSFRcut - 0.5  # -11.5
+        
+        # Separate into star forming, green valley, and quiescent
+        sf_mask = sSFR_filtered > green_valley_upper
+        gv_mask = (sSFR_filtered <= green_valley_upper) & (sSFR_filtered > green_valley_lower)
+        q_mask = sSFR_filtered <= green_valley_lower
+        
+        # Sample galaxies for plotting
+        if len(w) > dilute:
+            indices_to_sample = sample(range(len(w)), dilute)
+        else:
+            indices_to_sample = range(len(w))
+        
+        # Get sampled indices for each population
+        sf_indices = [i for i in indices_to_sample if sf_mask[i]]
+        gv_indices = [i for i in indices_to_sample if gv_mask[i]]
+        q_indices = [i for i in indices_to_sample if q_mask[i]]
+        
+        # Plot scatter - star forming (first, so it's on bottom)
+        if len(sf_indices) > 0:
+            plt.scatter(np.log10(StellarMass[w[sf_indices]]), np.log10(Sigma_1kpc[sf_indices]), 
+                       c='dodgerblue', s=5, edgecolors='none', marker='s', alpha=0.6)
+        
+        # Plot scatter - green valley
+        if len(gv_indices) > 0:
+            plt.scatter(np.log10(StellarMass[w[gv_indices]]), np.log10(Sigma_1kpc[gv_indices]), 
+                       c='mediumseagreen', s=5, edgecolors='none', marker='s')
+        
+        # Plot scatter - quiescent (last, so it's on top)
+        if len(q_indices) > 0:
+            plt.scatter(np.log10(StellarMass[w[q_indices]]), np.log10(Sigma_1kpc[q_indices]), 
+                       c='firebrick', s=5, edgecolors='none', marker='s')
+
+    plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
+    plt.ylabel(r'$\log_{10} \Sigma_{<1\mathrm{kpc}}\ (M_{\odot}\ \mathrm{kpc}^{-2})$')
+    plt.xlim(8.0, 12.0)
+    plt.ylim(6.5, 10.5)
+    
+    # Create custom legend with colored text and no markers
+    from matplotlib.patches import Rectangle
+    legend_labels = ['Star Forming', 'Green Valley', 'Quiescent']
+    legend_colors = ['dodgerblue', 'mediumseagreen', 'firebrick']
+    handles = [Rectangle((0,0),1,1, fc="w", fill=False, edgecolor='none', linewidth=0) for _ in legend_labels]
+    legend = plt.legend(handles, legend_labels, loc='upper left', frameon=False)
+    for i, text in enumerate(legend.get_texts()):
+        text.set_color(legend_colors[i])
+    
+    # plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+
+    outputFile = OutputDir + '32.central_stellar_density' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# --------------------------------------------------------
+
+    print('Plotting Kennicutt-Schmidt relation')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    # Filter for galaxies with positive cold gas and disk radius
+    # Include total SFR (disk + bulge)
+    w = np.where((ColdGas > 0.0) & (DiskRadius > 0.0) & (Type == 0) & (H2gas > 0.0))[0]
+    
+    print(f'Found {len(w)} galaxies with H2 gas and disk radius')
+    
+    if len(w) > 0:
+        # Calculate gas surface density
+        # DiskRadius is in Mpc/h (already divided by h based on other code), convert to kpc
+        R_d_kpc = DiskRadius[w] * 1000.0
+        
+        # For exponential disk, use the area at 2*R_d (contains ~86% of light/mass)
+        # Or use effective area = 2*pi*R_d^2 for an exponential disk
+        disk_area = 2.0 * np.pi * R_d_kpc**2  # kpc^2 (scale area for exponential disk)
+        
+        # Use H2 gas (molecular) for KS relation
+        # This is the physically correct choice because:
+        # 1. Star formation occurs in molecular clouds (H2), not atomic gas (HI)
+        # 2. The original Kennicutt-Schmidt relation was derived from star-forming regions
+        # 3. There's a much tighter correlation between H2 and SFR than total cold gas
+        # 4. HI needs to convert to H2 before participating in star formation
+        Sigma_gas_kpc = H2gas[w] / disk_area  # M_sun / kpc^2
+        Sigma_gas = Sigma_gas_kpc / 1e6  # M_sun / pc^2
+        
+        # Calculate SFR surface density (use total SFR: disk + bulge)
+        # Keep in kpc^-2
+        total_SFR = SfrDisk[w] + SfrBulge[w]
+        Sigma_SFR = total_SFR / disk_area  # M_sun/yr / kpc^2
+        
+        # Filter out galaxies with zero SFR for plotting
+        w_sfr = np.where(total_SFR > 0.0)[0]
+        print(f'Of those, {len(w_sfr)} have SFR > 0')
+        print(f'Sigma_gas range: {np.min(Sigma_gas[w_sfr]):.2e} to {np.max(Sigma_gas[w_sfr]):.2e} M_sun/pc^2')
+        print(f'Sigma_SFR range: {np.min(Sigma_SFR[w_sfr]):.2e} to {np.max(Sigma_SFR[w_sfr]):.2e} M_sun/yr/kpc^2')
+        
+        if len(w_sfr) == 0:
+            print('No galaxies with positive SFR!')
+        else:
+            Sigma_gas_plot = Sigma_gas[w_sfr]
+            Sigma_SFR_plot = Sigma_SFR[w_sfr]
+            w_indices = w[w_sfr]
+            w_indices = w[w_sfr]
+        
+            # Sample for plotting
+            if len(w_sfr) > dilute:
+                indices = sample(range(len(w_sfr)), dilute)
+            else:
+                indices = range(len(w_sfr))
+            
+            # Calculate sSFR for coloring
+            sSFR_filtered = np.log10((SfrDisk[w_indices] + SfrBulge[w_indices]) / StellarMass[w_indices])
+            green_valley_upper = sSFRcut
+            green_valley_lower = sSFRcut - 0.5
+            
+            sf_mask = sSFR_filtered > green_valley_upper
+            gv_mask = (sSFR_filtered <= green_valley_upper) & (sSFR_filtered > green_valley_lower)
+            q_mask = sSFR_filtered <= green_valley_lower
+            
+            # Get sampled indices for each population
+            sf_indices = [i for i in indices if sf_mask[i]]
+            gv_indices = [i for i in indices if gv_mask[i]]
+            q_indices = [i for i in indices if q_mask[i]]
+            
+            # Plot scatter - star forming
+            if len(sf_indices) > 0:
+                plt.scatter(np.log10(Sigma_gas_plot[sf_indices]), np.log10(Sigma_SFR_plot[sf_indices]),
+                           c='dodgerblue', s=5, edgecolors='none', alpha=0.6)
+            
+            # Plot scatter - green valley
+            if len(gv_indices) > 0:
+                plt.scatter(np.log10(Sigma_gas_plot[gv_indices]), np.log10(Sigma_SFR_plot[gv_indices]),
+                           c='mediumseagreen', s=5, edgecolors='none')
+            
+            # Plot scatter - quiescent
+            if len(q_indices) > 0:
+                plt.scatter(np.log10(Sigma_gas_plot[q_indices]), np.log10(Sigma_SFR_plot[q_indices]),
+                           c='firebrick', s=5, edgecolors='none')
+            
+            # Plot the canonical KS relation: Sigma_SFR = A * Sigma_gas^N
+            # Kennicutt (1998): N ~ 1.4
+            # Original: Sigma_SFR [M_sun yr^-1 kpc^-2] = 2.5e-4 * (Sigma_gas [M_sun pc^-2])^1.4
+            gas_range = np.logspace(-4, 5, 100)  # M_sun/pc^2
+            kennicutt_sfr = 2.5e-4 * gas_range**1.4  # M_sun/yr/kpc^2
+            plt.plot(np.log10(gas_range), np.log10(kennicutt_sfr), 'k--', linewidth=2, 
+                    label='Kennicutt (1998), N=1.4', alpha=0.7)
+
+    plt.xlabel(r'$\log_{10} \Sigma_{\mathrm{H_2}}\ (M_{\odot}\ \mathrm{pc}^{-2})$')
+    plt.ylabel(r'$\log_{10} \Sigma_{\mathrm{SFR}}\ (M_{\odot}\ \mathrm{yr}^{-1}\ \mathrm{kpc}^{-2})$')
+    plt.xlim(-0.5, 5)
+    plt.ylim(-4, 3)
+    
+    # Create custom legend
+    legend_labels = ['Star Forming', 'Green Valley', 'Quiescent', 'Kennicutt (1998), N=1.4']
+    legend_colors = ['dodgerblue', 'mediumseagreen', 'firebrick', 'black']
+    handles = [Rectangle((0,0),1,1, fc="w", fill=False, edgecolor='none', linewidth=0) for _ in legend_labels[:-1]]
+    handles.append(plt.Line2D([0], [0], color='black', linestyle='--', linewidth=2))
+    legend = plt.legend(handles, legend_labels, loc='upper left', frameon=False)
+    for i, text in enumerate(legend.get_texts()[:-1]):
+        text.set_color(legend_colors[i])
+    
+    # plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+
+    outputFile = OutputDir + '33.kennicutt_schmidt_relation' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# --------------------------------------------------------
+
+    print('Plotting black hole mass vs stellar mass colored by SFR')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    # Filter for galaxies with positive black hole mass and stellar mass
+    w = np.where((BlackHoleMass > 0.0) & (StellarMass > 0.0) & (Type == 0))[0]
+    
+    print(f'Found {len(w)} central galaxies with black holes')
+    
+    if len(w) > 0:
+        # Calculate total SFR and sSFR
+        total_SFR = SfrDisk[w] + SfrBulge[w]
+        sSFR = total_SFR / StellarMass[w]  # yr^-1
+        
+        # Sample for plotting
+        if len(w) > dilute:
+            indices = sample(range(len(w)), dilute)
+        else:
+            indices = range(len(w))
+        
+        # Use log10(sSFR) for coloring, handle zero/negative values
+        log_sSFR = np.log10(np.maximum(sSFR[indices], 1e-15))
+        
+        # Create scatter plot
+        scatter = ax.scatter(np.log10(StellarMass[w[indices]]), np.log10(BlackHoleMass[w[indices]]),
+                           c=log_sSFR, s=5, cmap='coolwarm_r', 
+                           vmin=-13, vmax=-9, edgecolors='none', alpha=0.9, marker='s')
+        
+        # Add colorbar
+        cbar = plt.colorbar(scatter, ax=ax)
+        cbar.set_label(r'$\log_{10}$ sSFR $(yr^{-1})$', fontsize=12)
+        
+        # Add observed M_BH - M_* relations
+        stellar_mass_range = np.logspace(9, 12, 100)
+
+    plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
+    plt.ylabel(r'$\log_{10} M_{\mathrm{BH}}\ (M_{\odot})$')
+    plt.xlim(9, 12)
+    plt.ylim(5, 10)
+    plt.legend(loc='upper left', frameon=False)
+    # plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+
+    outputFile = OutputDir + '34.black_hole_mass_vs_stellar_mass' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# --------------------------------------------------------
+
+    print('Plotting sSFR vs black hole mass / stellar mass')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    # Filter for galaxies with positive black hole mass, stellar mass, and SFR
+    total_SFR_all = SfrDisk + SfrBulge
+    w = np.where((BlackHoleMass > 0.0) & (StellarMass > 0.0) & (total_SFR_all > 0.0) & (Type == 0))[0]
+    
+    print(f'Found {len(w)} central galaxies with black holes and SFR > 0')
+    
+    if len(w) > 0:
+        # Calculate sSFR and BH mass fraction
+        sSFR = total_SFR_all[w] / StellarMass[w]
+        BH_mass_fraction = BlackHoleMass[w] / StellarMass[w]
+        
+        # Sample for plotting
+        if len(w) > dilute:
+            indices = sample(range(len(w)), dilute)
+        else:
+            indices = range(len(w))
+        
+        # Calculate log values
+        log_sSFR = np.log10(np.maximum(sSFR[indices], 1e-15))
+        log_BH_fraction = np.log10(BH_mass_fraction[indices])
+        
+        # Separate into star forming, green valley, and quiescent
+        sf_mask = log_sSFR > sSFRcut
+        gv_mask = (log_sSFR <= sSFRcut) & (log_sSFR > sSFRcut - 0.5)
+        q_mask = log_sSFR <= sSFRcut - 0.5
+        
+        # Get indices for each population
+        sf_indices = [i for i in range(len(indices)) if sf_mask[i]]
+        gv_indices = [i for i in range(len(indices)) if gv_mask[i]]
+        q_indices = [i for i in range(len(indices)) if q_mask[i]]
+        
+        # Plot scatter - star forming
+        if len(sf_indices) > 0:
+            plt.scatter(log_BH_fraction[sf_indices], log_sSFR[sf_indices],
+                       c='dodgerblue', s=5, edgecolors='none', alpha=0.9, marker='s')
+        
+        # Plot scatter - green valley
+        if len(gv_indices) > 0:
+            plt.scatter(log_BH_fraction[gv_indices], log_sSFR[gv_indices],
+                       c='mediumseagreen', s=5, edgecolors='none', alpha=0.9, marker='s')
+        
+        # Plot scatter - quiescent
+        if len(q_indices) > 0:
+            plt.scatter(log_BH_fraction[q_indices], log_sSFR[q_indices],
+                       c='firebrick', s=5, edgecolors='none', alpha=0.9, marker='s')
+
+    plt.xlabel(r'$\log_{10} (M_{\mathrm{BH}} / M_{\mathrm{stars}})$')
+    plt.ylabel(r'$\log_{10}$ sSFR $(yr^{-1})$')
+    plt.xlim(-5.5, -1.5)
+    plt.ylim(-14, -9)
+    
+    # Create custom legend with colored text and no markers
+    from matplotlib.patches import Rectangle
+    legend_labels = ['Star Forming', 'Green Valley', 'Quiescent']
+    legend_colors = ['dodgerblue', 'mediumseagreen', 'firebrick']
+    handles = [Rectangle((0,0),1,1, fc="w", fill=False, edgecolor='none', linewidth=0) for _ in legend_labels]
+    legend = plt.legend(handles, legend_labels, loc='lower left', frameon=False)
+    for i, text in enumerate(legend.get_texts()):
+        text.set_color(legend_colors[i])
+    
+    # plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+
+    outputFile = OutputDir + '35.ssfr_vs_bh_mass_fraction' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# --------------------------------------------------------
+
+    print('Plotting black hole mass vs central stellar density within 1 kpc')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    # Calculate disk mass
+    DiskMass = StellarMass - BulgeMass
+    
+    # Filter for galaxies with positive stellar mass, BH mass, and valid disk radius
+    w = np.where((StellarMass > 0.0) & (DiskRadius > 0.0) & (BlackHoleMass > 0.0) & (Type == 0))[0]
+    
+    print(f'Found {len(w)} central galaxies with black holes for density calculation')
+    
+    if len(w) > 0:
+        # Calculate disk contribution to central density
+        R_d_kpc = DiskRadius[w] * 1000.0  # Convert from Mpc/h to kpc
+        R_inner = 1.0  # kpc
+        
+        # Disk contribution (only if DiskMass > 0)
+        disk_enclosed_mass = np.zeros(len(w))
+        disk_mask = DiskMass[w] > 0.0
+        if np.any(disk_mask):
+            ratio_disk = R_inner / R_d_kpc[disk_mask]
+            enclosed_mass_fraction_disk = 1.0 - np.exp(-ratio_disk) * (1.0 + ratio_disk)
+            disk_enclosed_mass[disk_mask] = DiskMass[w][disk_mask] * enclosed_mass_fraction_disk
+        
+        # Bulge contribution using Hernquist profile
+        bulge_enclosed_mass = np.zeros(len(w))
+        bulge_mask = BulgeMass[w] > 0.0
+        if np.any(bulge_mask):
+            R_b_kpc = BulgeRadius[w][bulge_mask] * 1000.0  # Convert to kpc
+            bulge_enclosed_mass[bulge_mask] = BulgeMass[w][bulge_mask] * R_inner**2 / (R_inner + R_b_kpc)**2
+        
+        # Total enclosed mass within 1 kpc
+        total_enclosed_mass = disk_enclosed_mass + bulge_enclosed_mass
+        area_1kpc = np.pi * R_inner**2
+        Sigma_1kpc = total_enclosed_mass / area_1kpc
+        
+        # Calculate sSFR for coloring
+        sSFR_filtered = np.log10((SfrDisk[w] + SfrBulge[w]) / StellarMass[w])
+        
+        # Define populations
+        green_valley_upper = sSFRcut
+        green_valley_lower = sSFRcut - 0.5
+        
+        sf_mask = sSFR_filtered > green_valley_upper
+        gv_mask = (sSFR_filtered <= green_valley_upper) & (sSFR_filtered > green_valley_lower)
+        q_mask = sSFR_filtered <= green_valley_lower
+        
+        # Sample for plotting
+        if len(w) > dilute:
+            indices = sample(range(len(w)), dilute)
+        else:
+            indices = range(len(w))
+        
+        # Get sampled indices for each population
+        sf_indices = [i for i in indices if sf_mask[i]]
+        gv_indices = [i for i in indices if gv_mask[i]]
+        q_indices = [i for i in indices if q_mask[i]]
+        
+        # Plot scatter - star forming
+        if len(sf_indices) > 0:
+            plt.scatter(np.log10(Sigma_1kpc[sf_indices]), np.log10(BlackHoleMass[w[sf_indices]]),
+                       c='dodgerblue', s=5, edgecolors='none', alpha=0.6)
+        
+        # Plot scatter - green valley
+        if len(gv_indices) > 0:
+            plt.scatter(np.log10(Sigma_1kpc[gv_indices]), np.log10(BlackHoleMass[w[gv_indices]]),
+                       c='mediumseagreen', s=5, edgecolors='none')
+        
+        # Plot scatter - quiescent
+        if len(q_indices) > 0:
+            plt.scatter(np.log10(Sigma_1kpc[q_indices]), np.log10(BlackHoleMass[w[q_indices]]),
+                       c='firebrick', s=5, edgecolors='none')
+
+    plt.xlabel(r'$\log_{10} \Sigma_{<1\mathrm{kpc}}\ (M_{\odot}\ \mathrm{kpc}^{-2})$')
+    plt.ylabel(r'$\log_{10} M_{\mathrm{BH}}\ (M_{\odot})$')
+    plt.xlim(7, 11)
+    plt.ylim(5, 10)
+    
+    # Create custom legend
+    legend_labels = ['Star Forming', 'Green Valley', 'Quiescent']
+    legend_colors = ['dodgerblue', 'mediumseagreen', 'firebrick']
+    handles = [Rectangle((0,0),1,1, fc="w", fill=False, edgecolor='none', linewidth=0) for _ in legend_labels]
+    legend = plt.legend(handles, legend_labels, loc='upper left', frameon=False)
+    for i, text in enumerate(legend.get_texts()):
+        text.set_color(legend_colors[i])
+    
+    # plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+
+    outputFile = OutputDir + '36.bh_mass_vs_central_density' + OutputFormat
     plt.savefig(outputFile)
     print('Saved file to', outputFile, '\n')
     plt.close()
