@@ -77,6 +77,9 @@ if __name__ == '__main__':
     coldgasFull = [0]*(LastSnap-FirstSnap+1)
     dT = [0]*(LastSnap-FirstSnap+1)
     RegimeFull = [0]*(LastSnap-FirstSnap+1)
+    DiskRadiusFull = [0]*(LastSnap-FirstSnap+1)
+    BulgeRadiusFull = [0]*(LastSnap-FirstSnap+1)
+    RvirFull = [0]*(LastSnap-FirstSnap+1)
 
     for snap in range(FirstSnap,LastSnap+1):
 
@@ -96,6 +99,9 @@ if __name__ == '__main__':
         coldgasFull[snap] = read_hdf(snap_num = Snapshot, param = 'ColdGas') * 1.0e10 / Hubble_h
         dT[snap] = read_hdf(snap_num = Snapshot, param = 'dT')
         RegimeFull[snap] = read_hdf(snap_num = Snapshot, param = 'Regime')
+        DiskRadiusFull[snap] = read_hdf(snap_num = Snapshot, param = 'DiskRadius') / Hubble_h
+        BulgeRadiusFull[snap] = read_hdf(snap_num = Snapshot, param = 'BulgeRadius') / Hubble_h
+        RvirFull[snap] = read_hdf(snap_num = Snapshot, param = 'Rvir') / Hubble_h
 
 
 # --------------------------------------------------------
@@ -970,7 +976,7 @@ if __name__ == '__main__':
     # --------------------------------------------------------
     
     print('Plotting stellar mass vs halo mass colored by regime across redshifts')
-    dilute = 30000
+    dilute = 7500
     plt.figure(figsize=(12, 8))
 
     # Select a subset of snapshots for clarity (every other snapshot from SMFsnaps)
@@ -1027,7 +1033,7 @@ if __name__ == '__main__':
     # --------------------------------------------------------
     
     print('Plotting regime distribution histograms across redshifts')
-    dilute = 30000
+    dilute = 7500
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
     axes = axes.flatten()
     
@@ -1105,7 +1111,7 @@ if __name__ == '__main__':
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
     axes = axes.flatten()
-    dilute = 30000
+    dilute = 7500
     # Use the same snapshots and redshifts as before
     regime_snaps = [63, 32, 23, 18]  # z=0, z~1, z~2, z~3
     regime_redshifts = [redshifts[snap] for snap in regime_snaps]
@@ -1153,6 +1159,199 @@ if __name__ == '__main__':
     plt.tight_layout()
     
     outputFile = OutputDir + 'T.regime_distribution_stellar_mass_histograms_redshift' + OutputFormat
+    plt.savefig(outputFile, dpi=300, bbox_inches='tight')
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+    # --------------------------------------------------------
+    
+    print('Plotting effective radius vs stellar mass across redshifts (centrals only)')
+
+    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+    axes = axes.flatten()
+    
+    # Select 6 redshift snapshots from z=0 to z~2.75
+    # Based on the redshifts array: z=0(snap63), z~0.5(snap49), z~1.0(snap40), z~1.5(snap35), z~2.0(snap32), z~2.75(snap28)
+    radius_snaps = [63, 49, 40, 35, 32, 28]
+    radius_redshifts = [redshifts[snap] for snap in radius_snaps]
+    dilute_grid = 7500
+    
+    for i, snap in enumerate(radius_snaps):
+        ax = axes[i]
+        
+        # Get valid central galaxies (Type==0) with positive stellar mass and disk radius
+        w = np.where((StellarMassFull[snap] > 0.0) & 
+                     (DiskRadiusFull[snap] > 0.0) & 
+                     (TypeFull[snap] == 0))[0]
+        
+        if len(w) == 0:
+            continue
+        
+        # Dilute for plotting
+        if len(w) > dilute_grid:
+            w = sample(list(w), dilute_grid)
+        
+        # Get galaxy properties
+        log10_stellar_mass = np.log10(StellarMassFull[snap][w])
+        
+        # Try different radius definitions:
+        # Option 1: DiskRadius (Mpc -> kpc)
+        log10_radius = np.log10(DiskRadiusFull[snap][w] * 1000.0)
+        
+        # Option 2: Half-mass radius (1.68 * DiskRadius)
+        # log10_radius = np.log10(DiskRadiusFull[snap][w] * 1.68 * 1000.0)
+        
+        # Option 3: 0.02 * Rvir
+        # log10_radius = np.log10(RvirFull[snap][w] * 0.02 * 1000.0)  # Approximate Rvir scaling
+        
+        # Option 4: Just use raw DiskRadius values
+        # log10_radius = np.log10(DiskRadiusFull[snap][w])
+        
+        sfr_total = SfrDiskFull[snap][w] + SfrBulgeFull[snap][w]
+        stellar_mass = StellarMassFull[snap][w]
+        
+        # Calculate log10(sSFR) for color-coding
+        sSFR_linear = sfr_total / stellar_mass
+        # Handle zeros/negative values
+        sSFR_linear = np.maximum(sSFR_linear, 1e-15)
+        log10_sSFR = np.log10(sSFR_linear)
+        
+        # Alternative quiescence criteria:
+        
+        # Method 1: Fixed sSFR cut (current default)
+        # quenched = log10_sSFR < sSFRcut  # sSFRcut = -11.0
+        
+        # Method 2: Evolving sSFR cut (Donnari et al. 2019 / common in literature)
+        z = radius_redshifts[i]
+        sSFR_cut_evolving = -11.0 + 0.5 * z
+        quenched = log10_sSFR < sSFR_cut_evolving
+        star_forming = ~quenched
+        
+        # Plot quenched galaxies first (so star forming appear on top)
+        if np.any(quenched):
+            ax.scatter(log10_stellar_mass[quenched], log10_radius[quenched],
+                      c='red', s=10, alpha=0.4, label='Quenched', edgecolors='none')
+        
+        # Plot star forming galaxies
+        if np.any(star_forming):
+            ax.scatter(log10_stellar_mass[star_forming], log10_radius[star_forming],
+                      c='blue', s=5, alpha=0.4, label='Star Forming', edgecolors='none')
+        
+        # Formatting
+        ax.set_title(f'z = {radius_redshifts[i]:.2f}', fontsize=12, fontweight='bold')
+        ax.set_xlabel(r'$\log_{10} M_* [M_\odot]$', fontsize=11)
+        ax.set_ylabel(r'$\log_{10} R_{\rm eff}$ [kpc]', fontsize=11)
+        ax.set_xlim(8.0, 12.0)
+        # ax.set_ylim(-1.0, 2.5)
+        ax.grid(True, alpha=0.3)
+        
+        # # Add legend only to first subplot
+        # if i == 0:
+        #     ax.legend(loc='upper left', frameon=False, fontsize=10, markerscale=2)
+        
+        # Add text box with statistics
+        total = len(w)
+        sf_count = np.sum(star_forming)
+        q_count = np.sum(quenched)
+        sf_percent = (sf_count / total * 100) if total > 0 else 0
+        ax.text(0.98, 0.02, f'SF: {sf_percent:.1f}%\nN={total}\ncut={sSFR_cut_evolving:.1f}',
+                transform=ax.transAxes, verticalalignment='bottom', 
+                horizontalalignment='right', fontsize=9,
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.7))
+    
+    plt.tight_layout()
+    
+    outputFile = OutputDir + 'U.effective_radius_vs_stellar_mass_redshift' + OutputFormat
+    plt.savefig(outputFile, dpi=300, bbox_inches='tight')
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# --------------------------------------------------------
+
+    print('Plotting effective radius vs stellar mass colored by central density')
+
+    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+    axes = axes.flatten()
+    
+    # Use the same 6 redshift snapshots
+    radius_snaps = [63, 49, 40, 35, 32, 28]
+    radius_redshifts = [redshifts[snap] for snap in radius_snaps]
+    dilute_grid = 7500
+    
+    for i, snap in enumerate(radius_snaps):
+        ax = axes[i]
+        
+        # Get valid central galaxies with positive stellar mass and disk radius
+        w = np.where((StellarMassFull[snap] > 0.0) & 
+                     (DiskRadiusFull[snap] > 0.0) &
+                     (TypeFull[snap] == 0))[0]
+        
+        if len(w) == 0:
+            continue
+        
+        # Dilute for plotting
+        if len(w) > dilute_grid:
+            w_sample = sample(list(w), dilute_grid)
+        else:
+            w_sample = w
+        
+        # Calculate disk mass
+        DiskMass = StellarMassFull[snap][w_sample] - BulgeMassFull[snap][w_sample]
+        
+        # Get galaxy properties
+        log10_stellar_mass = np.log10(StellarMassFull[snap][w_sample])
+        log10_radius = np.log10(DiskRadiusFull[snap][w_sample] * 1000.0)  # Convert to kpc
+        
+        # Calculate central stellar density within 1 kpc (disk + bulge)
+        R_d_kpc = DiskRadiusFull[snap][w_sample] * 1000.0
+        R_inner = 1.0  # kpc
+        
+        # Disk contribution (only if DiskMass > 0)
+        disk_enclosed_mass = np.zeros(len(w_sample))
+        disk_mask = DiskMass > 0.0
+        if np.any(disk_mask):
+            ratio_disk = R_inner / R_d_kpc[disk_mask]
+            enclosed_mass_fraction_disk = 1.0 - np.exp(-ratio_disk) * (1.0 + ratio_disk)
+            disk_enclosed_mass[disk_mask] = DiskMass[disk_mask] * enclosed_mass_fraction_disk
+        
+        # Bulge contribution using Hernquist profile
+        bulge_enclosed_mass = np.zeros(len(w_sample))
+        bulge_mask = BulgeMassFull[snap][w_sample] > 0.0
+        if np.any(bulge_mask):
+            R_b_kpc = BulgeRadiusFull[snap][w_sample][bulge_mask] * 1000.0  # Convert to kpc
+            bulge_enclosed_mass[bulge_mask] = BulgeMassFull[snap][w_sample][bulge_mask] * R_inner**2 / (R_inner + R_b_kpc)**2
+        
+        # Total enclosed mass within 1 kpc
+        total_enclosed_mass = disk_enclosed_mass + bulge_enclosed_mass
+        area_1kpc = np.pi * R_inner**2
+        Sigma_1kpc = total_enclosed_mass / area_1kpc
+        
+        # Use log10 of density for coloring
+        log10_Sigma = np.log10(Sigma_1kpc)
+        
+        # Create scatter plot colored by density
+        scatter = ax.scatter(log10_stellar_mass, log10_radius,
+                           c=log10_Sigma, s=5, alpha=0.9, 
+                           cmap='rainbow', vmin=7.2, vmax=10.2,
+                           edgecolors='none')
+        
+        # Formatting
+        ax.set_title(f'z = {radius_redshifts[i]:.2f}', fontsize=12, fontweight='bold')
+        ax.set_xlabel(r'$\log_{10} M_* [M_\odot]$', fontsize=11)
+        ax.set_ylabel(r'$\log_{10} R_{\rm eff}$ [kpc]', fontsize=11)
+        ax.set_xlim(8.0, 12.0)
+        ax.grid(True, alpha=0.3)
+    
+    # Add a single colorbar for all subplots
+    fig.subplots_adjust(right=0.92)
+    cbar_ax = fig.add_axes([0.94, 0.15, 0.02, 0.7])
+    cbar = fig.colorbar(scatter, cax=cbar_ax)
+    cbar.set_label(r'$\log_{10} \Sigma_{<1\mathrm{kpc}}\ (M_{\odot}\ \mathrm{kpc}^{-2})$', 
+                   fontsize=12, rotation=270, labelpad=20)
+    
+    plt.tight_layout(rect=[0, 0, 0.92, 1])
+    
+    outputFile = OutputDir + 'V.effective_radius_vs_stellar_mass_density_colored' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()
