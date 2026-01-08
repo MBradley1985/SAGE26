@@ -2560,4 +2560,74 @@ if __name__ == '__main__':
     print('Saved file to', outputFile, '\n')
     plt.close()
 
+# --------------------------------------------------------
+
+    print('Plotting black hole mass vs virial velocity')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    # Filter for galaxies with positive black hole mass, stellar mass, and Vvir
+    w = np.where((BlackHoleMass > 0.0) & (StellarMass > 0.0) & (Vvir > 0.0) & (Type == 0))[0]
+    
+    print(f'Found {len(w)} central galaxies with black holes and Vvir > 0')
+    
+    if len(w) > 0:
+        # Calculate sSFR for coloring
+        sSFR_filtered = np.log10((SfrDisk[w] + SfrBulge[w]) / StellarMass[w])
+        
+        # Define populations
+        green_valley_upper = sSFRcut
+        green_valley_lower = sSFRcut - 0.5
+        
+        sf_mask = sSFR_filtered > green_valley_upper
+        gv_mask = (sSFR_filtered <= green_valley_upper) & (sSFR_filtered > green_valley_lower)
+        q_mask = sSFR_filtered <= green_valley_lower
+        
+        # Sample for plotting
+        if len(w) > dilute:
+            indices = sample(range(len(w)), dilute)
+        else:
+            indices = range(len(w))
+        
+        # Get sampled indices for each population
+        sf_indices = [i for i in indices if sf_mask[i]]
+        gv_indices = [i for i in indices if gv_mask[i]]
+        q_indices = [i for i in indices if q_mask[i]]
+        
+        # Plot scatter - star forming
+        if len(sf_indices) > 0:
+            plt.scatter(np.log10(Vvir[w[sf_indices]]), np.log10(BlackHoleMass[w[sf_indices]]),
+                       c='dodgerblue', s=5, edgecolors='none', alpha=0.6)
+        
+        # Plot scatter - green valley
+        if len(gv_indices) > 0:
+            plt.scatter(np.log10(Vvir[w[gv_indices]]), np.log10(BlackHoleMass[w[gv_indices]]),
+                       c='mediumseagreen', s=5, edgecolors='none')
+        
+        # Plot scatter - quiescent
+        if len(q_indices) > 0:
+            plt.scatter(np.log10(Vvir[w[q_indices]]), np.log10(BlackHoleMass[w[q_indices]]),
+                       c='firebrick', s=5, edgecolors='none')
+
+    plt.xlabel(r'$\log_{10} V_{\mathrm{vir}}\ (\mathrm{km}\ \mathrm{s}^{-1})$')
+    plt.ylabel(r'$\log_{10} M_{\mathrm{BH}}\ (M_{\odot})$')
+    plt.xlim(1.5, 3.0)
+    plt.ylim(5, 10)
+    
+    # Create custom legend
+    legend_labels = ['Star Forming', 'Green Valley', 'Quiescent']
+    legend_colors = ['dodgerblue', 'mediumseagreen', 'firebrick']
+    handles = [Rectangle((0,0),1,1, fc="w", fill=False, edgecolor='none', linewidth=0) for _ in legend_labels]
+    legend = plt.legend(handles, legend_labels, loc='upper left', frameon=False)
+    for i, text in enumerate(legend.get_texts()):
+        text.set_color(legend_colors[i])
+    
+    plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+
+    outputFile = OutputDir + '37.bh_mass_vs_vvir' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
     print('\nAll plots completed!')
