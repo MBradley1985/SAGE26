@@ -329,7 +329,7 @@ if __name__ == '__main__':
     binwidth = 0.1  # mass function histogram bin width
 
     # calculate all
-    w = np.where(ColdGas > 0.0)[0]
+    w = np.where((ColdGas > 0.0) & (Type==0))[0]
     mass = np.log10(ColdGas[w])
     H2mass = np.log10(H2gas[w])
     H1mass = np.log10(ColdGas[w] - H2gas[w])
@@ -2645,12 +2645,21 @@ if __name__ == '__main__':
     # Define radial bins in physical units (Mpc/h) - logarithmic spacing
     radial_bins = np.logspace(-2, np.log10(3), 15)  # 0.01 to 3 Mpc/h
     radial_centers = np.sqrt(radial_bins[:-1] * radial_bins[1:])  # geometric mean for log bins
+    max_radius = radial_bins[-1]  # Maximum search radius
 
     # Get central galaxies only
     central_mask = (Type == 0) & (StellarMass > 0) & (Mvir > 0)
     centrals_idx = np.where(central_mask)[0]
     
+    # Pre-filter galaxies with CentralMvir > 0 (all potential neighbors)
+    neighbor_mask = CentralMvir > 0
+    neighbor_idx = np.where(neighbor_mask)[0]
+    neighbor_pos = np.column_stack([Posx[neighbor_mask], Posy[neighbor_mask], Posz[neighbor_mask]])
+    neighbor_mvir = CentralMvir[neighbor_mask]
+    neighbor_central_gal_idx = CentralGalaxyIndex[neighbor_mask]
+    
     print(f'Total central galaxies: {len(centrals_idx)}')
+    print(f'Total potential neighbors: {len(neighbor_idx)}')
     
     # For each mass bin, calculate surface density in each radial bin
     for mass_min, mass_max, label, color in mass_bins:
@@ -2664,31 +2673,32 @@ if __name__ == '__main__':
         if len(selected_centrals) == 0:
             continue
         
-        # For each central, find ALL other galaxies around it and calculate surface density
+        # Initialize surface density profile for all radial bins
         surface_density_profile = []
         
+        # Process all radial bins
         for r_idx in range(len(radial_bins) - 1):
             r_min = radial_bins[r_idx]  # Mpc/h
             r_max = radial_bins[r_idx + 1]  # Mpc/h
             
             total_mvir_in_bin = 0.0
             n_neighbors = 0
-            unique_halos_seen = set()  # Reset for each radial bin
+            unique_halos_seen = set()  # Track unique halos per bin
             
-            # For each central in this mass bin
+            # Vectorized processing: calculate distances for all centrals at once
             for central_idx in selected_centrals:
-                # Find ALL other galaxies with CentralMvir > 0
-                other_galaxies = np.where((CentralMvir > 0) & (np.arange(len(CentralMvir)) != central_idx))[0]
+                # Get central position
+                central_pos = np.array([Posx[central_idx], Posy[central_idx], Posz[central_idx]])
                 
-                if len(other_galaxies) == 0:
-                    continue
+                # Exclude self if central is also in neighbor list
+                not_self = neighbor_idx != central_idx
                 
-                # Calculate 3D distances from central
-                dx = Posx[other_galaxies] - Posx[central_idx]
-                dy = Posy[other_galaxies] - Posy[central_idx]
-                dz = Posz[other_galaxies] - Posz[central_idx]
+                # Calculate separation vectors with periodic boundary conditions
+                dx = neighbor_pos[not_self, 0] - central_pos[0]
+                dy = neighbor_pos[not_self, 1] - central_pos[1]
+                dz = neighbor_pos[not_self, 2] - central_pos[2]
                 
-                # Handle periodic boundary conditions
+                # Apply periodic boundary conditions
                 dx = np.where(dx > BoxSize/2, dx - BoxSize, dx)
                 dx = np.where(dx < -BoxSize/2, dx + BoxSize, dx)
                 dy = np.where(dy > BoxSize/2, dy - BoxSize, dy)
@@ -2696,38 +2706,38 @@ if __name__ == '__main__':
                 dz = np.where(dz > BoxSize/2, dz - BoxSize, dz)
                 dz = np.where(dz < -BoxSize/2, dz + BoxSize, dz)
                 
-                # Calculate PROJECTED distance (2D, typically x-y plane) not 3D
-                distance_projected = np.sqrt(dx**2 + dy**2)  # Mpc/h (projected radius rp)
+                # Calculate projected distance (2D in x-y plane)
+                distance_projected = np.sqrt(dx**2 + dy**2)
                 
                 # Select galaxies in this radial bin
-                in_radial_bin = (distance_projected >= r_min) & (distance_projected < r_max)
-                galaxies_in_bin = other_galaxies[in_radial_bin]
+                in_bin = (distance_projected >= r_min) & (distance_projected < r_max)
                 
-                # Count unique halos - use CentralGalaxyIndex to identify unique halos
-                for gal_idx in galaxies_in_bin:
-                    halo_id = CentralGalaxyIndex[gal_idx]
-                    # Only count this halo if we haven't seen it before in this bin
+                # Get the neighbor indices and halo IDs for galaxies in this bin
+                neighbor_subset = neighbor_idx[not_self][in_bin]
+                neighbor_central_gal_subset = neighbor_central_gal_idx[not_self][in_bin]
+                neighbor_mvir_subset = neighbor_mvir[not_self][in_bin]
+                
+                # Count unique halos
+                for idx, (gal_idx, halo_id, mvir_val) in enumerate(zip(neighbor_subset, 
+                                                                         neighbor_central_gal_subset, 
+                                                                         neighbor_mvir_subset)):
                     if halo_id not in unique_halos_seen:
                         unique_halos_seen.add(halo_id)
-                        total_mvir_in_bin += CentralMvir[gal_idx]
+                        total_mvir_in_bin += mvir_val
                         n_neighbors += 1
             
             # Calculate surface density for this radial bin
-            # Area of annulus in pc^2: π(r_outer^2 - r_inner^2)
-            # r is in Mpc/h, convert to pc (not pc/h): r_pc = r * 1e6 / h
             r_min_pc = r_min * 1e6 / Hubble_h  # pc (physical)
             r_max_pc = r_max * 1e6 / Hubble_h  # pc (physical)
-            area_annulus = np.pi * (r_max_pc**2 - r_min_pc**2)  # pc^2 (physical)
+            area_annulus = np.pi * (r_max_pc**2 - r_min_pc**2)  # pc^2
             
-            # Surface density in h M_☉/pc^2
-            # Mvir is in M_☉, multiply by h to get h M_☉, divide by physical area in pc^2
             total_mvir_h = total_mvir_in_bin * Hubble_h
             
-            # Average surface density across all centrals in this mass bin
+            # Average surface density across all centrals
             if len(selected_centrals) > 0 and area_annulus > 0:
                 surf_density = total_mvir_h / (area_annulus * len(selected_centrals))
                 surface_density_profile.append(surf_density)
-                print(f'    Bin {r_min:.3f}-{r_max:.3f} Mpc/h: {n_neighbors} neighbors, Σ={surf_density:.2e}')
+                print(f'    Bin {r_min:.3f}-{r_max:.3f} Mpc/h: {n_neighbors} unique halos, Σ={surf_density:.2e}')
             else:
                 surface_density_profile.append(np.nan)
         
@@ -2952,6 +2962,70 @@ if __name__ == '__main__':
     plt.ylim(-3, 2)
 
     outputFile = OutputDir + '42.H2_fraction_vs_Mstar' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# ---------------------------------------------------------
+
+    print('Plotting H2 fraction (H2/ColdGas) vs M_star')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    # Select galaxies with stellar mass and cold gas
+    w = np.where((StellarMass > 0) & (ColdGas > 0) & (Type == 0))[0]
+    
+    if len(w) > dilute:
+        w = sample(list(w), dilute)
+    
+    x = np.log10(StellarMass[w])
+    y = H2gas[w] / ColdGas[w]  # H2 fraction
+    
+    plt.scatter(x, y, c='forestgreen', s=1, alpha=0.3, rasterized=True)
+    
+    # Calculate median in bins with bootstrap errors
+    mass_bins = np.arange(8.0, 12.5, 0.2)
+    bin_centers = []
+    bin_medians = []
+    bin_lower = []
+    bin_upper = []
+    
+    n_bootstrap = 1000
+    
+    for i in range(len(mass_bins)-1):
+        mask = (x >= mass_bins[i]) & (x < mass_bins[i+1])
+        if np.sum(mask) > 10:
+            bin_centers.append((mass_bins[i] + mass_bins[i+1]) / 2.0)
+            bin_data = y[mask]
+            bin_medians.append(np.median(bin_data))
+            
+            # Bootstrap resampling
+            bootstrap_medians = []
+            for _ in range(n_bootstrap):
+                resample = np.random.choice(bin_data, size=len(bin_data), replace=True)
+                bootstrap_medians.append(np.median(resample))
+            
+            # 68% confidence interval (1 sigma)
+            bin_lower.append(np.percentile(bootstrap_medians, 16))
+            bin_upper.append(np.percentile(bootstrap_medians, 84))
+    
+    if len(bin_centers) > 0:
+        bin_centers = np.array(bin_centers)
+        bin_medians = np.array(bin_medians)
+        bin_lower = np.array(bin_lower)
+        bin_upper = np.array(bin_upper)
+        
+        plt.fill_between(bin_centers, bin_lower, bin_upper, alpha=0.3, color='red', label='68% CI')
+        plt.plot(bin_centers, bin_medians, 'r-', lw=2, label='Median')
+        plt.legend(loc='best')
+    
+    plt.xlabel(r'$\log_{10}\ M_{\star}\ (M_{\odot})$')
+    plt.ylabel(r'$f_{\mathrm{H}_2}\ (M_{\mathrm{H}_2} / M_{\mathrm{cold}})$')
+    plt.xlim(8.0, 12.0)
+    plt.ylim(0, 1.0)
+
+    outputFile = OutputDir + '43.H2_fraction_vs_Mstar' + OutputFormat
     plt.savefig(outputFile)
     print('Saved file to', outputFile, '\n')
     plt.close()

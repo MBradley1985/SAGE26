@@ -85,6 +85,10 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
                 galaxies[p].H2gas = total_molecular_gas;
 
+                // float fmol = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
+                //                                                        rs_pc);
+                // printf("Galaxy %d: f_mol = %f, H2gas = %f, ColdGas = %f\n", p, fmol, galaxies[p].H2gas, galaxies[p].ColdGas);
+
                 if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
                     strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
                 } else {
