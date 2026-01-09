@@ -14,7 +14,7 @@ warnings.filterwarnings("ignore")
 # ========================== USER OPTIONS ==========================
 
 # File details
-DirName = './output/millennium/'
+DirName = './output/millennium_kd12/'
 FileName = 'model_0.hdf5'
 Snapshot = 'Snap_63'
 
@@ -677,7 +677,7 @@ if __name__ == '__main__':
     sSFR = (SfrDisk[w] + SfrBulge[w]) / StellarMass[w]
 
     MinRange = 9.5
-    MaxRange = 12.0
+    MaxRange = 12.5
     Interval = 0.1
     Nbins = int((MaxRange-MinRange)/Interval)
     Range = np.arange(MinRange, MaxRange, Interval)
