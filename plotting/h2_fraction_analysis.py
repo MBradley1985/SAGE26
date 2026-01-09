@@ -416,7 +416,7 @@ def plot_h2_fraction_multi_redshift():
         
         # Format panel
         ax.set_xlim(8.0, 12.0)
-        ax.set_ylim(0.0, 1.0)
+        ax.set_ylim(0.0, 1.2)
         ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
         ax.text(0.95, 0.95, f'z $\\approx$ {target_z:.1f}', 
                transform=ax.transAxes, ha='right', va='top',

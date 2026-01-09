@@ -4862,7 +4862,7 @@ if __name__ == '__main__':
     # -----------------------------------------------------------------------
     
     # plot_stellar_mass_function_comparison(SMF_SimConfigs, Snapshot, OutputDir)
-    plot_h2_fraction_vs_stellar_mass(GAS_SimConfigs, Snapshot, OutputDir)
+    # plot_h2_fraction_vs_stellar_mass(GAS_SimConfigs, Snapshot, OutputDir)
     # plot_h2_fraction_vs_halo_mass(GAS_SimConfigs, Snapshot, OutputDir)
     # plot_h1_fraction_vs_halo_mass(GAS_SimConfigs, Snapshot, OutputDir)
     # plot_h2_fraction_vs_stellar_mass_with_selection(GAS_SimConfigs, Snapshot, OutputDir)
