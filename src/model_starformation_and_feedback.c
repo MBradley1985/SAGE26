@@ -76,7 +76,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 strdot = 0.0;
             } else {
                 // float disk_area_pc2 = M_PI * rs_pc * rs_pc;
-                float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2); // 3× scale radius captures ~95% of mass
+                float disk_area_pc2 = M_PI * pow(rs_pc, 2); // pc^2
                 float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
                 float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
 
@@ -109,7 +109,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             tdyn = reff / galaxies[p].Vvir;
             const float h = run_params->Hubble_h;
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-            float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2); // pc^2
+            float disk_area_pc2 = M_PI * pow(rs_pc, 2); // pc^2
             float gas_surface_density = (disk_area_pc2 > 0.0) ?
                 (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2 : 0.0; // Msun/pc^2
 
@@ -153,7 +153,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 galaxies[p].H2gas = 0.0;
                 strdot = 0.0;
             } else {
-                float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2); // pc^2
+                float disk_area_pc2 = M_PI * pow(rs_pc, 2); // pc^2
                 float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // Msun/pc^2
                 float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2; // Msun/pc^2
 
@@ -187,9 +187,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // Krumholz and Dekel (2012) - KD12 Model
         // ========================================================================
 
-        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
-        reff = 3.0 * galaxies[p].DiskScaleRadius;
-
         tdyn = 3.0 * galaxies[p].DiskScaleRadius / galaxies[p].Vvir;
         const float h = run_params->Hubble_h;
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
@@ -197,8 +194,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             galaxies[p].H2gas = 0.0;
             strdot = 0.0;
         } else {
-            float disk_area = M_PI * galaxies[p].DiskScaleRadius * galaxies[p].DiskScaleRadius;; // pc^2
-            // float disk_area =  M_PI * pow(3.0 * rs_pc, 2);
+            float disk_area =  M_PI * pow(rs_pc, 2);
             if(disk_area <= 0.0) {
                 galaxies[p].H2gas = 0.0;
                 return;
@@ -231,8 +227,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // Krumholz, McKee, & Tumlinson (2009) - KMT09 Model
         // ========================================================================
 
-        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
-        reff = 3.0 * galaxies[p].DiskScaleRadius;
         
         // 1. Geometry and Units [cite: 60-64]
         reff = 3.0 * galaxies[p].DiskScaleRadius;
@@ -246,8 +240,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             // Scale radius in pc
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
             
-            // Disk Area (pc^2) - 3*rs captures ~95% of mass
-            float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+            // Disk Area (pc^2)
+            float disk_area_pc2 = M_PI * pow(rs_pc, 2);
             
             // Gas Surface Density (Msun/pc^2) - Sigma_g
             // ColdGas is in 10^10 Msun/h
@@ -353,8 +347,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             const float h = run_params->Hubble_h;
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
             
-            // Calculate surface densities within 3*scale_radius (captures ~95% of mass)
-            const float area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+            // Calculate surface densities
+            const float area_pc2 = M_PI * pow(rs_pc, 2);
             
             if(area_pc2 > 0.0) {
                 // Surface densities in Msun/pc^2
@@ -390,6 +384,10 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                     f_H2_2p = 1.0 - (0.75 * s) / (1.0 + 0.25 * s);
                 }
                 if(f_H2_2p < 0.0) f_H2_2p = 0.0;
+                if(f_H2_2p > 1.0) f_H2_2p = 1.0;
+                
+                // Store H2 mass
+                galaxies[p].H2gas = f_H2_2p * galaxies[p].ColdGas;
                 
                 // t_dep_2p (Eq 27) 
                 // t_dep = 3.1 Gyr / (f_H2 * Sigma^0.25)
@@ -435,28 +433,18 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 if(t_hydro_gas_Gyr < t_dep_Gyr) t_dep_Gyr = t_hydro_gas_Gyr;
 
                 // ----------------------------------------------------------------
-                // 4. Calculate SFR and Back-calculate H2 Fraction
+                // 4. Calculate SFR using H2 gas
                 // ----------------------------------------------------------------
 
                 // Convert t_dep (Gyr) to Code Units
                 double UnitTime_Gyr = run_params->UnitTime_in_Megayears / 1000.0;
                 double t_dep_Code = t_dep_Gyr / UnitTime_Gyr;
 
-                if(t_dep_Code > 0.0) {
-                    strdot = galaxies[p].ColdGas / t_dep_Code;
+                if(galaxies[p].H2gas > 0.0 && t_dep_Code > 0.0) {
+                    strdot = galaxies[p].H2gas / t_dep_Code;
                 } else {
                     strdot = 0.0;
                 }
-
-                // Calculate the effective H2 fraction consistent with this SFR
-                // Inverting Eq 27: f_H2_eff = 3.1 / (t_dep_Gyr * Sigma^0.25)
-                double f_H2_eff = 3.1 / (t_dep_Gyr * pow(Sigma_gas, 0.25));
-                
-                // Clamp fraction between 0 and 1
-                if(f_H2_eff > 1.0) f_H2_eff = 1.0;
-                if(f_H2_eff < 0.0) f_H2_eff = 0.0;
-                
-                galaxies[p].H2gas = f_H2_eff * galaxies[p].ColdGas;
 
             } else {
                 strdot = 0.0;
@@ -488,8 +476,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
             
             // 1. Calculate Geometry and Gas Surface Density
-            // Averaging over 3*scale_radius (captures ~95% of mass)
-            const float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+            const float disk_area_pc2 = M_PI * pow(rs_pc, 2);
             
             double Sigma_gas = 0.0;
             if(disk_area_pc2 > 0.0) {
@@ -1038,7 +1025,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
         if(rs_pc > 0.0) {
-            float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+            float disk_area_pc2 = M_PI * pow(rs_pc, 2);
             float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
             float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2;
             
@@ -1055,7 +1042,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
         if(rs_pc > 0.0) {
-            const float disk_area = M_PI * galaxies[p].DiskScaleRadius * galaxies[p].DiskScaleRadius;; // pc^2
+            const float disk_area = M_PI * pow(rs_pc, 2); // pc^2
             if(disk_area > 0.0) {
                 const float surface_density = galaxies[p].ColdGas / disk_area;
                 // double metallicity = 0.0;
@@ -1079,7 +1066,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
         if(rs_pc > 0.0) {
-            const float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+            const float disk_area_pc2 = M_PI * pow(rs_pc, 2);
             const float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
             
             float metallicity_abs = 0.0;
@@ -1118,7 +1105,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
         if(rs_pc > 0.0) {
-            const float area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+            const float area_pc2 = M_PI * pow(rs_pc, 2);
             
             if(area_pc2 > 0.0) {
                 double Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / area_pc2;
@@ -1181,7 +1168,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
         if(rs_pc > 0.0) {
-            const float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+            const float disk_area_pc2 = M_PI * pow(rs_pc, 2);
             
             double Sigma_gas = 0.0;
             if(disk_area_pc2 > 0.0) {
