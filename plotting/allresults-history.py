@@ -1356,4 +1356,108 @@ if __name__ == '__main__':
     print('Saved file to', outputFile, '\n')
     plt.close()
 
+# --------------------------------------------------------
+
+    print('Plotting halo mass function evolution')
+
+    plt.figure(figsize=(10, 8))
+    ax = plt.subplot(111)
+
+    # Define redshift bins (same as stellar mass function evolution)
+    z_bins = [
+        (0.2, 0.5), (0.5, 0.8), (0.8, 1.1), (1.1, 1.5), (1.5, 2.0),
+        (2.0, 2.5), (2.5, 3.0), (3.0, 3.5), (3.5, 4.5), (4.5, 5.5),
+        (5.5, 6.5), (6.5, 7.5), (7.5, 8.5), (8.5, 10.0), (10.0, 12.0)
+    ]
+
+    # Define colormap - from dark to light/orange (same as SMF)
+    colors = plt.cm.plasma(np.linspace(0.1, 0.9, len(z_bins)))
+
+    # Function to find snapshots within a redshift range
+    def find_snapshots_in_z_range(z_min, z_max, redshifts):
+        """Find snapshot indices within redshift range"""
+        snapshot_indices = []
+        for i, z in enumerate(redshifts):
+            if z_min <= z <= z_max:
+                snapshot_indices.append(i)
+        return snapshot_indices
+
+    # Mass bins for HMF
+    mass_bins = np.arange(10.0, 15.0, 0.1)
+    mass_centers = mass_bins[:-1] + 0.05
+    bin_width = mass_bins[1] - mass_bins[0]
+
+    # Calculate HMF for each redshift bin
+    for i, (z_min, z_max) in enumerate(z_bins):
+        # Find snapshots in this redshift range
+        snap_indices = find_snapshots_in_z_range(z_min, z_max, redshifts)
+        
+        if len(snap_indices) == 0:
+            continue
+        
+        # Calculate halo mass function for each snapshot separately
+        phi_snapshots = []
+        
+        for snap_idx in snap_indices:
+            if snap_idx < len(HaloMassFull):
+                # Get central galaxies only (unique halos)
+                central_mask = (TypeFull[snap_idx] == 0) & (HaloMassFull[snap_idx] > 0)
+                halo_masses = HaloMassFull[snap_idx][central_mask]
+                
+                if len(halo_masses) > 0:
+                    log_masses = np.log10(halo_masses)
+                    counts, _ = np.histogram(log_masses, bins=mass_bins)
+                    phi_snap = counts / (volume * bin_width)
+                    phi_snapshots.append(phi_snap)
+        
+        if len(phi_snapshots) == 0:
+            continue
+        
+        # Convert to numpy array for easier manipulation
+        phi_snapshots = np.array(phi_snapshots)
+        
+        # Calculate mean and 1-sigma error (standard error of the mean)
+        phi = np.mean(phi_snapshots, axis=0)
+        phi_err = np.std(phi_snapshots, axis=0) / np.sqrt(len(phi_snapshots))
+        
+        # Only plot where we have data
+        valid = (phi > 0) & (phi_err > 0)
+        if not np.any(valid):
+            continue
+        
+        # Plot the main curve
+        label = f'{z_min:.1f} < z < {z_max:.1f}'
+        ax.plot(mass_centers[valid], np.log10(phi[valid]), 
+                color=colors[i], linewidth=2, label=label)
+        
+        # Add shaded error region
+        ax.fill_between(mass_centers[valid], 
+                       np.log10(phi[valid] - phi_err[valid]), 
+                       np.log10(phi[valid] + phi_err[valid]),
+                       color=colors[i], alpha=0.3)
+
+    # Set limits
+    ax.set_xlim(10.0, 15.0)
+    ax.set_ylim(-6, -0.5)
+
+    # Labels and formatting
+    ax.set_xlabel(r'$\log_{10} M_{\rm vir}$ [$M_\odot$]', fontsize=14)
+    ax.set_ylabel(r'$\log_{10}\phi$ [Mpc$^{-3}$ dex$^{-1}$]', fontsize=14)
+
+    # Set minor ticks
+    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
+
+    # Create legend
+    leg = ax.legend(loc='upper right', fontsize=10, frameon=False)
+    for text in leg.get_texts():
+        text.set_fontsize(10)
+
+    plt.tight_layout()
+    
+    # Save the plot
+    outputFile = OutputDir + 'W.HaloMassFunctionEvolution' + OutputFormat
+    plt.savefig(outputFile, dpi=300, bbox_inches='tight')
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
     print('\nAll mass evolution plots completed!')

@@ -2234,26 +2234,21 @@ if __name__ == '__main__':
 
     # Filter for galaxies with positive cold gas and disk radius
     # Include total SFR (disk + bulge)
-    w = np.where((ColdGas > 0.0) & (DiskRadius > 0.0) & (Type == 0) & (H2gas > 0.0))[0]
+    w = np.where((ColdGas > 0.0) & (DiskRadius > 0.0))[0]
     
-    print(f'Found {len(w)} galaxies with H2 gas and disk radius')
+    print(f'Found {len(w)} galaxies with cold gas and disk radius')
     
     if len(w) > 0:
         # Calculate gas surface density
-        # DiskRadius is in Mpc/h (already divided by h based on other code), convert to kpc
-        R_d_kpc = DiskRadius[w] * 1000.0
+        # DiskRadius is in Mpc/h, convert to physical kpc
+        R_d_kpc = DiskRadius[w] * 1000.0 / Hubble_h  # kpc (physical)
         
-        # For exponential disk, use the area at 2*R_d (contains ~86% of light/mass)
-        # Or use effective area = 2*pi*R_d^2 for an exponential disk
-        disk_area = 2.0 * np.pi * R_d_kpc**2  # kpc^2 (scale area for exponential disk)
+        # Match the model's disk area: π × (3 × R_d)² to be consistent
+        # This captures ~95% of exponential disk mass
+        disk_area = np.pi * (R_d_kpc)**2  # kpc^2 (physical)
         
-        # Use H2 gas (molecular) for KS relation
-        # This is the physically correct choice because:
-        # 1. Star formation occurs in molecular clouds (H2), not atomic gas (HI)
-        # 2. The original Kennicutt-Schmidt relation was derived from star-forming regions
-        # 3. There's a much tighter correlation between H2 and SFR than total cold gas
-        # 4. HI needs to convert to H2 before participating in star formation
-        Sigma_gas_kpc = H2gas[w] / disk_area  # M_sun / kpc^2
+        # Use total cold gas for KS relation
+        Sigma_gas_kpc = ColdGas[w] / disk_area  # M_sun / kpc^2
         Sigma_gas = Sigma_gas_kpc / 1e6  # M_sun / pc^2
         
         # Calculate SFR surface density (use total SFR: disk + bulge)
@@ -2311,14 +2306,13 @@ if __name__ == '__main__':
                            c='firebrick', s=5, edgecolors='none')
             
             # Plot the canonical KS relation: Sigma_SFR = A * Sigma_gas^N
-            # Kennicutt (1998): N ~ 1.4
-            # Original: Sigma_SFR [M_sun yr^-1 kpc^-2] = 2.5e-4 * (Sigma_gas [M_sun pc^-2])^1.4
-            gas_range = np.logspace(-4, 5, 100)  # M_sun/pc^2
+            # Kennicutt (1998): Sigma_SFR [M_sun yr^-1 kpc^-2] = 2.5e-4 * (Sigma_gas [M_sun pc^-2])^1.4
+            gas_range = np.logspace(-1, 4, 100)  # M_sun/pc^2
             kennicutt_sfr = 2.5e-4 * gas_range**1.4  # M_sun/yr/kpc^2
             plt.plot(np.log10(gas_range), np.log10(kennicutt_sfr), 'k--', linewidth=2, 
                     label='Kennicutt (1998), N=1.4', alpha=0.7)
 
-    plt.xlabel(r'$\log_{10} \Sigma_{\mathrm{H_2}}\ (M_{\odot}\ \mathrm{pc}^{-2})$')
+    plt.xlabel(r'$\log_{10} \Sigma_{\mathrm{gas}}\ (M_{\odot}\ \mathrm{pc}^{-2})$')
     plt.ylabel(r'$\log_{10} \Sigma_{\mathrm{SFR}}\ (M_{\odot}\ \mathrm{yr}^{-1}\ \mathrm{kpc}^{-2})$')
     plt.xlim(-0.5, 5)
     plt.ylim(-4, 3)
@@ -2626,6 +2620,338 @@ if __name__ == '__main__':
     plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
 
     outputFile = OutputDir + '37.bh_mass_vs_vvir' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# --------------------------------------------------------
+
+    print('Plotting Mvir surface density around galaxies of different mass as a function of radii')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    # Define stellar mass bins for central galaxies (log10 M*)
+    mass_bins = [
+        (10.0, 10.4, r'$10.0 - 10.4$', 'navy'),
+        (10.4, 10.7, r'$10.4 - 10.7$', 'blue'),
+        (10.7, 11.0, r'$10.7 - 11.0$', 'cyan'),
+        (11.0, 11.2, r'$11.0 - 11.2$', 'green'),
+        (11.2, 11.4, r'$11.2 - 11.4$', 'yellow'),
+        (11.4, 11.6, r'$11.4 - 11.6$', 'orange'),
+        (11.6, 13.0, r'$> 11.6$', 'red')
+    ]
+
+    # Define radial bins in physical units (Mpc/h) - logarithmic spacing
+    radial_bins = np.logspace(-2, np.log10(3), 15)  # 0.01 to 3 Mpc/h
+    radial_centers = np.sqrt(radial_bins[:-1] * radial_bins[1:])  # geometric mean for log bins
+
+    # Get central galaxies only
+    central_mask = (Type == 0) & (StellarMass > 0) & (Mvir > 0)
+    centrals_idx = np.where(central_mask)[0]
+    
+    print(f'Total central galaxies: {len(centrals_idx)}')
+    
+    # For each mass bin, calculate surface density in each radial bin
+    for mass_min, mass_max, label, color in mass_bins:
+        # Select centrals in this mass range - mass bins are in log space
+        log_mass = np.log10(StellarMass[centrals_idx])
+        mass_mask = (log_mass >= mass_min) & (log_mass < mass_max)
+        selected_centrals = centrals_idx[mass_mask]
+        
+        print(f'  Mass bin {label}: {len(selected_centrals)} central galaxies')
+        
+        if len(selected_centrals) == 0:
+            continue
+        
+        # For each central, find ALL other galaxies around it and calculate surface density
+        surface_density_profile = []
+        
+        for r_idx in range(len(radial_bins) - 1):
+            r_min = radial_bins[r_idx]  # Mpc/h
+            r_max = radial_bins[r_idx + 1]  # Mpc/h
+            
+            total_mvir_in_bin = 0.0
+            n_neighbors = 0
+            unique_halos_seen = set()  # Reset for each radial bin
+            
+            # For each central in this mass bin
+            for central_idx in selected_centrals:
+                # Find ALL other galaxies with CentralMvir > 0
+                other_galaxies = np.where((CentralMvir > 0) & (np.arange(len(CentralMvir)) != central_idx))[0]
+                
+                if len(other_galaxies) == 0:
+                    continue
+                
+                # Calculate 3D distances from central
+                dx = Posx[other_galaxies] - Posx[central_idx]
+                dy = Posy[other_galaxies] - Posy[central_idx]
+                dz = Posz[other_galaxies] - Posz[central_idx]
+                
+                # Handle periodic boundary conditions
+                dx = np.where(dx > BoxSize/2, dx - BoxSize, dx)
+                dx = np.where(dx < -BoxSize/2, dx + BoxSize, dx)
+                dy = np.where(dy > BoxSize/2, dy - BoxSize, dy)
+                dy = np.where(dy < -BoxSize/2, dy + BoxSize, dy)
+                dz = np.where(dz > BoxSize/2, dz - BoxSize, dz)
+                dz = np.where(dz < -BoxSize/2, dz + BoxSize, dz)
+                
+                # Calculate PROJECTED distance (2D, typically x-y plane) not 3D
+                distance_projected = np.sqrt(dx**2 + dy**2)  # Mpc/h (projected radius rp)
+                
+                # Select galaxies in this radial bin
+                in_radial_bin = (distance_projected >= r_min) & (distance_projected < r_max)
+                galaxies_in_bin = other_galaxies[in_radial_bin]
+                
+                # Count unique halos - use CentralGalaxyIndex to identify unique halos
+                for gal_idx in galaxies_in_bin:
+                    halo_id = CentralGalaxyIndex[gal_idx]
+                    # Only count this halo if we haven't seen it before in this bin
+                    if halo_id not in unique_halos_seen:
+                        unique_halos_seen.add(halo_id)
+                        total_mvir_in_bin += CentralMvir[gal_idx]
+                        n_neighbors += 1
+            
+            # Calculate surface density for this radial bin
+            # Area of annulus in pc^2: π(r_outer^2 - r_inner^2)
+            # r is in Mpc/h, convert to pc (not pc/h): r_pc = r * 1e6 / h
+            r_min_pc = r_min * 1e6 / Hubble_h  # pc (physical)
+            r_max_pc = r_max * 1e6 / Hubble_h  # pc (physical)
+            area_annulus = np.pi * (r_max_pc**2 - r_min_pc**2)  # pc^2 (physical)
+            
+            # Surface density in h M_☉/pc^2
+            # Mvir is in M_☉, multiply by h to get h M_☉, divide by physical area in pc^2
+            total_mvir_h = total_mvir_in_bin * Hubble_h
+            
+            # Average surface density across all centrals in this mass bin
+            if len(selected_centrals) > 0 and area_annulus > 0:
+                surf_density = total_mvir_h / (area_annulus * len(selected_centrals))
+                surface_density_profile.append(surf_density)
+                print(f'    Bin {r_min:.3f}-{r_max:.3f} Mpc/h: {n_neighbors} neighbors, Σ={surf_density:.2e}')
+            else:
+                surface_density_profile.append(np.nan)
+        
+        # Plot the surface density profile
+        surface_density_profile = np.array(surface_density_profile)
+        
+        valid = (~np.isnan(surface_density_profile)) & (surface_density_profile > 0)
+        print(f'  Valid points: {np.sum(valid)} / {len(surface_density_profile)}')
+        if np.sum(valid) > 0:
+            plt.plot(radial_centers[valid], surface_density_profile[valid], 
+                    color=color, label=label, linewidth=2, marker='o', markersize=5)
+
+    plt.xlabel(r'$r_{\mathrm{p}}\ (\mathrm{Mpc}/h)$', fontsize=14)
+    plt.ylabel(r'$\Sigma\ (h\,M_{\odot}\,\mathrm{pc}^{-2})$', fontsize=14)
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.xlim(0.1, 10)
+    plt.ylim(1e-2, 1e3)
+
+    outputFile = OutputDir + '38.mvir_distribution_vs_radius' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# --------------------------------------------------------
+
+    print('Plotting halo mass function')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    halos = (Mvir > 0)
+    halo_masses = Mvir[halos]
+    
+    print(f'Found {len(halo_masses)} halos with Mvir > 0')
+
+    # Create mass bins
+    binwidth = 0.1  # dex
+    log_masses = np.log10(halo_masses)
+    mi = np.floor(log_masses.min()) - 1
+    ma = np.floor(log_masses.max()) + 1
+    NB = int((ma - mi) / binwidth)
+    
+    # Calculate histogram
+    counts, bin_edges = np.histogram(log_masses, range=(mi, ma), bins=NB)
+    bin_centers = bin_edges[:-1] + 0.5 * binwidth
+    
+    # Convert to number density: divide by volume and bin width
+    # phi = dn/dlog10M in units of (Mpc/h)^-3 dex^-1
+    phi = counts / (volume * binwidth)
+    
+    # Plot
+    w = np.where(phi > 0)[0]
+    plt.plot(bin_centers[w], np.log10(phi[w]), 'b-', linewidth=2, label='SAGE26')
+    
+    plt.xlabel(r'$\log_{10}(M_{\mathrm{vir}}/M_{\odot})$')
+    plt.ylabel(r'$\log_{10}[\phi\ \mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
+    plt.xlim(10, 15)
+
+    outputFile = OutputDir + '39.halo_mass_function' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# --------------------------------------------------------
+
+    print('Plotting SFR surface density vs SFR')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    # Calculate total SFR
+    SFR = SfrDisk + SfrBulge
+    
+    # Filter for galaxies with positive SFR and disk radius
+    w = np.where((SFR > 0) & (DiskRadius > 0) & (StellarMass > 0))[0]
+    
+    if len(w) > dilute:
+        indices = sample(range(len(w)), dilute)
+        w_sample = w[indices]
+    else:
+        w_sample = w
+    
+    print(f'Plotting {len(w_sample)} galaxies with SFR > 0')
+    
+    # Calculate SFR surface density
+    # Σ_SFR = SFR / (π * R_disk^2)
+    # DiskRadius is in Mpc/h, convert to kpc: R_kpc = DiskRadius * 1000 / h
+    R_disk_kpc = DiskRadius[w_sample] * 1000.0 / Hubble_h  # kpc
+    area_kpc2 = np.pi * R_disk_kpc**2  # kpc^2
+    
+    SFR_surface_density = SFR[w_sample] / area_kpc2  # M_sun/yr/kpc^2
+    
+    # Calculate sSFR for coloring
+    sSFR_filtered = np.log10(SFR[w_sample] / StellarMass[w_sample])
+    
+    # Define populations
+    green_valley_upper = sSFRcut
+    green_valley_lower = sSFRcut - 0.5
+    
+    sf_mask = sSFR_filtered > green_valley_upper
+    gv_mask = (sSFR_filtered <= green_valley_upper) & (sSFR_filtered > green_valley_lower)
+    q_mask = sSFR_filtered <= green_valley_lower
+    
+    # Plot scatter - star forming
+    if np.sum(sf_mask) > 0:
+        plt.scatter(np.log10(SFR[w_sample[sf_mask]]), np.log10(SFR_surface_density[sf_mask]),
+                   c='dodgerblue', s=5, edgecolors='none', alpha=0.6)
+    
+    # Plot scatter - green valley
+    if np.sum(gv_mask) > 0:
+        plt.scatter(np.log10(SFR[w_sample[gv_mask]]), np.log10(SFR_surface_density[gv_mask]),
+                   c='mediumseagreen', s=5, edgecolors='none')
+    
+    # Plot scatter - quiescent
+    if np.sum(q_mask) > 0:
+        plt.scatter(np.log10(SFR[w_sample[q_mask]]), np.log10(SFR_surface_density[q_mask]),
+                   c='firebrick', s=5, edgecolors='none')
+    
+    plt.xlabel(r'$\log_{10}\ \mathrm{SFR}\ (M_{\odot}\ \mathrm{yr}^{-1})$')
+    plt.ylabel(r'$\log_{10}\ \Sigma_{\mathrm{SFR}}\ (M_{\odot}\ \mathrm{yr}^{-1}\ \mathrm{kpc}^{-2})$')
+    
+    # Create custom legend with colored text
+    from matplotlib.patches import Rectangle
+    legend_labels = ['Star Forming', 'Green Valley', 'Quiescent']
+    legend_colors = ['dodgerblue', 'mediumseagreen', 'firebrick']
+    handles = [Rectangle((0,0),1,1, fc="w", fill=False, edgecolor='none', linewidth=0) for _ in legend_labels]
+    legend = plt.legend(handles, legend_labels, loc='upper left', frameon=False)
+    for i, text in enumerate(legend.get_texts()):
+        text.set_color(legend_colors[i])
+    
+    plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
+    plt.xlim(-4, 3)
+    plt.ylim(-6, 1)
+
+    outputFile = OutputDir + '40.sfr_surface_density_vs_sfr' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# ---------------------------------------------------------
+
+    print('Plotting H1/M_star vs M_star')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    # Calculate HI mass (ColdGas - H2)
+    HI = ColdGas - H2gas
+    HI[HI < 0] = 0  # Ensure non-negative
+
+    # Select galaxies with stellar mass and HI
+    w = np.where((StellarMass > 0) & (HI > 0) & (Type == 0))[0]
+    
+    if len(w) > dilute:
+        w = sample(list(w), dilute)
+    
+    x = np.log10(StellarMass[w])
+    y = np.log10(HI[w] / StellarMass[w])
+    
+    plt.scatter(x, y, c='cornflowerblue', s=1, alpha=0.3, rasterized=True)
+    
+    # Calculate median in bins
+    mass_bins = np.arange(8.0, 12.5, 0.2)
+    bin_centers = []
+    bin_medians = []
+    
+    for i in range(len(mass_bins)-1):
+        mask = (x >= mass_bins[i]) & (x < mass_bins[i+1])
+        if np.sum(mask) > 10:
+            bin_centers.append((mass_bins[i] + mass_bins[i+1]) / 2.0)
+            bin_medians.append(np.median(y[mask]))
+    
+    if len(bin_centers) > 0:
+        plt.plot(bin_centers, bin_medians, 'r-', lw=2, label='Median')
+    
+    plt.xlabel(r'$\log_{10}\ M_{\star}\ (M_{\odot})$')
+    plt.ylabel(r'$\log_{10}\ (M_{\mathrm{HI}} / M_{\star})$')
+    plt.xlim(8.0, 12.0)
+    plt.ylim(-3, 2)
+
+    outputFile = OutputDir + '41.HI_fraction_vs_Mstar' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# ---------------------------------------------------------
+
+    print('Plotting H2/M_star vs M_star')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    # Select galaxies with stellar mass and H2
+    w = np.where((StellarMass > 0) & (H2gas > 0) & (Type == 0))[0]
+    
+    if len(w) > dilute:
+        w = sample(list(w), dilute)
+    
+    x = np.log10(StellarMass[w])
+    y = np.log10(H2gas[w] / StellarMass[w])
+    
+    plt.scatter(x, y, c='mediumorchid', s=1, alpha=0.3, rasterized=True)
+    
+    # Calculate median in bins
+    mass_bins = np.arange(8.0, 12.5, 0.2)
+    bin_centers = []
+    bin_medians = []
+    
+    for i in range(len(mass_bins)-1):
+        mask = (x >= mass_bins[i]) & (x < mass_bins[i+1])
+        if np.sum(mask) > 10:
+            bin_centers.append((mass_bins[i] + mass_bins[i+1]) / 2.0)
+            bin_medians.append(np.median(y[mask]))
+    
+    if len(bin_centers) > 0:
+        plt.plot(bin_centers, bin_medians, 'r-', lw=2, label='Median')
+    
+    plt.xlabel(r'$\log_{10}\ M_{\star}\ (M_{\odot})$')
+    plt.ylabel(r'$\log_{10}\ (M_{\mathrm{H}_2} / M_{\star})$')
+    plt.xlim(8.0, 12.0)
+    plt.ylim(-3, 2)
+
+    outputFile = OutputDir + '42.H2_fraction_vs_Mstar' + OutputFormat
     plt.savefig(outputFile)
     print('Saved file to', outputFile, '\n')
     plt.close()
