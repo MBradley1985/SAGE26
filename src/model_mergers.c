@@ -422,9 +422,6 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     if(stars < 0.0) {
         stars = 0.0;
     }
-
-    // [... keep all the feedback calculation code the same ...]
-    // [lines for reheated_mass and ejected_mass calculation - unchanged]
     
     // this bursting results in SN feedback on the cold/hot gas
     if(run_params->SupernovaRecipeOn == 1) {
