@@ -611,7 +611,12 @@ float calculate_H2_fraction_KD12(const float surface_density, const float metall
     
     // Metallicity normalized to solar (Z_sun = 0.02)
     // Z0 = (M_Z/M_g)/Z_sun as defined in KD12 equation after (17)
-    float Z0 = metallicity / 0.02;
+    // Apply floor to prevent numerical issues and unphysical zero H2 at very low Z
+    float metallicity_floored = metallicity;
+    if (metallicity_floored < 0.0002) {  // Z = 0.01 Z_sun minimum
+        metallicity_floored = 0.0002;
+    }
+    float Z0 = metallicity_floored / 0.02;
     
     // Convert surface density from M_sun/pc^2 to g/cm^2
     // Conversion: 1 M_sun/pc^2 = 2.088 × 10^-4 g/cm^2
