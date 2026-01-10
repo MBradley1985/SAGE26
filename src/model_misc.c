@@ -452,10 +452,11 @@ float calculate_midplane_pressure_BR06(float sigma_gas, float sigma_stars, float
         return 0.0;
     }
     
-    // Handle zero or very low stellar surface density (early galaxy evolution)
+    // For very low stellar surface density, use a minimal value to avoid numerical issues
+    // but don't artificially boost it like before
     float effective_sigma_stars = sigma_stars;
-    if (sigma_stars < 3.0) {
-        effective_sigma_stars = fmax(sigma_gas * 0.2, 3.0);
+    if (sigma_stars < 0.1) {
+        effective_sigma_stars = 0.1;  // Minimal floor just to avoid sqrt(0)
     }
     
     // Calculate stellar scale height using exact BR06 equation (9)
@@ -520,8 +521,8 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
     const float sigma_star_0 = M_star_total / (2.0 * M_PI * rs_pc * rs_pc);
     
     // Radial integration parameters
-    const int N_BINS = 50;  // Number of radial bins
-    const float R_MAX = 5.0 * rs_pc;  // Integrate out to 5 scale radii (~99% of mass)
+    const int N_BINS = 10;  // Number of radial bins
+    const float R_MAX = 3.0 * rs_pc;  // Integrate out to 3 scale radii (~95% of mass)
     const float dr = R_MAX / N_BINS;
     
     // Integrate molecular gas mass

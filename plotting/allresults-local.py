@@ -14,7 +14,7 @@ warnings.filterwarnings("ignore")
 # ========================== USER OPTIONS ==========================
 
 # File details
-DirName = './output/millennium/'
+DirName = './output/millennium_kd12/'
 FileName = 'model_0.hdf5'
 Snapshot = 'Snap_63'
 
@@ -3026,6 +3026,70 @@ if __name__ == '__main__':
     plt.ylim(0, 1.0)
 
     outputFile = OutputDir + '43.H2_fraction_vs_Mstar' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# ---------------------------------------------------------
+
+    print('Plotting bulge fraction vs M_star')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    # Select galaxies with stellar mass
+    w = np.where((StellarMass > 0) & (Type == 0))[0]
+    
+    if len(w) > dilute:
+        w = sample(list(w), dilute)
+    
+    x = np.log10(StellarMass[w])
+    y = BulgeMass[w] / StellarMass[w]  # Bulge fraction
+    
+    plt.scatter(x, y, c='darkorange', s=1, alpha=0.3, rasterized=True)
+    
+    # Calculate median in bins with bootstrap errors
+    mass_bins = np.arange(8.0, 12.5, 0.2)
+    bin_centers = []
+    bin_medians = []
+    bin_lower = []
+    bin_upper = []
+    
+    n_bootstrap = 1000
+    
+    for i in range(len(mass_bins)-1):
+        mask = (x >= mass_bins[i]) & (x < mass_bins[i+1])
+        if np.sum(mask) > 10:
+            bin_centers.append((mass_bins[i] + mass_bins[i+1]) / 2.0)
+            bin_data = y[mask]
+            bin_medians.append(np.median(bin_data))
+            
+            # Bootstrap resampling
+            bootstrap_medians = []
+            for _ in range(n_bootstrap):
+                resample = np.random.choice(bin_data, size=len(bin_data), replace=True)
+                bootstrap_medians.append(np.median(resample))
+            
+            # 68% confidence interval (1 sigma)
+            bin_lower.append(np.percentile(bootstrap_medians, 16))
+            bin_upper.append(np.percentile(bootstrap_medians, 84))
+    
+    if len(bin_centers) > 0:
+        bin_centers = np.array(bin_centers)
+        bin_medians = np.array(bin_medians)
+        bin_lower = np.array(bin_lower)
+        bin_upper = np.array(bin_upper)
+        
+        plt.fill_between(bin_centers, bin_lower, bin_upper, alpha=0.3, color='red', label='68% CI')
+        plt.plot(bin_centers, bin_medians, 'r-', lw=2, label='Median')
+        plt.legend(loc='best')
+    
+    plt.xlabel(r'$\log_{10}\ M_{\star}\ (M_{\odot})$')
+    plt.ylabel(r'$M_{\mathrm{bulge}} / M_{\star}$')
+    plt.xlim(8.0, 12.0)
+    plt.ylim(0, 1.0)
+
+    outputFile = OutputDir + '44.bulge_fraction_vs_Mstar' + OutputFormat
     plt.savefig(outputFile)
     print('Saved file to', outputFile, '\n')
     plt.close()
