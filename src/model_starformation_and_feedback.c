@@ -94,12 +94,11 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
                 galaxies[p].H2gas = total_molecular_gas;
 
-                // float time = 0.4 * SEC_PER_MEGAYEAR; // 0.4 Gyr in seconds
-
-                // float mu_sf = time * pow(1 + gas_surface_density/200.0, 0.4); // in units of M☉ pc⁻² (km/s)⁻¹
+                // double nu_sf = 0.4 * (1.0 + pow(gas_surface_density / 200.0, 0.4)); // Gyr^-1
+                // double nu_sf_per_year = nu_sf * SEC_PER_MEGAYEAR/ 1000;
 
                 if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
-                    // strdot = mu_sf * galaxies[p].H2gas;
+                    // strdot = nu_sf_per_year * galaxies[p].H2gas;
                     strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
                 } else {
                     strdot = 0.0;
@@ -214,6 +213,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             galaxies[p].H2gas = 0.0;
             strdot = 0.0;
         } else {
+            reff = 3.0 * galaxies[p].DiskScaleRadius;
             tdyn = 3.0 * galaxies[p].DiskScaleRadius / galaxies[p].Vvir;
             const float h = run_params->Hubble_h;
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
@@ -265,6 +265,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         
         // 1. Geometry and Units [cite: 60-64]
         reff = 3.0 * galaxies[p].DiskScaleRadius;
+        tdyn = reff / galaxies[p].Vvir;
         
         // Check for physical validity
         if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
@@ -284,7 +285,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             } else {
                 disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
             }
-            
+
             // Gas Surface Density (Msun/pc^2) - Sigma_g
             // ColdGas is in 10^10 Msun/h
             float gas_surface_density = (disk_area_pc2 > 0.0) ? 
@@ -298,12 +299,17 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             }
             // Z' = Z / Z_solar. Clamp to a minimum to avoid division by zero in log terms.
             float Z_prime = metallicity_abs / 0.02; 
-            if (Z_prime < 0.01) Z_prime = 0.01;
+            if (Z_prime < 0.05) Z_prime = 0.05; // Minimum metallicity floor
 
             // 3. Molecular Fraction f_H2 (Equation 2 from KMT09) [cite: 80-81]
             // Clumping factor c: Paper suggests c ~ 5 for kpc-scale observations/models 
-            const float clumping_factor = 5.0; 
+            const float clumping_factor = 3.0; 
             float Sigma_comp = clumping_factor * gas_surface_density; // Surface density of complexes
+
+            // --- Equation 21: Dust Optical Depth (tau_c) ---
+            // tau_c = 0.066 * f_c * D_MW * Sigma_gas
+            // Note: surface_density must be in M_sun/pc^2
+            double tau_c = 0.066 * clumping_factor * Z_prime * gas_surface_density;
 
             // Chi factor: chi = 0.77 * (1 + 3.1 * Z'^0.365)
             float chi = 0.77 * (1.0 + 3.1 * pow(Z_prime, 0.365));
@@ -312,17 +318,21 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             // Note: 0.04 constant includes units for Sigma in Msun/pc^2
             float s = 0.0;
             if (Sigma_comp > 0.0) {
-                s = log(1.0 + 0.6 * chi) / (0.04 * Sigma_comp * Z_prime);
+                s = log(1.0 + 0.6 * chi + 0.01 * chi * chi) / (0.6 * tau_c);
             } else {
-                s = 1.0e5; // Large s implies f_H2 -> 0
+                s = 100.0; // Large s implies f_H2 -> 0
             }
 
-            // delta = 0.0712 * (0.1/s + 0.675)^-2.8
-            float delta = 0.0712 * pow(0.1/s + 0.675, -2.8);
-
-            // f_H2 formula: 1 - [1 + (0.75 * s / (1+delta))^-5]^-1/5
-            float term_inner = 0.75 * s / (1.0 + delta);
-            float f_H2 = 1.0 - pow(1.0 + pow(term_inner, -5.0), -0.2);
+            float f_H2 = 0.0; 
+            
+            if (s < 2.0) {
+                // Eq 23: Approximation for molecular-dominated regime
+                f_H2 = 1.0 - (3.0 * s) / (4.0 + s);
+            } else {
+                // For s >= 2, gas is atomic dominated. 
+                // The exact solution approaches 0 very fast.
+                f_H2 = 0.0; 
+            }
 
             // Safety clamps
             if (f_H2 < 0.0) f_H2 = 0.0;
@@ -331,40 +341,24 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             // Store H2 mass
             galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
-            // 4. Star Formation Timescale (Equation 10 from KMT09) 
-            // The paper specifies a depletion time for the molecular gas:
-            // t_dep = 2.6 Gyr * (Sigma_g / 85 Msun/pc^2)^-0.33  [for Low Density]
-            // t_dep = 2.6 Gyr * (Sigma_g / 85 Msun/pc^2)^+0.33  [for High Density]
+            // 4. Star Formation Timescale (Xie et al. 2017 Simplification)
+            // The paper Section 2.4.2 explicitly states:
+            // "We assume a constant depletion time t_dep = 2.6 Gyr."
             
-            double t_sf_gyr = 2.6; // Normalization from Eq 10
-            double sigma_crit = 85.0; // Critical density Msun/pc^2
-            
-            double density_ratio = 1.0;
-            if (gas_surface_density > 0.0) {
-                density_ratio = gas_surface_density / sigma_crit;
-            }
-
-            double timescale_factor = 1.0;
-            if (gas_surface_density < sigma_crit) {
-                // Low density: internal regulation, t_ff depends on Jeans mass
-                timescale_factor = pow(density_ratio, -0.333); 
-            } else {
-                // High density: ambient pressure regulation
-                timescale_factor = pow(density_ratio, 0.333);
-            }
-            
-            double t_depletion_gyr = t_sf_gyr * timescale_factor;
+            // This 2.6 Gyr already accounts for the efficiency (epsilon_ff),
+            // so we do not need to multiply by extra factors unless tuning.
+            double t_depletion_gyr = 2.6; 
 
             // Convert Gyr to code time units
-            // UnitTime_in_Megayears is typically ~978 Myr/h for SAGE, but we use the variable
+            // (e.g., if UnitTime is ~978 Myr, this converts 2.6 Gyr to code units)
             double t_depletion_code = t_depletion_gyr * 1000.0 / run_params->UnitTime_in_Megayears;
 
             // 5. Calculate SFR
-            if (galaxies[p].H2gas > 0.0 && t_depletion_code > 0.0) {
+            if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
                 // SFR = M_H2 / t_depletion
-                // Note: We apply SfrEfficiency here to allow standard tuning, 
-                // though KMT09 provides an absolute prediction (Efficiency ~ 1.0).
-                strdot = run_params->SfrEfficiency * galaxies[p].H2gas / t_depletion_code;
+                
+                // STRICT XIE 2017:
+                strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
             } else {
                 strdot = 0.0;
             }
@@ -378,6 +372,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // ========================================================================
 
         reff = 3.0 * galaxies[p].DiskScaleRadius;
+        tdyn = reff / galaxies[p].Vvir;
 
         // Basic safety checks
         if(galaxies[p].Vvir <= 0.0 || galaxies[p].ColdGas <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
@@ -487,10 +482,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
                 // Convert t_dep (Gyr) to Code Units
                 double UnitTime_Gyr = run_params->UnitTime_in_Megayears / 1000.0;
-                double t_dep_Code = t_dep_Gyr / UnitTime_Gyr;
 
-                if(galaxies[p].H2gas > 0.0 && t_dep_Code > 0.0) {
-                    strdot = galaxies[p].H2gas / t_dep_Code;
+                if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
+                    strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
                 } else {
                     strdot = 0.0;
                 }
@@ -509,8 +503,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // ========================================================================
 
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
-        reff = 3.0 * galaxies[p].DiskScaleRadius;
-
         reff = 3.0 * galaxies[p].DiskScaleRadius;
 
         // Basic safety checks
@@ -1147,33 +1139,61 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
             } else {
                 disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
             }
-            const float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
+            // const float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
             
+            // Gas Surface Density (Msun/pc^2) - Sigma_g
+            // ColdGas is in 10^10 Msun/h
+            float gas_surface_density = (disk_area_pc2 > 0.0) ? 
+                (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2 : 0.0;
+                
+            // 2. Metallicity (Normalized to Solar) [cite: 81]
+            // Calculate absolute metallicity Z, then normalize to Solar (approx 0.02)
             float metallicity_abs = 0.0;
             if(galaxies[p].ColdGas > 0.0) {
                 metallicity_abs = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
             }
-            float Z_prime = metallicity_abs / 0.02;
-            if(Z_prime < 0.01) Z_prime = 0.01;
-            
-            const float clumping_factor = 5.0;
-            float Sigma_comp = clumping_factor * gas_surface_density;
+            // Z' = Z / Z_solar. Clamp to a minimum to avoid division by zero in log terms.
+            float Z_prime = metallicity_abs / 0.02; 
+            if (Z_prime < 0.05) Z_prime = 0.05; // Minimum metallicity floor
+
+            // 3. Molecular Fraction f_H2 (Equation 2 from KMT09) [cite: 80-81]
+            // Clumping factor c: Paper suggests c ~ 5 for kpc-scale observations/models 
+            const float clumping_factor = 3.0; 
+            float Sigma_comp = clumping_factor * gas_surface_density; // Surface density of complexes
+
+            // --- Equation 21: Dust Optical Depth (tau_c) ---
+            // tau_c = 0.066 * f_c * D_MW * Sigma_gas
+            // Note: surface_density must be in M_sun/pc^2
+            double tau_c = 0.066 * clumping_factor * Z_prime * gas_surface_density;
+
+            // Chi factor: chi = 0.77 * (1 + 3.1 * Z'^0.365)
             float chi = 0.77 * (1.0 + 3.1 * pow(Z_prime, 0.365));
-            
+
+            // s = ln(1 + 0.6*chi) / (0.04 * Sigma_comp * Z')
+            // Note: 0.04 constant includes units for Sigma in Msun/pc^2
             float s = 0.0;
-            if(Sigma_comp > 0.0) {
-                s = log(1.0 + 0.6 * chi) / (0.04 * Sigma_comp * Z_prime);
+            if (Sigma_comp > 0.0) {
+                s = log(1.0 + 0.6 * chi + 0.01 * chi * chi) / (0.6 * tau_c);
             } else {
-                s = 1.0e5;
+                s = 100.0; // Large s implies f_H2 -> 0
             }
+
+            float f_H2 = 0.0; 
             
-            float delta = 0.0712 * pow(0.1/s + 0.675, -2.8);
-            float term_inner = 0.75 * s / (1.0 + delta);
-            float f_H2 = 1.0 - pow(1.0 + pow(term_inner, -5.0), -0.2);
-            
-            if(f_H2 < 0.0) f_H2 = 0.0;
-            if(f_H2 > 1.0) f_H2 = 1.0;
-            
+            if (s < 2.0) {
+                // Eq 23: Approximation for molecular-dominated regime
+                f_H2 = 1.0 - (3.0 * s) / (4.0 + s);
+            } else {
+                // For s >= 2, gas is atomic dominated. 
+                // The exact solution approaches 0 very fast.
+                f_H2 = 0.0; 
+            }
+
+            // Safety clamps
+            if (f_H2 < 0.0) f_H2 = 0.0;
+            if (f_H2 > 1.0) f_H2 = 1.0;
+
+            // Store H2 mass
             galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
         } else {
             galaxies[p].H2gas = 0.0;
