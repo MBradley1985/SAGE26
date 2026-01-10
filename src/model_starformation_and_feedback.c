@@ -87,14 +87,19 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                     disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
                 }
                 float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
-                float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
+                float stellar_surface_density = (galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h / disk_area_pc2; // M☉/pc²
 
                 total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
                                                                        rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
                 galaxies[p].H2gas = total_molecular_gas;
 
+                // float time = 0.4 * SEC_PER_MEGAYEAR; // 0.4 Gyr in seconds
+
+                // float mu_sf = time * pow(1 + gas_surface_density/200.0, 0.4); // in units of M☉ pc⁻² (km/s)⁻¹
+
                 if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
+                    // strdot = mu_sf * galaxies[p].H2gas;
                     strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
                 } else {
                     strdot = 0.0;
@@ -176,7 +181,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
                 // Calculate molecular fraction using Blitz & Rosolowsky 2006
                 total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
-                                                                       rs_pc) * galaxies[p].ColdGas;
+                                                                       rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
                 galaxies[p].H2gas = total_molecular_gas;
 
@@ -235,7 +240,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                     }
                     float clumping_factor = 5.0;
                     
-                    total_molecular_gas = calculate_H2_fraction_KD12(surface_density, metallicity, clumping_factor) * galaxies[p].ColdGas;
+                    total_molecular_gas = calculate_H2_fraction_KD12(surface_density, metallicity, clumping_factor) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
                     galaxies[p].H2gas = total_molecular_gas;
                     // Safety check: H2 fraction cannot exceed 1.0
@@ -324,7 +329,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             if (f_H2 > 1.0) f_H2 = 1.0;
 
             // Store H2 mass
-            galaxies[p].H2gas = f_H2 * galaxies[p].ColdGas;
+            galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
             // 4. Star Formation Timescale (Equation 10 from KMT09) 
             // The paper specifies a depletion time for the molecular gas:
@@ -431,7 +436,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 if(f_H2_2p > 1.0) f_H2_2p = 1.0;
                 
                 // Store H2 mass
-                galaxies[p].H2gas = f_H2_2p * galaxies[p].ColdGas;
+                galaxies[p].H2gas = f_H2_2p * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
                 
                 // t_dep_2p (Eq 27) 
                 // t_dep = 3.1 Gyr / (f_H2 * Sigma^0.25)
@@ -598,7 +603,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             if(f_H2 > 1.0) f_H2 = 1.0;
             if(f_H2 < 0.0) f_H2 = 0.0;
 
-            galaxies[p].H2gas = f_H2 * galaxies[p].ColdGas;
+            galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
             // 8. Calculate Star Formation Rate
             // Standard relation: SFR = Efficiency * H2 / t_dyn
@@ -1086,11 +1091,11 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
                 disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
             }
             float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
-            float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2;
+            float stellar_surface_density = (galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h / disk_area_pc2;
             
             float f_mol = calculate_molecular_fraction_BR06(gas_surface_density, 
                                                             stellar_surface_density, rs_pc);
-            galaxies[p].H2gas = f_mol * galaxies[p].ColdGas;
+            galaxies[p].H2gas = f_mol * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
         } else {
             galaxies[p].H2gas = 0.0;
         }
@@ -1119,7 +1124,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
                 float clumping_factor = 5.0;
                 
                 float f_mol = calculate_H2_fraction_KD12(surface_density, metallicity, clumping_factor);
-                galaxies[p].H2gas = f_mol * galaxies[p].ColdGas;
+                galaxies[p].H2gas = f_mol * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
             } else {
                 galaxies[p].H2gas = 0.0;
             }
@@ -1169,7 +1174,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
             if(f_H2 < 0.0) f_H2 = 0.0;
             if(f_H2 > 1.0) f_H2 = 1.0;
             
-            galaxies[p].H2gas = f_H2 * galaxies[p].ColdGas;
+            galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
         } else {
             galaxies[p].H2gas = 0.0;
         }
@@ -1237,7 +1242,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
                 if(f_H2_eff > 1.0) f_H2_eff = 1.0;
                 if(f_H2_eff < 0.0) f_H2_eff = 0.0;
                 
-                galaxies[p].H2gas = f_H2_eff * galaxies[p].ColdGas;
+                galaxies[p].H2gas = f_H2_eff * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
             } else {
                 galaxies[p].H2gas = 0.0;
             }
@@ -1295,7 +1300,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
             if(f_H2 > 1.0) f_H2 = 1.0;
             if(f_H2 < 0.0) f_H2 = 0.0;
             
-            galaxies[p].H2gas = f_H2 * galaxies[p].ColdGas;
+            galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
         } else {
             galaxies[p].H2gas = 0.0;
         }
