@@ -257,9 +257,11 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
     if(quasar_energy > cold_gas_energy) {
         galaxies[gal].EjectedMass += galaxies[gal].ColdGas;
         galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsColdGas;
+        galaxies[gal].EjectedMass += galaxies[gal].H2gas;
 
         galaxies[gal].ColdGas = 0.0;
         galaxies[gal].MetalsColdGas = 0.0;
+        galaxies[gal].H2gas = 0.0;
     }
 
     // compare quasar wind and cold+hot/CGM gas energies and eject from appropriate reservoir

@@ -66,7 +66,7 @@ FFBMaxEfficiency        0.2   %0.2 fits observations best, 1.0 is theoretical ma
 RedshiftPowerLawExponent    1.25   %alpha for (1+z)^alpha in mass loading calculation (FIREmodeOn=1)
 
 FeedbackReheatingEpsilon    2.9   %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)
-FeedbackEjectionEfficiency  0.5   %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
+FeedbackEjectionEfficiency  0.3   %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
 
 ReIncorporationFactor   0.15    %fraction of ejected mass reincorporated per dynamical time to hot
 
