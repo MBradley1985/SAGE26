@@ -1,6 +1,6 @@
-def plot_hi_mass_vs_stellar_mass(target_z=0.0):
+def plot_radius_vs_stellar_mass(target_z=0.0):
     """
-    Plot HI mass vs. stellar mass for different H2 prescriptions and area options
+    Plot disk radius vs. stellar mass for different H2 prescriptions and area options
     """
     mass_bins = np.arange(8.0, 12.5, 0.2)
     z_diff = [abs(z - target_z) for z in DEFAULT_REDSHIFTS]
@@ -8,7 +8,7 @@ def plot_hi_mass_vs_stellar_mass(target_z=0.0):
     actual_z = DEFAULT_REDSHIFTS[best_snap]
     snap_str = f'Snap_{best_snap}'
     print(f"\n{'='*60}")
-    print(f"Creating HI mass vs. stellar mass plot for z ~ {target_z}")
+    print(f"Creating disk radius vs. stellar mass plot for z ~ {target_z}")
     print(f"Using {snap_str} (z={actual_z:.2f})")
     print(f"{'='*60}")
     fig, ax = plt.subplots(figsize=(10, 7))
@@ -23,30 +23,26 @@ def plot_hi_mass_vs_stellar_mass(target_z=0.0):
             print(f"  Processing {prescription} with {area_option}...")
             try:
                 stellar_mass = read_hdf(directory, snap_num=snap_str, param='StellarMass')
-                h2_gas = read_hdf(directory, snap_num=snap_str, param='H2gas')
-                cold_gas = read_hdf(directory, snap_num=snap_str, param='ColdGas')
+                disk_radius = read_hdf(directory, snap_num=snap_str, param='DiskRadius') * 1.0e3  # Convert to kpc
                 galaxy_type = read_hdf(directory, snap_num=snap_str, param='Type')
-                if stellar_mass is None or h2_gas is None or cold_gas is None:
+                if stellar_mass is None or disk_radius is None or galaxy_type is None:
                     continue
                 stellar_mass = stellar_mass * 1.0e10 / MILLENNIUM_HUBBLE_H
-                h2_gas = h2_gas * 1.0e10 / MILLENNIUM_HUBBLE_H
-                cold_gas = cold_gas * 1.0e10 / MILLENNIUM_HUBBLE_H
-                hi_gas = cold_gas - h2_gas
-                hi_gas[hi_gas < 0] = 0
-                mask = (stellar_mass > 0) & (hi_gas > 0) & (galaxy_type == 0)
+                # Disk radius in kpc
+                mask = (stellar_mass > 0) & (disk_radius > 0) & (galaxy_type == 0)
                 stellar_mass_filtered = stellar_mass[mask]
-                hi_gas_filtered = hi_gas[mask]
+                disk_radius_filtered = disk_radius[mask]
                 if len(stellar_mass_filtered) == 0:
                     continue
                 log_stellar_mass = np.log10(stellar_mass_filtered)
-                log_hi_mass = np.log10(hi_gas_filtered)
+                # Bin by stellar mass
                 bin_centers = 0.5 * (mass_bins[:-1] + mass_bins[1:])
                 bin_medians = []
                 valid_bins = []
                 for i in range(len(mass_bins)-1):
                     bin_mask = (log_stellar_mass >= mass_bins[i]) & (log_stellar_mass < mass_bins[i+1])
-                    if np.sum(bin_mask) > 10:
-                        bin_medians.append(np.median(log_hi_mass[bin_mask]))
+                    if np.sum(bin_mask) >= 5:
+                        bin_medians.append(np.median(disk_radius_filtered[bin_mask]))
                         valid_bins.append(bin_centers[i])
                 if len(valid_bins) > 0:
                     label = f'{prescription} {AREA_OPTION_LABELS[area_option]}'
@@ -56,28 +52,29 @@ def plot_hi_mass_vs_stellar_mass(target_z=0.0):
                 print(f"    Error: {e}")
                 continue
     ax.set_xlabel(r'$\log_{10}(M_\star / \mathrm{M}_\odot)$', fontsize=14)
-    ax.set_ylabel(r'$\log_{10}(M_{\mathrm{HI}} / \mathrm{M}_\odot)$', fontsize=14)
+    ax.set_ylabel(r'Disk Radius (kpc)', fontsize=14)
     ax.set_xlim(8.0, 12.0)
-    ax.set_ylim(7, 11)
+    # ax.set_yscale('log')
+    ax.set_ylim(bottom=0)
     ax.legend(loc='best', fontsize=9, framealpha=0.9, ncol=2)
     os.makedirs(OutputDir, exist_ok=True)
-    output_path = os.path.join(OutputDir, f'hi_mass_vs_stellar_mass_area_comparison_z{target_z:.1f}.pdf')
+    output_path = os.path.join(OutputDir, f'disk_radius_vs_stellar_mass_z{target_z:.1f}.pdf')
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"\n  Saved: {output_path}")
     plt.close()
-
-def plot_h2_mass_vs_stellar_mass(target_z=0.0):
+def plot_sfr_surface_density_vs_cold_gas_surface_density(target_z=0.0):
     """
-    Plot H2 mass vs. stellar mass for different H2 prescriptions and area options
+    Plot SFR surface density vs. cold gas (HI+H2) surface density for different H2 prescriptions and area options
     """
-    mass_bins = np.arange(8.0, 12.5, 0.2)
+    # Surface density bins (log10)
+    sigma_bins = np.arange(0.0, 10.2, 0.2)
     z_diff = [abs(z - target_z) for z in DEFAULT_REDSHIFTS]
     best_snap = z_diff.index(min(z_diff))
     actual_z = DEFAULT_REDSHIFTS[best_snap]
     snap_str = f'Snap_{best_snap}'
     print(f"\n{'='*60}")
-    print(f"Creating H2 mass vs. stellar mass plot for z ~ {target_z}")
+    print(f"Creating SFR surface density vs. cold gas surface density plot for z ~ {target_z}")
     print(f"Using {snap_str} (z={actual_z:.2f})")
     print(f"{'='*60}")
     fig, ax = plt.subplots(figsize=(10, 7))
@@ -91,42 +88,55 @@ def plot_h2_mass_vs_stellar_mass(target_z=0.0):
                 continue
             print(f"  Processing {prescription} with {area_option}...")
             try:
-                stellar_mass = read_hdf(directory, snap_num=snap_str, param='StellarMass')
-                h2_gas = read_hdf(directory, snap_num=snap_str, param='H2gas')
+                sfr_disk = read_hdf(directory, snap_num=snap_str, param='SfrDisk')
+                sfr_bulge = read_hdf(directory, snap_num=snap_str, param='SfrBulge')
+                cold_gas = read_hdf(directory, snap_num=snap_str, param='ColdGas')
                 galaxy_type = read_hdf(directory, snap_num=snap_str, param='Type')
-                if stellar_mass is None or h2_gas is None:
+                disk_radius = read_hdf(directory, snap_num=snap_str, param='DiskRadius')
+                if sfr_disk is None or sfr_bulge is None or cold_gas is None or disk_radius is None:
+                    print(f"    Debug: Missing data for {prescription} {area_option}")
                     continue
-                stellar_mass = stellar_mass * 1.0e10 / MILLENNIUM_HUBBLE_H
-                h2_gas = h2_gas * 1.0e10 / MILLENNIUM_HUBBLE_H
-                mask = (stellar_mass > 0) & (h2_gas > 0) & (galaxy_type == 0)
-                stellar_mass_filtered = stellar_mass[mask]
-                h2_gas_filtered = h2_gas[mask]
-                if len(stellar_mass_filtered) == 0:
-                    continue
-                log_stellar_mass = np.log10(stellar_mass_filtered)
-                log_h2_mass = np.log10(h2_gas_filtered)
-                bin_centers = 0.5 * (mass_bins[:-1] + mass_bins[1:])
+                sfr = sfr_disk + sfr_bulge  # SFR in M_sun/yr
+                cold_gas = cold_gas * 1.0e10 / MILLENNIUM_HUBBLE_H
+                disk_radius_pc = disk_radius * 1.0e6
+                disk_area_pc2 = np.pi * disk_radius_pc**2
+                sigma_cold_gas = cold_gas / disk_area_pc2  # M_sun/pc^2
+                sigma_sfr = sfr / disk_area_pc2  # M_sun/yr/pc^2
+                mask = (cold_gas > 0) & (disk_area_pc2 > 0) & (galaxy_type == 0)
+                sigma_cold_gas = sigma_cold_gas[mask]
+                sigma_sfr = sigma_sfr[mask]
+                # Only keep galaxies with positive SFR and cold gas
+                valid = (sigma_cold_gas > 0) & (sigma_sfr > 0)
+                sigma_cold_gas = sigma_cold_gas[valid]
+                sigma_sfr = sigma_sfr[valid]
+                log_sigma_cold_gas = np.log10(sigma_cold_gas)
+                log_sigma_sfr = np.log10(sigma_sfr)
+                # Bin by cold gas surface density
+                bin_centers = 0.5 * (sigma_bins[:-1] + sigma_bins[1:])
                 bin_medians = []
                 valid_bins = []
-                for i in range(len(mass_bins)-1):
-                    bin_mask = (log_stellar_mass >= mass_bins[i]) & (log_stellar_mass < mass_bins[i+1])
-                    if np.sum(bin_mask) > 10:
-                        bin_medians.append(np.median(log_h2_mass[bin_mask]))
+                for i in range(len(sigma_bins)-1):
+                    bin_mask = (log_sigma_cold_gas >= sigma_bins[i]) & (log_sigma_cold_gas < sigma_bins[i+1])
+                    if np.sum(bin_mask) >= 5:
+                        bin_medians.append(np.median(log_sigma_sfr[bin_mask]))
                         valid_bins.append(bin_centers[i])
                 if len(valid_bins) > 0:
                     label = f'{prescription} {AREA_OPTION_LABELS[area_option]}'
-                    ax.plot(valid_bins, bin_medians, color=color, linestyle=linestyle,
+                    ax.plot(10**np.array(valid_bins), 10**np.array(bin_medians), color=color, linestyle=linestyle,
                             linewidth=2, label=label, alpha=0.8)
             except Exception as e:
                 print(f"    Error: {e}")
                 continue
-    ax.set_xlabel(r'$\log_{10}(M_\star / \mathrm{M}_\odot)$', fontsize=14)
-    ax.set_ylabel(r'$\log_{10}(M_{\mathrm{H}_2} / \mathrm{M}_\odot)$', fontsize=14)
-    ax.set_xlim(8.0, 12.0)
-    ax.set_ylim(7, 11)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_xlabel(r'$\Sigma_{\mathrm{HI+H_2}}$ [M$_\odot$/pc$^2$]', fontsize=14)
+    ax.set_ylabel(r'$\Sigma_{\mathrm{SFR}}$ [M$_\odot$/yr/pc$^2$]', fontsize=14)
+    # ax.set_xticks([1, 10, 100, 1000])
+    ax.get_xaxis().set_major_formatter(plt.ScalarFormatter())
+    # ax.set_xlim(1, 1000)
     ax.legend(loc='best', fontsize=9, framealpha=0.9, ncol=2)
     os.makedirs(OutputDir, exist_ok=True)
-    output_path = os.path.join(OutputDir, f'h2_mass_vs_stellar_mass_area_comparison_z{target_z:.1f}.pdf')
+    output_path = os.path.join(OutputDir, f'sfr_surface_density_vs_cold_gas_surface_density_z{target_z:.1f}.pdf')
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"\n  Saved: {output_path}")
@@ -1209,10 +1219,234 @@ def plot_ssfr_vs_stellar_mass(target_z=0.0):
     ax.set_xlabel(r'$\log_{10}(M_\star / \mathrm{M}_\odot)$', fontsize=14)
     ax.set_ylabel(r'sSFR (yr$^{-1}$)', fontsize=14)
     ax.set_xlim(8.0, 12.0)
+    ax.set_ylim(1e-14, 1e-8)
     ax.set_yscale('log')
     ax.legend(loc='best', fontsize=9, framealpha=0.9, ncol=2)
     os.makedirs(OutputDir, exist_ok=True)
     output_path = os.path.join(OutputDir, f'ssfr_vs_stellar_mass_area_comparison_z{target_z:.1f}.pdf')
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"\n  Saved: {output_path}")
+    plt.close()
+
+def plot_hydrogen_fraction_vs_cold_gas_surface_density(target_z=0.0):
+    """
+    Plot hydrogen fraction (H2/(HI+H2)) as a function of cold gas surface density for different H2 prescriptions and area options
+    """
+    # Surface density bins (log10)
+    sigma_bins = np.arange(0.0, 10.2, 0.2)  # Cover full log_sigma range
+    z_diff = [abs(z - target_z) for z in DEFAULT_REDSHIFTS]
+    best_snap = z_diff.index(min(z_diff))
+    actual_z = DEFAULT_REDSHIFTS[best_snap]
+    snap_str = f'Snap_{best_snap}'
+    print(f"\n{'='*60}")
+    print(f"Creating hydrogen fraction vs. cold gas surface density plot for z ~ {target_z}")
+    print(f"Using {snap_str} (z={actual_z:.2f})")
+    print(f"{'='*60}")
+    fig, ax = plt.subplots(figsize=(10, 7))
+    for prescription in H2_PRESCRIPTIONS:
+        color = H2_PRESCRIPTION_COLORS[prescription]
+        for area_option in AREA_OPTIONS:
+            directory = f'./output/millennium_{prescription.lower()}_{area_option}/'
+            linestyle = AREA_OPTION_LINESTYLES[area_option]
+            if not os.path.exists(directory):
+                print(f"  Warning: Directory {directory} not found, skipping")
+                continue
+            print(f"  Processing {prescription} with {area_option}...")
+            try:
+                h2_gas = read_hdf(directory, snap_num=snap_str, param='H2gas')
+                cold_gas = read_hdf(directory, snap_num=snap_str, param='ColdGas')
+                galaxy_type = read_hdf(directory, snap_num=snap_str, param='Type')
+                disk_radius = read_hdf(directory, snap_num=snap_str, param='DiskRadius')
+                if h2_gas is None or cold_gas is None or disk_radius is None:
+                    print(f"    Debug: Missing data for {prescription} {area_option} (h2_gas: {h2_gas is None}, cold_gas: {cold_gas is None}, disk_radius: {disk_radius is None})")
+                    continue
+                h2_gas = h2_gas * 1.0e10 / MILLENNIUM_HUBBLE_H
+                cold_gas = cold_gas * 1.0e10 / MILLENNIUM_HUBBLE_H
+                hi_gas = cold_gas - h2_gas
+                hi_gas[hi_gas < 0] = 0
+                disk_radius_pc = disk_radius * 1.0e6
+                disk_area_pc2 = np.pi * disk_radius_pc**2
+                sigma_cold_gas = cold_gas / disk_area_pc2
+                mask = (cold_gas > 0) & (disk_area_pc2 > 0) & (galaxy_type == 0)
+                print(f"    Debug: {prescription} {area_option} - Total galaxies: {len(cold_gas)}, After mask: {np.sum(mask)}")
+                if np.sum(mask) == 0:
+                    print(f"    Debug: No galaxies pass mask for {prescription} {area_option}")
+                    continue
+                sigma_cold_gas = sigma_cold_gas[mask]
+                h2_gas_filtered = h2_gas[mask]
+                hi_gas_filtered = hi_gas[mask]
+                total_hydrogen = hi_gas_filtered + h2_gas_filtered
+                hydrogen_fraction = np.zeros_like(h2_gas_filtered)
+                valid = total_hydrogen > 0
+                print(f"    Debug: {prescription} {area_option} - Total hydrogen > 0: {np.sum(valid)}")
+                if np.sum(valid) == 0:
+                    print(f"    Debug: No valid hydrogen for {prescription} {area_option}")
+                    continue
+                hydrogen_fraction[valid] = h2_gas_filtered[valid] / total_hydrogen[valid]
+                log_sigma = np.log10(sigma_cold_gas[valid])
+                hydrogen_fraction = hydrogen_fraction[valid]
+                print(f"    Debug: {prescription} {area_option} - log_sigma range: {log_sigma.min():.2f} to {log_sigma.max():.2f}, hydrogen_fraction range: {hydrogen_fraction.min():.2f} to {hydrogen_fraction.max():.2f}")
+                bin_centers = 0.5 * (sigma_bins[:-1] + sigma_bins[1:])
+                bin_medians = []
+                valid_bins = []
+                for i in range(len(sigma_bins)-1):
+                    bin_mask = (log_sigma >= sigma_bins[i]) & (log_sigma < sigma_bins[i+1])
+                    if np.sum(bin_mask) >= 3:
+                        bin_medians.append(np.median(hydrogen_fraction[bin_mask]))
+                        valid_bins.append(bin_centers[i])
+                    else:
+                        print(f"    Debug: Bin {i} ({sigma_bins[i]:.2f}-{sigma_bins[i+1]:.2f}) has {np.sum(bin_mask)} galaxies")
+                if len(valid_bins) > 0:
+                    label = f'{prescription} {AREA_OPTION_LABELS[area_option]}'
+                    ax.plot(valid_bins, bin_medians, color=color, linestyle=linestyle,
+                            linewidth=2, label=label, alpha=0.8)
+                else:
+                    print(f"    Debug: No valid bins for {prescription} {area_option}")
+            except Exception as e:
+                print(f"    Error: {e}")
+                continue
+    ax.set_xlabel(r'$\log_{10}(\Sigma_{\mathrm{cold\,gas}} / \mathrm{M}_\odot\,\mathrm{pc}^{-2})$', fontsize=14)
+    ax.set_ylabel(r'Hydrogen Fraction (H$_2$/(HI+H$_2$))', fontsize=14)
+    # ax.set_xlim(0, 3)
+    # ax.set_ylim(0, 1)
+    ax.legend(loc='best', fontsize=9, framealpha=0.9, ncol=2)
+    os.makedirs(OutputDir, exist_ok=True)
+    output_path = os.path.join(OutputDir, f'hydrogen_fraction_vs_cold_gas_surface_density_z{target_z:.1f}.pdf')
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"\n  Saved: {output_path}")
+    plt.close()
+    
+def plot_hi_mass_vs_stellar_mass(target_z=0.0):
+    """
+    Plot HI mass vs. stellar mass for different H2 prescriptions and area options
+    """
+    mass_bins = np.arange(8.0, 12.5, 0.2)
+    z_diff = [abs(z - target_z) for z in DEFAULT_REDSHIFTS]
+    best_snap = z_diff.index(min(z_diff))
+    actual_z = DEFAULT_REDSHIFTS[best_snap]
+    snap_str = f'Snap_{best_snap}'
+    print(f"\n{'='*60}")
+    print(f"Creating HI mass vs. stellar mass plot for z ~ {target_z}")
+    print(f"Using {snap_str} (z={actual_z:.2f})")
+    print(f"{'='*60}")
+    fig, ax = plt.subplots(figsize=(10, 7))
+    for prescription in H2_PRESCRIPTIONS:
+        color = H2_PRESCRIPTION_COLORS[prescription]
+        for area_option in AREA_OPTIONS:
+            directory = f'./output/millennium_{prescription.lower()}_{area_option}/'
+            linestyle = AREA_OPTION_LINESTYLES[area_option]
+            if not os.path.exists(directory):
+                print(f"  Warning: Directory {directory} not found, skipping")
+                continue
+            print(f"  Processing {prescription} with {area_option}...")
+            try:
+                stellar_mass = read_hdf(directory, snap_num=snap_str, param='StellarMass')
+                h2_gas = read_hdf(directory, snap_num=snap_str, param='H2gas')
+                cold_gas = read_hdf(directory, snap_num=snap_str, param='ColdGas')
+                galaxy_type = read_hdf(directory, snap_num=snap_str, param='Type')
+                if stellar_mass is None or h2_gas is None or cold_gas is None:
+                    continue
+                stellar_mass = stellar_mass * 1.0e10 / MILLENNIUM_HUBBLE_H
+                h2_gas = h2_gas * 1.0e10 / MILLENNIUM_HUBBLE_H
+                cold_gas = cold_gas * 1.0e10 / MILLENNIUM_HUBBLE_H
+                hi_gas = cold_gas - h2_gas
+                hi_gas[hi_gas < 0] = 0
+                mask = (stellar_mass > 0) & (hi_gas > 0) & (galaxy_type == 0)
+                stellar_mass_filtered = stellar_mass[mask]
+                hi_gas_filtered = hi_gas[mask]
+                if len(stellar_mass_filtered) == 0:
+                    continue
+                log_stellar_mass = np.log10(stellar_mass_filtered)
+                log_hi_mass = np.log10(hi_gas_filtered)
+                bin_centers = 0.5 * (mass_bins[:-1] + mass_bins[1:])
+                bin_medians = []
+                valid_bins = []
+                for i in range(len(mass_bins)-1):
+                    bin_mask = (log_stellar_mass >= mass_bins[i]) & (log_stellar_mass < mass_bins[i+1])
+                    if np.sum(bin_mask) > 10:
+                        bin_medians.append(np.median(log_hi_mass[bin_mask]))
+                        valid_bins.append(bin_centers[i])
+                if len(valid_bins) > 0:
+                    label = f'{prescription} {AREA_OPTION_LABELS[area_option]}'
+                    ax.plot(valid_bins, bin_medians, color=color, linestyle=linestyle,
+                            linewidth=2, label=label, alpha=0.8)
+            except Exception as e:
+                print(f"    Error: {e}")
+                continue
+    ax.set_xlabel(r'$\log_{10}(M_\star / \mathrm{M}_\odot)$', fontsize=14)
+    ax.set_ylabel(r'$\log_{10}(M_{\mathrm{HI}} / \mathrm{M}_\odot)$', fontsize=14)
+    ax.set_xlim(8.0, 12.0)
+    ax.set_ylim(7, 11)
+    ax.legend(loc='best', fontsize=9, framealpha=0.9, ncol=2)
+    os.makedirs(OutputDir, exist_ok=True)
+    output_path = os.path.join(OutputDir, f'hi_mass_vs_stellar_mass_area_comparison_z{target_z:.1f}.pdf')
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"\n  Saved: {output_path}")
+    plt.close()
+
+def plot_h2_mass_vs_stellar_mass(target_z=0.0):
+    """
+    Plot H2 mass vs. stellar mass for different H2 prescriptions and area options
+    """
+    mass_bins = np.arange(8.0, 12.5, 0.2)
+    z_diff = [abs(z - target_z) for z in DEFAULT_REDSHIFTS]
+    best_snap = z_diff.index(min(z_diff))
+    actual_z = DEFAULT_REDSHIFTS[best_snap]
+    snap_str = f'Snap_{best_snap}'
+    print(f"\n{'='*60}")
+    print(f"Creating H2 mass vs. stellar mass plot for z ~ {target_z}")
+    print(f"Using {snap_str} (z={actual_z:.2f})")
+    print(f"{'='*60}")
+    fig, ax = plt.subplots(figsize=(10, 7))
+    for prescription in H2_PRESCRIPTIONS:
+        color = H2_PRESCRIPTION_COLORS[prescription]
+        for area_option in AREA_OPTIONS:
+            directory = f'./output/millennium_{prescription.lower()}_{area_option}/'
+            linestyle = AREA_OPTION_LINESTYLES[area_option]
+            if not os.path.exists(directory):
+                print(f"  Warning: Directory {directory} not found, skipping")
+                continue
+            print(f"  Processing {prescription} with {area_option}...")
+            try:
+                stellar_mass = read_hdf(directory, snap_num=snap_str, param='StellarMass')
+                h2_gas = read_hdf(directory, snap_num=snap_str, param='H2gas')
+                galaxy_type = read_hdf(directory, snap_num=snap_str, param='Type')
+                if stellar_mass is None or h2_gas is None:
+                    continue
+                stellar_mass = stellar_mass * 1.0e10 / MILLENNIUM_HUBBLE_H
+                h2_gas = h2_gas * 1.0e10 / MILLENNIUM_HUBBLE_H
+                mask = (stellar_mass > 0) & (h2_gas > 0) & (galaxy_type == 0)
+                stellar_mass_filtered = stellar_mass[mask]
+                h2_gas_filtered = h2_gas[mask]
+                if len(stellar_mass_filtered) == 0:
+                    continue
+                log_stellar_mass = np.log10(stellar_mass_filtered)
+                log_h2_mass = np.log10(h2_gas_filtered)
+                bin_centers = 0.5 * (mass_bins[:-1] + mass_bins[1:])
+                bin_medians = []
+                valid_bins = []
+                for i in range(len(mass_bins)-1):
+                    bin_mask = (log_stellar_mass >= mass_bins[i]) & (log_stellar_mass < mass_bins[i+1])
+                    if np.sum(bin_mask) > 10:
+                        bin_medians.append(np.median(log_h2_mass[bin_mask]))
+                        valid_bins.append(bin_centers[i])
+                if len(valid_bins) > 0:
+                    label = f'{prescription} {AREA_OPTION_LABELS[area_option]}'
+                    ax.plot(valid_bins, bin_medians, color=color, linestyle=linestyle,
+                            linewidth=2, label=label, alpha=0.8)
+            except Exception as e:
+                print(f"    Error: {e}")
+                continue
+    ax.set_xlabel(r'$\log_{10}(M_\star / \mathrm{M}_\odot)$', fontsize=14)
+    ax.set_ylabel(r'$\log_{10}(M_{\mathrm{H}_2} / \mathrm{M}_\odot)$', fontsize=14)
+    ax.set_xlim(8.0, 12.0)
+    ax.set_ylim(7, 11)
+    ax.legend(loc='best', fontsize=9, framealpha=0.9, ncol=2)
+    os.makedirs(OutputDir, exist_ok=True)
+    output_path = os.path.join(OutputDir, f'h2_mass_vs_stellar_mass_area_comparison_z{target_z:.1f}.pdf')
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"\n  Saved: {output_path}")
@@ -1271,6 +1505,18 @@ if __name__ == '__main__':
     print("Creating H2 mass vs. stellar mass plot...")
     print("="*60)
     plot_h2_mass_vs_stellar_mass(target_z=0.0)
+    print("\n" + "="*60)
+    print("Creating hydrogen fraction vs. cold gas surface density plot...")
+    print("="*60)
+    plot_hydrogen_fraction_vs_cold_gas_surface_density(target_z=0.0)
+    print("\n" + "="*60)
+    print("Creating SFR surface density vs. cold gas surface density plot...")
+    print("="*60)
+    plot_sfr_surface_density_vs_cold_gas_surface_density(target_z=0.0)
+    print("\n" + "="*60)
+    print("Creating disk radius vs. stellar mass plot...")
+    print("="*60)
+    plot_radius_vs_stellar_mass(target_z=0.0)
     # Calculate and plot statistics
     print("\n" + "="*60)
     print("Calculating model-observation statistics...")
