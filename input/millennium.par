@@ -4,7 +4,7 @@
 
 FileNameGalaxies  model
 %OutputDir         /<absolute>/<root>/<path>/sage-model/output/millennium/
-OutputDir   /Users/mbradley/Documents/PhD/SAGE26/output/millennium_kd12/
+OutputDir   /Users/mbradley/Documents/PhD/SAGE26/output/millennium/
 
 FirstFile         0
 LastFile          7
@@ -45,9 +45,9 @@ BoxSize         62.5 % Size of the simulation box in Mpc/h.
 %----- SAGE recipe options ----------------
 %------------------------------------------
 
-SFprescription        4   %0: original Croton et al. 2006; 1: BR06 H2 Stars; 2: Somerville et al. 2025 SFR; 3: Somerville et al. 2025 SFR + H2; 4: KD12 H2 Stars; 5: KMT09; 6: K13; 7: GD14
+SFprescription        1   %0: original Croton et al. 2006; 1: BR06 H2 Stars; 2: Somerville et al. 2025 SFR; 3: Somerville et al. 2025 SFR + H2; 4: KD12 H2 Stars; 5: KMT09; 6: K13; 7: GD14
 AGNrecipeOn           2   %0: switch off; 1: empirical model; 2: Bondi-Hoyle model; 3: cold cloud accretion model; 4: Bondi-Hoyle with BH seeding
-H2DiskAreaOption      1   %0: π*r_s²; 1: π*(3*r_s)² (default); 2: 2π*r_s² (central Σ₀)
+H2DiskAreaOption      2   %0: π*r_s²; 1: π*(3*r_s)² (default); 2: 2π*r_s² (central Σ₀); For BR06 use 0/2; For KMT09/KD12/K13 don't use 1
 SupernovaRecipeOn     1   %0: switch off; 1: original Croton et al. 2016
 ReionizationOn        1   %0: switch off
 DiskInstabilityOn     1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
