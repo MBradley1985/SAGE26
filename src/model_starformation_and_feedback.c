@@ -75,8 +75,15 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 galaxies[p].H2gas = 0.0;
                 strdot = 0.0;
             } else {
-                // float disk_area_pc2 = M_PI * rs_pc * rs_pc;
-                float disk_area_pc2 = M_PI * pow(rs_pc, 2); // pc^2
+                // Choose disk area based on H2DiskAreaOption
+                float disk_area_pc2;
+                if (run_params->H2DiskAreaOption == 0) {
+                    disk_area_pc2 = M_PI * pow(rs_pc, 2);  // π*r_s²
+                } else if (run_params->H2DiskAreaOption == 1) {
+                    disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+                } else {
+                    disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+                }
                 float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
                 float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
 
@@ -84,10 +91,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                                                                        rs_pc) * galaxies[p].ColdGas;
 
                 galaxies[p].H2gas = total_molecular_gas;
-
-                // float fmol = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
-                //                                                        rs_pc);
-                // printf("Galaxy %d: f_mol = %f, H2gas = %f, ColdGas = %f\n", p, fmol, galaxies[p].H2gas, galaxies[p].ColdGas);
 
                 if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
                     strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
@@ -113,7 +116,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             tdyn = reff / galaxies[p].Vvir;
             const float h = run_params->Hubble_h;
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-            float disk_area_pc2 = M_PI * pow(rs_pc, 2); // pc^2
+            float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2); // pc^2
             float gas_surface_density = (disk_area_pc2 > 0.0) ?
                 (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2 : 0.0; // Msun/pc^2
 
@@ -157,7 +160,15 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 galaxies[p].H2gas = 0.0;
                 strdot = 0.0;
             } else {
-                float disk_area_pc2 = M_PI * pow(rs_pc, 2); // pc^2
+                // Choose disk area based on H2DiskAreaOption
+                float disk_area_pc2;
+                if (run_params->H2DiskAreaOption == 0) {
+                    disk_area_pc2 = M_PI * pow(rs_pc, 2);  // π*r_s²
+                } else if (run_params->H2DiskAreaOption == 1) {
+                    disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+                } else {
+                    disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+                }
                 float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // Msun/pc^2
                 float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2; // Msun/pc^2
 
@@ -203,7 +214,15 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 galaxies[p].H2gas = 0.0; 
                 strdot = 0.0;
             } else {
-                float disk_area = M_PI * pow(rs_pc, 2);
+                // Choose disk area based on H2DiskAreaOption
+                float disk_area;
+                if (run_params->H2DiskAreaOption == 0) {
+                    disk_area = M_PI * pow(rs_pc, 2);  // π*r_s²
+                } else if (run_params->H2DiskAreaOption == 1) {
+                    disk_area = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+                } else {
+                    disk_area = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+                }
                 if(disk_area <= 0.0) {
                     galaxies[p].H2gas = 0.0;
                     strdot = 0.0;
@@ -249,8 +268,15 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             // Scale radius in pc
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
             
-            // Disk Area (pc^2)
-            float disk_area_pc2 = M_PI * pow(rs_pc, 2);
+            // Choose disk area based on H2DiskAreaOption
+            float disk_area_pc2;
+            if (run_params->H2DiskAreaOption == 0) {
+                disk_area_pc2 = M_PI * pow(rs_pc, 2);  // π*r_s²
+            } else if (run_params->H2DiskAreaOption == 1) {
+                disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+            } else {
+                disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+            }
             
             // Gas Surface Density (Msun/pc^2) - Sigma_g
             // ColdGas is in 10^10 Msun/h
@@ -356,8 +382,15 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             const float h = run_params->Hubble_h;
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
             
-            // Calculate surface densities
-            const float area_pc2 = M_PI * pow(rs_pc, 2);
+            // Choose disk area based on H2DiskAreaOption
+            float area_pc2;
+            if (run_params->H2DiskAreaOption == 0) {
+                area_pc2 = M_PI * pow(rs_pc, 2);  // π*r_s²
+            } else if (run_params->H2DiskAreaOption == 1) {
+                area_pc2 = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+            } else {
+                area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+            }
             
             if(area_pc2 > 0.0) {
                 // Surface densities in Msun/pc^2
@@ -484,8 +517,15 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             // Scale radius in pc
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
             
-            // 1. Calculate Geometry and Gas Surface Density
-            const float disk_area_pc2 = M_PI * pow(rs_pc, 2);
+            // Choose disk area based on H2DiskAreaOption
+            float disk_area_pc2;
+            if (run_params->H2DiskAreaOption == 0) {
+                disk_area_pc2 = M_PI * pow(rs_pc, 2);  // π*r_s²
+            } else if (run_params->H2DiskAreaOption == 1) {
+                disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+            } else {
+                disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+            }
             
             double Sigma_gas = 0.0;
             if(disk_area_pc2 > 0.0) {
@@ -1034,7 +1074,15 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
         if(rs_pc > 0.0) {
-            float disk_area_pc2 = M_PI * pow(rs_pc, 2);
+            // Choose disk area based on H2DiskAreaOption
+            float disk_area_pc2;
+            if (run_params->H2DiskAreaOption == 0) {
+                disk_area_pc2 = M_PI * pow(rs_pc, 2);  // π*r_s²
+            } else if (run_params->H2DiskAreaOption == 1) {
+                disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+            } else {
+                disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+            }
             float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
             float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2;
             
@@ -1051,8 +1099,15 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
         if(rs_pc > 0.0) {
-            const float disk_area = M_PI * pow(rs_pc, 2); // pc^2
-            // float disk_area = M_PI * galaxies[p].DiskScaleRadius * galaxies[p].DiskScaleRadius;
+            // Choose disk area based on H2DiskAreaOption
+            float disk_area;
+            if (run_params->H2DiskAreaOption == 0) {
+                disk_area = M_PI * pow(rs_pc, 2);  // π*r_s²
+            } else if (run_params->H2DiskAreaOption == 1) {
+                disk_area = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+            } else {
+                disk_area = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+            }
             if(disk_area > 0.0) {
                 const float surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area;
                 // double metallicity = 0.0;
@@ -1076,7 +1131,15 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
         if(rs_pc > 0.0) {
-            const float disk_area_pc2 = M_PI * pow(rs_pc, 2);
+            // Choose disk area based on H2DiskAreaOption
+            float disk_area_pc2;
+            if (run_params->H2DiskAreaOption == 0) {
+                disk_area_pc2 = M_PI * pow(rs_pc, 2);  // π*r_s²
+            } else if (run_params->H2DiskAreaOption == 1) {
+                disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+            } else {
+                disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+            }
             const float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
             
             float metallicity_abs = 0.0;
@@ -1115,7 +1178,15 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
         if(rs_pc > 0.0) {
-            const float area_pc2 = M_PI * pow(rs_pc, 2);
+            // Choose disk area based on H2DiskAreaOption
+            float area_pc2;
+            if (run_params->H2DiskAreaOption == 0) {
+                area_pc2 = M_PI * pow(rs_pc, 2);  // π*r_s²
+            } else if (run_params->H2DiskAreaOption == 1) {
+                area_pc2 = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+            } else {
+                area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+            }
             
             if(area_pc2 > 0.0) {
                 double Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / area_pc2;
@@ -1178,7 +1249,15 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         
         if(rs_pc > 0.0) {
-            const float disk_area_pc2 = M_PI * pow(rs_pc, 2);
+            // Choose disk area based on H2DiskAreaOption
+            float disk_area_pc2;
+            if (run_params->H2DiskAreaOption == 0) {
+                disk_area_pc2 = M_PI * pow(rs_pc, 2);  // π*r_s²
+            } else if (run_params->H2DiskAreaOption == 1) {
+                disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+            } else {
+                disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+            }
             
             double Sigma_gas = 0.0;
             if(disk_area_pc2 > 0.0) {
