@@ -10,6 +10,8 @@
 #include "model_misc.h"
 #include "model_disk_instability.h"
 
+#define HYDROGEN_MASS_FRAC 0.74
+
 
 void starformation_and_feedback(const int p, const int centralgal, const double time, const double dt, const int halonr, const int step,
                                 struct GALAXY *galaxies, const struct params *run_params)
@@ -88,7 +90,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
 
                 total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
-                                                                       rs_pc) * galaxies[p].ColdGas;
+                                                                       rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
                 galaxies[p].H2gas = total_molecular_gas;
 
