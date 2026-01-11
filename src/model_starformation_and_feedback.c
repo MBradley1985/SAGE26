@@ -112,6 +112,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // Using Equation 3 for efficiency: epsilon = (Sigma/Sigma_crit)/(1 + Sigma/Sigma_crit)
         // =======================================================================
 
+        // No H2 tracking in this prescription
+        galaxies[p].H2gas = 0.0;
+
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
         reff = 3.0 * galaxies[p].DiskScaleRadius;
 
@@ -176,7 +179,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                     disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
                 }
                 float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // Msun/pc^2
-                float stellar_surface_density = (galaxies[p].StellarMass * 1.0e10 / h) / disk_area_pc2; // Msun/pc^2
+                float stellar_surface_density = ((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h) / disk_area_pc2; // Msun/pc^2 (disk only)
 
                 // Calculate molecular fraction using Blitz & Rosolowsky 2006
                 total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
@@ -397,12 +400,12 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             if(area_pc2 > 0.0) {
                 // Surface densities in Msun/pc^2
                 double Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / area_pc2;
-                double Sigma_star = (galaxies[p].StellarMass * 1.0e10 / h) / area_pc2;
+                double Sigma_star = ((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h) / area_pc2; // Disk stellar mass only
 
-                // Metallicity Z' (normalized to solar). 
+                // Metallicity Z' (normalized to solar).
                 // Using Z_sun ~ 0.014. Floor at 0.01 to avoid numerical singularities.
                 double Z_gas = (galaxies[p].ColdGas > 0.0) ? (galaxies[p].MetalsColdGas / galaxies[p].ColdGas) : 0.0;
-                double Z_prime = Z_gas / 0.014; 
+                double Z_prime = Z_gas / 0.014;
                 if(Z_prime < 0.01) Z_prime = 0.01;
 
                 // Clumping factor fc = 5 is recommended for ~kpc scales (Section 3.1) [cite: 377]
@@ -411,17 +414,17 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 // ----------------------------------------------------------------
                 // 1. Calculate Standard KMT Depletion Time (Molecule-Rich Regime)
                 // ----------------------------------------------------------------
-                
+
                 // Normalized Radiation Field chi_2p (Eq 13) [cite: 116]
                 double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime, 0.365)) / 4.1;
-                
+
                 // Optical Depth tau_c (Eq 12) [cite: 123]
                 double tau_c = 0.066 * fc * Z_prime * Sigma_gas;
-                
+
                 // Parameter s (Eq 11) [cite: 122]
                 // Protected against tau_c=0
                 double s = (tau_c > 0.0) ? log(1.0 + 0.6 * chi_2p + 0.01 * chi_2p * chi_2p) / (0.6 * tau_c) : 100.0;
-                
+
                 // H2 Fraction f_H2 (Eq 10) [cite: 120]
                 double f_H2_2p = 0.0;
                 if(s < 2.0) {
@@ -429,11 +432,11 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 }
                 if(f_H2_2p < 0.0) f_H2_2p = 0.0;
                 if(f_H2_2p > 1.0) f_H2_2p = 1.0;
-                
+
                 // Store H2 mass
                 galaxies[p].H2gas = f_H2_2p * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-                
-                // t_dep_2p (Eq 27) 
+
+                // t_dep_2p (Eq 27)
                 // t_dep = 3.1 Gyr / (f_H2 * Sigma^0.25)
                 double t_dep_2p_Gyr;
                 if(f_H2_2p > 1e-6) {
@@ -446,8 +449,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 // 2. Calculate Hydrostatic Limits (Molecule-Poor Regimes)
                 // ----------------------------------------------------------------
 
-                // Estimate stellar density rho_sd for Eq 21. 
-                // We approximate h_z ~ 0.1 * R_d. 
+                // Estimate stellar density rho_sd for Eq 21.
+                // We approximate h_z ~ 0.1 * R_d.
                 // rho_sd_2 is rho_sd in units of 0.01 Msun/pc^3 (e.g., rho_sd,-2 in paper)
                 double h_z = 0.1 * rs_pc;
                 double rho_sd_2 = 0.0;
@@ -457,34 +460,36 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 }
                 if(rho_sd_2 < 1e-4) rho_sd_2 = 1e-4; // Avoid div by zero
 
-                // t_dep_hydro_star (Eq 21) 
+                // t_dep_hydro_star (Eq 21)
                 // 3.1/Sigma^0.25 + 100 / ( (fc/5) * Z' * sqrt(rho_sd_2) * Sigma )
-                double t_hydro_star_Gyr = 3.1 / pow(Sigma_gas, 0.25) + 
+                double t_hydro_star_Gyr = 3.1 / pow(Sigma_gas, 0.25) +
                                           100.0 / ((fc/5.0) * Z_prime * sqrt(rho_sd_2) * Sigma_gas);
 
-                // t_dep_hydro_gas (Eq 22) 
+                // t_dep_hydro_gas (Eq 22)
                 // 3.1/Sigma^0.25 + 360 / ( (fc/5) * Z' * Sigma^2 )
-                double t_hydro_gas_Gyr = 3.1 / pow(Sigma_gas, 0.25) + 
+                double t_hydro_gas_Gyr = 3.1 / pow(Sigma_gas, 0.25) +
                                          360.0 / ((fc/5.0) * Z_prime * pow(Sigma_gas, 2.0));
 
                 // ----------------------------------------------------------------
-                // 3. Analytic Approximation for Depletion Time
+                // 3. Analytic Approximation for Depletion Time (K13 Eq. 28)
                 // ----------------------------------------------------------------
-                
-                // Eq 28: t_dep ~ min(t_2p, t_hydro_star, t_hydro_gas) 
+
+                // Eq 28: t_dep ~ min(t_2p, t_hydro_star, t_hydro_gas)
                 double t_dep_Gyr = t_dep_2p_Gyr;
                 if(t_hydro_star_Gyr < t_dep_Gyr) t_dep_Gyr = t_hydro_star_Gyr;
                 if(t_hydro_gas_Gyr < t_dep_Gyr) t_dep_Gyr = t_hydro_gas_Gyr;
 
                 // ----------------------------------------------------------------
-                // 4. Calculate SFR using H2 gas
+                // 4. Calculate SFR using K13 depletion time
                 // ----------------------------------------------------------------
 
                 // Convert t_dep (Gyr) to Code Units
-                // double UnitTime_Gyr = run_params->UnitTime_in_Megayears / 1000.0;
+                // Code time unit: 1 Mpc/h / (km/s) ≈ 978/h Gyr
+                double t_dep_code = t_dep_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
 
-                if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
-                    strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
+                // K13 gives depletion time for total gas: SFR = M_gas / t_dep
+                if(galaxies[p].ColdGas > 0.0 && t_dep_code > 0.0) {
+                    strdot = run_params->SfrEfficiency * galaxies[p].ColdGas / t_dep_code;
                 } else {
                     strdot = 0.0;
                 }
