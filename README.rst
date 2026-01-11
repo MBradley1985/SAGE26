@@ -117,6 +117,18 @@ The PSO package includes:
 
 To get started with SAGE-PSO, please refer to the documentation available in the repository, which includes installation instructions, usage examples, and guidelines for setting up your own optimization runs.
 
+Extra OPTIONS
+=============
+
+There are several H2 star formation and feedback model options that can be enabled by modifying the parameter file.
+There are three options for area calculation in the H2 star formation model.
+Feedback-free burst galaxies can also be enabled.
+CGM building can be turned on or off.
+
+Parameters can be manipulated in the parameter file as follows to allow for extra exploration.
+
+Future work should include black hole recipes from other models, as well as more advanced H2 star formation and feedback models.
+
 Citation
 =========
 

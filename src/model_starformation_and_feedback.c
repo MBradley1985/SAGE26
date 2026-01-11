@@ -347,11 +347,11 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             
             // This 2.6 Gyr already accounts for the efficiency (epsilon_ff),
             // so we do not need to multiply by extra factors unless tuning.
-            double t_depletion_gyr = 2.6; 
+            // double t_depletion_gyr = 2.6; 
 
             // Convert Gyr to code time units
             // (e.g., if UnitTime is ~978 Myr, this converts 2.6 Gyr to code units)
-            double t_depletion_code = t_depletion_gyr * 1000.0 / run_params->UnitTime_in_Megayears;
+            // double t_depletion_code = t_depletion_gyr * 1000.0 / run_params->UnitTime_in_Megayears;
 
             // 5. Calculate SFR
             if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
@@ -481,7 +481,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 // ----------------------------------------------------------------
 
                 // Convert t_dep (Gyr) to Code Units
-                double UnitTime_Gyr = run_params->UnitTime_in_Megayears / 1000.0;
+                // double UnitTime_Gyr = run_params->UnitTime_in_Megayears / 1000.0;
 
                 if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
                     strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
