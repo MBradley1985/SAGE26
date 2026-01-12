@@ -274,6 +274,7 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
     o->BlackHoleMass = g->BlackHoleMass;
     o->ICS = g->ICS;
     o->H2gas = g->H2gas;
+    o->H1gas = g->H1gas;
 
     o->MetalsColdGas = g->MetalsColdGas;
     o->MetalsStellarMass = g->MetalsStellarMass;
