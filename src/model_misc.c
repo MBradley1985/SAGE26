@@ -62,6 +62,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].ICS = 0.0;
     galaxies[p].CGMgas = 0.0;
     galaxies[p].H2gas = 0.0;
+    galaxies[p].H1gas = 0.0;
 
     galaxies[p].MetalsColdGas = 0.0;
     galaxies[p].MetalsStellarMass = 0.0;

@@ -85,6 +85,7 @@ if __name__ == '__main__':
     print(BulgeRadius)
 
     H2gas = read_hdf(snap_num = Snapshot, param = 'H2gas') * 1.0e10 / Hubble_h
+    H1gas = read_hdf(snap_num = Snapshot, param = 'H1gas') * 1.0e10 / Hubble_h
     Vvir = read_hdf(snap_num = Snapshot, param = 'Vvir')
     Vmax = read_hdf(snap_num = Snapshot, param = 'Vmax')
     Rvir = read_hdf(snap_num = Snapshot, param = 'Rvir')
@@ -332,7 +333,7 @@ if __name__ == '__main__':
     w = np.where((ColdGas > 0.0) & (Type==0))[0]
     mass = np.log10(ColdGas[w])
     H2mass = np.log10(H2gas[w])
-    H1mass = np.log10(ColdGas[w] - H2gas[w])
+    H1mass = np.log10(H1gas[w])  # Now read directly from model output
     sSFR = (SfrDisk[w] + SfrBulge[w]) / StellarMass[w]
 
     mi = np.floor(min(mass)) - 2
@@ -2885,8 +2886,8 @@ if __name__ == '__main__':
     plt.figure()
     ax = plt.subplot(111)
 
-    # Calculate HI mass (ColdGas - H2)
-    HI = ColdGas - H2gas
+    # HI mass now read directly from model output
+    HI = H1gas
     HI[HI < 0] = 0  # Ensure non-negative
 
     # Select galaxies with stellar mass and HI

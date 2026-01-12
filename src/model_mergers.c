@@ -329,6 +329,7 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
         run_params->SFprescription == 4 || run_params->SFprescription == 5 ||
         run_params->SFprescription == 6 || run_params->SFprescription == 7) {
         galaxies[t].H2gas += galaxies[p].H2gas;
+        galaxies[t].H1gas += galaxies[p].H1gas;
     }
 
     // add merger to bulge

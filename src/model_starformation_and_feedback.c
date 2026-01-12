@@ -615,6 +615,14 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         ABORT(0);
     }
 
+    // Calculate HI (atomic hydrogen) as the remainder of hydrogen after H2
+    // Total hydrogen = ColdGas * HYDROGEN_MASS_FRAC (0.74)
+    // HI = Total hydrogen - H2
+    galaxies[p].H1gas = (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) - galaxies[p].H2gas;
+    if(galaxies[p].H1gas < 0.0) {
+        galaxies[p].H1gas = 0.0;  // Safety check
+    }
+
     stars = strdot * dt;
     if(stars < 0.0) {
         stars = 0.0;
@@ -945,7 +953,11 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     } else {
         stars = 0.0;
     }
-    
+
+    // FFB doesn't track H2, so all cold gas hydrogen is HI
+    galaxies[p].H2gas = 0.0;
+    galaxies[p].H1gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+
     // Update star formation rate tracking
     galaxies[p].SfrDisk[step] += stars / dt;
     galaxies[p].SfrDiskColdGas[step] = galaxies[p].ColdGas;

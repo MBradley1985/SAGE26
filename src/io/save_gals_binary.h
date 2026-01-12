@@ -51,6 +51,7 @@ extern "C" {
       float BlackHoleMass;
       float ICS;
       float H2gas;
+      float H1gas;
 
       /* metals */
       float MetalsColdGas;

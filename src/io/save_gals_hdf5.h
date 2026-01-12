@@ -60,7 +60,8 @@ struct HDF5_GALAXY_OUTPUT
     float *BlackHoleMass;
     float *ICS;
     float *H2gas;
-    
+    float *H1gas;
+
     /* metals */
     float *MetalsColdGas;
     float *MetalsStellarMass;

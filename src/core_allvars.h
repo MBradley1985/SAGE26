@@ -132,6 +132,7 @@ struct GALAXY
     float ICS;
     float CGMgas;
     float H2gas;
+    float H1gas;
 
     /* metals */
     float MetalsColdGas;
