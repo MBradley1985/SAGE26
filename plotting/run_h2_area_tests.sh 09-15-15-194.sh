@@ -127,22 +127,22 @@ for idx in "${!H2_PRESCRIPTIONS[@]}"; do
         update_parameter "H2DiskAreaOption" "$area_option" "$PAR_FILE"
         update_output_dir "$output_dir" "$PAR_FILE"
         
-        # KMT09 (prescription 5) requires SfrEfficiency = 1.0, others use 0.03
-        if [ "$prescription" -eq 5 ]; then
-            echo "  Setting SfrEfficiency = 1.0 for KMT09"
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                sed -i '' "s/^\(SfrEfficiency[[:space:]]*\)[0-9.]*.*/\11.0/" "$PAR_FILE"
-            else
-                sed -i "s/^\(SfrEfficiency[[:space:]]*\)[0-9.]*.*/\11.0/" "$PAR_FILE"
-            fi
-        else
-            echo "  Setting SfrEfficiency = 0.03"
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                sed -i '' "s/^\(SfrEfficiency[[:space:]]*\)[0-9.]*.*/\10.03/" "$PAR_FILE"
-            else
-                sed -i "s/^\(SfrEfficiency[[:space:]]*\)[0-9.]*.*/\10.03/" "$PAR_FILE"
-            fi
-        fi
+        # # KMT09 (prescription 5) requires SfrEfficiency = 1.0, others use 0.03
+        # if [ "$prescription" -eq 5 ]; then
+        #     echo "  Setting SfrEfficiency = 1.0 for KMT09"
+        #     if [[ "$OSTYPE" == "darwin"* ]]; then
+        #         sed -i '' "s/^\(SfrEfficiency[[:space:]]*\)[0-9.]*.*/\11.0/" "$PAR_FILE"
+        #     else
+        #         sed -i "s/^\(SfrEfficiency[[:space:]]*\)[0-9.]*.*/\11.0/" "$PAR_FILE"
+        #     fi
+        # else
+        #     echo "  Setting SfrEfficiency = 0.03"
+        #     if [[ "$OSTYPE" == "darwin"* ]]; then
+        #         sed -i '' "s/^\(SfrEfficiency[[:space:]]*\)[0-9.]*.*/\10.03/" "$PAR_FILE"
+        #     else
+        #         sed -i "s/^\(SfrEfficiency[[:space:]]*\)[0-9.]*.*/\10.03/" "$PAR_FILE"
+        #     fi
+        # fi
         
         # Run SAGE
         echo "Running SAGE..."
