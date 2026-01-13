@@ -2246,7 +2246,7 @@ if __name__ == '__main__':
         
         # Match the model's disk area: π × (3 × R_d)² to be consistent
         # This captures ~95% of exponential disk mass
-        disk_area = np.pi * (R_d_kpc)**2  # kpc^2 (physical)
+        disk_area = np.pi * (3*R_d_kpc)**2  # kpc^2 (physical)
         
         # Use total cold gas for KS relation
         Sigma_gas_kpc = ColdGas[w] / disk_area  # M_sun / kpc^2
@@ -2258,7 +2258,7 @@ if __name__ == '__main__':
         Sigma_SFR = total_SFR / disk_area  # M_sun/yr / kpc^2
         
         # Filter out galaxies with zero SFR for plotting
-        w_sfr = np.where(total_SFR > 0.0)[0]
+        w_sfr = np.where(Sigma_gas > -10.0)[0]
         print(f'Of those, {len(w_sfr)} have SFR > 0')
         print(f'Sigma_gas range: {np.min(Sigma_gas[w_sfr]):.2e} to {np.max(Sigma_gas[w_sfr]):.2e} M_sun/pc^2')
         print(f'Sigma_SFR range: {np.min(Sigma_SFR[w_sfr]):.2e} to {np.max(Sigma_SFR[w_sfr]):.2e} M_sun/yr/kpc^2')
