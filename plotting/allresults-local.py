@@ -1595,7 +1595,7 @@ if __name__ == '__main__':
 
     # -------------------------------------------------------
 
-    print('Plotting outflow vs stellar mass')
+    print('Plotting outflow vs Vvir')
 
     plt.figure()
     w = np.where((StellarMass > 0.0) & (OutflowRate > 0.0))[0]
@@ -1607,7 +1607,7 @@ if __name__ == '__main__':
     plt.scatter(Vvir[w], mass_loading, c='green', s=5, alpha=0.6)
 
     plt.xlabel(r'$V_{\mathrm{vir}}\ (\mathrm{km/s})$')
-    plt.ylabel(r'$\eta = \dot{M}_{\mathrm{outflow}}/\mathrm{SFR}$')
+    plt.ylabel(r'$\dot{M}_{\mathrm{outflow}}\ (M_{\odot}\ \mathrm{yr}^{-1})$')
 
     # Add vertical line at critical velocity
     plt.axvline(x=60, color='gray', linestyle=':', linewidth=2, alpha=0.7, 
@@ -1796,9 +1796,15 @@ if __name__ == '__main__':
     print('Plotting Mass Loading Factor vs Stellar Mass')
 
     plt.figure()
-    plt.scatter(np.log10(StellarMass), MassLoading, c='b', marker='o', s=1, alpha=0.7)
+    w = np.where((StellarMass > 0.0) & (MassLoading >= 0))[0]
+    if(len(w) > dilute): w = sample(list(w), dilute)
+
+    log10_stellar_mass = np.log10(StellarMass[w])
+    MassLoading = MassLoading[w]
+
+    plt.scatter(log10_stellar_mass, MassLoading, c='b', marker='o', s=1, alpha=0.7)
     plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
-    plt.ylabel(r'$\mathrm{Mass\ Loading\ Factor}$')
+    plt.ylabel(r'$\mathrm{Mass\ Loading\ Factor}\ (\eta)$')
     plt.xlim(8.0, 12.2)
     plt.ylim(0, None)
 
