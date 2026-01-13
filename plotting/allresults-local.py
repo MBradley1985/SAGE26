@@ -25,7 +25,7 @@ VolumeFraction = 1.0   # Fraction of the full volume output by the model
 
 # Plotting options
 whichimf = 1        # 0=Slapeter; 1=Chabrier
-dilute = 75000       # Number of galaxies to plot in scatter plots
+dilute = 100000       # Number of galaxies to plot in scatter plots
 sSFRcut = -11.0     # Divide quiescent from star forming galaxies
 
 OutputFormat = '.pdf'
@@ -1602,7 +1602,7 @@ if __name__ == '__main__':
     if(len(w) > dilute): w = sample(list(w), dilute)
 
     log10_stellar_mass = np.log10(StellarMass[w])
-    mass_loading = OutflowRate[w] / (SfrDisk[w] + SfrBulge[w])
+    mass_loading = OutflowRate[w]
 
     plt.scatter(Vvir[w], mass_loading, c='green', s=5, alpha=0.6)
 
