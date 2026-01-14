@@ -5,6 +5,7 @@ output/
 input/
 tests/test_build/
 tests/test_output/
+plotting/ICL/
 
 *.o
 *.*~
