@@ -248,7 +248,7 @@ ifeq ($(DO_CHECKS), 1)
   endif
 
   CCFLAGS += -g -Wextra -Wshadow -Wall -Wno-unused-local-typedefs # and more warning flags
-  LIBFLAGS +=   -lm
+
 
 else
   # something like `make clean` is in effect -> need to also remove the HDF5 objects
@@ -266,7 +266,7 @@ all:  $(SAGELIB) $(EXEC)
 
 
 $(EXEC): $(OBJS)
-	$(CC) $^ -o $@ $(LIBFLAGS)
+	$(CC) $^ -o $@ $(LIBFLAGS) -lm
 
 lib libs: $(SAGELIB)
 
