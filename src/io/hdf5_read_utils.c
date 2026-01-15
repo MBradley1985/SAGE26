@@ -176,7 +176,7 @@ int32_t fill_hdf5_metadata_names(struct HDF5_METADATA_NAMES *metadata_names, enu
         snprintf(metadata_names->name_NTrees, MAX_STRING_LEN - 1, "Ntrees_ThisFile"); // Total number of forests within the file.
         snprintf(metadata_names->name_totNHalos, MAX_STRING_LEN - 1, "Nhalos_ThisFile"); // Total number of halos within the file.
         // snprintf(metadata_names->name_TreeNHalos, MAX_STRING_LEN - 1, "TreeNHalos"); // Number of halos per forest within the file.
-        snprintf(metadata_names->name_ParticleMass, MAX_STRING_LEN - 1, "DOES-NOT-EXIST");//Particle mass for Dark matter in the sim
+        snprintf(metadata_names->name_ParticleMass, MAX_STRING_LEN - 1, "particleMass");//Particle mass for Dark matter in the sim
         snprintf(metadata_names->name_NumSimulationTreeFiles, MAX_STRING_LEN - 1, "NumFiles");//Number of output mergertree files 
         return EXIT_SUCCESS;
 
