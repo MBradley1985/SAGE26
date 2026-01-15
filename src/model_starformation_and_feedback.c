@@ -997,7 +997,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
             }
             if(disk_area > 0.0) {
                 const float surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area;
-                float metallicity = 0.0;
+                metallicity = 0.0;
                 if(galaxies[p].ColdGas > 0.0) {
                     metallicity = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
                 }
