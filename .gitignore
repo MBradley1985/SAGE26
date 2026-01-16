@@ -39,6 +39,7 @@ yy*
 data/COSMOS.csv
 data/COSMOS2020/
 data/Thorne21/
+data/
 
 # sage_analysis Package Stuff #
 *.egg-info
