@@ -35,10 +35,7 @@ yy*
 *.hdf5
 *.csv
 
-# Large CSV files #
-data/COSMOS.csv
-data/COSMOS2020/
-data/Thorne21/
+# data files #
 data/
 
 # sage_analysis Package Stuff #
