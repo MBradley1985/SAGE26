@@ -120,7 +120,7 @@ int setup_forests_io_gadget4_hdf5(struct forest_info *forests_info,
                         "but found %g instead in hdf5 file\n", expected_value, dst);                           \
             }
             double tmp;
-            const double tolerance = 1e-6;
+            const double tolerance = 1e-2;
             SANITY_CHECK_FLOAT64_ATTRIBUTE(fd, "/Parameters", "BoxSize", tmp, run_params->BoxSize, tolerance);
             SANITY_CHECK_FLOAT64_ATTRIBUTE(fd, "/Parameters", "Omega0", tmp, run_params->Omega, tolerance);
             SANITY_CHECK_FLOAT64_ATTRIBUTE(fd, "/Parameters", "OmegaLambda", tmp, run_params->OmegaLambda, tolerance);

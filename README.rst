@@ -1,4 +1,4 @@
-.. image:: ./SAGElogo.jpg
+.. image:: ./SAGElogo2.jpg
    :width: 300
    :alt: Project Logo
    :align: center
