@@ -21,7 +21,8 @@ tmp*
 _sage_cffi.*
 codecov
 *.tar*
-
+*.png
+*.jpg
 *.par
 *.ipynb_checkpoints
 *.dSYM
