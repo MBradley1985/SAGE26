@@ -1,0 +1,19 @@
+#Median and 1sigma scatter relation between HI and stellar mass 
+#calculated from xGASS (Catinella,  2018MNRAS.476..875C).
+#IMF adopted for stellar masses, Chabrier IMF.
+#Non-detections assumed to have a Mneutral=upper limit.
+#Values computed by Claudia Lagos.
+#columns: 
+#1 - stellar mass log10(Msun)
+#2 - log(MHn/Mstar) median
+#3 - 16th percentile log(MHn/Mstar)
+#4 - 84th percentile log(MHn/Mstar)
+      8.95000    0.0184543     0.381359     0.217581
+      9.25000    0.0334082     0.936826     0.375941
+      9.55000    -0.509528      3.68470     0.569342
+      9.85000    -0.480238      1.01719     0.436219
+      10.1500    -0.707989      4.10096     0.597839
+      10.4500    -0.956985      4.19696     0.439689
+      10.7500     -1.15499      4.33296     0.493937
+      11.0500     -1.39699      4.36396     0.472497
+      11.3500     -2.02597      4.00597     0.647367
