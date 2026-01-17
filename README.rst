@@ -78,7 +78,7 @@ or in parallel as:
 
     $ mpirun -np <NUMBER_PROCESSORS> ./sage input/millennium.par
 
-Plotting the output (basic method)
+Plotting the output
 ==================================
 
 If you already have Python 3 installed, you can switch to the plotting directory, where you will find two scripts, 

@@ -105,9 +105,6 @@ if __name__ == '__main__':
     MergerBulgeMass = read_hdf(snap_num = Snapshot, param = 'MergerBulgeMass') * 1.0e10 / Hubble_h
     InstabilityBulgeMass = read_hdf(snap_num = Snapshot, param = 'InstabilityBulgeMass') * 1.0e10 / Hubble_h
 
-    print("Bulge Scale Radius sample:")
-    print(BulgeRadius)
-
     H2gas = read_hdf(snap_num = Snapshot, param = 'H2gas') * 1.0e10 / Hubble_h
     H1gas = read_hdf(snap_num = Snapshot, param = 'H1gas') * 1.0e10 / Hubble_h
     Vvir = read_hdf(snap_num = Snapshot, param = 'Vvir')
@@ -852,13 +849,6 @@ if __name__ == '__main__':
     mask = (np.log10(Mvir) > 13.5) & (np.log10(Mvir) < 14.0)
 
     total_baryons = (StellarMass[mask] + ColdGas[mask] + HotGas[mask] + CGMgas[mask] + IntraClusterStars[mask] + BlackHoleMass[mask] + EjectedMass[mask]) / (0.17 * Mvir[mask])
-    print(f"Baryon closure at high mass: {np.mean(total_baryons):.3f}")
-    print(f"Should be ~1.0. If < 0.95, baryons are leaking somewhere.")
-
-    # Check component fractions
-    print(f"Hot gas fraction: {np.mean(HotGas[mask] / (0.17 * Mvir[mask])):.3f}")
-    print(f"Stellar fraction: {np.mean(StellarMass[mask] / (0.17 * Mvir[mask])):.3f}")
-    print(f"CGM fraction: {np.mean(CGMgas[mask] / (0.17 * Mvir[mask])):.3f}  # Should be ~0")
 
     plt.figure()
     ax = plt.subplot(111)
@@ -1098,7 +1088,7 @@ if __name__ == '__main__':
 
     print('Plotting the spatial distribution of all galaxies')
 
-    plt.figure()  # New figure
+    plt.figure(figsize=(18, 5))  # New figure
 
     w = np.where((Mvir > 0.0) & (StellarMass > 1.0e9))[0]
     if(len(w) > dilute): w = sample(list(w), dilute)
@@ -1109,7 +1099,7 @@ if __name__ == '__main__':
 
     buff = BoxSize*0.1
 
-    ax = plt.subplot(221)  # 1 plot on the figure
+    ax = plt.subplot(131)  # 1 plot on the figure
     xy = np.vstack([xx,yy])
     z_xy = gaussian_kde(xy)(xy)
     plt.scatter(xx, yy, marker='o', s=0.3, c=z_xy, cmap='plasma', alpha=0.5)
@@ -1117,7 +1107,7 @@ if __name__ == '__main__':
     plt.ylabel(r'$\mathrm{x}$')  # Set the y...
     plt.xlabel(r'$\mathrm{y}$')  # and the x-axis labels
     
-    ax = plt.subplot(222)  # 1 plot on the figure
+    ax = plt.subplot(132)  # 1 plot on the figure
     xz = np.vstack([xx,zz])
     z_xz = gaussian_kde(xz)(xz)
     plt.scatter(xx, zz, marker='o', s=0.3, c=z_xz, cmap='plasma', alpha=0.5)
@@ -1125,7 +1115,7 @@ if __name__ == '__main__':
     plt.ylabel(r'$\mathrm{x}$')  # Set the y...
     plt.xlabel(r'$\mathrm{z}$')  # and the x-axis labels
     
-    ax = plt.subplot(223)  # 1 plot on the figure
+    ax = plt.subplot(133)  # 1 plot on the figure
     yz = np.vstack([yy,zz])
     z_yz = gaussian_kde(yz)(yz)
     plt.scatter(yy, zz, marker='o', s=0.3, c=z_yz, cmap='plasma', alpha=0.5)
@@ -1137,6 +1127,8 @@ if __name__ == '__main__':
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
+
+# -------------------------------------------------------
 
     print('Plotting the SFR')
 
@@ -1192,13 +1184,7 @@ if __name__ == '__main__':
     plt.close()
 
     # -------------------------------------------------------
-
-    # Regime = read_hdf(snap_num = Snapshot, param = 'Regime')
-
-    print('Regime fractions:')
-    print('Cool regime:', np.mean(Regime == 0))
-    print('Hot regime:', np.mean(Regime == 1))
-
+    
     print('Plotting stellar mass vs halo mass colored by regime')
 
     plt.figure()
