@@ -239,6 +239,8 @@ if __name__ == '__main__':
     for t in leg.get_texts():  # Reduce the size of the text
         t.set_fontsize('medium')
 
+    plt.tight_layout()
+
     outputFile = OutputDir + 'A.StellarMassFunction_z' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
@@ -311,7 +313,8 @@ if __name__ == '__main__':
     ax.xaxis.set_minor_locator(plt.MultipleLocator(1))
     ax.yaxis.set_minor_locator(plt.MultipleLocator(0.5))
 
-    plt.axis([0.0, 8.0, -3.0, -0.4])            
+    plt.axis([0.0, 8.0, -3.0, -0.4])   
+    plt.tight_layout()         
 
     outputFile = OutputDir + 'B.History-SFR-density' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
@@ -399,6 +402,7 @@ if __name__ == '__main__':
     ax.yaxis.set_minor_locator(plt.MultipleLocator(0.5))
 
     plt.axis([0.0, 4.2, 6.5, 9.0])   
+    plt.tight_layout()
 
     outputFile = OutputDir + 'C.History-stellar-mass-density' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
@@ -489,6 +493,8 @@ if __name__ == '__main__':
     leg = ax.legend(loc='lower right', fontsize=10, frameon=False, ncol=3)
     for text in leg.get_texts():
         text.set_fontsize(10)
+
+
     plt.tight_layout()
     outputFile = OutputDir + 'D.SFR_evolution' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
@@ -935,57 +941,13 @@ if __name__ == '__main__':
     leg = ax.legend(loc='upper left', fontsize=8, frameon=False, ncol=3)
     for text in leg.get_texts():
         text.set_fontsize(8)
+
+
     plt.tight_layout()
     outputFile = OutputDir + 'G.QuenchedFraction.StellarMassFunctionEvolution' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()
-
-    # --------------------------------------------------------
-
-    print('Plotting regime transition function behavior')
-
-    plt.figure(figsize=(10, 8))
-
-    # Define the regime transition function
-    def regime_transition(Mvir_physical, transition_width=0.2):
-        """
-        Calculate the regime transition value for a given virial mass.
-        Returns value between 0 (CGM regime) and 1 (hot-ICM regime).
-        """
-        Mshock = 6.0e11  # Msun
-        mass_ratio = Mvir_physical / Mshock
-        regime_criterion = mass_ratio ** (4.0/3.0)
-        regime_smooth = 0.5 * (1.0 + np.tanh((regime_criterion - 1.0) / transition_width))
-        return regime_smooth
-
-    # Create a range of virial masses
-    Mvir_range = np.logspace(10, 14, 200)  # 10^10 to 10^14 Msun
-
-    # Plot for different transition widths to show the effect
-    transition_widths = [0.1, 0.2, 0.5]
-    colors_tw = ['darkblue', 'blue', 'lightblue']
-    
-    for tw, color in zip(transition_widths, colors_tw):
-        regime_values = regime_transition(Mvir_range, transition_width=tw)
-        plt.plot(np.log10(Mvir_range), regime_values, '-', color=color, 
-                linewidth=2, label=f'Transition width = {tw}')
-
-    # Mark the Mshock threshold
-    plt.axvline(x=np.log10(6.0e11), color='red', linestyle='--', 
-                linewidth=1.5, alpha=0.7, label=r'$M_{\rm shock} = 6 \times 10^{11} M_\odot$')
-    
-    # Add horizontal lines at regime boundaries
-    plt.axhline(y=0, color='gray', linestyle=':', alpha=0.5)
-    plt.axhline(y=1, color='gray', linestyle=':', alpha=0.5)
-    plt.axhline(y=0.5, color='gray', linestyle=':', alpha=0.5, label='Transition midpoint')
-
-    plt.xlabel(r'$\log_{10} M_{\rm vir}$ [$M_\odot$]', fontsize=14)
-    plt.ylabel('Regime Value', fontsize=14)
-    plt.title('CGM/Hot-ICM Regime Transition Function', fontsize=14)
-    plt.xlim(10.5, 13.5)
-    plt.ylim(-0.05, 1.05)
-    plt.legend(loc='best', frameon=False, fontsize=11)
     # --------------------------------------------------------
     
     print('Plotting stellar mass vs halo mass colored by regime across redshifts')
@@ -1504,13 +1466,13 @@ if __name__ == '__main__':
     num_ffb_plot = np.array(num_ffb_per_snap)
 
     # Filter for z <= 20
-    z_mask = z <= 20
+    z_mask = z <= 15
     z_filtered = z[z_mask]
     num_galaxies_filtered = num_galaxies_plot[z_mask]
     num_ffb_filtered = num_ffb_plot[z_mask]
 
     # Define bin edges for the bar plot
-    z_edges = [20.0]
+    z_edges = [15.0]
     for i in range(len(z_filtered) - 1):
         mid_point = (z_filtered[i] + z_filtered[i+1]) / 2.0
         z_edges.append(mid_point)
@@ -1518,16 +1480,20 @@ if __name__ == '__main__':
     z_edges = np.array(z_edges)
     widths = z_edges[:-1] - z_edges[1:]
 
+    cmap = plt.get_cmap('Reds')
+    norm = plt.Normalize(vmin=np.min(z_edges[:-1]), vmax=np.max(z_edges[:-1]))
+    colors = cmap(norm(z_edges[:-1]))
     ax.bar(z_edges[:-1], num_galaxies_filtered, width=widths, align='edge', label='All Galaxies', alpha=0.5, edgecolor='black', color='cornflowerblue')
-    ax.bar(z_edges[:-1], num_ffb_filtered, width=widths, align='edge', label='FFB Galaxies', alpha=1.0, edgecolor='black', color='firebrick')
+    ax.bar(z_edges[:-1], num_ffb_filtered, width=widths, align='edge', label='FFB Galaxies', alpha=1.0, edgecolor='black', color=colors)
 
     ax.set_yscale('log')
     ax.set_ylabel('Number of Galaxies')
     ax.set_xlabel('Redshift')
-    ax.legend(loc='best')
-    ax.set_title('Galaxy Number Evolution')
+    ax.legend(loc='best', fontsize=10, frameon=False)
+    # ax.set_title('Galaxy Number Evolution')
     
-    ax.set_xlim(20, 0)
+    ax.set_xlim(17, 0)
+    plt.tight_layout()
 
     outputFile = OutputDir + 'X.GalaxyCountEvolution' + OutputFormat
     plt.savefig(outputFile)
@@ -1535,5 +1501,68 @@ if __name__ == '__main__':
     plt.close()
 
     # --------------------------------------------------------
+
+    print('Plotting Galaxy Number Evolution')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    num_hot_per_snap = []
+    for snap_idx in range(len(RegimeFull)):
+        regime = RegimeFull[snap_idx]
+        if isinstance(regime, (list, np.ndarray)) and len(regime) > 0:
+            num_hot = np.sum(regime == 1)
+        else:
+            num_hot = 0
+        num_hot_per_snap.append(num_hot)
+
+    num_cgm_per_snap = []
+    for snap_idx in range(len(RegimeFull)):
+        regime = RegimeFull[snap_idx]
+        if isinstance(regime, (list, np.ndarray)) and len(regime) > 0:
+            num_cgm = np.sum(regime == 0)
+        else:
+            num_cgm = 0
+        num_cgm_per_snap.append(num_cgm)
+
+    z = np.array(redshifts)
+    num_hot_plot = np.array(num_hot_per_snap)
+    num_cgm_plot = np.array(num_cgm_per_snap)
+
+    # Filter for z <= 15
+    z_mask = z <= 15
+    z_filtered = z[z_mask]
+    num_hot_filtered = num_hot_plot[z_mask]
+    num_cgm_filtered = num_cgm_plot[z_mask]
+
+    # Define bin edges for the bar plot
+    z_edges = [15.0]
+    for i in range(len(z_filtered) - 1):
+        mid_point = (z_filtered[i] + z_filtered[i+1]) / 2.0
+        z_edges.append(mid_point)
+    z_edges.append(0.0)
+    z_edges = np.array(z_edges)
+    widths = z_edges[:-1] - z_edges[1:]
+
+    cmap = plt.get_cmap('gist_heat_r')
+    norm = plt.Normalize(vmin=np.min(z_edges[:-1]), vmax=np.max(z_edges[:-1]))
+    colors = cmap(norm(z_edges[:-1]))
+
+    ax.bar(z_edges[:-1], num_cgm_filtered, width=widths, align='edge', label='CGM Galaxies', alpha=0.5, edgecolor='black', color='cornflowerblue')
+    ax.bar(z_edges[:-1], num_hot_filtered, width=widths, align='edge', label='Hot Galaxies', alpha=1.0, edgecolor='black', color=colors)
+
+    ax.set_yscale('log')
+    ax.set_ylabel('Number of Galaxies')
+    ax.set_xlabel('Redshift')
+    ax.legend(loc='best', fontsize=10, frameon=False)
+    # ax.set_title('Galaxy Number Evolution')
+    
+    ax.set_xlim(17, 0)
+    plt.tight_layout()
+
+    outputFile = OutputDir + 'Y.GalaxyCountEvolution' + OutputFormat
+    plt.savefig(outputFile)
+    print(f'Saved file to {outputFile}\n')
+    plt.close()
 
     print('\nAll mass evolution plots completed!')

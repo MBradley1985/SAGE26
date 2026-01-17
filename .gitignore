@@ -34,7 +34,6 @@ xx*
 yy*
 *.hdf5
 *.csv
-*.py
 
 # data files #
 data/
@@ -46,4 +45,3 @@ data/
 # Documentation with Sphinx #
 docs/build
 docs/make.bat
-
