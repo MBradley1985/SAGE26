@@ -1473,8 +1473,6 @@ if __name__ == '__main__':
     print('Saved file to', outputFile, '\n')
     plt.close()
 
-    print('\nAll mass evolution plots completed!')
-
     # --------------------------------------------------------
 
     print('Plotting Galaxy Number Evolution')
@@ -1538,23 +1536,4 @@ if __name__ == '__main__':
 
     # --------------------------------------------------------
 
-    print('FFB- Statitics summary:')
-    total_galaxies = 0
-    for snap_idx in range(len(StellarMassFull)):
-        stellar_mass = StellarMassFull[snap_idx]
-        valid_mask = stellar_mass > 0.0
-        num_galaxies = np.sum(valid_mask)
-        total_galaxies += num_galaxies
-        print(f'Snapshot {snap_idx} (z={redshifts[snap_idx]:.2f}): {num_galaxies} galaxies')
-    print(f'Total galaxies across all snapshots: {total_galaxies}\n')
-
-    ffb_galaxies = 0
-    for snap_idx in range(len(FFBRegimeFull)):
-        ffb_regime = FFBRegimeFull[snap_idx]
-        num_ffb = np.sum(ffb_regime == 1)
-        ffb_galaxies += num_ffb
-        print(f'Snapshot {snap_idx} (z={redshifts[snap_idx]:.2f}): {num_ffb} FFB galaxies')
-    print(f'Total FFB galaxies across all snapshots: {ffb_galaxies}\n')
-
-
-    # --------------------------------------------------------
+    print('\nAll mass evolution plots completed!')
