@@ -1,0 +1,8 @@
+# SAGE Model Python requirements
+cffi
+mpi4py
+h5py
+numpy
+matplotlib
+scipy
+pandas
