@@ -34,6 +34,7 @@ xx*
 yy*
 *.hdf5
 *.csv
+*.py
 
 # data files #
 data/
