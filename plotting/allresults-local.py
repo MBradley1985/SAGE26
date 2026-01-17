@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from collections import defaultdict
-from scipy import stats
+from scipy.stats import gaussian_kde, stats
 from random import sample, seed
 
 import warnings
@@ -34,6 +34,17 @@ OutputFormat = '.pdf'
 plt.rcParams["figure.figsize"] = (8.34,6.25)
 plt.rcParams["figure.dpi"] = 96
 plt.rcParams["font.size"] = 14
+
+plt.rcParams['figure.facecolor'] = 'black'
+plt.rcParams['axes.facecolor'] = 'black'
+plt.rcParams['axes.edgecolor'] = 'white'
+plt.rcParams['xtick.color'] = 'white'
+plt.rcParams['ytick.color'] = 'white'
+plt.rcParams['axes.labelcolor'] = 'white'
+plt.rcParams['axes.titlecolor'] = 'white'
+plt.rcParams['text.color'] = 'white'
+plt.rcParams['legend.facecolor'] = 'black'
+plt.rcParams['legend.edgecolor'] = 'white'
 
 
 # ==================================================================
@@ -204,7 +215,7 @@ if __name__ == '__main__':
 
     # Overplot the model histograms (in log10 space)
     # plt.plot(xaxeshisto, np.log10(counts / volume / binwidth), 'k-', label='SAGE26')
-    plt.plot(xaxeshisto, np.log10(counts / volume / binwidth), color='black', lw=4, label='SAGE26 Total')
+    plt.plot(xaxeshisto, np.log10(counts / volume / binwidth), color='white', lw=4, label='SAGE26 Total')
     plt.plot(xaxeshisto, np.log10(countsRED / volume / binwidth), color='firebrick', lw=4, label='SAGE26 Quiescent')
     plt.plot(xaxeshisto, np.log10(countsBLU / volume / binwidth), color='dodgerblue', lw=4, label='SAGE26 Star Forming')
 
@@ -313,7 +324,7 @@ if __name__ == '__main__':
         plt.plot(np.log10(10.0**M /0.7 /1.8), yval, 'g--', lw=1.5, label='Bell et al. 2003')  # Plot the SMF
 
     # Overplot the model histograms
-    plt.plot(xaxeshisto, counts / volume / binwidth, 'k-', label='Model')
+    plt.plot(xaxeshisto, counts / volume / binwidth, 'w-', label='Model')
     plt.plot(xaxeshisto_centrals, counts_centrals / volume / binwidth, 'b:', lw=2, label='Model - Centrals')
     plt.plot(xaxeshisto_satellites, counts_satellites / volume / binwidth, 'g--', lw=1.5, label='Model - Satellites')
 
@@ -435,7 +446,7 @@ if __name__ == '__main__':
     ObrRaw_xval = np.log10(10**(ObrRaw[:, 0])  /Hubble_h/Hubble_h)
     ObrRaw_yval = (10**(ObrRaw[:, 1]) * Hubble_h*Hubble_h*Hubble_h)
 
-    plt.plot(ObrCold_xval, ObrCold_yval, color='black', lw = 7, alpha=0.25, label='Obr. & Raw. 2009 (Cold Gas)')
+    plt.plot(ObrCold_xval, ObrCold_yval, color='white', lw = 7, alpha=0.25, label='Obr. & Raw. 2009 (Cold Gas)')
     plt.plot(Zwaan_xval, Zwaan_yval, color='cyan', lw = 7, alpha=0.25, label='Zwaan et al. 2005 (HI)')
     plt.plot(ObrRaw_xval, ObrRaw_yval, color='magenta', lw = 7, alpha=0.25, label='Obr. & Raw. 2009 (H2)')
 
@@ -443,7 +454,7 @@ if __name__ == '__main__':
     plt.plot(xaxeshisto_h1, counts_h1 / volume / binwidth, 'cyan', linestyle='-', label='Model - HI Gas')
     
     # Overplot the model histograms
-    plt.plot(xaxeshisto, counts / volume / binwidth, 'k-', label='Model - Cold Gas')
+    plt.plot(xaxeshisto, counts / volume / binwidth, 'w-', label='Model - Cold Gas')
 
     plt.yscale('log')
     plt.axis([8.0, 11.5, 1.0e-6, 1.0e-1])
@@ -476,7 +487,7 @@ if __name__ == '__main__':
     mass = np.log10( (StellarMass[w] + ColdGas[w]) )
     vel = np.log10(Vmax[w])
                 
-    plt.scatter(vel, mass, marker='x', s=50, c='k', alpha=0.3, label='Model Sb/c galaxies')
+    plt.scatter(vel, mass, marker='x', s=1, c='magenta', alpha=0.9, label='Model Sb/c galaxies')
             
     # overplot Stark, McGaugh & Swatters 2009 (assumes h=0.75? ... what IMF?)
     w = np.arange(0.5, 10.0, 0.5)
@@ -518,7 +529,7 @@ if __name__ == '__main__':
     if(len(w) > dilute): w = sample(list(w), dilute)
     mass = np.log10(StellarMass[w])
     sSFR = np.log10( (SfrDisk[w] + SfrBulge[w]) / StellarMass[w] )
-    plt.scatter(mass, sSFR, marker='o', s=1, c='k', alpha=0.5, label='Model galaxies')
+    plt.scatter(mass, sSFR, marker='x', s=1, c='magenta', alpha=0.9, label='Model galaxies')
 
     # overplot dividing line between SF and passive
     w = np.arange(7.0, 13.0, 1.0)
@@ -557,7 +568,7 @@ if __name__ == '__main__':
     mass = np.log10(StellarMass[w])
     fraction = ColdGas[w] / (StellarMass[w] + ColdGas[w])
 
-    plt.scatter(mass, fraction, marker='o', s=1, c='k', alpha=0.5, label='Model Sb/c galaxies')
+    plt.scatter(mass, fraction, marker='x', s=1, c='magenta', alpha=0.9, label='Model Sb/c galaxies')
         
     plt.ylabel(r'$\mathrm{Cold\ Mass\ /\ (Cold+Stellar\ Mass)}$')  # Set the y...
     plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')  # and the x-axis labels
@@ -591,7 +602,7 @@ if __name__ == '__main__':
     mass = np.log10(StellarMass[w])
     Z = np.log10((MetalsColdGas[w] / ColdGas[w]) / 0.02) + 9.0
     
-    plt.scatter(mass, Z, marker='o', s=1, c='k', alpha=0.5, label='Model galaxies')
+    plt.scatter(mass, Z, marker='x', s=1, c='magenta', alpha=0.9, label='Model galaxies')
         
     # overplot Tremonti et al. 2003 (h=0.7)
     w = np.arange(7.0, 11.5, 0.1)
@@ -637,7 +648,7 @@ if __name__ == '__main__':
     bh = np.log10(BlackHoleMass[w])
     bulge = np.log10(BulgeMass[w])
                 
-    plt.scatter(bulge, bh, marker='o', s=1, c='k', alpha=0.5, label='Model galaxies')
+    plt.scatter(bulge, bh, marker='x', s=1, c='magenta', alpha=0.9, label='Model galaxies', zorder=10)
             
     # overplot Haring & Rix 2004
     w = 10. ** np.arange(20)
@@ -654,8 +665,8 @@ if __name__ == '__main__':
     core = np.array([1,1,0,1,1,0,0,0,1,1,0,1,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,1,1,0,0,0,1,1,0,0,0,0,0,1,0,1,0,0,1,0,0,0,1,0,1,0,1,0,1,1,1,0,0,1,0,1,0])
     yerr2, yerr1 = np.log10((M_BH_obs+M_BH_hi)/M_BH_obs), -np.log10((M_BH_obs-M_BH_lo)/M_BH_obs)
     xerr2, xerr1 = np.log10((M_sph_obs+M_sph_hi)/M_sph_obs), -np.log10((M_sph_obs-M_sph_lo)/M_sph_obs)
-    plt.errorbar(np.log10(M_sph_obs[core==0]), np.log10(M_BH_obs[core==0]), yerr=[yerr1[core==0],yerr2[core==0]], xerr=[xerr1[core==0],xerr2[core==0]], color='purple', alpha=0.3, label=r'S13 core', ls='none', lw=2, ms=0)
-    plt.errorbar(np.log10(M_sph_obs[core==1]), np.log10(M_BH_obs[core==1]), yerr=[yerr1[core==1],yerr2[core==1]], xerr=[xerr1[core==1],xerr2[core==1]], color='c', alpha=0.3, label=r'S13 Sersic', ls='none', lw=2, ms=0)
+    plt.errorbar(np.log10(M_sph_obs[core==0]), np.log10(M_BH_obs[core==0]), yerr=[yerr1[core==0],yerr2[core==0]], xerr=[xerr1[core==0],xerr2[core==0]], color='orange', alpha=0.6, label=r'S13 core', ls='none', lw=2, ms=0)
+    plt.errorbar(np.log10(M_sph_obs[core==1]), np.log10(M_BH_obs[core==1]), yerr=[yerr1[core==1],yerr2[core==1]], xerr=[xerr1[core==1],xerr2[core==1]], color='c', alpha=0.6, label=r'S13 Sersic', ls='none', lw=2, ms=0)
     
     plt.ylabel(r'$\log\ M_{\mathrm{BH}}\ (M_{\odot})$')  # Set the y...
     plt.xlabel(r'$\log\ M_{\mathrm{bulge}}\ (M_{\odot})$')  # and the x-axis labels
@@ -812,11 +823,11 @@ if __name__ == '__main__':
         facecolor='red', alpha=0.25)
     
     w = np.where(fDisk_ave > 0.0)[0]
-    plt.plot(mass_range[w]+shift, fDisk_ave[w], 'k-', label='disk stars')
+    plt.plot(mass_range[w]+shift, fDisk_ave[w], 'w-', label='disk stars')
     plt.fill_between(mass_range[w]+shift, 
         fDisk_ave[w]+fDisk_var[w], 
         fDisk_ave[w]-fDisk_var[w], 
-        facecolor='black', alpha=0.25)
+        facecolor='white', alpha=0.25)
     
     plt.axis([mass_range[0], mass_range[bins-1], 0.0, 1.05])
 
@@ -1008,9 +1019,9 @@ if __name__ == '__main__':
 
     # Add 1-sigma shading for each mass reservoir
     plt.fill_between(MeanCentralHaloMass, MeanBaryonFractionL, MeanBaryonFractionU, 
-                     color='black', alpha=0.2)
+                     color='white', alpha=0.2)
     plt.fill_between(MeanCentralHaloMass, MeanStarsL, MeanStarsU, 
-                     color='purple', alpha=0.2)
+                     color='magenta', alpha=0.2)
     plt.fill_between(MeanCentralHaloMass, MeanColdL, MeanColdU, 
                      color='blue', alpha=0.2)
     plt.fill_between(MeanCentralHaloMass, MeanHotL, MeanHotU, 
@@ -1022,8 +1033,8 @@ if __name__ == '__main__':
     plt.fill_between(MeanCentralHaloMass, MeanEjectedL, MeanEjectedU, 
                      color='yellow', alpha=0.2)
 
-    plt.plot(MeanCentralHaloMass, MeanBaryonFraction, 'k-', label='Total')
-    plt.plot(MeanCentralHaloMass, MeanStars, label='Stars', color='purple', linestyle='--')
+    plt.plot(MeanCentralHaloMass, MeanBaryonFraction, 'w-', label='Total')
+    plt.plot(MeanCentralHaloMass, MeanStars, label='Stars', color='magenta', linestyle='--')
     plt.plot(MeanCentralHaloMass, MeanCold, label='Cold gas', color='blue', linestyle=':')
     plt.plot(MeanCentralHaloMass, MeanHot, label='Hot gas', color='red')
     plt.plot(MeanCentralHaloMass, MeanCGM, label='Circumgalactic Medium', color='green', linestyle='-.')
@@ -1057,15 +1068,16 @@ if __name__ == '__main__':
     ax = plt.subplot(111)  # 1 plot on the figure
 
     w = np.where((Type == 0) & (Mvir > 1.0e10) & (StellarMass > 0.0))[0]
-    if(len(w) > dilute): w = sample(list(w), dilute)
+    dilute_mass_reservoir = 10000
+    if(len(w) > dilute_mass_reservoir): w = sample(list(w), dilute_mass_reservoir)
 
     HaloMass = np.log10(Mvir[w])
-    plt.scatter(HaloMass, np.log10(StellarMass[w]), marker='o', s=0.3, c='k', alpha=0.5, label='Stars')
-    plt.scatter(HaloMass, np.log10(ColdGas[w]), marker='o', s=0.3, color='blue', alpha=0.5, label='Cold gas')
-    plt.scatter(HaloMass, np.log10(HotGas[w]), marker='o', s=0.3, color='red', alpha=0.5, label='Hot gas')
-    plt.scatter(HaloMass, np.log10(EjectedMass[w]), marker='o', s=0.3, color='green', alpha=0.5, label='Ejected gas')
-    plt.scatter(HaloMass, np.log10(IntraClusterStars[w]), marker='o', s=0.3, color='yellow', alpha=0.5, label='Intracluster stars')
-    plt.scatter(HaloMass, np.log10(CGMgas[w]), marker='o', s=0.3, color='orange', alpha=0.5, label='CGM gas')
+    plt.scatter(HaloMass, np.log10(StellarMass[w]), marker='x', s=0.3, c='w', alpha=0.5, label='Stars')
+    plt.scatter(HaloMass, np.log10(ColdGas[w]), marker='x', s=0.3, color='blue', alpha=0.5, label='Cold gas')
+    plt.scatter(HaloMass, np.log10(HotGas[w]), marker='x', s=0.3, color='red', alpha=0.5, label='Hot gas')
+    plt.scatter(HaloMass, np.log10(EjectedMass[w]), marker='x', s=0.3, color='green', alpha=0.5, label='Ejected gas')
+    plt.scatter(HaloMass, np.log10(IntraClusterStars[w]), marker='x', s=0.3, color='yellow', alpha=0.5, label='Intracluster stars')
+    plt.scatter(HaloMass, np.log10(CGMgas[w]), marker='x', s=0.3, color='orange', alpha=0.5, label='CGM gas')
 
     plt.ylabel(r'$\mathrm{stellar,\ cold,\ hot,\ ejected,\ CGM,\ ICS\ mass}$')  # Set the y...
     plt.xlabel(r'$\log\ M_{\mathrm{vir}}\ (h^{-1}\ M_{\odot})$')  # and the x-axis labels
@@ -1098,19 +1110,25 @@ if __name__ == '__main__':
     buff = BoxSize*0.1
 
     ax = plt.subplot(221)  # 1 plot on the figure
-    plt.scatter(xx, yy, marker='o', s=0.3, c='k', alpha=0.5)
+    xy = np.vstack([xx,yy])
+    z_xy = gaussian_kde(xy)(xy)
+    plt.scatter(xx, yy, marker='o', s=0.3, c=z_xy, cmap='plasma', alpha=0.5)
     plt.axis([0.0-buff, BoxSize+buff, 0.0-buff, BoxSize+buff])
     plt.ylabel(r'$\mathrm{x}$')  # Set the y...
     plt.xlabel(r'$\mathrm{y}$')  # and the x-axis labels
     
     ax = plt.subplot(222)  # 1 plot on the figure
-    plt.scatter(xx, zz, marker='o', s=0.3, c='k', alpha=0.5)
+    xz = np.vstack([xx,zz])
+    z_xz = gaussian_kde(xz)(xz)
+    plt.scatter(xx, zz, marker='o', s=0.3, c=z_xz, cmap='plasma', alpha=0.5)
     plt.axis([0.0-buff, BoxSize+buff, 0.0-buff, BoxSize+buff])
     plt.ylabel(r'$\mathrm{x}$')  # Set the y...
     plt.xlabel(r'$\mathrm{z}$')  # and the x-axis labels
     
     ax = plt.subplot(223)  # 1 plot on the figure
-    plt.scatter(yy, zz, marker='o', s=0.3, c='k', alpha=0.5)
+    yz = np.vstack([yy,zz])
+    z_yz = gaussian_kde(yz)(yz)
+    plt.scatter(yy, zz, marker='o', s=0.3, c=z_yz, cmap='plasma', alpha=0.5)
     plt.axis([0.0-buff, BoxSize+buff, 0.0-buff, BoxSize+buff])
     plt.ylabel(r'$\mathrm{y}$')  # Set the y...
     plt.xlabel(r'$\mathrm{z}$')  # and the x-axis labels
@@ -1126,12 +1144,13 @@ if __name__ == '__main__':
     ax = plt.subplot(111)  # 1 plot on the figure
 
     w2 = np.where(StellarMass > 0.01)[0]
-    if(len(w2) > dilute): w2 = sample(list(range(len(w2))), dilute)
+    dilute_sfr = 10000
+    if(len(w2) > dilute_sfr): w2 = sample(list(w2), dilute_sfr)
     mass = np.log10(StellarMass[w2])
     starformationrate =  (SfrDisk[w2] + SfrBulge[w2])
 
     # Create scatter plot with metallicity coloring
-    plt.scatter(mass, np.log10(starformationrate), c='b', marker='o', s=1, alpha=0.7)
+    plt.scatter(mass, np.log10(starformationrate), c='magenta', marker='x', s=1, alpha=0.9)
 
     plt.ylabel(r'$\log_{10} \mathrm{SFR}\ (M_{\odot}\ \mathrm{yr^{-1}})$')  # Set the y...
     plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')  # and the x-axis labels
@@ -1159,14 +1178,10 @@ if __name__ == '__main__':
     log10_stellar_mass = np.log10(StellarMass[w])
     mass_loading = OutflowRate[w]
 
-    plt.scatter(Vvir[w], mass_loading, c='green', s=5, alpha=0.6)
+    plt.scatter(Vvir[w], mass_loading, c='magenta', marker='x', s=1, alpha=0.9)
 
     plt.xlabel(r'$V_{\mathrm{vir}}\ (\mathrm{km/s})$')
     plt.ylabel(r'$\dot{M}_{\mathrm{outflow}}\ (M_{\odot}\ \mathrm{yr}^{-1})$')
-
-    # Add vertical line at critical velocity
-    plt.axvline(x=60, color='gray', linestyle=':', linewidth=2, alpha=0.7, 
-                label='$V_{\\mathrm{crit}} = 60$ km/s')
 
     plt.xlim(min(Vvir[w]), 300)
     plt.ylim(0.01, max(mass_loading)*1.1)
@@ -1202,11 +1217,11 @@ if __name__ == '__main__':
     # Plot each regime separately with different colors
     if np.any(cgm_regime):
         plt.scatter(log10_halo_mass[cgm_regime], log10_stellar_mass[cgm_regime], 
-                   c='blue', s=5, alpha=0.6, label='CGM Regime')
+                   c='blue', s=1, alpha=0.6, label='CGM Regime')
     
     if np.any(hot_regime):
         plt.scatter(log10_halo_mass[hot_regime], log10_stellar_mass[hot_regime], 
-                   c='red', s=5, alpha=0.6, label='Hot Regime')
+                   c='red', s=1, alpha=0.6, label='Hot Regime')
 
     plt.xlabel(r'$\log_{10} M_{\mathrm{vir}}\ (M_{\odot})$')
     plt.ylabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
@@ -1319,7 +1334,7 @@ if __name__ == '__main__':
     if len(mass_sf) > 0:
         plot_density_contours(mass_sf, sSFR_sf, 'dodgerblue', 'Star-forming', clip_below=sSFRcut)
     # Add the sSFR cut line
-    plt.axhline(y=sSFRcut, color='black', linestyle='--', linewidth=2, 
+    plt.axhline(y=sSFRcut, color='white', linestyle='--', linewidth=2, 
             label=f'sSFR cut = {sSFRcut}', zorder=10)
 
     plt.ylabel(r'$\log_{10} \mathrm{sSFR}\ (\mathrm{yr^{-1}})$', fontsize=14)

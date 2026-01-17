@@ -39,6 +39,17 @@ plt.rcParams["figure.figsize"] = (8.34,6.25)
 plt.rcParams["figure.dpi"] = 96
 plt.rcParams["font.size"] = 14
 
+plt.rcParams['figure.facecolor'] = 'black'
+plt.rcParams['axes.facecolor'] = 'black'
+plt.rcParams['axes.edgecolor'] = 'white'
+plt.rcParams['xtick.color'] = 'white'
+plt.rcParams['ytick.color'] = 'white'
+plt.rcParams['axes.labelcolor'] = 'white'
+plt.rcParams['axes.titlecolor'] = 'white'
+plt.rcParams['text.color'] = 'white'
+plt.rcParams['legend.facecolor'] = 'black'
+plt.rcParams['legend.edgecolor'] = 'white'
+
 
 # ==================================================================
 
@@ -80,6 +91,7 @@ if __name__ == '__main__':
     DiskRadiusFull = [0]*(LastSnap-FirstSnap+1)
     BulgeRadiusFull = [0]*(LastSnap-FirstSnap+1)
     RvirFull = [0]*(LastSnap-FirstSnap+1)
+    FFBRegimeFull = [0]*(LastSnap-FirstSnap+1)
 
     for snap in range(FirstSnap,LastSnap+1):
 
@@ -99,6 +111,7 @@ if __name__ == '__main__':
         coldgasFull[snap] = read_hdf(snap_num = Snapshot, param = 'ColdGas') * 1.0e10 / Hubble_h
         dT[snap] = read_hdf(snap_num = Snapshot, param = 'dT')
         RegimeFull[snap] = read_hdf(snap_num = Snapshot, param = 'Regime')
+        FFBRegimeFull[snap] = read_hdf(snap_num = Snapshot, param = 'FFBRegime')
         DiskRadiusFull[snap] = read_hdf(snap_num = Snapshot, param = 'DiskRadius') / Hubble_h
         BulgeRadiusFull[snap] = read_hdf(snap_num = Snapshot, param = 'BulgeRadius') / Hubble_h
         RvirFull[snap] = read_hdf(snap_num = Snapshot, param = 'Rvir') / Hubble_h
@@ -169,7 +182,7 @@ if __name__ == '__main__':
     (counts, binedges) = np.histogram(mass, range=(mi, ma), bins=NB)
     xaxeshisto = binedges[:-1] + 0.5 * binwidth
 
-    plt.plot(xaxeshisto, counts / volume / binwidth, 'k-', label='Model galaxies')
+    plt.plot(xaxeshisto, counts / volume / binwidth, 'w-', label='Model galaxies')
 
     ###### z=1.3
     
@@ -281,7 +294,7 @@ if __name__ == '__main__':
     yErrHi = np.abs(np.log10(ObsSFRdensity[:, 5])-np.log10(ObsSFRdensity[:, 1]))
 
     # plot observational data (compilation used in Croton et al. 2006)
-    plt.errorbar(ObsRedshift, ObsSFR, yerr=[yErrLo, yErrHi], xerr=[xErrLo, xErrHi], color='g', lw=1.0, alpha=0.3, marker='o', ls='none', label='Observations')
+    plt.errorbar(ObsRedshift, ObsSFR, yerr=[yErrLo, yErrHi], xerr=[xErrLo, xErrHi], color='g', lw=1.0, alpha=0.5, marker='o', ls='none', label='Observations')
     
     SFR_density = np.zeros((LastSnap+1-FirstSnap))       
     for snap in range(FirstSnap,LastSnap+1):
@@ -364,9 +377,9 @@ if __name__ == '__main__':
     for o in obs:
         xval = ((o[:,1]-o[:,0])/2.)+o[:,0]
         if(whichimf == 0):
-            ax.errorbar(xval, np.log10(10**o[:,2] *1.6), xerr=(xval-o[:,0], o[:,1]-xval), yerr=(o[:,3], o[:,4]), alpha=0.3, lw=1.0, marker='o', ls='none')
+            ax.errorbar(xval, np.log10(10**o[:,2] *1.6), xerr=(xval-o[:,0], o[:,1]-xval), yerr=(o[:,3], o[:,4]), alpha=0.5, lw=1.0, marker='o', ls='none')
         elif(whichimf == 1):
-            ax.errorbar(xval, np.log10(10**o[:,2] *1.6/1.8), xerr=(xval-o[:,0], o[:,1]-xval), yerr=(o[:,3], o[:,4]), alpha=0.3, lw=1.0, marker='o', ls='none')
+            ax.errorbar(xval, np.log10(10**o[:,2] *1.6/1.8), xerr=(xval-o[:,0], o[:,1]-xval), yerr=(o[:,3], o[:,4]), alpha=0.5, lw=1.0, marker='o', ls='none')
             
     smd = np.zeros((LastSnap+1-FirstSnap))       
     for snap in range(FirstSnap,LastSnap+1):
@@ -376,7 +389,7 @@ if __name__ == '__main__':
 
     z = np.array(redshifts)
     nonzero = np.where(smd > 0.0)[0]
-    plt.plot(z[nonzero], np.log10(smd[nonzero]), 'k-', lw=3.0)
+    plt.plot(z[nonzero], np.log10(smd[nonzero]), 'w-', lw=3.0)
 
     plt.ylabel(r'$\log_{10}\ \phi\ (M_{\odot}\ \mathrm{Mpc}^{-3})$')  # Set the y...
     plt.xlabel(r'$\mathrm{redshift}$')  # and the x-axis labels
@@ -1151,7 +1164,7 @@ if __name__ == '__main__':
         ax.set_ylabel('Galaxy Count', fontsize=10)
         ax.set_xlim(8.0, 12.0)
         ax.set_ylim(0, None)  # Auto-scale based on actual counts
-        ax.grid(True, alpha=0.3)
+        # ax.grid(True, alpha=0.3)
     
     # Add legend to the first subplot
     axes[0].legend(loc='upper right', frameon=False, fontsize=10)
@@ -1230,12 +1243,12 @@ if __name__ == '__main__':
         # Plot quenched galaxies first (so star forming appear on top)
         if np.any(quenched):
             ax.scatter(log10_stellar_mass[quenched], log10_radius[quenched],
-                      c='red', s=10, alpha=0.4, label='Quenched', edgecolors='none')
+                      c='red', s=5, alpha=0.8, label='Quenched', edgecolors='none')
         
         # Plot star forming galaxies
         if np.any(star_forming):
             ax.scatter(log10_stellar_mass[star_forming], log10_radius[star_forming],
-                      c='blue', s=5, alpha=0.4, label='Star Forming', edgecolors='none')
+                      c='blue', s=5, alpha=0.8, label='Star Forming', edgecolors='none')
         
         # Formatting
         ax.set_title(f'z = {radius_redshifts[i]:.2f}', fontsize=12, fontweight='bold')
@@ -1243,7 +1256,7 @@ if __name__ == '__main__':
         ax.set_ylabel(r'$\log_{10} R_{\rm eff}$ [kpc]', fontsize=11)
         ax.set_xlim(8.0, 12.0)
         # ax.set_ylim(-1.0, 2.5)
-        ax.grid(True, alpha=0.3)
+        # ax.grid(True, alpha=0.3)
         
         # # Add legend only to first subplot
         # if i == 0:
@@ -1340,7 +1353,7 @@ if __name__ == '__main__':
         ax.set_xlabel(r'$\log_{10} M_* [M_\odot]$', fontsize=11)
         ax.set_ylabel(r'$\log_{10} R_{\rm eff}$ [kpc]', fontsize=11)
         ax.set_xlim(8.0, 12.0)
-        ax.grid(True, alpha=0.3)
+        # ax.grid(True, alpha=0.3)
     
     # Add a single colorbar for all subplots
     fig.subplots_adjust(right=0.92)
@@ -1461,3 +1474,87 @@ if __name__ == '__main__':
     plt.close()
 
     print('\nAll mass evolution plots completed!')
+
+    # --------------------------------------------------------
+
+    print('Plotting Galaxy Number Evolution')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    num_galaxies_per_snap = []
+    for snap_idx in range(len(StellarMassFull)):
+        stellar_mass = StellarMassFull[snap_idx]
+        if isinstance(stellar_mass, (list, np.ndarray)) and len(stellar_mass) > 0:
+            valid_mask = stellar_mass > 0.0
+            num_galaxies = np.sum(valid_mask)
+        else:
+            num_galaxies = 0
+        num_galaxies_per_snap.append(num_galaxies)
+
+    num_ffb_per_snap = []
+    for snap_idx in range(len(FFBRegimeFull)):
+        ffb_regime = FFBRegimeFull[snap_idx]
+        if isinstance(ffb_regime, (list, np.ndarray)) and len(ffb_regime) > 0:
+            num_ffb = np.sum(ffb_regime == 1)
+        else:
+            num_ffb = 0
+        num_ffb_per_snap.append(num_ffb)
+
+    z = np.array(redshifts)
+    num_galaxies_plot = np.array(num_galaxies_per_snap)
+    num_ffb_plot = np.array(num_ffb_per_snap)
+
+    # Filter for z <= 20
+    z_mask = z <= 20
+    z_filtered = z[z_mask]
+    num_galaxies_filtered = num_galaxies_plot[z_mask]
+    num_ffb_filtered = num_ffb_plot[z_mask]
+
+    # Define bin edges for the bar plot
+    z_edges = [20.0]
+    for i in range(len(z_filtered) - 1):
+        mid_point = (z_filtered[i] + z_filtered[i+1]) / 2.0
+        z_edges.append(mid_point)
+    z_edges.append(0.0)
+    z_edges = np.array(z_edges)
+    widths = z_edges[:-1] - z_edges[1:]
+
+    ax.bar(z_edges[:-1], num_galaxies_filtered, width=widths, align='edge', label='All Galaxies', alpha=0.5, edgecolor='black', color='cornflowerblue')
+    ax.bar(z_edges[:-1], num_ffb_filtered, width=widths, align='edge', label='FFB Galaxies', alpha=1.0, edgecolor='black', color='firebrick')
+
+    ax.set_yscale('log')
+    ax.set_ylabel('Number of Galaxies')
+    ax.set_xlabel('Redshift')
+    ax.legend(loc='best')
+    ax.set_title('Galaxy Number Evolution')
+    
+    ax.set_xlim(20, 0)
+
+    outputFile = OutputDir + 'X.GalaxyCountEvolution' + OutputFormat
+    plt.savefig(outputFile)
+    print(f'Saved file to {outputFile}\n')
+    plt.close()
+
+    # --------------------------------------------------------
+
+    print('FFB- Statitics summary:')
+    total_galaxies = 0
+    for snap_idx in range(len(StellarMassFull)):
+        stellar_mass = StellarMassFull[snap_idx]
+        valid_mask = stellar_mass > 0.0
+        num_galaxies = np.sum(valid_mask)
+        total_galaxies += num_galaxies
+        print(f'Snapshot {snap_idx} (z={redshifts[snap_idx]:.2f}): {num_galaxies} galaxies')
+    print(f'Total galaxies across all snapshots: {total_galaxies}\n')
+
+    ffb_galaxies = 0
+    for snap_idx in range(len(FFBRegimeFull)):
+        ffb_regime = FFBRegimeFull[snap_idx]
+        num_ffb = np.sum(ffb_regime == 1)
+        ffb_galaxies += num_ffb
+        print(f'Snapshot {snap_idx} (z={redshifts[snap_idx]:.2f}): {num_ffb} FFB galaxies')
+    print(f'Total FFB galaxies across all snapshots: {ffb_galaxies}\n')
+
+
+    # --------------------------------------------------------
