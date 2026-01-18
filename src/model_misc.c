@@ -585,6 +585,10 @@ double calculate_ffb_fraction(const double Mvir, const double z, const struct pa
     if (run_params->FeedbackFreeModeOn == 0) {
         return 0.0;  // FFB mode disabled
     }
+
+    if (z < 5.0) {
+        return 0.0;  // FFB only active at z >= 6.2
+    }
     
     // Calculate FFB threshold mass
     const double Mvir_ffb = calculate_ffb_threshold_mass(z, run_params);
