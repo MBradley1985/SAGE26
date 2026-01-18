@@ -35,6 +35,11 @@ yy*
 *.hdf5
 *.csv
 
+plotting/gas_plots.py
+plotting/ICS_plots.py
+plotting/paper_plots.py
+plotting/smf_analysis_obs_sam.py
+
 # data files #
 data/
 
