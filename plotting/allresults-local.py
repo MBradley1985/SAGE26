@@ -7,6 +7,8 @@ import os
 from collections import defaultdict
 from scipy.stats import gaussian_kde, stats
 from random import sample, seed
+from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -143,7 +145,7 @@ if __name__ == '__main__':
     ax = plt.subplot(111)  # 1 plot on the figure
 
     binwidth = 0.1  # mass function histogram bin width
-    DirName2 = './output/millennium_vanilla/'
+    # DirName2 = './output/millennium_vanilla/'
 
     # Load GAMA morphological SMF data
     # Columns: log_M, E_HE, E_HE_err, cBD, cBD_err, dBD, dBD_err, D, D_err
@@ -162,18 +164,18 @@ if __name__ == '__main__':
     baldry_q_mass = baldry[:, 2]
     baldry_q_phi = baldry[:, 3]
 
-    smass_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'StellarMass') * 1.0e10 / Hubble_h
-    sfrdisk_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'SfrDisk')
-    sfrbulge_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'SfrBulge')
+    # smass_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'StellarMass') * 1.0e10 / Hubble_h
+    # sfrdisk_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'SfrDisk')
+    # sfrbulge_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'SfrBulge')
 
     # calculate all
     w = np.where(StellarMass > 0.0)[0]
     mass = np.log10(StellarMass[w])
     sSFR = np.log10( (SfrDisk[w] + SfrBulge[w]) / StellarMass[w] )
 
-    w2 = np.where(smass_vanilla > 0.0)[0]
-    mass_vanilla = np.log10(smass_vanilla[w2])
-    sSFR_vanilla = np.log10( (sfrdisk_vanilla[w2] + sfrbulge_vanilla[w2]) / smass_vanilla[w2] )
+    # w2 = np.where(smass_vanilla > 0.0)[0]
+    # mass_vanilla = np.log10(smass_vanilla[w2])
+    # sSFR_vanilla = np.log10( (sfrdisk_vanilla[w2] + sfrbulge_vanilla[w2]) / smass_vanilla[w2] )
 
     # Bin parameters for original model
     mi = np.floor(min(mass)) - 2
@@ -193,21 +195,21 @@ if __name__ == '__main__':
     (countsBLU, binedges) = np.histogram(massBLU, range=(mi, ma), bins=NB)
 
     # Bin parameters for vanilla model
-    mi_v = np.floor(min(mass_vanilla)) - 2
-    ma_v = np.floor(max(mass_vanilla)) + 2
-    NB_v = int((ma_v - mi_v) / binwidth)
-    (counts_vanilla, binedges) = np.histogram(mass_vanilla, range=(mi_v, ma_v), bins=NB_v)
-    xaxeshisto_vanilla = binedges[:-1] + 0.5 * binwidth  # Set the x-axis values to be the centre of the bins
+    # mi_v = np.floor(min(mass_vanilla)) - 2
+    # ma_v = np.floor(max(mass_vanilla)) + 2
+    # NB_v = int((ma_v - mi_v) / binwidth)
+    # (counts_vanilla, binedges) = np.histogram(mass_vanilla, range=(mi_v, ma_v), bins=NB_v)
+    # xaxeshisto_vanilla = binedges[:-1] + 0.5 * binwidth  # Set the x-axis values to be the centre of the bins
 
     # additionally calculate red for vanilla
-    w2 = np.where(sSFR_vanilla < sSFRcut)[0]
-    massRED_vanilla = mass_vanilla[w2]
-    (countsRED_vanilla, binedges) = np.histogram(massRED_vanilla, range=(mi_v, ma_v), bins=NB_v)
+    # w2 = np.where(sSFR_vanilla < sSFRcut)[0]
+    # massRED_vanilla = mass_vanilla[w2]
+    # (countsRED_vanilla, binedges) = np.histogram(massRED_vanilla, range=(mi_v, ma_v), bins=NB_v)
 
-    # additionally calculate blue for vanilla
-    w2 = np.where(sSFR_vanilla > sSFRcut)[0]
-    massBLU_vanilla = mass_vanilla[w2]
-    (countsBLU_vanilla, binedges) = np.histogram(massBLU_vanilla, range=(mi_v, ma_v), bins=NB_v)
+    # # additionally calculate blue for vanilla
+    # w2 = np.where(sSFR_vanilla > sSFRcut)[0]
+    # massBLU_vanilla = mass_vanilla[w2]
+    # (countsBLU_vanilla, binedges) = np.histogram(massBLU_vanilla, range=(mi_v, ma_v), bins=NB_v)
 
 
     # Overplot the model histograms (in log10 space)
@@ -216,8 +218,8 @@ if __name__ == '__main__':
     plt.plot(xaxeshisto, np.log10(countsRED / volume / binwidth), color='firebrick', lw=4, label='SAGE26 Quiescent')
     plt.plot(xaxeshisto, np.log10(countsBLU / volume / binwidth), color='dodgerblue', lw=4, label='SAGE26 Star Forming')
 
-    plt.plot(xaxeshisto_vanilla, np.log10(countsRED_vanilla / volume / binwidth), color='firebrick', lw=2, ls='--', label='C16 Quiescent')
-    plt.plot(xaxeshisto_vanilla, np.log10(countsBLU_vanilla / volume / binwidth), color='dodgerblue', lw=2, ls='--', label='C16 Star Forming')
+    # plt.plot(xaxeshisto_vanilla, np.log10(countsRED_vanilla / volume / binwidth), color='firebrick', lw=2, ls='--', label='C16 Quiescent')
+    # plt.plot(xaxeshisto_vanilla, np.log10(countsBLU_vanilla / volume / binwidth), color='dodgerblue', lw=2, ls='--', label='C16 Star Forming')
 
     # Create shaded regions from observations (GAMA + Baldry combined)
     from scipy import interpolate
@@ -612,18 +614,92 @@ if __name__ == '__main__':
     Z = np.log10((MetalsColdGas[w] / ColdGas[w]) / 0.02) + 9.0
     
     plt.scatter(mass, Z, marker='x', s=1, c='magenta', alpha=0.9, label='Model galaxies')
-        
-    # overplot Tremonti et al. 2003 (h=0.7)
-    w = np.arange(7.0, 11.5, 0.1)
-    Zobs = -1.492 + 1.847*w - 0.08026*w*w
-    if(whichimf == 0):
-        # Conversion from Kroupa IMF to Slapeter IMF
-        # plt.plot(np.log10((10**w *1.5)), Zobs, 'b-', lw=2.0, label='Tremonti et al. 2003')
-        plt.fill_between(np.log10((10**w *1.5)), Zobs+0.1, Zobs-0.1, color='blue', alpha=0.2)
-    elif(whichimf == 1):
-        # Conversion from Kroupa IMF to Slapeter IMF to Chabrier IMF
-        # plt.plot(np.log10((10**w *1.5 /1.8)), Zobs, 'b-', lw=2.0, label='Tremonti et al. 2003')
-        plt.fill_between(np.log10((10**w *1.5 /1.8)), Zobs+0.1, Zobs-0.1, color='blue', alpha=0.2)
+
+    # Tremonti et al. 2004 - the primary observational reference
+    try:
+        tremonti_data = np.loadtxt('./data/Tremonti04.dat')
+        tremonti_mass = tremonti_data[:, 0]
+        tremonti_Z = tremonti_data[:, 1]
+        tremonti_Z_err_low = tremonti_data[:, 2]
+        tremonti_Z_err_high = tremonti_data[:, 3]
+        # Convert IMF if needed
+        if whichimf == 0:
+            tremonti_mass_corrected = np.log10(10**tremonti_mass * 1.5)
+        elif whichimf == 1:
+            tremonti_mass_corrected = np.log10(10**tremonti_mass * 1.5 / 1.8)
+        else:
+            tremonti_mass_corrected = tremonti_mass
+        # Plot main line
+        ax.plot(tremonti_mass_corrected, tremonti_Z, '-', color='orange', linewidth=1.5, alpha=0.7, label='Tremonti+04')
+        # Plot error shading
+        ax.fill_between(tremonti_mass_corrected, tremonti_Z_err_low, tremonti_Z_err_high, color='orange', alpha=0.2, zorder=5)
+    except Exception as e:
+        print(f"Warning: Could not load Tremonti04.dat: {e}. Using fallback polynomial fit.")
+        w_obs = np.arange(7.0, 13.0, 0.1)
+        Zobs = -1.492 + 1.847*w_obs - 0.08026*w_obs*w_obs
+        if whichimf == 0:
+            ax.plot(np.log10((10**w_obs * 1.5)), Zobs, 'o-', linewidth=3, label='Tremonti et al. 2004 (poly fit)')
+        elif whichimf == 1:
+            ax.plot(np.log10((10**w_obs * 1.5 / 1.8)), Zobs, 'o-', linewidth=3, label='Tremonti et al. 2004 (poly fit)')
+        else:
+            ax.plot(w_obs, Zobs, 'o-', linewidth=3, label='Tremonti et al. 2004 (poly fit)')
+    
+    # Curti et al. 2020
+    try:
+        curti_data = np.loadtxt('./data/Curti2020.dat')
+        curti_mass = curti_data[:, 0]
+        curti_Z = curti_data[:, 1]
+        curti_Z_low = curti_data[:, 2]
+        curti_Z_high = curti_data[:, 3]
+        # Plot main line
+        ax.plot(curti_mass, curti_Z, linestyle='-', color='cyan', linewidth=2, label='Curti+20')
+        # Plot error shading
+        ax.fill_between(curti_mass, curti_Z_low, curti_Z_high, color='cyan', alpha=0.2, zorder=5)
+    except Exception as e:
+        print(f"Warning: Could not load Curti2020.dat: {e}")
+    
+    # Andrews & Martini 2013
+    try:
+        andrews_data = np.loadtxt('./data/MMAdrews13.dat')
+        andrews_mass = andrews_data[:, 0]
+        andrews_Z = andrews_data[:, 1]
+        if whichimf == 0:
+            andrews_mass_corrected = np.log10(10**andrews_mass * 1.5)
+        elif whichimf == 1:
+            andrews_mass_corrected = np.log10(10**andrews_mass * 1.5 / 1.8)
+        else:
+            andrews_mass_corrected = andrews_mass
+        ax.scatter(andrews_mass_corrected, andrews_Z, marker='s', s=30, color='limegreen', edgecolors='darkgreen', linewidth=0.5, alpha=0.8, label='Andrews & Martini 2013')
+    except Exception as e:
+        print(f"Warning: Could not load MMAdrews13.dat: {e}")
+    
+    # Kewley & Ellison 2008 - T04 calibration (most commonly used)
+    try:
+        kewley_data = np.loadtxt('./data/MMR-Kewley08.dat')
+        t04_start = 59
+        t04_end = 74
+        kewley_mass_t04 = kewley_data[t04_start:t04_end, 0]
+        kewley_Z_t04 = kewley_data[t04_start:t04_end, 1]
+        if whichimf == 0:
+            kewley_mass_corrected = np.log10(10**kewley_mass_t04 * 1.5)
+        elif whichimf == 1:
+            kewley_mass_corrected = np.log10(10**kewley_mass_t04 * 1.5 / 1.8)
+        else:
+            kewley_mass_corrected = kewley_mass_t04
+        ax.scatter(kewley_mass_corrected, kewley_Z_t04, marker='D', s=40, color='yellow', edgecolors='goldenrod', linewidth=0.8, alpha=0.8, label='Kewley & Ellison 2008')
+    except Exception as e:
+        print(f"Warning: Could not load MMR-Kewley08.dat: {e}")
+    
+    # Gallazzi et al. 2005 - Stellar metallicity (note: this is different from gas metallicity)
+    try:
+        gallazzi_data = np.loadtxt('./data/MSZR-Gallazzi05.dat')
+        gallazzi_mass = gallazzi_data[7:, 0]
+        gallazzi_Z_stellar = gallazzi_data[7:, 1]
+        gallazzi_Z_gas_approx = gallazzi_Z_stellar + 8.69
+        gallazzi_mass_corrected = gallazzi_mass
+        ax.scatter(gallazzi_mass_corrected, gallazzi_Z_gas_approx, marker='P', s=100, color='white', edgecolors='gray', linewidth=0.5, alpha=0.8, label='Gallazzi+05')
+    except Exception as e:
+        print(f"Warning: Could not load MSZR-Gallazzi05.dat: {e}")
         
     plt.ylabel(r'$12\ +\ \log_{10}(\mathrm{O/H})$')  # Set the y...
     plt.xlabel(r'$\log_{10} M_{\mathrm{*}}\ (M_{\odot})$')  # and the x-axis labels
@@ -664,7 +740,7 @@ if __name__ == '__main__':
     # overplot Haring & Rix 2004
     w = 10. ** np.arange(20)
     BHdata = 10. ** (8.2 + 1.12 * np.log10(w / 1.0e11))
-    plt.plot(np.log10(w), np.log10(BHdata), 'b-', label="Haring \& Rix 2004")
+    plt.plot(np.log10(w), np.log10(BHdata), 'b-', label=r"Haring \& Rix 2004")
 
     # Observational points
     M_BH_obs = (0.7/Hubble_h)**2*1e8*np.array([39, 11, 0.45, 25, 24, 0.044, 1.4, 0.73, 9.0, 58, 0.10, 8.3, 0.39, 0.42, 0.084, 0.66, 0.73, 15, 4.7, 0.083, 0.14, 0.15, 0.4, 0.12, 1.7, 0.024, 8.8, 0.14, 2.0, 0.073, 0.77, 4.0, 0.17, 0.34, 2.4, 0.058, 3.1, 1.3, 2.0, 97, 8.1, 1.8, 0.65, 0.39, 5.0, 3.3, 4.5, 0.075, 0.68, 1.2, 0.13, 4.7, 0.59, 6.4, 0.79, 3.9, 47, 1.8, 0.06, 0.016, 210, 0.014, 7.4, 1.6, 6.8, 2.6, 11, 37, 5.9, 0.31, 0.10, 3.7, 0.55, 13, 0.11])
@@ -1156,6 +1232,66 @@ if __name__ == '__main__':
 
 # -------------------------------------------------------
 
+    print('Plotting the spatial distribution of all galaxies in 3D Box')
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    w = np.where((Mvir > 0.0) & (StellarMass > 1.0e9))[0]
+    if(len(w) > dilute): w = sample(list(w), dilute)
+
+    xx = Posx[w]
+    yy = Posy[w]
+    zz = Posz[w]
+
+    # Scatter plot
+    xyz = np.vstack([xx,yy,zz])
+    density = gaussian_kde(xyz)(xyz)
+    ax.scatter(xx, yy, zz, s=0.3, c=density, cmap='plasma', alpha=0.8)
+
+    # Draw the box edges
+    points = np.array([[0,0,0], [BoxSize,0,0], [BoxSize,BoxSize,0], [0,BoxSize,0],
+                       [0,0,BoxSize], [BoxSize,0,BoxSize], [BoxSize,BoxSize,BoxSize], [0,BoxSize,BoxSize]])
+
+    edges = [[points[0], points[1]], [points[1], points[2]], [points[2], points[3]], [points[3], points[0]],
+             [points[4], points[5]], [points[5], points[6]], [points[6], points[7]], [points[7], points[4]],
+             [points[0], points[4]], [points[1], points[5]], [points[2], points[6]], [points[3], points[7]]]
+    
+    line_collection = Line3DCollection(edges, colors='k')
+    ax.add_collection3d(line_collection)
+
+    ax.set_xlabel('X (Mpc/h)')
+    ax.set_ylabel('Y (Mpc/h)')
+    ax.set_zlabel('Z (Mpc/h)')
+
+    ax.set_xlim([0, BoxSize])
+    ax.set_ylim([0, BoxSize])
+    ax.set_zlim([0, BoxSize])
+
+    # Set background color to black for the 3D plot
+    ax.xaxis.set_pane_color((0.0, 0.0, 0.0, 1.0))
+    ax.yaxis.set_pane_color((0.0, 0.0, 0.0, 1.0))
+    ax.zaxis.set_pane_color((0.0, 0.0, 0.0, 1.0))
+    
+    ax.grid(False) # No grid
+    
+    # Set axis ticks to white
+    ax.tick_params(axis='x', colors='white')
+    ax.tick_params(axis='y', colors='white')
+    ax.tick_params(axis='z', colors='white')
+
+    # Make the aspect ratio equal
+    ax.set_box_aspect([1,1,1])
+
+    plt.tight_layout()
+
+    outputFile = OutputDir + '13b.SpatialDistribution3D_Box' + OutputFormat
+    plt.savefig(outputFile)  # Save the figure
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# -------------------------------------------------------
+
     print('Plotting the SFR')
 
     plt.figure()  # New figure
@@ -1272,7 +1408,7 @@ if __name__ == '__main__':
     sSFR[mask] = np.log10(starformationrate[mask] / StellarMass[w2][mask])
 
     sSFRcut = -11.0
-    print(f'sSFR cut at {sSFRcut} yr^-1')
+    # print(f'sSFR cut at {sSFRcut} yr^-1')
 
     # Separate populations
     sf_mask = (sSFR > sSFRcut) & (sSFR > -99.0)  # Star-forming

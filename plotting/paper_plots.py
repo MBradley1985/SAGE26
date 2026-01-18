@@ -21,29 +21,41 @@ warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+plt.rcParams['figure.facecolor'] = 'black'
+plt.rcParams['axes.facecolor'] = 'black'
+plt.rcParams['axes.edgecolor'] = 'white'
+plt.rcParams['xtick.color'] = 'white'
+plt.rcParams['ytick.color'] = 'white'
+plt.rcParams['axes.labelcolor'] = 'white'
+plt.rcParams['axes.titlecolor'] = 'white'
+plt.rcParams['text.color'] = 'white'
+plt.rcParams['legend.facecolor'] = 'black'
+plt.rcParams['legend.edgecolor'] = 'white'
+
+
 # ========================== USER OPTIONS ==========================
 
 # File details for the main analysis (mass loading plot)
-DirName = './output/testmodels/Millennium_FFB/'
+DirName = './output/millennium/'
 FileName = 'model_0.hdf5'
 Snapshot = 'Snap_63'
 OutputDir = DirName + 'plots/'
 
 # Main simulation details (for mass loading plot only)
 Main_Hubble_h = 0.73        # Hubble parameter
-Main_BoxSize = 500.0         # h-1 Mpc
-Main_VolumeFraction = 0.3  # Fraction of the full volume output by the model
+Main_BoxSize = 62.5        # h-1 Mpc
+Main_VolumeFraction = 1.0  # Fraction of the full volume output by the model
 
 # Additional simulation directories for SFR density comparison
 SFR_SimDirs = [
     {
-        'path': './output/testmodels/Millennium_FFB/', 
+        'path': './output/millennium/', 
         'label': 'SAGE26', 
-        'color': 'black', 
+        'color': 'white', 
         'linestyle': '-',
-        'BoxSize': 500,  # h-1 Mpc
+        'BoxSize': 62.5,  # h-1 Mpc
         'Hubble_h': 0.73,
-        'VolumeFraction': 0.3,
+        'VolumeFraction': 1.0,
         'FirstSnap': 0,
         'LastSnap': 63,
         'redshifts': [127.000, 79.998, 50.000, 30.000, 19.916, 18.244, 16.725, 15.343, 14.086, 12.941, 11.897, 10.944, 10.073, 
@@ -73,13 +85,13 @@ SFR_SimDirs = [
         'BHMFsnaps': [49, 38, 32, 23, 17, 13, 10, 8, 7, 5, 4]  # Example snapshots
     },
     {
-        'path': './output/testmodels/Millennium_vanilla/', 
+        'path': './output/millennium_vanilla/', 
         'label': 'SAGE C16', 
         'color': 'firebrick', 
         'linestyle': '-',
-        'BoxSize': 500,  # h-1 Mpc  (example - adjust to your actual values)
+        'BoxSize': 62.5,  # h-1 Mpc  (example - adjust to your actual values)
         'Hubble_h': 0.73,  # (example - adjust to your actual values)
-        'VolumeFraction': 0.3,
+        'VolumeFraction': 1.0,
         'FirstSnap': 0,  # (adjust to your actual values)
         'LastSnap': 63,  # (adjust to your actual values)
         'redshifts': [127.000, 79.998, 50.000, 30.000, 19.916, 18.244, 16.725, 15.343, 14.086, 12.941, 11.897, 10.944, 10.073, 
@@ -109,13 +121,13 @@ SFR_SimDirs = [
     #     'BHMFsnaps': [63, 40, 32, 27, 23, 20, 18, 16]
     # },
     {
-        'path': './output/testmodels/Millennium_noFFB/', 
+        'path': './output/millennium_noffb/', 
         'label': 'SAGE26 (no FFB)', 
         'color': 'dodgerblue', 
         'linestyle': '-',
-        'BoxSize': 500,  # h-1 Mpc
+        'BoxSize': 62.5,  # h-1 Mpc
         'Hubble_h': 0.73,
-        'VolumeFraction': 0.3,
+        'VolumeFraction': 1.0,
         'FirstSnap': 0,
         'LastSnap': 63,
         'redshifts': [127.000, 79.998, 50.000, 30.000, 19.916, 18.244, 16.725, 15.343, 14.086, 12.941, 11.897, 10.944, 10.073, 
@@ -1117,9 +1129,9 @@ else:
 # Create custom legend (rest of your existing legend code)
 legend_elements = []
 if os.path.exists(main_sim_path):
-    legend_elements.append(plt.Line2D([0], [0], color='black', linewidth=3, linestyle='-', label='SAGE26'))
+    legend_elements.append(plt.Line2D([0], [0], color='white', linewidth=3, linestyle='-', label='SAGE26'))
 if vanilla_sim_path and os.path.exists(vanilla_sim_path):
-    legend_elements.append(plt.Line2D([0], [0], color='black', linewidth=3, linestyle=':', label='SAGE C16'))
+    legend_elements.append(plt.Line2D([0], [0], color='white', linewidth=3, linestyle=':', label='SAGE C16'))
 
 if legend_elements:
     leg = ax.legend(handles=legend_elements, loc='upper left', fontsize=14)  # Use ax.legend, not plt.legend
@@ -1316,7 +1328,7 @@ if __name__ == '__main__':
             # Plot the ECSV data with error bars
             plt.errorbar(ecsv_redshift, log_sfrd_median, 
                         yerr=[yerr_low, yerr_high], 
-                        color='orange', lw=1.0, alpha=0.2, 
+                        color='orange', lw=1.0, alpha=0.3, 
                         marker='o', markersize=2, ls='none', 
                         label='COSMOS Web 2025')
 
@@ -1365,7 +1377,7 @@ if __name__ == '__main__':
 
     # plot observational data (compilation used in Croton et al. 2006)
     plt.errorbar(ObsRedshift, ObsSFR, yerr=[yErrLo, yErrHi], xerr=[xErrLo, xErrHi], 
-                color='purple', lw=1.0, alpha=0.3, marker='o', ls='none', 
+                color='purple', lw=1.0, alpha=0.6, marker='o', ls='none', 
                 label='Observations')
 
     def MD14_sfrd(z):
@@ -1474,9 +1486,9 @@ if __name__ == '__main__':
     for o in obs:
         xval = ((o[:,1]-o[:,0])/2.)+o[:,0]
         if(whichimf == 0):
-            ax.errorbar(xval, np.log10(10**o[:,2] *1.6), xerr=(xval-o[:,0], o[:,1]-xval), yerr=(o[:,3], o[:,4]), alpha=0.3, lw=1.0, marker='o', ls='none', label='Observations')
+            ax.errorbar(xval, np.log10(10**o[:,2] *1.6), xerr=(xval-o[:,0], o[:,1]-xval), yerr=(o[:,3], o[:,4]), alpha=0.6, lw=1.0, marker='o', ls='none', label='Observations')
         elif(whichimf == 1):
-            ax.errorbar(xval, np.log10(10**o[:,2] *1.6/1.8), xerr=(xval-o[:,0], o[:,1]-xval), yerr=(o[:,3], o[:,4]), alpha=0.3, lw=1.0, marker='o', ls='none')
+            ax.errorbar(xval, np.log10(10**o[:,2] *1.6/1.8), xerr=(xval-o[:,0], o[:,1]-xval), yerr=(o[:,3], o[:,4]), alpha=0.6, lw=1.0, marker='o', ls='none')
     
     # Calculate SMD from the main simulation using pre-loaded data
     smd = np.zeros((LastSnap+1-FirstSnap))       
