@@ -48,10 +48,10 @@ MODEL_CONFIGS = [
     {
         'name': 'SAGE26',           # Display name for legend (Duplicate for High-Z/All-Z plots)
         'dir': './output/millennium/',  # Directory path
-        'color': 'magenta',            # Color for plotting
+        'color': 'white',            # Color for plotting
         'linestyle': '-',            # Line style
-        'linewidth': 4,              # Thick line for SAGE26
-        'alpha': 0.8,                # Transparency
+        'linewidth': 3.5,              # Thick line for SAGE26
+        'alpha': 1.0,                # Transparency
         'boxsize': MILLENNIUM_BOXSIZE,             # Box size in h^-1 Mpc for this model
         'volume_fraction': 1.0,      # Fraction of the full volume output by the model
         'use_for_residuals': False,  # NEW: Flag to indicate this is NOT the comparison model
@@ -62,10 +62,10 @@ MODEL_CONFIGS = [
     {
         'name': 'SAGE C16',           # Display name for legend
         'dir': './output/millennium_vanilla/',  # Second directory path
-        'color': 'firebrick',             # Color for plotting
+        'color': 'red',             # Color for plotting
         'linestyle': '--',           # Dashed line style
         'linewidth': 1.5,              # Thin line for Vanilla SAGE
-        'alpha': 0.8,                # Transparency
+        'alpha': 1.0,                # Transparency
         'boxsize': MILLENNIUM_BOXSIZE,             # Box size in h^-1 Mpc for this model
         'volume_fraction': 1.0,      # Fraction of the full volume output by the model
         'use_for_residuals': True,   # NEW: Flag to indicate this is the comparison model
@@ -80,7 +80,7 @@ MODEL_CONFIGS = [
         'color': 'red',            # Color for plotting
         'linestyle': ':',           # Dotted line style
         'linewidth': 2,             # Line width
-        'alpha': 0.8,               # Transparency
+        'alpha': 1.0,               # Transparency
         'boxsize': MILLENNIUM_BOXSIZE,            # Box size in h^-1 Mpc for this model
         'volume_fraction': 0.5,      # Fraction of the full volume output by the model
         'use_for_residuals': False,   # NEW: Flag to indicate this is the comparison model
@@ -93,7 +93,7 @@ MODEL_CONFIGS = [
         'name': 'C16 feedback',
         'dir': './output/millennium_c16feedback/', 
         'color': 'dodgerblue', 
-        'linestyle': '-', 'alpha': 0.8, 
+        'linestyle': '-', 'alpha': 1.0, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
@@ -101,7 +101,7 @@ MODEL_CONFIGS = [
     },
     {
         'name': 'SAGE26 (no FFB)', 'dir': './output/millennium_noffb/', 
-        'color': 'dodgerblue', 'linestyle': '-', 'alpha': 0.8, 
+        'color': 'dodgerblue', 'linestyle': '-', 'alpha': 1.0, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
@@ -109,7 +109,7 @@ MODEL_CONFIGS = [
     },
     {
         'name': 'SAGE26 (no CGM)', 'dir': './output/millennium_nocgm/', 
-        'color': 'dodgerblue', 'linestyle': '-', 'alpha': 0.8, 
+        'color': 'dodgerblue', 'linestyle': '-', 'alpha': 1.0, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
@@ -117,7 +117,7 @@ MODEL_CONFIGS = [
     },
     {
         'name': '10% FFB', 'dir': './output/millennium_ffb10/', 
-        'color': 'red', 'linestyle': '-', 'alpha': 0.8, 
+        'color': 'red', 'linestyle': '-', 'alpha': 1.0, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
@@ -125,7 +125,7 @@ MODEL_CONFIGS = [
     },
     {
         'name': '20% FFB', 'dir': './output/millennium_ffb20/', 
-        'color': 'red', 'linestyle': '-', 'alpha': 0.8, 
+        'color': 'red', 'linestyle': '-', 'alpha': 1.0, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
@@ -133,7 +133,7 @@ MODEL_CONFIGS = [
     },
     {
         'name': '30% FFB', 'dir': './output/millennium_ffb30/', 
-        'color': 'magenta', 'linestyle': '-', 'alpha': 0.8, 
+        'color': 'magenta', 'linestyle': '-', 'alpha': 1.0, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
@@ -141,7 +141,7 @@ MODEL_CONFIGS = [
     },
     {
         'name': '40% FFB', 'dir': './output/millennium_ffb40/', 
-        'color': 'purple', 'linestyle': '-', 'alpha': 0.8, 
+        'color': 'purple', 'linestyle': '-', 'alpha': 1.0, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
@@ -149,7 +149,7 @@ MODEL_CONFIGS = [
     },
     {
         'name': '50% FFB', 'dir': './output/millennium_ffb50/', 
-        'color': 'red', 'linestyle': '-', 'alpha': 0.8, 
+        'color': 'red', 'linestyle': '-', 'alpha': 1.0, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
@@ -157,7 +157,7 @@ MODEL_CONFIGS = [
     },
     {
         'name': '60% FFB', 'dir': './output/millennium_ffb60/', 
-        'color': 'red', 'linestyle': '-', 'alpha': 0.8, 
+        'color': 'red', 'linestyle': '-', 'alpha': 1.0, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
@@ -165,7 +165,7 @@ MODEL_CONFIGS = [
     },
     {
         'name': '70% FFB', 'dir': './output/millennium_ffb70/', 
-        'color': 'red', 'linestyle': '-', 'alpha': 0.8, 
+        'color': 'red', 'linestyle': '-', 'alpha': 1.0, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
@@ -173,7 +173,7 @@ MODEL_CONFIGS = [
     },
     {
         'name': '80% FFB', 'dir': './output/millennium_ffb80/', 
-        'color': 'orange', 'linestyle': '-', 'alpha': 0.8, 
+        'color': 'orange', 'linestyle': '-', 'alpha': 1.0, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
@@ -181,7 +181,7 @@ MODEL_CONFIGS = [
     },
     {
         'name': '90% FFB', 'dir': './output/millennium_ffb90/', 
-        'color': 'red', 'linestyle': '-', 'alpha': 0.8, 
+        'color': 'red', 'linestyle': '-', 'alpha': 1.0, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
@@ -189,7 +189,7 @@ MODEL_CONFIGS = [
     },
     {
         'name': '100% FFB', 'dir': './output/millennium_ffb100/', 
-        'color': 'yellow', 'linestyle': '-', 'alpha': 0.8, 
+        'color': 'yellow', 'linestyle': '-', 'alpha': 1.0, 
         'boxsize': MILLENNIUM_BOXSIZE, 'volume_fraction': 1.0, 
         'hubble_h': MILLENNIUM_HUBBLE_H, 
         'baryon_fraction': MILLENNIUM_BARYON_FRACTION,
@@ -203,7 +203,7 @@ MODEL_CONFIGS = [
         'boxsize': 400,
         'hubble_h': 0.677, 'baryon_fraction': 0.15,
         'volume_fraction': 0.3,
-        'linestyle': '-', 'alpha': 0.8,
+        'linestyle': '-', 'alpha': 1.0,
         'redshifts': [13.9334, 12.67409, 11.50797, 10.44649, 9.480752, 8.58543, 7.77447, 7.032387, 6.344409, 5.721695,
             5.153127, 4.629078, 4.26715, 3.929071, 3.610462, 3.314082, 3.128427, 2.951226, 2.77809, 2.616166,
             2.458114, 2.309724, 2.16592, 2.027963, 1.8962, 1.770958, 1.65124, 1.535928, 1.426272, 1.321656,
@@ -215,15 +215,15 @@ MODEL_CONFIGS = [
 # List of observational CSV files, one per redshift
 # Note: SMFvals data will be plotted as symbols only (no lines), using squares by default
 OBSERVATIONAL_FILES = [
-    {'file': './data/SHARK_smf_z0.csv', 'z': 0.0, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z05.csv', 'z': 0.5, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z1.csv', 'z': 1.0, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z2.csv', 'z': 2.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z3.csv', 'z': 3.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z4.csv', 'z': 4.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z5.csv', 'z': 5.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z6.csv', 'z': 6.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
-    {'file': './data/SHARK_smf_z7.csv', 'z': 7.01, 'color': 'orange', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z0.csv', 'z': 0.0, 'color': 'yellow', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z05.csv', 'z': 0.5, 'color': 'yellow', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z1.csv', 'z': 1.0, 'color': 'yellow', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z2.csv', 'z': 2.01, 'color': 'yellow', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z3.csv', 'z': 3.01, 'color': 'yellow', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z4.csv', 'z': 4.01, 'color': 'yellow', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z5.csv', 'z': 5.01, 'color': 'yellow', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z6.csv', 'z': 6.01, 'color': 'yellow', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
+    {'file': './data/SHARK_smf_z7.csv', 'z': 7.01, 'color': 'yellow', 'label': 'SHARK', 'linestyle': '--', 'linewidth': 2, 'type': 'shark'},
     # Add your new SMFvals files here (plotted as symbols only)
     {'file': './data/Thorne21/SMFvals_z2.csv', 'z': 2.0, 'color': 'grey', 'label': 'Thorne+21', 'marker': 's', 'markersize': 4, 'type': 'smfvals'},
     {'file': './data/Thorne21/SMFvals_z2.4.csv', 'z': 2.4, 'color': 'grey', 'label': 'Thorne+21', 'marker': 's', 'markersize': 4, 'type': 'smfvals'},
@@ -2408,8 +2408,19 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
     # Track which models have appeared in legends globally
     models_in_legend = set()
 
-    # Load GAEA data
-    gaea_data = load_gaea_data(GAEADataFile)
+    # Load GAEA data only if allowed for this plot
+    gaea_data = None
+    allow_gaea = True
+    allow_shark = True
+    # If saving to low-z or high-z grid, do not plot GAEA or SHARK
+    if save_path is not None and (
+        'sage_smf_redshift_grid_low_z_nocgm' in save_path or
+        'sage_smf_redshift_grid_high_z_ffb' in save_path or
+        'sage_smf_redshift_grid_low_z_c16feedback' in save_path):
+        allow_gaea = False
+        allow_shark = False
+    else:
+        gaea_data = load_gaea_data(GAEADataFile)
 
     if show_observations:
         obs_data = load_observational_data()
@@ -2417,7 +2428,9 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
         santini_data = load_santini_2012_data()
         wright_data = load_wright_2018_data()
         harvey_data = load_harvey_data(HarveyDataFile)
-        
+        # Remove SHARK from obs_data for low-z, high-z, and low-z c16feedback grid plots
+        if not allow_shark:
+            obs_data = [d for d in obs_data if d.get('label', '').upper() != 'SHARK']
         if not obs_data and not muzzin_data and not santini_data and not wright_data and not harvey_data:
             print("Warning: No observational data loaded. Proceeding without observations.")
             show_observations = False
@@ -2505,64 +2518,63 @@ def plot_smf_redshift_grid(galaxy_types='all', mass_range=(7, 12),
             panel_obs_legend_items.extend(obs_legend_items)
             panel_sim_legend_items.extend(sim_legend_items)
 
-        # Add GAEA data for this redshift bin
-        # Find closest GAEA redshift to bin center
-        if gaea_data:
+        # Add GAEA data for this redshift bin only if allowed
+        if allow_gaea and gaea_data:
             gaea_zs = np.array(list(gaea_data.keys()))
             z_center_bin = (z_low + z_high) / 2
             closest_gaea_z = gaea_zs[np.argmin(np.abs(gaea_zs - z_center_bin))]
-            
             if closest_gaea_z <= 4.0:
                 gaea_bin = gaea_data[closest_gaea_z]
                 # Plot only intrinsic data
                 # Only show legend for GAEA on the first subplot
                 if i == 0:
-                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=f'GAEA', zorder=5)
+                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='limegreen', linestyle='--', linewidth=2, alpha=0.8, label=f'GAEA', zorder=5)
                     panel_sim_legend_items.append((gaea_plot[0], f'GAEA'))
                 else:
-                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=None, zorder=5)
+                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='limegreen', linestyle='--', linewidth=2, alpha=0.8, label=None, zorder=5)
 
-        # Add SHARK data (always shown, regardless of show_observations)
-        # Find the best matching SHARK redshift for this bin
-        search_z_low_shark = z_low
-        search_z_high_shark = z_high
-        z_center_shark = (search_z_low_shark + search_z_high_shark) / 2
-        best_shark_z = None
-        best_distance_shark = float('inf')
+        # Add SHARK data unless disabled for this plot
+        if allow_shark:
+            # Find the best matching SHARK redshift for this bin
+            search_z_low_shark = z_low
+            search_z_high_shark = z_high
+            z_center_shark = (search_z_low_shark + search_z_high_shark) / 2
+            best_shark_z = None
+            best_distance_shark = float('inf')
 
-        # Look for SHARK data only
-        shark_data_dict = {z: data for z, data in obs_data_by_z.items() if data.get('type') == 'shark'}
+            # Look for SHARK data only
+            shark_data_dict = {z: data for z, data in obs_data_by_z.items() if data.get('type') == 'shark'}
 
-        for obs_z in shark_data_dict.keys():
-            matches = find_closest_redshift_in_range(obs_z, search_z_low_shark, search_z_high_shark)
-            if matches:
-                distance = abs(obs_z - z_center_shark)
-                if distance < best_distance_shark:
-                    best_distance_shark = distance
-                    best_shark_z = obs_z
+            for obs_z in shark_data_dict.keys():
+                matches = find_closest_redshift_in_range(obs_z, search_z_low_shark, search_z_high_shark)
+                if matches:
+                    distance = abs(obs_z - z_center_shark)
+                    if distance < best_distance_shark:
+                        best_distance_shark = distance
+                        best_shark_z = obs_z
 
-        if best_shark_z is not None:
-            obs_info = obs_data_by_z[best_shark_z]
-            try:
-                obs_masses = obs_info['x']
-                obs_phi = obs_info['y']  # SHARK data already in log space
+            if best_shark_z is not None:
+                obs_info = obs_data_by_z[best_shark_z]
+                try:
+                    obs_masses = obs_info['x']
+                    obs_phi = obs_info['y']  # SHARK data already in log space
 
-                # Only add label if SHARK dataset type hasn't been labeled anywhere in the figure yet
-                shark_label = f"{obs_info['label']}" if not sim_datasets_in_legend['shark'] else None
+                    # Only add label if SHARK dataset type hasn't been labeled anywhere in the figure yet
+                    shark_label = f"{obs_info['label']}" if not sim_datasets_in_legend['shark'] else None
 
-                # Plot SHARK as dashed lines
-                shark_plot = ax.plot(obs_masses, obs_phi,
-                       linestyle=obs_info.get('linestyle', '--'), color=obs_info['color'],
-                       linewidth=obs_info.get('linewidth', 2),
-                       label=shark_label, alpha=0.8)
+                    # Plot SHARK as dashed lines
+                    shark_plot = ax.plot(obs_masses, obs_phi,
+                           linestyle=obs_info.get('linestyle', '--'), color=obs_info['color'],
+                           linewidth=obs_info.get('linewidth', 2),
+                           label=shark_label, alpha=0.8)
 
-                if shark_label is not None:
-                    sim_datasets_in_legend['shark'] = True
-                    panel_sim_legend_items.append((shark_plot[0], shark_label))
-                print(f"  ✓ Added SHARK (z={best_shark_z}) to bin {z_low:.1f} < z < {z_high:.1f}")
+                    if shark_label is not None:
+                        sim_datasets_in_legend['shark'] = True
+                        panel_sim_legend_items.append((shark_plot[0], shark_label))
+                    print(f"  ✓ Added SHARK (z={best_shark_z}) to bin {z_low:.1f} < z < {z_high:.1f}")
 
-            except Exception as e:
-                print(f"Warning: Could not add SHARK data: {e}")
+                except Exception as e:
+                    print(f"Warning: Could not add SHARK data: {e}")
 
         # Process each model
         model_redshifts_used = {}  # Track which redshift each model used in this panel
@@ -4240,7 +4252,7 @@ def plot_smf_all_redshift_bins(galaxy_types='all', mass_range=(7, 12),
                 # Plot only intrinsic data
                 # Only show legend for GAEA on the first subplot
                 if i == 0:
-                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=f'GAEA', zorder=5)
+                    gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='limegreen', linestyle='--', linewidth=2, alpha=0.8, label=f'GAEA', zorder=5)
                     panel_sim_legend_items.append((gaea_plot[0], f'GAEA'))
                 else:
                     gaea_plot = ax.plot(gaea_bin['log_mstar'], gaea_bin['log_phi_intrinsic'], color='green', linestyle='--', linewidth=2, alpha=0.8, label=None, zorder=5)

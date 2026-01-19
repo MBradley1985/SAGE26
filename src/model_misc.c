@@ -594,16 +594,18 @@ double calculate_ffb_fraction(const double Mvir, const double z, const struct pa
     const double Mvir_ffb = calculate_ffb_threshold_mass(z, run_params);
     
     // Width of transition in dex (Li et al. use 0.15 dex)
-    const double delta_log_M = 0.015;
+    const double delta_log_M = 0.15;
     
     // Calculate argument for sigmoid function
     const double x = log10(Mvir / Mvir_ffb) / delta_log_M;
     
     // Sigmoid function: S(x) = 1 / (1 + exp(-x))
-    const double k = 5.0;  // Steepness parameter (can be adjusted)
+    // const double k = 5.0;  // Steepness parameter (can be adjusted)
+    // Sigmoid function with adjustable steepness
     // Smoothly varies from 0 (well below threshold) to 1 (well above threshold)
-    // const double f_ffb = 1.0 / (1.0 + exp(-x));
-    const double f_ffb = 1.0 / (1.0 + exp(-k * x));
+    const double f_ffb = 1.0 / (1.0 + exp(-x));
+    // Steeper transition
+    // const double f_ffb = 1.0 / (1.0 + exp(-k * x));
     
     return f_ffb;
 }
