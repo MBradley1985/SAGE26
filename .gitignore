@@ -5,10 +5,8 @@ output/
 input/
 tests/test_build/
 tests/test_output/
-plotting/gas_plots.py
-plotting/ICS_plots.py
-plotting/paper_plots.py
-plotting/smf_analysis_obs_sam.py
+plotting/presentation_plots/
+
 
 *.o
 *.*~
