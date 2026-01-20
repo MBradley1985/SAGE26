@@ -41,10 +41,10 @@ BOX_SIZE = 62.5  # Mpc/h
 
 # Animation parameters
 FPS = 30
-ORBIT_DURATION = 5      # seconds for one full orbit
-FLYTHROUGH_DURATION = 25  # seconds for flythrough (longer = smoother)
+ORBIT_DURATION = 60      # seconds for one full orbit
+FLYTHROUGH_DURATION = 60  # seconds for flythrough (longer = smoother)
 EVOLUTION_DURATION = 20   # seconds for time evolution
-COMBINED_DURATION = 30    # seconds for combined animation
+COMBINED_DURATION = 20    # seconds for combined animation
 
 # Output format: 'mp4', 'mov', 'gif', or 'frames' (individual PNG files)
 OUTPUT_FORMAT = 'frames'
@@ -76,7 +76,7 @@ SATELLITE_COLORMAP = 'Reds_r'  # Colormap for satellite galaxies (Type mode, col
 # Colormap ranges (set to None for auto-scaling based on data)
 # Values are in log10 units where applicable
 STELLAR_MASS_RANGE = [8.0, 12.0]   # log10(Msun) range for mass coloring
-SSFR_RANGE = [-12.0, -9.0]         # log10(yr^-1) range for sSFR coloring
+SSFR_RANGE = [-14.0, -8.0]         # log10(yr^-1) range for sSFR coloring
 DENSITY_RANGE = None               # Set to [min, max] to fix density range, or None for auto
 
 # Halo visualization settings
@@ -272,10 +272,10 @@ def create_box_mesh():
 
 
 def compute_density_colors(positions):
-    """Compute KDE-based density coloring for galaxies/halos."""
+    """Compute KDE-based density coloring for galaxies/halos using DENSITY_RANGE."""
     if len(positions) < 10:
         return np.ones(len(positions))
-    
+
     print("    Computing density estimates...")
     # Subsample for KDE computation to keep it fast
     if len(positions) > 5000:
@@ -288,35 +288,49 @@ def compute_density_colors(positions):
         kde = gaussian_kde(kde_data)
         # Evaluate density on all points
         density = kde(positions.T)
-        
+
         # Log scaling for better visual dynamic range
         density = np.log10(density + 1e-10)
-        
-        # Normalize to 0-1
-        d_min, d_max = density.min(), density.max()
+
+        # Use configured range or auto-scale
+        if DENSITY_RANGE is not None:
+            d_min, d_max = DENSITY_RANGE
+        else:
+            d_min, d_max = density.min(), density.max()
+
         if d_max > d_min:
             density = (density - d_min) / (d_max - d_min)
         else:
             density = np.zeros_like(density)
-            
-        return density
+
+        return np.clip(density, 0, 1)
     except Exception as e:
         print(f"    Density computation failed: {e}")
         return np.zeros(len(positions))
 
 
 def get_mass_colors(stellar_mass):
-    """Normalize stellar mass to 0-1 for coloring."""
+    """Normalize stellar mass to 0-1 for coloring using STELLAR_MASS_RANGE."""
     log_mass = np.log10(stellar_mass + 1)
-    return (log_mass - log_mass.min()) / (log_mass.max() - log_mass.min() + 1e-10)
+    if STELLAR_MASS_RANGE is not None:
+        vmin, vmax = STELLAR_MASS_RANGE
+    else:
+        vmin, vmax = log_mass.min(), log_mass.max()
+    normalized = (log_mass - vmin) / (vmax - vmin + 1e-10)
+    return np.clip(normalized, 0, 1)
 
 
 def get_ssfr_colors(ssfr):
-    """Normalize sSFR to 0-1 for coloring (log scale)."""
+    """Normalize sSFR to 0-1 for coloring using SSFR_RANGE."""
     # Use log scale, handling zero/negative sSFR
     ssfr_safe = np.maximum(ssfr, 1e-14)
     log_ssfr = np.log10(ssfr_safe)
-    return (log_ssfr - log_ssfr.min()) / (log_ssfr.max() - log_ssfr.min() + 1e-10)
+    if SSFR_RANGE is not None:
+        vmin, vmax = SSFR_RANGE
+    else:
+        vmin, vmax = log_ssfr.min(), log_ssfr.max()
+    normalized = (log_ssfr - vmin) / (vmax - vmin + 1e-10)
+    return np.clip(normalized, 0, 1)
 
 
 def get_mass_sizes(stellar_mass):
@@ -940,8 +954,10 @@ def main():
 
     if args.force:
         import shutil
+        # Clean up frame directories for all color modes
+        suffix = f"_{args.color_by}" if args.color_by != 'mass' else ""
         for mode in ['orbit', 'flythrough', 'evolution', 'combined']:
-            fdir = os.path.join(args.output_dir, f'sage26_{mode}_frames')
+            fdir = os.path.join(args.output_dir, f'sage26_{mode}{suffix}_frames')
             if os.path.exists(fdir): shutil.rmtree(fdir)
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -960,8 +976,8 @@ def main():
     ext = {'frames':'mp4', 'gif':'gif', 'mp4':'mp4', 'mov':'mov'}.get(OUTPUT_FORMAT, 'mp4')
 
     for mode in modes_to_run:
-        # Append mode to filename if density is selected
-        suffix = f"_{args.color_by}" if args.color_by == 'density' else ""
+        # Append color mode to filename (except for default 'mass' mode)
+        suffix = f"_{args.color_by}" if args.color_by != 'mass' else ""
         output_file = os.path.join(args.output_dir, f'sage26_{mode}{suffix}.{ext}')
 
         if mode == 'orbit':
