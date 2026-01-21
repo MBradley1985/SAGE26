@@ -2,9 +2,9 @@
 
 #SBATCH --job-name=sage_flythrough
 #SBATCH --output=slurm-flythrough-%A_%a.out
-#SBATCH --array=0-5
+#SBATCH --array=0-7
 #SBATCH --cpus-per-task=1
-#SBATCH --time=02:00:00
+#SBATCH --time=08:00:00
 #SBATCH --mem=2G
 
 # List of argument sets for each array job
@@ -15,6 +15,8 @@ ARGS_LIST=(
   "flythrough type mov"
   "evolution density mov"
   "evolution type mov"
+  "combined density mov"
+  "combined type mov"
 )
 
 ml purge
