@@ -195,13 +195,10 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     const double volume_cgs = (4.0 * M_PI / 3.0) * Rvir_cgs * Rvir_cgs * Rvir_cgs; // cm^3
     const double mass_density_cgs = CGMgas_cgs / volume_cgs; // g cm^-3
     
-    // Number density (fully ionized gas: μ ≈ 0.59)
+    // Cooling time: tcool = (3/2) * μ * m_p * k * T / (ρ * Λ)
+    // where μ = 0.59 for fully ionized gas
     const double mu = 0.59;
-    const double mean_particle_mass = mu * PROTONMASS; // g
-    const double number_density = mass_density_cgs / mean_particle_mass; // cm^-3
-    
-    // Cooling time: tcool = (3/2) * k * T / (n * Λ)
-    const double tcool_cgs = (1.5 * BOLTZMANN * temp) / (number_density * lambda); // s
+    const double tcool_cgs = (1.5 * mu * PROTONMASS * BOLTZMANN * temp) / (mass_density_cgs * lambda); // s
     const double tcool = tcool_cgs / run_params->UnitTime_in_s; // code units
 
     // ========================================================================
