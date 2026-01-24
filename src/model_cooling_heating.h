@@ -19,6 +19,8 @@ extern "C" {
                                  struct GALAXY *galaxies, const struct params *run_params);
     extern double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
                                      struct GALAXY *galaxies, const struct params *run_params);
+    double calculate_cold_stream_cooling(const int gal, const double dt, 
+                                     struct GALAXY *galaxies, const struct params *run_params);
     // extern double calculate_adaptive_sfr_norm(const int gal, struct GALAXY *galaxies, const struct params *run_params);
 
 #ifdef __cplusplus
