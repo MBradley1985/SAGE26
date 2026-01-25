@@ -352,62 +352,38 @@ double get_virial_radius(const int halonr, const struct halo_data *halos, const 
   return cbrt(get_virial_mass(halonr, halos, run_params) * fac);
 }
 
-void determine_and_store_regime(const int ngal, const double Zcurr, struct GALAXY *galaxies,
+void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
                                 const struct params *run_params)
 {
-    // ========================================================================
-    // Dekel & Birnboim (2006) regime determination
-    // 
-    // Determines whether a halo has a stable virial shock (HOT regime)
-    // or gas flows in cold without shocking (CGM regime)
-    //
-    // Key physics:
-    // - M_shock ~ 6e11 Msun: threshold for stable virial shocks
-    // - Below M_shock: no stable shock, cold infall (CGM regime)
-    // - Above M_shock: stable virial shock exists (HOT regime)
-    //
-    // Note: Cold streams in HOT halos at high-z are handled separately
-    // in the cooling physics, not here.
-    // ========================================================================
-    
-    // Physical parameters from D&B06
-    const double Mshock = 6.0e11;           // Msun - shock heating threshold
-    const double delta_log_M = 0.3;         // Transition width in dex (~factor of 2)
-    
-    // ========================================================================
-    // Assign regime to each galaxy
-    // ========================================================================
     for(int p = 0; p < ngal; p++) {
-        // Skip merged galaxies
         if(galaxies[p].mergeType > 0) continue;
-        
+
         // Convert Mvir to physical units (Msun)
+        // Mvir is stored in units of 10^10 Msun/h
         const double Mvir_physical = galaxies[p].Mvir * 1.0e10 / run_params->Hubble_h;
-        
-        // ====================================================================
-        // Smooth sigmoid transition around M_shock
-        // 
-        // D&B06: transition from cold to hot occurs over factor ~2 in mass
-        // 
-        // hot_fraction = 1 / (1 + exp(-x))
-        // where x = log10(M/M_shock) / delta_log_M
-        // ====================================================================
-        const double log_mass_ratio = log10(Mvir_physical / Mshock);
-        const double x = log_mass_ratio / delta_log_M;
-        
-        // Sigmoid function for smooth transition
+
+        // Shock mass threshold (Dekel & Birnboim 2006)
+        const double Mshock = 6.0e11;  // Msun
+
+        // Calculate mass ratio for sigmoid
+        const double mass_ratio = Mvir_physical / Mshock;
+
+        // Smooth sigmoid transition (consistent with FFB approach)
+        // Width of transition in dex
+        const double delta_log_M = 0.1;
+
+        // Sigmoid argument: x = log10(M/Mshock) / width
+        const double x = log10(mass_ratio) / delta_log_M;
+
+        // Sigmoid function: probability of being in Hot regime
+        // Smoothly varies from 0 (well below Mshock) to 1 (well above Mshock)
         const double hot_fraction = 1.0 / (1.0 + exp(-x));
-        
-        // ====================================================================
-        // Probabilistic assignment
-        // ====================================================================
+
+        // Probabilistic assignment based on sigmoid
         const double random_uniform = (double)rand() / (double)RAND_MAX;
-        
-        if(random_uniform < hot_fraction) {
-            galaxies[p].Regime = 1;  // HOT regime: virial shock exists
-        } else {
-            galaxies[p].Regime = 0;  // CGM regime: no virial shock, cold infall
-        }
+
+        galaxies[p].Regime = (random_uniform < hot_fraction) ? 1 : 0;
+
     }
 }
 

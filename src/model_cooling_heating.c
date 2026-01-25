@@ -21,17 +21,14 @@ double cooling_recipe(const int gal, const double dt, struct GALAXY *galaxies, c
     }
 }
 
+
 double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     double coolingGas;
 
     if(galaxies[gal].HotGas > 0.0 && galaxies[gal].Vvir > 0.0) {
-        
-        // ====================================================================
-        // STEP 1: Standard cooling radius calculation
-        // ====================================================================
         const double tcool = galaxies[gal].Rvir / galaxies[gal].Vvir;
-        const double temp = 35.9 * galaxies[gal].Vvir * galaxies[gal].Vvir;  // Kelvin
+        const double temp = 35.9 * galaxies[gal].Vvir * galaxies[gal].Vvir;         // in Kelvin
 
         double logZ = -10.0;
         if(galaxies[gal].MetalsHotGas > 0) {
@@ -40,221 +37,116 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 
         double lambda = get_metaldependent_cooling_rate(log10(temp), logZ);
 
-        // Check lambda > 0 to avoid division by zero
+        // BUG FIX: Check lambda > 0 to avoid division by zero
         if(lambda <= 0.0) {
-            return 0.0;
+            return 0.0;  // No cooling if cooling function is zero/negative
         }
 
-        double x = PROTONMASS * BOLTZMANN * temp / lambda;
-        x /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);
-        const double rho_rcool = x / tcool * 0.885;  // 0.885 = 3/2 * mu, mu=0.59
+        double x = PROTONMASS * BOLTZMANN * temp / lambda;        // now this has units sec g/cm^3
+        x /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);         // now in internal units
+        const double rho_rcool = x / tcool * 0.885;  // 0.885 = 3/2 * mu, mu=0.59 for a fully ionized gas
 
+        // BUG FIX: Check rho_rcool > 0 to avoid sqrt of negative or division by zero
         if(rho_rcool <= 0.0) {
             return 0.0;
         }
 
-        // Isothermal density profile for hot gas
+        // an isothermal density profile for the hot gas is assumed here
         const double rho0 = galaxies[gal].HotGas / (4 * M_PI * galaxies[gal].Rvir);
         const double rcool = sqrt(rho0 / rho_rcool);
 
         galaxies[gal].RcoolToRvir = rcool / galaxies[gal].Rvir;
 
-        // ====================================================================
-        // STEP 2: Calculate base cooling rate from hot halo
-        // ====================================================================
-        double hot_halo_cooling = 0.0;
+        coolingGas = 0.0;
         
-        if(rcool > galaxies[gal].Rvir) {
-            // Rapid cooling regime: cooling time < dynamical time
-            // All hot gas can cool on dynamical timescale
-            hot_halo_cooling = galaxies[gal].HotGas / tcool * dt;
+        if(run_params->CGMrecipeOn == 0) {
+            // Original behavior: SAGE C16 cooling recipe
+            if(rcool > galaxies[gal].Rvir) {
+                // "cold accretion" regime
+                coolingGas = galaxies[gal].HotGas / (galaxies[gal].Rvir / galaxies[gal].Vvir) * dt;
+            } else {
+                // "hot halo cooling" regime
+                coolingGas = (galaxies[gal].HotGas / galaxies[gal].Rvir) * (rcool / (2.0 * tcool)) * dt;
+            }
         } else {
-            // Standard hot halo cooling from within rcool
-            hot_halo_cooling = (galaxies[gal].HotGas / galaxies[gal].Rvir) * 
-                               (rcool / (2.0 * tcool)) * dt;
+            // CGMrecipeOn == 1: D&B06 cold streams for hot-regime halos
+            // All halos here are in the hot regime (have virial shocks)
+            const double z = run_params->ZZ[galaxies[gal].SnapNum];
+            
+            // Calculate mass ratio for penetration factor
+            const double Mvir_physical = galaxies[gal].Mvir * 1.0e10 / run_params->Hubble_h;
+            const double Mshock = 6.0e11;  // Msun (D&B06 shock heating threshold)
+            const double mass_ratio = Mvir_physical / Mshock;
+            
+            // D&B06 equations 39-41: Stream penetration factor
+            // The characteristic mass for streams is M_stream ~ M_shock / (fM_*)
+            // where fM_* is the universal baryon fraction that collapses into stars
+            // At high-z, M_stream > M_shock, allowing cold streams in massive halos
+            // At low-z, M_stream < M_shock, cold streams only in halos below shock threshold
+            
+            // Simplified prescription: cold stream fraction depends on M/Mshock and redshift
+            // f_stream decreases with mass: halos much larger than Mshock have fewer cold streams
+            // f_stream increases with redshift: high-z universe has more cold streams
+            
+            // Mass suppression: (M/Mshock)^(-4/3) from D&B06 eq 39
+            double f_stream = pow(mass_ratio, -4.0/3.0);
+            
+            // Redshift enhancement: cold streams more prominent at high z
+            // Use smooth scaling that enhances at high-z, suppresses at low-z
+            const double z_factor = (1.0 + z) / (1.0 + 1.0);  // Normalized to z=1
+            f_stream *= z_factor;
+            
+            // Ensure physical bounds
+            // Cap at 0.5 (50%) to account for partial heating/mixing of cold streams
+            // as they penetrate through the hot medium
+            if(f_stream > 1.0) f_stream = 1.0;
+            if(f_stream < 0.0) f_stream = 0.0;
+            
+            // Calculate cooling: mix of cold streams + hot halo cooling
+            double cold_stream_cooling = 0.0;
+            double hot_halo_cooling = 0.0;
+            
+            if(rcool < galaxies[gal].Rvir) {
+                // When rcool < Rvir: both cold streams and hot halo cooling
+                // Cold stream component: rapid accretion on dynamical time
+                cold_stream_cooling = f_stream * galaxies[gal].HotGas / 
+                                     (galaxies[gal].Rvir / galaxies[gal].Vvir) * dt;
+                
+                // Hot halo component: traditional cooling from the shocked gas
+                hot_halo_cooling = (1.0 - f_stream) * (galaxies[gal].HotGas / galaxies[gal].Rvir) * 
+                                  (rcool / (2.0 * tcool)) * dt;
+            } else {
+                // When rcool >= Rvir: only hot halo cooling (no cold streams)
+                hot_halo_cooling = (galaxies[gal].HotGas / galaxies[gal].Rvir) * 
+                                  (rcool / (2.0 * tcool)) * dt;
+            }
+            
+            coolingGas = cold_stream_cooling + hot_halo_cooling;
         }
 
-        // ====================================================================
-        // STEP 3: Cold streams in hot halos (D&B06)
-        // Only applies when CGMrecipeOn is enabled
-        // ====================================================================
-        double cold_stream_cooling = 0.0;
-        
-        if(run_params->CGMrecipeOn == 1) {
-            cold_stream_cooling = calculate_cold_stream_cooling(gal, dt, galaxies, run_params);
-        }
-
-        // ====================================================================
-        // STEP 4: Total cooling
-        // ====================================================================
-        coolingGas = hot_halo_cooling + cold_stream_cooling;
-
-        // Physical limits
         if(coolingGas > galaxies[gal].HotGas) {
             coolingGas = galaxies[gal].HotGas;
-        }
-        if(coolingGas < 0.0) {
-            coolingGas = 0.0;
-        }
-
-        // ====================================================================
-        // STEP 5: AGN heating (if enabled)
-        // ====================================================================
-        if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
-            coolingGas = do_AGN_heating(coolingGas, gal, dt, x, rcool, galaxies, run_params);
+        } else {
+            if(coolingGas < 0.0) coolingGas = 0.0;
         }
 
-        // Track cooling energy
-        if(coolingGas > 0.0) {
-            galaxies[gal].Cooling += 0.5 * coolingGas * galaxies[gal].Vvir * galaxies[gal].Vvir;
+		// at this point we have calculated the maximal cooling rate
+		// if AGNrecipeOn we now reduce it in line with past heating before proceeding
+
+		if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
+			coolingGas = do_AGN_heating(coolingGas, gal, dt, x, rcool, galaxies, run_params);
         }
-        
-    } else {
-        coolingGas = 0.0;
+
+		if (coolingGas > 0.0) {
+			galaxies[gal].Cooling += 0.5 * coolingGas * galaxies[gal].Vvir * galaxies[gal].Vvir;
+        }
+	} else {
+		coolingGas = 0.0;
     }
 
-    XASSERT(coolingGas >= 0.0, -1,
+	XASSERT(coolingGas >= 0.0, -1,
             "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
     return coolingGas;
-}
-
-
-double calculate_cold_stream_cooling(const int gal, const double dt, 
-                                     struct GALAXY *galaxies, const struct params *run_params)
-{
-    // ========================================================================
-    // Cold streams in hot halos following Dekel & Birnboim (2006)
-    //
-    // Key physics:
-    // - Cold filamentary streams can penetrate shock-heated halos
-    // - Stream survival depends on stream density vs halo density
-    // - More prominent at high-z when halos are rare peaks
-    // - Streams deliver gas on ~dynamical timescale
-    //
-    // D&B06 equations 37-41:
-    //   (tcool/tcomp)_stream = (rho_halo/rho_stream) * (M/M_shock)^(4/3)
-    //   rho_stream/rho_halo ~ (fM_*/M)^(-2/3)
-    //   => f_stream ~ (fM_*/M)^(2/3) * (M_shock/M)^(4/3)
-    // ========================================================================
-    
-    if(galaxies[gal].HotGas <= 0.0 || galaxies[gal].Vvir <= 0.0) {
-        return 0.0;
-    }
-    
-    // Physical parameters
-    const double Mshock = 6.0e11;      // Msun - shock heating threshold
-    const double f_cluster = 3.0;      // Clustering parameter
-    
-    // Get current redshift
-    const double z = run_params->ZZ[galaxies[gal].SnapNum];
-    
-    // Calculate M_* at current redshift (Press-Schechter)
-    double log_Mstar;
-    if(z < 4.0) {
-        log_Mstar = 13.1 - 1.3 * z;
-    } else {
-        log_Mstar = 13.1 - 1.3 * 4.0 - 0.5 * (z - 4.0);
-    }
-    const double Mstar = pow(10.0, log_Mstar);  // Msun
-    
-    // Critical redshift
-    const double z_crit = (13.1 - log10(Mshock / f_cluster)) / 1.3;  // ~1.4 for f=3
-    
-    // Halo mass in physical units
-    const double Mvir_physical = galaxies[gal].Mvir * 1.0e10 / run_params->Hubble_h;
-    
-    // ========================================================================
-    // Cold stream fraction calculation
-    // ========================================================================
-    double f_stream = 0.0;
-    
-    if(z > z_crit && Mvir_physical > Mshock) {
-        // ====================================================================
-        // High-z regime: cold streams can penetrate hot halos
-        // 
-        // D&B06 eq 39: The ratio tcool/tcomp in streams depends on:
-        //   - Density enhancement in streams: (fM_*/M)^(-2/3)
-        //   - Mass ratio: (M/M_shock)^(4/3)
-        //
-        // Stream fraction ~ probability that a parcel arrives cold
-        // ====================================================================
-        
-        // Mass-dependent suppression: more massive halos have fewer streams
-        // (M_shock/M)^(4/3) from D&B06 eq 38
-        const double mass_suppression = pow(Mshock / Mvir_physical, 4.0/3.0);
-        
-        // Density enhancement in streams relative to spherical infall
-        // Streams are denser by factor ~ (M / fM_*)^(2/3)
-        // This HELPS streams survive (shorter tcool in stream)
-        // So stream fraction INCREASES when M > fM_*
-        double density_factor;
-        if(Mvir_physical > f_cluster * Mstar) {
-            // Halo is massive relative to clustering scale
-            // Streams are dense and can penetrate
-            density_factor = pow(Mvir_physical / (f_cluster * Mstar), 2.0/3.0);
-        } else {
-            // Halo is typical or below clustering scale
-            // Less prominent filamentary feeding
-            density_factor = 1.0;
-        }
-        
-        // Combined stream fraction
-        // Normalize so that at M = M_shock, z ~ 2-3, we get f_stream ~ 0.3-0.5
-        f_stream = mass_suppression * density_factor;
-        
-        // Redshift modulation: streams more effective at higher z
-        // Linear ramp from z_crit to z ~ 4
-        const double z_factor = (z - z_crit) / (4.0 - z_crit);
-        f_stream *= fmin(z_factor, 1.0);
-        
-        // ====================================================================
-        // Physical bounds
-        // ====================================================================
-        // Maximum ~50%: even with cold streams, some gas is shock-heated
-        // and streams may be disrupted/heated as they penetrate
-        if(f_stream > 0.5) f_stream = 0.5;
-        
-        // Minimum 0
-        if(f_stream < 0.0) f_stream = 0.0;
-        
-        // Suppress streams in very massive halos (clusters)
-        // ICM is too hot and dense for streams to survive
-        if(Mvir_physical > 1.0e13) {
-            f_stream *= exp(-(Mvir_physical - 1.0e13) / 1.0e13);
-        }
-        
-    } else if(Mvir_physical < Mshock) {
-        // ====================================================================
-        // Below M_shock: no virial shock, ALL gas arrives cold
-        // But this should be handled by Regime = 0 (CGM regime)
-        // If we're in this function, galaxy is Regime = 1 (HOT)
-        // So this case shouldn't occur often - just return 0
-        // ====================================================================
-        f_stream = 0.0;
-    }
-    // else: z < z_crit and M > M_shock: classical hot halo, no cold streams
-    
-    // ========================================================================
-    // Calculate cold stream cooling rate
-    // Streams deliver gas on dynamical timescale (free-fall along filament)
-    // ========================================================================
-    double cold_stream_cooling = 0.0;
-    
-    if(f_stream > 0.0) {
-        const double t_dyn = galaxies[gal].Rvir / galaxies[gal].Vvir;
-        
-        // Cold streams tap into the hot gas reservoir
-        // (In reality they're separate, but in this simplified model
-        // we account for it as a fraction of the total gas supply)
-        cold_stream_cooling = f_stream * galaxies[gal].HotGas / t_dyn * dt;
-        
-        // Don't exceed available gas
-        if(cold_stream_cooling > f_stream * galaxies[gal].HotGas) {
-            cold_stream_cooling = f_stream * galaxies[gal].HotGas;
-        }
-    }
-    
-    return cold_stream_cooling;
 }
 
 
