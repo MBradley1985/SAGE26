@@ -329,7 +329,7 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
     const double Zcurr = run_params->ZZ[halo_snapnum];
     
     if (run_params->CGMrecipeOn == 1) {
-        determine_and_store_regime(ngal, Zcurr, galaxies, run_params);
+        determine_and_store_regime(ngal, galaxies, run_params);
     }
     
     if (run_params->FeedbackFreeModeOn == 1) {
