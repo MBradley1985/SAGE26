@@ -89,12 +89,23 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             // f_stream increases with redshift: high-z universe has more cold streams
             
             // Mass suppression: (M/Mshock)^(-4/3) from D&B06 eq 39
-            double f_stream = pow(mass_ratio, -4.0/3.0);
+            // double f_stream = pow(mass_ratio, -4.0/3.0);
             
             // Redshift enhancement: cold streams more prominent at high z
             // Use smooth scaling that enhances at high-z, suppresses at low-z
             const double z_factor = (1.0 + z) / (1.0 + 1.0);  // Normalized to z=1
-            f_stream *= z_factor;
+            // f_stream *= z_factor;
+            // D&B06 eq 41: critical redshift where fM* = Mshock
+            // Below this redshift, no cold streams in M > Mshock haloes
+            const double z_crit = 1.5;  // D&B06 estimate ~1-2
+            double f_stream;
+
+            if(z < z_crit && mass_ratio > 1.0) {
+                f_stream = 0.0;  // Hard cutoff per D&B06
+            } else {
+                // High-z regime: streams can penetrate
+                f_stream = pow(mass_ratio, -4.0/3.0) * z_factor;
+            }
             
             // Ensure physical bounds
             // Cap at 0.5 (50%) to account for partial heating/mixing of cold streams
@@ -117,9 +128,14 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
                                   (rcool / (2.0 * tcool)) * dt;
             } else {
                 // When rcool >= Rvir: only hot halo cooling (no cold streams)
+                // rcool >= Rvir: This shouldn't occur for properly-classified hot-regime haloes
+                // (such haloes belong in the CGM/cold-flow regime). Handle conservatively.
                 hot_halo_cooling = (galaxies[gal].HotGas / galaxies[gal].Rvir) * 
                                   (rcool / (2.0 * tcool)) * dt;
             }
+
+            galaxies[gal].mdot_cool = hot_halo_cooling / dt;
+            galaxies[gal].mdot_stream = cold_stream_cooling / dt;
             
             coolingGas = cold_stream_cooling + hot_halo_cooling;
         }

@@ -106,6 +106,10 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].infallVmax = -1.0;
     galaxies[p].TimeOfInfall = -1.0;
 
+    galaxies[p].mdot_cool = 0.0;
+    galaxies[p].mdot_stream = 0.0;
+
+
 }
 
 

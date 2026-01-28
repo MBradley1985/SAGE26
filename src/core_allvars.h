@@ -184,6 +184,9 @@ struct GALAXY
     float InstabilityBulgeMass; 
     float MergerBulgeRadius;      
     float InstabilityBulgeRadius;
+
+    float mdot_cool;
+    float mdot_stream;
 };
 
 
