@@ -145,7 +145,7 @@ if __name__ == '__main__':
     ax = plt.subplot(111)  # 1 plot on the figure
 
     binwidth = 0.1  # mass function histogram bin width
-    # DirName2 = './output/millennium_vanilla/'
+    DirName2 = './output/millennium_vanilla/'
 
     # Load GAMA morphological SMF data
     # Columns: log_M, E_HE, E_HE_err, cBD, cBD_err, dBD, dBD_err, D, D_err
@@ -164,18 +164,18 @@ if __name__ == '__main__':
     baldry_q_mass = baldry[:, 2]
     baldry_q_phi = baldry[:, 3]
 
-    # smass_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'StellarMass') * 1.0e10 / Hubble_h
-    # sfrdisk_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'SfrDisk')
-    # sfrbulge_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'SfrBulge')
+    smass_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'StellarMass') * 1.0e10 / Hubble_h
+    sfrdisk_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'SfrDisk')
+    sfrbulge_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'SfrBulge')
 
     # calculate all
     w = np.where(StellarMass > 0.0)[0]
     mass = np.log10(StellarMass[w])
     sSFR = np.log10( (SfrDisk[w] + SfrBulge[w]) / StellarMass[w] )
 
-    # w2 = np.where(smass_vanilla > 0.0)[0]
-    # mass_vanilla = np.log10(smass_vanilla[w2])
-    # sSFR_vanilla = np.log10( (sfrdisk_vanilla[w2] + sfrbulge_vanilla[w2]) / smass_vanilla[w2] )
+    w2 = np.where(smass_vanilla > 0.0)[0]
+    mass_vanilla = np.log10(smass_vanilla[w2])
+    sSFR_vanilla = np.log10( (sfrdisk_vanilla[w2] + sfrbulge_vanilla[w2]) / smass_vanilla[w2] )
 
     # Bin parameters for original model
     mi = np.floor(min(mass)) - 2
@@ -195,21 +195,21 @@ if __name__ == '__main__':
     (countsBLU, binedges) = np.histogram(massBLU, range=(mi, ma), bins=NB)
 
     # Bin parameters for vanilla model
-    # mi_v = np.floor(min(mass_vanilla)) - 2
-    # ma_v = np.floor(max(mass_vanilla)) + 2
-    # NB_v = int((ma_v - mi_v) / binwidth)
-    # (counts_vanilla, binedges) = np.histogram(mass_vanilla, range=(mi_v, ma_v), bins=NB_v)
-    # xaxeshisto_vanilla = binedges[:-1] + 0.5 * binwidth  # Set the x-axis values to be the centre of the bins
+    mi_v = np.floor(min(mass_vanilla)) - 2
+    ma_v = np.floor(max(mass_vanilla)) + 2
+    NB_v = int((ma_v - mi_v) / binwidth)
+    (counts_vanilla, binedges) = np.histogram(mass_vanilla, range=(mi_v, ma_v), bins=NB_v)
+    xaxeshisto_vanilla = binedges[:-1] + 0.5 * binwidth  # Set the x-axis values to be the centre of the bins
 
     # additionally calculate red for vanilla
-    # w2 = np.where(sSFR_vanilla < sSFRcut)[0]
-    # massRED_vanilla = mass_vanilla[w2]
-    # (countsRED_vanilla, binedges) = np.histogram(massRED_vanilla, range=(mi_v, ma_v), bins=NB_v)
+    w2 = np.where(sSFR_vanilla < sSFRcut)[0]
+    massRED_vanilla = mass_vanilla[w2]
+    (countsRED_vanilla, binedges) = np.histogram(massRED_vanilla, range=(mi_v, ma_v), bins=NB_v)
 
     # # additionally calculate blue for vanilla
-    # w2 = np.where(sSFR_vanilla > sSFRcut)[0]
-    # massBLU_vanilla = mass_vanilla[w2]
-    # (countsBLU_vanilla, binedges) = np.histogram(massBLU_vanilla, range=(mi_v, ma_v), bins=NB_v)
+    w2 = np.where(sSFR_vanilla > sSFRcut)[0]
+    massBLU_vanilla = mass_vanilla[w2]
+    (countsBLU_vanilla, binedges) = np.histogram(massBLU_vanilla, range=(mi_v, ma_v), bins=NB_v)
 
 
     # Overplot the model histograms (in log10 space)
@@ -218,8 +218,8 @@ if __name__ == '__main__':
     plt.plot(xaxeshisto, np.log10(countsRED / volume / binwidth), color='firebrick', lw=4, label='SAGE26 Quiescent')
     plt.plot(xaxeshisto, np.log10(countsBLU / volume / binwidth), color='dodgerblue', lw=4, label='SAGE26 Star Forming')
 
-    # plt.plot(xaxeshisto_vanilla, np.log10(countsRED_vanilla / volume / binwidth), color='firebrick', lw=2, ls='--', label='C16 Quiescent')
-    # plt.plot(xaxeshisto_vanilla, np.log10(countsBLU_vanilla / volume / binwidth), color='dodgerblue', lw=2, ls='--', label='C16 Star Forming')
+    plt.plot(xaxeshisto_vanilla, np.log10(countsRED_vanilla / volume / binwidth), color='firebrick', lw=2, ls='--', label='C16 Quiescent')
+    plt.plot(xaxeshisto_vanilla, np.log10(countsBLU_vanilla / volume / binwidth), color='dodgerblue', lw=2, ls='--', label='C16 Star Forming')
 
     # Create shaded regions from observations (GAMA + Baldry combined)
     from scipy import interpolate
