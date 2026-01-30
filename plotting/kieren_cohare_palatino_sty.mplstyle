@@ -4,17 +4,17 @@ figure.dpi : 140
 
 # Set x axis
 xtick.major.size : 7.5
-xtick.major.width : 2
+xtick.major.width : 1.5
 xtick.minor.size : 5.5
-xtick.minor.width : 1
+xtick.minor.width : 0.5
 xtick.direction : in
 xtick.top : True
 
 # Set y axis
 ytick.major.size : 7.5
-ytick.major.width : 2
+ytick.major.width : 1.5
 ytick.minor.size : 5.5
-ytick.minor.width : 1
+ytick.minor.width : 0.5
 ytick.direction : in
 ytick.right : True
 
@@ -28,7 +28,7 @@ axes.titlesize : 12
 axes.labelsize : 20
 
 # Line widths
-axes.linewidth : 2.5
+axes.linewidth : 1.5
 grid.linewidth : 1
 lines.linewidth : 2
 lines.solid_capstyle : round
