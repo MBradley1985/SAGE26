@@ -844,7 +844,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
                 galaxies[centralgal].MetalsCGMgas += metallicity * reheated_mass;
 
                 // Check if ejection is possible from CGM
-                if(ejected_mass >= galaxies[centralgal].CGMgas) {
+                if(ejected_mass > galaxies[centralgal].CGMgas) {
                     ejected_mass = galaxies[centralgal].CGMgas;
                 }
                 const double metallicityCGM = get_metallicity(galaxies[centralgal].CGMgas, galaxies[centralgal].MetalsCGMgas);
@@ -863,7 +863,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
                 galaxies[centralgal].MetalsHotGas += metallicity * reheated_mass;
 
                 // Check if ejection is possible from HotGas
-                if(ejected_mass >= galaxies[centralgal].HotGas) {
+                if(ejected_mass > galaxies[centralgal].HotGas) {
                     ejected_mass = galaxies[centralgal].HotGas;
                 }
                 const double metallicityHot = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);
