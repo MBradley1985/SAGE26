@@ -94,6 +94,11 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
                 galaxies[p].H2gas = total_molecular_gas;
 
+                // Can't create more H2 than total cold gas
+                if(galaxies[p].H2gas > galaxies[p].ColdGas) {
+                    galaxies[p].H2gas = galaxies[p].ColdGas;
+                }
+
                 // double nu_sf = 0.4 * (1.0 + pow(gas_surface_density / 200.0, 0.4)); // Gyr^-1
                 // double nu_sf_per_year = nu_sf * SEC_PER_MEGAYEAR/ 1000;
 
@@ -344,6 +349,11 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             // Store H2 mass
             galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
+            // Can't create more H2 than total cold gas
+            if(galaxies[p].H2gas > galaxies[p].ColdGas) {
+                galaxies[p].H2gas = galaxies[p].ColdGas;
+            }
+
             // 4. Star Formation Timescale (Xie et al. 2017 Simplification)
             // The paper Section 2.4.2 explicitly states:
             // "We assume a constant depletion time t_dep = 2.6 Gyr."
@@ -435,6 +445,10 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
                 // Store H2 mass
                 galaxies[p].H2gas = f_H2_2p * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                // Can't create more H2 than total cold gas
+                if(galaxies[p].H2gas > galaxies[p].ColdGas) {
+                    galaxies[p].H2gas = galaxies[p].ColdGas;
+                }
 
                 // t_dep_2p (Eq 27)
                 // t_dep = 3.1 Gyr / (f_H2 * Sigma^0.25)
@@ -601,6 +615,10 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             if(f_H2 < 0.0) f_H2 = 0.0;
 
             galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+            // Can't create more H2 than total cold gas
+            if(galaxies[p].H2gas > galaxies[p].ColdGas) {
+                galaxies[p].H2gas = galaxies[p].ColdGas;
+            }
 
             // 8. Calculate Star Formation Rate
             // Standard relation: SFR = Efficiency * H2 / t_dyn
