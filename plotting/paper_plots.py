@@ -1301,7 +1301,7 @@ def plot_1_stellar_mass_function_ssfr_s(primary, vanilla):
     # ax.fill_between(x, phi_q_lo, phi_q_hi, color='firebrick', alpha=0.3, edgecolor='none', zorder=10)
     
     # Star-forming
-    ax.plot(x, phi_sf, color='k', lw=4, label='SAGE26 Star-forming', zorder=10)
+    ax.plot(x, phi_sf, color='dodgerblue', lw=4, label='SAGE26 Star-forming', zorder=10)
     ax.fill_between(x, phi_sf_lo, phi_sf_hi, color='dodgerblue', alpha=0.3, edgecolor='none', zorder=10)
     # C16 (vanilla)
     # ax.plot(x_v, phi_q_v, color='firebrick', lw=2, ls='--', label='C16 Quiescent')
@@ -1311,8 +1311,10 @@ def plot_1_stellar_mass_function_ssfr_s(primary, vanilla):
     valid_D = ~np.isnan(gama['D'])
     valid_E = ~np.isnan(gama['E_HE'])
     ax.errorbar(gama['mass'][valid_D], gama['D'][valid_D],
-                yerr=gama['D_err'][valid_D], markeredgecolor='k', markerfacecolor='gray',
-                fmt='d', color='k', ms=6, lw=1.5, capsize=2,
+                yerr=gama['D_err'][valid_D],
+                fmt='d', color='k',markeredgecolor='k', markeredgewidth=1.0, linewidth=1.0,
+                markerfacecolor = 'gray', ms=8,
+                alpha=0.6, zorder=9,
                 label='Moffett+16')
     # ax.errorbar(gama['mass'][valid_E], gama['E_HE'][valid_E],
     #             yerr=gama['E_HE_err'][valid_E],
@@ -1320,7 +1322,7 @@ def plot_1_stellar_mass_function_ssfr_s(primary, vanilla):
 
     # Observational data: Baldry+12 with 'o' markers
     ax.scatter(baldry['sf_mass'], baldry['sf_phi'], edgecolor='k', facecolor='gray', marker=
-            'o', color='k', s=25, label='Baldry+12')
+            'o', color='k', s=50, label='Baldry+12', alpha=0.6, zorder=9)
     # ax.plot(baldry['q_mass'], baldry['q_phi'],
     #         'o', color='r', ms=10)
 
@@ -1330,7 +1332,7 @@ def plot_1_stellar_mass_function_ssfr_s(primary, vanilla):
         ax.errorbar(bell_mass, bell_phi,
                     yerr=[bell_err_lo, bell_err_hi],
                     markeredgecolor='k', markerfacecolor='gray',
-                    fmt='s', color='k', ms=6, lw=1.5, capsize=2,
+                    fmt='s', color='k', ms=8, lw=1.0, alpha=0.6, zorder=9,
                     label='Bell+03')
 
     ax.set_xlim(8, 12)
@@ -1443,7 +1445,7 @@ def plot_1_stellar_mass_function_ssfr_q(primary, vanilla):
 
     # SAGE26 (Lines + Shading)
     # Quiescent
-    ax.plot(x, phi_q, color='k', lw=3, label='SAGE26 Quiescent', zorder=10)
+    ax.plot(x, phi_q, color='firebrick', lw=3, label='SAGE26 Quiescent', zorder=10)
     ax.fill_between(x, phi_q_lo, phi_q_hi, color='firebrick', alpha=0.3, edgecolor='none', zorder=10)
     
     # Star-forming
@@ -1462,13 +1464,13 @@ def plot_1_stellar_mass_function_ssfr_q(primary, vanilla):
     #             label='Moffett+16')
     ax.errorbar(gama['mass'][valid_E], gama['E_HE'][valid_E],
                 yerr=gama['E_HE_err'][valid_E], markeredgecolor='k', markerfacecolor='gray',
-                fmt='d', color='k', ms=6, lw=1.5, capsize=2,label='Moffett+16')
+                fmt='d', color='k', ms=8, lw=1,label='Moffett+16', alpha=0.6, zorder=9)
 
     # Observational data: Baldry+12 with 'o' markers
     # ax.plot(baldry['sf_mass'], baldry['sf_phi'],
     #         'o', color='b', ms=10, label='Baldry+12')
     ax.scatter(baldry['q_mass'], baldry['q_phi'], edgecolor='k', facecolor='gray', marker=
-            'o', color='k', s=25, label='Baldry+12')
+            'o', color='k', s=50, label='Baldry+12', alpha=0.6, zorder=9)
     
     # Load Bell+03 SMF quiescent data
     bell_mass, bell_phi, bell_err_hi, bell_err_lo = load_bell_smf_q_data()
@@ -1476,7 +1478,7 @@ def plot_1_stellar_mass_function_ssfr_q(primary, vanilla):
         ax.errorbar(bell_mass, bell_phi,
                     yerr=[bell_err_lo, bell_err_hi],
                     markeredgecolor='k', markerfacecolor='gray',
-                    fmt='s', color='k', ms=6, lw=1.5, capsize=2,
+                    fmt='s', color='k', ms=8, lw=1, alpha=0.6, zorder=9,
                     label='Bell+03')
 
     ax.set_xlim(8, 12)
@@ -1604,7 +1606,7 @@ def plot_3_gas_metallicity_vs_stellar_mass(primary, vanilla):
             idx_v = sample(range(len(log_mass_v)), DILUTE)
             log_mass_v = log_mass_v[idx_v]
             gas_Z_v = gas_Z_v[idx_v]
-        ax.scatter(log_mass_v, gas_Z_v, marker='x', s=50, c='firebrick',
+        ax.scatter(log_mass_v, gas_Z_v, marker='x', s=50, c='purple',
                    alpha=0.1, label='C16', rasterized=True, zorder=9)
 
     # --- Observational data ---
@@ -1612,14 +1614,14 @@ def plot_3_gas_metallicity_vs_stellar_mass(primary, vanilla):
         if obs['yerr'] is not None:
             ax.errorbar(obs['mass'], obs['Z'], yerr=obs['yerr'],
                         fmt=obs['fmt'], color=obs['color'],
-                        markeredgecolor='k', markeredgewidth=0.8,
-                        markerfacecolor = 'gray', ms=6,
-                        label=obs['label'], alpha=0.8, zorder=8)
+                        markeredgecolor='k', markeredgewidth=1.0, linewidth=1.0,
+                        markerfacecolor = 'gray', ms=8,
+                        label=obs['label'], alpha=0.6, zorder=9)
         else:
             ax.plot(obs['mass'], obs['Z'], obs['fmt'],
-                    markeredgecolor='k', markeredgewidth=0.8,
-                    markerfacecolor = 'gray', ms=6,
-                    color=obs['color'], label=obs['label'], alpha=0.8, zorder=8)
+                    markeredgecolor='k', markeredgewidth=1.0, linewidth=1.0,
+                    markerfacecolor = 'gray', ms=8,
+                    color=obs['color'], label=obs['label'], alpha=0.6, zorder=9)
 
     ax.set_xlim(8.0, 12.0)
     ax.set_ylim(8.0, 10.0)
@@ -1677,7 +1679,7 @@ def plot_4_bh_bulge_mass(primary, vanilla):
     if Z.max() > 0:
         levels = sigma_contour_levels(Z)
         if levels is not None:
-            ax.contourf(X, Y, Z, levels=levels, cmap='Blues_r', alpha=0.6)
+            ax.contourf(X, Y, Z, levels=levels, cmap='Blues_r', alpha=0.6, zorder=8)
             ax.contour(X, Y, Z, levels=levels, colors='steelblue',
                        linestyles='-', alpha=1.0, linewidths=1.5)
 
@@ -1690,8 +1692,8 @@ def plot_4_bh_bulge_mass(primary, vanilla):
             idx_v = sample(range(len(log_bulge_v)), DILUTE)
             log_bulge_v = log_bulge_v[idx_v]
             log_bh_v = log_bh_v[idx_v]
-        ax.scatter(log_bulge_v, log_bh_v, marker='x', s=50, c='firebrick',
-                   alpha=0.1, label='C16', rasterized=True)
+        ax.scatter(log_bulge_v, log_bh_v, marker='x', s=50, c='purple',
+                   alpha=0.1, label='C16', rasterized=True, zorder=9)
 
     # --- Observational data ---
     obs = load_bh_bulge_observations()
@@ -1700,15 +1702,15 @@ def plot_4_bh_bulge_mass(primary, vanilla):
     ax.errorbar(obs['log_M_sph'][sersic], obs['log_M_BH'][sersic],
                 yerr=[obs['yerr'][0][sersic], obs['yerr'][1][sersic]],
                 xerr=[obs['xerr'][0][sersic], obs['xerr'][1][sersic]],
-                color='k', ls='none', lw=1, marker='d', ms=10,
+                color='k', ls='none', lw=1, marker='d', ms=8, alpha=0.6, zorder=10,
                 markeredgecolor='k', markeredgewidth=0.8,
                         markerfacecolor = 'gray',
                 label='S13 core')
     ax.errorbar(obs['log_M_sph'][obs['core']], obs['log_M_BH'][obs['core']],
                 yerr=[obs['yerr'][0][obs['core']], obs['yerr'][1][obs['core']]],
                 xerr=[obs['xerr'][0][obs['core']], obs['xerr'][1][obs['core']]],
-                color='k', ls='none', lw=1, marker='o', ms=10,
-                markeredgecolor='k', markeredgewidth=0.8,
+                color='k', ls='none', lw=1, marker='o', ms=8,
+                markeredgecolor='k', markeredgewidth=0.8, alpha=0.6, zorder=10,
                         markerfacecolor = 'gray',
                 label=_tex_safe(r'S13 S\'{e}rsic'))
 
@@ -1771,7 +1773,7 @@ def plot_5_stellar_halo_mass(primary, vanilla):
     if Z.max() > 0:
         levels = sigma_contour_levels(Z)
         if levels is not None:
-            ax.contourf(X, Y, Z, levels=levels, cmap='Blues_r', alpha=0.6)
+            ax.contourf(X, Y, Z, levels=levels, cmap='Blues_r', alpha=0.6, zorder=8)
             ax.contour(X, Y, Z, levels=levels, colors='steelblue',
                        linestyles='-', alpha=1.0, linewidths=1.5)
 
@@ -1784,8 +1786,8 @@ def plot_5_stellar_halo_mass(primary, vanilla):
             idx_v = sample(range(len(log_mvir_v)), DILUTE)
             log_mvir_v = log_mvir_v[idx_v]
             log_mstar_v = log_mstar_v[idx_v]
-        ax.scatter(log_mvir_v, log_mstar_v, marker='x', s=50, c='firebrick',
-                   alpha=0.1, label='C16', rasterized=True)
+        ax.scatter(log_mvir_v, log_mstar_v, marker='x', s=50, c='purple',
+                   alpha=0.1, label='C16', rasterized=True, zorder=9)
 
     # --- Observational data ---
     obs = load_shmr_observations()
@@ -1797,24 +1799,24 @@ def plot_5_stellar_halo_mass(primary, vanilla):
     if 'romeo' in obs:
         ax.scatter(obs['romeo']['mvir'], obs['romeo']['mstar'],
                    marker='o', s=50, c='gray', label='Romeo+20',
-                   edgecolor='k', linewidth=0.8)
+                   edgecolor='k', linewidth=0.8, alpha=0.6, zorder=8)
 
     if 'kravtsov' in obs:
         k = obs['kravtsov']
         xerr = [k['xerr_lo'], k['xerr_hi']]
         ax.errorbar(k['mvir'], k['mstar'], xerr=xerr,
-                    fmt='s', color='k', ms=10, lw=1,
+                    fmt='s', color='k', ms=8, lw=1,
                     markeredgecolor='k', markeredgewidth=0.8,
-                    markerfacecolor = 'gray',
+                    markerfacecolor = 'gray', alpha=0.6, zorder=8,
                     label='Kravtsov+18')
 
     if 'taylor' in obs:
         t = obs['taylor']
         ax.errorbar(t['mvir'], t['mstar'],
                     xerr=t['xerr'], yerr=t['yerr'],
-                    fmt='d', color='k', ms=10, lw=1,
+                    fmt='d', color='k', ms=8, lw=1,
                     markeredgecolor='k', markeredgewidth=0.8,
-                    markerfacecolor = 'gray',
+                    markerfacecolor = 'gray', alpha=0.6, zorder=9,
                     label='Taylor+20')
 
     ax.set_xlim(10.0, 15.0)
@@ -2641,7 +2643,7 @@ def plot_13_ffb_vs_redshift(snapdata):
             mass_errs = np.array(mass_errs).T
             ax.errorbar(valid_bins, ffb_fracs,
                         xerr=mass_errs, yerr=ffb_errs,
-                        fmt='o', color=color, markersize=10, capsize=3,
+                        fmt='o', color=color, markersize=8, capsize=3,
                         alpha=0.6, markeredgecolor='k',
                         markeredgewidth=0.3)
 
@@ -2884,10 +2886,10 @@ def plot_14_density_evolution():
         if np.sum(mask) > 0:
             axes[0].errorbar(z_madau[mask], re_madau[mask],
                             yerr=[re_err_minus_madau[mask], re_err_plus_madau[mask]],
-                            fmt='o', color='black', markersize=10, alpha=0.8,
+                            fmt='o', color='black', markersize=8, alpha=0.6,
                             markeredgecolor='k', markeredgewidth=0.8,
                             markerfacecolor = 'gray',
-                            label=_tex_safe(r'Madau \& Dickinson 14'), capsize=2, linewidth=1.5, zorder=5)
+                            label=_tex_safe(r'Madau \& Dickinson 14'), linewidth=1.0, zorder=5)
 
     z_oesch, re_oesch, re_err_plus_oesch, re_err_minus_oesch = load_oesch_sfrd_2018_data()
     if z_oesch is not None:
@@ -2895,10 +2897,10 @@ def plot_14_density_evolution():
         if np.sum(mask) > 0:
             axes[0].errorbar(z_oesch[mask], re_oesch[mask],
                             yerr=[re_err_minus_oesch[mask], re_err_plus_oesch[mask]],
-                            fmt='*', color='black', markersize=10, alpha=0.8,
+                            fmt='*', color='black', markersize=8, alpha=0.6,
                             markeredgecolor='k', markeredgewidth=0.8,
                             markerfacecolor = 'gray',
-                            label='Oesch+18', capsize=2, linewidth=1.5, zorder=5)
+                            label='Oesch+18', linewidth=1.0, zorder=5)
 
     z_mcleod, re_mcleod, re_err_plus_mcleod, re_err_minus_mcleod = load_mcleod_rho_sfr_2024_data()
     if z_mcleod is not None:
@@ -2906,10 +2908,10 @@ def plot_14_density_evolution():
         if np.sum(mask) > 0:
             axes[0].errorbar(z_mcleod[mask], re_mcleod[mask],
                             yerr=[re_err_minus_mcleod[mask], re_err_plus_mcleod[mask]],
-                            fmt='v', color='black', markersize=10, alpha=0.8,
+                            fmt='v', color='black', markersize=8, alpha=0.6,
                             markeredgecolor='k', markeredgewidth=0.8,
                             markerfacecolor = 'gray',
-                            label='McLeod+24', capsize=2, linewidth=1.5, zorder=5)
+                            label='McLeod+24', linewidth=1.0, zorder=5)
 
     z_harikane, re_harikane, re_err_plus_harikane, re_err_minus_harikane = load_harikane_sfr_density_2023_data()
     if z_harikane is not None:
@@ -2917,10 +2919,10 @@ def plot_14_density_evolution():
         if np.sum(mask) > 0:
             axes[0].errorbar(z_harikane[mask], re_harikane[mask],
                             yerr=[re_err_minus_harikane[mask], re_err_plus_harikane[mask]],
-                            fmt='D', color='black', markersize=10, alpha=0.8,
+                            fmt='D', color='black', markersize=8, alpha=0.6,
                             markeredgecolor='k', markeredgewidth=0.8,
                             markerfacecolor = 'gray',
-                            label='Harikane+23', capsize=2, linewidth=1.5, zorder=5)
+                            label='Harikane+23', linewidth=1.0, zorder=5)
 
     # ----- Bottom Panel: SMD vs Redshift -----
     if np.sum(valid_ffb) > 1:
@@ -2958,10 +2960,10 @@ def plot_14_density_evolution():
         if np.sum(mask) > 0:
             axes[1].errorbar(z_madau_smd[mask], re_madau_smd[mask],
                             yerr=[re_err_minus_madau_smd[mask], re_err_plus_madau_smd[mask]],
-                            fmt='o', color='black', markersize=10, alpha=0.8,
+                            fmt='o', color='black', markersize=8, alpha=0.6,
                             markeredgecolor='k', markeredgewidth=0.8,
                             markerfacecolor = 'gray',
-                            label=_tex_safe(r'Madau \& Dickinson 14'), capsize=2, linewidth=1.5, zorder=5)
+                            label=_tex_safe(r'Madau \& Dickinson 14'), linewidth=1.0, zorder=5)
 
     z_kiku, re_kiku, re_err_plus_kiku, re_err_minus_kiku = load_kikuchihara_smd_2020_data()
     if z_kiku is not None:
@@ -2969,10 +2971,10 @@ def plot_14_density_evolution():
         if np.sum(mask) > 0:
             axes[1].errorbar(z_kiku[mask], re_kiku[mask],
                             yerr=[re_err_minus_kiku[mask], re_err_plus_kiku[mask]],
-                            fmt='d', color='black', markersize=10, alpha=0.8,
+                            fmt='d', color='black', markersize=8, alpha=0.6,
                             markeredgecolor='k', markeredgewidth=0.8,
                             markerfacecolor = 'gray',
-                            label='Kikuchihara+20', capsize=2, linewidth=1.5, zorder=5)
+                            label='Kikuchihara+20', linewidth=1.0, zorder=5)
 
     z_papovich, re_papovich, re_err_plus_papovich, re_err_minus_papovich = load_papovich_smd_2023_data()
     if z_papovich is not None:
@@ -2980,10 +2982,10 @@ def plot_14_density_evolution():
         if np.sum(mask) > 0:
             axes[1].errorbar(z_papovich[mask], re_papovich[mask],
                             yerr=[re_err_minus_papovich[mask], re_err_plus_papovich[mask]],
-                            fmt='s', color='black', markersize=10, alpha=0.8,
+                            fmt='s', color='black', markersize=8, alpha=0.6,
                             markeredgecolor='k', markeredgewidth=0.8,
                             markerfacecolor = 'gray',
-                            label='Papovich+23', capsize=2, linewidth=1.5, zorder=5)
+                            label='Papovich+23', linewidth=1.0, zorder=5)
 
     # Configure axes and split legends
     sim_names = {'SAGE26', 'SAGE26 (no FFB)', 'SAGE26 (miniUchuu)'}
@@ -3050,9 +3052,9 @@ def plot_15_sfr_vs_stellar_mass(primary, vanilla):
     if Z.max() > 0:
         levels = sigma_contour_levels(Z)
         if levels is not None:
-            ax.contourf(X, Y, Z, levels=levels, cmap='Blues_r', alpha=0.6)
+            ax.contourf(X, Y, Z, levels=levels, cmap='Blues_r', alpha=0.6, zorder=8)
             ax.contour(X, Y, Z, levels=levels, colors='steelblue',
-                       linestyles='-', alpha=1.0, linewidths=1.5)
+                       linestyles='-', alpha=1.0, linewidths=1.0)
 
     # --- C16 (Vanilla) model ---
     sfr_v = vanilla['SfrDisk'] + vanilla['SfrBulge']
@@ -3064,13 +3066,13 @@ def plot_15_sfr_vs_stellar_mass(primary, vanilla):
             idx_v = sample(range(len(log_mass_v)), DILUTE)
             log_mass_v = log_mass_v[idx_v]
             log_sfr_v = log_sfr_v[idx_v]
-        ax.scatter(log_mass_v, log_sfr_v, marker='x', s=50, c='firebrick',
+        ax.scatter(log_mass_v, log_sfr_v, marker='x', s=50, c='purple', zorder=9,
                    alpha=0.1, label='C16', rasterized=True)
         
     # --- Load Brinchmann et al. (2004) data ---
     bz04_mass, bz04_sfr = load_brinchmann_sfr_mass_2004_data()
     if bz04_mass is not None and bz04_sfr is not None:
-        ax.scatter(bz04_mass, bz04_sfr, marker='d', 
+        ax.scatter(bz04_mass, bz04_sfr, marker='d', alpha=0.6, zorder=10,
                 facecolors='gray', edgecolors='black', s=50,
                 label='Brinchmann+04')
         
@@ -3078,8 +3080,8 @@ def plot_15_sfr_vs_stellar_mass(primary, vanilla):
     ter_mass, ter_sfr = load_terrazas17_mbh_host_sfr_data()
     if ter_mass is not None and ter_sfr is not None:
         # Plot with error bars
-        ax.errorbar(ter_mass, ter_sfr, xerr=0.2, yerr=0.3, fmt='o', ecolor='black',
-                   mfc='gray', mec='black', ms=10, mew=1.2, elinewidth=1.2, label='Terrazas+17')
+        ax.errorbar(ter_mass, ter_sfr, xerr=0.2, yerr=0.3, fmt='o', ecolor='black', alpha=0.6, zorder=10,
+                   mfc='gray', mec='black', ms=8, mew=1.0, elinewidth=1.0, label='Terrazas+17')
         
      # --- Load and plot GAMA ProSpect Claudia data ---
         log_ms, log_sfr = load_gama_prospect_claudia()
@@ -3096,8 +3098,9 @@ def plot_15_sfr_vs_stellar_mass(primary, vanilla):
             centers, med, p25, p75 = binned_median(log_ms, log_sfr, bins)
             valid = ~np.isnan(med)
             ax.errorbar(centers[valid], med[valid], yerr=[med[valid] - p25[valid], p75[valid] - med[valid]],
-                        fmt='o', color='black', label='Bellstedt+20', markersize=10, markerfacecolor='gray',
-                        markeredgecolor='black', markeredgewidth=0.8)
+                        fmt='s', color='black', label='Bellstedt+20', markersize=8, alpha=0.6, zorder=10,
+                        markeredgewidth=0.8, markerfacecolor='gray',
+                        markeredgecolor='black')
         
 
     ax.set_xlim(8.0, 12.0)
@@ -3605,7 +3608,7 @@ def _load_smf_grid_observations():
         obs.append({'z': 0.05, 'log_mass': log_m[ok], 'log_phi': lp,
                      'err_lo': lp - np.log10(phi_l[ok]),
                      'err_hi': np.log10(phi_u[ok]) - lp,
-                     'label': 'Baldry+08', 'marker': 'o', 'ms': 6})
+                     'label': 'Baldry+08', 'marker': 'o', 'ms': 8})
     except Exception as e:
         print(f"  Baldry+08 load error: {e}")
 
@@ -3683,7 +3686,7 @@ def _load_smf_grid_observations():
                 obs.append({'z': z_val, 'log_mass': m[ok], 'log_phi': lp,
                              'err_lo': lp - np.log10(plo[ok]),
                              'err_hi': np.log10(phi_hi[ok]) - lp,
-                             'label': 'Weaver+23', 'marker': 'D', 'ms': 6})
+                             'label': 'Weaver+23', 'marker': 'D', 'ms': 8})
         except Exception as e:
             print(f"  Weaver+23 z={z_val} load error: {e}")
 
@@ -3717,7 +3720,7 @@ def _load_smf_grid_observations():
                 lp_arr = np.array(v['lp'])
                 obs.append({'z': 0.5*(zl+zh), 'log_mass': m_arr, 'log_phi': lp_arr,
                              'err_lo': None, 'err_hi': None,
-                             'label': 'Muzzin+13', 'marker': '^', 'ms': 6})
+                             'label': 'Muzzin+13', 'marker': '^', 'ms': 8})
     except Exception as e:
         print(f"  Muzzin+13 load error: {e}")
 
@@ -3755,7 +3758,7 @@ def _load_smf_grid_observations():
                              'log_phi': np.array(v['lp']),
                              'err_lo': np.array(v['elo']),
                              'err_hi': np.array(v['ehi']),
-                             'label': 'Santini+12', 'marker': 'v', 'ms': 6})
+                             'label': 'Santini+12', 'marker': 'v', 'ms': 8})
     except Exception as e:
         print(f"  Santini+12 load error: {e}")
 
@@ -3792,7 +3795,7 @@ def _load_smf_grid_observations():
                              'log_phi': np.array(v['lp']),
                              'err_lo': np.array(v['elo']),
                              'err_hi': np.array(v['ehi']),
-                             'label': 'Wright+18', 'marker': 'p', 'ms': 6})
+                             'label': 'Wright+18', 'marker': 'p', 'ms': 8})
     except Exception as e:
         print(f"  Wright+18 load error: {e}")
 
@@ -3842,7 +3845,7 @@ def _load_smf_grid_observations():
                         elo = np.where(lower > 0, lp - np.log10(lower), 0.0)
                         obs.append({'z': zc, 'log_mass': m_arr[ok], 'log_phi': lp,
                                      'err_lo': elo, 'err_hi': ehi,
-                                     'label': 'COSMOS-Web', 'marker': 'h', 'ms': 6})
+                                     'label': 'COSMOS-Web', 'marker': 'h', 'ms': 8})
         except Exception as e:
             print(f"  COSMOS-Web load error: {e}")
 
@@ -3873,7 +3876,7 @@ def _load_smf_grid_observations():
                         elo = np.where(lower > 0, lp - np.log10(lower), 0.0)
                         obs.append({'z': float(z_val), 'log_mass': log_m[ok], 'log_phi': lp,
                                      'err_lo': elo, 'err_hi': ehi,
-                                     'label': 'Harvey+24', 'marker': 'H', 'ms': 6})
+                                     'label': 'Harvey+24', 'marker': 'H', 'ms': 8})
         except Exception as e:
             print(f"  Harvey+24 load error: {e}")
 
@@ -3883,22 +3886,22 @@ def _load_smf_grid_observations():
     # ------------------------------------------------------------------
     _highz_ecsv = [
         {'file': './data/stefanon_smf_2021.ecsv',
-         'label': 'Stefanon+21', 'marker': '*', 'ms': 5,
+         'label': 'Stefanon+21', 'marker': '*', 'ms': 8,
          'zcol': 'redshift_bin', 'mcol': 'log_M',
          'phi_col': 'phi', 'phi_eu': 'phi_err_up', 'phi_el': 'phi_err_low',
          'phi_scale': 1e-4, 'phi_log': False, 'zbins': [6, 7, 8, 9, 10]},
         {'file': './data/navarro_carrera_smf_2023.ecsv',
-         'label': 'Navarro-Carrera+23', 'marker': 'X', 'ms': 5,
+         'label': 'Navarro-Carrera+23', 'marker': 'X', 'ms': 8,
          'zcol': 'redshift_bin', 'mcol': 'log_M',
          'phi_col': 'phi', 'phi_eu': 'phi_err_up', 'phi_el': 'phi_err_low',
          'phi_scale': 1e-4, 'phi_log': False, 'zbins': [6, 7, 8]},
         {'file': './data/weibel_smf_2024.ecsv',
-         'label': 'Weibel+24', 'marker': 'P', 'ms': 5,
+         'label': 'Weibel+24', 'marker': 'P', 'ms': 8,
          'zcol': 'redshift_bin', 'mcol': 'log_M',
          'phi_col': 'log_phi', 'phi_eu': 'log_phi_err_up', 'phi_el': 'log_phi_err_low',
          'phi_scale': 1.0, 'phi_log': True, 'zbins': [6, 7, 8, 9]},
         {'file': './data/kikuchihara_smf_2020.ecsv',
-         'label': 'Kikuchihara+20', 'marker': 'd', 'ms': 5,
+         'label': 'Kikuchihara+20', 'marker': 'd', 'ms': 8,
          'zcol': 'redshift_approx', 'mcol': 'log_M_star',
          'phi_col': 'phi_star', 'phi_eu': 'phi_star_err_up', 'phi_el': 'phi_star_err_low',
          'phi_scale': 1e-5, 'phi_log': False, 'zbins': [6, 7, 8, 9]},
@@ -4120,6 +4123,169 @@ def plot_18_smf_redshift_grid():
     save_figure(fig, outputFile)
 
 
+# ======================== PLOT 18b: SMF REDSHIFT GRID (5-col) ========================
+
+def plot_18b_smf_redshift_grid_wide():
+    """
+    Plot: 3x5 (rows x cols) grid of Stellar Mass Functions at 15 redshift bins.
+    Wide version of Plot 18 with x-axis labels on every panel.
+    """
+    print('Plot 18b: SMF Redshift Grid (wide)')
+
+    # Redshift bins: (z_lo, z_hi)
+    z_bins = [
+        (0.0, 0.5),   (0.5, 0.8),   (0.8, 1.1),
+        (1.1, 1.5),   (1.5, 2.0),   (2.0, 2.5),
+        (2.5, 3.0),   (3.0, 3.5),   (3.5, 4.5),
+        (4.5, 5.5),   (5.5, 6.5),   (6.5, 7.5),
+        (7.5, 8.5),   (8.5, 9.5),   (9.5, 12.0),
+    ]
+
+    # Models to plot
+    mill_redshifts = np.array(REDSHIFTS)
+    mu_redshifts = np.array(MINIUCHUU_REDSHIFTS)
+
+    models = []
+    if os.path.exists(PRIMARY_DIR):
+        models.append({
+            'path': PRIMARY_DIR, 'label': 'SAGE26 (Millennium)',
+            'color': 'black', 'ls': '-', 'lw': 4.5,
+            'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+            'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+        })
+    if os.path.exists(MINIUCHUU_DIR):
+        models.append({
+            'path': MINIUCHUU_DIR, 'label': 'SAGE26 (miniUchuu)',
+            'color': 'dodgerblue', 'ls': '--', 'lw': 2.5,
+            'redshifts': mu_redshifts, 'first_snap': MINIUCHUU_FIRST_SNAP, 'last_snap': MINIUCHUU_LAST_SNAP,
+            'volume': MINIUCHUU_VOLUME, 'mass_convert': MINIUCHUU_MASS_CONVERT,
+        })
+    if os.path.exists(VANILLA_DIR):
+        models.append({
+            'path': VANILLA_DIR, 'label': 'C16',
+            'color': 'firebrick', 'ls': '-', 'lw': 4.5,
+            'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+            'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+        })
+
+    # Load observational data
+    all_obs = _load_smf_grid_observations()
+    labels_used = set()  # track legend entries to avoid duplicates
+
+    nrows, ncols = 3, 5
+    fig, axes = plt.subplots(nrows, ncols, figsize=(25, 15), sharex=True, sharey=True)
+    axes_flat = axes.flatten()
+    binwidth = 0.1
+
+    for i, (z_lo, z_hi) in enumerate(z_bins):
+        ax = axes_flat[i]
+        z_mid = 0.5 * (z_lo + z_hi)
+
+        for model in models:
+            mod_redshifts = model['redshifts']
+            first_snap = model['first_snap']
+            last_snap = model['last_snap']
+
+            # Find snapshot closest to bin centre that falls within the bin
+            snap_redshifts = mod_redshifts[first_snap:last_snap + 1]
+            in_bin = np.where((snap_redshifts >= z_lo) & (snap_redshifts <= z_hi))[0]
+            if len(in_bin) == 0:
+                continue
+            snap_idx = in_bin[np.argmin(np.abs(snap_redshifts[in_bin] - z_mid))]
+            snap_num = snap_idx + first_snap
+            snap_name = f'Snap_{snap_num}'
+
+            try:
+                filepath = os.path.join(model['path'], MODEL_FILE)
+                with h5.File(filepath, 'r') as f:
+                    if snap_name not in f:
+                        continue
+                    m_stars = np.array(f[snap_name]['StellarMass']) * model['mass_convert']
+                    w = m_stars > 0
+                    if np.sum(w) == 0:
+                        continue
+                    log_m = np.log10(m_stars[w])
+
+                    # Use bootstrap for SAGE26 models
+                    if model['label'].startswith('SAGE26'):
+                        x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
+                            log_m, model['volume'], binwidth, n_boot=100)
+                        valid = np.isfinite(phi)
+                        ax.plot(x[valid], phi[valid],
+                                lw=model['lw'], color=model['color'],
+                                ls=model['ls'],
+                                label=model['label'] if i == 0 else None)
+                        # Bootstrap shading
+                        boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
+                        if np.any(boot_valid):
+                            ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
+                                            color=model['color'], alpha=0.2, linewidth=0)
+                    else:
+                        x, phi, _ = mass_function(log_m, model['volume'], binwidth)
+                        valid = np.isfinite(phi)
+                        ax.plot(x[valid], phi[valid],
+                                lw=model['lw'], color=model['color'],
+                                ls=model['ls'],
+                                label=model['label'] if i == 0 else None)
+            except Exception as e:
+                print(f"  Error loading {snap_name} from {model['path']}: {e}")
+                continue
+
+        # Plot observational data for this redshift bin
+        for od in all_obs:
+            z_obs = od['z']
+            # Match obs to bin: inclusive lower, exclusive upper (last bin inclusive)
+            if i == len(z_bins) - 1:
+                in_bin = z_lo <= z_obs <= z_hi
+            else:
+                in_bin = z_lo <= z_obs < z_hi
+            if not in_bin:
+                continue
+            lbl = od['label'] if od['label'] not in labels_used else None
+            if lbl is not None:
+                labels_used.add(od['label'])
+            yerr = None
+            if od['err_lo'] is not None and od['err_hi'] is not None:
+                yerr = [od['err_lo'], od['err_hi']]
+            ax.errorbar(od['log_mass'], od['log_phi'], yerr=yerr,
+                        fmt=od['marker'], color='grey', ms=od['ms'],
+                        markeredgecolor='k', markeredgewidth=0.8,
+                            markerfacecolor = 'gray',
+                        alpha=0.6, lw=1.5, capsize=1.5, label=lbl, zorder=1)
+
+        # Redshift label in each panel
+        ax.text(0.95, 0.95, rf'${z_lo:.1f} < z < {z_hi:.1f}$',
+                transform=ax.transAxes, ha='right', va='top')
+
+    # Axis limits and labels
+    axes_flat[0].set_xlim(8, 12.2)
+    axes_flat[0].set_ylim(-6, -0.8)
+    for i, ax in enumerate(axes_flat):
+        row, col = divmod(i, ncols)
+        if row == nrows - 1:
+            ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{*}}\ [M_{\odot}]$')
+        if col == 0:
+            ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
+        ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
+        ax.yaxis.set_major_locator(plt.MultipleLocator(2.0))
+        ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
+        ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
+        ax.tick_params(axis='both', which='both', direction='in',
+                       top=True, bottom=True, left=True, right=True)
+
+    # Per-panel legends (only panels with new labelled entries get a legend)
+    for ax in axes_flat:
+        _, labels = ax.get_legend_handles_labels()
+        if labels:
+            ax.legend(loc='lower left', frameon=False)
+
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=0.001, wspace=0.001)
+
+    outputFile = os.path.join(OUTPUT_DIR, '18b.SMF_Redshift_Grid_Wide' + OUTPUT_FORMAT)
+    save_figure(fig, outputFile)
+
+
 # ========================== PLOT 19: SMF FFB GRID ==========================
 
 def plot_19_smf_ffb_grid():
@@ -4169,7 +4335,7 @@ def plot_19_smf_ffb_grid():
     all_obs = _load_smf_grid_observations()
     labels_used = set()
 
-    fig, axes = plt.subplots(3, 1, figsize=(8, 18), sharex=True, sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6), sharex=True, sharey=True)
     fig.set_tight_layout(False)
     binwidth = 0.2
 
@@ -4282,23 +4448,25 @@ def plot_19_smf_ffb_grid():
                         fmt=od['marker'], color='grey', ms=od['ms'],
                         markeredgecolor='k', markeredgewidth=0.8,
                             markerfacecolor = 'gray',
-                        alpha=0.6, lw=1.5, capsize=1.5, label=lbl, zorder=1)
+                        alpha=0.6, lw=1.0, label=lbl, zorder=1)
 
         # Redshift label in each panel
         ax.text(0.95, 0.95, rf'${z_lo:.0f} < z < {z_hi:.0f}$',
                 transform=ax.transAxes, ha='right', va='top')
 
     # Axis limits and labels
-    axes[0].set_xlim(8, 12)
+    axes[0].set_xlim(8, 12.3)
     axes[0].set_ylim(-6, -1.5)
 
+    axes[0].set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
     for i, ax in enumerate(axes):
-        ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
+        ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{*}}\ [M_{\odot}]$')
         ax.tick_params(axis='both', which='both', direction='in',
                        top=True, bottom=True, left=True, right=True)
         ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
         ax.yaxis.set_major_locator(plt.MultipleLocator(1.0))
-    axes[-1].set_xlabel(r'$\log_{10}\ m_{\mathrm{*}}\ [M_{\odot}]$')
+        ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
+        ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
 
     # Split legends: SAGE26 models lower left, observations upper right
     handles, labels = axes[0].get_legend_handles_labels()
@@ -4314,19 +4482,13 @@ def plot_19_smf_ffb_grid():
                        bbox_to_anchor=(1.0, 0.88))
 
     fig.tight_layout()
-    fig.subplots_adjust(hspace=0.001, bottom=0.12)
+    fig.subplots_adjust(wspace=0.001)
 
-    # Colorbar for FFB efficiency (horizontal at bottom, like a legend)
-    cbar_ax = fig.add_axes([0.15, 0.05, 0.7, 0.02])
+    # Colorbar for FFB efficiency (vertical on right side)
     sm = cm.ScalarMappable(cmap=cmap_sfe, norm=plt.Normalize(vmin=sfe_min*100, vmax=sfe_max*100))
     sm.set_array([])
-    cbar = fig.colorbar(sm, cax=cbar_ax, orientation='horizontal')
+    cbar = fig.colorbar(sm, ax=axes.tolist(), pad=0.01, fraction=0.046)
     cbar.set_label(r'FFB Efficiency [$\epsilon_{\mathrm{max}}$]')
-
-    ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
-    ax.yaxis.set_major_locator(plt.MultipleLocator(1.0))
-    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
-    ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
 
     outputFile = os.path.join(OUTPUT_DIR, '19.SMF_FFB_Grid' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
@@ -4375,7 +4537,7 @@ def plot_20_smf_lowz_grid():
     all_obs = _load_smf_grid_observations()
     labels_used = set()
 
-    fig, axes = plt.subplots(3, 1, figsize=(8, 18), sharex=True, sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6), sharex=True, sharey=True)
     fig.set_tight_layout(False)
     binwidth = 0.2
 
@@ -4453,7 +4615,7 @@ def plot_20_smf_lowz_grid():
                         fmt=od['marker'], color='grey', ms=od['ms'],
                         markeredgecolor='k', markeredgewidth=0.8,
                             markerfacecolor = 'gray',
-                        alpha=0.6, lw=1.5, capsize=1.5, label=lbl, zorder=1)
+                        alpha=0.6, lw=1.0, label=lbl, zorder=1)
 
         # Redshift label in each panel
         ax.text(0.95, 0.95, rf'${z_lo:.0f} < z < {z_hi:.0f}$',
@@ -4463,13 +4625,15 @@ def plot_20_smf_lowz_grid():
     axes[0].set_xlim(10.5, 12.5)
     axes[0].set_ylim(-6, -1.5)
 
+    axes[0].set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
     for i, ax in enumerate(axes):
-        ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
+        ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{*}}\ [M_{\odot}]$')
         ax.tick_params(axis='both', which='both', direction='in',
                        top=True, bottom=True, left=True, right=True)
         ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
         ax.yaxis.set_major_locator(plt.MultipleLocator(1.0))
-    axes[-1].set_xlabel(r'$\log_{10}\ m_{\mathrm{*}}\ [M_{\odot}]$')
+        ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
+        ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
 
     # Split legends: SAGE26 models lower left, observations upper right
     handles, labels = axes[0].get_legend_handles_labels()
@@ -4485,12 +4649,7 @@ def plot_20_smf_lowz_grid():
                        bbox_to_anchor=(1.0, 0.88))
 
     fig.tight_layout()
-    fig.subplots_adjust(hspace=0.001)
-
-    ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
-    ax.yaxis.set_major_locator(plt.MultipleLocator(1.0))
-    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
-    ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
+    fig.subplots_adjust(wspace=0.001)
 
     outputFile = os.path.join(OUTPUT_DIR, '20.SMF_LowZ_Grid' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
@@ -4618,7 +4777,7 @@ def plot_21_smf_lowz_lowmass_grid():
                         fmt=od['marker'], color='grey', ms=od['ms'],
                         markeredgecolor='k', markeredgewidth=0.8,
                             markerfacecolor = 'gray',
-                        alpha=0.6, lw=1.5, capsize=1.5, label=lbl, zorder=1)
+                        alpha=0.6, lw=1.0, label=lbl, zorder=1)
 
         # Redshift label in each panel
         ax.text(0.95, 0.95, rf'${z_lo:.0f} < z < {z_hi:.0f}$',
@@ -4891,10 +5050,10 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
     sugahara_x = sugahara_ml[0]  # First column
     sugahara_y = sugahara_ml[1]  # Second column 
 
-    ax.scatter(chisholm_x, chisholm_y, color='k', marker='o', s=50, label='Chisholm+17', edgecolors='gray', linewidths=0.8, facecolors='k')
-    ax.scatter(heckman_x, heckman_y, color='k', marker='x', s=50, label='Heckman+15', edgecolors='gray', linewidths=0.8, facecolors='k')
-    ax.scatter(rupke_x, rupke_y, color='k', marker='s', s=50, label='Rupke+05', edgecolors='gray', linewidths=0.8, facecolors='k')
-    ax.scatter(sugahara_x, sugahara_y, color='k', marker='d', s=50, label='Sugahara+17', edgecolors='gray', linewidths=0.8, facecolors='k')
+    ax.scatter(chisholm_x, chisholm_y, color='k', marker='o', s=50, label='Chisholm+17', edgecolors='k', linewidths=1.0, facecolors='gray', alpha=0.6)
+    ax.scatter(heckman_x, heckman_y, color='k', marker='x', s=50, label='Heckman+15', edgecolors='k', linewidths=1.0, facecolors='gray', alpha=0.6)
+    ax.scatter(rupke_x, rupke_y, color='k', marker='s', s=50, label='Rupke+05', edgecolors='k', linewidths=1.0, facecolors='gray', alpha=0.6)
+    ax.scatter(sugahara_x, sugahara_y, color='k', marker='d', s=50, label='Sugahara+17', edgecolors='k', linewidths=1.0, facecolors='gray', alpha=0.6)
             
     ax.set_xlim(0, 500)
     # ax.set_xscale('log')
@@ -5029,10 +5188,10 @@ def _gas_ratio_plot(gas_prop, obs_file, obs_label, ylabel, output_name):
         yerr_lo = np.abs(med[omask] - op16[omask])
         yerr_hi = np.abs(op84[omask] - med[omask])
         ax.errorbar(log_ms[omask], med[omask], yerr=[yerr_lo, yerr_hi],
-                    fmt='o', color='k', markersize=10, capsize=3,
-                    label=obs_label, zorder=10,
-                    markerfacecolor='k', markeredgecolor='gray',
-                    markeredgewidth=0.8, ecolor='k')
+                    fmt='o', color='k', markersize=8,
+                    label=obs_label, zorder=10, linewidth=1.0,
+                    markerfacecolor='gray', markeredgecolor='k',
+                    markeredgewidth=1.0, alpha=0.6)
 
     ax.set_xlim(8, 12)
     ax.set_ylim(-3, 1)
@@ -5285,6 +5444,110 @@ def print_mdot_stream_cool_stats():
             pct_cool_dom = 100.0 * np.sum((mc_bin > ms_bin) & valid) / n_valid if n_valid > 0 else np.nan
             print(f"z={zlabel}  mean_logM={mean_mass:.2f}  pop_norm_ratio={pop_norm_ratio:.3f}  %stream_dom={pct_stream_dom:5.1f}%  %cool_dom={pct_cool_dom:5.1f}%")
 
+# ========================== HIGH-Z MASSIVE GALAXY STATS ==========================
+
+def print_massive_galaxy_stats():
+    """Print properties of massive galaxies (M* > 10^9.5) at z = 4-6."""
+    print("\n==== Massive galaxy properties at z = 4-6 (M* > 10^9.5 Msun) ====\n")
+
+    props = ['StellarMass', 'Mvir', 'ColdGas', 'H2gas',
+             'MassLoading', 'MetalsColdGas', 'BlackHoleMass', 'Type',
+             'SfrDisk', 'SfrBulge', 'Vvir', 'Regime', 'EjectedMass']
+    mass_cut = 10**9.5
+
+    filepath = os.path.join(PRIMARY_DIR, MODEL_FILE)
+    if not os.path.exists(filepath):
+        print(f"  File not found: {filepath}")
+        return
+
+    with h5.File(filepath, 'r') as f:
+        for snap in range(len(REDSHIFTS)):
+            z = REDSHIFTS[snap]
+            if z < 4.0 or z > 6.0:
+                continue
+
+            snap_key = f'Snap_{snap}'
+            if snap_key not in f:
+                continue
+
+            grp = f[snap_key]
+            data = {}
+            for prop in props:
+                if prop in grp:
+                    arr = np.array(grp[prop])
+                    if prop in _MASS_PROPS:
+                        arr *= MASS_CONVERT
+                    data[prop] = arr
+
+            mstar = data.get('StellarMass')
+            if mstar is None:
+                continue
+
+            gal_type = data.get('Type', np.zeros_like(mstar))
+            mask = (mstar > mass_cut) & (gal_type == 0)
+            n_gal = np.sum(mask)
+            if n_gal == 0:
+                print(f"  Snap {snap} (z = {z:.3f}): 0 galaxies above cut\n")
+                continue
+
+            print(f"  Snap {snap} (z = {z:.3f}): {n_gal} galaxies with M* > 10^9.5 Msun")
+            print(f"  {'#':>3s}  {'log M*':>8s}  {'log Mhalo':>9s}  {'Vvir':>7s}  {'log Mcold':>9s}  "
+                  f"{'log MH2':>8s}  {'log Meject':>10s}  {'SFR':>8s}  {'eta_rh':>7s}  {'12+log(O/H)':>11s}  {'log MBH':>8s}  {'Regime':>6s}")
+            print(f"  {'':->3s}  {'':->8s}  {'':->9s}  {'':->7s}  {'':->9s}  "
+                  f"{'':->8s}  {'':->10s}  {'':->8s}  {'':->7s}  {'':->11s}  {'':->8s}  {'':->6s}")
+
+            # Top 10 most massive CGM regime galaxies
+            reg = data.get('Regime')
+            idx = np.where(mask)[0]
+            if reg is not None:
+                idx = idx[reg[idx] == 0]
+            idx = idx[np.argsort(-mstar[idx])][:10]
+
+            for i, gi in enumerate(idx):
+                log_ms = np.log10(mstar[gi])
+                mvir = data.get('Mvir')
+                log_mh = np.log10(mvir[gi]) if mvir is not None and mvir[gi] > 0 else np.nan
+                cg = data.get('ColdGas')
+                log_cg = np.log10(cg[gi]) if cg is not None and cg[gi] > 0 else np.nan
+                h2 = data.get('H2gas')
+                log_h2 = np.log10(h2[gi]) if h2 is not None and h2[gi] > 0 else np.nan
+                ml = data.get('MassLoading')
+                eta = ml[gi] if ml is not None else np.nan
+                mcg = data.get('MetalsColdGas')
+                if mcg is not None and cg is not None and cg[gi] > 0:
+                    z_met = mcg[gi] / cg[gi]
+                    # 12 + log10(O/H) assuming O is ~0.5 of metals by mass, H is 0.75 of gas
+                    # Simplified: 12 + log10(Z/Z_sun) + 8.69 (solar 12+log(O/H))
+                    oh12 = 12.0 + np.log10(z_met / Z_SUN) + np.log10(10**(8.69 - 12.0))
+                    # Or more directly: 12+log(O/H) = log10(Z/Zsun) + 8.69
+                    oh12 = np.log10(z_met / Z_SUN) + 8.69
+                else:
+                    oh12 = np.nan
+                sfrd = data.get('SfrDisk')
+                sfrb = data.get('SfrBulge')
+                sfr_val = 0.0
+                if sfrd is not None:
+                    sfr_val += sfrd[gi]
+                if sfrb is not None:
+                    sfr_val += sfrb[gi]
+                bh = data.get('BlackHoleMass')
+                log_bh = np.log10(bh[gi]) if bh is not None and bh[gi] > 0 else np.nan
+
+                vv = data.get('Vvir')
+                vvir_val = vv[gi] if vv is not None else np.nan
+
+                ej = data.get('EjectedMass')
+                log_ej = np.log10(ej[gi]) if ej is not None and ej[gi] > 0 else np.nan
+
+                reg = data.get('Regime')
+                regime_str = 'Hot' if (reg is not None and reg[gi] == 1) else 'CGM'
+
+                print(f"  {i+1:3d}  {log_ms:8.3f}  {log_mh:9.3f}  {vvir_val:7.1f}  {log_cg:9.3f}  "
+                      f"{log_h2:8.3f}  {log_ej:10.3f}  {sfr_val:8.2f}  {eta:7.2f}  {oh12:11.3f}  {log_bh:8.3f}  {regime_str:>6s}")
+
+            print()
+
+
 # ========================== MAIN ==========================
 
 # Registry of plot functions
@@ -5292,41 +5555,42 @@ def print_mdot_stream_cool_stats():
 Z0_PLOTS = {
     31: plot_1_stellar_mass_function_ssfr_s,
     30: plot_1_stellar_mass_function_ssfr_q,
-    # 2: plot_2_baryon_fraction,
-    # 3: plot_3_gas_metallicity_vs_stellar_mass,
-    # 4: plot_4_bh_bulge_mass,
-    # 5: plot_5_stellar_halo_mass,
-    # 6: plot_6_bulge_mass_size,
-    # 15: plot_15_sfr_vs_stellar_mass,
-    # 24: plot_24_mass_loading_vs_velocity,
+    2: plot_2_baryon_fraction,
+    3: plot_3_gas_metallicity_vs_stellar_mass,
+    4: plot_4_bh_bulge_mass,
+    5: plot_5_stellar_halo_mass,
+    6: plot_6_bulge_mass_size,
+    15: plot_15_sfr_vs_stellar_mass,
+    24: plot_24_mass_loading_vs_velocity,
 }
 
 EVOLUTION_PLOTS = {
-    # 7: plot_7_tcool_tff_distribution,
-    # 8: plot_8_precipitation_fraction,
-    # 9: plot_9_cgm_fractions_depletion,
-    # 10: plot_10_sfe_ffb,
-    # 11: plot_11_ffb_properties,
-    # 12: plot_12_sfh_ffb,
-    # 13: plot_13_ffb_vs_redshift,
+    7: plot_7_tcool_tff_distribution,
+    8: plot_8_precipitation_fraction,
+    9: plot_9_cgm_fractions_depletion,
+    10: plot_10_sfe_ffb,
+    11: plot_11_ffb_properties,
+    12: plot_12_sfh_ffb,
+    13: plot_13_ffb_vs_redshift,
 }
 
 # Standalone plots (load their own data)
 STANDALONE_PLOTS = {
-    # 14: plot_14_density_evolution,
-    # 16: plot_16_sfrd_history,
-    # 17: plot_17_smd_history,
-    # 18: plot_18_smf_redshift_grid,
-    # 19: plot_19_smf_ffb_grid,
-    # 20: plot_20_smf_lowz_grid,
-    # 21: plot_21_smf_lowz_lowmass_grid,
-    # 22: plot_22_regime_histogram,
-    # 23: plot_23_ffb_histogram,
-    # 25: plot_25_hi_mass_ratio,
-    # 26: plot_26_h2_mass_ratio,
-    # 27: plot_27_cold_gas_mass_ratio,
-    # 28: plot_28_mdot_vs_mvir,
-    # 29: plot_29_mdot_vs_vvir,
+    14: plot_14_density_evolution,
+    16: plot_16_sfrd_history,
+    17: plot_17_smd_history,
+    18: plot_18_smf_redshift_grid,
+    181: plot_18b_smf_redshift_grid_wide,
+    19: plot_19_smf_ffb_grid,
+    20: plot_20_smf_lowz_grid,
+    21: plot_21_smf_lowz_lowmass_grid,
+    22: plot_22_regime_histogram,
+    23: plot_23_ffb_histogram,
+    25: plot_25_hi_mass_ratio,
+    26: plot_26_h2_mass_ratio,
+    27: plot_27_cold_gas_mass_ratio,
+    28: plot_28_mdot_vs_mvir,
+    29: plot_29_mdot_vs_vvir,
 }
 
 ALL_PLOTS = {**Z0_PLOTS, **EVOLUTION_PLOTS, **STANDALONE_PLOTS}
@@ -5394,3 +5658,4 @@ if __name__ == '__main__':
     main()
 
 # print_mdot_stream_cool_stats()
+print_massive_galaxy_stats()
