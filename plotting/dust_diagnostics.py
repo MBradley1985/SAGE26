@@ -1797,6 +1797,8 @@ def main():
         # Storage arrays for all MW galaxies across time
         all_dust_mass = []
         all_sfr = []
+        all_sfr_p16 = []  # 16th percentile of SFR
+        all_sfr_p84 = []  # 84th percentile of SFR
         all_metallicity = []
         all_cold_gas = []
         all_metals_cold = []
@@ -1836,6 +1838,8 @@ def main():
             except KeyError:
                 all_dust_mass.append(np.nan)
                 all_sfr.append(np.nan)
+                all_sfr_p16.append(np.nan)
+                all_sfr_p84.append(np.nan)
                 all_metallicity.append(np.nan)
                 all_cold_gas.append(np.nan)
                 all_metals_cold.append(np.nan)
@@ -1878,6 +1882,8 @@ def main():
             if len(dust_this_snap) > 0:
                 all_dust_mass.append(np.median(dust_this_snap))
                 all_sfr.append(np.median(sfr_this_snap))
+                all_sfr_p16.append(np.percentile(sfr_this_snap, 16))
+                all_sfr_p84.append(np.percentile(sfr_this_snap, 84))
                 all_metallicity.append(np.median(Z_this_snap))
                 all_cold_gas.append(np.median(cg_this_snap))
                 all_metals_cold.append(np.median(mcg_this_snap))
@@ -1894,6 +1900,8 @@ def main():
             else:
                 all_dust_mass.append(np.nan)
                 all_sfr.append(np.nan)
+                all_sfr_p16.append(np.nan)
+                all_sfr_p84.append(np.nan)
                 all_metallicity.append(np.nan)
                 all_cold_gas.append(np.nan)
                 all_metals_cold.append(np.nan)
@@ -1906,6 +1914,8 @@ def main():
     # Convert to arrays
     dust_mass = np.array(all_dust_mass)
     sfr = np.array(all_sfr)
+    sfr_p16 = np.array(all_sfr_p16)
+    sfr_p84 = np.array(all_sfr_p84)
     metallicity = np.array(all_metallicity)
     cold_gas = np.array(all_cold_gas)
     metals_cold = np.array(all_metals_cold)
@@ -1992,9 +2002,7 @@ def main():
     
     # Secondary y-axis for SFR
     ax7_right = ax7.twinx()
-    ax7_right.fill_between(lookback_times[valid], 0.1, sfr[valid], 
-                           color='magenta', alpha=0.3, label='Star formation rate')
-    ax7_right.plot(lookback_times[valid], sfr[valid], 'm-', lw=2, alpha=0.7)
+    ax7_right.plot(lookback_times[valid], sfr[valid], 'm-', lw=10, alpha=0.3, label='Star formation rate')
     
     # Labels
     ax7.set_xlabel('Lookback time (Gyr)', fontsize=14)

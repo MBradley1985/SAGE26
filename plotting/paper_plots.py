@@ -243,20 +243,39 @@ def load_model(directory, filename=MODEL_FILE, snapshot=SNAPSHOT,
     if properties is None:
         properties = _DEFAULT_PROPERTIES
 
-    filepath = os.path.join(directory, filename)
-    data = {}
 
-    with h5.File(filepath, 'r') as f:
-        snap = f[snapshot]
-        for prop in properties:
-            if prop in snap:
-                arr = np.array(snap[prop])
-                if prop in _MASS_PROPS:
-                    arr *= MASS_CONVERT
-                data[prop] = arr
-            else:
-                print(f"  Warning: '{prop}' not found in {filepath}")
+    # Find all model_*.hdf5 files in the directory
+    import glob
+    pattern = os.path.join(directory, 'model_*.hdf5')
+    filelist = sorted(glob.glob(pattern))
+    if not filelist:
+        # Fallback to single file (legacy)
+        filelist = [os.path.join(directory, filename)]
 
+    data = {prop: [] for prop in properties}
+    for filepath in filelist:
+        if not os.path.exists(filepath):
+            print(f"  Warning: File {filepath} not found, skipping.")
+            continue
+        with h5.File(filepath, 'r') as f:
+            if snapshot not in f:
+                print(f"  Warning: Snapshot {snapshot} not found in {filepath}, skipping.")
+                continue
+            snap = f[snapshot]
+            for prop in properties:
+                if prop in snap:
+                    arr = np.array(snap[prop])
+                    if prop in _MASS_PROPS:
+                        arr *= MASS_CONVERT
+                    data[prop].append(arr)
+                else:
+                    print(f"  Warning: '{prop}' not found in {filepath}")
+    # Concatenate arrays for each property
+    for prop in properties:
+        if data[prop]:
+            data[prop] = np.concatenate(data[prop])
+        else:
+            data[prop] = np.array([])
     return data
 
 
@@ -3463,28 +3482,25 @@ def plot_16_sfrd_history():
         sfr_density_hi = np.zeros(n_snaps)
 
         # Loop strictly from first_snap to last_snap
+
+        # Use load_model to support multi-file HDF5
         for snap in range(sim_first, sim_last + 1):
             snap_name = f'Snap_{snap}'
             idx = snap - sim_first
-
             try:
-                filepath = os.path.join(sim_path, MODEL_FILE)
-
-                with h5.File(filepath, 'r') as f:
-                    if snap_name in f:
-                        sfr_disk = np.array(f[snap_name]['SfrDisk'])
-                        sfr_bulge = np.array(f[snap_name]['SfrBulge'])
-                        sfr_total = sfr_disk + sfr_bulge
-                        sfr_density[idx] = np.sum(sfr_total) / sim_volume
-
-                        if do_bootstrap and len(sfr_total) > 0:
-                            n_gal = len(sfr_total)
-                            boot = np.array([
-                                np.sum(sfr_total[np.random.randint(0, n_gal, n_gal)])
-                                for _ in range(N_BOOT)
-                            ]) / sim_volume
-                            sfr_density_lo[idx] = np.percentile(boot, 16)
-                            sfr_density_hi[idx] = np.percentile(boot, 84)
+                data = load_model(sim_path, snapshot=snap_name, properties=['SfrDisk', 'SfrBulge'])
+                sfr_disk = data['SfrDisk']
+                sfr_bulge = data['SfrBulge']
+                sfr_total = sfr_disk + sfr_bulge
+                sfr_density[idx] = np.sum(sfr_total) / sim_volume
+                if do_bootstrap and len(sfr_total) > 0:
+                    n_gal = len(sfr_total)
+                    boot = np.array([
+                        np.sum(sfr_total[np.random.randint(0, n_gal, n_gal)])
+                        for _ in range(N_BOOT)
+                    ]) / sim_volume
+                    sfr_density_lo[idx] = np.percentile(boot, 16)
+                    sfr_density_hi[idx] = np.percentile(boot, 84)
             except Exception:
                 continue
 
@@ -3666,32 +3682,26 @@ def plot_17_smd_history():
         smd_lo = np.zeros(n_snaps)
         smd_hi = np.zeros(n_snaps)
 
+
+        # Use load_model to support multi-file HDF5
         for snap in range(sim_first, sim_last + 1):
             snap_name = f'Snap_{snap}'
             idx = snap - sim_first
-
             try:
-                filepath = os.path.join(sim_path, MODEL_FILE)
-                with h5.File(filepath, 'r') as f:
-                    if snap_name in f:
-                        # Mass is in 10^10 Msol/h
-                        # Convert to Msol: * 1e10 / h
-                        m_stars = np.array(f[snap_name]['StellarMass']) * sim_mass_convert
-
-                        # Apply limits 1e8 < M < 1e13 (from uploaded script)
-                        w = np.where((m_stars > 1.0e8) & (m_stars < 1.0e13))[0]
-                        if len(w) > 0:
-                            m_sel = m_stars[w]
-                            smd[idx] = np.sum(m_sel) / sim_volume
-
-                            if do_bootstrap:
-                                n_gal = len(m_sel)
-                                boot = np.array([
-                                    np.sum(m_sel[np.random.randint(0, n_gal, n_gal)])
-                                    for _ in range(N_BOOT)
-                                ]) / sim_volume
-                                smd_lo[idx] = np.percentile(boot, 16)
-                                smd_hi[idx] = np.percentile(boot, 84)
+                data = load_model(sim_path, snapshot=snap_name, properties=['StellarMass'])
+                m_stars = data['StellarMass']
+                w = np.where((m_stars > 1.0e8) & (m_stars < 1.0e13))[0]
+                if len(w) > 0:
+                    m_sel = m_stars[w]
+                    smd[idx] = np.sum(m_sel) / sim_volume
+                    if do_bootstrap:
+                        n_gal = len(m_sel)
+                        boot = np.array([
+                            np.sum(m_sel[np.random.randint(0, n_gal, n_gal)])
+                            for _ in range(N_BOOT)
+                        ]) / sim_volume
+                        smd_lo[idx] = np.percentile(boot, 16)
+                        smd_hi[idx] = np.percentile(boot, 84)
             except Exception:
                 continue
 
@@ -4935,37 +4945,33 @@ def plot_18_smf_redshift_grid():
             snap_name = f'Snap_{snap_num}'
 
             try:
-                filepath = os.path.join(model['path'], MODEL_FILE)
-                with h5.File(filepath, 'r') as f:
-                    if snap_name not in f:
-                        continue
-                    m_stars = np.array(f[snap_name]['StellarMass']) * model['mass_convert']
-                    w = m_stars > 0
-                    if np.sum(w) == 0:
-                        continue
-                    log_m = np.log10(m_stars[w])
-
-                    # Use bootstrap for SAGE26 models
-                    if model['label'].startswith('SAGE26'):
-                        x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
-                            log_m, model['volume'], binwidth, n_boot=100)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
-                        # Bootstrap shading
-                        boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
-                        if np.any(boot_valid):
-                            ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
-                                            color=model['color'], alpha=0.2, linewidth=0)
-                    else:
-                        x, phi, _ = mass_function(log_m, model['volume'], binwidth)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
+                data = load_model(model['path'], snapshot=snap_name, properties=['StellarMass'])
+                m_stars = data['StellarMass']
+                w = m_stars > 0
+                if np.sum(w) == 0:
+                    continue
+                log_m = np.log10(m_stars[w])
+                # Use bootstrap for SAGE26 models
+                if model['label'].startswith('SAGE26'):
+                    x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
+                        log_m, model['volume'], binwidth, n_boot=100)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
+                    # Bootstrap shading
+                    boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
+                    if np.any(boot_valid):
+                        ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
+                                        color=model['color'], alpha=0.2, linewidth=0)
+                else:
+                    x, phi, _ = mass_function(log_m, model['volume'], binwidth)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
             except Exception as e:
                 print(f"  Error loading {snap_name} from {model['path']}: {e}")
                 continue
@@ -5101,37 +5107,33 @@ def plot_18b_smf_redshift_grid_wide():
             snap_name = f'Snap_{snap_num}'
 
             try:
-                filepath = os.path.join(model['path'], MODEL_FILE)
-                with h5.File(filepath, 'r') as f:
-                    if snap_name not in f:
-                        continue
-                    m_stars = np.array(f[snap_name]['StellarMass']) * model['mass_convert']
-                    w = m_stars > 0
-                    if np.sum(w) == 0:
-                        continue
-                    log_m = np.log10(m_stars[w])
-
-                    # Use bootstrap for SAGE26 models
-                    if model['label'].startswith('SAGE26'):
-                        x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
-                            log_m, model['volume'], binwidth, n_boot=100)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
-                        # Bootstrap shading
-                        boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
-                        if np.any(boot_valid):
-                            ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
-                                            color=model['color'], alpha=0.2, linewidth=0)
-                    else:
-                        x, phi, _ = mass_function(log_m, model['volume'], binwidth)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
+                data = load_model(model['path'], snapshot=snap_name, properties=['StellarMass'])
+                m_stars = data['StellarMass']
+                w = m_stars > 0
+                if np.sum(w) == 0:
+                    continue
+                log_m = np.log10(m_stars[w])
+                # Use bootstrap for SAGE26 models
+                if model['label'].startswith('SAGE26'):
+                    x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
+                        log_m, model['volume'], binwidth, n_boot=100)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
+                    # Bootstrap shading
+                    boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
+                    if np.any(boot_valid):
+                        ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
+                                        color=model['color'], alpha=0.2, linewidth=0)
+                else:
+                    x, phi, _ = mass_function(log_m, model['volume'], binwidth)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
             except Exception as e:
                 print(f"  Error loading {snap_name} from {model['path']}: {e}")
                 continue
@@ -5449,29 +5451,25 @@ def plot_19_smf_ffb_grid():
             snap_name = f'Snap_{snap_num}'
 
             try:
-                filepath = os.path.join(model['path'], MODEL_FILE)
-                with h5.File(filepath, 'r') as f:
-                    if snap_name not in f:
-                        continue
-                    m_stars = np.array(f[snap_name]['StellarMass']) * model['mass_convert']
-                    w = m_stars > 0
-                    if np.sum(w) == 0:
-                        continue
-                    log_m = np.log10(m_stars[w])
-
-                    # Bootstrap SMF
-                    x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
-                        log_m, model['volume'], binwidth, n_boot=100)
-                    valid = np.isfinite(phi)
-                    ax.plot(x[valid], phi[valid],
-                            lw=model['lw'], color=model['color'],
-                            ls=model['ls'],
-                            label=model['label'] if i == 0 else None)
-                    # Bootstrap shading
-                    boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
-                    if np.any(boot_valid):
-                        ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
-                                        color=model['color'], alpha=0.2, linewidth=0)
+                data = load_model(model['path'], snapshot=snap_name, properties=['StellarMass'])
+                m_stars = data['StellarMass']
+                w = m_stars > 0
+                if np.sum(w) == 0:
+                    continue
+                log_m = np.log10(m_stars[w])
+                # Bootstrap SMF
+                x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
+                    log_m, model['volume'], binwidth, n_boot=100)
+                valid = np.isfinite(phi)
+                ax.plot(x[valid], phi[valid],
+                        lw=model['lw'], color=model['color'],
+                        ls=model['ls'],
+                        label=model['label'] if i == 0 else None)
+                # Bootstrap shading
+                boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
+                if np.any(boot_valid):
+                    ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
+                                    color=model['color'], alpha=0.2, linewidth=0)
             except Exception as e:
                 print(f"  Error loading {snap_name} from {model['path']}: {e}")
                 continue
@@ -5605,37 +5603,33 @@ def plot_20_smf_lowz_grid():
             snap_name = f'Snap_{snap_num}'
 
             try:
-                filepath = os.path.join(model['path'], MODEL_FILE)
-                with h5.File(filepath, 'r') as f:
-                    if snap_name not in f:
-                        continue
-                    m_stars = np.array(f[snap_name]['StellarMass']) * model['mass_convert']
-                    w = m_stars > 0
-                    if np.sum(w) == 0:
-                        continue
-                    log_m = np.log10(m_stars[w])
-
-                    # Use bootstrap for SAGE26 models
-                    if model['label'].startswith('SAGE26'):
-                        x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
-                            log_m, model['volume'], binwidth, n_boot=100)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
-                        # Bootstrap shading
-                        boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
-                        if np.any(boot_valid):
-                            ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
-                                            color=model['color'], alpha=0.2, linewidth=0)
-                    else:
-                        x, phi, _ = mass_function(log_m, model['volume'], binwidth)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
+                data = load_model(model['path'], snapshot=snap_name, properties=['StellarMass'])
+                m_stars = data['StellarMass']
+                w = m_stars > 0
+                if np.sum(w) == 0:
+                    continue
+                log_m = np.log10(m_stars[w])
+                # Use bootstrap for SAGE26 models
+                if model['label'].startswith('SAGE26'):
+                    x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
+                        log_m, model['volume'], binwidth, n_boot=100)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
+                    # Bootstrap shading
+                    boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
+                    if np.any(boot_valid):
+                        ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
+                                        color=model['color'], alpha=0.2, linewidth=0)
+                else:
+                    x, phi, _ = mass_function(log_m, model['volume'], binwidth)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
             except Exception as e:
                 print(f"  Error loading {snap_name} from {model['path']}: {e}")
                 continue
@@ -5767,37 +5761,33 @@ def plot_21_smf_lowz_lowmass_grid():
             snap_name = f'Snap_{snap_num}'
 
             try:
-                filepath = os.path.join(model['path'], MODEL_FILE)
-                with h5.File(filepath, 'r') as f:
-                    if snap_name not in f:
-                        continue
-                    m_stars = np.array(f[snap_name]['StellarMass']) * model['mass_convert']
-                    w = m_stars > 0
-                    if np.sum(w) == 0:
-                        continue
-                    log_m = np.log10(m_stars[w])
-
-                    # Use bootstrap for SAGE26 models
-                    if model['label'].startswith('SAGE26'):
-                        x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
-                            log_m, model['volume'], binwidth, n_boot=100)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
-                        # Bootstrap shading
-                        boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
-                        if np.any(boot_valid):
-                            ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
-                                            color=model['color'], alpha=0.2, linewidth=0)
-                    else:
-                        x, phi, _ = mass_function(log_m, model['volume'], binwidth)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
+                data = load_model(model['path'], snapshot=snap_name, properties=['StellarMass'])
+                m_stars = data['StellarMass']
+                w = m_stars > 0
+                if np.sum(w) == 0:
+                    continue
+                log_m = np.log10(m_stars[w])
+                # Use bootstrap for SAGE26 models
+                if model['label'].startswith('SAGE26'):
+                    x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
+                        log_m, model['volume'], binwidth, n_boot=100)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
+                    # Bootstrap shading
+                    boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
+                    if np.any(boot_valid):
+                        ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
+                                        color=model['color'], alpha=0.2, linewidth=0)
+                else:
+                    x, phi, _ = mass_function(log_m, model['volume'], binwidth)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
             except Exception as e:
                 print(f"  Error loading {snap_name} from {model['path']}: {e}")
                 continue

@@ -98,10 +98,11 @@ EtaSN                   5.0e-3  %supernova efficiency
 %----- Dust Modelling --------------
 %------------------------------------------
 
-DeltaDustAGB            0.2
-DeltaDustSNII           0.2
-DeltaDustSNIa           0.15
-DustAccretionTimescale  20.0
+DeltaDustAGB            0.35
+DeltaDustSNII           0.15
+DeltaDustSNIa           0.0
+DustAccretionTimescale  50.0
+EtaSNDust               0.1
 BinaryFraction          0.1    %Fraction of stars in SNIa binaries
 
 %------------------------------------------

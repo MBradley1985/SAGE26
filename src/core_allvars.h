@@ -513,6 +513,7 @@ struct params
     double     DeltaDustSNII;           // SNII dust production efficiency (default 0.2)
     double     DeltaDustSNIa;           // SNIa dust production efficiency (default 0.15)
     double     DustAccretionTimescale;  // ISM accretion baseline [Myr] (default 20)
+    double     EtaSNDust;               // SN destruction efficiency (default 0.1)
     int32_t    MetalYieldsOn;           // Element-by-element yields (1=on)
     int32_t    AGBYields;               // AGB yield table selection
     int32_t    SNIIYields;              // SNII yield table selection

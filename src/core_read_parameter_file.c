@@ -281,6 +281,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->DustAccretionTimescale);
     ParamID[NParam++] = DOUBLE;
 
+    strncpy(ParamTag[NParam], "EtaSNDust", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->EtaSNDust);
+    ParamID[NParam++] = DOUBLE;
+
     strncpy(ParamTag[NParam], "MetalYieldsOn", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->MetalYieldsOn);
     ParamID[NParam++] = INT;

@@ -392,55 +392,94 @@ void destruct_dust(const double metallicity, const double stars, const double dt
 {
     /* Dust destruction by SN shocks
      * Based on Asano et al. 2013 equations 12, 14
-     * SN rate computed from IMF integration (Dwek & Cherchneff 2011)
-     * when GSL is available; otherwise approximate 1 SN per 100 Msun.
+     * 
+     * IMPORTANT: SN rate now uses DELAYED enrichment to be consistent with
+     * dust production. SNe explode from stars that formed taum (stellar lifetime) ago,
+     * not from stars forming now. This prevents the timing mismatch where
+     * destruction responds instantly to SFR but production is delayed.
      */
 
-    if(stars <= 0.0 || galaxies[p].ColdGas <= 1.0e-10 || galaxies[p].ColdDust <= 0.0) {
+    if(galaxies[p].ColdGas <= 1.0e-10 || galaxies[p].ColdDust <= 0.0) {
         return;
     }
 
-    const double eta_sn = 0.1;  /* destruction efficiency (Asano+13) */
+    const double eta_sn = run_params->EtaSNDust;  /* destruction efficiency (tunable) */
     const double m_swept = 1535.0 * pow(metallicity / 0.02 + 0.039, -0.289)
                            * run_params->Hubble_h / 1.0e10;  /* code units */
 
     if(m_swept <= 0.0) return;
 
-    /* Compute SN rate: R_SN = SFR / <m> integrated over the IMF */
+    /* Compute DELAYED SN rate from past SFR history */
     double Rsn = 0.0;
 
 #ifdef GSL_FOUND
     {
+        const int snapnum = galaxies[p].SnapNum;
+        
+        /* Local copies of SFR history and snapshot ages (same as produce_metals_dust) */
+        double age[ABSOLUTEMAXSNAPS], sfh[ABSOLUTEMAXSNAPS];
+        for(int i = 0; i < run_params->Snaplistlen; i++) {
+            age[i] = run_params->lbtime[i];
+            sfh[i] = (double)galaxies[p].Sfr[i];
+        }
+        
+        /* Integrate SN rate over massive stars (8-40 Msun) using delayed SFR */
         const int nbins = 20;
         const double m_low = 8.0, m_up = 40.0;
-        double mass[20], phi_arr[20], mphi[20];
-
-        for(int i = 0; i < nbins; i++) {
-            mass[i] = 1.0 + ((m_up - 1.0) / (double)(nbins - i));
-            phi_arr[i] = compute_imf(mass[i]);
-            mphi[i] = mass[i] * phi_arr[i];
-        }
-
-        /* mean_mass is in physical Msun, need to convert to code units */
-        double mean_mass = integrate_arr(mass, mphi, nbins, mass[0], m_up)
-                         / integrate_arr(mass, phi_arr, nbins, m_low, m_up);
+        double mass[20], sn_rate[20], phi_arr[20];
         
-        /* Convert mean_mass from Msun to code units (10^10 Msun/h) */
-        double mean_mass_code = mean_mass * run_params->Hubble_h / 1.0e10;
-
-        if(mean_mass_code > 0.0) {
-            Rsn = stars / dt / mean_mass_code;
+        for(int i = 0; i < nbins; i++) {
+            mass[i] = m_low + (m_up - m_low) * (double)i / (double)(nbins - 1);
+            phi_arr[i] = compute_imf(mass[i]);
+            
+            /* Stellar lifetime for this mass */
+            double taum = compute_taum(mass[i]);  /* in Myr/h */
+            /* Convert to code time units */
+            taum = taum * SEC_PER_MEGAYEAR / run_params->UnitTime_in_s;
+            
+            /* Time when this star formed (in lookback time) */
+            double time = age[snapnum] - taum;
+            
+            /* Look up SFR at that past time */
+            double sfr_past = 0.0;
+            if(time >= run_params->lbtime[0] && time <= run_params->lbtime[run_params->Snaplistlen - 1]) {
+                sfr_past = interpolate_arr(age, sfh, run_params->Snaplistlen, time);
+            }
+            
+            /* SN rate contribution: each massive star that formed at time and is dying now */
+            sn_rate[i] = phi_arr[i] * sfr_past;
+        }
+        
+        /* Integrate over IMF to get total SN rate */
+        double total_sn = integrate_arr(mass, sn_rate, nbins, m_low, m_up);
+        double total_phi = integrate_arr(mass, phi_arr, nbins, m_low, m_up);
+        
+        if(total_phi > 0.0) {
+            /* mean_mass in physical Msun */
+            double mean_mass = 0.0;
+            double mphi[20];
+            for(int i = 0; i < nbins; i++) {
+                mphi[i] = mass[i] * phi_arr[i];
+            }
+            mean_mass = integrate_arr(mass, mphi, nbins, m_low, m_up) / total_phi;
+            
+            /* Convert mean_mass from Msun to code units */
+            double mean_mass_code = mean_mass * run_params->Hubble_h / 1.0e10;
+            
+            if(mean_mass_code > 0.0 && total_sn > 0.0) {
+                /* Rsn = integrated SN rate / mean mass of SN progenitors */
+                Rsn = total_sn / mean_mass_code;
+            }
         }
     }
 #else
-    /* Fallback: 1 SN per 100 Msun formed */
-    Rsn = stars / dt / (100.0 * run_params->Hubble_h / 1.0e10);
+    /* Fallback without GSL: use instantaneous SFR (less accurate) */
+    if(stars > 0.0) {
+        Rsn = stars / dt / (100.0 * run_params->Hubble_h / 1.0e10);
+    }
 #endif
 
     if(Rsn > 0.0 && galaxies[p].ColdGas > 0.0) {
-        /* Keep everything in code units for consistency with formation/growth rates.
-         * Don't convert Rsn - it's already in code units (SN per code time). */
-        
         /* tsn = ColdGas / (eta * m_swept * Rsn) is in code time */
         double tsn = galaxies[p].ColdGas / (eta_sn * m_swept * Rsn);
 
