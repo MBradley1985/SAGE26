@@ -768,15 +768,15 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     if(run_params->DustOn == 1) {
 #ifdef GSL_FOUND
         if(run_params->MetalYieldsOn == 1) {
-            produce_metals_dust(metallicity, dt, p, centralgal, galaxies, run_params);
+            produce_metals_dust(metallicity, dt, p, centralgal, step, galaxies, run_params);
         } else {
-            produce_dust(stars, metallicity, dt, p, centralgal, galaxies, run_params);
+            produce_dust(stars, metallicity, dt, p, centralgal, step, galaxies, run_params);
         }
 #else
-        produce_dust(stars, metallicity, dt, p, centralgal, galaxies, run_params);
+        produce_dust(stars, metallicity, dt, p, centralgal, step, galaxies, run_params);
 #endif
-        accrete_dust(metallicity, dt, p, galaxies, run_params);
-        destruct_dust(metallicity, stars, dt, p, galaxies, run_params);
+        accrete_dust(metallicity, dt, p, step, galaxies, run_params);
+        destruct_dust(metallicity, stars, dt, p, step, galaxies, run_params);
     }
 
     // Safety check: ensure reheated_mass doesn't exceed remaining ColdGas (floating-point precision)

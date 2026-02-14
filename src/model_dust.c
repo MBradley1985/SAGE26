@@ -29,8 +29,8 @@
  * produce_dust: Simplified dust production (MetalYieldsOn=0)
  * ======================================================================== */
 void produce_dust(const double stars, const double metallicity, const double dt,
-                  const int p, const int centralgal, struct GALAXY *galaxies,
-                  const struct params *run_params)
+                  const int p, const int centralgal, const int step,
+                  struct GALAXY *galaxies, const struct params *run_params)
 {
     (void)centralgal; (void)dt;
 
@@ -47,6 +47,11 @@ void produce_dust(const double stars, const double metallicity, const double dt,
 
     if(metallicity < 0.01) dust_produced *= metallicity / 0.01;
     if(dust_produced > metals_produced) dust_produced = metals_produced;
+
+    /* Store formation rate in code units (will be converted in output) */
+    if(dt > 0.0 && step >= 0 && step < STEPS) {
+        galaxies[p].DustDotForm[step] += (float)(dust_produced / dt);
+    }
 
     galaxies[p].ColdDust += dust_produced;
     if(galaxies[p].ColdDust > galaxies[p].MetalsColdGas)
@@ -67,7 +72,7 @@ void produce_dust(const double stars, const double metallicity, const double dt,
  * SNIa rate from Arrigoni et al. 2010 eq. 9-10.
  * ======================================================================== */
 void produce_metals_dust(const double metallicity, const double dt,
-                         const int p, const int centralgal,
+                         const int p, const int centralgal, const int step,
                          struct GALAXY *galaxies, const struct params *run_params)
 {
     (void)centralgal;   /* reserved for future use */
@@ -278,6 +283,11 @@ void produce_metals_dust(const double metallicity, const double dt,
      * dustdot += delta_snia * (Cr_snia + Ni_snia) / dt;
      */
 
+    /* Store formation rate in code units (will be converted in output) */
+    if(dustdot > 0.0 && step >= 0 && step < STEPS) {
+        galaxies[p].DustDotForm[step] += (float)(dustdot);
+    }
+
     /* Apply dust to cold phase */
     if(dustdot > 0.0) {
         galaxies[p].ColdDust += dustdot * dt;
@@ -293,7 +303,7 @@ void produce_metals_dust(const double metallicity, const double dt,
 
 
 void accrete_dust(const double metallicity, const double dt, const int p,
-                  struct GALAXY *galaxies, const struct params *run_params)
+                  const int step, struct GALAXY *galaxies, const struct params *run_params)
 {
     /* ISM grain growth / dust accretion
      * Based on Asano et al. 2013 equation 20
@@ -357,6 +367,11 @@ void accrete_dust(const double metallicity, const double dt, const int p,
             delta_dust = gas_phase_metals;
         }
 
+        /* Store growth rate in code units (will be converted in output) */
+        if(delta_dust > 0.0 && step >= 0 && step < STEPS) {
+            galaxies[p].DustDotGrowth[step] += (float)(delta_dust / dt);
+        }
+
         if(delta_dust > 0.0) {
             galaxies[p].ColdDust += delta_dust;
         }
@@ -373,7 +388,7 @@ void accrete_dust(const double metallicity, const double dt, const int p,
 
 
 void destruct_dust(const double metallicity, const double stars, const double dt,
-                   const int p, struct GALAXY *galaxies, const struct params *run_params)
+                   const int p, const int step, struct GALAXY *galaxies, const struct params *run_params)
 {
     /* Dust destruction by SN shocks
      * Based on Asano et al. 2013 equations 12, 14
@@ -406,11 +421,15 @@ void destruct_dust(const double metallicity, const double stars, const double dt
             mphi[i] = mass[i] * phi_arr[i];
         }
 
+        /* mean_mass is in physical Msun, need to convert to code units */
         double mean_mass = integrate_arr(mass, mphi, nbins, mass[0], m_up)
                          / integrate_arr(mass, phi_arr, nbins, m_low, m_up);
+        
+        /* Convert mean_mass from Msun to code units (10^10 Msun/h) */
+        double mean_mass_code = mean_mass * run_params->Hubble_h / 1.0e10;
 
-        if(mean_mass > 0.0) {
-            Rsn = stars / dt / mean_mass;
+        if(mean_mass_code > 0.0) {
+            Rsn = stars / dt / mean_mass_code;
         }
     }
 #else
@@ -419,16 +438,22 @@ void destruct_dust(const double metallicity, const double stars, const double dt
 #endif
 
     if(Rsn > 0.0 && galaxies[p].ColdGas > 0.0) {
-        /* Convert Rsn to physical units for the timescale calculation */
-        Rsn *= run_params->UnitMass_in_g / run_params->UnitTime_in_s
-             * SEC_PER_YEAR / SOLAR_MASS;
-
-        double tsn = galaxies[p].ColdGas / (eta_sn * m_swept * Rsn);  /* code time */
-        tsn /= run_params->UnitTime_in_s / SEC_PER_YEAR;
+        /* Keep everything in code units for consistency with formation/growth rates.
+         * Don't convert Rsn - it's already in code units (SN per code time). */
+        
+        /* tsn = ColdGas / (eta * m_swept * Rsn) is in code time */
+        double tsn = galaxies[p].ColdGas / (eta_sn * m_swept * Rsn);
 
         if(tsn > 0.0) {
+            /* dustdot = ColdDust / tsn is in code mass / code time */
             double dustdot = galaxies[p].ColdDust / tsn;
 
+            /* Store destruction rate in code mass / code time (same as formation/growth) */
+            if(dustdot > 0.0 && step >= 0 && step < STEPS) {
+                galaxies[p].DustDotDestruct[step] += (float)(dustdot);
+            }
+
+            /* Subtract destroyed dust */
             if(galaxies[p].ColdDust - dustdot * dt > 0.0) {
                 galaxies[p].ColdDust -= dustdot * dt;
             } else {

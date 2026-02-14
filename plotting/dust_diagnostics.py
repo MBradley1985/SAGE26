@@ -1681,6 +1681,13 @@ def main():
         n_mw = min(100, len(mw_indices))
         mw_sample = mw_indices[:n_mw]
         
+        # Check if DustDot arrays are available
+        has_dustdot = 'Snap_63/DustDotForm' in f
+        if has_dustdot:
+            print(f'    Using DustDot arrays from HDF5 output')
+        else:
+            print(f'    DustDot arrays not found, estimating rates from physics')
+        
         # Storage arrays for all MW galaxies across time
         all_dust_mass = []
         all_sfr = []
@@ -1688,6 +1695,9 @@ def main():
         all_cold_gas = []
         all_metals_cold = []
         all_h2_gas = []
+        all_dustdot_form = []     # From HDF5
+        all_dustdot_growth = []   # From HDF5
+        all_dustdot_destruct = [] # From HDF5
         snap_has_data = []
         
         # Read data for each relevant snapshot
@@ -1703,6 +1713,20 @@ def main():
                 sfr_disk = f[f'{snap_str}/SfrDisk'][:]
                 sfr_bulge = f[f'{snap_str}/SfrBulge'][:]
                 h2 = f[f'{snap_str}/H2gas'][:] * 1e10 / Hubble_h
+                
+                # Read DustDot arrays if available (sum over STEPS for total rate)
+                if has_dustdot:
+                    dustdot_form = f[f'{snap_str}/DustDotForm'][:]  # [ngal, STEPS] in Msun/yr
+                    dustdot_growth = f[f'{snap_str}/DustDotGrowth'][:]
+                    dustdot_destruct = f[f'{snap_str}/DustDotDestruct'][:]
+                    # Sum over steps (or use mean - they're rates per step)
+                    ddform = np.mean(dustdot_form, axis=1)  # Mean rate over steps
+                    ddgrowth = np.mean(dustdot_growth, axis=1)
+                    dddestruct = np.mean(dustdot_destruct, axis=1)
+                else:
+                    ddform = None
+                    ddgrowth = None
+                    dddestruct = None
             except KeyError:
                 all_dust_mass.append(np.nan)
                 all_sfr.append(np.nan)
@@ -1710,6 +1734,9 @@ def main():
                 all_cold_gas.append(np.nan)
                 all_metals_cold.append(np.nan)
                 all_h2_gas.append(np.nan)
+                all_dustdot_form.append(np.nan)
+                all_dustdot_growth.append(np.nan)
+                all_dustdot_destruct.append(np.nan)
                 snap_has_data.append(False)
                 continue
             
@@ -1720,6 +1747,9 @@ def main():
             cg_this_snap = []
             mcg_this_snap = []
             h2_this_snap = []
+            ddform_this_snap = []
+            ddgrowth_this_snap = []
+            dddestruct_this_snap = []
             
             for mw_gi in mw_sample:
                 match = np.where(gi == mw_gi)[0]
@@ -1734,6 +1764,10 @@ def main():
                     cg_this_snap.append(cg[idx])
                     mcg_this_snap.append(mcg[idx])
                     h2_this_snap.append(h2[idx])
+                    if has_dustdot and ddform is not None:
+                        ddform_this_snap.append(ddform[idx])
+                        ddgrowth_this_snap.append(ddgrowth[idx])
+                        dddestruct_this_snap.append(dddestruct[idx])
             
             if len(dust_this_snap) > 0:
                 all_dust_mass.append(np.median(dust_this_snap))
@@ -1742,6 +1776,14 @@ def main():
                 all_cold_gas.append(np.median(cg_this_snap))
                 all_metals_cold.append(np.median(mcg_this_snap))
                 all_h2_gas.append(np.median(h2_this_snap))
+                if has_dustdot and len(ddform_this_snap) > 0:
+                    all_dustdot_form.append(np.median(ddform_this_snap))
+                    all_dustdot_growth.append(np.median(ddgrowth_this_snap))
+                    all_dustdot_destruct.append(np.median(dddestruct_this_snap))
+                else:
+                    all_dustdot_form.append(np.nan)
+                    all_dustdot_growth.append(np.nan)
+                    all_dustdot_destruct.append(np.nan)
                 snap_has_data.append(True)
             else:
                 all_dust_mass.append(np.nan)
@@ -1750,6 +1792,9 @@ def main():
                 all_cold_gas.append(np.nan)
                 all_metals_cold.append(np.nan)
                 all_h2_gas.append(np.nan)
+                all_dustdot_form.append(np.nan)
+                all_dustdot_growth.append(np.nan)
+                all_dustdot_destruct.append(np.nan)
                 snap_has_data.append(False)
     
     # Convert to arrays
@@ -1760,48 +1805,65 @@ def main():
     metals_cold = np.array(all_metals_cold)
     h2_gas = np.array(all_h2_gas)
     snap_has_data = np.array(snap_has_data)
+    dustdot_form = np.array(all_dustdot_form)
+    dustdot_growth = np.array(all_dustdot_growth)
+    dustdot_destruct = np.array(all_dustdot_destruct)
     
-    # Calculate dust rates from mass differences
-    # Use cosmic time differences (Gyr)
-    dt = np.diff(cosmic_times)  # Gyr between snapshots
+    # Check if we have valid DustDot data
+    has_valid_dustdot = has_dustdot and np.any(~np.isnan(dustdot_form))
     
-    # Total dust rate: dM_dust/dt
-    total_dust_rate = np.zeros(len(dust_mass))
-    total_dust_rate[1:] = np.diff(dust_mass) / (dt * 1e9)  # Msun/yr
-    
-    # Estimate component rates based on physics:
-    # 1. Production rate ~ delta_eff × Yield × SFR
-    #    delta_eff ~ 0.27 (weighted AGB+SNII+SNIa: 0.3×0.6 + 0.6×0.15 + 0.1×0.03)
-    #    Yield ~ 0.03
-    delta_eff = 0.27
-    yield_frac = 0.03
-    prod_rate = delta_eff * yield_frac * sfr  # Msun/yr
-    Z_solar = 0.02
-    
-    # 2. Accretion rate ~ (1 - DtM)^2 × f_H2 × M_dust / tau_acc
-    #    tau_acc = 50 Myr × (Z_solar/Z)  [from parameter file]
-    #    Squared term matches model (Asano+13 eq 20 with self-regulation)
-    tau_acc_0 = 50e6  # 50 Myr in years (DustAccretionTimescale from .par)
-    f_h2 = np.where(cold_gas > 0, h2_gas / cold_gas, 0)
-    f_h2 = np.clip(f_h2, 0, 1)
-    # Default f_h2 = 0.5 when H2 tracking unavailable (matches model)
-    f_h2 = np.where(f_h2 < 1e-10, 0.5, f_h2)
-    dtm = np.where(metals_cold > 0, dust_mass / metals_cold, 0)
-    dtm = np.clip(dtm, 0, 1)
-    tau_acc = np.where(metallicity > 0, tau_acc_0 * Z_solar / metallicity, tau_acc_0)
-    accretion_rate = (1 - dtm)**2 * f_h2 * dust_mass / tau_acc  # Msun/yr
-    
-    # 3. Destruction rate ~ eta × m_swept × R_SN × DtG
-    #    R_SN ~ SFR / 100 Msun (1 SN per 100 Msun)
-    #    Note: Using higher efficiency (0.5) to match dusty-sage which includes
-    #    both SNII and SNIa destruction. The model code uses 0.1 for SNII only.
-    eta_sn = 0.5  # effective destruction efficiency (SNII + SNIa contribution)
-    m_swept = 1535 * (metallicity / Z_solar + 0.039)**(-0.289)  # Msun
-    R_sn = sfr / 100.0  # SN rate (per year)
-    dtg = np.where(cold_gas > 0, dust_mass / cold_gas, 0)
-    # Destruction timescale
-    tau_dest = np.where((R_sn > 0) & (cold_gas > 0), cold_gas / (eta_sn * m_swept * R_sn), 1e12)
-    destruction_rate = dust_mass / tau_dest  # Msun/yr
+    if has_valid_dustdot:
+        # Use actual dust rates from simulation
+        print(f'    Using actual DustDot values from SAGE output')
+        prod_rate = dustdot_form  # Dust formation rate from stellar ejecta (Msun/yr)
+        accretion_rate = dustdot_growth  # Dust growth rate in ISM (Msun/yr)
+        destruction_rate = dustdot_destruct  # Dust destruction rate (Msun/yr)
+    else:
+        # Fallback: Estimate rates from physics (original method)
+        print(f'    Using estimated dust rates from physics approximations')
+        
+        # Calculate dust rates from mass differences
+        # Use cosmic time differences (Gyr)
+        dt = np.diff(cosmic_times)  # Gyr between snapshots
+        
+        # Total dust rate: dM_dust/dt
+        total_dust_rate = np.zeros(len(dust_mass))
+        total_dust_rate[1:] = np.diff(dust_mass) / (dt * 1e9)  # Msun/yr
+        
+        # Estimate component rates based on physics:
+        # 1. Production rate ~ delta_eff × Yield × SFR
+        #    delta_eff ~ 0.27 (weighted AGB+SNII+SNIa: 0.3×0.6 + 0.6×0.15 + 0.1×0.03)
+        #    Yield ~ 0.03
+        delta_eff = 0.27
+        yield_frac = 0.03
+        prod_rate = delta_eff * yield_frac * sfr  # Msun/yr
+        Z_solar = 0.02
+        
+        # 2. Accretion rate ~ (1 - DtM)^2 × f_H2 × M_dust / tau_acc
+        #    tau_acc = 50 Myr × (Z_solar/Z)  [from parameter file]
+        #    Squared term matches model (Asano+13 eq 20 with self-regulation)
+        tau_acc_0 = 50e6  # 50 Myr in years (DustAccretionTimescale from .par)
+        f_h2 = np.where(cold_gas > 0, h2_gas / cold_gas, 0)
+        f_h2 = np.clip(f_h2, 0, 1)
+        # Default f_h2 = 0.5 when H2 tracking unavailable (matches model)
+        f_h2 = np.where(f_h2 < 1e-10, 0.5, f_h2)
+        dtm = np.where(metals_cold > 0, dust_mass / metals_cold, 0)
+        dtm = np.clip(dtm, 0, 1)
+        tau_acc = np.where(metallicity > 0, tau_acc_0 * Z_solar / metallicity, tau_acc_0)
+        accretion_rate = (1 - dtm)**2 * f_h2 * dust_mass / tau_acc  # Msun/yr
+        
+        # 3. Destruction rate ~ eta × m_swept × R_SN × DtG
+        #    R_SN ~ SFR / 100 Msun (1 SN per 100 Msun)
+        #    Note: Using higher efficiency (0.5) to match dusty-sage which includes
+        #    both SNII and SNIa destruction. The model code uses 0.1 for SNII only.
+        eta_sn = 0.5  # effective destruction efficiency (SNII + SNIa contribution)
+        Z_solar = 0.02
+        m_swept = 1535 * (metallicity / Z_solar + 0.039)**(-0.289)  # Msun
+        R_sn = sfr / 100.0  # SN rate (per year)
+        dtg = np.where(cold_gas > 0, dust_mass / cold_gas, 0)
+        # Destruction timescale
+        tau_dest = np.where((R_sn > 0) & (cold_gas > 0), cold_gas / (eta_sn * m_swept * R_sn), 1e12)
+        destruction_rate = dust_mass / tau_dest  # Msun/yr
     
     # Total dust formation rate = production + growth (sources only)
     total_formation_rate = prod_rate + accretion_rate

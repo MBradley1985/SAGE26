@@ -573,15 +573,15 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     if(run_params->DustOn == 1) {
 #ifdef GSL_FOUND
         if(run_params->MetalYieldsOn == 1) {
-            produce_metals_dust(metallicity, dt, merger_centralgal, centralgal, galaxies, run_params);
+            produce_metals_dust(metallicity, dt, merger_centralgal, centralgal, step, galaxies, run_params);
         } else {
-            produce_dust(stars, metallicity, dt, merger_centralgal, centralgal, galaxies, run_params);
+            produce_dust(stars, metallicity, dt, merger_centralgal, centralgal, step, galaxies, run_params);
         }
 #else
-        produce_dust(stars, metallicity, dt, merger_centralgal, centralgal, galaxies, run_params);
+        produce_dust(stars, metallicity, dt, merger_centralgal, centralgal, step, galaxies, run_params);
 #endif
-        accrete_dust(metallicity, dt, merger_centralgal, galaxies, run_params);
-        destruct_dust(metallicity, stars, dt, merger_centralgal, galaxies, run_params);
+        accrete_dust(metallicity, dt, merger_centralgal, step, galaxies, run_params);
+        destruct_dust(metallicity, stars, dt, merger_centralgal, step, galaxies, run_params);
     }
 
     // update from feedback

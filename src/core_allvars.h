@@ -194,6 +194,11 @@ struct GALAXY
     float CGMDust;
     float EjectedDust;
 
+    /* dust rate diagnostics (one entry per step within snapshot) */
+    float DustDotForm[STEPS];
+    float DustDotGrowth[STEPS];
+    float DustDotDestruct[STEPS];
+
     /* SFR history for delayed enrichment (one entry per snapshot) */
     float Sfr[ABSOLUTEMAXSNAPS];
 };

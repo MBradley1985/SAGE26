@@ -331,6 +331,57 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
             CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
                                             "Failed to close dataspace for SfrHistory at snapshot %d.\n", snap_idx);
         }
+
+        // Create 2D DustDot datasets (DustDotForm, DustDotGrowth, DustDotDestruct)
+        // Dimensions: [ngal (unlimited), STEPS (fixed)]
+        {
+            const char *dustdot_names[3] = {"DustDotForm", "DustDotGrowth", "DustDotDestruct"};
+            const char *dustdot_desc[3] = {
+                "Dust formation rate from stellar sources (per step within snapshot). Units: Msun/yr",
+                "Dust grain growth rate by metal accretion (per step within snapshot). Units: Msun/yr",
+                "Dust destruction rate by SN shocks (per step within snapshot). Units: Msun/yr"
+            };
+
+            hsize_t dd_dims[2] = {0, (hsize_t)STEPS};
+            hsize_t dd_maxdims[2] = {H5S_UNLIMITED, (hsize_t)STEPS};
+            hsize_t dd_chunk_dims[2] = {NUM_GALS_PER_BUFFER, (hsize_t)STEPS};
+
+            for(int dd_idx = 0; dd_idx < 3; dd_idx++) {
+                snprintf(full_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/%s", run_params->ListOutputSnaps[snap_idx], dustdot_names[dd_idx]);
+
+                hid_t dd_prop = H5Pcreate(H5P_DATASET_CREATE);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(dd_prop, (int32_t) dd_prop,
+                                                "Could not create property list for %s dataset at snapshot %d.\n", dustdot_names[dd_idx], snap_idx);
+
+                hid_t dd_dataspace = H5Screate_simple(2, dd_dims, dd_maxdims);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(dd_dataspace, (int32_t) dd_dataspace,
+                                                "Could not create 2D dataspace for %s at snapshot %d.\n", dustdot_names[dd_idx], snap_idx);
+
+                herr_t status = H5Pset_chunk(dd_prop, 2, dd_chunk_dims);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                                "Could not set HDF5 chunking for %s at snapshot %d.\n", dustdot_names[dd_idx], snap_idx);
+
+                hid_t dd_dataset = H5Dcreate2(file_id, full_field_name, H5T_NATIVE_FLOAT, dd_dataspace,
+                                              H5P_DEFAULT, dd_prop, H5P_DEFAULT);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(dd_dataset, (int32_t) dd_dataset,
+                                                "Could not create %s dataset at snapshot %d.\n", dustdot_names[dd_idx], snap_idx);
+
+                CREATE_STRING_ATTRIBUTE(dd_dataset, "Description", dustdot_desc[dd_idx], MAX_STRING_LEN);
+                CREATE_STRING_ATTRIBUTE(dd_dataset, "Units", "Msun/yr", MAX_STRING_LEN);
+
+                status = H5Dclose(dd_dataset);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                                "Failed to close %s dataset at snapshot %d.\n", dustdot_names[dd_idx], snap_idx);
+
+                status = H5Pclose(dd_prop);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                                "Failed to close property list for %s at snapshot %d.\n", dustdot_names[dd_idx], snap_idx);
+
+                status = H5Sclose(dd_dataspace);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                                "Failed to close dataspace for %s at snapshot %d.\n", dustdot_names[dd_idx], snap_idx);
+            }
+        }
     }
 
     // Now for each snapshot, we process `buffer_count` galaxies into RAM for every snapshot before
@@ -432,6 +483,21 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, CGMDust);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, EjectedDust);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TotalDust);
+
+        // Special allocation for 2D DustDot arrays: size = buffer_size * STEPS
+        save_info->buffer_output_gals[snap_idx].DustDotForm = malloc(
+            (size_t)save_info->buffer_size * (size_t)STEPS * sizeof(float));
+        save_info->buffer_output_gals[snap_idx].DustDotGrowth = malloc(
+            (size_t)save_info->buffer_size * (size_t)STEPS * sizeof(float));
+        save_info->buffer_output_gals[snap_idx].DustDotDestruct = malloc(
+            (size_t)save_info->buffer_size * (size_t)STEPS * sizeof(float));
+        if(save_info->buffer_output_gals[snap_idx].DustDotForm == NULL ||
+           save_info->buffer_output_gals[snap_idx].DustDotGrowth == NULL ||
+           save_info->buffer_output_gals[snap_idx].DustDotDestruct == NULL) {
+            fprintf(stderr, "Could not allocate %d x %d elements for DustDot buffers for snapshot %d\n",
+                    save_info->buffer_size, STEPS, snap_idx);
+            return MALLOC_FAILURE;
+        }
 
         // Special allocation for 2D SfrHistory buffer: size = buffer_size * Snaplistlen
         save_info->buffer_output_gals[snap_idx].SfrHistory = malloc(
@@ -734,6 +800,11 @@ int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, CGMDust);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, EjectedDust);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TotalDust);
+
+        // Free 2D DustDot buffers
+        free(save_info->buffer_output_gals[snap_idx].DustDotForm);
+        free(save_info->buffer_output_gals[snap_idx].DustDotGrowth);
+        free(save_info->buffer_output_gals[snap_idx].DustDotDestruct);
 
         // Free 2D SfrHistory buffer
         free(save_info->buffer_output_gals[snap_idx].SfrHistory);
@@ -1090,6 +1161,19 @@ int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct save_info 
     save_info->buffer_output_gals[output_snap_idx].EjectedDust[gals_in_buffer] = g->EjectedDust;
     save_info->buffer_output_gals[output_snap_idx].TotalDust[gals_in_buffer] = g->ColdDust + g->HotDust + g->CGMDust + g->EjectedDust;
 
+    // Copy DustDot arrays - convert from code units to Msun/yr (same as SFR conversion)
+    // The 2D buffer is laid out as [gal_idx * STEPS + step_idx]
+    {
+        float rate_conversion = (float)(run_params->UnitMass_in_g / run_params->UnitTime_in_s 
+                                        * SEC_PER_YEAR / SOLAR_MASS);
+        int64_t dustdot_offset = gals_in_buffer * STEPS;
+        for(int32_t step = 0; step < STEPS; step++) {
+            save_info->buffer_output_gals[output_snap_idx].DustDotForm[dustdot_offset + step] = g->DustDotForm[step] * rate_conversion;
+            save_info->buffer_output_gals[output_snap_idx].DustDotGrowth[dustdot_offset + step] = g->DustDotGrowth[step] * rate_conversion;
+            save_info->buffer_output_gals[output_snap_idx].DustDotDestruct[dustdot_offset + step] = g->DustDotDestruct[step] * rate_conversion;
+        }
+    }
+
     // Copy SfrHistory array (convert to Msun/yr)
     // The 2D buffer is laid out as [gal_idx * Snaplistlen + snap_idx]
     // Note: Sfr[] array stores SFR at the time of each snapshot, but the current
@@ -1383,6 +1467,67 @@ int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to_write,
         H5Sclose(sfh_memspace);
         H5Sclose(sfh_filespace);
         H5Dclose(sfh_dataset_id);
+    }
+
+    // Write 2D DustDot datasets (separate from 1D fields)
+    {
+        const char *dustdot_names[3] = {"DustDotForm", "DustDotGrowth", "DustDotDestruct"};
+        float *dustdot_buffers[3] = {
+            save_info->buffer_output_gals[snap_idx].DustDotForm,
+            save_info->buffer_output_gals[snap_idx].DustDotGrowth,
+            save_info->buffer_output_gals[snap_idx].DustDotDestruct
+        };
+
+        for(int dd_idx = 0; dd_idx < 3; dd_idx++) {
+            char dd_field_name[2*MAX_STRING_LEN];
+            snprintf(dd_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/%s", run_params->ListOutputSnaps[snap_idx], dustdot_names[dd_idx]);
+
+            hid_t dd_dataset_id = H5Dopen2(save_info->file_id, dd_field_name, H5P_DEFAULT);
+            if(dd_dataset_id < 0) {
+                fprintf(stderr, "Could not access %s dataset for output snapshot %d.\n", dustdot_names[dd_idx], snap_idx);
+                return (int32_t) dd_dataset_id;
+            }
+
+            // 2D dimensions: [ngal, STEPS]
+            hsize_t dd_dims_extend[2] = {(hsize_t)num_to_write, (hsize_t)STEPS};
+            hsize_t dd_old_dims[2] = {(hsize_t)num_already_written, (hsize_t)STEPS};
+            hsize_t dd_new_dims[2] = {dd_old_dims[0] + dd_dims_extend[0], (hsize_t)STEPS};
+
+            status = H5Dset_extent(dd_dataset_id, dd_new_dims);
+            if(status < 0) {
+                fprintf(stderr, "Could not resize %s dataset dimensions for snapshot %d.\n", dustdot_names[dd_idx], snap_idx);
+                return (int32_t) status;
+            }
+
+            hid_t dd_filespace = H5Dget_space(dd_dataset_id);
+            if(dd_filespace < 0) {
+                fprintf(stderr, "Could not get dataspace for %s at snapshot %d.\n", dustdot_names[dd_idx], snap_idx);
+                return (int32_t) dd_filespace;
+            }
+
+            // Select hyperslab: start at [old_ngal, 0], count [num_to_write, STEPS]
+            hsize_t dd_start[2] = {dd_old_dims[0], 0};
+            status = H5Sselect_hyperslab(dd_filespace, H5S_SELECT_SET, dd_start, NULL, dd_dims_extend, NULL);
+            if(status < 0) {
+                fprintf(stderr, "Could not select hyperslab for %s at snapshot %d.\n", dustdot_names[dd_idx], snap_idx);
+                return (int32_t) status;
+            }
+
+            hid_t dd_memspace = H5Screate_simple(2, dd_dims_extend, NULL);
+            if(dd_memspace < 0) {
+                fprintf(stderr, "Could not create memory space for %s at snapshot %d.\n", dustdot_names[dd_idx], snap_idx);
+                return (int32_t) dd_memspace;
+            }
+
+            status = H5Dwrite(dd_dataset_id, H5T_NATIVE_FLOAT, dd_memspace, dd_filespace, H5P_DEFAULT,
+                              dustdot_buffers[dd_idx]);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                            "Could not write %s dataset for snapshot %d.\n", dustdot_names[dd_idx], snap_idx);
+
+            H5Sclose(dd_memspace);
+            H5Sclose(dd_filespace);
+            H5Dclose(dd_dataset_id);
+        }
     }
 
 #endif

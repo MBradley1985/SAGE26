@@ -118,6 +118,11 @@ struct HDF5_GALAXY_OUTPUT
     float *EjectedDust;
     float *TotalDust;
 
+    /* dust rate diagnostics (per-step arrays) */
+    float *DustDotForm;
+    float *DustDotGrowth;
+    float *DustDotDestruct;
+
     /* Star formation history array (2D: [ngal * nsnaps]) */
     float *SfrHistory;
 };

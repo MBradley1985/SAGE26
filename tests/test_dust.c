@@ -127,7 +127,7 @@ void test_dust_production() {
     double metallicity = get_metallicity(gal[0].ColdGas, gal[0].MetalsColdGas);
     double dt = 0.01;  // ~10 Myr
     
-    produce_dust(stars, metallicity, dt, 0, 1, gal, &run_params);
+    produce_dust(stars, metallicity, dt, 0, 1, 0, gal, &run_params);
     
     // Verify dust was produced
     ASSERT_TRUE(gal[0].ColdDust > initial_cold_dust, "Dust produced in ColdDust");
@@ -156,7 +156,7 @@ void test_dust_production_zero_metallicity() {
     double metallicity = 0.0;
     double dt = 0.01;
     
-    produce_dust(stars, metallicity, dt, 0, 1, gal, &run_params);
+    produce_dust(stars, metallicity, dt, 0, 1, 0, gal, &run_params);
     
     // At zero metallicity, dust production should still work (primordial enrichment)
     // but the amount should be small
@@ -188,7 +188,7 @@ void test_dust_accretion() {
     double metallicity = get_metallicity(gal.ColdGas, gal.MetalsColdGas);
     double dt = 0.1;  // ~100 Myr
     
-    accrete_dust(metallicity, dt, 0, &gal, &run_params);
+    accrete_dust(metallicity, dt, 0, 0, &gal, &run_params);
     
     // Verify dust increased (grain growth)
     ASSERT_TRUE(gal.ColdDust > initial_dust, "Dust grows via accretion");
@@ -222,7 +222,7 @@ void test_dust_accretion_saturation() {
     double metallicity = get_metallicity(gal.ColdGas, gal.MetalsColdGas);
     double dt = 0.1;
     
-    accrete_dust(metallicity, dt, 0, &gal, &run_params);
+    accrete_dust(metallicity, dt, 0, 0, &gal, &run_params);
     
     // Some growth should still occur, but less than at low DtM
     ASSERT_TRUE(gal.ColdDust >= initial_dust, "Dust doesn't decrease from accretion");
@@ -251,7 +251,7 @@ void test_dust_accretion_no_h2() {
     double metallicity = get_metallicity(gal.ColdGas, gal.MetalsColdGas);
     double dt = 0.1;
     
-    accrete_dust(metallicity, dt, 0, &gal, &run_params);
+    accrete_dust(metallicity, dt, 0, 0, &gal, &run_params);
     
     // With default f_mol=0.5 fallback for gas-rich galaxies, some growth may occur
     // But with very little gas, growth should be minimal
@@ -278,7 +278,7 @@ void test_dust_destruction() {
     double metallicity = get_metallicity(gal.ColdGas, gal.MetalsColdGas);
     double dt = 0.01;
     
-    destruct_dust(metallicity, stars, dt, 0, &gal, &run_params);
+    destruct_dust(metallicity, stars, dt, 0, 0, &gal, &run_params);
     
     // Dust should decrease or stay the same (never increase from destruction)
     ASSERT_TRUE(gal.ColdDust <= initial_dust + 1e-15, "Dust not increased by destruction");
@@ -307,7 +307,7 @@ void test_dust_destruction_no_sf() {
     double metallicity = get_metallicity(gal.ColdGas, gal.MetalsColdGas);
     double dt = 0.01;
     
-    destruct_dust(metallicity, stars, dt, 0, &gal, &run_params);
+    destruct_dust(metallicity, stars, dt, 0, 0, &gal, &run_params);
     
     // With no SF, no SNe, so no destruction
     ASSERT_CLOSE(gal.ColdDust, initial_dust, 1e-10, 
@@ -507,9 +507,9 @@ void test_dust_conservation_bounds() {
     double stars = 0.05;
     
     // Production, accretion, destruction, sputtering
-    produce_dust(stars, metallicity, dt, 0, 0, &gal, &run_params);
-    accrete_dust(metallicity, dt, 0, &gal, &run_params);
-    destruct_dust(metallicity, stars, dt, 0, &gal, &run_params);
+    produce_dust(stars, metallicity, dt, 0, 0, 0, &gal, &run_params);
+    accrete_dust(metallicity, dt, 0, 0, &gal, &run_params);
+    destruct_dust(metallicity, stars, dt, 0, 0, &gal, &run_params);
     dust_thermal_sputtering(0, dt, &gal, &run_params);
     
     // Check all dust reservoirs are non-negative
