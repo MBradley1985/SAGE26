@@ -372,6 +372,7 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
         galaxies[t].SfrBulge[step] += galaxies[p].SfrDisk[step] + galaxies[p].SfrBulge[step];
         galaxies[t].SfrBulgeColdGas[step] += galaxies[p].SfrDiskColdGas[step] + galaxies[p].SfrBulgeColdGas[step];
         galaxies[t].SfrBulgeColdGasMetals[step] += galaxies[p].SfrDiskColdGasMetals[step] + galaxies[p].SfrBulgeColdGasMetals[step];
+        galaxies[t].SfrBulgeColdGasDust[step] += galaxies[p].SfrDiskColdGasDust[step] + galaxies[p].SfrBulgeColdGasDust[step];
     }
 
     if(run_params->DustOn == 1) {
@@ -407,9 +408,11 @@ void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
         galaxies[p].SfrBulge[step] += galaxies[p].SfrDisk[step];
         galaxies[p].SfrBulgeColdGas[step] += galaxies[p].SfrDiskColdGas[step];
         galaxies[p].SfrBulgeColdGasMetals[step] += galaxies[p].SfrDiskColdGasMetals[step];
+        galaxies[p].SfrBulgeColdGasDust[step] += galaxies[p].SfrDiskColdGasDust[step];
         galaxies[p].SfrDisk[step] = 0.0;
         galaxies[p].SfrDiskColdGas[step] = 0.0;
         galaxies[p].SfrDiskColdGasMetals[step] = 0.0;
+        galaxies[p].SfrDiskColdGasDust[step] = 0.0;
     }
 }
 
@@ -544,6 +547,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     galaxies[merger_centralgal].SfrBulge[step] += stars / dt;
     galaxies[merger_centralgal].SfrBulgeColdGas[step] += galaxies[merger_centralgal].ColdGas;
     galaxies[merger_centralgal].SfrBulgeColdGasMetals[step] += galaxies[merger_centralgal].MetalsColdGas;
+    galaxies[merger_centralgal].SfrBulgeColdGasDust[step] += galaxies[merger_centralgal].ColdDust;
 
     metallicity = get_metallicity(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].MetalsColdGas);
     update_from_star_formation(merger_centralgal, stars, metallicity, galaxies, run_params);

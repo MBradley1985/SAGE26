@@ -148,8 +148,10 @@ struct GALAXY
     float SfrBulge[STEPS];
     float SfrDiskColdGas[STEPS];
     float SfrDiskColdGasMetals[STEPS];
+    float SfrDiskColdGasDust[STEPS];
     float SfrBulgeColdGas[STEPS];
     float SfrBulgeColdGasMetals[STEPS];
+    float SfrBulgeColdGasDust[STEPS];
 
     /* misc */
     float DiskScaleRadius;

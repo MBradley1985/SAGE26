@@ -216,7 +216,9 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                     for(int step = 0; step < STEPS; step++) {
                         galaxies[ngal].SfrDisk[step] = galaxies[ngal].SfrBulge[step] = 0.0;
                         galaxies[ngal].SfrDiskColdGas[step] = galaxies[ngal].SfrDiskColdGasMetals[step] = 0.0;
+                        galaxies[ngal].SfrDiskColdGasDust[step] = 0.0;
                         galaxies[ngal].SfrBulgeColdGas[step] = galaxies[ngal].SfrBulgeColdGasMetals[step] = 0.0;
+                        galaxies[ngal].SfrBulgeColdGasDust[step] = 0.0;
                         galaxies[ngal].DustDotForm[step] = 0.0f;
                         galaxies[ngal].DustDotGrowth[step] = 0.0f;
                         galaxies[ngal].DustDotDestruct[step] = 0.0f;

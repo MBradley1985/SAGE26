@@ -123,6 +123,10 @@ struct HDF5_GALAXY_OUTPUT
     float *DustDotGrowth;
     float *DustDotDestruct;
 
+    /* Dust mass at time of star formation (per-step arrays) */
+    float *SfrDiskColdGasDust;
+    float *SfrBulgeColdGasDust;
+
     /* Star formation history array (2D: [ngal * nsnaps]) */
     float *SfrHistory;
 };

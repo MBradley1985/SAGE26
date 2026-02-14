@@ -754,6 +754,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     galaxies[p].SfrDisk[step] += stars / dt;
     galaxies[p].SfrDiskColdGas[step] = galaxies[p].ColdGas;
     galaxies[p].SfrDiskColdGasMetals[step] = galaxies[p].MetalsColdGas;
+    galaxies[p].SfrDiskColdGasDust[step] = galaxies[p].ColdDust;
 
     // accumulate total SFR for this snapshot (used by delayed-enrichment dust model)
     galaxies[p].Sfr[galaxies[p].SnapNum] += (float)(stars / dt);
@@ -1235,6 +1236,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     galaxies[p].SfrDisk[step] += stars / dt;
     galaxies[p].SfrDiskColdGas[step] = galaxies[p].ColdGas;
     galaxies[p].SfrDiskColdGasMetals[step] = galaxies[p].MetalsColdGas;
+    galaxies[p].SfrDiskColdGasDust[step] = galaxies[p].ColdDust;
 
     // accumulate total SFR for this snapshot (used by delayed-enrichment dust model)
     galaxies[p].Sfr[galaxies[p].SnapNum] += (float)(stars / dt);

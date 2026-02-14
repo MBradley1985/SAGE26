@@ -81,8 +81,10 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].SfrBulge[step] = 0.0;
         galaxies[p].SfrDiskColdGas[step] = 0.0;
         galaxies[p].SfrDiskColdGasMetals[step] = 0.0;
+        galaxies[p].SfrDiskColdGasDust[step] = 0.0;
         galaxies[p].SfrBulgeColdGas[step] = 0.0;
         galaxies[p].SfrBulgeColdGasMetals[step] = 0.0;
+        galaxies[p].SfrBulgeColdGasDust[step] = 0.0;
         galaxies[p].DustDotForm[step] = 0.0f;
         galaxies[p].DustDotGrowth[step] = 0.0f;
         galaxies[p].DustDotDestruct[step] = 0.0f;

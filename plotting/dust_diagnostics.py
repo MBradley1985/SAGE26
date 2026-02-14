@@ -1228,6 +1228,112 @@ def main():
     plt.close(fig2)
 
     # ==================================================================
+    # NEW FIGURE: Dust Components vs Stellar Mass (line plot version)
+    # ==================================================================
+    print(f'  Creating Dust Components vs Stellar Mass evolution figure...')
+    
+    fig2b, axes2b = plt.subplots(2, 4, figsize=(18, 10))
+    axes2b = axes2b.flatten()
+    
+    for idx, (snapnum, z_val, z_label) in enumerate(z_panels):
+        ax = axes2b[idx]
+        sn = f'Snap_{snapnum}'
+        
+        # Load data for this snapshot
+        sm_z = read_all_files(DirName, sn, 'StellarMass')
+        cd_z = read_all_files(DirName, sn, 'ColdDust')
+        hd_z = read_all_files(DirName, sn, 'HotDust')
+        ed_z = read_all_files(DirName, sn, 'EjectedDust')
+        cgm_z = read_all_files(DirName, sn, 'CGMDust')
+        
+        if sm_z is None or cd_z is None:
+            ax.text(0.5, 0.5, f'{z_label}\nNo data', transform=ax.transAxes,
+                   ha='center', va='center', fontsize=14, color='white')
+            ax.set_xlim(7, 12)
+            ax.set_ylim(3, 10)
+            continue
+        
+        # Convert to physical units
+        sm_z = sm_z * 1e10 / Hubble_h
+        cd_z = cd_z * 1e10 / Hubble_h
+        hd_z = hd_z * 1e10 / Hubble_h
+        ed_z = ed_z * 1e10 / Hubble_h
+        if cgm_z is not None:
+            cgm_z = cgm_z * 1e10 / Hubble_h
+            total_dust_z = cd_z + np.maximum(hd_z, 0) + ed_z + np.maximum(cgm_z, 0)
+        else:
+            total_dust_z = cd_z + np.maximum(hd_z, 0) + ed_z
+        
+        # Select galaxies with positive stellar mass
+        w = np.where(sm_z > 0)[0]
+        
+        if len(w) < 100:
+            ax.text(0.5, 0.5, f'{z_label}\nToo few galaxies', transform=ax.transAxes,
+                   ha='center', va='center', fontsize=14, color='white')
+            ax.set_xlim(7, 12)
+            ax.set_ylim(3, 10)
+            continue
+        
+        log_mstar = np.log10(sm_z[w])
+        
+        # Define stellar mass bins
+        mstar_bins = np.arange(7.5, 12.0, 0.25)
+        mstar_centers = 0.5 * (mstar_bins[:-1] + mstar_bins[1:])
+        
+        # Define dust component arrays to iterate over
+        dust_components = [
+            (total_dust_z[w], 'Total', 'white', '-', 2.5),
+            (cd_z[w], 'Cold', 'cyan', '-', 2.0),
+            (np.maximum(hd_z[w], 0), 'Hot', 'red', '--', 2.0),
+            (ed_z[w], 'Ejected', 'orange', ':', 2.0),
+        ]
+        
+        for dust_arr, label, color, ls, lw in dust_components:
+            median_mdust = np.full(len(mstar_centers), np.nan)
+            p16_mdust = np.full(len(mstar_centers), np.nan)
+            p84_mdust = np.full(len(mstar_centers), np.nan)
+            
+            for i in range(len(mstar_centers)):
+                sel = np.where((log_mstar >= mstar_bins[i]) & (log_mstar < mstar_bins[i+1]) & (dust_arr > 0))[0]
+                if len(sel) > 10:
+                    log_dust = np.log10(dust_arr[sel])
+                    median_mdust[i] = np.median(log_dust)
+                    p16_mdust[i] = np.percentile(log_dust, 16)
+                    p84_mdust[i] = np.percentile(log_dust, 84)
+            
+            good = ~np.isnan(median_mdust)
+            if np.sum(good) > 2:
+                ax.plot(mstar_centers[good], median_mdust[good], color=color, ls=ls, lw=lw, label=label)
+                # Add shaded region for Total only
+                if label == 'Total':
+                    ax.fill_between(mstar_centers[good], p16_mdust[good], p84_mdust[good], 
+                                   color=color, alpha=0.15)
+        
+        # Labels and styling
+        ax.set_xlim(7, 12)
+        ax.set_ylim(3, 10)
+        ax.set_xlabel(r'$\log_{10}\, M_\star\ (M_\odot)$')
+        ax.set_ylabel(r'$\log_{10}\, M_{\rm dust}\ (M_\odot)$')
+        ax.set_title(z_label, fontsize=14)
+        
+        # Add galaxy count
+        ax.text(0.05, 0.95, f'N = {len(w):,}', transform=ax.transAxes,
+               ha='left', va='top', fontsize=10, color='white',
+               bbox=dict(boxstyle='round', facecolor='black', alpha=0.5))
+        
+        # Add legend to first panel only
+        if idx == 0:
+            ax.legend(loc='lower right', fontsize=9, framealpha=0.8)
+    
+    fig2b.suptitle('Dust Components vs Stellar Mass Evolution', fontsize=16, y=0.98)
+    plt.tight_layout(rect=[0, 0, 1.0, 0.95])
+    
+    outfile2b = os.path.join(OutputDir, 'DustComponents_StellarMass_Evolution' + OutputFormat)
+    fig2b.savefig(outfile2b, facecolor=fig2b.get_facecolor())
+    print(f'  Saved dust components evolution figure to: {outfile2b}\n')
+    plt.close(fig2b)
+
+    # ==================================================================
     # NEW FIGURE: Dust-to-Gas Ratio vs Stellar Mass Evolution (z=0 to z=7)
     # ==================================================================
     print(f'  Creating Dust Fraction vs Stellar Mass evolution figure...')
@@ -1886,14 +1992,14 @@ def main():
     
     # Secondary y-axis for SFR
     ax7_right = ax7.twinx()
-    ax7_right.fill_between(lookback_times[valid], 1e-2, sfr[valid], 
+    ax7_right.fill_between(lookback_times[valid], 0.1, sfr[valid], 
                            color='magenta', alpha=0.3, label='Star formation rate')
-    ax7_right.plot(lookback_times[valid], sfr[valid], 'm-', lw=1, alpha=0.5)
+    ax7_right.plot(lookback_times[valid], sfr[valid], 'm-', lw=2, alpha=0.7)
     
     # Labels
     ax7.set_xlabel('Lookback time (Gyr)', fontsize=14)
     ax7.set_ylabel(r'$\log_{10}$ Dust rate ($M_\odot$ yr$^{-1}$)', fontsize=14)
-    ax7_right.set_ylabel(r'$\log_{10}$ SFR ($M_\odot$ yr$^{-1}$)', fontsize=14, color='magenta')
+    ax7_right.set_ylabel(r'SFR ($M_\odot$ yr$^{-1}$)', fontsize=14, color='magenta')
     ax7_right.tick_params(axis='y', labelcolor='magenta')
     
     # Add redshift axis on top
@@ -1910,7 +2016,7 @@ def main():
     ax7.set_yscale('log')
     ax7.set_ylim(1e-4, 1)
     ax7_right.set_yscale('log')
-    ax7_right.set_ylim(1e-1, 1e2)
+    ax7_right.set_ylim(0.3, 30)  # Better range for MW SFR (~1-10 Msun/yr)
     
     # Legend
     lines1, labels1 = ax7.get_legend_handles_labels()
