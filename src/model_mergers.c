@@ -10,6 +10,7 @@
 #include "model_misc.h"
 #include "model_starformation_and_feedback.h"
 #include "model_disk_instability.h"
+#include "model_dust.h"
 
 double estimate_merging_time(const int sat_halo, const int mother_halo, const int ngal, struct halo_data *halos, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -567,6 +568,21 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
 
     // recompute the metallicity of the cold phase
     metallicity = get_metallicity(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].MetalsColdGas);
+
+    // Dust production, accretion, and destruction for merger-induced starburst
+    if(run_params->DustOn == 1) {
+#ifdef GSL_FOUND
+        if(run_params->MetalYieldsOn == 1) {
+            produce_metals_dust(metallicity, dt, merger_centralgal, centralgal, galaxies, run_params);
+        } else {
+            produce_dust(stars, metallicity, dt, merger_centralgal, centralgal, galaxies, run_params);
+        }
+#else
+        produce_dust(stars, metallicity, dt, merger_centralgal, centralgal, galaxies, run_params);
+#endif
+        accrete_dust(metallicity, dt, merger_centralgal, galaxies, run_params);
+        destruct_dust(metallicity, stars, dt, merger_centralgal, galaxies, run_params);
+    }
 
     // update from feedback
     update_from_feedback(merger_centralgal, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
