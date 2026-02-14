@@ -243,6 +243,11 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
 
         quasar_mode_wind(merger_centralgal, BHaccrete, galaxies, run_params);
     }
+
+    if(run_params->DustOn == 1) {
+        const double DTG = get_DTG(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].ColdDust);
+        galaxies[merger_centralgal].ColdDust -= DTG * BHaccrete;
+    }
 }
 
 
@@ -257,9 +262,11 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
     if(quasar_energy > cold_gas_energy) {
         galaxies[gal].EjectedMass += galaxies[gal].ColdGas;
         galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsColdGas;
+        galaxies[gal].EjectedDust += galaxies[gal].ColdDust;
 
         galaxies[gal].ColdGas = 0.0;
         galaxies[gal].MetalsColdGas = 0.0;
+        galaxies[gal].ColdDust = 0.0;
     }
 
     // compare quasar wind and cold+hot/CGM gas energies and eject from appropriate reservoir
@@ -271,9 +278,11 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
             if(quasar_energy > cold_gas_energy + cgm_gas_energy) {
                 galaxies[gal].EjectedMass += galaxies[gal].CGMgas;
                 galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsCGMgas;
+                galaxies[gal].EjectedDust += galaxies[gal].CGMDust;
 
                 galaxies[gal].CGMgas = 0.0;
                 galaxies[gal].MetalsCGMgas = 0.0;
+                galaxies[gal].CGMDust = 0.0;
             }
         } else {
             // Hot-ICM-regime: check and eject from HotGas
@@ -282,9 +291,11 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
             if(quasar_energy > cold_gas_energy + hot_gas_energy) {
                 galaxies[gal].EjectedMass += galaxies[gal].HotGas;
                 galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsHotGas;
+                galaxies[gal].EjectedDust += galaxies[gal].HotDust;
 
                 galaxies[gal].HotGas = 0.0;
                 galaxies[gal].MetalsHotGas = 0.0;
+                galaxies[gal].HotDust = 0.0;
             }
         }
     } else {
@@ -294,9 +305,11 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
         if(quasar_energy > cold_gas_energy + hot_gas_energy) {
             galaxies[gal].EjectedMass += galaxies[gal].HotGas;
             galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsHotGas;
+            galaxies[gal].EjectedDust += galaxies[gal].HotDust;
 
             galaxies[gal].HotGas = 0.0;
             galaxies[gal].MetalsHotGas = 0.0;
+            galaxies[gal].HotDust = 0.0;
         }
     }
 }
@@ -358,6 +371,21 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
         galaxies[t].SfrBulge[step] += galaxies[p].SfrDisk[step] + galaxies[p].SfrBulge[step];
         galaxies[t].SfrBulgeColdGas[step] += galaxies[p].SfrDiskColdGas[step] + galaxies[p].SfrBulgeColdGas[step];
         galaxies[t].SfrBulgeColdGasMetals[step] += galaxies[p].SfrDiskColdGasMetals[step] + galaxies[p].SfrBulgeColdGasMetals[step];
+    }
+
+    if(run_params->DustOn == 1) {
+        galaxies[t].ColdDust += galaxies[p].ColdDust;
+        galaxies[t].HotDust += galaxies[p].HotDust;
+        galaxies[t].CGMDust += galaxies[p].CGMDust;
+        galaxies[t].EjectedDust += galaxies[p].EjectedDust;
+        if(galaxies[t].ColdDust > galaxies[t].MetalsColdGas) galaxies[t].ColdDust = galaxies[t].MetalsColdGas;
+        if(galaxies[t].HotDust > galaxies[t].MetalsHotGas) galaxies[t].HotDust = galaxies[t].MetalsHotGas;
+        if(galaxies[t].MetalsCGMgas > 0.0 && galaxies[t].CGMDust > galaxies[t].MetalsCGMgas)
+            galaxies[t].CGMDust = galaxies[t].MetalsCGMgas;
+        if(galaxies[t].CGMDust < 0.0) galaxies[t].CGMDust = 0.0;
+        if(galaxies[t].MetalsEjectedMass > 0.0 && galaxies[t].EjectedDust > galaxies[t].MetalsEjectedMass)
+            galaxies[t].EjectedDust = galaxies[t].MetalsEjectedMass;
+        if(galaxies[t].EjectedDust < 0.0) galaxies[t].EjectedDust = 0.0;
     }
 }
 
@@ -631,4 +659,24 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, struct GALAXY
 
     // what should we do with the disrupted satellite BH?
     galaxies[gal].mergeType = 4;  // mark as disruption to the ICS
+
+    if(run_params->DustOn == 1) {
+        const double total_dust = galaxies[gal].ColdDust + galaxies[gal].HotDust + galaxies[gal].CGMDust;
+        if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
+            // CGM-regime central: disrupted dust goes to CGMDust
+            galaxies[centralgal].CGMDust += total_dust;
+            if(galaxies[centralgal].CGMDust > galaxies[centralgal].MetalsCGMgas)
+                galaxies[centralgal].CGMDust = galaxies[centralgal].MetalsCGMgas;
+        } else {
+            // Hot-ICM or original: disrupted dust goes to HotDust
+            galaxies[centralgal].HotDust += total_dust;
+            if(galaxies[centralgal].HotDust > galaxies[centralgal].MetalsHotGas)
+                galaxies[centralgal].HotDust = galaxies[centralgal].MetalsHotGas;
+        }
+        galaxies[centralgal].EjectedDust += galaxies[gal].EjectedDust;
+        if(galaxies[centralgal].MetalsEjectedMass > 0.0 &&
+           galaxies[centralgal].EjectedDust > galaxies[centralgal].MetalsEjectedMass)
+            galaxies[centralgal].EjectedDust = galaxies[centralgal].MetalsEjectedMass;
+        if(galaxies[centralgal].EjectedDust < 0.0) galaxies[centralgal].EjectedDust = 0.0;
+    }
 }

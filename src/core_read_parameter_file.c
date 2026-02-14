@@ -261,6 +261,46 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->BulgeSizeOn);
     ParamID[NParam++] = INT;
 
+    strncpy(ParamTag[NParam], "DustOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->DustOn);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "DeltaDustAGB", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->DeltaDustAGB);
+    ParamID[NParam++] = DOUBLE;
+
+    strncpy(ParamTag[NParam], "DeltaDustSNII", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->DeltaDustSNII);
+    ParamID[NParam++] = DOUBLE;
+
+    strncpy(ParamTag[NParam], "DeltaDustSNIa", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->DeltaDustSNIa);
+    ParamID[NParam++] = DOUBLE;
+
+    strncpy(ParamTag[NParam], "DustAccretionTimescale", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->DustAccretionTimescale);
+    ParamID[NParam++] = DOUBLE;
+
+    strncpy(ParamTag[NParam], "MetalYieldsOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->MetalYieldsOn);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "AGBYields", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->AGBYields);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "SNIIYields", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->SNIIYields);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "SNIaYields", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->SNIaYields);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "BinaryFraction", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->BinaryFraction);
+    ParamID[NParam++] = DOUBLE;
+
     
     used_tag = mymalloc(sizeof(int) * NParam);
     for(int i=0; i<NParam; i++) {

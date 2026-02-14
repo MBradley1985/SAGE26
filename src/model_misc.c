@@ -4,6 +4,10 @@
 #include <math.h>
 #include <time.h>
 
+#ifdef GSL_FOUND
+#include <gsl/gsl_spline.h>
+#endif
+
 #include "core_allvars.h"
 
 #include "model_misc.h"
@@ -109,7 +113,14 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].mdot_cool = 0.0;
     galaxies[p].mdot_stream = 0.0;
 
+    galaxies[p].ColdDust = 0.0;
+    galaxies[p].HotDust = 0.0;
+    galaxies[p].CGMDust = 0.0;
+    galaxies[p].EjectedDust = 0.0;
 
+    for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
+        galaxies[p].Sfr[snap] = 0.0f;
+    }
 }
 
 
@@ -127,6 +138,16 @@ double get_disk_radius(const int halonr, const int p, const struct halo_data *ha
 	} else {
 		return 0.1 * galaxies[p].Rvir;
     }
+}
+
+double get_DTG(const double gas, const double dust)
+{
+    double DTG = 0.0;
+    if(gas > 0.0 && dust > 0.0) {
+        DTG = dust / gas;
+        if(DTG > 1.0) DTG = 1.0;
+    }
+    return DTG;
 }
 
 
@@ -669,4 +690,81 @@ float calculate_H2_fraction_KD12(const float surface_density, const float metall
     if (f_H2 > 1.0) f_H2 = 1.0;
     
     return f_H2;
+}
+
+
+#ifdef GSL_FOUND
+double integrate_arr(const double arr1[MAX_STRING_LEN], const double arr2[MAX_STRING_LEN],
+                     const int npts, const double lower_limit, const double upper_limit)
+{
+    double Q;
+    gsl_interp_accel *acc;
+    gsl_spline *spl;
+
+    acc = gsl_interp_accel_alloc();
+    spl = gsl_spline_alloc(gsl_interp_linear, npts);
+
+    gsl_spline_init(spl, arr1, arr2, npts);
+    Q = gsl_spline_eval_integ(spl, lower_limit, upper_limit, acc);
+
+    gsl_spline_free(spl);
+    gsl_interp_accel_free(acc);
+
+    return Q;
+}
+
+
+double interpolate_arr(const double arr1[MAX_STRING_LEN], const double arr2[MAX_STRING_LEN],
+                       const int npts, const double xi)
+{
+    double Q;
+    gsl_interp_accel *acc;
+    gsl_spline *spl;
+
+    acc = gsl_interp_accel_alloc();
+    spl = gsl_spline_alloc(gsl_interp_linear, npts);
+
+    gsl_spline_init(spl, arr1, arr2, npts);
+    Q = gsl_spline_eval(spl, xi, acc);
+
+    gsl_spline_free(spl);
+    gsl_interp_accel_free(acc);
+
+    return Q;
+}
+#endif /* GSL_FOUND */
+
+
+double compute_imf(const double m)
+{
+    /* Chabrier IMF (eq 11 Arrigoni et al. 2010) */
+    const double A = 0.9098, B = 0.2539, x = 1.3, sigma = 0.69;
+    const double mc = 0.079;  /* Msun */
+    double phi;
+
+    if(m < 1.0) {
+        const double log_diff = log10(m) - log10(mc);
+        phi = A * exp(-(log_diff * log_diff) / (2.0 * sigma * sigma));
+    } else {
+        phi = B * pow(m, -x);
+    }
+
+    return phi;
+}
+
+
+double compute_taum(const double m)
+{
+    /* Stellar lifetime (eq 3 Raiteri et al. 1996) */
+    const double Z = 0.02;
+    const double logZ = log10(Z);
+    const double a0 = 10.13 + 0.07547 * logZ - 0.008084 * logZ * logZ;
+    const double a1 = -4.424 - 0.7939 * logZ - 0.1187 * logZ * logZ;
+    const double a2 = 1.262 + 0.3385 * logZ + 0.05417 * logZ * logZ;
+
+    const double logm = log10(m);
+    const double logt = a0 + a1 * logm + a2 * logm * logm;
+    const double t = pow(10.0, logt) / 1.0e6;  /* in Myr/h */
+
+    return t;
 }

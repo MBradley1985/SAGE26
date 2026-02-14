@@ -19,6 +19,7 @@
 #include "model_reincorporation.h"
 #include "model_starformation_and_feedback.h"
 #include "model_cooling_heating.h"
+#include "model_dust.h"
 
 
 static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals, struct halo_data *halos,
@@ -391,6 +392,11 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
                 if(run_params->ReIncorporationFactor > 0.0) {
                     reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
                 }
+
+                if(run_params->DustOn == 1) {
+                    dust_thermal_sputtering(centralgal, deltaT / effective_steps, galaxies, run_params);
+                }
+                
             } else {
                 if(galaxies[p].Type == 1 && galaxies[p].HotGas > 0.0) {
                     strip_from_satellite(centralgal, p, Zcurr, galaxies, run_params);

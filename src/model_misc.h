@@ -35,6 +35,17 @@ extern "C" {
 
     extern float calculate_H2_fraction_KD12(const float surface_density, const float metallicity, const float clumping_factor);
 
+    extern double get_DTG(const double gas, const double dust);
+
+#ifdef GSL_FOUND
+    extern double integrate_arr(const double arr1[MAX_STRING_LEN], const double arr2[MAX_STRING_LEN],
+                                const int npts, const double lower_limit, const double upper_limit);
+    extern double interpolate_arr(const double arr1[MAX_STRING_LEN], const double arr2[MAX_STRING_LEN],
+                                  const int npts, const double xi);
+#endif
+    extern double compute_imf(const double m);
+    extern double compute_taum(const double m);
+
 
 #ifdef __cplusplus
 }

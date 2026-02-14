@@ -187,6 +187,15 @@ struct GALAXY
 
     float mdot_cool;
     float mdot_stream;
+
+    /* dust reservoirs */
+    float ColdDust;
+    float HotDust;
+    float CGMDust;
+    float EjectedDust;
+
+    /* SFR history for delayed enrichment (one entry per snapshot) */
+    float Sfr[ABSOLUTEMAXSNAPS];
 };
 
 
@@ -491,6 +500,41 @@ struct params
     double Hubble;
     double a0;
     double ar;
+
+    int32_t    DustOn;                  // 0: off; 1: on
+    double     DeltaDustAGB;            // AGB dust production efficiency (default 0.2)
+    double     DeltaDustSNII;           // SNII dust production efficiency (default 0.2)
+    double     DeltaDustSNIa;           // SNIa dust production efficiency (default 0.15)
+    double     DustAccretionTimescale;  // ISM accretion baseline [Myr] (default 20)
+    int32_t    MetalYieldsOn;           // Element-by-element yields (1=on)
+    int32_t    AGBYields;               // AGB yield table selection
+    int32_t    SNIIYields;              // SNII yield table selection
+    int32_t    SNIaYields;              // SNIa yield table selection
+    double     BinaryFraction;          // Binary fraction for SNIa (default 0.1)
+
+    /* Yield table data (populated by read_metal_yield when MetalYieldsOn=1) */
+    double Qagb[MAXYIELDS][METALGRID];      /* Total AGB yield per mass/Z bin */
+    double Qsn[MAXYIELDS][METALGRID];       /* Total SNII yield per mass/Z bin */
+    double qCagb[MAXYIELDS][METALGRID];     /* AGB carbon yield */
+    double qNagb[MAXYIELDS][METALGRID];     /* AGB nitrogen yield */
+    double qOagb[MAXYIELDS][METALGRID];     /* AGB oxygen yield */
+    double qCsn[MAXYIELDS][METALGRID];      /* SNII carbon yield */
+    double qOsn[MAXYIELDS][METALGRID];      /* SNII oxygen yield */
+    double qMgsn[MAXYIELDS][METALGRID];     /* SNII magnesium yield */
+    double qSisn[MAXYIELDS][METALGRID];     /* SNII silicon yield */
+    double qSsn[MAXYIELDS][METALGRID];      /* SNII sulfur yield */
+    double qCasn[MAXYIELDS][METALGRID];     /* SNII calcium yield */
+    double qFesn[MAXYIELDS][METALGRID];     /* SNII iron yield */
+    double qCrsnia;                         /* SNIa chromium yield (scalar) */
+    double qFesnia;                         /* SNIa iron yield (scalar) */
+    double qNisnia;                         /* SNIa nickel yield (scalar) */
+    double magb[MAXYIELDS];                 /* AGB stellar mass grid */
+    double msn[MAXYIELDS];                  /* SNII stellar mass grid */
+    int    countagb;                        /* Number of AGB mass bins read */
+    int    countsn;                         /* Number of SNII mass bins read */
+
+    /* Lookback time array (age of universe at each snapshot, in Myr) */
+    double lbtime[ABSOLUTEMAXSNAPS];
 
     int32_t nsnapshots;
     int32_t LastSnapshotNr;

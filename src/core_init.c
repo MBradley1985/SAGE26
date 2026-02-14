@@ -23,6 +23,177 @@ void set_units(struct params *run_params);
 void read_snap_list(struct params *run_params);
 double time_to_present(const double z, struct params *run_params);
 
+/* Yield table reader (from dusty-sage, Triani et al. 2020) */
+struct yield_table {
+    double tbl[1000][17];   /* up to 1000 rows x 17 columns */
+    int nr;                 /* number of rows read */
+};
+
+static struct yield_table read_table(const char *fname, const int ncols)
+{
+    struct yield_table dt;
+    memset(&dt, 0, sizeof(dt));
+
+    FILE *file = fopen(fname, "r");
+    if(file == NULL) {
+        fprintf(stderr, "Error: cannot open yield table '%s'\n", fname);
+        ABORT(1);
+    }
+
+    /* skip header line */
+    char buf[4096];
+    if(fgets(buf, sizeof(buf), file) == NULL) {
+        fclose(file);
+        dt.nr = 0;
+        return dt;
+    }
+
+    int i = 0;
+    while(!feof(file) && i < 1000) {
+        int nread = 0;
+        for(int j = 0; j < ncols; j++) {
+            if(fscanf(file, " %lf", &dt.tbl[i][j]) == 1)
+                nread++;
+        }
+        /* skip rest of line */
+        int c;
+        while((c = fgetc(file)) != '\n' && c != EOF) {}
+
+        if(nread == ncols) i++;
+    }
+    fclose(file);
+    dt.nr = i;
+    return dt;
+}
+
+static void read_metal_yield(struct params *run_params)
+{
+    char fname[MAX_STRING_LEN];
+    int i, j, rows;
+
+    /* ---- AGB yields (Karakas 2010) ---- */
+    if(run_params->AGBYields == 0) {
+        double Z_std[7] = {0.0, 1e-4, 4e-4, 4e-3, 8e-3, 0.02, 0.05};
+        snprintf(fname, MAX_STRING_LEN, "%s/src/auxdata/yields/table2d.dat", ROOT_DIR);
+
+        struct yield_table data = read_table(fname, 13);
+        rows = data.nr;
+
+        /* Count mass bins for the first metallicity */
+        int count = 0;
+        for(i = 0; i < rows; i++) {
+            if(data.tbl[i][0] == Z_std[0]) count++;
+        }
+        run_params->countagb = count;
+
+        for(j = 0; j < 7; j++) {
+            int index = 0;
+            for(i = 0; i < rows; i++) {
+                if(data.tbl[i][0] == Z_std[j]) {
+                    run_params->magb[index] = data.tbl[i][1];                     /* mass */
+                    run_params->qCagb[index][j] = data.tbl[i][6] + data.tbl[i][7] + data.tbl[i][11]; /* C */
+                    run_params->qNagb[index][j] = data.tbl[i][8] + data.tbl[i][12];                  /* N */
+                    run_params->qOagb[index][j] = data.tbl[i][9];                                    /* O */
+                    run_params->Qagb[index][j] = run_params->qCagb[index][j] +
+                                                 run_params->qNagb[index][j] +
+                                                 run_params->qOagb[index][j];
+                    index++;
+                }
+            }
+        }
+    }
+
+    /* ---- SNII yields ---- */
+    if(run_params->SNIIYields == 0) {
+        /* Woosley & Weaver 1995 */
+        double Z_std[7] = {0.0, 1e-4, 4e-4, 4e-3, 8e-3, 0.02, 0.05};
+        snprintf(fname, MAX_STRING_LEN, "%s/src/auxdata/yields/table4a.dat", ROOT_DIR);
+
+        struct yield_table data = read_table(fname, 17);
+        rows = data.nr;
+
+        int count = 0;
+        for(i = 0; i < rows; i++) {
+            if(data.tbl[i][0] == Z_std[0]) count++;
+        }
+        run_params->countsn = count;
+
+        for(j = 0; j < 7; j++) {
+            int index = 0;
+            for(i = 0; i < rows; i++) {
+                if(data.tbl[i][0] == Z_std[j]) {
+                    run_params->msn[index] = data.tbl[i][1];                       /* mass */
+                    run_params->qCsn[index][j] = data.tbl[i][6] + data.tbl[i][15]; /* C */
+                    run_params->qOsn[index][j] = data.tbl[i][7];                   /* O */
+                    run_params->qMgsn[index][j] = data.tbl[i][9];                  /* Mg */
+                    run_params->qSisn[index][j] = data.tbl[i][10];                 /* Si */
+                    run_params->qSsn[index][j] = data.tbl[i][11];                  /* S */
+                    run_params->qCasn[index][j] = data.tbl[i][12];                 /* Ca */
+                    run_params->qFesn[index][j] = data.tbl[i][13];                 /* Fe */
+                    run_params->Qsn[index][j] = run_params->qCsn[index][j] +
+                                                run_params->qOsn[index][j] +
+                                                run_params->qMgsn[index][j] +
+                                                run_params->qSisn[index][j] +
+                                                run_params->qSsn[index][j] +
+                                                run_params->qCasn[index][j] +
+                                                run_params->qFesn[index][j];
+                    index++;
+                }
+            }
+        }
+    } else if(run_params->SNIIYields == 1) {
+        /* Nomoto et al. 2006 */
+        double Z_std[4] = {0.0, 0.001, 0.004, 0.02};
+        snprintf(fname, MAX_STRING_LEN, "%s/src/auxdata/yields/Nomoto.dat", ROOT_DIR);
+
+        struct yield_table data = read_table(fname, 13);
+        rows = data.nr;
+
+        int count = 0;
+        for(i = 0; i < rows; i++) {
+            if(data.tbl[i][0] == Z_std[0]) count++;
+        }
+        run_params->countsn = count;
+
+        for(j = 0; j < 4; j++) {
+            int index = 0;
+            for(i = 0; i < rows; i++) {
+                if(data.tbl[i][0] == Z_std[j]) {
+                    run_params->msn[index] = data.tbl[i][1];
+                    run_params->qCsn[index][j] = data.tbl[i][2] + data.tbl[i][11]; /* C */
+                    run_params->qOsn[index][j] = data.tbl[i][3];                   /* O */
+                    run_params->qMgsn[index][j] = data.tbl[i][5];                  /* Mg */
+                    run_params->qSisn[index][j] = data.tbl[i][6];                  /* Si */
+                    run_params->qSsn[index][j] = data.tbl[i][7];                   /* S */
+                    run_params->qCasn[index][j] = data.tbl[i][8];                  /* Ca */
+                    run_params->qFesn[index][j] = data.tbl[i][9];                  /* Fe */
+                    run_params->Qsn[index][j] = run_params->qCsn[index][j] +
+                                                run_params->qOsn[index][j] +
+                                                run_params->qMgsn[index][j] +
+                                                run_params->qSisn[index][j] +
+                                                run_params->qSsn[index][j] +
+                                                run_params->qCasn[index][j] +
+                                                run_params->qFesn[index][j];
+                    index++;
+                }
+            }
+        }
+    }
+
+    /* ---- SNIa yields (scalar constants) ---- */
+    if(run_params->SNIaYields == 0) {
+        /* Iwamoto 1999 */
+        run_params->qCrsnia = 0.0168;
+        run_params->qFesnia = 0.587;
+        run_params->qNisnia = 0.0314;
+    } else if(run_params->SNIaYields == 1) {
+        /* Seitenzahl et al. 2013 */
+        run_params->qCrsnia = 0.00857;
+        run_params->qFesnia = 0.622;
+        run_params->qNisnia = 0.069;
+    }
+}
+
 void init(struct params *run_params)
 {
 #ifdef VERBOSE
@@ -45,10 +216,28 @@ void init(struct params *run_params)
         run_params->Age[i] = time_to_present(run_params->ZZ[i], run_params);
     }
 
+    /* Compute age of universe at each snapshot (in Myr) for delayed enrichment */
+    for(int i = 0; i < run_params->Snaplistlen; i++) {
+        run_params->lbtime[i] = (run_params->Age[-1] - run_params->Age[i])
+                                * run_params->UnitTime_in_s / SEC_PER_MEGAYEAR;
+    }
+
     run_params->a0 = 1.0 / (1.0 + run_params->Reionization_z0);
     run_params->ar = 1.0 / (1.0 + run_params->Reionization_zr);
 
     read_cooling_functions();
+
+    /* Read stellar yield tables if element-by-element dust production is on */
+    if(run_params->MetalYieldsOn == 1) {
+        read_metal_yield(run_params);
+#ifdef VERBOSE
+        if(ThisTask == 0) {
+            fprintf(stdout, "metal yield tables read (AGB: %d bins, SNII: %d bins)\n",
+                    run_params->countagb, run_params->countsn);
+        }
+#endif
+    }
+
 #ifdef VERBOSE
     if(ThisTask == 0) {
         fprintf(stdout, "cooling functions read\n\n");

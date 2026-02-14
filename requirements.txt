@@ -2,7 +2,7 @@
 cffi
 mpi4py
 h5py
-numpy
+numpy>=1.23.5,<2.3.0
 matplotlib
 scipy
 pandas

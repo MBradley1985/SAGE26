@@ -25,6 +25,10 @@
 #define  SEC_PER_YEAR       3.155e7
 
 #define  MAX_STRING_LEN     1024 /* Max length of a string containing a name */
+
+/* Yield table dimensions (from dusty-sage) */
+#define  MAXYIELDS          100  /* Max stellar mass bins in yield tables */
+#define  METALGRID           10  /* Max metallicity grid points in yield tables */
 /* End of Macro Constants */
 
 

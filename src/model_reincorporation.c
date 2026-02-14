@@ -30,6 +30,7 @@ void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *gal
         // Remove from ejected reservoir (same for all regimes)
         galaxies[centralgal].EjectedMass -= reincorporated;
         galaxies[centralgal].MetalsEjectedMass -= metallicity * reincorporated;
+        if(galaxies[centralgal].MetalsEjectedMass < 0.0) galaxies[centralgal].MetalsEjectedMass = 0.0;
         
         // Add to appropriate hot reservoir (regime-dependent)
         if(run_params->CGMrecipeOn == 1) {
@@ -46,6 +47,25 @@ void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *gal
             // Original SAGE behavior: reincorporate to HotGas
             galaxies[centralgal].HotGas += reincorporated;
             galaxies[centralgal].MetalsHotGas += metallicity * reincorporated;
+        }
+
+        if(run_params->DustOn == 1) {
+            const double DTG = get_DTG(galaxies[centralgal].EjectedMass, galaxies[centralgal].EjectedDust);
+            double reinc_dust = DTG * reincorporated;
+            if(reinc_dust > galaxies[centralgal].EjectedDust) reinc_dust = galaxies[centralgal].EjectedDust;
+            galaxies[centralgal].EjectedDust -= reinc_dust;
+
+            if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
+                // CGM-regime: reincorporate dust to CGMDust
+                galaxies[centralgal].CGMDust += reinc_dust;
+                if(galaxies[centralgal].CGMDust > galaxies[centralgal].MetalsCGMgas)
+                    galaxies[centralgal].CGMDust = galaxies[centralgal].MetalsCGMgas;
+            } else {
+                // Hot-ICM-regime or original: reincorporate dust to HotDust
+                galaxies[centralgal].HotDust += reinc_dust;
+                if(galaxies[centralgal].HotDust > galaxies[centralgal].MetalsHotGas)
+                    galaxies[centralgal].HotDust = galaxies[centralgal].MetalsHotGas;
+            }
         }
     }
 }

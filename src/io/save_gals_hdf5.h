@@ -110,6 +110,15 @@ struct HDF5_GALAXY_OUTPUT
     int32_t *FFBRegime;
     float *mdot_cool;
     float *mdot_stream;
+
+    /* dust reservoirs */
+    float *ColdDust;
+    float *HotDust;
+    float *CGMDust;
+    float *EjectedDust;
+    float *TotalDust;
+
+    
 };
     
     // Proto-Types //

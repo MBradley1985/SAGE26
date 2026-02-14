@@ -125,6 +125,17 @@ if __name__ == '__main__':
 
     MassLoading = read_hdf(snap_num = Snapshot, param = 'MassLoading')
 
+    # Dust properties
+    try:
+        ColdDust = read_hdf(snap_num = Snapshot, param = 'ColdDust') * 1.0e10 / Hubble_h
+        HotDust = read_hdf(snap_num = Snapshot, param = 'HotDust') * 1.0e10 / Hubble_h
+        EjectedDust = read_hdf(snap_num = Snapshot, param = 'EjectedDust') * 1.0e10 / Hubble_h
+        DustOn = True
+        print('Dust properties loaded successfully')
+    except KeyError:
+        DustOn = False
+        print('Dust properties not found in output -- skipping dust plots')
+
 
     w = np.where(StellarMass > 1.0e10)[0]
     print('Number of galaxies read:', len(StellarMass))
@@ -1507,3 +1518,137 @@ if __name__ == '__main__':
     plt.savefig(OutputDir + '17.specific_star_formation_rate' + OutputFormat, dpi=150)
     print('Saved file to', outputFile, '\n')
     plt.close()
+
+# ---------------------------------------------------------
+#  Dust plots
+# ---------------------------------------------------------
+
+    if DustOn:
+
+        print('Plotting the dust-to-gas ratio vs stellar mass')
+
+        plt.figure()
+        ax = plt.subplot(111)
+
+        # Select galaxies with meaningful cold gas and dust
+        w = np.where((StellarMass > 0.0) & (ColdGas > 1.0e4) & (ColdDust > 0.0))[0]
+
+        mass = np.log10(StellarMass[w])
+        dtg = np.log10(ColdDust[w] / ColdGas[w])
+
+        # Scatter plot (diluted)
+        if len(w) > dilute:
+            ws = np.array(sample(range(len(w)), dilute))
+        else:
+            ws = np.arange(len(w))
+        plt.scatter(mass[ws], dtg[ws], marker='o', s=1, c='goldenrod', alpha=0.3)
+
+        # Running median
+        mass_bins = np.arange(8.0, 12.5, 0.25)
+        median_dtg = np.zeros(len(mass_bins) - 1)
+        p16_dtg = np.zeros(len(mass_bins) - 1)
+        p84_dtg = np.zeros(len(mass_bins) - 1)
+        mass_centers = 0.5 * (mass_bins[:-1] + mass_bins[1:])
+
+        for i in range(len(mass_bins) - 1):
+            sel = np.where((mass >= mass_bins[i]) & (mass < mass_bins[i+1]))[0]
+            if len(sel) > 10:
+                median_dtg[i] = np.median(dtg[sel])
+                p16_dtg[i] = np.percentile(dtg[sel], 16)
+                p84_dtg[i] = np.percentile(dtg[sel], 84)
+            else:
+                median_dtg[i] = np.nan
+                p16_dtg[i] = np.nan
+                p84_dtg[i] = np.nan
+
+        good = ~np.isnan(median_dtg)
+        plt.plot(mass_centers[good], median_dtg[good], 'w-', lw=3, label='SAGE26 median')
+        plt.fill_between(mass_centers[good], p16_dtg[good], p84_dtg[good],
+                         color='white', alpha=0.15, label=r'16$^{\rm th}$-84$^{\rm th}$ pctl')
+
+        # Milky Way reference: DtG ~ 0.01 (Draine 2003)
+        plt.axhline(y=np.log10(0.01), color='cyan', ls='--', lw=1.5, label='MW DtG (Draine 03)')
+
+        plt.ylabel(r'$\log_{10}\, (M_{\rm dust}^{\rm cold} \,/\, M_{\rm cold\,gas})$')
+        plt.xlabel(r'$\log_{10}\, M_{\rm stars}\ (M_{\odot})$')
+        plt.axis([8.0, 12.0, -6.0, -0.5])
+
+        ax.xaxis.set_minor_locator(plt.MultipleLocator(0.25))
+        ax.yaxis.set_minor_locator(plt.MultipleLocator(0.25))
+
+        leg = plt.legend(loc='lower right', fontsize=11)
+        leg.draw_frame(False)
+        for t in leg.get_texts():
+            t.set_fontsize('medium')
+
+        plt.tight_layout()
+        outputFile = OutputDir + '18.DustToGasRatio' + OutputFormat
+        plt.savefig(outputFile)
+        print('Saved to', outputFile, '\n')
+        plt.close()
+
+# ---------------------------------------------------------
+
+        print('Plotting the dust mass function')
+
+        plt.figure()
+        ax = plt.subplot(111)
+
+        binwidth = 0.2
+
+        # Total dust = Cold + Hot + Ejected
+        TotalDust = ColdDust + HotDust + EjectedDust
+
+        # Total dust mass function
+        w = np.where(TotalDust > 0.0)[0]
+        dustmass = np.log10(TotalDust[w])
+        mi = np.floor(min(dustmass)) - 2
+        ma = np.floor(max(dustmass)) + 2
+        NB = int((ma - mi) / binwidth)
+        (counts_total, binedges) = np.histogram(dustmass, range=(mi, ma), bins=NB)
+        xaxeshisto = binedges[:-1] + 0.5 * binwidth
+
+        plt.plot(xaxeshisto, np.log10(counts_total / volume / binwidth),
+                 color='white', lw=3, label='Total dust')
+
+        # Cold dust only
+        w = np.where(ColdDust > 0.0)[0]
+        dustmass_cold = np.log10(ColdDust[w])
+        (counts_cold, _) = np.histogram(dustmass_cold, range=(mi, ma), bins=NB)
+        plt.plot(xaxeshisto, np.log10(counts_cold / volume / binwidth),
+                 color='goldenrod', lw=2, ls='-', label='Cold dust (ISM)')
+
+        # Hot dust only
+        w = np.where(HotDust > 0.0)[0]
+        if len(w) > 0:
+            dustmass_hot = np.log10(HotDust[w])
+            (counts_hot, _) = np.histogram(dustmass_hot, range=(mi, ma), bins=NB)
+            plt.plot(xaxeshisto, np.log10(counts_hot / volume / binwidth),
+                     color='firebrick', lw=2, ls='--', label='Hot dust (CGM)')
+
+        # Ejected dust only
+        w = np.where(EjectedDust > 0.0)[0]
+        if len(w) > 0:
+            dustmass_ejected = np.log10(EjectedDust[w])
+            (counts_ejected, _) = np.histogram(dustmass_ejected, range=(mi, ma), bins=NB)
+            plt.plot(xaxeshisto, np.log10(counts_ejected / volume / binwidth),
+                     color='dodgerblue', lw=2, ls=':', label='Ejected dust')
+
+        plt.ylabel(r'$\log_{10}\ \phi\ (\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1})$')
+        plt.xlabel(r'$\log_{10}\, M_{\rm dust}\ (M_{\odot})$')
+        plt.axis([4.0, 10.0, -6.0, -1.0])
+
+        ax.xaxis.set_major_locator(plt.MultipleLocator(1))
+        ax.yaxis.set_major_locator(plt.MultipleLocator(1))
+
+        leg = plt.legend(loc='upper right', fontsize=11)
+        leg.draw_frame(False)
+        for t in leg.get_texts():
+            t.set_fontsize('medium')
+
+        plt.tight_layout()
+        outputFile = OutputDir + '19.DustMassFunction' + OutputFormat
+        plt.savefig(outputFile)
+        print('Saved to', outputFile, '\n')
+        plt.close()
+

@@ -9,6 +9,7 @@
 #include "model_starformation_and_feedback.h"
 #include "model_misc.h"
 #include "model_disk_instability.h"
+#include "model_dust.h"
 
 #define HYDROGEN_MASS_FRAC 0.74
 
@@ -754,12 +755,29 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     galaxies[p].SfrDiskColdGas[step] = galaxies[p].ColdGas;
     galaxies[p].SfrDiskColdGasMetals[step] = galaxies[p].MetalsColdGas;
 
+    // accumulate total SFR for this snapshot (used by delayed-enrichment dust model)
+    galaxies[p].Sfr[galaxies[p].SnapNum] += (float)(stars / dt);
+
     // update for star formation
     metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
     update_from_star_formation(p, stars, metallicity, galaxies, run_params);
 
     // recompute the metallicity of the cold phase
     metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
+
+    if(run_params->DustOn == 1) {
+#ifdef GSL_FOUND
+        if(run_params->MetalYieldsOn == 1) {
+            produce_metals_dust(metallicity, dt, p, centralgal, galaxies, run_params);
+        } else {
+            produce_dust(stars, metallicity, dt, p, centralgal, galaxies, run_params);
+        }
+#else
+        produce_dust(stars, metallicity, dt, p, centralgal, galaxies, run_params);
+#endif
+        accrete_dust(metallicity, dt, p, galaxies, run_params);
+        destruct_dust(metallicity, stars, dt, p, galaxies, run_params);
+    }
 
     // Safety check: ensure reheated_mass doesn't exceed remaining ColdGas (floating-point precision)
     if(reheated_mass > galaxies[p].ColdGas) {
@@ -826,6 +844,12 @@ void update_from_star_formation(const int p, const double stars, const double me
     galaxies[p].MetalsColdGas -= metallicity * (1 - RecycleFraction) * stars;
     galaxies[p].StellarMass += (1 - RecycleFraction) * stars;
     galaxies[p].MetalsStellarMass += metallicity * (1 - RecycleFraction) * stars;
+
+    if(run_params->DustOn == 1) {
+    const double DTG = get_DTG(galaxies[p].ColdGas, galaxies[p].ColdDust);
+    galaxies[p].ColdDust -= DTG * (1.0 - run_params->RecycleFraction) * stars;
+    if(galaxies[p].ColdDust < 0.0) galaxies[p].ColdDust = 0.0;
+}
 }
 
 
@@ -913,6 +937,41 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
         }
 
         galaxies[p].OutflowRate += reheated_mass;
+        if(run_params->DustOn == 1) {
+            // Dust follows gas: ColdDust → CGMDust/HotDust → EjectedDust
+            const double DTG = get_DTG(galaxies[p].ColdGas, galaxies[p].ColdDust);
+            double reheated_dust = DTG * reheated_mass;
+            if(reheated_dust > galaxies[p].ColdDust) reheated_dust = galaxies[p].ColdDust;
+            galaxies[p].ColdDust -= reheated_dust;
+
+            if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
+                // CGM-regime: ColdDust → CGMDust → EjectedDust
+                galaxies[centralgal].CGMDust += reheated_dust;
+                if(galaxies[centralgal].CGMDust > galaxies[centralgal].MetalsCGMgas)
+                    galaxies[centralgal].CGMDust = galaxies[centralgal].MetalsCGMgas;
+
+                const double DTGCGM = get_DTG(galaxies[centralgal].CGMgas, galaxies[centralgal].CGMDust);
+                double ejected_dust = DTGCGM * ejected_mass;
+                if(ejected_dust > galaxies[centralgal].CGMDust) ejected_dust = galaxies[centralgal].CGMDust;
+                galaxies[centralgal].CGMDust -= ejected_dust;
+                galaxies[centralgal].EjectedDust += ejected_dust;
+            } else {
+                // Hot-ICM-regime or original: ColdDust → HotDust → EjectedDust
+                galaxies[centralgal].HotDust += reheated_dust;
+                if(galaxies[centralgal].HotDust > galaxies[centralgal].MetalsHotGas)
+                    galaxies[centralgal].HotDust = galaxies[centralgal].MetalsHotGas;
+
+                const double DTGHot = get_DTG(galaxies[centralgal].HotGas, galaxies[centralgal].HotDust);
+                double ejected_dust = DTGHot * ejected_mass;
+                if(ejected_dust > galaxies[centralgal].HotDust) ejected_dust = galaxies[centralgal].HotDust;
+                galaxies[centralgal].HotDust -= ejected_dust;
+                galaxies[centralgal].EjectedDust += ejected_dust;
+            }
+            if(galaxies[centralgal].MetalsEjectedMass > 0.0 &&
+               galaxies[centralgal].EjectedDust > galaxies[centralgal].MetalsEjectedMass)
+                galaxies[centralgal].EjectedDust = galaxies[centralgal].MetalsEjectedMass;
+            if(galaxies[centralgal].EjectedDust < 0.0) galaxies[centralgal].EjectedDust = 0.0;
+        }
     }
 }
 
@@ -1176,7 +1235,10 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     galaxies[p].SfrDisk[step] += stars / dt;
     galaxies[p].SfrDiskColdGas[step] = galaxies[p].ColdGas;
     galaxies[p].SfrDiskColdGasMetals[step] = galaxies[p].MetalsColdGas;
-    
+
+    // accumulate total SFR for this snapshot (used by delayed-enrichment dust model)
+    galaxies[p].Sfr[galaxies[p].SnapNum] += (float)(stars / dt);
+
     // Update for star formation (convert gas to stars)
     metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
     update_from_star_formation(p, stars, metallicity, galaxies, run_params);
