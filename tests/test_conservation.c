@@ -26,14 +26,14 @@
 double calculate_total_baryonic_mass(struct GALAXY *gal) {
     return gal->ColdGas + gal->StellarMass + gal->BulgeMass + 
            gal->HotGas + gal->CGMgas + gal->EjectedMass +
-           gal->ColdDust + gal->HotDust + gal->EjectedDust;
+           gal->ColdDust + gal->HotDust + gal->CGMDust + gal->EjectedDust;
 }
 
 // Helper function to calculate total metal mass (including dust reservoirs)
 double calculate_total_metal_mass(struct GALAXY *gal) {
     return gal->MetalsColdGas + gal->MetalsStellarMass + gal->MetalsBulgeMass + 
            gal->MetalsHotGas + gal->MetalsCGMgas + gal->MetalsEjectedMass +
-           gal->ColdDust + gal->HotDust + gal->EjectedDust;
+           gal->ColdDust + gal->HotDust + gal->CGMDust + gal->EjectedDust;
 }
 
 // Helper function to initialize realistic run_params with redshift arrays
@@ -306,6 +306,7 @@ void test_no_negative_masses() {
     ASSERT_GREATER_THAN(gal.StellarMass + 1e-10, 0.0, "StellarMass >= 0");
     ASSERT_GREATER_THAN(gal.ColdDust + 1e-10, 0.0, "ColdDust >= 0");
     ASSERT_GREATER_THAN(gal.HotDust + 1e-10, 0.0, "HotDust >= 0");
+    ASSERT_GREATER_THAN(gal.CGMDust + 1e-10, 0.0, "CGMDust >= 0");
     ASSERT_GREATER_THAN(gal.EjectedDust + 1e-10, 0.0, "EjectedDust >= 0");
 }
 

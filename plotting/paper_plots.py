@@ -28,6 +28,7 @@ import warnings
 warnings.filterwarnings("ignore")
 try:
     from astropy.table import Table
+    from astropy.cosmology import FlatLambdaCDM
     HAS_ASTROPY = True
 except ImportError:
     HAS_ASTROPY = False
@@ -84,6 +85,11 @@ SEED = 2222
 OMEGA_M = 0.25
 OMEGA_L = 0.75
 OMEGA_B = 0.045
+HUBBLE = 73.0  # km/s/Mpc
+
+# Cosmology object for lookback times
+if HAS_ASTROPY:
+    COSMOLOGY = FlatLambdaCDM(H0=HUBBLE, Om0=OMEGA_M)
 
 # Redshift array (snap 0 -> snap 63)
 REDSHIFTS = [
@@ -4150,6 +4156,712 @@ def _load_smf_grid_observations():
     return obs
 
 
+def _load_uvlf_grid_observations():
+    """
+    Load UV luminosity function observational data from data/lf/ folder.
+
+    Returns list of dicts with keys:
+        z, M_UV, log_phi, err_lo, err_hi, label, marker, ms
+    Errors are positive offsets in dex (for errorbar yerr).
+    """
+    obs = []
+    lf_dir = './data/lf/'
+
+    # ------------------------------------------------------------------
+    # 1. Driver+12  (z=0, FUV 1500A)
+    # ------------------------------------------------------------------
+    try:
+        fpath = os.path.join(lf_dir, 'lf1500_z0_driver12.data')
+        if os.path.exists(fpath):
+            # Format: M_AB-5logh  phi  err  N  (phi in (Mpc/h)^-3 per 0.5 mag)
+            d = np.genfromtxt(fpath, comments='#')
+            M_UV = d[:, 0] + 5 * np.log10(HUBBLE_H)  # Convert from M-5logh to M
+            phi = d[:, 1] * HUBBLE_H**3 / 0.5  # (Mpc/h)^-3 per 0.5 mag -> Mpc^-3 mag^-1
+            phi_err = d[:, 2] * HUBBLE_H**3 / 0.5
+            ok = phi > 0
+            if np.any(ok):
+                lp = np.log10(phi[ok])
+                upper = phi[ok] + phi_err[ok]
+                lower = phi[ok] - phi_err[ok]
+                ehi = np.where(upper > 0, np.log10(upper) - lp, 0.0)
+                elo = np.where(lower > 0, lp - np.log10(lower), 0.0)
+                obs.append({'z': 0.1, 'M_UV': M_UV[ok], 'log_phi': lp,
+                            'err_lo': elo, 'err_hi': ehi,
+                            'label': 'Driver+12', 'marker': 'o', 'ms': 6})
+    except Exception as e:
+        print(f"  Driver+12 load error: {e}")
+
+    # ------------------------------------------------------------------
+    # 2. Bouwens+15  (z=4,5,6,7,8,10)
+    # ------------------------------------------------------------------
+    try:
+        fpath = os.path.join(lf_dir, 'lf1600_z4-10_Bouwens2015.data')
+        if os.path.exists(fpath):
+            # Multi-column format: M_1600 phi err for z=4,5,6,7,8,10
+            d = np.genfromtxt(fpath, comments='#')
+            z_vals = [4, 5, 6, 7, 8, 10]
+            markers = ['s', 's', 's', 's', 's', 's']
+            for i, z_val in enumerate(z_vals):
+                col_start = i * 3
+                M_UV = d[:, col_start]
+                phi = d[:, col_start + 1]
+                phi_err = d[:, col_start + 2]
+                # Filter invalid data (-100 or 0)
+                ok = (M_UV > -99) & (phi > 0) & (phi_err > 0)
+                if np.any(ok):
+                    lp = np.log10(phi[ok])
+                    upper = phi[ok] + phi_err[ok]
+                    lower = phi[ok] - phi_err[ok]
+                    ehi = np.where(upper > 0, np.log10(upper) - lp, 0.0)
+                    elo = np.where(lower > 0, lp - np.log10(lower), 0.0)
+                    obs.append({'z': float(z_val), 'M_UV': M_UV[ok], 'log_phi': lp,
+                                'err_lo': elo, 'err_hi': ehi,
+                                'label': 'Bouwens+15', 'marker': 's', 'ms': 6})
+    except Exception as e:
+        print(f"  Bouwens+15 load error: {e}")
+
+    # ------------------------------------------------------------------
+    # 3. Finkelstein+15  (z=4,5,6,7,8)
+    # ------------------------------------------------------------------
+    try:
+        fpath = os.path.join(lf_dir, 'lf1500_z4-8_Finkelstein2015.data')
+        if os.path.exists(fpath):
+            # Multi-column format: M_1500 | phi err_up err_low for z=4,5,6,7,8
+            # phi in 10^-3 Mpc^-3 mag^-1
+            d = np.genfromtxt(fpath, comments='#')
+            z_vals = [4, 5, 6, 7, 8]
+            for i, z_val in enumerate(z_vals):
+                col_start = 1 + i * 3  # First column is M_1500
+                M_UV = d[:, 0]
+                phi = d[:, col_start] * 1e-3  # Convert to Mpc^-3 mag^-1
+                phi_eu = d[:, col_start + 1] * 1e-3
+                phi_el = d[:, col_start + 2] * 1e-3
+                # Filter invalid data (upper limits have err=0)
+                ok = (phi > 0) & (phi_eu > 0) & (phi_el > 0)
+                if np.any(ok):
+                    lp = np.log10(phi[ok])
+                    upper = phi[ok] + phi_eu[ok]
+                    lower = phi[ok] - phi_el[ok]
+                    ehi = np.where(upper > 0, np.log10(upper) - lp, 0.0)
+                    elo = np.where(lower > 0, lp - np.log10(lower), 0.0)
+                    obs.append({'z': float(z_val), 'M_UV': M_UV[ok], 'log_phi': lp,
+                                'err_lo': elo, 'err_hi': ehi,
+                                'label': 'Finkelstein+15', 'marker': 'D', 'ms': 6})
+    except Exception as e:
+        print(f"  Finkelstein+15 load error: {e}")
+
+    # ------------------------------------------------------------------
+    # 4. McLure+13  (z=7,8,9)
+    # ------------------------------------------------------------------
+    try:
+        fpath = os.path.join(lf_dir, 'lf1500_z7-9_McLure2013.data')
+        if os.path.exists(fpath):
+            # Multi-column format: M_1500 phi err for z=7,8,9
+            d = np.genfromtxt(fpath, comments='#')
+            z_vals = [7, 8, 9]
+            for i, z_val in enumerate(z_vals):
+                col_start = i * 3
+                M_UV = d[:, col_start]
+                phi = d[:, col_start + 1]
+                phi_err = d[:, col_start + 2]
+                # Filter invalid data (-100)
+                ok = (M_UV > -99) & (phi > 0) & (phi > -99)
+                if np.any(ok):
+                    lp = np.log10(phi[ok])
+                    upper = phi[ok] + phi_err[ok]
+                    lower = phi[ok] - phi_err[ok]
+                    ehi = np.where(upper > 0, np.log10(upper) - lp, 0.0)
+                    elo = np.where(lower > 0, lp - np.log10(lower), 0.0)
+                    obs.append({'z': float(z_val), 'M_UV': M_UV[ok], 'log_phi': lp,
+                                'err_lo': elo, 'err_hi': ehi,
+                                'label': 'McLure+13', 'marker': '^', 'ms': 6})
+    except Exception as e:
+        print(f"  McLure+13 load error: {e}")
+
+    # ------------------------------------------------------------------
+    # 5. McLure+09  (z=5,6)
+    # ------------------------------------------------------------------
+    for z_val, fname in [(5, 'lf1500_z5_mclure09.data'), (6, 'lf1500_z6_mclure09.data')]:
+        try:
+            fpath = os.path.join(lf_dir, fname)
+            if os.path.exists(fpath):
+                # Format: M_1500 log_phi log_phi+err log_phi-err
+                d = np.genfromtxt(fpath, comments='#')
+                M_UV = d[:, 0]
+                log_phi = d[:, 1]
+                log_phi_hi = d[:, 2]
+                log_phi_lo = d[:, 3]
+                ok = np.isfinite(log_phi) & (log_phi > -10)
+                if np.any(ok):
+                    ehi = np.abs(log_phi_hi[ok] - log_phi[ok])
+                    elo = np.abs(log_phi[ok] - log_phi_lo[ok])
+                    obs.append({'z': float(z_val), 'M_UV': M_UV[ok], 'log_phi': log_phi[ok],
+                                'err_lo': elo, 'err_hi': ehi,
+                                'label': 'McLure+09', 'marker': 'v', 'ms': 6})
+        except Exception as e:
+            print(f"  McLure+09 z={z_val} load error: {e}")
+
+    # ------------------------------------------------------------------
+    # 6. McLure+10  (z=7,8)
+    # ------------------------------------------------------------------
+    for z_val, fname in [(7, 'lf1500_z7_mclure10.data'), (8, 'lf1500_z8_mclure10.data')]:
+        try:
+            fpath = os.path.join(lf_dir, fname)
+            if os.path.exists(fpath):
+                d = np.genfromtxt(fpath, comments='#')
+                M_UV = d[:, 0]
+                phi = d[:, 1]
+                phi_err = d[:, 2]
+                ok = phi > 0
+                if np.any(ok):
+                    lp = np.log10(phi[ok])
+                    upper = phi[ok] + phi_err[ok]
+                    lower = phi[ok] - phi_err[ok]
+                    ehi = np.where(upper > 0, np.log10(upper) - lp, 0.0)
+                    elo = np.where(lower > 0, lp - np.log10(lower), 0.0)
+                    obs.append({'z': float(z_val), 'M_UV': M_UV[ok], 'log_phi': lp,
+                                'err_lo': elo, 'err_hi': ehi,
+                                'label': 'McLure+10', 'marker': '<', 'ms': 6})
+        except Exception as e:
+            print(f"  McLure+10 z={z_val} load error: {e}")
+
+    # ------------------------------------------------------------------
+    # 7. Adams+23  (z=8,9,10)
+    # ------------------------------------------------------------------
+    for z_val, fname in [(8, 'lf1500_z8_adams23.data'), (9, 'lf1500_z9_adams23.data'),
+                         (10.5, 'lf1500_z10_adams23.data')]:
+        try:
+            fpath = os.path.join(lf_dir, fname)
+            if os.path.exists(fpath):
+                # Format: mag phi[1e-5] err_phi[1e-5]
+                d = np.genfromtxt(fpath, comments='#')
+                M_UV = d[:, 0]
+                phi = d[:, 1] * 1e-5  # Convert to Mpc^-3 mag^-1
+                phi_err = d[:, 2] * 1e-5
+                ok = phi > 0
+                if np.any(ok):
+                    lp = np.log10(phi[ok])
+                    upper = phi[ok] + phi_err[ok]
+                    lower = phi[ok] - phi_err[ok]
+                    ehi = np.where(upper > 0, np.log10(upper) - lp, 0.0)
+                    elo = np.where(lower > 0, lp - np.log10(lower), 0.0)
+                    obs.append({'z': float(z_val), 'M_UV': M_UV[ok], 'log_phi': lp,
+                                'err_lo': elo, 'err_hi': ehi,
+                                'label': 'Adams+23', 'marker': 'h', 'ms': 6})
+        except Exception as e:
+            print(f"  Adams+23 z={z_val} load error: {e}")
+
+    # ------------------------------------------------------------------
+    # 8. Oesch+18  (z=10)
+    # ------------------------------------------------------------------
+    try:
+        fpath = os.path.join(lf_dir, 'lf1500_z10_oesch2018.data')
+        if os.path.exists(fpath):
+            # Format: M_UV log_phi log_phi_hi log_phi_lo
+            d = np.genfromtxt(fpath, comments='#')
+            M_UV = d[:, 0]
+            log_phi = d[:, 1]
+            log_phi_hi = d[:, 2]
+            log_phi_lo = d[:, 3]
+            ok = np.isfinite(log_phi) & (log_phi > -10)
+            if np.any(ok):
+                ehi = np.abs(log_phi_hi[ok] - log_phi[ok])
+                elo = np.abs(log_phi[ok] - log_phi_lo[ok])
+                obs.append({'z': 10.0, 'M_UV': M_UV[ok], 'log_phi': log_phi[ok],
+                            'err_lo': elo, 'err_hi': ehi,
+                            'label': 'Oesch+18', 'marker': '*', 'ms': 8})
+    except Exception as e:
+        print(f"  Oesch+18 load error: {e}")
+
+    # ------------------------------------------------------------------
+    # 9. Schenker+13  (z=7,8)
+    # ------------------------------------------------------------------
+    try:
+        fpath = os.path.join(lf_dir, 'lf1400_z7-8_Schenker2013.data')
+        if os.path.exists(fpath):
+            # Multi-column format for z=7,8
+            d = np.genfromtxt(fpath, comments='#')
+            z_vals = [7, 8]
+            for i, z_val in enumerate(z_vals):
+                col_start = i * 3
+                M_UV = d[:, col_start]
+                phi = d[:, col_start + 1]
+                phi_err = d[:, col_start + 2]
+                ok = (M_UV > -99) & (phi > 0) & (phi_err > 0)
+                if np.any(ok):
+                    lp = np.log10(phi[ok])
+                    upper = phi[ok] + phi_err[ok]
+                    lower = phi[ok] - phi_err[ok]
+                    ehi = np.where(upper > 0, np.log10(upper) - lp, 0.0)
+                    elo = np.where(lower > 0, lp - np.log10(lower), 0.0)
+                    obs.append({'z': float(z_val), 'M_UV': M_UV[ok], 'log_phi': lp,
+                                'err_lo': elo, 'err_hi': ehi,
+                                'label': 'Schenker+13', 'marker': 'P', 'ms': 6})
+    except Exception as e:
+        print(f"  Schenker+13 load error: {e}")
+
+    # ------------------------------------------------------------------
+    # 10. Yoshida+06  (z=4,5)
+    # ------------------------------------------------------------------
+    for z_val, fname in [(4, 'lf1500_z4_yoshida06.data'), (5, 'lf1500_z5_yoshida06.data')]:
+        try:
+            fpath = os.path.join(lf_dir, fname)
+            if os.path.exists(fpath):
+                # Raw counts format - skip for now as it needs volume correction
+                pass
+        except Exception as e:
+            pass
+
+    # ------------------------------------------------------------------
+    # 11. Reddy+09  (z=3)
+    # ------------------------------------------------------------------
+    try:
+        fpath = os.path.join(lf_dir, 'lf1700_z3_reddy09.data')
+        if os.path.exists(fpath):
+            d = np.genfromtxt(fpath, comments='#')
+            M_UV = d[:, 0]
+            phi = d[:, 1]
+            phi_err = d[:, 2]
+            ok = phi > 0
+            if np.any(ok):
+                lp = np.log10(phi[ok])
+                upper = phi[ok] + phi_err[ok]
+                lower = phi[ok] - phi_err[ok]
+                ehi = np.where(upper > 0, np.log10(upper) - lp, 0.0)
+                elo = np.where(lower > 0, lp - np.log10(lower), 0.0)
+                obs.append({'z': 3.0, 'M_UV': M_UV[ok], 'log_phi': lp,
+                            'err_lo': elo, 'err_hi': ehi,
+                            'label': 'Reddy+09', 'marker': 'X', 'ms': 6})
+    except Exception as e:
+        print(f"  Reddy+09 load error: {e}")
+
+    # ------------------------------------------------------------------
+    # 12. Arnouts+05  (z=0-2 FUV)
+    # ------------------------------------------------------------------
+    try:
+        fpath = os.path.join(lf_dir, 'lf_FUV_arnouts05.data')
+        if os.path.exists(fpath):
+            d = np.genfromtxt(fpath, comments='#')
+            # Multiple redshift bins in columns
+            z_mapping = {0: 0.055, 1: 0.3, 2: 0.5, 3: 0.7, 4: 0.9, 5: 1.1}
+            for i, z_val in z_mapping.items():
+                col_start = i * 3
+                if col_start + 2 < d.shape[1]:
+                    M_UV = d[:, col_start]
+                    phi = d[:, col_start + 1]
+                    phi_err = d[:, col_start + 2]
+                    ok = (M_UV > -99) & (phi > 0)
+                    if np.any(ok):
+                        lp = np.log10(phi[ok])
+                        upper = phi[ok] + phi_err[ok]
+                        lower = np.maximum(phi[ok] - phi_err[ok], 1e-10)
+                        ehi = np.log10(upper) - lp
+                        elo = lp - np.log10(lower)
+                        obs.append({'z': z_val, 'M_UV': M_UV[ok], 'log_phi': lp,
+                                    'err_lo': elo, 'err_hi': ehi,
+                                    'label': 'Arnouts+05', 'marker': 'p', 'ms': 5})
+    except Exception as e:
+        print(f"  Arnouts+05 load error: {e}")
+
+    # ------------------------------------------------------------------
+    # 13. Sawicki+06  (z=3)
+    # ------------------------------------------------------------------
+    try:
+        fpath = os.path.join(lf_dir, 'lf1700_z3_sawicki06.data')
+        if os.path.exists(fpath):
+            d = np.genfromtxt(fpath, comments='#')
+            M_UV = d[:, 0]
+            phi = d[:, 1]
+            phi_err = d[:, 2] if d.shape[1] > 2 else phi * 0.2
+            ok = phi > 0
+            if np.any(ok):
+                lp = np.log10(phi[ok])
+                upper = phi[ok] + phi_err[ok]
+                lower = phi[ok] - phi_err[ok]
+                ehi = np.where(upper > 0, np.log10(upper) - lp, 0.0)
+                elo = np.where(lower > 0, lp - np.log10(lower), 0.0)
+                obs.append({'z': 3.0, 'M_UV': M_UV[ok], 'log_phi': lp,
+                            'err_lo': elo, 'err_hi': ehi,
+                            'label': 'Sawicki+06', 'marker': '>', 'ms': 6})
+    except Exception as e:
+        print(f"  Sawicki+06 load error: {e}")
+
+    # ------------------------------------------------------------------
+    # 14. Bouwens+07  (z=6)
+    # ------------------------------------------------------------------
+    try:
+        fpath = os.path.join(lf_dir, 'lf1350_z6_bouwens07.data')
+        if os.path.exists(fpath):
+            d = np.genfromtxt(fpath, comments='#')
+            M_UV = d[:, 0]
+            phi = d[:, 1]
+            phi_err = d[:, 2]
+            ok = phi > 0
+            if np.any(ok):
+                lp = np.log10(phi[ok])
+                upper = phi[ok] + phi_err[ok]
+                lower = phi[ok] - phi_err[ok]
+                ehi = np.where(upper > 0, np.log10(upper) - lp, 0.0)
+                elo = np.where(lower > 0, lp - np.log10(lower), 0.0)
+                obs.append({'z': 6.0, 'M_UV': M_UV[ok], 'log_phi': lp,
+                            'err_lo': elo, 'err_hi': ehi,
+                            'label': 'Bouwens+07', 'marker': 'd', 'ms': 6})
+    except Exception as e:
+        print(f"  Bouwens+07 load error: {e}")
+
+    # ------------------------------------------------------------------
+    # 15. Ouchi+09  (z=7)
+    # ------------------------------------------------------------------
+    try:
+        fpath = os.path.join(lf_dir, 'lf1500_z7_ouchi09.data')
+        if os.path.exists(fpath):
+            d = np.genfromtxt(fpath, comments='#')
+            M_UV = d[:, 0]
+            phi = d[:, 1]
+            phi_err = d[:, 2] if d.shape[1] > 2 else phi * 0.3
+            ok = phi > 0
+            if np.any(ok):
+                lp = np.log10(phi[ok])
+                upper = phi[ok] + phi_err[ok]
+                lower = phi[ok] - phi_err[ok]
+                ehi = np.where(upper > 0, np.log10(upper) - lp, 0.0)
+                elo = np.where(lower > 0, lp - np.log10(lower), 0.0)
+                obs.append({'z': 7.0, 'M_UV': M_UV[ok], 'log_phi': lp,
+                            'err_lo': elo, 'err_hi': ehi,
+                            'label': 'Ouchi+09', 'marker': 'H', 'ms': 6})
+    except Exception as e:
+        print(f"  Ouchi+09 load error: {e}")
+
+    print(f"  Loaded {len(obs)} observational UV LF datasets")
+    return obs
+
+
+def sfr_to_muv(sfr):
+    """
+    Convert star formation rate to UV absolute magnitude.
+
+    Uses the Madau & Dickinson (2014) relation for Chabrier IMF:
+    M_UV = -2.5 * log10(SFR) - 18.6
+
+    Parameters
+    ----------
+    sfr : array-like
+        Star formation rate in M_sun/yr
+
+    Returns
+    -------
+    M_UV : array-like
+        UV absolute magnitude (AB)
+    """
+    sfr = np.asarray(sfr)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        M_UV = np.where(sfr > 0, -2.5 * np.log10(sfr) - 18.6, np.nan)
+    return M_UV
+
+
+def sfh_to_muv(sfr_history, lookback_times, current_snap):
+    """
+    Compute UV absolute magnitudes from star formation history.
+
+    Integrates the SFH weighted by age-dependent UV luminosity yield.
+    Young stars (<100 Myr) dominate the UV, with yield declining with age.
+
+    Uses a simple UV yield model based on FSPS/BPASS:
+    - Age < 10 Myr:  l_UV = 1.4e28 erg/s/Hz per M_sun/yr
+    - 10-100 Myr:    l_UV declines as (age/10 Myr)^-0.7
+    - Age > 100 Myr: l_UV negligible (~1e25)
+
+    Parameters
+    ----------
+    sfr_history : array, shape (ngal, nsnaps)
+        SFR at each snapshot in M_sun/yr
+    lookback_times : array, shape (nsnaps,)
+        Lookback time at each snapshot in Myr
+    current_snap : int
+        The snapshot index for these galaxies (defines t=0)
+
+    Returns
+    -------
+    M_UV : array, shape (ngal,)
+        UV absolute magnitude (AB)
+    """
+    ngal, nsnaps = sfr_history.shape
+
+    # Current time (lookback=0 at current snapshot)
+    t_now = lookback_times[current_snap]
+
+    # UV yield constants (erg/s/Hz per M_sun/yr of continuous SF)
+    # Based on Kennicutt & Evans (2012), Madau & Dickinson (2014)
+    KAPPA_UV = 1.4e28  # erg/s/Hz / (M_sun/yr) for young (<10 Myr) populations
+
+    # For each snapshot, compute the stellar age and UV weight
+    L_UV = np.zeros(ngal)
+
+    for snap in range(current_snap + 1):  # Only consider past/current snapshots
+        sfr_at_snap = sfr_history[:, snap]
+
+        # Stellar age = time since this snapshot
+        t_snap = lookback_times[snap]
+        age_myr = t_now - t_snap  # Age in Myr (positive = formed in past)
+
+        if age_myr < 0:
+            continue  # Future snapshot, skip
+
+        # Time interval for this snapshot's SF (trapezoid approximation)
+        if snap > 0:
+            dt = lookback_times[snap - 1] - t_snap  # Time to next snapshot
+        else:
+            dt = 100.0  # First snapshot: assume 100 Myr duration
+
+        dt = max(dt, 1.0)  # Minimum 1 Myr bin
+
+        # UV yield depends on stellar age
+        # l_UV in erg/s/Hz per M_sun of stars formed
+        # Assumes constant SFR over dt, so stars have ages uniformly distributed
+        # Use mean age for the bin
+        mean_age = age_myr + dt / 2.0
+
+        if mean_age < 10.0:
+            # Very young: peak UV yield
+            l_UV_per_msun = 2.0e21  # erg/s/Hz per M_sun formed (integrated over ~10 Myr)
+        elif mean_age < 100.0:
+            # Declining UV as massive stars die
+            l_UV_per_msun = 2.0e21 * (10.0 / mean_age) ** 0.8
+        elif mean_age < 300.0:
+            # Older population: UV from evolved stars (small contribution)
+            l_UV_per_msun = 2.0e21 * (10.0 / 100.0) ** 0.8 * (100.0 / mean_age) ** 1.5
+        else:
+            # Very old: negligible UV
+            l_UV_per_msun = 0.0
+
+        # Stellar mass formed in this bin = SFR * dt (in M_sun, with SFR in M_sun/yr and dt in Myr)
+        # L_UV contribution = M_star * l_UV_per_msun
+        # But we need SFR in M_sun/yr and dt in Myr, so M_star = SFR * dt * 1e6
+        # Actually, let's work with SFR directly:
+        # For steady SFR, L_UV = kappa_UV * SFR (Kennicutt relation)
+        # The kappa_UV already assumes steady state over ~100 Myr
+        # For each age bin, weight by the fractional UV contribution
+
+        # Simpler approach: weight recent SFR by age factor
+        # UV luminosity scales with recent SFR, weighted by how much UV those stars still emit
+        if mean_age < 100.0:
+            age_weight = (1.0 - mean_age / 100.0) ** 0.5  # Higher weight for younger stars
+        else:
+            age_weight = 0.0
+
+        L_UV += sfr_at_snap * age_weight * (dt / 100.0)  # Normalized contribution
+
+    # Scale to match the Kennicutt relation: L_UV = kappa * SFR_100Myr
+    # For steady SFR, the integral above gives SFR * integral(age_weight * dt/100) ~ SFR * 0.5
+    # We want L_UV in erg/s/Hz, then convert to M_UV
+    L_UV_physical = L_UV * KAPPA_UV * 2.0  # Factor of 2 to normalize
+
+    # Convert to absolute magnitude
+    # M_UV = -2.5 * log10(L_UV / (4*pi*d^2 * Hz_per_Angstrom)) + const
+    # For L in erg/s/Hz, M_AB = -2.5*log10(L) + 51.6
+    # But the Kennicutt relation gives:
+    # log10(SFR) = log10(L_UV) - 28 + const, so M_UV = -2.5 * log10(SFR) - 18.6
+    # which means L_UV [erg/s/Hz] = SFR * 10^(28 - (18.6/2.5)) = SFR * 10^20.56
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        M_UV = np.where(L_UV_physical > 0, -2.5 * np.log10(L_UV_physical) + 51.6, np.nan)
+
+    return M_UV
+
+
+def sfh_to_muv_simple(sfr_history, lookback_times, current_snap, t_uv=100.0):
+    """
+    Compute UV magnitude from average SFR over the last t_uv Myr.
+
+    This is a simpler approximation that averages the SFR over recent time
+    (default 100 Myr, or age of universe at that redshift if younger).
+
+    Parameters
+    ----------
+    sfr_history : array, shape (ngal, nsnaps)
+        SFR at each snapshot in M_sun/yr
+    lookback_times : array, shape (nsnaps,)
+        Lookback time at each snapshot in Myr
+    current_snap : int
+        The snapshot index for these galaxies
+    t_uv : float
+        Time window for UV averaging in Myr (default 100)
+
+    Returns
+    -------
+    M_UV : array, shape (ngal,)
+        UV absolute magnitude (AB)
+    """
+    ngal, nsnaps = sfr_history.shape
+
+    # Current lookback time
+    t_now = lookback_times[current_snap]
+
+    # Age of universe at this snapshot (approximate from lookback times)
+    # At z=0, lookback=0. Universe age ~ max(lookback_times)
+    t_age = lookback_times[0] - t_now  # Age of universe
+
+    # Effective averaging window
+    t_window = min(t_uv, t_age)
+
+    # Find snapshots within the averaging window
+    sfr_weighted_sum = np.zeros(ngal)
+    total_weight = 0.0
+
+    for snap in range(current_snap + 1):
+        t_snap = lookback_times[snap]
+        dt_from_now = t_now - t_snap
+
+        # Check if this snapshot is within the window
+        if dt_from_now > t_window:
+            continue
+
+        # Weight by time interval (trapezoid integration)
+        if snap > 0:
+            dt = min(lookback_times[snap - 1] - t_snap, t_window - dt_from_now)
+        else:
+            dt = t_window - dt_from_now
+
+        dt = max(dt, 0.0)
+
+        sfr_weighted_sum += sfr_history[:, snap] * dt
+        total_weight += dt
+
+    # Average SFR over window
+    if total_weight > 0:
+        sfr_avg = sfr_weighted_sum / total_weight
+    else:
+        sfr_avg = sfr_history[:, current_snap]
+
+    # Convert to M_UV using Madau & Dickinson relation
+    return sfr_to_muv(sfr_avg)
+
+
+def get_lookback_times_myr(redshifts):
+    """
+    Compute lookback times in Myr for an array of redshifts.
+
+    Parameters
+    ----------
+    redshifts : array-like
+        Array of redshifts
+
+    Returns
+    -------
+    lookback_times : array
+        Lookback times in Myr
+    """
+    if HAS_ASTROPY:
+        return COSMOLOGY.lookback_time(redshifts).to('Myr').value
+    else:
+        # Simple approximation if astropy unavailable
+        z = np.asarray(redshifts)
+        # Use Hubble time as rough scale
+        t_H = 13.7e3  # Myr
+        return t_H * (1 - 1 / np.sqrt(1 + z) ** 1.5)
+
+
+def uv_luminosity_function(M_UV, volume, binwidth=0.5):
+    """
+    Compute UV luminosity function.
+
+    Parameters
+    ----------
+    M_UV : array-like
+        UV absolute magnitudes
+    volume : float
+        Simulation volume in Mpc^3
+    binwidth : float
+        Bin width in magnitudes (default 0.5)
+
+    Returns
+    -------
+    M_bin : array
+        Bin centres (magnitudes)
+    log_phi : array
+        log10 of number density (Mpc^-3 mag^-1)
+    N : array
+        Counts per bin
+    """
+    M_UV = np.asarray(M_UV)
+    M_UV = M_UV[np.isfinite(M_UV)]
+
+    # Define bins (brightest to faintest)
+    M_min = np.floor(np.nanmin(M_UV) / binwidth) * binwidth
+    M_max = np.ceil(np.nanmax(M_UV) / binwidth) * binwidth
+    bins = np.arange(M_min, M_max + binwidth, binwidth)
+    M_bin = 0.5 * (bins[:-1] + bins[1:])
+
+    N, _ = np.histogram(M_UV, bins=bins)
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        phi = N / (volume * binwidth)
+        log_phi = np.where(phi > 0, np.log10(phi), np.nan)
+
+    return M_bin, log_phi, N
+
+
+def uv_luminosity_function_bootstrap(M_UV, volume, binwidth=0.5, n_boot=100):
+    """
+    Compute UV luminosity function with bootstrap confidence intervals.
+
+    Parameters
+    ----------
+    M_UV : array-like
+        UV absolute magnitudes
+    volume : float
+        Simulation volume in Mpc^3
+    binwidth : float
+        Bin width in magnitudes (default 0.5)
+    n_boot : int
+        Number of bootstrap resamples
+
+    Returns
+    -------
+    M_bin : array
+        Bin centres (magnitudes)
+    log_phi : array
+        log10 of number density (Mpc^-3 mag^-1)
+    log_phi_lo : array
+        16th percentile (lower 1-sigma)
+    log_phi_hi : array
+        84th percentile (upper 1-sigma)
+    N : array
+        Counts per bin
+    """
+    M_UV = np.asarray(M_UV)
+    M_UV = M_UV[np.isfinite(M_UV)]
+
+    # Define bins
+    M_min = np.floor(np.nanmin(M_UV) / binwidth) * binwidth
+    M_max = np.ceil(np.nanmax(M_UV) / binwidth) * binwidth
+    bins = np.arange(M_min, M_max + binwidth, binwidth)
+    M_bin = 0.5 * (bins[:-1] + bins[1:])
+    n_bins = len(M_bin)
+
+    # Main estimate
+    N, _ = np.histogram(M_UV, bins=bins)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        phi = N / (volume * binwidth)
+        log_phi = np.where(phi > 0, np.log10(phi), np.nan)
+
+    # Bootstrap
+    boot_phi = np.zeros((n_boot, n_bins))
+    n_gal = len(M_UV)
+    for i in range(n_boot):
+        idx = np.random.randint(0, n_gal, n_gal)
+        N_boot, _ = np.histogram(M_UV[idx], bins=bins)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            phi_boot = N_boot / (volume * binwidth)
+            boot_phi[i] = np.where(phi_boot > 0, np.log10(phi_boot), np.nan)
+
+    with np.errstate(all='ignore'):
+        log_phi_lo = np.nanpercentile(boot_phi, 16, axis=0)
+        log_phi_hi = np.nanpercentile(boot_phi, 84, axis=0)
+
+    return M_bin, log_phi, log_phi_lo, log_phi_hi, N
+
+
 # ========================== PLOT 18: SMF REDSHIFT GRID ==========================
 
 def plot_18_smf_redshift_grid():
@@ -4476,6 +5188,190 @@ def plot_18b_smf_redshift_grid_wide():
     fig.subplots_adjust(hspace=0.001, wspace=0.001)
 
     outputFile = os.path.join(OUTPUT_DIR, '18b.SMF_Redshift_Grid_Wide' + OUTPUT_FORMAT)
+    save_figure(fig, outputFile)
+
+
+# ========================== PLOT 30: UV LF REDSHIFT GRID ==========================
+
+def plot_30_uvlf_redshift_grid():
+    """
+    Plot: 3x5 grid of UV Luminosity Functions at 15 redshift bins.
+    Uses SfrHistory to properly compute M_UV from integrated star formation
+    over the last ~100 Myr, which is valid at all redshifts.
+
+    Falls back to instantaneous SFR if SfrHistory is not available.
+    """
+    print('Plot 30: UV LF Redshift Grid')
+
+    # Redshift bins matching SMF grid (z_lo, z_hi)
+    z_bins = [
+        (0.0, 0.5),   (0.5, 0.8),   (0.8, 1.1),
+        (1.1, 1.5),   (1.5, 2.0),   (2.0, 2.5),
+        (2.5, 3.0),   (3.0, 3.5),   (3.5, 4.5),
+        (4.5, 5.5),   (5.5, 6.5),   (6.5, 7.5),
+        (7.5, 8.5),   (8.5, 9.5),   (9.5, 12.0),
+    ]
+
+    # Models to plot
+    mill_redshifts = np.array(REDSHIFTS)
+    mu_redshifts = np.array(MINIUCHUU_REDSHIFTS)
+
+    models = []
+    if os.path.exists(PRIMARY_DIR):
+        models.append({
+            'path': PRIMARY_DIR, 'label': 'SAGE26 (Millennium)',
+            'color': 'black', 'ls': '-', 'lw': 4.5,
+            'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+            'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+        })
+    if os.path.exists(NOFFB_DIR):
+        models.append({
+            'path': NOFFB_DIR, 'label': 'No FFB',
+            'color': 'firebrick', 'ls': '-', 'lw': 3.0,
+            'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+            'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+        })
+    if os.path.exists(MINIUCHUU_DIR):
+        models.append({
+            'path': MINIUCHUU_DIR, 'label': 'SAGE26 (miniUchuu)',
+            'color': 'dodgerblue', 'ls': '--', 'lw': 2.5,
+            'redshifts': mu_redshifts, 'first_snap': MINIUCHUU_FIRST_SNAP, 'last_snap': MINIUCHUU_LAST_SNAP,
+            'volume': MINIUCHUU_VOLUME, 'mass_convert': MINIUCHUU_MASS_CONVERT,
+        })
+
+    # Precompute lookback times for each model
+    mill_lookback = get_lookback_times_myr(mill_redshifts)
+    mu_lookback = get_lookback_times_myr(mu_redshifts)
+
+    # Load observational data
+    all_obs = _load_uvlf_grid_observations()
+    labels_used = set()  # track legend entries to avoid duplicates
+
+    nrows, ncols = 3, 5
+    fig, axes = plt.subplots(nrows, ncols, figsize=(25, 15), sharex=True, sharey=True)
+    axes_flat = axes.flatten()
+    binwidth = 0.5  # magnitude bin width
+
+    for i, (z_lo, z_hi) in enumerate(z_bins):
+        ax = axes_flat[i]
+        z_mid = 0.5 * (z_lo + z_hi)
+
+        for model in models:
+            mod_redshifts = model['redshifts']
+            first_snap = model['first_snap']
+            last_snap = model['last_snap']
+
+            # Select appropriate lookback times
+            if len(mod_redshifts) == len(mill_redshifts):
+                lookback_times = mill_lookback
+            else:
+                lookback_times = mu_lookback
+
+            # Find snapshot closest to bin centre that falls within the bin
+            snap_redshifts = mod_redshifts[first_snap:last_snap + 1]
+            in_bin = np.where((snap_redshifts >= z_lo) & (snap_redshifts <= z_hi))[0]
+            if len(in_bin) == 0:
+                continue
+            snap_idx = in_bin[np.argmin(np.abs(snap_redshifts[in_bin] - z_mid))]
+            snap_num = snap_idx + first_snap
+            snap_name = f'Snap_{snap_num}'
+
+            try:
+                filepath = os.path.join(model['path'], MODEL_FILE)
+                with h5.File(filepath, 'r') as f:
+                    if snap_name not in f:
+                        continue
+
+                    # Try to use SfrHistory if available
+                    if 'SfrHistory' in f[snap_name]:
+                        sfr_history = np.array(f[snap_name]['SfrHistory'])
+                        # Compute M_UV from SFH (100 Myr average)
+                        M_UV = sfh_to_muv_simple(sfr_history, lookback_times, snap_num, t_uv=100.0)
+                        w = np.isfinite(M_UV)
+                    else:
+                        # Fall back to instantaneous SFR
+                        sfr_disk = np.array(f[snap_name]['SfrDisk'])
+                        sfr_bulge = np.array(f[snap_name]['SfrBulge'])
+                        sfr_total = sfr_disk + sfr_bulge
+                        w = sfr_total > 0
+                        M_UV = sfr_to_muv(sfr_total[w])
+
+                    if np.sum(w) == 0:
+                        continue
+                    M_UV_valid = M_UV[w] if len(M_UV) > np.sum(w) else M_UV
+
+                    # Compute UV luminosity function with bootstrap
+                    M_bin, log_phi, log_phi_lo, log_phi_hi, _ = uv_luminosity_function_bootstrap(
+                        M_UV_valid, model['volume'], binwidth, n_boot=100)
+                    valid = np.isfinite(log_phi)
+                    ax.plot(M_bin[valid], log_phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
+                    # Bootstrap shading
+                    boot_valid = np.isfinite(log_phi_lo) & np.isfinite(log_phi_hi)
+                    if np.any(boot_valid):
+                        ax.fill_between(M_bin[boot_valid], log_phi_lo[boot_valid], log_phi_hi[boot_valid],
+                                        color=model['color'], alpha=0.2, linewidth=0)
+            except Exception as e:
+                print(f"  Error loading {snap_name} from {model['path']}: {e}")
+                continue
+
+        # Plot observational data for this redshift bin
+        for od in all_obs:
+            z_obs = od['z']
+            # Match obs to bin: inclusive lower, exclusive upper (last bin inclusive)
+            if i == len(z_bins) - 1:
+                in_bin = z_lo <= z_obs <= z_hi
+            else:
+                in_bin = z_lo <= z_obs < z_hi
+            if not in_bin:
+                continue
+            lbl = od['label'] if od['label'] not in labels_used else None
+            if lbl is not None:
+                labels_used.add(od['label'])
+            yerr = None
+            if od['err_lo'] is not None and od['err_hi'] is not None:
+                yerr = [od['err_lo'], od['err_hi']]
+            ax.errorbar(od['M_UV'], od['log_phi'], yerr=yerr,
+                        fmt=od['marker'], color='grey', ms=od['ms'],
+                        markeredgecolor='k', markeredgewidth=0.8,
+                        markerfacecolor='gray',
+                        alpha=0.6, lw=1.5, capsize=1.5, label=lbl, zorder=1)
+
+        # Redshift label in each panel
+        ax.text(0.95, 0.95, rf'${z_lo:.1f} < z < {z_hi:.1f}$',
+                transform=ax.transAxes, ha='right', va='top', fontsize=12)
+
+    # Axis limits and labels (brighter = more negative on left)
+    axes_flat[0].set_xlim(-24, -16)
+    axes_flat[0].set_ylim(-7, -1)
+
+    for i, ax in enumerate(axes_flat):
+        row, col = divmod(i, ncols)
+        if row == nrows - 1:
+            ax.set_xlabel(r'$M_{\mathrm{UV}}\ [\mathrm{mag}]$', fontsize=12)
+        if col == 0:
+            ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{mag}^{-1}]$', fontsize=12)
+        ax.xaxis.set_major_locator(plt.MultipleLocator(2.0))
+        ax.yaxis.set_major_locator(plt.MultipleLocator(2.0))
+        ax.xaxis.set_minor_locator(plt.MultipleLocator(0.5))
+        ax.yaxis.set_minor_locator(plt.MultipleLocator(0.5))
+        ax.tick_params(axis='both', which='both', direction='in',
+                       top=True, bottom=True, left=True, right=True, labelsize=10)
+        # Invert x-axis so brighter (more negative) is on left
+        ax.invert_xaxis()
+
+    # Per-panel legends (only panels with new labelled entries get a legend)
+    for ax in axes_flat:
+        _, labels = ax.get_legend_handles_labels()
+        if labels:
+            ax.legend(loc='lower left', frameon=False, fontsize=9)
+
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=0.001, wspace=0.001)
+
+    outputFile = os.path.join(OUTPUT_DIR, '30.UVLF_Redshift_Grid' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
 
 
@@ -5765,6 +6661,7 @@ STANDALONE_PLOTS = {
     27: plot_27_cold_gas_mass_ratio,
     28: plot_28_mdot_vs_mvir,
     29: plot_29_mdot_vs_vvir,
+    33: plot_30_uvlf_redshift_grid,
 }
 
 ALL_PLOTS = {**Z0_PLOTS, **EVOLUTION_PLOTS, **STANDALONE_PLOTS}

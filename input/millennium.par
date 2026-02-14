@@ -53,7 +53,7 @@ ReionizationOn        1   %0: switch off
 DiskInstabilityOn     1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
 CGMrecipeOn           1   %0: switch off
 FIREmodeOn            1   %0: switch off
-FeedbackFreeModeOn    1   %0: switch off
+FeedbackFreeModeOn    0   %0: switch off
 BulgeSizeOn           3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 DustOn                1   %0: switch off
 MetalYieldsOn         1   %0: use constant yield representing SNII only; 1: use stellar yields from AGB, SN and SNIa (Arrigoni 2012)
@@ -96,7 +96,7 @@ EtaSN                   5.0e-3  %supernova efficiency
 DeltaDustAGB            0.2
 DeltaDustSNII           0.2
 DeltaDustSNIa           0.15
-DustAccretionTimescale  50.0
+DustAccretionTimescale  20.0
 BinaryFraction          0.1    %Fraction of stars in SNIa binaries
 
 %------------------------------------------

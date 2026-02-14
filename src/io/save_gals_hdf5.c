@@ -288,6 +288,49 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
                                             "Failed to close the dataspace for output snapshot number %d.\n", snap_idx);
 
         }
+
+        // Create the 2D SfrHistory dataset (separate from 1D field datasets)
+        // Dimensions: [ngal (unlimited), nsnaps (fixed)]
+        {
+            hsize_t sfh_dims[2] = {0, (hsize_t)run_params->Snaplistlen};
+            hsize_t sfh_maxdims[2] = {H5S_UNLIMITED, (hsize_t)run_params->Snaplistlen};
+            hsize_t sfh_chunk_dims[2] = {NUM_GALS_PER_BUFFER, (hsize_t)run_params->Snaplistlen};
+
+            snprintf(full_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/SfrHistory", run_params->ListOutputSnaps[snap_idx]);
+
+            hid_t sfh_prop = H5Pcreate(H5P_DATASET_CREATE);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(sfh_prop, (int32_t) sfh_prop,
+                                            "Could not create property list for SfrHistory dataset at snapshot %d.\n", snap_idx);
+
+            hid_t sfh_dataspace = H5Screate_simple(2, sfh_dims, sfh_maxdims);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(sfh_dataspace, (int32_t) sfh_dataspace,
+                                            "Could not create 2D dataspace for SfrHistory at snapshot %d.\n", snap_idx);
+
+            herr_t status = H5Pset_chunk(sfh_prop, 2, sfh_chunk_dims);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                            "Could not set HDF5 chunking for SfrHistory at snapshot %d.\n", snap_idx);
+
+            hid_t sfh_dataset = H5Dcreate2(file_id, full_field_name, H5T_NATIVE_FLOAT, sfh_dataspace,
+                                           H5P_DEFAULT, sfh_prop, H5P_DEFAULT);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(sfh_dataset, (int32_t) sfh_dataset,
+                                            "Could not create SfrHistory dataset at snapshot %d.\n", snap_idx);
+
+            CREATE_STRING_ATTRIBUTE(sfh_dataset, "Description",
+                                    "Star formation rate history array. Each row contains the SFR at each snapshot up to the current one. Units: Msun/yr", MAX_STRING_LEN);
+            CREATE_STRING_ATTRIBUTE(sfh_dataset, "Units", "Msun/yr", MAX_STRING_LEN);
+
+            status = H5Dclose(sfh_dataset);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                            "Failed to close SfrHistory dataset at snapshot %d.\n", snap_idx);
+
+            status = H5Pclose(sfh_prop);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                            "Failed to close property list for SfrHistory at snapshot %d.\n", snap_idx);
+
+            status = H5Sclose(sfh_dataspace);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                            "Failed to close dataspace for SfrHistory at snapshot %d.\n", snap_idx);
+        }
     }
 
     // Now for each snapshot, we process `buffer_count` galaxies into RAM for every snapshot before
@@ -389,6 +432,15 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, CGMDust);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, EjectedDust);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TotalDust);
+
+        // Special allocation for 2D SfrHistory buffer: size = buffer_size * Snaplistlen
+        save_info->buffer_output_gals[snap_idx].SfrHistory = malloc(
+            (size_t)save_info->buffer_size * (size_t)run_params->Snaplistlen * sizeof(float));
+        if(save_info->buffer_output_gals[snap_idx].SfrHistory == NULL) {
+            fprintf(stderr, "Could not allocate %d x %d elements for SfrHistory buffer for snapshot %d\n",
+                    save_info->buffer_size, run_params->Snaplistlen, snap_idx);
+            return MALLOC_FAILURE;
+        }
     }
 
     return EXIT_SUCCESS;
@@ -682,6 +734,9 @@ int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, CGMDust);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, EjectedDust);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TotalDust);
+
+        // Free 2D SfrHistory buffer
+        free(save_info->buffer_output_gals[snap_idx].SfrHistory);
     }
 
     myfree(save_info->buffer_output_gals);
@@ -1035,6 +1090,24 @@ int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct save_info 
     save_info->buffer_output_gals[output_snap_idx].EjectedDust[gals_in_buffer] = g->EjectedDust;
     save_info->buffer_output_gals[output_snap_idx].TotalDust[gals_in_buffer] = g->ColdDust + g->HotDust + g->CGMDust + g->EjectedDust;
 
+    // Copy SfrHistory array (convert to Msun/yr)
+    // The 2D buffer is laid out as [gal_idx * Snaplistlen + snap_idx]
+    // Note: Sfr[] array stores SFR at the time of each snapshot, but the current
+    // snapshot's SFR is stored in SfrDisk[step]/SfrBulge[step] (computed above).
+    // We need to include the current snapshot's SFR in the history.
+    {
+        float sfr_conversion = (float)(run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS);
+        int64_t sfh_offset = gals_in_buffer * run_params->Snaplistlen;
+        for(int32_t snap = 0; snap < run_params->Snaplistlen; snap++) {
+            save_info->buffer_output_gals[output_snap_idx].SfrHistory[sfh_offset + snap] = g->Sfr[snap] * sfr_conversion;
+        }
+        // Fill in the current snapshot's SFR from SfrDisk+SfrBulge (already converted)
+        int32_t current_snap = g->SnapNum;
+        if(current_snap >= 0 && current_snap < run_params->Snaplistlen) {
+            save_info->buffer_output_gals[output_snap_idx].SfrHistory[sfh_offset + current_snap] = tmp_SfrDisk + tmp_SfrBulge;
+        }
+    }
+
 
     //infall properties
     if(g->Type != 0) {
@@ -1259,6 +1332,58 @@ int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to_write,
     EXTEND_AND_WRITE_GALAXY_DATASET(CGMDust);
     EXTEND_AND_WRITE_GALAXY_DATASET(EjectedDust);
     EXTEND_AND_WRITE_GALAXY_DATASET(TotalDust);
+
+    // Write 2D SfrHistory dataset (separate from 1D fields)
+    {
+        char sfh_field_name[2*MAX_STRING_LEN];
+        snprintf(sfh_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/SfrHistory", run_params->ListOutputSnaps[snap_idx]);
+
+        hid_t sfh_dataset_id = H5Dopen2(save_info->file_id, sfh_field_name, H5P_DEFAULT);
+        if(sfh_dataset_id < 0) {
+            fprintf(stderr, "Could not access SfrHistory dataset for output snapshot %d.\n", snap_idx);
+            return (int32_t) sfh_dataset_id;
+        }
+
+        // 2D dimensions: [ngal, nsnaps]
+        hsize_t sfh_dims_extend[2] = {(hsize_t)num_to_write, (hsize_t)run_params->Snaplistlen};
+        hsize_t sfh_old_dims[2] = {(hsize_t)num_already_written, (hsize_t)run_params->Snaplistlen};
+        hsize_t sfh_new_dims[2] = {sfh_old_dims[0] + sfh_dims_extend[0], (hsize_t)run_params->Snaplistlen};
+
+        status = H5Dset_extent(sfh_dataset_id, sfh_new_dims);
+        if(status < 0) {
+            fprintf(stderr, "Could not resize SfrHistory dataset dimensions for snapshot %d.\n", snap_idx);
+            return (int32_t) status;
+        }
+
+        hid_t sfh_filespace = H5Dget_space(sfh_dataset_id);
+        if(sfh_filespace < 0) {
+            fprintf(stderr, "Could not get dataspace for SfrHistory at snapshot %d.\n", snap_idx);
+            return (int32_t) sfh_filespace;
+        }
+
+        // Select hyperslab: start at [old_ngal, 0], count [num_to_write, nsnaps]
+        hsize_t sfh_start[2] = {sfh_old_dims[0], 0};
+        status = H5Sselect_hyperslab(sfh_filespace, H5S_SELECT_SET, sfh_start, NULL, sfh_dims_extend, NULL);
+        if(status < 0) {
+            fprintf(stderr, "Could not select hyperslab for SfrHistory at snapshot %d.\n", snap_idx);
+            return (int32_t) status;
+        }
+
+        hid_t sfh_memspace = H5Screate_simple(2, sfh_dims_extend, NULL);
+        if(sfh_memspace < 0) {
+            fprintf(stderr, "Could not create memory space for SfrHistory at snapshot %d.\n", snap_idx);
+            return (int32_t) sfh_memspace;
+        }
+
+        status = H5Dwrite(sfh_dataset_id, H5T_NATIVE_FLOAT, sfh_memspace, sfh_filespace, H5P_DEFAULT,
+                          save_info->buffer_output_gals[snap_idx].SfrHistory);
+        CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                        "Could not write SfrHistory dataset for snapshot %d.\n", snap_idx);
+
+        H5Sclose(sfh_memspace);
+        H5Sclose(sfh_filespace);
+        H5Dclose(sfh_dataset_id);
+    }
 
 #endif
     // We've performed a write, so future galaxies will overwrite the old data.

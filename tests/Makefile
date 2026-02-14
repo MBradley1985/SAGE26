@@ -30,6 +30,7 @@ PROJECT_SOURCES = \
 	$(SRC_DIR)/model_infall.c \
 	$(SRC_DIR)/model_disk_instability.c \
 	$(SRC_DIR)/model_mergers.c \
+	$(SRC_DIR)/model_dust.c \
 	$(SRC_DIR)/core_cool_func.c
 
 # Test files
@@ -49,7 +50,8 @@ TEST_SOURCES = \
 	test_reincorporation.c \
 	test_cooling_heating.c \
 	test_halo_mergers.c \
-	test_agn_feedback.c
+	test_agn_feedback.c \
+	test_dust.c
 
 # Function to check if all dependencies exist for a test
 # Usage: $(call check_test_deps,test_name)

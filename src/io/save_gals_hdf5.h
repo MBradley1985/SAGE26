@@ -118,7 +118,8 @@ struct HDF5_GALAXY_OUTPUT
     float *EjectedDust;
     float *TotalDust;
 
-    
+    /* Star formation history array (2D: [ngal * nsnaps]) */
+    float *SfrHistory;
 };
     
     // Proto-Types //

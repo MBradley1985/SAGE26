@@ -1101,6 +1101,769 @@ def main():
     print(f'  Saved 8-panel figure to: {outfile}\n')
     plt.close()
 
+    # ==================================================================
+    # NEW FIGURE: Dust Mass vs Stellar Mass Evolution (z=0 to z=7)
+    # ==================================================================
+    print(f'  Creating Dust Mass vs Stellar Mass evolution figure...')
+    
+    # Define redshift targets and corresponding snapshots
+    # Millennium snapshots: z=0 (63), z~1 (37), z~2 (32), z~3 (27), z~4 (23), z~5 (20), z~6 (17), z~7 (15)
+    z_panels = [
+        (63, 0.00, 'z = 0'),
+        (37, 1.39, 'z = 1'),
+        (32, 2.07, 'z = 2'),
+        (27, 3.06, 'z = 3'),
+        (23, 3.87, 'z = 4'),
+        (20, 4.89, 'z = 5'),
+        (17, 6.20, 'z = 6'),
+        (15, 7.27, 'z = 7'),
+    ]
+    
+    fig2, axes2 = plt.subplots(2, 4, figsize=(18, 10))
+    axes2 = axes2.flatten()
+    
+    for idx, (snapnum, z_val, z_label) in enumerate(z_panels):
+        ax = axes2[idx]
+        sn = f'Snap_{snapnum}'
+        
+        # Load data for this snapshot
+        sm_z = read_all_files(DirName, sn, 'StellarMass')
+        cd_z = read_all_files(DirName, sn, 'ColdDust')
+        hd_z = read_all_files(DirName, sn, 'HotDust')
+        ed_z = read_all_files(DirName, sn, 'EjectedDust')
+        cgm_z = read_all_files(DirName, sn, 'CGMDust')
+        
+        if sm_z is None or cd_z is None:
+            ax.text(0.5, 0.5, f'{z_label}\nNo data', transform=ax.transAxes,
+                   ha='center', va='center', fontsize=14, color='white')
+            ax.set_xlim(7, 12)
+            ax.set_ylim(3, 10)
+            continue
+        
+        # Convert to physical units
+        sm_z = sm_z * 1e10 / Hubble_h
+        cd_z = cd_z * 1e10 / Hubble_h
+        hd_z = hd_z * 1e10 / Hubble_h
+        ed_z = ed_z * 1e10 / Hubble_h
+        if cgm_z is not None:
+            cgm_z = cgm_z * 1e10 / Hubble_h
+            total_dust_z = cd_z + np.maximum(hd_z, 0) + ed_z + np.maximum(cgm_z, 0)
+        else:
+            total_dust_z = cd_z + np.maximum(hd_z, 0) + ed_z
+        
+        # Select galaxies with positive stellar and dust mass
+        w = np.where((sm_z > 0) & (total_dust_z > 0))[0]
+        
+        if len(w) < 100:
+            ax.text(0.5, 0.5, f'{z_label}\nToo few galaxies', transform=ax.transAxes,
+                   ha='center', va='center', fontsize=14, color='white')
+            ax.set_xlim(7, 12)
+            ax.set_ylim(3, 10)
+            continue
+        
+        log_mstar = np.log10(sm_z[w])
+        log_mdust = np.log10(total_dust_z[w])
+        
+        # Create 2D histogram (heatmap)
+        xbins = np.linspace(7, 12, 60)
+        ybins = np.linspace(3, 10, 60)
+        
+        H, xedges, yedges = np.histogram2d(log_mstar, log_mdust, bins=[xbins, ybins])
+        
+        # Use raw counts for density display
+        H_plot = H.T
+        
+        # Create heatmap with custom colormap (dark background compatible)
+        extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+        cmap = plt.cm.inferno.copy()
+        cmap.set_bad(color='black')
+        cmap.set_under(color='black')
+        
+        im = ax.imshow(H_plot, extent=extent, origin='lower', aspect='auto',
+                       cmap=cmap, vmin=1, interpolation='gaussian')
+        
+        # Calculate and plot median line
+        mstar_bins = np.arange(7.5, 12.0, 0.25)
+        mstar_centers = 0.5 * (mstar_bins[:-1] + mstar_bins[1:])
+        median_mdust = np.full(len(mstar_centers), np.nan)
+        p16_mdust = np.full(len(mstar_centers), np.nan)
+        p84_mdust = np.full(len(mstar_centers), np.nan)
+        
+        for i in range(len(mstar_centers)):
+            sel = np.where((log_mstar >= mstar_bins[i]) & (log_mstar < mstar_bins[i+1]))[0]
+            if len(sel) > 10:
+                median_mdust[i] = np.median(log_mdust[sel])
+                p16_mdust[i] = np.percentile(log_mdust[sel], 16)
+                p84_mdust[i] = np.percentile(log_mdust[sel], 84)
+        
+        good = ~np.isnan(median_mdust)
+        ax.plot(mstar_centers[good], median_mdust[good], 'k-', lw=3, label='Median')
+        ax.plot(mstar_centers[good], median_mdust[good], 'w-', lw=1.5)
+        
+        # Labels and styling
+        ax.set_xlim(7, 12)
+        ax.set_ylim(3, 10)
+        ax.set_xlabel(r'$\log_{10}\, M_\star\ (M_\odot)$')
+        ax.set_ylabel(r'$\log_{10}\, M_{\rm dust}\ (M_\odot)$')
+        ax.set_title(z_label, fontsize=14)
+        
+        # Add galaxy count
+        ax.text(0.05, 0.95, f'N = {len(w):,}', transform=ax.transAxes,
+               ha='left', va='top', fontsize=10, color='white',
+               bbox=dict(boxstyle='round', facecolor='black', alpha=0.5))
+    
+    # Add colorbar
+    cbar_ax = fig2.add_axes([0.92, 0.15, 0.015, 0.7])
+    cbar = fig2.colorbar(im, cax=cbar_ax)
+    cbar.set_label(r'$N_{\rm gal}$', color='white')
+    cbar.ax.yaxis.set_tick_params(color='white')
+    plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+    
+    fig2.suptitle('Dust Mass vs Stellar Mass Evolution', fontsize=16, y=0.98)
+    plt.tight_layout(rect=[0, 0, 0.91, 0.95])
+    
+    outfile2 = os.path.join(OutputDir, 'DustMass_StellarMass_Evolution' + OutputFormat)
+    fig2.savefig(outfile2, facecolor=fig2.get_facecolor())
+    print(f'  Saved dust-stellar mass evolution figure to: {outfile2}\n')
+    plt.close(fig2)
+
+    # ==================================================================
+    # NEW FIGURE: Dust-to-Gas Ratio vs Stellar Mass Evolution (z=0 to z=7)
+    # ==================================================================
+    print(f'  Creating Dust Fraction vs Stellar Mass evolution figure...')
+    
+    fig3, axes3 = plt.subplots(2, 4, figsize=(18, 10))
+    axes3 = axes3.flatten()
+    
+    for idx, (snapnum, z_val, z_label) in enumerate(z_panels):
+        ax = axes3[idx]
+        sn = f'Snap_{snapnum}'
+        
+        # Load data for this snapshot
+        sm_z = read_all_files(DirName, sn, 'StellarMass')
+        cg_z = read_all_files(DirName, sn, 'ColdGas')
+        cd_z = read_all_files(DirName, sn, 'ColdDust')
+        
+        if sm_z is None or cd_z is None or cg_z is None:
+            ax.text(0.5, 0.5, f'{z_label}\nNo data', transform=ax.transAxes,
+                   ha='center', va='center', fontsize=14, color='white')
+            ax.set_xlim(7, 12)
+            ax.set_ylim(-6, 0)
+            continue
+        
+        # Convert to physical units
+        sm_z = sm_z * 1e10 / Hubble_h
+        cg_z = cg_z * 1e10 / Hubble_h
+        cd_z = cd_z * 1e10 / Hubble_h
+        
+        # Select galaxies with positive stellar mass, cold gas, and cold dust
+        w = np.where((sm_z > 0) & (cg_z > 1e4) & (cd_z > 0))[0]
+        
+        if len(w) < 100:
+            ax.text(0.5, 0.5, f'{z_label}\nToo few galaxies', transform=ax.transAxes,
+                   ha='center', va='center', fontsize=14, color='white')
+            ax.set_xlim(7, 12)
+            ax.set_ylim(-6, 0)
+            continue
+        
+        log_mstar = np.log10(sm_z[w])
+        log_dtg = np.log10(cd_z[w] / cg_z[w])
+        
+        # Create 2D histogram (heatmap)
+        xbins = np.linspace(7, 12, 60)
+        ybins = np.linspace(-6, 0, 60)
+        
+        H, xedges, yedges = np.histogram2d(log_mstar, log_dtg, bins=[xbins, ybins])
+        
+        # Use raw counts for density display
+        H_plot = H.T
+        
+        # Create heatmap with custom colormap (dark background compatible)
+        extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+        cmap = plt.cm.inferno.copy()
+        cmap.set_bad(color='black')
+        cmap.set_under(color='black')
+        
+        im3 = ax.imshow(H_plot, extent=extent, origin='lower', aspect='auto',
+                       cmap=cmap, vmin=1, interpolation='gaussian')
+        
+        # Calculate and plot median line
+        mstar_bins = np.arange(7.5, 12.0, 0.25)
+        mstar_centers = 0.5 * (mstar_bins[:-1] + mstar_bins[1:])
+        median_dtg = np.full(len(mstar_centers), np.nan)
+        
+        for i in range(len(mstar_centers)):
+            sel = np.where((log_mstar >= mstar_bins[i]) & (log_mstar < mstar_bins[i+1]))[0]
+            if len(sel) > 10:
+                median_dtg[i] = np.median(log_dtg[sel])
+        
+        good = ~np.isnan(median_dtg)
+        ax.plot(mstar_centers[good], median_dtg[good], 'k-', lw=3, label='Median')
+        ax.plot(mstar_centers[good], median_dtg[good], 'w-', lw=1.5)
+        
+        # MW reference line
+        ax.axhline(np.log10(0.01), color='cyan', ls='--', lw=1.5, alpha=0.7)
+        
+        # Labels and styling
+        ax.set_xlim(7, 12)
+        ax.set_ylim(-6, 0)
+        ax.set_xlabel(r'$\log_{10}\, M_\star\ (M_\odot)$')
+        ax.set_ylabel(r'$\log_{10}(M_{\rm dust} / M_{\rm gas})$')
+        ax.set_title(z_label, fontsize=14)
+        
+        # Add galaxy count
+        ax.text(0.05, 0.95, f'N = {len(w):,}', transform=ax.transAxes,
+               ha='left', va='top', fontsize=10, color='white',
+               bbox=dict(boxstyle='round', facecolor='black', alpha=0.5))
+    
+    # Add colorbar
+    cbar_ax3 = fig3.add_axes([0.92, 0.15, 0.015, 0.7])
+    cbar3 = fig3.colorbar(im3, cax=cbar_ax3)
+    cbar3.set_label(r'$N_{\rm gal}$', color='white')
+    cbar3.ax.yaxis.set_tick_params(color='white')
+    plt.setp(plt.getp(cbar3.ax.axes, 'yticklabels'), color='white')
+    
+    fig3.suptitle('Dust-to-Gas Ratio vs Stellar Mass Evolution', fontsize=16, y=0.98)
+    plt.tight_layout(rect=[0, 0, 0.91, 0.95])
+    
+    outfile3 = os.path.join(OutputDir, 'DustFraction_StellarMass_Evolution' + OutputFormat)
+    fig3.savefig(outfile3, facecolor=fig3.get_facecolor())
+    print(f'  Saved dust fraction evolution figure to: {outfile3}\n')
+    plt.close(fig3)
+
+    # ==================================================================
+    # NEW FIGURE: Dust-to-Gas Ratio vs Metallicity Evolution (z=0 to z=7)
+    # ==================================================================
+    print(f'  Creating Dust Fraction vs Metallicity evolution figure...')
+    
+    fig4, axes4 = plt.subplots(2, 4, figsize=(18, 10))
+    axes4 = axes4.flatten()
+    
+    for idx, (snapnum, z_val, z_label) in enumerate(z_panels):
+        ax = axes4[idx]
+        sn = f'Snap_{snapnum}'
+        
+        # Load data for this snapshot
+        cg_z = read_all_files(DirName, sn, 'ColdGas')
+        mcg_z = read_all_files(DirName, sn, 'MetalsColdGas')
+        cd_z = read_all_files(DirName, sn, 'ColdDust')
+        
+        if cg_z is None or cd_z is None or mcg_z is None:
+            ax.text(0.5, 0.5, f'{z_label}\nNo data', transform=ax.transAxes,
+                   ha='center', va='center', fontsize=14, color='white')
+            ax.set_xlim(6, 10)
+            ax.set_ylim(-6, 0)
+            continue
+        
+        # Convert to physical units
+        cg_z = cg_z * 1e10 / Hubble_h
+        mcg_z = mcg_z * 1e10 / Hubble_h
+        cd_z = cd_z * 1e10 / Hubble_h
+        
+        # Select galaxies with positive cold gas, metals, and dust
+        w = np.where((cg_z > 1e4) & (mcg_z > 0) & (cd_z > 0))[0]
+        
+        if len(w) < 100:
+            ax.text(0.5, 0.5, f'{z_label}\nToo few galaxies', transform=ax.transAxes,
+                   ha='center', va='center', fontsize=14, color='white')
+            ax.set_xlim(6, 10)
+            ax.set_ylim(-6, 0)
+            continue
+        
+        # Calculate metallicity as 12 + log(O/H)
+        # Z_gas = MetalsColdGas / ColdGas (mass fraction)
+        # 12 + log(O/H) = 8.69 + log(Z_gas / 0.02)  [solar = 8.69]
+        Z_gas = mcg_z[w] / cg_z[w]
+        log_OH = 8.69 + np.log10(Z_gas / 0.02)
+        log_dtg = np.log10(cd_z[w] / cg_z[w])
+        
+        # Create 2D histogram (heatmap)
+        xbins = np.linspace(6, 10, 60)
+        ybins = np.linspace(-6, 0, 60)
+        
+        H, xedges, yedges = np.histogram2d(log_OH, log_dtg, bins=[xbins, ybins])
+        
+        # Use raw counts for density display
+        H_plot = H.T
+        
+        # Create heatmap with custom colormap (dark background compatible)
+        extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+        cmap = plt.cm.inferno.copy()
+        cmap.set_bad(color='black')
+        cmap.set_under(color='black')
+        
+        im4 = ax.imshow(H_plot, extent=extent, origin='lower', aspect='auto',
+                       cmap=cmap, vmin=1, interpolation='gaussian')
+        
+        # Calculate and plot median line
+        oh_bins = np.arange(6.5, 10.0, 0.25)
+        oh_centers = 0.5 * (oh_bins[:-1] + oh_bins[1:])
+        median_dtg = np.full(len(oh_centers), np.nan)
+        
+        for i in range(len(oh_centers)):
+            sel = np.where((log_OH >= oh_bins[i]) & (log_OH < oh_bins[i+1]))[0]
+            if len(sel) > 10:
+                median_dtg[i] = np.median(log_dtg[sel])
+        
+        good = ~np.isnan(median_dtg)
+        ax.plot(oh_centers[good], median_dtg[good], 'k-', lw=3, label='Median')
+        ax.plot(oh_centers[good], median_dtg[good], 'w-', lw=1.5)
+        
+        # MW reference line and solar metallicity
+        ax.axhline(np.log10(0.01), color='cyan', ls='--', lw=1.5, alpha=0.7)
+        ax.axvline(8.69, color='cyan', ls=':', lw=1.5, alpha=0.7)  # Solar 12+log(O/H)
+        
+        # Labels and styling
+        ax.set_xlim(6, 10)
+        ax.set_ylim(-6, 0)
+        ax.set_xlabel(r'$12 + \log({\rm O/H})$')
+        ax.set_ylabel(r'$\log_{10}(M_{\rm dust} / M_{\rm gas})$')
+        ax.set_title(z_label, fontsize=14)
+        
+        # Add galaxy count
+        ax.text(0.05, 0.95, f'N = {len(w):,}', transform=ax.transAxes,
+               ha='left', va='top', fontsize=10, color='white',
+               bbox=dict(boxstyle='round', facecolor='black', alpha=0.5))
+    
+    # Add colorbar
+    cbar_ax4 = fig4.add_axes([0.92, 0.15, 0.015, 0.7])
+    cbar4 = fig4.colorbar(im4, cax=cbar_ax4)
+    cbar4.set_label(r'$N_{\rm gal}$', color='white')
+    cbar4.ax.yaxis.set_tick_params(color='white')
+    plt.setp(plt.getp(cbar4.ax.axes, 'yticklabels'), color='white')
+    
+    fig4.suptitle('Dust-to-Gas Ratio vs Metallicity Evolution', fontsize=16, y=0.98)
+    plt.tight_layout(rect=[0, 0, 0.91, 0.95])
+    
+    outfile4 = os.path.join(OutputDir, 'DustFraction_Metallicity_Evolution' + OutputFormat)
+    fig4.savefig(outfile4, facecolor=fig4.get_facecolor())
+    print(f'  Saved dust fraction vs metallicity figure to: {outfile4}\n')
+    plt.close(fig4)
+
+    # ==================================================================
+    # NEW FIGURE: Dust-to-Metal Ratio vs Stellar Mass Evolution (z=0 to z=7)
+    # ==================================================================
+    print(f'  Creating Dust-to-Metal vs Stellar Mass evolution figure...')
+    
+    fig5, axes5 = plt.subplots(2, 4, figsize=(18, 10))
+    axes5 = axes5.flatten()
+    
+    for idx, (snapnum, z_val, z_label) in enumerate(z_panels):
+        ax = axes5[idx]
+        sn = f'Snap_{snapnum}'
+        
+        # Load data for this snapshot
+        sm_z = read_all_files(DirName, sn, 'StellarMass')
+        cg_z = read_all_files(DirName, sn, 'ColdGas')
+        mcg_z = read_all_files(DirName, sn, 'MetalsColdGas')
+        cd_z = read_all_files(DirName, sn, 'ColdDust')
+        
+        if sm_z is None or cd_z is None or mcg_z is None:
+            ax.text(0.5, 0.5, f'{z_label}\nNo data', transform=ax.transAxes,
+                   ha='center', va='center', fontsize=14, color='white')
+            ax.set_xlim(7, 12)
+            ax.set_ylim(-1, 0.5)
+            continue
+        
+        # Convert to physical units
+        sm_z = sm_z * 1e10 / Hubble_h
+        cg_z = cg_z * 1e10 / Hubble_h
+        mcg_z = mcg_z * 1e10 / Hubble_h
+        cd_z = cd_z * 1e10 / Hubble_h
+        
+        # Select galaxies with positive stellar mass, metals, and dust
+        w = np.where((sm_z > 0) & (cg_z > 1e4) & (mcg_z > 0) & (cd_z > 0))[0]
+        
+        if len(w) < 100:
+            ax.text(0.5, 0.5, f'{z_label}\nToo few galaxies', transform=ax.transAxes,
+                   ha='center', va='center', fontsize=14, color='white')
+            ax.set_xlim(7, 12)
+            ax.set_ylim(-1, 0.5)
+            continue
+        
+        log_mstar = np.log10(sm_z[w])
+        log_dtm = np.log10(cd_z[w] / mcg_z[w])
+        
+        # Create 2D histogram (heatmap)
+        xbins = np.linspace(7, 12, 60)
+        ybins = np.linspace(-4, 0.5, 60)
+        
+        H, xedges, yedges = np.histogram2d(log_mstar, log_dtm, bins=[xbins, ybins])
+        
+        # Use raw counts for density display
+        H_plot = H.T
+        
+        # Create heatmap with custom colormap (dark background compatible)
+        extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+        cmap = plt.cm.inferno.copy()
+        cmap.set_bad(color='black')
+        cmap.set_under(color='black')
+        
+        im5 = ax.imshow(H_plot, extent=extent, origin='lower', aspect='auto',
+                       cmap=cmap, vmin=1, interpolation='gaussian')
+        
+        # Calculate and plot median line
+        mstar_bins = np.arange(7.5, 12.0, 0.25)
+        mstar_centers = 0.5 * (mstar_bins[:-1] + mstar_bins[1:])
+        median_dtm = np.full(len(mstar_centers), np.nan)
+        
+        for i in range(len(mstar_centers)):
+            sel = np.where((log_mstar >= mstar_bins[i]) & (log_mstar < mstar_bins[i+1]))[0]
+            if len(sel) > 10:
+                median_dtm[i] = np.median(log_dtm[sel])
+        
+        good = ~np.isnan(median_dtm)
+        ax.plot(mstar_centers[good], median_dtm[good], 'k-', lw=3, label='Median')
+        ax.plot(mstar_centers[good], median_dtm[good], 'w-', lw=1.5)
+        
+        # MW reference line (DtM ~ 0.5)
+        ax.axhline(np.log10(0.5), color='cyan', ls='--', lw=1.5, alpha=0.7)
+        
+        # Labels and styling
+        ax.set_xlim(7, 12)
+        ax.set_ylim(-1, 0.5)
+        ax.set_xlabel(r'$\log_{10}\, M_\star\ (M_\odot)$')
+        ax.set_ylabel(r'$\log_{10}(M_{\rm dust} / M_{\rm metals})$')
+        ax.set_title(z_label, fontsize=14)
+        
+        # Add galaxy count
+        ax.text(0.05, 0.95, f'N = {len(w):,}', transform=ax.transAxes,
+               ha='left', va='top', fontsize=10, color='white',
+               bbox=dict(boxstyle='round', facecolor='black', alpha=0.5))
+    
+    # Add colorbar
+    cbar_ax5 = fig5.add_axes([0.92, 0.15, 0.015, 0.7])
+    cbar5 = fig5.colorbar(im5, cax=cbar_ax5)
+    cbar5.set_label(r'$N_{\rm gal}$', color='white')
+    cbar5.ax.yaxis.set_tick_params(color='white')
+    plt.setp(plt.getp(cbar5.ax.axes, 'yticklabels'), color='white')
+    
+    fig5.suptitle('Dust-to-Metal Ratio vs Stellar Mass Evolution', fontsize=16, y=0.98)
+    plt.tight_layout(rect=[0, 0, 0.91, 0.95])
+    
+    outfile5 = os.path.join(OutputDir, 'DustToMetal_StellarMass_Evolution' + OutputFormat)
+    fig5.savefig(outfile5, facecolor=fig5.get_facecolor())
+    print(f'  Saved dust-to-metal vs stellar mass figure to: {outfile5}\n')
+    plt.close(fig5)
+
+    # ==================================================================
+    # NEW FIGURE: Dust-to-Metal Ratio vs Metallicity Evolution (z=0 to z=7)
+    # ==================================================================
+    print(f'  Creating Dust-to-Metal vs Metallicity evolution figure...')
+    
+    fig6, axes6 = plt.subplots(2, 4, figsize=(18, 10))
+    axes6 = axes6.flatten()
+    
+    for idx, (snapnum, z_val, z_label) in enumerate(z_panels):
+        ax = axes6[idx]
+        sn = f'Snap_{snapnum}'
+        
+        # Load data for this snapshot
+        cg_z = read_all_files(DirName, sn, 'ColdGas')
+        mcg_z = read_all_files(DirName, sn, 'MetalsColdGas')
+        cd_z = read_all_files(DirName, sn, 'ColdDust')
+        
+        if cg_z is None or cd_z is None or mcg_z is None:
+            ax.text(0.5, 0.5, f'{z_label}\nNo data', transform=ax.transAxes,
+                   ha='center', va='center', fontsize=14, color='white')
+            ax.set_xlim(6, 10)
+            ax.set_ylim(-1, 0.5)
+            continue
+        
+        # Convert to physical units
+        cg_z = cg_z * 1e10 / Hubble_h
+        mcg_z = mcg_z * 1e10 / Hubble_h
+        cd_z = cd_z * 1e10 / Hubble_h
+        
+        # Select galaxies with positive cold gas, metals, and dust
+        w = np.where((cg_z > 1e4) & (mcg_z > 0) & (cd_z > 0))[0]
+        
+        if len(w) < 100:
+            ax.text(0.5, 0.5, f'{z_label}\nToo few galaxies', transform=ax.transAxes,
+                   ha='center', va='center', fontsize=14, color='white')
+            ax.set_xlim(6, 10)
+            ax.set_ylim(-1, 0.5)
+            continue
+        
+        # Calculate metallicity as 12 + log(O/H)
+        Z_gas = mcg_z[w] / cg_z[w]
+        log_OH = 8.69 + np.log10(Z_gas / 0.02)
+        log_dtm = np.log10(cd_z[w] / mcg_z[w])
+        
+        # Create 2D histogram (heatmap)
+        xbins = np.linspace(6, 10, 60)
+        ybins = np.linspace(-4, 0.5, 60)
+        
+        H, xedges, yedges = np.histogram2d(log_OH, log_dtm, bins=[xbins, ybins])
+        
+        # Use raw counts for density display
+        H_plot = H.T
+        
+        # Create heatmap with custom colormap (dark background compatible)
+        extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+        cmap = plt.cm.inferno.copy()
+        cmap.set_bad(color='black')
+        cmap.set_under(color='black')
+        
+        im6 = ax.imshow(H_plot, extent=extent, origin='lower', aspect='auto',
+                       cmap=cmap, vmin=1, interpolation='gaussian')
+        
+        # Calculate and plot median line
+        oh_bins = np.arange(6.5, 10.0, 0.25)
+        oh_centers = 0.5 * (oh_bins[:-1] + oh_bins[1:])
+        median_dtm = np.full(len(oh_centers), np.nan)
+        
+        for i in range(len(oh_centers)):
+            sel = np.where((log_OH >= oh_bins[i]) & (log_OH < oh_bins[i+1]))[0]
+            if len(sel) > 10:
+                median_dtm[i] = np.median(log_dtm[sel])
+        
+        good = ~np.isnan(median_dtm)
+        ax.plot(oh_centers[good], median_dtm[good], 'k-', lw=3, label='Median')
+        ax.plot(oh_centers[good], median_dtm[good], 'w-', lw=1.5)
+        
+        # MW reference line (DtM ~ 0.5) and solar metallicity
+        ax.axhline(np.log10(0.5), color='cyan', ls='--', lw=1.5, alpha=0.7)
+        ax.axvline(8.69, color='cyan', ls=':', lw=1.5, alpha=0.7)  # Solar 12+log(O/H)
+        
+        # Labels and styling
+        ax.set_xlim(6, 10)
+        ax.set_ylim(-1, 0.5)
+        ax.set_xlabel(r'$12 + \log({\rm O/H})$')
+        ax.set_ylabel(r'$\log_{10}(M_{\rm dust} / M_{\rm metals})$')
+        ax.set_title(z_label, fontsize=14)
+        
+        # Add galaxy count
+        ax.text(0.05, 0.95, f'N = {len(w):,}', transform=ax.transAxes,
+               ha='left', va='top', fontsize=10, color='white',
+               bbox=dict(boxstyle='round', facecolor='black', alpha=0.5))
+    
+    # Add colorbar
+    cbar_ax6 = fig6.add_axes([0.92, 0.15, 0.015, 0.7])
+    cbar6 = fig6.colorbar(im6, cax=cbar_ax6)
+    cbar6.set_label(r'$N_{\rm gal}$', color='white')
+    cbar6.ax.yaxis.set_tick_params(color='white')
+    plt.setp(plt.getp(cbar6.ax.axes, 'yticklabels'), color='white')
+    
+    fig6.suptitle('Dust-to-Metal Ratio vs Metallicity Evolution', fontsize=16, y=0.98)
+    plt.tight_layout(rect=[0, 0, 0.91, 0.95])
+    
+    outfile6 = os.path.join(OutputDir, 'DustToMetal_Metallicity_Evolution' + OutputFormat)
+    fig6.savefig(outfile6, facecolor=fig6.get_facecolor())
+    print(f'  Saved dust-to-metal vs metallicity figure to: {outfile6}\n')
+    plt.close(fig6)
+
+    # ==================================================================
+    # NEW FIGURE: Dust and Star Formation History of MW-type Galaxy
+    # ==================================================================
+    print(f'  Creating MW-type galaxy dust history figure...')
+    
+    # Lookback times for each snapshot (Gyr)
+    from astropy.cosmology import FlatLambdaCDM
+    cosmo = FlatLambdaCDM(H0=73, Om0=0.25)
+    lookback_times = np.array([cosmo.lookback_time(z).value for z in redshifts])  # Gyr
+    cosmic_times = cosmo.age(0).value - lookback_times  # Age of universe at each z
+    
+    # Read all snapshots and find MW-like galaxies
+    with h5.File(os.path.join(DirName, 'model_0.hdf5'), 'r') as f:
+        # Get z=0 data to identify MW-like galaxies
+        sm_z0 = f['Snap_63/StellarMass'][:] * 1e10 / Hubble_h
+        gi_z0 = f['Snap_63/GalaxyIndex'][:]
+        sfr_z0 = f['Snap_63/SfrDisk'][:] + f['Snap_63/SfrBulge'][:]
+        
+        # MW-like: stellar mass between 3e10 and 1e11 Msun, AND star-forming
+        mw_mask = (sm_z0 > 3e10) & (sm_z0 < 1e11) & (sfr_z0 > 0.1)
+        mw_indices = gi_z0[mw_mask]
+        
+        print(f'    Found {len(mw_indices)} star-forming MW-like galaxies at z=0')
+        
+        # Limit to first 100 MW galaxies for computing median
+        n_mw = min(100, len(mw_indices))
+        mw_sample = mw_indices[:n_mw]
+        
+        # Storage arrays for all MW galaxies across time
+        all_dust_mass = []
+        all_sfr = []
+        all_metallicity = []
+        all_cold_gas = []
+        all_metals_cold = []
+        all_h2_gas = []
+        snap_has_data = []
+        
+        # Read data for each relevant snapshot
+        for snap in range(FirstSnap, LastSnap + 1):
+            snap_str = f'Snap_{snap}'
+            
+            try:
+                gi = f[f'{snap_str}/GalaxyIndex'][:]
+                sm = f[f'{snap_str}/StellarMass'][:] * 1e10 / Hubble_h
+                cd = f[f'{snap_str}/ColdDust'][:] * 1e10 / Hubble_h
+                cg = f[f'{snap_str}/ColdGas'][:] * 1e10 / Hubble_h
+                mcg = f[f'{snap_str}/MetalsColdGas'][:] * 1e10 / Hubble_h
+                sfr_disk = f[f'{snap_str}/SfrDisk'][:]
+                sfr_bulge = f[f'{snap_str}/SfrBulge'][:]
+                h2 = f[f'{snap_str}/H2gas'][:] * 1e10 / Hubble_h
+            except KeyError:
+                all_dust_mass.append(np.nan)
+                all_sfr.append(np.nan)
+                all_metallicity.append(np.nan)
+                all_cold_gas.append(np.nan)
+                all_metals_cold.append(np.nan)
+                all_h2_gas.append(np.nan)
+                snap_has_data.append(False)
+                continue
+            
+            # Find MW progenitors at this snapshot
+            dust_this_snap = []
+            sfr_this_snap = []
+            Z_this_snap = []
+            cg_this_snap = []
+            mcg_this_snap = []
+            h2_this_snap = []
+            
+            for mw_gi in mw_sample:
+                match = np.where(gi == mw_gi)[0]
+                if len(match) > 0:
+                    idx = match[0]
+                    dust_this_snap.append(cd[idx])
+                    sfr_this_snap.append(sfr_disk[idx] + sfr_bulge[idx])
+                    if cg[idx] > 0:
+                        Z_this_snap.append(mcg[idx] / cg[idx])
+                    else:
+                        Z_this_snap.append(0.0)
+                    cg_this_snap.append(cg[idx])
+                    mcg_this_snap.append(mcg[idx])
+                    h2_this_snap.append(h2[idx])
+            
+            if len(dust_this_snap) > 0:
+                all_dust_mass.append(np.median(dust_this_snap))
+                all_sfr.append(np.median(sfr_this_snap))
+                all_metallicity.append(np.median(Z_this_snap))
+                all_cold_gas.append(np.median(cg_this_snap))
+                all_metals_cold.append(np.median(mcg_this_snap))
+                all_h2_gas.append(np.median(h2_this_snap))
+                snap_has_data.append(True)
+            else:
+                all_dust_mass.append(np.nan)
+                all_sfr.append(np.nan)
+                all_metallicity.append(np.nan)
+                all_cold_gas.append(np.nan)
+                all_metals_cold.append(np.nan)
+                all_h2_gas.append(np.nan)
+                snap_has_data.append(False)
+    
+    # Convert to arrays
+    dust_mass = np.array(all_dust_mass)
+    sfr = np.array(all_sfr)
+    metallicity = np.array(all_metallicity)
+    cold_gas = np.array(all_cold_gas)
+    metals_cold = np.array(all_metals_cold)
+    h2_gas = np.array(all_h2_gas)
+    snap_has_data = np.array(snap_has_data)
+    
+    # Calculate dust rates from mass differences
+    # Use cosmic time differences (Gyr)
+    dt = np.diff(cosmic_times)  # Gyr between snapshots
+    
+    # Total dust rate: dM_dust/dt
+    total_dust_rate = np.zeros(len(dust_mass))
+    total_dust_rate[1:] = np.diff(dust_mass) / (dt * 1e9)  # Msun/yr
+    
+    # Estimate component rates based on physics:
+    # 1. Production rate ~ delta_eff × Yield × SFR
+    #    delta_eff ~ 0.27 (weighted AGB+SNII+SNIa: 0.3×0.6 + 0.6×0.15 + 0.1×0.03)
+    #    Yield ~ 0.03
+    delta_eff = 0.27
+    yield_frac = 0.03
+    prod_rate = delta_eff * yield_frac * sfr  # Msun/yr
+    Z_solar = 0.02
+    
+    # 2. Accretion rate ~ (1 - DtM)^2 × f_H2 × M_dust / tau_acc
+    #    tau_acc = 50 Myr × (Z_solar/Z)  [from parameter file]
+    #    Squared term matches model (Asano+13 eq 20 with self-regulation)
+    tau_acc_0 = 50e6  # 50 Myr in years (DustAccretionTimescale from .par)
+    f_h2 = np.where(cold_gas > 0, h2_gas / cold_gas, 0)
+    f_h2 = np.clip(f_h2, 0, 1)
+    # Default f_h2 = 0.5 when H2 tracking unavailable (matches model)
+    f_h2 = np.where(f_h2 < 1e-10, 0.5, f_h2)
+    dtm = np.where(metals_cold > 0, dust_mass / metals_cold, 0)
+    dtm = np.clip(dtm, 0, 1)
+    tau_acc = np.where(metallicity > 0, tau_acc_0 * Z_solar / metallicity, tau_acc_0)
+    accretion_rate = (1 - dtm)**2 * f_h2 * dust_mass / tau_acc  # Msun/yr
+    
+    # 3. Destruction rate ~ eta × m_swept × R_SN × DtG
+    #    R_SN ~ SFR / 100 Msun (1 SN per 100 Msun)
+    #    Note: Using higher efficiency (0.5) to match dusty-sage which includes
+    #    both SNII and SNIa destruction. The model code uses 0.1 for SNII only.
+    eta_sn = 0.5  # effective destruction efficiency (SNII + SNIa contribution)
+    m_swept = 1535 * (metallicity / Z_solar + 0.039)**(-0.289)  # Msun
+    R_sn = sfr / 100.0  # SN rate (per year)
+    dtg = np.where(cold_gas > 0, dust_mass / cold_gas, 0)
+    # Destruction timescale
+    tau_dest = np.where((R_sn > 0) & (cold_gas > 0), cold_gas / (eta_sn * m_swept * R_sn), 1e12)
+    destruction_rate = dust_mass / tau_dest  # Msun/yr
+    
+    # Total dust formation rate = production + growth (sources only)
+    total_formation_rate = prod_rate + accretion_rate
+    
+    # Create figure
+    fig7, ax7 = plt.subplots(figsize=(12, 8))
+    
+    # Select valid data points (after early snapshots, with positive dust)
+    valid = (snap_has_data) & (lookback_times < 13) & (dust_mass > 0) & (prod_rate > 0)
+    
+    # Plot dust rates vs lookback time (dusty-sage style)
+    ax7.plot(lookback_times[valid], total_formation_rate[valid], 'w-', lw=3, 
+             label='Total dust formation')
+    ax7.plot(lookback_times[valid], prod_rate[valid], 'g--', lw=2.5, 
+             label='Formation in stellar ejecta')
+    ax7.plot(lookback_times[valid], accretion_rate[valid], 'b-.', lw=2.5, 
+             label='Growth in the ISM')
+    ax7.plot(lookback_times[valid], destruction_rate[valid], 'r:', lw=2.5, 
+             label='Destruction by SN')
+    
+    # Secondary y-axis for SFR
+    ax7_right = ax7.twinx()
+    ax7_right.fill_between(lookback_times[valid], 1e-2, sfr[valid], 
+                           color='magenta', alpha=0.3, label='Star formation rate')
+    ax7_right.plot(lookback_times[valid], sfr[valid], 'm-', lw=1, alpha=0.5)
+    
+    # Labels
+    ax7.set_xlabel('Lookback time (Gyr)', fontsize=14)
+    ax7.set_ylabel(r'$\log_{10}$ Dust rate ($M_\odot$ yr$^{-1}$)', fontsize=14)
+    ax7_right.set_ylabel(r'$\log_{10}$ SFR ($M_\odot$ yr$^{-1}$)', fontsize=14, color='magenta')
+    ax7_right.tick_params(axis='y', labelcolor='magenta')
+    
+    # Add redshift axis on top
+    ax7_top = ax7.twiny()
+    z_ticks = [0, 0.2, 0.5, 1, 2, 4]
+    lb_ticks = [cosmo.lookback_time(z).value for z in z_ticks]
+    ax7_top.set_xlim(ax7.get_xlim())
+    ax7_top.set_xticks(lb_ticks)
+    ax7_top.set_xticklabels([f'{z}' for z in z_ticks])
+    ax7_top.set_xlabel('redshift', fontsize=12)
+    
+    # Limits - lookback time from 0 (today) to ~13 Gyr (early universe)
+    ax7.set_xlim(0, 13)
+    ax7.set_yscale('log')
+    ax7.set_ylim(1e-4, 1)
+    ax7_right.set_yscale('log')
+    ax7_right.set_ylim(1e-1, 1e2)
+    
+    # Legend
+    lines1, labels1 = ax7.get_legend_handles_labels()
+    lines2, labels2 = ax7_right.get_legend_handles_labels()
+    ax7.legend(lines1 + lines2, labels1 + labels2, loc='lower left', fontsize=11)
+    
+    ax7.set_title('Dust and Star Formation History of MW-type Galaxy', fontsize=16)
+    
+    plt.tight_layout()
+    
+    outfile7 = os.path.join(OutputDir, 'MW_Dust_History' + OutputFormat)
+    fig7.savefig(outfile7, facecolor=fig7.get_facecolor())
+    print(f'  Saved MW dust history figure to: {outfile7}\n')
+    plt.close(fig7)
+
 
 if __name__ == '__main__':
     main()
