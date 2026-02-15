@@ -224,7 +224,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
 
 void grow_black_hole(const int merger_centralgal, const double mass_ratio, struct GALAXY *galaxies, const struct params *run_params)
 {
-    double BHaccrete, metallicity;
+    double BHaccrete = 0.0, metallicity;
 
     if(galaxies[merger_centralgal].ColdGas > 0.0) {
         BHaccrete = run_params->BlackHoleGrowthRate * mass_ratio /
@@ -243,11 +243,12 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
         galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
 
         quasar_mode_wind(merger_centralgal, BHaccrete, galaxies, run_params);
-    }
 
-    if(run_params->DustOn == 1) {
-        const double DTG = get_DTG(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].ColdDust);
-        galaxies[merger_centralgal].ColdDust -= DTG * BHaccrete;
+        /* Remove dust proportional to BH accretion (inside ColdGas > 0 block) */
+        if(run_params->DustOn == 1 && BHaccrete > 0.0) {
+            const double DTG = get_DTG(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].ColdDust);
+            galaxies[merger_centralgal].ColdDust -= DTG * BHaccrete;
+        }
     }
 }
 
@@ -263,11 +264,13 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
     if(quasar_energy > cold_gas_energy) {
         galaxies[gal].EjectedMass += galaxies[gal].ColdGas;
         galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsColdGas;
-        galaxies[gal].EjectedDust += galaxies[gal].ColdDust;
+        if(run_params->DustOn == 1) {
+            galaxies[gal].EjectedDust += galaxies[gal].ColdDust;
+            galaxies[gal].ColdDust = 0.0;
+        }
 
         galaxies[gal].ColdGas = 0.0;
         galaxies[gal].MetalsColdGas = 0.0;
-        galaxies[gal].ColdDust = 0.0;
     }
 
     // compare quasar wind and cold+hot/CGM gas energies and eject from appropriate reservoir
@@ -279,11 +282,13 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
             if(quasar_energy > cold_gas_energy + cgm_gas_energy) {
                 galaxies[gal].EjectedMass += galaxies[gal].CGMgas;
                 galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsCGMgas;
-                galaxies[gal].EjectedDust += galaxies[gal].CGMDust;
+                if(run_params->DustOn == 1) {
+                    galaxies[gal].EjectedDust += galaxies[gal].CGMDust;
+                    galaxies[gal].CGMDust = 0.0;
+                }
 
                 galaxies[gal].CGMgas = 0.0;
                 galaxies[gal].MetalsCGMgas = 0.0;
-                galaxies[gal].CGMDust = 0.0;
             }
         } else {
             // Hot-ICM-regime: check and eject from HotGas
@@ -292,11 +297,13 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
             if(quasar_energy > cold_gas_energy + hot_gas_energy) {
                 galaxies[gal].EjectedMass += galaxies[gal].HotGas;
                 galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsHotGas;
-                galaxies[gal].EjectedDust += galaxies[gal].HotDust;
+                if(run_params->DustOn == 1) {
+                    galaxies[gal].EjectedDust += galaxies[gal].HotDust;
+                    galaxies[gal].HotDust = 0.0;
+                }
 
                 galaxies[gal].HotGas = 0.0;
                 galaxies[gal].MetalsHotGas = 0.0;
-                galaxies[gal].HotDust = 0.0;
             }
         }
     } else {
@@ -306,11 +313,13 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
         if(quasar_energy > cold_gas_energy + hot_gas_energy) {
             galaxies[gal].EjectedMass += galaxies[gal].HotGas;
             galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsHotGas;
-            galaxies[gal].EjectedDust += galaxies[gal].HotDust;
+            if(run_params->DustOn == 1) {
+                galaxies[gal].EjectedDust += galaxies[gal].HotDust;
+                galaxies[gal].HotDust = 0.0;
+            }
 
             galaxies[gal].HotGas = 0.0;
             galaxies[gal].MetalsHotGas = 0.0;
-            galaxies[gal].HotDust = 0.0;
         }
     }
 }

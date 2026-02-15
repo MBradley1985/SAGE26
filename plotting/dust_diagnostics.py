@@ -85,11 +85,11 @@ def load_remy_ruyer_2014():
     """Load Rémy-Ruyer+2014 galaxy sample from dusty-sage analysis directory.
     Returns dict with keys: logMstar, logMdust, logSFR, Z_12logOH, logMgas"""
     datafile = os.path.join(os.path.dirname(__file__),
-                            '../../dusty-sage/analysis/remy-ruyer.master.dat')
+                            './data/remy-ruyer.master.dat')
     if not os.path.exists(datafile):
         # Try relative to workspace root
         datafile = os.path.expanduser(
-            '~/Documents/PhD/dusty-sage/analysis/remy-ruyer.master.dat')
+            './data/remy-ruyer.master.dat')
     if not os.path.exists(datafile):
         return None
 
@@ -1770,146 +1770,181 @@ def main():
     lookback_times = np.array([cosmo.lookback_time(z).value for z in redshifts])  # Gyr
     cosmic_times = cosmo.age(0).value - lookback_times  # Age of universe at each z
     
-    # Read all snapshots and find MW-like galaxies
-    with h5.File(os.path.join(DirName, 'model_0.hdf5'), 'r') as f:
-        # Get z=0 data to identify MW-like galaxies
-        sm_z0 = f['Snap_63/StellarMass'][:] * 1e10 / Hubble_h
-        gi_z0 = f['Snap_63/GalaxyIndex'][:]
-        sfr_z0 = f['Snap_63/SfrDisk'][:] + f['Snap_63/SfrBulge'][:]
-        
-        # MW-like: stellar mass between 3e10 and 1e11 Msun, AND star-forming
-        mw_mask = (sm_z0 > 3e10) & (sm_z0 < 1e11) & (sfr_z0 > 0.1)
-        mw_indices = gi_z0[mw_mask]
-        
-        print(f'    Found {len(mw_indices)} star-forming MW-like galaxies at z=0')
-        
-        # Limit to first 100 MW galaxies for computing median
-        n_mw = min(100, len(mw_indices))
-        mw_sample = mw_indices[:n_mw]
-        
-        # Check if DustDot arrays are available
-        has_dustdot = 'Snap_63/DustDotForm' in f
-        if has_dustdot:
-            print(f'    Using DustDot arrays from HDF5 output')
-        else:
-            print(f'    DustDot arrays not found, estimating rates from physics')
-        
-        # Storage arrays for all MW galaxies across time
-        all_dust_mass = []
-        all_sfr = []
-        all_sfr_p16 = []  # 16th percentile of SFR
-        all_sfr_p84 = []  # 84th percentile of SFR
-        all_metallicity = []
-        all_cold_gas = []
-        all_metals_cold = []
-        all_h2_gas = []
-        all_dustdot_form = []     # From HDF5
-        all_dustdot_growth = []   # From HDF5
-        all_dustdot_destruct = [] # From HDF5
-        snap_has_data = []
-        
-        # Read data for each relevant snapshot
-        for snap in range(FirstSnap, LastSnap + 1):
-            snap_str = f'Snap_{snap}'
-            
-            try:
-                gi = f[f'{snap_str}/GalaxyIndex'][:]
-                sm = f[f'{snap_str}/StellarMass'][:] * 1e10 / Hubble_h
-                cd = f[f'{snap_str}/ColdDust'][:] * 1e10 / Hubble_h
-                cg = f[f'{snap_str}/ColdGas'][:] * 1e10 / Hubble_h
-                mcg = f[f'{snap_str}/MetalsColdGas'][:] * 1e10 / Hubble_h
-                sfr_disk = f[f'{snap_str}/SfrDisk'][:]
-                sfr_bulge = f[f'{snap_str}/SfrBulge'][:]
-                h2 = f[f'{snap_str}/H2gas'][:] * 1e10 / Hubble_h
-                
-                # Read DustDot arrays if available (sum over STEPS for total rate)
-                if has_dustdot:
-                    dustdot_form = f[f'{snap_str}/DustDotForm'][:]  # [ngal, STEPS] in Msun/yr
-                    dustdot_growth = f[f'{snap_str}/DustDotGrowth'][:]
-                    dustdot_destruct = f[f'{snap_str}/DustDotDestruct'][:]
-                    # Sum over steps (or use mean - they're rates per step)
-                    ddform = np.mean(dustdot_form, axis=1)  # Mean rate over steps
-                    ddgrowth = np.mean(dustdot_growth, axis=1)
-                    dddestruct = np.mean(dustdot_destruct, axis=1)
-                else:
-                    ddform = None
-                    ddgrowth = None
-                    dddestruct = None
-            except KeyError:
-                all_dust_mass.append(np.nan)
-                all_sfr.append(np.nan)
-                all_sfr_p16.append(np.nan)
-                all_sfr_p84.append(np.nan)
-                all_metallicity.append(np.nan)
-                all_cold_gas.append(np.nan)
-                all_metals_cold.append(np.nan)
-                all_h2_gas.append(np.nan)
-                all_dustdot_form.append(np.nan)
-                all_dustdot_growth.append(np.nan)
-                all_dustdot_destruct.append(np.nan)
-                snap_has_data.append(False)
-                continue
-            
-            # Find MW progenitors at this snapshot
-            dust_this_snap = []
-            sfr_this_snap = []
-            Z_this_snap = []
-            cg_this_snap = []
-            mcg_this_snap = []
-            h2_this_snap = []
-            ddform_this_snap = []
-            ddgrowth_this_snap = []
-            dddestruct_this_snap = []
-            
-            for mw_gi in mw_sample:
-                match = np.where(gi == mw_gi)[0]
-                if len(match) > 0:
-                    idx = match[0]
-                    dust_this_snap.append(cd[idx])
-                    sfr_this_snap.append(sfr_disk[idx] + sfr_bulge[idx])
-                    if cg[idx] > 0:
-                        Z_this_snap.append(mcg[idx] / cg[idx])
-                    else:
-                        Z_this_snap.append(0.0)
-                    cg_this_snap.append(cg[idx])
-                    mcg_this_snap.append(mcg[idx])
-                    h2_this_snap.append(h2[idx])
-                    if has_dustdot and ddform is not None:
-                        ddform_this_snap.append(ddform[idx])
-                        ddgrowth_this_snap.append(ddgrowth[idx])
-                        dddestruct_this_snap.append(dddestruct[idx])
-            
-            if len(dust_this_snap) > 0:
-                all_dust_mass.append(np.median(dust_this_snap))
-                all_sfr.append(np.median(sfr_this_snap))
-                all_sfr_p16.append(np.percentile(sfr_this_snap, 16))
-                all_sfr_p84.append(np.percentile(sfr_this_snap, 84))
-                all_metallicity.append(np.median(Z_this_snap))
-                all_cold_gas.append(np.median(cg_this_snap))
-                all_metals_cold.append(np.median(mcg_this_snap))
-                all_h2_gas.append(np.median(h2_this_snap))
-                if has_dustdot and len(ddform_this_snap) > 0:
-                    all_dustdot_form.append(np.median(ddform_this_snap))
-                    all_dustdot_growth.append(np.median(ddgrowth_this_snap))
-                    all_dustdot_destruct.append(np.median(dddestruct_this_snap))
-                else:
-                    all_dustdot_form.append(np.nan)
-                    all_dustdot_growth.append(np.nan)
-                    all_dustdot_destruct.append(np.nan)
-                snap_has_data.append(True)
+    # Helper function to read multiple arrays from all model files for a snapshot
+    def read_snap_from_all_files(dirpath, snap_str, params):
+        """Read multiple params from all model_*.hdf5 files, return dict of concatenated arrays."""
+        result = {p: [] for p in params}
+        i = 0
+        while True:
+            fname = os.path.join(dirpath, f'model_{i}.hdf5')
+            if not os.path.exists(fname):
+                break
+            with h5.File(fname, 'r') as f:
+                if snap_str in f:
+                    for p in params:
+                        if p in f[snap_str]:
+                            result[p].append(np.array(f[snap_str][p]))
+            i += 1
+        # Concatenate arrays
+        for p in params:
+            if result[p]:
+                result[p] = np.concatenate(result[p])
             else:
-                all_dust_mass.append(np.nan)
-                all_sfr.append(np.nan)
-                all_sfr_p16.append(np.nan)
-                all_sfr_p84.append(np.nan)
-                all_metallicity.append(np.nan)
-                all_cold_gas.append(np.nan)
-                all_metals_cold.append(np.nan)
-                all_h2_gas.append(np.nan)
+                result[p] = None
+        return result
+    
+    # Check if DustDot arrays are available (check first file)
+    has_dustdot = False
+    with h5.File(os.path.join(DirName, 'model_0.hdf5'), 'r') as f:
+        has_dustdot = 'Snap_63/DustDotForm' in f
+    
+    if has_dustdot:
+        print(f'    Using DustDot arrays from HDF5 output')
+    else:
+        print(f'    DustDot arrays not found, estimating rates from physics')
+    
+    # Get z=0 data from ALL files to identify MW-like galaxies
+    z0_params = ['StellarMass', 'GalaxyIndex', 'SfrDisk', 'SfrBulge']
+    z0_data = read_snap_from_all_files(DirName, f'Snap_{LastSnap}', z0_params)
+    
+    sm_z0 = z0_data['StellarMass'] * 1e10 / Hubble_h
+    gi_z0 = z0_data['GalaxyIndex']
+    sfr_z0 = z0_data['SfrDisk'] + z0_data['SfrBulge']
+    
+    # MW-like: stellar mass between 3e10 and 1e11 Msun, AND star-forming
+    mw_mask = (sm_z0 > 3e10) & (sm_z0 < 1e11) & (sfr_z0 > 0.1)
+    mw_indices = gi_z0[mw_mask]
+    
+    print(f'    Found {len(mw_indices)} star-forming MW-like galaxies at z=0')
+    
+    # Limit to first 100 MW galaxies for computing median
+    n_mw = min(100, len(mw_indices))
+    mw_sample = mw_indices[:n_mw]
+    
+    # Storage arrays for all MW galaxies across time
+    all_dust_mass = []
+    all_sfr = []
+    all_sfr_p16 = []  # 16th percentile of SFR
+    all_sfr_p84 = []  # 84th percentile of SFR
+    all_metallicity = []
+    all_cold_gas = []
+    all_metals_cold = []
+    all_h2_gas = []
+    all_dustdot_form = []     # From HDF5
+    all_dustdot_growth = []   # From HDF5
+    all_dustdot_destruct = [] # From HDF5
+    snap_has_data = []
+    
+    # Parameters to read for each snapshot
+    snap_params = ['GalaxyIndex', 'StellarMass', 'ColdDust', 'ColdGas', 
+                   'MetalsColdGas', 'SfrDisk', 'SfrBulge', 'H2gas']
+    if has_dustdot:
+        snap_params.extend(['DustDotForm', 'DustDotGrowth', 'DustDotDestruct'])
+    
+    # Read data for each relevant snapshot from ALL files
+    for snap in range(FirstSnap, LastSnap + 1):
+        snap_str = f'Snap_{snap}'
+        
+        snap_data = read_snap_from_all_files(DirName, snap_str, snap_params)
+        
+        if snap_data['GalaxyIndex'] is None:
+            all_dust_mass.append(np.nan)
+            all_sfr.append(np.nan)
+            all_sfr_p16.append(np.nan)
+            all_sfr_p84.append(np.nan)
+            all_metallicity.append(np.nan)
+            all_cold_gas.append(np.nan)
+            all_metals_cold.append(np.nan)
+            all_h2_gas.append(np.nan)
+            all_dustdot_form.append(np.nan)
+            all_dustdot_growth.append(np.nan)
+            all_dustdot_destruct.append(np.nan)
+            snap_has_data.append(False)
+            continue
+        
+        gi = snap_data['GalaxyIndex']
+        sm = snap_data['StellarMass'] * 1e10 / Hubble_h
+        cd = snap_data['ColdDust'] * 1e10 / Hubble_h
+        cg = snap_data['ColdGas'] * 1e10 / Hubble_h
+        mcg = snap_data['MetalsColdGas'] * 1e10 / Hubble_h
+        sfr_disk = snap_data['SfrDisk']
+        sfr_bulge = snap_data['SfrBulge']
+        h2 = snap_data['H2gas'] * 1e10 / Hubble_h
+        
+        # Read DustDot arrays if available (sum over STEPS for total rate)
+        if has_dustdot and snap_data['DustDotForm'] is not None:
+            dustdot_form = snap_data['DustDotForm']
+            dustdot_growth = snap_data['DustDotGrowth']
+            dustdot_destruct = snap_data['DustDotDestruct']
+            # Sum over steps (or use mean - they're rates per step)
+            ddform = np.mean(dustdot_form, axis=1)  # Mean rate over steps
+            ddgrowth = np.mean(dustdot_growth, axis=1)
+            dddestruct = np.mean(dustdot_destruct, axis=1)
+        else:
+            ddform = None
+            ddgrowth = None
+            dddestruct = None
+        
+        # Find MW progenitors at this snapshot
+        dust_this_snap = []
+        sfr_this_snap = []
+        Z_this_snap = []
+        cg_this_snap = []
+        mcg_this_snap = []
+        h2_this_snap = []
+        ddform_this_snap = []
+        ddgrowth_this_snap = []
+        dddestruct_this_snap = []
+        
+        for mw_gi in mw_sample:
+            match = np.where(gi == mw_gi)[0]
+            if len(match) > 0:
+                idx = match[0]
+                dust_this_snap.append(cd[idx])
+                sfr_this_snap.append(sfr_disk[idx] + sfr_bulge[idx])
+                if cg[idx] > 0:
+                    Z_this_snap.append(mcg[idx] / cg[idx])
+                else:
+                    Z_this_snap.append(0.0)
+                cg_this_snap.append(cg[idx])
+                mcg_this_snap.append(mcg[idx])
+                h2_this_snap.append(h2[idx])
+                if has_dustdot and ddform is not None:
+                    ddform_this_snap.append(ddform[idx])
+                    ddgrowth_this_snap.append(ddgrowth[idx])
+                    dddestruct_this_snap.append(dddestruct[idx])
+        
+        if len(dust_this_snap) > 0:
+            all_dust_mass.append(np.median(dust_this_snap))
+            all_sfr.append(np.median(sfr_this_snap))
+            all_sfr_p16.append(np.percentile(sfr_this_snap, 16))
+            all_sfr_p84.append(np.percentile(sfr_this_snap, 84))
+            all_metallicity.append(np.median(Z_this_snap))
+            all_cold_gas.append(np.median(cg_this_snap))
+            all_metals_cold.append(np.median(mcg_this_snap))
+            all_h2_gas.append(np.median(h2_this_snap))
+            if has_dustdot and len(ddform_this_snap) > 0:
+                all_dustdot_form.append(np.median(ddform_this_snap))
+                all_dustdot_growth.append(np.median(ddgrowth_this_snap))
+                all_dustdot_destruct.append(np.median(dddestruct_this_snap))
+            else:
                 all_dustdot_form.append(np.nan)
                 all_dustdot_growth.append(np.nan)
                 all_dustdot_destruct.append(np.nan)
-                snap_has_data.append(False)
+            snap_has_data.append(True)
+        else:
+            all_dust_mass.append(np.nan)
+            all_sfr.append(np.nan)
+            all_sfr_p16.append(np.nan)
+            all_sfr_p84.append(np.nan)
+            all_metallicity.append(np.nan)
+            all_cold_gas.append(np.nan)
+            all_metals_cold.append(np.nan)
+            all_h2_gas.append(np.nan)
+            all_dustdot_form.append(np.nan)
+            all_dustdot_growth.append(np.nan)
+            all_dustdot_destruct.append(np.nan)
+            snap_has_data.append(False)
     
     # Convert to arrays
     dust_mass = np.array(all_dust_mass)

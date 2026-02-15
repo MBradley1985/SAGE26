@@ -14,6 +14,7 @@ extern "C" {
     extern double calculate_cgm_cool_fraction(const int gal, struct GALAXY *galaxies);
     extern void cgm_inflow_model(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params);
     extern void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct GALAXY *galaxies);
+    extern void cool_gas_onto_galaxy_with_dust(const int centralgal, const double coolingGas, struct GALAXY *galaxies);
     extern void cool_gas_onto_galaxy_regime_aware(const int centralgal, const double coolingGas, struct GALAXY *galaxies);
     extern double do_AGN_heating(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
                                  struct GALAXY *galaxies, const struct params *run_params);

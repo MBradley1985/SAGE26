@@ -398,6 +398,7 @@ void destruct_dust(const double metallicity, const double stars, const double dt
      * not from stars forming now. This prevents the timing mismatch where
      * destruction responds instantly to SFR but production is delayed.
      */
+    (void)stars;  /* Now using delayed SN rate from SFR history instead */
 
     if(galaxies[p].ColdGas <= 1.0e-10 || galaxies[p].ColdDust <= 0.0) {
         return;

@@ -416,7 +416,11 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
                 // cool_gas_onto_galaxy_regime_aware(p, coolingGas, galaxies);
             } else {
                 coolingGas = cooling_recipe(p, deltaT / effective_steps, galaxies, run_params);
-                cool_gas_onto_galaxy(p, coolingGas, galaxies);
+                if(run_params->DustOn == 1) {
+                    cool_gas_onto_galaxy_with_dust(p, coolingGas, galaxies);
+                } else {
+                    cool_gas_onto_galaxy(p, coolingGas, galaxies);
+                }
             }
 
             // stars form and then explode!
