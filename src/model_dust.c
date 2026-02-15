@@ -89,41 +89,37 @@ void produce_metals_dust(const double metallicity, const double dt,
     }
 
     /* ---------- SNIa channel (Arrigoni+2010 eq 9-10) ---------- */
+    /* Uses pre-computed mbin_snia, mu_snia, fmu_snia, taum_snia from init */
     const int count = 20;
-    const double gamma_bin = 2.0;
-    const double low_binary = 3.0, up_binary = 16.0;
+    const double up_binary = 16.0;
     const double max_mu = 0.5;
 
-    double mu[20], mbin[20];
     double yCrmu[20], yFemu[20], yNimu[20];
     double yCrphi[20], yFephi[20], yNiphi[20];
 
     for(int i = 0; i < count; i++) {
-        mbin[i] = low_binary + ((up_binary - low_binary) / (double)(count - i));
-        mu[i] = max_mu / (double)(count - i);
-        double fmu = pow(2.0, 1.0 + gamma_bin) * (1.0 + gamma_bin) * pow(mu[i], gamma_bin);
-        double taum = compute_taum(mu[i] * mbin[i]);
-        double time = age[snapnum] - taum;
+        double time = age[snapnum] - run_params->taum_snia[i];
         double sfr = 0.0;
         if(time >= run_params->lbtime[0]) {
             sfr = interpolate_arr(age, sfh, run_params->Snaplistlen, time);
         }
-        yCrmu[i] = fmu * sfr * run_params->qCrsnia;
-        yFemu[i] = fmu * sfr * run_params->qFesnia;
-        yNimu[i] = fmu * sfr * run_params->qNisnia;
+        yCrmu[i] = run_params->fmu_snia[i] * sfr * run_params->qCrsnia;
+        yFemu[i] = run_params->fmu_snia[i] * sfr * run_params->qFesnia;
+        yNimu[i] = run_params->fmu_snia[i] * sfr * run_params->qNisnia;
     }
 
-    double yCr = integrate_arr(mu, yCrmu, count, max_mu / count, max_mu);
-    double yFe = integrate_arr(mu, yFemu, count, max_mu / count, max_mu);
-    double yNi = integrate_arr(mu, yNimu, count, max_mu / count, max_mu);
+    double yCr = integrate_arr(run_params->mu_snia, yCrmu, count, max_mu / count, max_mu);
+    double yFe = integrate_arr(run_params->mu_snia, yFemu, count, max_mu / count, max_mu);
+    double yNi = integrate_arr(run_params->mu_snia, yNimu, count, max_mu / count, max_mu);
     for(int i = 0; i < count; i++) {
-        yCrphi[i] = yCr * compute_imf(mbin[i]);
-        yFephi[i] = yFe * compute_imf(mbin[i]);
-        yNiphi[i] = yNi * compute_imf(mbin[i]);
+        yCrphi[i] = yCr * run_params->phi_snia[i];
+        yFephi[i] = yFe * run_params->phi_snia[i];
+        yNiphi[i] = yNi * run_params->phi_snia[i];
     }
 
     /* ---------- AGB channel (Karakas 2010) ---------- */
-    const double low_agb = 1.0, up_agb = 6.0;
+    /* Uses pre-computed phi_agb, taum_agb from init; stack arrays for speed */
+    const double low_agb = 1.0, up_agb = 6.0, low_binary = 3.0;
 
     /* Find nearest metallicity grid index */
     int j_agb = 0;
@@ -137,28 +133,26 @@ void produce_metals_dust(const double metallicity, const double dt,
         }
     }
 
-    double *yCagb = calloc(run_params->countagb, sizeof(double));
-    double *yNagb = calloc(run_params->countagb, sizeof(double));
-    double *yOagb = calloc(run_params->countagb, sizeof(double));
-    double *m_agb = calloc(run_params->countagb, sizeof(double));
+    /* Stack arrays instead of calloc (countagb is typically ~16) */
+    double yCagb[MAXYIELDS], yNagb[MAXYIELDS], yOagb[MAXYIELDS];
 
     for(int i = 0; i < run_params->countagb; i++) {
         if(run_params->magb[i] != 0.0) {
-            m_agb[i] = run_params->magb[i];
-            double phi = compute_imf(run_params->magb[i]);
-            double taum = compute_taum(run_params->magb[i]);
-            double time = age[snapnum] - taum;
+            double time = age[snapnum] - run_params->taum_agb[i];
             double sfr = 0.0;
             if(time >= run_params->lbtime[0]) {
                 sfr = interpolate_arr(age, sfh, run_params->Snaplistlen, time);
             }
-            yCagb[i] = run_params->qCagb[i][j_agb] * phi * sfr;
-            yNagb[i] = run_params->qNagb[i][j_agb] * phi * sfr;
-            yOagb[i] = run_params->qOagb[i][j_agb] * phi * sfr;
+            yCagb[i] = run_params->qCagb[i][j_agb] * run_params->phi_agb[i] * sfr;
+            yNagb[i] = run_params->qNagb[i][j_agb] * run_params->phi_agb[i] * sfr;
+            yOagb[i] = run_params->qOagb[i][j_agb] * run_params->phi_agb[i] * sfr;
+        } else {
+            yCagb[i] = yNagb[i] = yOagb[i] = 0.0;
         }
     }
 
     /* ---------- SNII channel ---------- */
+    /* Uses pre-computed phi_sn, taum_sn from init; stack arrays for speed */
     const double low_sn = run_params->msn[0];
     const double up_sn = 40.0;
 
@@ -181,66 +175,58 @@ void produce_metals_dust(const double metallicity, const double dt,
         }
     }
 
-    double *yCsn  = calloc(run_params->countsn, sizeof(double));
-    double *yOsn  = calloc(run_params->countsn, sizeof(double));
-    double *yMgsn = calloc(run_params->countsn, sizeof(double));
-    double *ySisn = calloc(run_params->countsn, sizeof(double));
-    double *ySsn  = calloc(run_params->countsn, sizeof(double));
-    double *yCasn = calloc(run_params->countsn, sizeof(double));
-    double *yFesn = calloc(run_params->countsn, sizeof(double));
-    double *m_sn  = calloc(run_params->countsn, sizeof(double));
+    /* Stack arrays instead of calloc (countsn is typically ~13) */
+    double yCsn[MAXYIELDS], yOsn[MAXYIELDS], yMgsn[MAXYIELDS], ySisn[MAXYIELDS];
+    double ySsn[MAXYIELDS], yCasn[MAXYIELDS], yFesn[MAXYIELDS];
 
     for(int i = 0; i < run_params->countsn; i++) {
         if(run_params->msn[i] != 0.0) {
-            m_sn[i] = run_params->msn[i];
-            double phi = compute_imf(run_params->msn[i]);
-            double taum = compute_taum(run_params->msn[i]);
-            double time = age[snapnum] - taum;
+            double time = age[snapnum] - run_params->taum_sn[i];
             double sfr = 0.0;
             if(time >= run_params->lbtime[0]) {
                 sfr = interpolate_arr(age, sfh, run_params->Snaplistlen, time);
             }
-            yCsn[i]  = run_params->qCsn[i][j_sn]  * phi * sfr;
-            yOsn[i]  = run_params->qOsn[i][j_sn]  * phi * sfr;
-            yMgsn[i] = run_params->qMgsn[i][j_sn] * phi * sfr;
-            ySisn[i] = run_params->qSisn[i][j_sn] * phi * sfr;
-            ySsn[i]  = run_params->qSsn[i][j_sn]  * phi * sfr;
-            yCasn[i] = run_params->qCasn[i][j_sn] * phi * sfr;
-            yFesn[i] = run_params->qFesn[i][j_sn] * phi * sfr;
+            yCsn[i]  = run_params->qCsn[i][j_sn]  * run_params->phi_sn[i] * sfr;
+            yOsn[i]  = run_params->qOsn[i][j_sn]  * run_params->phi_sn[i] * sfr;
+            yMgsn[i] = run_params->qMgsn[i][j_sn] * run_params->phi_sn[i] * sfr;
+            ySisn[i] = run_params->qSisn[i][j_sn] * run_params->phi_sn[i] * sfr;
+            ySsn[i]  = run_params->qSsn[i][j_sn]  * run_params->phi_sn[i] * sfr;
+            yCasn[i] = run_params->qCasn[i][j_sn] * run_params->phi_sn[i] * sfr;
+            yFesn[i] = run_params->qFesn[i][j_sn] * run_params->phi_sn[i] * sfr;
+        } else {
+            yCsn[i] = yOsn[i] = yMgsn[i] = ySisn[i] = ySsn[i] = yCasn[i] = yFesn[i] = 0.0;
         }
     }
 
     /* ---------- Integrate over IMF ---------- */
-    double yCr_snia = A * integrate_arr(mbin, yCrphi, count, mbin[0], up_binary);
-    double yNi_snia = A * integrate_arr(mbin, yNiphi, count, mbin[0], up_binary);
-    double yFe_snia = A * integrate_arr(mbin, yFephi, count, mbin[0], up_binary);
+    /* Use magb/msn/mbin_snia directly since we no longer copy to m_agb/m_sn */
+    double yCr_snia = A * integrate_arr(run_params->mbin_snia, yCrphi, count, run_params->mbin_snia[0], up_binary);
+    double yNi_snia = A * integrate_arr(run_params->mbin_snia, yNiphi, count, run_params->mbin_snia[0], up_binary);
+    double yFe_snia = A * integrate_arr(run_params->mbin_snia, yFephi, count, run_params->mbin_snia[0], up_binary);
 
-    double yC_agb = (1.0 - A) * integrate_arr(m_agb, yCagb, run_params->countagb, low_binary, up_agb)
-                               + integrate_arr(m_agb, yCagb, run_params->countagb, low_agb, low_binary);
-    double yN_agb = (1.0 - A) * integrate_arr(m_agb, yNagb, run_params->countagb, low_binary, up_agb)
-                               + integrate_arr(m_agb, yNagb, run_params->countagb, low_agb, low_binary);
-    double yO_agb = (1.0 - A) * integrate_arr(m_agb, yOagb, run_params->countagb, low_binary, up_agb)
-                               + integrate_arr(m_agb, yOagb, run_params->countagb, low_agb, low_binary);
+    double yC_agb = (1.0 - A) * integrate_arr(run_params->magb, yCagb, run_params->countagb, low_binary, up_agb)
+                               + integrate_arr(run_params->magb, yCagb, run_params->countagb, low_agb, low_binary);
+    double yN_agb = (1.0 - A) * integrate_arr(run_params->magb, yNagb, run_params->countagb, low_binary, up_agb)
+                               + integrate_arr(run_params->magb, yNagb, run_params->countagb, low_agb, low_binary);
+    double yO_agb = (1.0 - A) * integrate_arr(run_params->magb, yOagb, run_params->countagb, low_binary, up_agb)
+                               + integrate_arr(run_params->magb, yOagb, run_params->countagb, low_agb, low_binary);
 
-    double yC_sn  = (1.0 - A) * integrate_arr(m_sn, yCsn,  run_params->countsn, low_sn, up_binary)
-                               + integrate_arr(m_sn, yCsn,  run_params->countsn, up_binary, up_sn);
-    double yO_sn  = (1.0 - A) * integrate_arr(m_sn, yOsn,  run_params->countsn, low_sn, up_binary)
-                               + integrate_arr(m_sn, yOsn,  run_params->countsn, up_binary, up_sn);
-    double yMg_sn = (1.0 - A) * integrate_arr(m_sn, yMgsn, run_params->countsn, low_sn, up_binary)
-                               + integrate_arr(m_sn, yMgsn, run_params->countsn, up_binary, up_sn);
-    double ySi_sn = (1.0 - A) * integrate_arr(m_sn, ySisn, run_params->countsn, low_sn, up_binary)
-                               + integrate_arr(m_sn, ySisn, run_params->countsn, up_binary, up_sn);
-    double yS_sn  = (1.0 - A) * integrate_arr(m_sn, ySsn,  run_params->countsn, low_sn, up_binary)
-                               + integrate_arr(m_sn, ySsn,  run_params->countsn, up_binary, up_sn);
-    double yCa_sn = (1.0 - A) * integrate_arr(m_sn, yCasn, run_params->countsn, low_sn, up_binary)
-                               + integrate_arr(m_sn, yCasn, run_params->countsn, up_binary, up_sn);
-    double yFe_sn = (1.0 - A) * integrate_arr(m_sn, yFesn, run_params->countsn, low_sn, up_binary)
-                               + integrate_arr(m_sn, yFesn, run_params->countsn, up_binary, up_sn);
+    double yC_sn  = (1.0 - A) * integrate_arr(run_params->msn, yCsn,  run_params->countsn, low_sn, up_binary)
+                               + integrate_arr(run_params->msn, yCsn,  run_params->countsn, up_binary, up_sn);
+    double yO_sn  = (1.0 - A) * integrate_arr(run_params->msn, yOsn,  run_params->countsn, low_sn, up_binary)
+                               + integrate_arr(run_params->msn, yOsn,  run_params->countsn, up_binary, up_sn);
+    double yMg_sn = (1.0 - A) * integrate_arr(run_params->msn, yMgsn, run_params->countsn, low_sn, up_binary)
+                               + integrate_arr(run_params->msn, yMgsn, run_params->countsn, up_binary, up_sn);
+    double ySi_sn = (1.0 - A) * integrate_arr(run_params->msn, ySisn, run_params->countsn, low_sn, up_binary)
+                               + integrate_arr(run_params->msn, ySisn, run_params->countsn, up_binary, up_sn);
+    double yS_sn  = (1.0 - A) * integrate_arr(run_params->msn, ySsn,  run_params->countsn, low_sn, up_binary)
+                               + integrate_arr(run_params->msn, ySsn,  run_params->countsn, up_binary, up_sn);
+    double yCa_sn = (1.0 - A) * integrate_arr(run_params->msn, yCasn, run_params->countsn, low_sn, up_binary)
+                               + integrate_arr(run_params->msn, yCasn, run_params->countsn, up_binary, up_sn);
+    double yFe_sn = (1.0 - A) * integrate_arr(run_params->msn, yFesn, run_params->countsn, low_sn, up_binary)
+                               + integrate_arr(run_params->msn, yFesn, run_params->countsn, up_binary, up_sn);
 
-    /* Free temporary arrays */
-    free(yCagb); free(yNagb); free(yOagb); free(m_agb);
-    free(yCsn); free(yOsn); free(yMgsn); free(ySisn);
-    free(ySsn); free(yCasn); free(yFesn); free(m_sn);
+    /* No more free() calls needed - using stack arrays now */
 
     /* ---------- Element masses produced this timestep ---------- */
     double Cr_snia = yCr_snia * dt;
@@ -417,29 +403,21 @@ void destruct_dust(const double metallicity, const double stars, const double dt
     {
         const int snapnum = galaxies[p].SnapNum;
         
-        /* Local copies of SFR history and snapshot ages (same as produce_metals_dust) */
+        /* Local copies of SFR history and snapshot ages */
         double age[ABSOLUTEMAXSNAPS], sfh[ABSOLUTEMAXSNAPS];
         for(int i = 0; i < run_params->Snaplistlen; i++) {
             age[i] = run_params->lbtime[i];
             sfh[i] = (double)galaxies[p].Sfr[i];
         }
         
-        /* Integrate SN rate over massive stars (8-40 Msun) using delayed SFR */
+        /* Integrate SN rate over massive stars (8-40 Msun) using cached mass grid */
         const int nbins = 20;
         const double m_low = 8.0, m_up = 40.0;
-        double mass[20], sn_rate[20], phi_arr[20];
+        double sn_rate[20], mphi[20];
         
         for(int i = 0; i < nbins; i++) {
-            mass[i] = m_low + (m_up - m_low) * (double)i / (double)(nbins - 1);
-            phi_arr[i] = compute_imf(mass[i]);
-            
-            /* Stellar lifetime for this mass */
-            double taum = compute_taum(mass[i]);  /* in Myr/h */
-            /* Convert to code time units */
-            taum = taum * SEC_PER_MEGAYEAR / run_params->UnitTime_in_s;
-            
-            /* Time when this star formed (in lookback time) */
-            double time = age[snapnum] - taum;
+            /* Use pre-computed mass, phi, and taum from init */
+            double time = age[snapnum] - run_params->taum_destruct[i];
             
             /* Look up SFR at that past time */
             double sfr_past = 0.0;
@@ -448,21 +426,17 @@ void destruct_dust(const double metallicity, const double stars, const double dt
             }
             
             /* SN rate contribution: each massive star that formed at time and is dying now */
-            sn_rate[i] = phi_arr[i] * sfr_past;
+            sn_rate[i] = run_params->phi_destruct[i] * sfr_past;
+            mphi[i] = run_params->mass_destruct[i] * run_params->phi_destruct[i];
         }
         
         /* Integrate over IMF to get total SN rate */
-        double total_sn = integrate_arr(mass, sn_rate, nbins, m_low, m_up);
-        double total_phi = integrate_arr(mass, phi_arr, nbins, m_low, m_up);
+        double total_sn = integrate_arr(run_params->mass_destruct, sn_rate, nbins, m_low, m_up);
+        double total_phi = integrate_arr(run_params->mass_destruct, run_params->phi_destruct, nbins, m_low, m_up);
         
         if(total_phi > 0.0) {
             /* mean_mass in physical Msun */
-            double mean_mass = 0.0;
-            double mphi[20];
-            for(int i = 0; i < nbins; i++) {
-                mphi[i] = mass[i] * phi_arr[i];
-            }
-            mean_mass = integrate_arr(mass, mphi, nbins, m_low, m_up) / total_phi;
+            double mean_mass = integrate_arr(run_params->mass_destruct, mphi, nbins, m_low, m_up) / total_phi;
             
             /* Convert mean_mass from Msun to code units */
             double mean_mass_code = mean_mass * run_params->Hubble_h / 1.0e10;

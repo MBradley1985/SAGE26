@@ -699,43 +699,67 @@ float calculate_H2_fraction_KD12(const float surface_density, const float metall
 
 
 #ifdef GSL_FOUND
+/* Fast trapezoidal integration - replaces GSL spline integration for performance.
+ * For yield integration where the integrand is piecewise linear, trapezoidal
+ * rule is exact and avoids GSL allocation overhead (huge speedup). */
 double integrate_arr(const double arr1[MAX_STRING_LEN], const double arr2[MAX_STRING_LEN],
                      const int npts, const double lower_limit, const double upper_limit)
 {
-    double Q;
-    gsl_interp_accel *acc;
-    gsl_spline *spl;
+    if(npts < 2 || lower_limit >= upper_limit) return 0.0;
 
-    acc = gsl_interp_accel_alloc();
-    spl = gsl_spline_alloc(gsl_interp_linear, npts);
+    double Q = 0.0;
+    int i_lo = 0, i_hi = npts - 1;
 
-    gsl_spline_init(spl, arr1, arr2, npts);
-    Q = gsl_spline_eval_integ(spl, lower_limit, upper_limit, acc);
+    /* Find bounds within integration limits */
+    for(int i = 0; i < npts - 1; i++) {
+        if(arr1[i] <= lower_limit && arr1[i + 1] > lower_limit) i_lo = i;
+        if(arr1[i] < upper_limit && arr1[i + 1] >= upper_limit) i_hi = i + 1;
+    }
 
-    gsl_spline_free(spl);
-    gsl_interp_accel_free(acc);
+    /* Trapezoidal integration over segments */
+    for(int i = i_lo; i < i_hi; i++) {
+        double x0 = arr1[i], x1 = arr1[i + 1];
+        double y0 = arr2[i], y1 = arr2[i + 1];
+
+        /* Clamp to integration limits */
+        if(x0 < lower_limit) {
+            y0 += (y1 - y0) * (lower_limit - x0) / (x1 - x0);
+            x0 = lower_limit;
+        }
+        if(x1 > upper_limit) {
+            y1 = y0 + (y1 - y0) * (upper_limit - x0) / (x1 - x0);
+            x1 = upper_limit;
+        }
+
+        Q += 0.5 * (y0 + y1) * (x1 - x0);
+    }
 
     return Q;
 }
 
 
+/* Fast linear interpolation - replaces GSL spline evaluation for performance.
+ * Uses binary search to find bracket, then linear interpolation. */
 double interpolate_arr(const double arr1[MAX_STRING_LEN], const double arr2[MAX_STRING_LEN],
                        const int npts, const double xi)
 {
-    double Q;
-    gsl_interp_accel *acc;
-    gsl_spline *spl;
+    if(npts < 2) return 0.0;
 
-    acc = gsl_interp_accel_alloc();
-    spl = gsl_spline_alloc(gsl_interp_linear, npts);
+    /* Handle out-of-bounds */
+    if(xi <= arr1[0]) return arr2[0];
+    if(xi >= arr1[npts - 1]) return arr2[npts - 1];
 
-    gsl_spline_init(spl, arr1, arr2, npts);
-    Q = gsl_spline_eval(spl, xi, acc);
+    /* Binary search for bracket */
+    int lo = 0, hi = npts - 1;
+    while(hi - lo > 1) {
+        int mid = (lo + hi) / 2;
+        if(arr1[mid] > xi) hi = mid;
+        else lo = mid;
+    }
 
-    gsl_spline_free(spl);
-    gsl_interp_accel_free(acc);
-
-    return Q;
+    /* Linear interpolation */
+    double t = (xi - arr1[lo]) / (arr1[hi] - arr1[lo]);
+    return arr2[lo] + t * (arr2[hi] - arr2[lo]);
 }
 #endif /* GSL_FOUND */
 

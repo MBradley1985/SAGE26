@@ -15,6 +15,7 @@
 #include "core_init.h"
 #include "core_mymalloc.h"
 #include "core_cool_func.h"
+#include "model_misc.h"
 
 
 /* These functions do not need to be exposed externally */
@@ -230,6 +231,43 @@ void init(struct params *run_params)
     /* Read stellar yield tables if element-by-element dust production is on */
     if(run_params->MetalYieldsOn == 1) {
         read_metal_yield(run_params);
+
+        /* Pre-compute IMF and stellar lifetimes for yield integration (big speedup) */
+        for(int i = 0; i < run_params->countagb; i++) {
+            run_params->phi_agb[i] = compute_imf(run_params->magb[i]);
+            run_params->taum_agb[i] = compute_taum(run_params->magb[i])
+                                      * SEC_PER_MEGAYEAR / run_params->UnitTime_in_s;
+        }
+        for(int i = 0; i < run_params->countsn; i++) {
+            run_params->phi_sn[i] = compute_imf(run_params->msn[i]);
+            run_params->taum_sn[i] = compute_taum(run_params->msn[i])
+                                     * SEC_PER_MEGAYEAR / run_params->UnitTime_in_s;
+        }
+
+        /* Pre-compute SNIa binary mass grid (fixed values from Arrigoni+2010) */
+        const int count = 20;
+        const double gamma_bin = 2.0;
+        const double low_binary = 3.0, up_binary = 16.0;
+        const double max_mu = 0.5;
+        for(int i = 0; i < count; i++) {
+            run_params->mbin_snia[i] = low_binary + ((up_binary - low_binary) / (double)(count - i));
+            run_params->mu_snia[i] = max_mu / (double)(count - i);
+            run_params->fmu_snia[i] = pow(2.0, 1.0 + gamma_bin) * (1.0 + gamma_bin)
+                                      * pow(run_params->mu_snia[i], gamma_bin);
+            run_params->phi_snia[i] = compute_imf(run_params->mbin_snia[i]);
+            run_params->taum_snia[i] = compute_taum(run_params->mu_snia[i] * run_params->mbin_snia[i])
+                                       * SEC_PER_MEGAYEAR / run_params->UnitTime_in_s;
+        }
+
+        /* Pre-compute SN destruction mass grid (8-40 Msun, 20 bins) */
+        const double m_low = 8.0, m_up = 40.0;
+        for(int i = 0; i < 20; i++) {
+            run_params->mass_destruct[i] = m_low + (m_up - m_low) * (double)i / 19.0;
+            run_params->phi_destruct[i] = compute_imf(run_params->mass_destruct[i]);
+            run_params->taum_destruct[i] = compute_taum(run_params->mass_destruct[i])
+                                           * SEC_PER_MEGAYEAR / run_params->UnitTime_in_s;
+        }
+
 #ifdef VERBOSE
         if(ThisTask == 0) {
             fprintf(stdout, "metal yield tables read (AGB: %d bins, SNII: %d bins)\n",

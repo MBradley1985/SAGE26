@@ -541,6 +541,24 @@ struct params
     int    countagb;                        /* Number of AGB mass bins read */
     int    countsn;                         /* Number of SNII mass bins read */
 
+    /* Pre-computed IMF and stellar lifetime values for yield integration (performance) */
+    double phi_agb[MAXYIELDS];              /* Cached compute_imf(magb[i]) */
+    double taum_agb[MAXYIELDS];             /* Cached compute_taum(magb[i]) in code units */
+    double phi_sn[MAXYIELDS];               /* Cached compute_imf(msn[i]) */
+    double taum_sn[MAXYIELDS];              /* Cached compute_taum(msn[i]) in code units */
+
+    /* Pre-computed SNIa binary mass grid (fixed, computed once) */
+    double mbin_snia[20];                   /* Binary mass grid */
+    double mu_snia[20];                     /* Mass ratio grid */
+    double fmu_snia[20];                    /* f(mu) = 2^(1+gamma) * (1+gamma) * mu^gamma */
+    double phi_snia[20];                    /* Cached compute_imf(mbin[i]) */
+    double taum_snia[20];                   /* Cached compute_taum(mu[i] * mbin[i]) in code units */
+
+    /* Pre-computed SN destruction mass grid (8-40 Msun, 20 bins) */
+    double mass_destruct[20];               /* Mass grid for SN destruction */
+    double phi_destruct[20];                /* Cached compute_imf(mass[i]) */
+    double taum_destruct[20];               /* Cached compute_taum(mass[i]) in code units */
+
     /* Lookback time array (age of universe at each snapshot, in Myr) */
     double lbtime[ABSOLUTEMAXSNAPS];
 
