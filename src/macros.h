@@ -8,6 +8,9 @@
 #define  MAXGALFAC        1
 #define  ABSOLUTEMAXSNAPS 1000  /* The largest number of snapshots for any simulation */
 
+/* DarkMode (radially-resolved disks) constants */
+#define  N_BINS           30         /* Number of radial annuli for disk structure (DarkMode) */
+
 #define  GRAVITY     6.672e-8
 #define  SOLAR_MASS  1.989e33
 #define  SOLAR_LUM   3.826e33

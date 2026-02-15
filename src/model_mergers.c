@@ -240,12 +240,41 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
         galaxies[merger_centralgal].ColdGas -= BHaccrete;
         galaxies[merger_centralgal].MetalsColdGas -= metallicity * BHaccrete;
 
+        // DarkMode: remove BH accretion from disc arrays proportionally
+        if(run_params->DarkModeOn == 1 && BHaccrete > 0.0) {
+            double total_disc_gas = 0.0;
+            for(int i = 0; i < N_BINS; i++) {
+                total_disc_gas += galaxies[merger_centralgal].DiscGas[i];
+            }
+            if(total_disc_gas > 0.0) {
+                for(int i = 0; i < N_BINS; i++) {
+                    double frac = galaxies[merger_centralgal].DiscGas[i] / total_disc_gas;
+                    double bh_bin = BHaccrete * frac;
+                    if(bh_bin > galaxies[merger_centralgal].DiscGas[i]) {
+                        bh_bin = galaxies[merger_centralgal].DiscGas[i];
+                    }
+                    const double local_Z = (galaxies[merger_centralgal].DiscGas[i] > 0.0) ?
+                        galaxies[merger_centralgal].DiscGasMetals[i] / galaxies[merger_centralgal].DiscGas[i] : 0.0;
+                    galaxies[merger_centralgal].DiscGas[i] -= bh_bin;
+                    galaxies[merger_centralgal].DiscGasMetals[i] -= local_Z * bh_bin;
+                    if(galaxies[merger_centralgal].DiscGas[i] < 0.0) galaxies[merger_centralgal].DiscGas[i] = 0.0;
+                    if(galaxies[merger_centralgal].DiscGasMetals[i] < 0.0) galaxies[merger_centralgal].DiscGasMetals[i] = 0.0;
+                    if(run_params->DustOn == 1) {
+                        const double local_DTG = (galaxies[merger_centralgal].DiscGas[i] > 0.0) ?
+                            galaxies[merger_centralgal].DiscDust[i] / (galaxies[merger_centralgal].DiscGas[i] + bh_bin) : 0.0;
+                        galaxies[merger_centralgal].DiscDust[i] -= local_DTG * bh_bin;
+                        if(galaxies[merger_centralgal].DiscDust[i] < 0.0) galaxies[merger_centralgal].DiscDust[i] = 0.0;
+                    }
+                }
+            }
+        }
+
         galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
 
         quasar_mode_wind(merger_centralgal, BHaccrete, galaxies, run_params);
 
         /* Remove dust proportional to BH accretion (inside ColdGas > 0 block) */
-        if(run_params->DustOn == 1 && BHaccrete > 0.0) {
+        if(run_params->DustOn == 1 && run_params->DarkModeOn == 0 && BHaccrete > 0.0) {
             const double DTG = get_DTG(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].ColdDust);
             galaxies[merger_centralgal].ColdDust -= DTG * BHaccrete;
         }
@@ -267,6 +296,17 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
         if(run_params->DustOn == 1) {
             galaxies[gal].EjectedDust += galaxies[gal].ColdDust;
             galaxies[gal].ColdDust = 0.0;
+        }
+
+        // DarkMode: clear all disc gas arrays when ColdGas is ejected
+        if(run_params->DarkModeOn == 1) {
+            for(int i = 0; i < N_BINS; i++) {
+                galaxies[gal].DiscGas[i] = 0.0;
+                galaxies[gal].DiscGasMetals[i] = 0.0;
+                if(run_params->DustOn == 1) {
+                    galaxies[gal].DiscDust[i] = 0.0;
+                }
+            }
         }
 
         galaxies[gal].ColdGas = 0.0;
@@ -328,8 +368,27 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
 
 void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
+    // DarkMode: combine spin vectors before adding masses
+    // (uses current masses for mass-weighted combination)
+    if(run_params->DarkModeOn == 1) {
+        combine_spins_merger(t, p, galaxies);
+    }
+    
     galaxies[t].ColdGas += galaxies[p].ColdGas;
     galaxies[t].MetalsColdGas += galaxies[p].MetalsColdGas;
+
+    // DarkMode: combine disc arrays from merging galaxies
+    if(run_params->DarkModeOn == 1) {
+        for(int i = 0; i < N_BINS; i++) {
+            galaxies[t].DiscGas[i] += galaxies[p].DiscGas[i];
+            galaxies[t].DiscGasMetals[i] += galaxies[p].DiscGasMetals[i];
+            galaxies[t].DiscStars[i] += galaxies[p].DiscStars[i];
+            galaxies[t].DiscStarsMetals[i] += galaxies[p].DiscStarsMetals[i];
+            if(run_params->DustOn == 1) {
+                galaxies[t].DiscDust[i] += galaxies[p].DiscDust[i];
+            }
+        }
+    }
 
     galaxies[t].StellarMass += galaxies[p].StellarMass;
     galaxies[t].MetalsStellarMass += galaxies[p].MetalsStellarMass;
@@ -613,7 +672,22 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / 30.0);
         
         // Metals that stay in disk
-        galaxies[merger_centralgal].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        const double metals_staying = run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        galaxies[merger_centralgal].MetalsColdGas += metals_staying;
+        
+        // DarkMode: distribute returned metals to disc annuli based on gas fraction
+        if(run_params->DarkModeOn == 1 && metals_staying > 0.0) {
+            double total_disc_gas = 0.0;
+            for(int i = 0; i < N_BINS; i++) {
+                total_disc_gas += galaxies[merger_centralgal].DiscGas[i];
+            }
+            if(total_disc_gas > 0.0) {
+                for(int i = 0; i < N_BINS; i++) {
+                    double frac = galaxies[merger_centralgal].DiscGas[i] / total_disc_gas;
+                    galaxies[merger_centralgal].DiscGasMetals[i] += metals_staying * frac;
+                }
+            }
+        }
         
         // Metals that leave disk - regime dependent
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;

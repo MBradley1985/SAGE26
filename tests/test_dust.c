@@ -20,6 +20,7 @@
 #include "../src/model_misc.h"
 #include "../src/model_dust.h"
 #include "../src/model_starformation_and_feedback.h"
+#include "../src/model_infall.h"
 
 // Helper function to initialize dust-enabled params
 static void initialize_dust_params(struct params *run_params) {
@@ -593,6 +594,120 @@ void test_dust_off_preserves_state() {
            gal[0].ColdDust, gal[1].HotDust);
 }
 
+void test_dust_baryon_conservation() {
+    BEGIN_TEST("Dust Counts as Baryonic Mass");
+    
+    struct params run_params;
+    initialize_dust_params(&run_params);
+    run_params.BaryonFrac = 0.17;
+    run_params.ReionizationOn = 0;
+    
+    struct GALAXY gal;
+    memset(&gal, 0, sizeof(struct GALAXY));
+    
+    // Set up a halo with dust
+    gal.Mvir = 100.0;
+    gal.StellarMass = 2.0;
+    gal.ColdGas = 1.0;
+    gal.HotGas = 5.0;
+    gal.CGMgas = 3.0;
+    gal.EjectedMass = 1.0;
+    gal.BlackHoleMass = 0.02;
+    gal.ICS = 0.2;
+    gal.Regime = 0;
+    
+    // Add metals
+    gal.MetalsColdGas = 0.02;
+    gal.MetalsHotGas = 0.1;
+    gal.MetalsCGMgas = 0.06;
+    gal.MetalsEjectedMass = 0.02;
+    
+    // Add dust (must be <= metals)
+    gal.ColdDust = 0.005;
+    gal.HotDust = 0.025;
+    gal.CGMDust = 0.015;
+    gal.EjectedDust = 0.005;
+    
+    // Calculate total baryons INCLUDING dust
+    double total_baryons_with_dust = gal.StellarMass + gal.ColdGas + gal.HotGas + 
+                                     gal.CGMgas + gal.EjectedMass + gal.BlackHoleMass + 
+                                     gal.ICS + gal.ColdDust + gal.HotDust + 
+                                     gal.CGMDust + gal.EjectedDust;
+    
+    double expected_baryons = run_params.BaryonFrac * gal.Mvir;
+    
+    // Call infall_recipe with DustOn=1
+    double infall_with_dust = infall_recipe(0, 1, 0.0, &gal, &run_params);
+    
+    // Verify infall correctly accounts for dust
+    double calculated_infall = expected_baryons - total_baryons_with_dust;
+    
+    ASSERT_CLOSE(infall_with_dust, calculated_infall, 1e-6,
+                "infall_recipe correctly subtracts dust from baryon budget");
+    
+    // Now test with DustOn=0 - infall should be HIGHER (more room for baryons)
+    run_params.DustOn = 0;
+    double total_baryons_no_dust = gal.StellarMass + gal.ColdGas + gal.HotGas + 
+                                   gal.CGMgas + gal.EjectedMass + gal.BlackHoleMass + gal.ICS;
+    double infall_without_dust = expected_baryons - total_baryons_no_dust;
+    
+    ASSERT_GREATER_THAN(infall_without_dust, infall_with_dust,
+                       "Infall higher when dust not counted in baryon budget");
+    
+    // The difference should equal the total dust mass (within rounding)
+    double dust_total = gal.ColdDust + gal.HotDust + gal.CGMDust + gal.EjectedDust;
+    ASSERT_CLOSE(infall_without_dust - infall_with_dust, dust_total, 1e-5,
+                "Infall difference equals total dust mass");
+}
+
+void test_dust_metal_conservation() {
+    BEGIN_TEST("Dust Conserved as Metal Subset");
+    
+    struct params run_params;
+    initialize_dust_params(&run_params);
+    
+    struct GALAXY gal;
+    initialize_dust_galaxy(&gal);
+    
+    // Record initial state
+    double initial_total_dust = total_dust(&gal);
+    
+    // Run multiple dust processes
+    double dt = 0.1;
+    double metallicity = get_metallicity(gal.ColdGas, gal.MetalsColdGas);
+    double stars = 0.05;
+    
+    // Dust production, growth, destruction
+    produce_dust(stars, metallicity, dt, 0, 0, 0, &gal, &run_params);
+    accrete_dust(metallicity, dt, 0, 0, &gal, &run_params);
+    destruct_dust(metallicity, stars, dt, 0, 0, &gal, &run_params);
+    
+    double final_total_dust = total_dust(&gal);
+    
+    // Dust should have changed (not exactly equal)
+    ASSERT_TRUE(fabs(final_total_dust - initial_total_dust) > 1e-10,
+                "Dust mass changed by processes");
+    
+    // But dust should never exceed total metals
+    double final_total_metals = total_metals(&gal);
+    ASSERT_TRUE(final_total_dust <= final_total_metals + 1e-6,
+                "Total dust <= total metals");
+    
+    // Check each reservoir
+    if(gal.MetalsColdGas > 1e-10) {
+        ASSERT_TRUE(gal.ColdDust <= gal.MetalsColdGas + 1e-6,
+                    "ColdDust <= MetalsColdGas");
+    }
+    if(gal.MetalsHotGas > 1e-10) {
+        ASSERT_TRUE(gal.HotDust <= gal.MetalsHotGas + 1e-6,
+                    "HotDust <= MetalsHotGas");
+    }
+    if(gal.MetalsCGMgas > 1e-10) {
+        ASSERT_TRUE(gal.CGMDust <= gal.MetalsCGMgas + 1e-6,
+                    "CGMDust <= MetalsCGMgas");
+    }
+}
+
 
 /* ========================================================================
  * MAIN TEST RUNNER
@@ -625,6 +740,8 @@ int main(void) {
     
     // Conservation tests
     test_dust_conservation_bounds();
+    test_dust_baryon_conservation();
+    test_dust_metal_conservation();
     test_dust_disabled();
     test_dust_off_preserves_state();
     

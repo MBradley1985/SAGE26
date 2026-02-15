@@ -10,6 +10,7 @@
 #include "model_misc.h"
 #include "model_disk_instability.h"
 #include "model_dust.h"
+#include "model_darkmode.h"
 
 #define HYDROGEN_MASS_FRAC 0.74
 
@@ -30,6 +31,76 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         starformation_ffb(p, centralgal, dt, step, galaxies, run_params);
         return;  // Exit early - FFB path complete
     }
+
+    // ========================================================================
+    // DARKMODE: SPATIAL DISK TRACKING (uses bulk SF for calibration)
+    // ========================================================================
+    if(run_params->DarkModeOn == 1) {
+        // Safety: Ensure disc arrays are initialized and NaN-free
+        double total_disc_gas_initial = 0.0;
+        for(int i = 0; i < N_BINS; i++) {
+            // Fix any NaN/Inf values in disc arrays
+            if(isnan(galaxies[p].DiscGas[i]) || isinf(galaxies[p].DiscGas[i])) {
+                galaxies[p].DiscGas[i] = 0.0;
+            }
+            if(isnan(galaxies[p].DiscGasMetals[i]) || isinf(galaxies[p].DiscGasMetals[i])) {
+                galaxies[p].DiscGasMetals[i] = 0.0;
+            }
+            if(run_params->DustOn == 1 && (isnan(galaxies[p].DiscDust[i]) || isinf(galaxies[p].DiscDust[i]))) {
+                galaxies[p].DiscDust[i] = 0.0;
+            }
+            total_disc_gas_initial += galaxies[p].DiscGas[i];
+        }
+        
+        // If disc is empty but ColdGas > 0, distribute to first bin
+        if(total_disc_gas_initial <= 0.0 && galaxies[p].ColdGas > 0.0) {
+            galaxies[p].DiscGas[0] = galaxies[p].ColdGas;
+            galaxies[p].DiscGasMetals[0] = galaxies[p].MetalsColdGas;
+            if(run_params->DustOn == 1) {
+                galaxies[p].DiscDust[0] = galaxies[p].ColdDust;
+            }
+        }
+        
+        // Compute diagnostic quantities (H2, HI per annulus) for output
+        // This doesn't affect SF, just tracks molecular/atomic gas
+        double h2_local[N_BINS];
+        double sfr_diagnostic[N_BINS];
+        compute_local_star_formation(p, dt, galaxies, run_params, sfr_diagnostic, h2_local);
+        
+        // Store H2/HI diagnostics in disc arrays (for output only)
+        double total_hydrogen = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+        double disc_h2_sum = 0.0;
+        for(int i = 0; i < N_BINS; i++) {
+            galaxies[p].DiscH2[i] = h2_local[i];
+            disc_h2_sum += h2_local[i];
+        }
+        galaxies[p].H2gas = disc_h2_sum;
+        if(galaxies[p].H2gas > galaxies[p].ColdGas) galaxies[p].H2gas = galaxies[p].ColdGas;
+        galaxies[p].H1gas = total_hydrogen - disc_h2_sum;
+        if(galaxies[p].H1gas < 0.0) galaxies[p].H1gas = 0.0;
+        
+        for(int i = 0; i < N_BINS; i++) {
+            if(total_hydrogen > 0.0) {
+                galaxies[p].DiscHI[i] = galaxies[p].DiscGas[i] * HYDROGEN_MASS_FRAC - h2_local[i];
+                if(galaxies[p].DiscHI[i] < 0.0) galaxies[p].DiscHI[i] = 0.0;
+            } else {
+                galaxies[p].DiscHI[i] = 0.0;
+            }
+        }
+        
+        // Apply radial gas flows BEFORE star formation
+        // This redistributes gas but doesn't change total
+        apply_radial_gas_flows(p, dt, galaxies, run_params);
+        
+        // Now proceed with BULK star formation (preserves calibration)
+        // This uses the same calculation as DarkModeOn=0, but we'll distribute
+        // the results to disc arrays afterwards
+        // Fall through to bulk SF code below...
+    }
+
+    // ========================================================================
+    // BULK STAR FORMATION (used by both DarkMode and non-DarkMode)
+    // ========================================================================
 
     double reff, tdyn, strdot, stars, ejected_mass, metallicity, total_molecular_gas;
 
@@ -766,7 +837,11 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // recompute the metallicity of the cold phase
     metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
 
+    // Dust production, accretion, and destruction
     if(run_params->DustOn == 1) {
+        // Store current dust mass before dust processes
+        const double dust_before = galaxies[p].ColdDust;
+        
 #ifdef GSL_FOUND
         if(run_params->MetalYieldsOn == 1) {
             produce_metals_dust(metallicity, dt, p, centralgal, step, galaxies, run_params);
@@ -778,6 +853,70 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 #endif
         accrete_dust(metallicity, dt, p, step, galaxies, run_params);
         destruct_dust(metallicity, stars, dt, p, step, galaxies, run_params);
+        
+        // DarkMode: Distribute dust changes to disc arrays
+        if(run_params->DarkModeOn == 1) {
+            const double dust_delta = galaxies[p].ColdDust - dust_before;
+            
+            if(fabs(dust_delta) > 1.0e-10) {
+                // Sum current disc dust
+                double total_disc_dust = 0.0;
+                for(int i = 0; i < N_BINS; i++) {
+                    if(!isnan(galaxies[p].DiscDust[i]) && !isinf(galaxies[p].DiscDust[i])) {
+                        total_disc_dust += galaxies[p].DiscDust[i];
+                    } else {
+                        galaxies[p].DiscDust[i] = 0.0;  // Fix NaN/Inf
+                    }
+                }
+                
+                if(total_disc_dust > 1.0e-10) {
+                    // Distribute delta proportionally to existing dust distribution
+                    for(int i = 0; i < N_BINS; i++) {
+                        double frac = galaxies[p].DiscDust[i] / total_disc_dust;
+                        galaxies[p].DiscDust[i] += dust_delta * frac;
+                        if(galaxies[p].DiscDust[i] < 0.0) galaxies[p].DiscDust[i] = 0.0;
+                        if(isnan(galaxies[p].DiscDust[i]) || isinf(galaxies[p].DiscDust[i])) {
+                            galaxies[p].DiscDust[i] = 0.0;
+                        }
+                    }
+                } else if(dust_delta > 0.0) {
+                    // No existing disc dust but dust was produced - distribute by gas fraction
+                    double total_disc_gas = 0.0;
+                    for(int i = 0; i < N_BINS; i++) {
+                        total_disc_gas += galaxies[p].DiscGas[i];
+                    }
+                    if(total_disc_gas > 0.0) {
+                        for(int i = 0; i < N_BINS; i++) {
+                            double frac = galaxies[p].DiscGas[i] / total_disc_gas;
+                            galaxies[p].DiscDust[i] += dust_delta * frac;
+                            if(isnan(galaxies[p].DiscDust[i]) || isinf(galaxies[p].DiscDust[i])) {
+                                galaxies[p].DiscDust[i] = 0.0;
+                            }
+                        }
+                    } else {
+                        // No gas either - put all dust in first bin
+                        galaxies[p].DiscDust[0] += dust_delta;
+                        if(isnan(galaxies[p].DiscDust[0]) || isinf(galaxies[p].DiscDust[0])) {
+                            galaxies[p].DiscDust[0] = 0.0;
+                        }
+                    }
+                }
+                
+                // Recalculate ColdDust from disc sum to ensure consistency
+                galaxies[p].ColdDust = 0.0;
+                for(int i = 0; i < N_BINS; i++) {
+                    if(!isnan(galaxies[p].DiscDust[i]) && !isinf(galaxies[p].DiscDust[i])) {
+                        galaxies[p].ColdDust += galaxies[p].DiscDust[i];
+                    } else {
+                        galaxies[p].DiscDust[i] = 0.0;
+                    }
+                }
+                // Final safety check
+                if(isnan(galaxies[p].ColdDust) || isinf(galaxies[p].ColdDust)) {
+                    galaxies[p].ColdDust = 0.0;
+                }
+            }
+        }
     }
 
     // Safety check: ensure reheated_mass doesn't exceed remaining ColdGas (floating-point precision)
@@ -790,7 +929,13 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
     // check for disk instability
     if(run_params->DiskInstabilityOn) {
-        check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
+        if(run_params->DarkModeOn == 1) {
+            // DarkMode: use local Toomre Q criterion per annulus
+            check_local_disk_instability(p, centralgal, dt, step, galaxies, run_params);
+        } else {
+            // Bulk: original disk instability model
+            check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
+        }
     }
 
     // formation of new metals - instantaneous recycling approximation - only SNII
@@ -798,7 +943,22 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / 30.0);  // Krumholz & Dekel 2011 Eq. 22
         
         // Metals that stay in disk (same for all regimes)
-        galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        const double metals_staying = run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        galaxies[p].MetalsColdGas += metals_staying;
+        
+        // DarkMode: distribute returned metals to disc annuli based on gas fraction
+        if(run_params->DarkModeOn == 1 && metals_staying > 0.0) {
+            double total_disc_gas = 0.0;
+            for(int i = 0; i < N_BINS; i++) {
+                total_disc_gas += galaxies[p].DiscGas[i];
+            }
+            if(total_disc_gas > 0.0) {
+                for(int i = 0; i < N_BINS; i++) {
+                    double frac = galaxies[p].DiscGas[i] / total_disc_gas;
+                    galaxies[p].DiscGasMetals[i] += metals_staying * frac;
+                }
+            }
+        }
         
         // Metals that leave disk - regime dependent
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
@@ -833,6 +993,42 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             galaxies[centralgal].MetalsHotGas += all_metals;
         }
     }
+    
+    // DarkMode: Post-processing after bulk SF
+    // This distributes the calibrated bulk SFR spatially for diagnostic purposes
+    // NOTE: DiscSFR conserves mass (sum = SfrDisk) but may not match local K-S relation normalization
+    //       This is intentional - we preserve SAGE's statistical calibration (SMF, cosmic SFRD)
+    //       while adding spatial resolution for radial profiles and gradients
+    if(run_params->DarkModeOn == 1 && stars > 0.0) {
+        // Distribute SFR proportional to H2 (molecular gas), not total gas
+        // This matches bulk SF which uses only molecular gas for star formation
+        double total_h2 = 0.0;
+        for(int i = 0; i < N_BINS; i++) {
+            total_h2 += galaxies[p].DiscH2[i];
+        }
+        
+        if(total_h2 > 0.0) {
+            // Accumulate SFR distributed by H2 fraction
+            const double sfr = stars / dt;  // Convert mass to rate
+            for(int i = 0; i < N_BINS; i++) {
+                double h2_frac = galaxies[p].DiscH2[i] / total_h2;
+                galaxies[p].DiscSFR[i] += sfr * h2_frac;  // ACCUMULATE rate over timesteps
+            }
+        } else {
+            // No H2 gas, but stars formed - distribute by total gas as fallback
+            double total_disc_gas = 0.0;
+            for(int i = 0; i < N_BINS; i++) {
+                total_disc_gas += galaxies[p].DiscGas[i];
+            }
+            if(total_disc_gas > 0.0) {
+                const double sfr = stars / dt;
+                for(int i = 0; i < N_BINS; i++) {
+                    double gas_frac = galaxies[p].DiscGas[i] / total_disc_gas;
+                    galaxies[p].DiscSFR[i] += sfr * gas_frac;
+                }
+            }
+        }
+    }
 }
 
 
@@ -840,17 +1036,81 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 void update_from_star_formation(const int p, const double stars, const double metallicity, struct GALAXY *galaxies, const struct params *run_params)
 {
     const double RecycleFraction = run_params->RecycleFraction;
-    // update gas and metals from star formation
+    
+    // DarkMode: Distribute star formation across disk annuli
+    if(run_params->DarkModeOn == 1 && stars > 0.0) {
+        // Sum total disk gas to get fractions
+        double total_disc_gas = 0.0;
+        for(int i = 0; i < N_BINS; i++) {
+            total_disc_gas += galaxies[p].DiscGas[i];
+        }
+        
+        // Distribute SF across annuli based on gas fraction
+        if(total_disc_gas > 0.0) {
+            for(int i = 0; i < N_BINS; i++) {
+                double frac = galaxies[p].DiscGas[i] / total_disc_gas;
+                double stars_bin = stars * frac;
+                
+                // Can't form more stars than gas available in bin
+                if(stars_bin > galaxies[p].DiscGas[i]) {
+                    stars_bin = galaxies[p].DiscGas[i];
+                }
+                
+                // Update disc arrays
+                const double local_metallicity = (galaxies[p].DiscGas[i] > 0.0) ?
+                    galaxies[p].DiscGasMetals[i] / galaxies[p].DiscGas[i] : 0.0;
+                
+                galaxies[p].DiscGas[i] -= (1 - RecycleFraction) * stars_bin;
+                galaxies[p].DiscGasMetals[i] -= local_metallicity * (1 - RecycleFraction) * stars_bin;
+                galaxies[p].DiscStars[i] += (1 - RecycleFraction) * stars_bin;
+                galaxies[p].DiscStarsMetals[i] += local_metallicity * (1 - RecycleFraction) * stars_bin;
+                
+                // Track SFR per annulus (divide by dt somehow - but we don't have dt here)
+                // For now just store stars formed; caller can track SFR
+                
+                // Dusty disks
+                if(run_params->DustOn == 1) {
+                    const double DTG = (galaxies[p].DiscGas[i] > 0.0) ?
+                        galaxies[p].DiscDust[i] / galaxies[p].DiscGas[i] : 0.0;
+                    galaxies[p].DiscDust[i] -= DTG * (1 - RecycleFraction) * stars_bin;
+                    if(galaxies[p].DiscDust[i] < 0.0) galaxies[p].DiscDust[i] = 0.0;
+                }
+                
+                // Safety clamps
+                if(galaxies[p].DiscGas[i] < 0.0) galaxies[p].DiscGas[i] = 0.0;
+                if(galaxies[p].DiscGasMetals[i] < 0.0) galaxies[p].DiscGasMetals[i] = 0.0;
+            }
+        }
+    }
+    
+    // Evolve stellar spin - new stars inherit gas disc spin (DarkMode only)
+    if(run_params->DarkModeOn == 1) {
+        update_spin_stars_sfr(p, (1 - RecycleFraction) * stars, galaxies);
+    }
+    
+    // update gas and metals from star formation (bulk quantities - always updated)
     galaxies[p].ColdGas -= (1 - RecycleFraction) * stars;
     galaxies[p].MetalsColdGas -= metallicity * (1 - RecycleFraction) * stars;
     galaxies[p].StellarMass += (1 - RecycleFraction) * stars;
     galaxies[p].MetalsStellarMass += metallicity * (1 - RecycleFraction) * stars;
 
-    if(run_params->DustOn == 1) {
-    const double DTG = get_DTG(galaxies[p].ColdGas, galaxies[p].ColdDust);
-    galaxies[p].ColdDust -= DTG * (1.0 - run_params->RecycleFraction) * stars;
-    if(galaxies[p].ColdDust < 0.0) galaxies[p].ColdDust = 0.0;
-}
+    if(run_params->DustOn == 1 && run_params->DarkModeOn == 0) {
+        // Only do bulk dust update if NOT in DarkMode (DarkMode handles it per-bin above)
+        const double DTG = get_DTG(galaxies[p].ColdGas, galaxies[p].ColdDust);
+        galaxies[p].ColdDust -= DTG * (1.0 - run_params->RecycleFraction) * stars;
+        if(galaxies[p].ColdDust < 0.0) galaxies[p].ColdDust = 0.0;
+    }
+    
+    // DarkMode+Dust: Sync ColdDust with sum(DiscDust) BEFORE dust processes run
+    // This ensures accrete_dust and destruct_dust use correct ColdDust values
+    if(run_params->DustOn == 1 && run_params->DarkModeOn == 1) {
+        galaxies[p].ColdDust = 0.0;
+        for(int i = 0; i < N_BINS; i++) {
+            if(!isnan(galaxies[p].DiscDust[i]) && !isinf(galaxies[p].DiscDust[i])) {
+                galaxies[p].ColdDust += galaxies[p].DiscDust[i];
+            }
+        }
+    }
 }
 
 
@@ -874,6 +1134,36 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
             reheated_mass, galaxies[p].ColdGas);
 
     if(run_params->SupernovaRecipeOn == 1) {
+        // DarkMode: Remove reheated mass from disc annuli proportionally
+        if(run_params->DarkModeOn == 1 && reheated_mass > 0.0) {
+            double total_disc_gas = 0.0;
+            for(int i = 0; i < N_BINS; i++) {
+                total_disc_gas += galaxies[p].DiscGas[i];
+            }
+            
+            if(total_disc_gas > 0.0) {
+                for(int i = 0; i < N_BINS; i++) {
+                    double frac = galaxies[p].DiscGas[i] / total_disc_gas;
+                    double reheated_bin = reheated_mass * frac;
+                    
+                    // Can't reheat more than available
+                    if(reheated_bin > galaxies[p].DiscGas[i]) {
+                        reheated_bin = galaxies[p].DiscGas[i];
+                    }
+                    
+                    const double local_metallicity = (galaxies[p].DiscGas[i] > 0.0) ?
+                        galaxies[p].DiscGasMetals[i] / galaxies[p].DiscGas[i] : 0.0;
+                    
+                    galaxies[p].DiscGas[i] -= reheated_bin;
+                    galaxies[p].DiscGasMetals[i] -= local_metallicity * reheated_bin;
+                    
+                    // Safety
+                    if(galaxies[p].DiscGas[i] < 0.0) galaxies[p].DiscGas[i] = 0.0;
+                    if(galaxies[p].DiscGasMetals[i] < 0.0) galaxies[p].DiscGasMetals[i] = 0.0;
+                }
+            }
+        }
+        
         // Remove reheated mass from cold gas (same for all regimes)
         galaxies[p].ColdGas -= reheated_mass;
         galaxies[p].MetalsColdGas -= metallicity * reheated_mass;
@@ -944,6 +1234,28 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
             double reheated_dust = DTG * reheated_mass;
             if(reheated_dust > galaxies[p].ColdDust) reheated_dust = galaxies[p].ColdDust;
             galaxies[p].ColdDust -= reheated_dust;
+            
+            // DarkMode: Also remove dust from disc arrays proportionally
+            if(run_params->DarkModeOn == 1 && reheated_dust > 0.0) {
+                double total_disc_dust = 0.0;
+                for(int i = 0; i < N_BINS; i++) {
+                    if(!isnan(galaxies[p].DiscDust[i]) && !isinf(galaxies[p].DiscDust[i])) {
+                        total_disc_dust += galaxies[p].DiscDust[i];
+                    } else {
+                        galaxies[p].DiscDust[i] = 0.0;
+                    }
+                }
+                if(total_disc_dust > 1.0e-10) {
+                    for(int i = 0; i < N_BINS; i++) {
+                        double frac = galaxies[p].DiscDust[i] / total_disc_dust;
+                        galaxies[p].DiscDust[i] -= reheated_dust * frac;
+                        if(galaxies[p].DiscDust[i] < 0.0) galaxies[p].DiscDust[i] = 0.0;
+                        if(isnan(galaxies[p].DiscDust[i]) || isinf(galaxies[p].DiscDust[i])) {
+                            galaxies[p].DiscDust[i] = 0.0;
+                        }
+                    }
+                }
+            }
 
             if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
                 // CGM-regime: ColdDust → CGMDust → EjectedDust
@@ -1628,7 +1940,22 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     if(galaxies[p].ColdGas > 1.0e-8) {
         // Metals that stay in disk
         const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / 30.0);
-        galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        const double metals_staying = run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        galaxies[p].MetalsColdGas += metals_staying;
+        
+        // DarkMode: distribute returned metals to disc annuli based on gas fraction
+        if(run_params->DarkModeOn == 1 && metals_staying > 0.0) {
+            double total_disc_gas = 0.0;
+            for(int i = 0; i < N_BINS; i++) {
+                total_disc_gas += galaxies[p].DiscGas[i];
+            }
+            if(total_disc_gas > 0.0) {
+                for(int i = 0; i < N_BINS; i++) {
+                    double frac = galaxies[p].DiscGas[i] / total_disc_gas;
+                    galaxies[p].DiscGasMetals[i] += metals_staying * frac;
+                }
+            }
+        }
         
         // Metals that leave disk - goes to appropriate reservoir based on CGM regime
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;

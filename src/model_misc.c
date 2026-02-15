@@ -126,6 +126,58 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
         galaxies[p].Sfr[snap] = 0.0f;
     }
+
+    /* DarkMode: Initialize disk arrays and angular momentum vectors */
+    if(run_params->DarkModeOn == 1) {
+        /* Compute disk radii from j-bin edges: r = j / Vvir */
+        /* Cap radii at 100 kpc (0.1 Mpc) to avoid unphysical outer bins */
+        const double MAX_RADIUS = 0.1;  // Mpc
+        for(int i = 0; i < N_BINS + 1; i++) {
+            if(galaxies[p].Vvir > 0.0) {
+                double r_calc = run_params->DiscBinEdge[i] / galaxies[p].Vvir;
+                galaxies[p].DiscRadii[i] = (r_calc < MAX_RADIUS) ? r_calc : MAX_RADIUS;
+            } else {
+                galaxies[p].DiscRadii[i] = 0.0;
+            }
+        }
+
+        /* Initialize disk arrays to zero */
+        for(int i = 0; i < N_BINS; i++) {
+            galaxies[p].DiscGas[i] = 0.0f;
+            galaxies[p].DiscStars[i] = 0.0f;
+            galaxies[p].DiscGasMetals[i] = 0.0f;
+            galaxies[p].DiscStarsMetals[i] = 0.0f;
+            galaxies[p].DiscH2[i] = 0.0f;
+            galaxies[p].DiscHI[i] = 0.0f;
+            galaxies[p].DiscSFR[i] = 0.0f;
+            galaxies[p].DiscDust[i] = 0.0f;
+        }
+
+        /* Initialize spin vectors from halo spin */
+        double halo_spin_mag = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
+                                    halos[halonr].Spin[1] * halos[halonr].Spin[1] +
+                                    halos[halonr].Spin[2] * halos[halonr].Spin[2]);
+        if(halo_spin_mag > 0.0) {
+            for(int j = 0; j < 3; j++) {
+                galaxies[p].SpinGas[j] = halos[halonr].Spin[j] / halo_spin_mag;
+                galaxies[p].SpinStars[j] = halos[halonr].Spin[j] / halo_spin_mag;
+                galaxies[p].SpinHot[j] = halos[halonr].Spin[j] / halo_spin_mag;
+                galaxies[p].SpinBulge[j] = 0.0f;
+            }
+        } else {
+            for(int j = 0; j < 3; j++) {
+                galaxies[p].SpinGas[j] = 0.0f;
+                galaxies[p].SpinStars[j] = 0.0f;
+                galaxies[p].SpinHot[j] = 0.0f;
+                galaxies[p].SpinBulge[j] = 0.0f;
+            }
+        }
+
+        /* Initialize scale radii */
+        galaxies[p].CoolScaleRadius = galaxies[p].DiskScaleRadius;
+        galaxies[p].GasDiscScaleRadius = galaxies[p].DiskScaleRadius;
+        galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;
+    }
 }
 
 
@@ -153,6 +205,168 @@ double get_DTG(const double gas, const double dust)
         if(DTG > 1.0) DTG = 1.0;
     }
     return DTG;
+}
+
+
+/* ========================================================================== */
+/* SPIN EVOLUTION FUNCTIONS                                                   */
+/* Angular momentum tracking for DarkMode - gas and stellar discs evolve      */
+/* independently based on mass flows (cooling, star formation, mergers)       */
+/* ========================================================================== */
+
+/**
+ * Normalize a 3D spin vector to unit length.
+ * 
+ * @param spin  Input/output spin vector (modified in place)
+ */
+void normalize_spin(float spin[3])
+{
+    double mag = sqrt((double)spin[0] * spin[0] + 
+                      (double)spin[1] * spin[1] + 
+                      (double)spin[2] * spin[2]);
+    
+    if(mag > 0.0) {
+        spin[0] = (float)(spin[0] / mag);
+        spin[1] = (float)(spin[1] / mag);
+        spin[2] = (float)(spin[2] / mag);
+    }
+}
+
+
+/**
+ * Evolve a spin vector by adding mass with a different angular momentum.
+ * Combines existing component with new component weighted by mass.
+ * 
+ * The new spin direction is: J_new = m_old * J_old + m_new * J_add
+ * Then normalized to unit vector.
+ * 
+ * @param spin_old  Existing spin vector (modified in place)
+ * @param m_old     Mass of existing component
+ * @param spin_add  Spin vector of material being added
+ * @param m_add     Mass of material being added
+ */
+void evolve_spin(float spin_old[3], const double m_old, 
+                 const float spin_add[3], const double m_add)
+{
+    if(m_add <= 0.0) return;  /* Nothing to add */
+    
+    double total_mass = m_old + m_add;
+    if(total_mass <= 0.0) return;
+    
+    /* Mass-weighted combination of angular momentum vectors */
+    double J_new[3];
+    for(int j = 0; j < 3; j++) {
+        J_new[j] = m_old * spin_old[j] + m_add * spin_add[j];
+    }
+    
+    /* Normalize to unit vector */
+    double mag = sqrt(J_new[0]*J_new[0] + J_new[1]*J_new[1] + J_new[2]*J_new[2]);
+    
+    if(mag > 0.0) {
+        for(int j = 0; j < 3; j++) {
+            spin_old[j] = (float)(J_new[j] / mag);
+        }
+    }
+    /* If mag == 0 (perfect cancellation), keep old spin direction */
+}
+
+
+/**
+ * Update gas disc spin when cooling gas onto disc.
+ * The cooling gas carries the hot gas / CGM spin (SpinHot).
+ * 
+ * @param gal           Galaxy index
+ * @param cooling_mass  Mass of gas being cooled onto disc
+ * @param galaxies      Galaxy array
+ */
+void update_spin_gas_cooling(const int gal, const double cooling_mass, 
+                             struct GALAXY *galaxies)
+{
+    if(cooling_mass <= 0.0) return;
+    
+    /* Cooling gas carries the hot/CGM spin */
+    evolve_spin(galaxies[gal].SpinGas, 
+                galaxies[gal].ColdGas,      /* Existing cold gas mass */
+                galaxies[gal].SpinHot,       /* Spin of cooling material */
+                cooling_mass);               /* Mass being added */
+}
+
+
+/**
+ * Update stellar disc spin when forming stars.
+ * New stars inherit the gas disc spin at the time of formation.
+ * 
+ * @param gal          Galaxy index
+ * @param stars_formed Mass of stars formed
+ * @param galaxies     Galaxy array
+ */
+void update_spin_stars_sfr(const int gal, const double stars_formed, 
+                           struct GALAXY *galaxies)
+{
+    if(stars_formed <= 0.0) return;
+    
+    /* New stars inherit current gas disc spin */
+    evolve_spin(galaxies[gal].SpinStars,
+                galaxies[gal].StellarMass,   /* Existing stellar mass */
+                galaxies[gal].SpinGas,        /* New stars get gas spin */
+                stars_formed);                /* Mass of new stars */
+}
+
+
+/**
+ * Update hot gas spin when gas is ejected.
+ * Ejected gas takes the current disc spin into the hot phase.
+ * 
+ * @param gal          Galaxy index
+ * @param ejected_mass Mass being ejected
+ * @param galaxies     Galaxy array
+ */
+void update_spin_hot_ejection(const int gal, const double ejected_mass,
+                              struct GALAXY *galaxies)
+{
+    if(ejected_mass <= 0.0) return;
+    
+    /* Ejected gas carries disc spin into hot phase */
+    evolve_spin(galaxies[gal].SpinHot,
+                galaxies[gal].HotGas,
+                galaxies[gal].SpinGas,
+                ejected_mass);
+}
+
+
+/**
+ * Combine spins of two galaxies during a merger.
+ * Mass-weighted combination of angular momentum vectors.
+ * 
+ * @param t         Target galaxy index (survives merger)
+ * @param p         Progenitor galaxy index (merges into target)
+ * @param galaxies  Galaxy array
+ */
+void combine_spins_merger(const int t, const int p, struct GALAXY *galaxies)
+{
+    /* Combine gas disc spins */
+    evolve_spin(galaxies[t].SpinGas,
+                galaxies[t].ColdGas,
+                galaxies[p].SpinGas,
+                galaxies[p].ColdGas);
+    
+    /* Combine stellar disc spins */
+    evolve_spin(galaxies[t].SpinStars,
+                galaxies[t].StellarMass,
+                galaxies[p].SpinStars,
+                galaxies[p].StellarMass);
+    
+    /* Combine hot gas spins */
+    evolve_spin(galaxies[t].SpinHot,
+                galaxies[t].HotGas,
+                galaxies[p].SpinHot,
+                galaxies[p].HotGas);
+    
+    /* Combine bulge spins */
+    evolve_spin(galaxies[t].SpinBulge,
+                galaxies[t].BulgeMass,
+                galaxies[p].SpinBulge,
+                galaxies[p].BulgeMass);
 }
 
 
@@ -550,14 +764,14 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
     const float sigma_star_0 = M_star_total / (2.0 * M_PI * rs_pc * rs_pc);
     
     // Radial integration parameters
-    const int N_BINS = 10;  // Number of radial bins
+    const int N_H2BINS = 10;  // Number of radial bins for H2 integration
     const float R_MAX = 3.0 * rs_pc;  // Integrate out to 3 scale radii (~95% of mass)
-    const float dr = R_MAX / N_BINS;
+    const float dr = R_MAX / N_H2BINS;
     
     // Integrate molecular gas mass
     float M_H2_total = 0.0;
     
-    for (int i = 0; i < N_BINS; i++) {
+    for (int i = 0; i < N_H2BINS; i++) {
         // Bin center radius
         const float r = (i + 0.5) * dr;
         
