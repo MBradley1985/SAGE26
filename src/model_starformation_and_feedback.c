@@ -827,7 +827,11 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // recompute the metallicity of the cold phase
     metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
 
+    // Dust production, accretion, and destruction
     if(run_params->DustOn == 1) {
+        // Store current dust mass before dust processes
+        const double dust_before = galaxies[p].ColdDust;
+        
 #ifdef GSL_FOUND
         if(run_params->MetalYieldsOn == 1) {
             produce_metals_dust(metallicity, dt, p, centralgal, step, galaxies, run_params);
@@ -839,6 +843,49 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 #endif
         accrete_dust(metallicity, dt, p, step, galaxies, run_params);
         destruct_dust(metallicity, stars, dt, p, step, galaxies, run_params);
+        
+        // DarkMode: Distribute dust changes to disc arrays
+        if(run_params->DarkModeOn == 1) {
+            const double dust_delta = galaxies[p].ColdDust - dust_before;
+            
+            if(fabs(dust_delta) > 1.0e-10) {
+                // Sum current disc dust
+                double total_disc_dust = 0.0;
+                for(int i = 0; i < N_BINS; i++) {
+                    total_disc_dust += galaxies[p].DiscDust[i];
+                }
+                
+                if(total_disc_dust > 1.0e-10) {
+                    // Distribute delta proportionally to existing dust distribution
+                    for(int i = 0; i < N_BINS; i++) {
+                        double frac = galaxies[p].DiscDust[i] / total_disc_dust;
+                        galaxies[p].DiscDust[i] += dust_delta * frac;
+                        if(galaxies[p].DiscDust[i] < 0.0) galaxies[p].DiscDust[i] = 0.0;
+                    }
+                } else if(dust_delta > 0.0) {
+                    // No existing disc dust but dust was produced - distribute by gas fraction
+                    double total_disc_gas = 0.0;
+                    for(int i = 0; i < N_BINS; i++) {
+                        total_disc_gas += galaxies[p].DiscGas[i];
+                    }
+                    if(total_disc_gas > 0.0) {
+                        for(int i = 0; i < N_BINS; i++) {
+                            double frac = galaxies[p].DiscGas[i] / total_disc_gas;
+                            galaxies[p].DiscDust[i] += dust_delta * frac;
+                        }
+                    } else {
+                        // No gas either - put all dust in first bin
+                        galaxies[p].DiscDust[0] += dust_delta;
+                    }
+                }
+                
+                // Recalculate ColdDust from disc sum to ensure consistency
+                galaxies[p].ColdDust = 0.0;
+                for(int i = 0; i < N_BINS; i++) {
+                    galaxies[p].ColdDust += galaxies[p].DiscDust[i];
+                }
+            }
+        }
     }
 
     // Safety check: ensure reheated_mass doesn't exceed remaining ColdGas (floating-point precision)
@@ -1002,13 +1049,10 @@ void update_from_star_formation(const int p, const double stars, const double me
         const double DTG = get_DTG(galaxies[p].ColdGas, galaxies[p].ColdDust);
         galaxies[p].ColdDust -= DTG * (1.0 - run_params->RecycleFraction) * stars;
         if(galaxies[p].ColdDust < 0.0) galaxies[p].ColdDust = 0.0;
-    } else if(run_params->DustOn == 1 && run_params->DarkModeOn == 1) {
-        // DarkMode: Sum disc dust to get bulk ColdDust
-        galaxies[p].ColdDust = 0.0;
-        for(int i = 0; i < N_BINS; i++) {
-            galaxies[p].ColdDust += galaxies[p].DiscDust[i];
-        }
     }
+    // Note: In DarkMode, DiscDust has already been updated per-bin above,
+    // and ColdDust is recalculated in the main function after dust production/accretion/destruction
+}
 }
 
 
@@ -1132,6 +1176,21 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
             double reheated_dust = DTG * reheated_mass;
             if(reheated_dust > galaxies[p].ColdDust) reheated_dust = galaxies[p].ColdDust;
             galaxies[p].ColdDust -= reheated_dust;
+            
+            // DarkMode: Also remove dust from disc arrays proportionally
+            if(run_params->DarkModeOn == 1 && reheated_dust > 0.0) {
+                double total_disc_dust = 0.0;
+                for(int i = 0; i < N_BINS; i++) {
+                    total_disc_dust += galaxies[p].DiscDust[i];
+                }
+                if(total_disc_dust > 1.0e-10) {
+                    for(int i = 0; i < N_BINS; i++) {
+                        double frac = galaxies[p].DiscDust[i] / total_disc_dust;
+                        galaxies[p].DiscDust[i] -= reheated_dust * frac;
+                        if(galaxies[p].DiscDust[i] < 0.0) galaxies[p].DiscDust[i] = 0.0;
+                    }
+                }
+            }
 
             if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
                 // CGM-regime: ColdDust → CGMDust → EjectedDust
