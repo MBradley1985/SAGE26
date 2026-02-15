@@ -1053,7 +1053,6 @@ void update_from_star_formation(const int p, const double stars, const double me
     // Note: In DarkMode, DiscDust has already been updated per-bin above,
     // and ColdDust is recalculated in the main function after dust production/accretion/destruction
 }
-}
 
 
 
