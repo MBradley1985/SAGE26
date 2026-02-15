@@ -425,9 +425,11 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
             if(cooling_dust > galaxies[gal].CGMDust) cooling_dust = galaxies[gal].CGMDust;
         }
         
-        // DarkMode: distribute to disk annuli
+        // DarkMode: distribute to disk annuli and evolve spin
         if(run_params->DarkModeOn == 1) {
             distribute_cooling_to_disk(gal, cgm_cooling, metallicity, cooling_dust, galaxies, run_params);
+            // CGM gas brings hot gas spin to disc (SpinHot tracks CGM/hot reservoir spin)
+            update_spin_gas_cooling(gal, cgm_cooling, galaxies);
         }
         
         // Update bulk quantities (always done, DarkMode just adds disk distribution)
@@ -454,9 +456,11 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
             if(cooling_dust > galaxies[gal].HotDust) cooling_dust = galaxies[gal].HotDust;
         }
         
-        // DarkMode: distribute to disk annuli
+        // DarkMode: distribute to disk annuli and evolve spin
         if(run_params->DarkModeOn == 1) {
             distribute_cooling_to_disk(gal, hot_cooling, metallicity, cooling_dust, galaxies, run_params);
+            // Hot gas brings its spin to disc
+            update_spin_gas_cooling(gal, hot_cooling, galaxies);
         }
         
         // Update bulk quantities
@@ -767,6 +771,9 @@ void cool_gas_onto_galaxy_darkmode(const int centralgal, const double coolingGas
         coolingGasBinSum += coolingGasBin;
     }
     
+    // Evolve gas disc spin - cooling gas brings hot gas spin
+    update_spin_gas_cooling(centralgal, actual_cooling, galaxies);
+    
     // Update bulk quantities  
     galaxies[centralgal].ColdGas += actual_cooling;
     galaxies[centralgal].MetalsColdGas += metallicity * actual_cooling;
@@ -819,6 +826,9 @@ void cool_gas_onto_galaxy_darkmode_with_dust(const int centralgal, const double 
         coolingGasBinSum += coolingGasBin;
         coolingDustBinSum += coolingDustBin;
     }
+    
+    // Evolve gas disc spin - cooling gas brings hot gas spin
+    update_spin_gas_cooling(centralgal, actual_cooling, galaxies);
     
     // Update bulk quantities
     galaxies[centralgal].ColdGas += actual_cooling;

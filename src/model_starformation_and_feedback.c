@@ -1083,6 +1083,11 @@ void update_from_star_formation(const int p, const double stars, const double me
         }
     }
     
+    // Evolve stellar spin - new stars inherit gas disc spin (DarkMode only)
+    if(run_params->DarkModeOn == 1) {
+        update_spin_stars_sfr(p, (1 - RecycleFraction) * stars, galaxies);
+    }
+    
     // update gas and metals from star formation (bulk quantities - always updated)
     galaxies[p].ColdGas -= (1 - RecycleFraction) * stars;
     galaxies[p].MetalsColdGas -= metallicity * (1 - RecycleFraction) * stars;

@@ -37,6 +37,18 @@ extern "C" {
 
     extern double get_DTG(const double gas, const double dust);
 
+    /* Spin evolution functions for DarkMode */
+    extern void normalize_spin(float spin[3]);
+    extern void evolve_spin(float spin_old[3], const double m_old, 
+                            const float spin_add[3], const double m_add);
+    extern void update_spin_gas_cooling(const int gal, const double cooling_mass, 
+                                        struct GALAXY *galaxies);
+    extern void update_spin_stars_sfr(const int gal, const double stars_formed, 
+                                      struct GALAXY *galaxies);
+    extern void update_spin_hot_ejection(const int gal, const double ejected_mass,
+                                         struct GALAXY *galaxies);
+    extern void combine_spins_merger(const int t, const int p, struct GALAXY *galaxies);
+
 #ifdef GSL_FOUND
     extern double integrate_arr(const double arr1[MAX_STRING_LEN], const double arr2[MAX_STRING_LEN],
                                 const int npts, const double lower_limit, const double upper_limit);

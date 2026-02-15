@@ -368,6 +368,12 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
 
 void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
+    // DarkMode: combine spin vectors before adding masses
+    // (uses current masses for mass-weighted combination)
+    if(run_params->DarkModeOn == 1) {
+        combine_spins_merger(t, p, galaxies);
+    }
+    
     galaxies[t].ColdGas += galaxies[p].ColdGas;
     galaxies[t].MetalsColdGas += galaxies[p].MetalsColdGas;
 
