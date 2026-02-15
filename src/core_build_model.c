@@ -226,8 +226,8 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                     
                     // DarkMode: Zero DiscSFR array for this output step
                     if(run_params->DarkModeOn == 1) {
-                        for(int i = 0; i < N_BINS; i++) {
-                            galaxies[ngal].DiscSFR[i] = 0.0;
+                        for(int bin_i = 0; bin_i < N_BINS; bin_i++) {
+                            galaxies[ngal].DiscSFR[bin_i] = 0.0;
                         }
                     }
 

@@ -14,7 +14,7 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
 {
     double tot_stellarMass, tot_BHMass, tot_coldMass, tot_hotMass, tot_ejected, tot_ICS;
     double tot_ejectedMetals, tot_ICSMetals;
-    double tot_hotDust = 0.0, tot_ejectedDust = 0.0, tot_CGMDust = 0.0;
+    double tot_coldDust = 0.0, tot_hotDust = 0.0, tot_ejectedDust = 0.0, tot_CGMDust = 0.0;
     double infallingMass, reionization_modifier;
     double tot_CGMgas, tot_MetalsCGMgas;
 
@@ -30,6 +30,7 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
         tot_ejected += galaxies[i].EjectedMass;
         tot_ejectedMetals += galaxies[i].MetalsEjectedMass;
         if(run_params->DustOn == 1) {
+            tot_coldDust += galaxies[i].ColdDust;
             tot_hotDust += galaxies[i].HotDust;
             tot_ejectedDust += galaxies[i].EjectedDust;
             tot_CGMDust += galaxies[i].CGMDust;
@@ -60,9 +61,14 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
         reionization_modifier = 1.0;
     }
 
+    // Calculate infall: total baryons allowed by Mvir minus all existing baryonic mass
+    // Dust is baryonic, so must be subtracted from available baryon budget
+    double tot_dust = (run_params->DustOn == 1) ? 
+        (tot_coldDust + tot_hotDust + tot_ejectedDust + tot_CGMDust) : 0.0;
+    
     infallingMass =
         reionization_modifier * run_params->BaryonFrac * galaxies[centralgal].Mvir - 
-        (tot_stellarMass + tot_coldMass + tot_hotMass + tot_ejected + tot_BHMass + tot_ICS + tot_CGMgas);
+        (tot_stellarMass + tot_coldMass + tot_hotMass + tot_ejected + tot_BHMass + tot_ICS + tot_CGMgas + tot_dust);
 
     // the central galaxy keeps all the ejected mass
     galaxies[centralgal].EjectedMass = tot_ejected;
@@ -171,7 +177,11 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
     }
 
     double strippedGas = -1.0 *
-        (reionization_modifier * run_params->BaryonFrac * galaxies[gal].Mvir - (galaxies[gal].StellarMass + galaxies[gal].ColdGas + galaxies[gal].HotGas + galaxies[gal].CGMgas + galaxies[gal].BlackHoleMass + galaxies[gal].ICS + galaxies[gal].EjectedMass) ) / STEPS;
+        (reionization_modifier * run_params->BaryonFrac * galaxies[gal].Mvir - 
+        (galaxies[gal].StellarMass + galaxies[gal].ColdGas + galaxies[gal].HotGas + galaxies[gal].CGMgas + 
+         galaxies[gal].BlackHoleMass + galaxies[gal].ICS + galaxies[gal].EjectedMass +
+         ((run_params->DustOn == 1) ? (galaxies[gal].ColdDust + galaxies[gal].HotDust + 
+                                        galaxies[gal].CGMDust + galaxies[gal].EjectedDust) : 0.0))) / STEPS;
     // ( reionization_modifier * run_params->BaryonFrac * galaxies[gal].deltaMvir ) / STEPS;
 
     if(strippedGas > 0.0) {

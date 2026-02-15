@@ -59,9 +59,9 @@ BulgeSizeOn           3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Ton
 
 DustOn                1   %0: switch off
 MetalYieldsOn         1   %0: use constant yield representing SNII only; 1: use stellar yields from AGB, SN and SNIa (Arrigoni 2012)
-AGBYields             0   %0=Karakas2010
-SNIIYields            0   %0=WoosleyWeaver1995
-SNIaYields            0   %0=Iwamoto1999
+AGBYields             0   %0: Karakas2010
+SNIIYields            0   %0: WoosleyWeaver1995
+SNIaYields            0   %0: Iwamoto1999
 
 DarkModeOn            1   %0: standard SAGE; 1: DarkSage-style radially-resolved disks
 

@@ -96,7 +96,6 @@ double compute_local_star_formation(const int p, const double dt,
         
         // --- Compute H2 fraction based on SFprescription ---
         double f_H2 = 0.0;
-        double gas_sf = galaxies[p].DiscGas[i];  // Default: all gas available for SF
         
         if(run_params->SFprescription == 0) {
             // Simple gas-based SF (no H2 tracking)
@@ -125,7 +124,6 @@ double compute_local_star_formation(const int p, const double dt,
             if(Z_prime < 0.05) Z_prime = 0.05;
             
             const double clumping = 3.0;
-            double Sigma_comp = clumping * Sigma_gas;
             double tau_c = 0.066 * clumping * Z_prime * Sigma_gas;
             double chi = 0.77 * (1.0 + 3.1 * pow(Z_prime, 0.365));
             
@@ -256,6 +254,7 @@ double apply_local_star_formation(const int p, const double dt, const int step,
                                  const double sfr_local[N_BINS],
                                  struct GALAXY *galaxies, const struct params *run_params)
 {
+    (void)step;  // Reserved for future use
     const double RecycleFraction = run_params->RecycleFraction;
     double total_stars_formed = 0.0;
     
@@ -328,6 +327,7 @@ double apply_local_star_formation(const int p, const double dt, const int step,
 double compute_toomre_Q(double Sigma_gas, double Sigma_stars, double r_mid, double Vvir,
                        const struct params *run_params)
 {
+    (void)run_params;  // Reserved for future use
     if(Sigma_gas <= 0.0 || r_mid <= 0.0 || Vvir <= 0.0) {
         return 1000.0;  // Large Q = stable
     }
@@ -382,6 +382,10 @@ double compute_toomre_Q(double Sigma_gas, double Sigma_stars, double r_mid, doub
 void check_local_disk_instability(const int p, const int centralgal, const double dt, const int step,
                                  struct GALAXY *galaxies, const struct params *run_params)
 {
+    (void)centralgal;  // Reserved for future use
+    (void)dt;  // Reserved for future use
+    (void)step;  // Reserved for future use
+    
     if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
         return;
     }
@@ -390,7 +394,6 @@ void check_local_disk_instability(const int p, const int centralgal, const doubl
     const double Q_crit = 1.0;  // Critical Q for marginal stability
     
     double total_unstable_stars = 0.0;
-    double total_unstable_gas = 0.0;
     
     for(int i = 0; i < N_BINS; i++) {
         double r_in = galaxies[p].DiscRadii[i] * 1000.0;    // kpc
@@ -415,20 +418,18 @@ void check_local_disk_instability(const int p, const int centralgal, const doubl
             double unstable_stars_bin = unstable_frac * galaxies[p].DiscStars[i];
             double unstable_gas_bin = unstable_frac * galaxies[p].DiscGas[i];
             
-            // Remove from disk
-            galaxies[p].DiscStars[i] -= unstable_stars_bin;
-            galaxies[p].DiscGas[i] -= unstable_gas_bin;
-            
             double Z_stars = (galaxies[p].DiscStars[i] > 0.0) ?
                 galaxies[p].DiscStarsMetals[i] / galaxies[p].DiscStars[i] : 0.0;
             double Z_gas = (galaxies[p].DiscGas[i] > 0.0) ?
                 galaxies[p].DiscGasMetals[i] / galaxies[p].DiscGas[i] : 0.0;
             
+            // Remove from disk
+            galaxies[p].DiscStars[i] -= unstable_stars_bin;
+            galaxies[p].DiscGas[i] -= unstable_gas_bin;
             galaxies[p].DiscStarsMetals[i] -= Z_stars * unstable_stars_bin;
             galaxies[p].DiscGasMetals[i] -= Z_gas * unstable_gas_bin;
             
             total_unstable_stars += unstable_stars_bin;
-            total_unstable_gas += unstable_gas_bin;
             
             // Safety
             if(galaxies[p].DiscStars[i] < 0.0) galaxies[p].DiscStars[i] = 0.0;
