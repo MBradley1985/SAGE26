@@ -164,7 +164,7 @@ def verify_angular_momentum(data, output_prefix):
     ax = axes[1, 1]
     valid = (spin_gas_mag > 0) & (spin_stars_mag > 0) & (data['StellarMass'] > 0.01)
     if np.sum(valid) > 100:
-        mass_bins = np.logspace(-1, 2, 15)
+        mass_bins = np.logspace(-2, 2, 20)  # Extended range from 10^-2 to 10^2
         alignment_median = []
         for i in range(len(mass_bins)-1):
             in_bin = valid & (data['StellarMass'] >= mass_bins[i]) & (data['StellarMass'] < mass_bins[i+1])
@@ -180,6 +180,7 @@ def verify_angular_momentum(data, output_prefix):
         ax.set_xlabel('Stellar Mass [10¹⁰ M☉/h]')
         ax.set_ylabel('Gas-Star Spin Dot Product')
         ax.set_title('Disk Alignment vs Mass')
+        ax.set_xlim(1e-2, 1e2)  # Full range from 0.01 to 100
         ax.set_ylim(-0.1, 1.1)
         ax.legend()
     
@@ -554,17 +555,25 @@ def verify_radial_tracking(data, output_prefix):
     ax = fig.add_subplot(gs[1, 2])
     
     # Compute surface densities for all bins
+    # IMPORTANT: Properly handle h-factors for physical units
+    h = 0.73  # Hubble parameter
     all_sigma_gas = []
     all_sigma_sfr = []
     
     for i in range(len(data['DiscGas'])):
-        r_edges = data['DiscRadii'][i] * 1000  # kpc
-        areas = np.pi * (r_edges[1:]**2 - r_edges[:-1]**2)  # kpc^2
+        # Convert radii to physical kpc
+        r_edges_phys = data['DiscRadii'][i] * 1000 / h  # Mpc/h * 1000 / h = kpc (physical)
+        areas_phys = np.pi * (r_edges_phys[1:]**2 - r_edges_phys[:-1]**2)  # kpc² (physical)
         
-        for j in range(len(areas)):
-            if data['DiscGas'][i, j] > 1e-5 and data['DiscSFR'][i, j] > 1e-6 and areas[j] > 0:
-                sigma_gas = (data['DiscGas'][i, j] * 1e10 / 0.73) / (areas[j] * 1e6)  # Msun/pc^2
-                sigma_sfr = data['DiscSFR'][i, j] / areas[j]  # Msun/yr/kpc^2
+        for j in range(len(areas_phys)):
+            if data['DiscGas'][i, j] > 1e-5 and data['DiscSFR'][i, j] > 0 and areas_phys[j] > 0:
+                # Convert mass to physical M☉
+                mass_gas_phys = data['DiscGas'][i, j] * 1e10 / h  # 10^10 M☉/h → M☉
+                sfr_phys = data['DiscSFR'][i, j]  # Already in M☉/yr (physical)
+                
+                # Surface densities in physical units
+                sigma_gas = mass_gas_phys / (areas_phys[j] * 1e6)  # M☉/pc²
+                sigma_sfr = sfr_phys / (areas_phys[j] * 1e6)  # M☉/yr/pc²
                 
                 all_sigma_gas.append(sigma_gas)
                 all_sigma_sfr.append(sigma_sfr)
@@ -573,16 +582,15 @@ def verify_radial_tracking(data, output_prefix):
         all_sigma_gas = np.array(all_sigma_gas)
         all_sigma_sfr = np.array(all_sigma_sfr)
         
-        # Convert to surface density of SFR
-        sigma_sfr_msun_yr_pc2 = all_sigma_sfr * 1e-6
-        
-        valid = (all_sigma_gas > 0.1) & (sigma_sfr_msun_yr_pc2 > 1e-6)
+        # Surface densities are already in correct units (M☉/pc² and M☉/yr/pc²)
+        # Use lower thresholds to capture low SFR bins
+        valid = (all_sigma_gas > 0.01) & (all_sigma_sfr > 1e-15) & np.isfinite(all_sigma_gas) & np.isfinite(all_sigma_sfr)
         if np.sum(valid) > 100:
-            h = ax.hexbin(np.log10(all_sigma_gas[valid]), np.log10(sigma_sfr_msun_yr_pc2[valid]),
+            h = ax.hexbin(np.log10(all_sigma_gas[valid]), np.log10(all_sigma_sfr[valid]),
                           gridsize=40, cmap='viridis', mincnt=1, bins='log')
             
             # Kennicutt-Schmidt relation: Σ_SFR ∝ Σ_gas^1.4
-            x = np.linspace(-1, 3, 50)
+            x = np.linspace(0.5, 3, 50)  # Match data range starting ~1
             y_ks = -3.9 + 1.4 * x  # Kennicutt 1998
             ax.plot(x, y_ks, 'r--', lw=2, label='K-S (N=1.4)')
             

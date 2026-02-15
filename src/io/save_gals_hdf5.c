@@ -1469,6 +1469,9 @@ int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct save_info 
 
     // DarkMode: Copy disk arrays (only if DarkModeOn=1)
     if(run_params->DarkModeOn == 1) {
+        // Unit conversion factor for SFR: code units → M☉/yr (same as SfrDisk)
+        const float sfr_conversion = run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / STEPS;
+        
         // 2D arrays: offset = gals_in_buffer * N_BINS
         int64_t disc_offset = gals_in_buffer * N_BINS;
         for(int32_t i = 0; i < N_BINS; i++) {
@@ -1478,7 +1481,8 @@ int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct save_info 
             save_info->buffer_output_gals[output_snap_idx].DiscStarsMetals[disc_offset + i] = (float)g->DiscStarsMetals[i];
             save_info->buffer_output_gals[output_snap_idx].DiscH2[disc_offset + i] = (float)g->DiscH2[i];
             save_info->buffer_output_gals[output_snap_idx].DiscHI[disc_offset + i] = (float)g->DiscHI[i];
-            save_info->buffer_output_gals[output_snap_idx].DiscSFR[disc_offset + i] = (float)g->DiscSFR[i];
+            // Convert DiscSFR from accumulated mass to M☉/yr (same conversion as SfrDisk)
+            save_info->buffer_output_gals[output_snap_idx].DiscSFR[disc_offset + i] = (float)(g->DiscSFR[i] * sfr_conversion);
             save_info->buffer_output_gals[output_snap_idx].DiscDust[disc_offset + i] = (float)g->DiscDust[i];
         }
 

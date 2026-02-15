@@ -36,9 +36,19 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // DARKMODE: SPATIAL DISK TRACKING (uses bulk SF for calibration)
     // ========================================================================
     if(run_params->DarkModeOn == 1) {
-        // Safety: Ensure disc arrays are initialized
+        // Safety: Ensure disc arrays are initialized and NaN-free
         double total_disc_gas_initial = 0.0;
         for(int i = 0; i < N_BINS; i++) {
+            // Fix any NaN/Inf values in disc arrays
+            if(isnan(galaxies[p].DiscGas[i]) || isinf(galaxies[p].DiscGas[i])) {
+                galaxies[p].DiscGas[i] = 0.0;
+            }
+            if(isnan(galaxies[p].DiscGasMetals[i]) || isinf(galaxies[p].DiscGasMetals[i])) {
+                galaxies[p].DiscGasMetals[i] = 0.0;
+            }
+            if(run_params->DustOn == 1 && (isnan(galaxies[p].DiscDust[i]) || isinf(galaxies[p].DiscDust[i]))) {
+                galaxies[p].DiscDust[i] = 0.0;
+            }
             total_disc_gas_initial += galaxies[p].DiscGas[i];
         }
         
@@ -852,7 +862,11 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 // Sum current disc dust
                 double total_disc_dust = 0.0;
                 for(int i = 0; i < N_BINS; i++) {
-                    total_disc_dust += galaxies[p].DiscDust[i];
+                    if(!isnan(galaxies[p].DiscDust[i]) && !isinf(galaxies[p].DiscDust[i])) {
+                        total_disc_dust += galaxies[p].DiscDust[i];
+                    } else {
+                        galaxies[p].DiscDust[i] = 0.0;  // Fix NaN/Inf
+                    }
                 }
                 
                 if(total_disc_dust > 1.0e-10) {
@@ -861,6 +875,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                         double frac = galaxies[p].DiscDust[i] / total_disc_dust;
                         galaxies[p].DiscDust[i] += dust_delta * frac;
                         if(galaxies[p].DiscDust[i] < 0.0) galaxies[p].DiscDust[i] = 0.0;
+                        if(isnan(galaxies[p].DiscDust[i]) || isinf(galaxies[p].DiscDust[i])) {
+                            galaxies[p].DiscDust[i] = 0.0;
+                        }
                     }
                 } else if(dust_delta > 0.0) {
                     // No existing disc dust but dust was produced - distribute by gas fraction
@@ -872,17 +889,31 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                         for(int i = 0; i < N_BINS; i++) {
                             double frac = galaxies[p].DiscGas[i] / total_disc_gas;
                             galaxies[p].DiscDust[i] += dust_delta * frac;
+                            if(isnan(galaxies[p].DiscDust[i]) || isinf(galaxies[p].DiscDust[i])) {
+                                galaxies[p].DiscDust[i] = 0.0;
+                            }
                         }
                     } else {
                         // No gas either - put all dust in first bin
                         galaxies[p].DiscDust[0] += dust_delta;
+                        if(isnan(galaxies[p].DiscDust[0]) || isinf(galaxies[p].DiscDust[0])) {
+                            galaxies[p].DiscDust[0] = 0.0;
+                        }
                     }
                 }
                 
                 // Recalculate ColdDust from disc sum to ensure consistency
                 galaxies[p].ColdDust = 0.0;
                 for(int i = 0; i < N_BINS; i++) {
-                    galaxies[p].ColdDust += galaxies[p].DiscDust[i];
+                    if(!isnan(galaxies[p].DiscDust[i]) && !isinf(galaxies[p].DiscDust[i])) {
+                        galaxies[p].ColdDust += galaxies[p].DiscDust[i];
+                    } else {
+                        galaxies[p].DiscDust[i] = 0.0;
+                    }
+                }
+                // Final safety check
+                if(isnan(galaxies[p].ColdDust) || isinf(galaxies[p].ColdDust)) {
+                    galaxies[p].ColdDust = 0.0;
                 }
             }
         }
@@ -964,23 +995,37 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     }
     
     // DarkMode: Post-processing after bulk SF
+    // This distributes the calibrated bulk SFR spatially for diagnostic purposes
+    // NOTE: DiscSFR conserves mass (sum = SfrDisk) but may not match local K-S relation normalization
+    //       This is intentional - we preserve SAGE's statistical calibration (SMF, cosmic SFRD)
+    //       while adding spatial resolution for radial profiles and gradients
     if(run_params->DarkModeOn == 1 && stars > 0.0) {
-        // Store diagnostic SFR per annulus (distribute bulk SFR proportional to gas)
-        double total_disc_gas = 0.0;
+        // Distribute SFR proportional to H2 (molecular gas), not total gas
+        // This matches bulk SF which uses only molecular gas for star formation
+        double total_h2 = 0.0;
         for(int i = 0; i < N_BINS; i++) {
-            total_disc_gas += galaxies[p].DiscGas[i];
+            total_h2 += galaxies[p].DiscH2[i];
         }
         
-        if(total_disc_gas > 0.0) {
-            double total_sfr = stars / dt;  // Total SFR from bulk calculation
+        if(total_h2 > 0.0) {
+            // Accumulate SFR distributed by H2 fraction
+            const double sfr = stars / dt;  // Convert mass to rate
             for(int i = 0; i < N_BINS; i++) {
-                double gas_frac = galaxies[p].DiscGas[i] / total_disc_gas;
-                galaxies[p].DiscSFR[i] = total_sfr * gas_frac;
+                double h2_frac = galaxies[p].DiscH2[i] / total_h2;
+                galaxies[p].DiscSFR[i] += sfr * h2_frac;  // ACCUMULATE rate over timesteps
             }
         } else {
-            // No gas in disk - zero SFR everywhere
+            // No H2 gas, but stars formed - distribute by total gas as fallback
+            double total_disc_gas = 0.0;
             for(int i = 0; i < N_BINS; i++) {
-                galaxies[p].DiscSFR[i] = 0.0;
+                total_disc_gas += galaxies[p].DiscGas[i];
+            }
+            if(total_disc_gas > 0.0) {
+                const double sfr = stars / dt;
+                for(int i = 0; i < N_BINS; i++) {
+                    double gas_frac = galaxies[p].DiscGas[i] / total_disc_gas;
+                    galaxies[p].DiscSFR[i] += sfr * gas_frac;
+                }
             }
         }
     }
@@ -1180,13 +1225,20 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
             if(run_params->DarkModeOn == 1 && reheated_dust > 0.0) {
                 double total_disc_dust = 0.0;
                 for(int i = 0; i < N_BINS; i++) {
-                    total_disc_dust += galaxies[p].DiscDust[i];
+                    if(!isnan(galaxies[p].DiscDust[i]) && !isinf(galaxies[p].DiscDust[i])) {
+                        total_disc_dust += galaxies[p].DiscDust[i];
+                    } else {
+                        galaxies[p].DiscDust[i] = 0.0;
+                    }
                 }
                 if(total_disc_dust > 1.0e-10) {
                     for(int i = 0; i < N_BINS; i++) {
                         double frac = galaxies[p].DiscDust[i] / total_disc_dust;
                         galaxies[p].DiscDust[i] -= reheated_dust * frac;
                         if(galaxies[p].DiscDust[i] < 0.0) galaxies[p].DiscDust[i] = 0.0;
+                        if(isnan(galaxies[p].DiscDust[i]) || isinf(galaxies[p].DiscDust[i])) {
+                            galaxies[p].DiscDust[i] = 0.0;
+                        }
                     }
                 }
             }

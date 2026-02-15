@@ -223,6 +223,13 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                         galaxies[ngal].DustDotGrowth[step] = 0.0f;
                         galaxies[ngal].DustDotDestruct[step] = 0.0f;
                     }
+                    
+                    // DarkMode: Zero DiscSFR array for this output step
+                    if(run_params->DarkModeOn == 1) {
+                        for(int i = 0; i < N_BINS; i++) {
+                            galaxies[ngal].DiscSFR[i] = 0.0;
+                        }
+                    }
 
                     if(halonr == halos[halonr].FirstHaloInFOFgroup) {
                         // a central galaxy
@@ -372,6 +379,15 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
     const int MAX_STEPS = 30;
     if(effective_steps > MAX_STEPS) {
         effective_steps = MAX_STEPS;
+    }
+
+    // DarkMode: Zero DiscSFR arrays before accumulating over timesteps
+    if(run_params->DarkModeOn == 1) {
+        for(int p = 0; p < ngal; p++) {
+            for(int i = 0; i < N_BINS; i++) {
+                galaxies[p].DiscSFR[i] = 0.0;
+            }
+        }
     }
 
     for(int step = 0; step < effective_steps; step++) {
