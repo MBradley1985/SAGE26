@@ -54,9 +54,25 @@ plt.rcParams['legend.edgecolor'] = 'white'
 def read_hdf(filename = None, snap_num = None, param = None):
 
     if filename is None:
-        filename = DirName + FileName
-    property = h5.File(filename,'r')
-    return np.array(property[snap_num][param])
+        # Check for multiple model_*.hdf5 files in DirName
+        import glob
+        pattern = os.path.join(DirName, 'model_*.hdf5')
+        filelist = sorted(glob.glob(pattern))
+        if filelist:
+            arrays = []
+            for fname in filelist:
+                with h5.File(fname, 'r') as f:
+                    if snap_num in f and param in f[snap_num]:
+                        arrays.append(np.array(f[snap_num][param]))
+            if arrays:
+                return np.concatenate(arrays)
+            else:
+                raise ValueError(f"Property '{param}' not found in any file for snapshot '{snap_num}'")
+        else:
+            filename = DirName + FileName
+    # Fallback to single file
+    with h5.File(filename, 'r') as property:
+        return np.array(property[snap_num][param])
 
 def read_obs_data(filename):
     """Read observational data files"""
