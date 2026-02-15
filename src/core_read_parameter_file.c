@@ -305,6 +305,18 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->BinaryFraction);
     ParamID[NParam++] = DOUBLE;
 
+    strncpy(ParamTag[NParam], "DarkModeOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->DarkModeOn);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "FirstBin", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->FirstBin);
+    ParamID[NParam++] = DOUBLE;
+
+    strncpy(ParamTag[NParam], "ExponentBin", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->ExponentBin);
+    ParamID[NParam++] = DOUBLE;
+
     
     used_tag = mymalloc(sizeof(int) * NParam);
     for(int i=0; i<NParam; i++) {

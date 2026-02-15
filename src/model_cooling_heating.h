@@ -16,6 +16,8 @@ extern "C" {
     extern void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct GALAXY *galaxies);
     extern void cool_gas_onto_galaxy_with_dust(const int centralgal, const double coolingGas, struct GALAXY *galaxies);
     extern void cool_gas_onto_galaxy_regime_aware(const int centralgal, const double coolingGas, struct GALAXY *galaxies);
+    extern void cool_gas_onto_galaxy_darkmode(const int centralgal, const double coolingGas, struct GALAXY *galaxies, const struct params *run_params);
+    extern void cool_gas_onto_galaxy_darkmode_with_dust(const int centralgal, const double coolingGas, struct GALAXY *galaxies, const struct params *run_params);
     extern double do_AGN_heating(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
                                  struct GALAXY *galaxies, const struct params *run_params);
     extern double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,

@@ -276,6 +276,30 @@ void init(struct params *run_params)
 #endif
     }
 
+    /* Initialize DarkMode: specific angular momentum bin edges */
+    if(run_params->DarkModeOn == 1) {
+        /* Set defaults if not specified */
+        if(run_params->FirstBin <= 0) run_params->FirstBin = 100.0;   /* kpc km/s */
+        if(run_params->ExponentBin <= 0) run_params->ExponentBin = 1.4;
+
+        /* Convert FirstBin from kpc km/s to internal units (Mpc/h * km/s / h = Mpc km/s / h^2) */
+        /* Factor: (kpc -> Mpc/h) / (km/s -> code velocity) */
+        double j_unit = (CM_PER_MPC / 1e3 / run_params->UnitLength_in_cm)
+                      / (1e5 / run_params->UnitVelocity_in_cm_per_s);
+
+        run_params->DiscBinEdge[0] = 0.0;
+        for(int i = 1; i < N_BINS + 1; i++) {
+            run_params->DiscBinEdge[i] = run_params->FirstBin * j_unit * pow(run_params->ExponentBin, i - 1);
+        }
+
+#ifdef VERBOSE
+        if(ThisTask == 0) {
+            fprintf(stdout, "DarkMode enabled: %d radial bins, FirstBin=%.1f kpc*km/s, ExponentBin=%.2f\n",
+                    N_BINS, run_params->FirstBin, run_params->ExponentBin);
+        }
+#endif
+    }
+
 #ifdef VERBOSE
     if(ThisTask == 0) {
         fprintf(stdout, "cooling functions read\n\n");

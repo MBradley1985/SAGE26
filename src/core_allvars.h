@@ -203,6 +203,26 @@ struct GALAXY
 
     /* SFR history for delayed enrichment (one entry per snapshot) */
     float Sfr[ABSOLUTEMAXSNAPS];
+
+    /* DarkMode: radially-resolved disk structure (only used when DarkModeOn=1) */
+    float DiscRadii[N_BINS+1];       /* Physical radius of each annulus boundary [Mpc/h] */
+    float DiscGas[N_BINS];           /* Cold gas mass in each annulus */
+    float DiscStars[N_BINS];         /* Stellar mass in each annulus */
+    float DiscGasMetals[N_BINS];     /* Gas-phase metals in each annulus */
+    float DiscStarsMetals[N_BINS];   /* Stellar metals in each annulus */
+    float DiscH2[N_BINS];            /* H2 mass in each annulus */
+    float DiscHI[N_BINS];            /* HI mass in each annulus */
+    float DiscSFR[N_BINS];           /* Star formation rate in each annulus */
+    float DiscDust[N_BINS];          /* Dust mass in each annulus (if DustOn=1) */
+
+    /* DarkMode: angular momentum tracking */
+    float SpinGas[3];                /* Gas disk spin vector */
+    float SpinStars[3];              /* Stellar disk spin vector */
+    float SpinHot[3];                /* Hot gas spin vector */
+    float SpinBulge[3];              /* Bulge spin vector */
+    float CoolScaleRadius;           /* Scale radius of cooling gas */
+    float GasDiscScaleRadius;        /* Gas disk scale radius */
+    float StellarDiscScaleRadius;    /* Stellar disk scale radius */
 };
 
 
@@ -519,6 +539,12 @@ struct params
     int32_t    SNIIYields;              // SNII yield table selection
     int32_t    SNIaYields;              // SNIa yield table selection
     double     BinaryFraction;          // Binary fraction for SNIa (default 0.1)
+
+    /* DarkMode: radially-resolved disk structure */
+    int32_t    DarkModeOn;              // 0: standard SAGE; 1: DarkSage-style disk resolution
+    double     FirstBin;                // First j-bin edge [kpc km/s] (default 100)
+    double     ExponentBin;             // j-bin geometric growth factor (default 1.4)
+    double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
 
     /* Yield table data (populated by read_metal_yield when MetalYieldsOn=1) */
     double Qagb[MAXYIELDS][METALGRID];      /* Total AGB yield per mass/Z bin */

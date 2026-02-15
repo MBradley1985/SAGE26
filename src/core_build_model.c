@@ -416,10 +416,20 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
                 // cool_gas_onto_galaxy_regime_aware(p, coolingGas, galaxies);
             } else {
                 coolingGas = cooling_recipe(p, deltaT / effective_steps, galaxies, run_params);
-                if(run_params->DustOn == 1) {
-                    cool_gas_onto_galaxy_with_dust(p, coolingGas, galaxies);
+                if(run_params->DarkModeOn == 1) {
+                    // DarkMode: Distribute cooling gas to radial annuli
+                    if(run_params->DustOn == 1) {
+                        cool_gas_onto_galaxy_darkmode_with_dust(p, coolingGas, galaxies, run_params);
+                    } else {
+                        cool_gas_onto_galaxy_darkmode(p, coolingGas, galaxies, run_params);
+                    }
                 } else {
-                    cool_gas_onto_galaxy(p, coolingGas, galaxies);
+                    // Standard SAGE: Add to bulk ColdGas
+                    if(run_params->DustOn == 1) {
+                        cool_gas_onto_galaxy_with_dust(p, coolingGas, galaxies);
+                    } else {
+                        cool_gas_onto_galaxy(p, coolingGas, galaxies);
+                    }
                 }
             }
 

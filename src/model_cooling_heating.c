@@ -658,3 +658,107 @@ void cool_gas_onto_galaxy_with_dust(const int centralgal, const double coolingGa
         }
     }
 }
+
+void cool_gas_onto_galaxy_darkmode(const int centralgal, const double coolingGas, struct GALAXY *galaxies, const struct params *run_params)
+{
+    // DarkMode: Distribute cooling gas to disk annuli based on exponential j-distribution
+    // Following DarkSage approach (Stevens, Croton & Mutch 2016)
+    if(coolingGas <= 0.0) return;
+    
+    const double actual_cooling = (coolingGas < galaxies[centralgal].HotGas) ? coolingGas : galaxies[centralgal].HotGas;
+    const double metallicity = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);
+    
+    // CoolScaleRadius defines the exponential decay scale for angular momentum distribution
+    const double jscale = galaxies[centralgal].Vvir * galaxies[centralgal].CoolScaleRadius;
+    
+    double coolingGasBinSum = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        double coolingGasBin;
+        
+        if(jscale > 0.0) {
+            // Distribute cooling gas with exponential j-profile: f(j) ~ j * exp(-j/j_scale)
+            // Integral between bin edges gives mass in each bin
+            const double jfrac1 = run_params->DiscBinEdge[i] / jscale;
+            const double jfrac2 = run_params->DiscBinEdge[i+1] / jscale;
+            coolingGasBin = actual_cooling * ((jfrac1 + 1.0) * exp(-jfrac1) - (jfrac2 + 1.0) * exp(-jfrac2));
+        } else {
+            // Fallback: uniform distribution if scale radius is zero
+            coolingGasBin = actual_cooling / N_BINS;
+        }
+        
+        // Ensure we don't exceed total cooling gas (numerical precision)
+        if(coolingGasBin + coolingGasBinSum > actual_cooling || i == N_BINS - 1) {
+            coolingGasBin = actual_cooling - coolingGasBinSum;
+        }
+        if(coolingGasBin < 0.0) coolingGasBin = 0.0;
+        
+        galaxies[centralgal].DiscGas[i] += coolingGasBin;
+        galaxies[centralgal].DiscGasMetals[i] += metallicity * coolingGasBin;
+        coolingGasBinSum += coolingGasBin;
+    }
+    
+    // Update bulk quantities  
+    galaxies[centralgal].ColdGas += actual_cooling;
+    galaxies[centralgal].MetalsColdGas += metallicity * actual_cooling;
+    galaxies[centralgal].HotGas -= actual_cooling;
+    galaxies[centralgal].MetalsHotGas -= metallicity * actual_cooling;
+    
+    if(galaxies[centralgal].HotGas < 0.0) galaxies[centralgal].HotGas = 0.0;
+    if(galaxies[centralgal].MetalsHotGas < 0.0) galaxies[centralgal].MetalsHotGas = 0.0;
+}
+
+void cool_gas_onto_galaxy_darkmode_with_dust(const int centralgal, const double coolingGas, struct GALAXY *galaxies, const struct params *run_params)
+{
+    // DarkMode with dust: Distribute cooling gas and dust to disk annuli
+    if(coolingGas <= 0.0) return;
+    
+    const double actual_cooling = (coolingGas < galaxies[centralgal].HotGas) ? coolingGas : galaxies[centralgal].HotGas;
+    const double metallicity = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);
+    const double DTG = get_DTG(galaxies[centralgal].HotGas, galaxies[centralgal].HotDust);
+    double cooling_dust = DTG * actual_cooling;
+    if(cooling_dust > galaxies[centralgal].HotDust) cooling_dust = galaxies[centralgal].HotDust;
+    
+    const double jscale = galaxies[centralgal].Vvir * galaxies[centralgal].CoolScaleRadius;
+    
+    double coolingGasBinSum = 0.0;
+    double coolingDustBinSum = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        double coolingGasBin, coolingDustBin;
+        
+        if(jscale > 0.0) {
+            const double jfrac1 = run_params->DiscBinEdge[i] / jscale;
+            const double jfrac2 = run_params->DiscBinEdge[i+1] / jscale;
+            const double frac = (jfrac1 + 1.0) * exp(-jfrac1) - (jfrac2 + 1.0) * exp(-jfrac2);
+            coolingGasBin = actual_cooling * frac;
+            coolingDustBin = cooling_dust * frac;
+        } else {
+            coolingGasBin = actual_cooling / N_BINS;
+            coolingDustBin = cooling_dust / N_BINS;
+        }
+        
+        if(coolingGasBin + coolingGasBinSum > actual_cooling || i == N_BINS - 1) {
+            coolingGasBin = actual_cooling - coolingGasBinSum;
+            coolingDustBin = cooling_dust - coolingDustBinSum;
+        }
+        if(coolingGasBin < 0.0) coolingGasBin = 0.0;
+        if(coolingDustBin < 0.0) coolingDustBin = 0.0;
+        
+        galaxies[centralgal].DiscGas[i] += coolingGasBin;
+        galaxies[centralgal].DiscGasMetals[i] += metallicity * coolingGasBin;
+        galaxies[centralgal].DiscDust[i] += coolingDustBin;
+        coolingGasBinSum += coolingGasBin;
+        coolingDustBinSum += coolingDustBin;
+    }
+    
+    // Update bulk quantities
+    galaxies[centralgal].ColdGas += actual_cooling;
+    galaxies[centralgal].MetalsColdGas += metallicity * actual_cooling;
+    galaxies[centralgal].ColdDust += cooling_dust;
+    galaxies[centralgal].HotGas -= actual_cooling;
+    galaxies[centralgal].MetalsHotGas -= metallicity * actual_cooling;
+    galaxies[centralgal].HotDust -= cooling_dust;
+    
+    if(galaxies[centralgal].HotGas < 0.0) galaxies[centralgal].HotGas = 0.0;
+    if(galaxies[centralgal].MetalsHotGas < 0.0) galaxies[centralgal].MetalsHotGas = 0.0;
+    if(galaxies[centralgal].HotDust < 0.0) galaxies[centralgal].HotDust = 0.0;
+}

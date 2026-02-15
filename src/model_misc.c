@@ -126,6 +126,55 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
         galaxies[p].Sfr[snap] = 0.0f;
     }
+
+    /* DarkMode: Initialize disk arrays and angular momentum vectors */
+    if(run_params->DarkModeOn == 1) {
+        /* Compute disk radii from j-bin edges: r = j / Vvir */
+        for(int i = 0; i < N_BINS + 1; i++) {
+            if(galaxies[p].Vvir > 0.0) {
+                galaxies[p].DiscRadii[i] = run_params->DiscBinEdge[i] / galaxies[p].Vvir;
+            } else {
+                galaxies[p].DiscRadii[i] = 0.0;
+            }
+        }
+
+        /* Initialize disk arrays to zero */
+        for(int i = 0; i < N_BINS; i++) {
+            galaxies[p].DiscGas[i] = 0.0f;
+            galaxies[p].DiscStars[i] = 0.0f;
+            galaxies[p].DiscGasMetals[i] = 0.0f;
+            galaxies[p].DiscStarsMetals[i] = 0.0f;
+            galaxies[p].DiscH2[i] = 0.0f;
+            galaxies[p].DiscHI[i] = 0.0f;
+            galaxies[p].DiscSFR[i] = 0.0f;
+            galaxies[p].DiscDust[i] = 0.0f;
+        }
+
+        /* Initialize spin vectors from halo spin */
+        double halo_spin_mag = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
+                                    halos[halonr].Spin[1] * halos[halonr].Spin[1] +
+                                    halos[halonr].Spin[2] * halos[halonr].Spin[2]);
+        if(halo_spin_mag > 0.0) {
+            for(int j = 0; j < 3; j++) {
+                galaxies[p].SpinGas[j] = halos[halonr].Spin[j] / halo_spin_mag;
+                galaxies[p].SpinStars[j] = halos[halonr].Spin[j] / halo_spin_mag;
+                galaxies[p].SpinHot[j] = halos[halonr].Spin[j] / halo_spin_mag;
+                galaxies[p].SpinBulge[j] = 0.0f;
+            }
+        } else {
+            for(int j = 0; j < 3; j++) {
+                galaxies[p].SpinGas[j] = 0.0f;
+                galaxies[p].SpinStars[j] = 0.0f;
+                galaxies[p].SpinHot[j] = 0.0f;
+                galaxies[p].SpinBulge[j] = 0.0f;
+            }
+        }
+
+        /* Initialize scale radii */
+        galaxies[p].CoolScaleRadius = galaxies[p].DiskScaleRadius;
+        galaxies[p].GasDiscScaleRadius = galaxies[p].DiskScaleRadius;
+        galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;
+    }
 }
 
 
@@ -550,14 +599,14 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
     const float sigma_star_0 = M_star_total / (2.0 * M_PI * rs_pc * rs_pc);
     
     // Radial integration parameters
-    const int N_BINS = 10;  // Number of radial bins
+    const int N_H2BINS = 10;  // Number of radial bins for H2 integration
     const float R_MAX = 3.0 * rs_pc;  // Integrate out to 3 scale radii (~95% of mass)
-    const float dr = R_MAX / N_BINS;
+    const float dr = R_MAX / N_H2BINS;
     
     // Integrate molecular gas mass
     float M_H2_total = 0.0;
     
-    for (int i = 0; i < N_BINS; i++) {
+    for (int i = 0; i < N_H2BINS; i++) {
         // Bin center radius
         const float r = (i + 0.5) * dr;
         

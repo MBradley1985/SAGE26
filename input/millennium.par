@@ -63,6 +63,8 @@ AGBYields             0   %0=Karakas2010
 SNIIYields            0   %0=WoosleyWeaver1995
 SNIaYields            0   %0=Iwamoto1999
 
+DarkModeOn            1   %0: standard SAGE; 1: DarkSage-style radially-resolved disks
+
 %------------------------------------------
 %----- SAGE model parameters --------------
 %------------------------------------------
@@ -104,6 +106,13 @@ DeltaDustSNIa           0.0
 DustAccretionTimescale  50.0
 EtaSNDust               0.1
 BinaryFraction          0.1    %Fraction of stars in SNIa binaries
+
+%------------------------------------------
+%----- DarkMode (Radially-Resolved Disks) --
+%------------------------------------------
+
+FirstBin                100.0   %First j-bin edge [kpc*km/s] (default 100)
+ExponentBin             1.4     %j-bin geometric growth factor (default 1.4)
 
 %------------------------------------------
 %----- Other code-related information -----
