@@ -529,6 +529,60 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
                 CHECK_STATUS_AND_RETURN_ON_FAIL(radii_status, (int32_t) radii_status,
                                                 "Failed to close dataspace for DiscRadii at snapshot %d.\n", snap_idx);
             }
+
+            // Create SpinGas and SpinStars 1D datasets (angular momentum tracking)
+            {
+                const char *spin_names[6] = {"SpinGasx", "SpinGasy", "SpinGasz",
+                                             "SpinStarsx", "SpinStarsy", "SpinStarsz"};
+                const char *spin_desc[6] = {
+                    "Gas disk spin vector x-component (unit vector)", 
+                    "Gas disk spin vector y-component (unit vector)",
+                    "Gas disk spin vector z-component (unit vector)",
+                    "Stellar disk spin vector x-component (unit vector)",
+                    "Stellar disk spin vector y-component (unit vector)",
+                    "Stellar disk spin vector z-component (unit vector)"
+                };
+
+                hsize_t spin_dims[1] = {0};
+                hsize_t spin_maxdims[1] = {H5S_UNLIMITED};
+                hsize_t spin_chunk_dims[1] = {NUM_GALS_PER_BUFFER};
+
+                for(int spin_idx = 0; spin_idx < 6; spin_idx++) {
+                    snprintf(full_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/%s", run_params->ListOutputSnaps[snap_idx], spin_names[spin_idx]);
+
+                    hid_t spin_prop = H5Pcreate(H5P_DATASET_CREATE);
+                    CHECK_STATUS_AND_RETURN_ON_FAIL(spin_prop, (int32_t) spin_prop,
+                                                    "Could not create property list for %s dataset at snapshot %d.\n", spin_names[spin_idx], snap_idx);
+
+                    hid_t spin_dataspace = H5Screate_simple(1, spin_dims, spin_maxdims);
+                    CHECK_STATUS_AND_RETURN_ON_FAIL(spin_dataspace, (int32_t) spin_dataspace,
+                                                    "Could not create 1D dataspace for %s at snapshot %d.\n", spin_names[spin_idx], snap_idx);
+
+                    herr_t spin_status = H5Pset_chunk(spin_prop, 1, spin_chunk_dims);
+                    CHECK_STATUS_AND_RETURN_ON_FAIL(spin_status, (int32_t) spin_status,
+                                                    "Could not set HDF5 chunking for %s at snapshot %d.\n", spin_names[spin_idx], snap_idx);
+
+                    hid_t spin_dataset = H5Dcreate2(file_id, full_field_name, H5T_NATIVE_FLOAT, spin_dataspace,
+                                                    H5P_DEFAULT, spin_prop, H5P_DEFAULT);
+                    CHECK_STATUS_AND_RETURN_ON_FAIL(spin_dataset, (int32_t) spin_dataset,
+                                                    "Could not create %s dataset at snapshot %d.\n", spin_names[spin_idx], snap_idx);
+
+                    CREATE_STRING_ATTRIBUTE(spin_dataset, "Description", spin_desc[spin_idx], MAX_STRING_LEN);
+                    CREATE_STRING_ATTRIBUTE(spin_dataset, "Units", "Unitless", MAX_STRING_LEN);
+
+                    spin_status = H5Dclose(spin_dataset);
+                    CHECK_STATUS_AND_RETURN_ON_FAIL(spin_status, (int32_t) spin_status,
+                                                    "Failed to close %s dataset at snapshot %d.\n", spin_names[spin_idx], snap_idx);
+
+                    spin_status = H5Pclose(spin_prop);
+                    CHECK_STATUS_AND_RETURN_ON_FAIL(spin_status, (int32_t) spin_status,
+                                                    "Failed to close property list for %s at snapshot %d.\n", spin_names[spin_idx], snap_idx);
+
+                    spin_status = H5Sclose(spin_dataspace);
+                    CHECK_STATUS_AND_RETURN_ON_FAIL(spin_status, (int32_t) spin_status,
+                                                    "Failed to close dataspace for %s at snapshot %d.\n", spin_names[spin_idx], snap_idx);
+                }
+            }
         }
     }
 
@@ -2000,6 +2054,70 @@ int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to_write,
             H5Sclose(radii_memspace);
             H5Sclose(radii_filespace);
             H5Dclose(radii_dataset_id);
+        }
+
+        // Write SpinGas and SpinStars 1D arrays (angular momentum tracking)
+        {
+            const char *spin_names[6] = {"SpinGasx", "SpinGasy", "SpinGasz",
+                                         "SpinStarsx", "SpinStarsy", "SpinStarsz"};
+            float *spin_buffers[6] = {
+                save_info->buffer_output_gals[snap_idx].SpinGasx,
+                save_info->buffer_output_gals[snap_idx].SpinGasy,
+                save_info->buffer_output_gals[snap_idx].SpinGasz,
+                save_info->buffer_output_gals[snap_idx].SpinStarsx,
+                save_info->buffer_output_gals[snap_idx].SpinStarsy,
+                save_info->buffer_output_gals[snap_idx].SpinStarsz
+            };
+
+            for(int spin_idx = 0; spin_idx < 6; spin_idx++) {
+                char spin_field_name[2*MAX_STRING_LEN];
+                snprintf(spin_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/%s", run_params->ListOutputSnaps[snap_idx], spin_names[spin_idx]);
+
+                hid_t spin_dataset_id = H5Dopen2(save_info->file_id, spin_field_name, H5P_DEFAULT);
+                if(spin_dataset_id < 0) {
+                    fprintf(stderr, "Could not access %s dataset for output snapshot %d.\n", spin_names[spin_idx], snap_idx);
+                    return (int32_t) spin_dataset_id;
+                }
+
+                // 1D dimensions: [ngal]
+                hsize_t spin_dims_extend[1] = {(hsize_t)num_to_write};
+                hsize_t spin_old_dims[1] = {(hsize_t)num_already_written};
+                hsize_t spin_new_dims[1] = {spin_old_dims[0] + spin_dims_extend[0]};
+
+                status = H5Dset_extent(spin_dataset_id, spin_new_dims);
+                if(status < 0) {
+                    fprintf(stderr, "Could not resize %s dataset dimensions for snapshot %d.\n", spin_names[spin_idx], snap_idx);
+                    return (int32_t) status;
+                }
+
+                hid_t spin_filespace = H5Dget_space(spin_dataset_id);
+                if(spin_filespace < 0) {
+                    fprintf(stderr, "Could not get dataspace for %s at snapshot %d.\n", spin_names[spin_idx], snap_idx);
+                    return (int32_t) spin_filespace;
+                }
+
+                hsize_t spin_start[1] = {spin_old_dims[0]};
+                status = H5Sselect_hyperslab(spin_filespace, H5S_SELECT_SET, spin_start, NULL, spin_dims_extend, NULL);
+                if(status < 0) {
+                    fprintf(stderr, "Could not select hyperslab for %s at snapshot %d.\n", spin_names[spin_idx], snap_idx);
+                    return (int32_t) status;
+                }
+
+                hid_t spin_memspace = H5Screate_simple(1, spin_dims_extend, NULL);
+                if(spin_memspace < 0) {
+                    fprintf(stderr, "Could not create memory space for %s at snapshot %d.\n", spin_names[spin_idx], snap_idx);
+                    return (int32_t) spin_memspace;
+                }
+
+                status = H5Dwrite(spin_dataset_id, H5T_NATIVE_FLOAT, spin_memspace, spin_filespace, H5P_DEFAULT,
+                                  spin_buffers[spin_idx]);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                                "Could not write %s dataset for snapshot %d.\n", spin_names[spin_idx], snap_idx);
+
+                H5Sclose(spin_memspace);
+                H5Sclose(spin_filespace);
+                H5Dclose(spin_dataset_id);
+            }
         }
     }
 
