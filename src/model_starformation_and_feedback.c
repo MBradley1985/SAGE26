@@ -928,14 +928,10 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     update_from_feedback(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 
     // check for disk instability
+    // Use the same Mcrit-based instability for both bulk and DarkMode
+    // The bulk version handles BH growth and starbursts correctly
     if(run_params->DiskInstabilityOn) {
-        if(run_params->DarkModeOn == 1) {
-            // DarkMode: use local Toomre Q criterion per annulus
-            check_local_disk_instability(p, centralgal, dt, step, galaxies, run_params);
-        } else {
-            // Bulk: original disk instability model
-            check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
-        }
+        check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
     }
 
     // formation of new metals - instantaneous recycling approximation - only SNII

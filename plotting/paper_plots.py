@@ -145,6 +145,7 @@ _MASS_PROPS = frozenset({
     'MetalsHotGas', 'MetalsCGMgas', 'ColdGas', 'HotGas', 'CGMgas',
     'EjectedMass', 'H2gas', 'H1gas', 'IntraClusterStars',
     'MergerBulgeMass', 'InstabilityBulgeMass',
+    'ColdDust', 'HotDust', 'EjectedDust', 'CGMDust', 'TotalDust',
 })
 
 # Default properties to load for the primary model
@@ -6357,6 +6358,584 @@ def plot_27_cold_gas_mass_ratio():
     )
 
 
+# ==================== DUST AND RADIAL STRUCTURE PLOTS ====================
+
+def plot_40_dust_and_structure_grid(primary, vanilla):
+    """
+    Comprehensive 4x3 grid showing dust and radially-resolved disk properties.
+    
+    Panel layout:
+    Row 1: Dust mass function | Dust-to-stellar ratio | Dust-to-gas vs Z
+    Row 2: Surface density profiles | Metallicity gradients | H2/HI profiles
+    Row 3: Disk size-mass | Angular momentum (Fall) | Toomre Q profiles
+    Row 4: Cosmic dust density | Dust production channels | Dust destruction
+    """
+    print('Plot 40: Dust and Radial Structure Grid')
+    
+    fig = plt.figure(figsize=(18, 20))
+    gs = fig.add_gridspec(4, 3, hspace=0.25, wspace=0.28)
+    
+    # Need radial data for structural plots
+    radial_props = ['StellarMass', 'ColdGas', 'ColdDust', 'MetalsColdGas',
+                    'DiscGas', 'DiscStars', 'DiscDust', 'DiscH2', 'DiscHI',
+                    'DiscGasMetals', 'DiscRadii', 'DiscSFR',
+                    'DiskRadius', 'Vvir', 'Type', 'H2gas', 'H1gas', 'SfrDisk', 'SfrBulge']
+    
+    print('  Loading radial data...')
+    data = load_model(PRIMARY_DIR, properties=radial_props)
+    
+    # Mass cuts and selections
+    mstar = data.get('StellarMass', np.array([]))
+    if len(mstar) == 0:
+        print('  No data found!')
+        return
+    
+    central = data.get('Type', np.zeros_like(mstar)) == 0
+    mass_cut = mstar > 1e8  # 10^8 Msun minimum
+    w = central & mass_cut
+    
+    # ========== ROW 1: DUST SCALING RELATIONS ==========
+    
+    # Panel 1: Dust Mass Function
+    ax1 = fig.add_subplot(gs[0, 0])
+    cold_dust = data.get('ColdDust', np.array([]))
+    if len(cold_dust) > 0 and np.any(cold_dust > 0):
+        dust_mass = cold_dust[cold_dust > 0]
+        log_dust = np.log10(dust_mass)
+        
+        binwidth = 0.25
+        bins = np.arange(4.0, 10.5, binwidth)
+        hist, bin_edges = np.histogram(log_dust, bins=bins)
+        bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+        
+        # Convert to phi (number density per dex)
+        volume = VOLUME
+        phi = hist / (volume * binwidth)
+        phi[phi == 0] = np.nan
+        log_phi = np.log10(phi)
+        
+        ax1.plot(bin_centers, log_phi, 'b-', lw=2, label='SAGE26')
+        ax1.set_xlabel(r'$\log_{10}\ (M_{\mathrm{dust}} / M_\odot)$')
+        ax1.set_ylabel(r'$\log_{10}\ \Phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
+        ax1.set_xlim(4, 10)
+        ax1.set_ylim(-6, 0)
+        ax1.legend(loc='upper right', fontsize=9)
+    
+    # Panel 2: Dust-to-Stellar Mass Ratio
+    ax2 = fig.add_subplot(gs[0, 1])
+    if len(cold_dust) > 0:
+        log_mstar = np.log10(mstar[w])
+        dust_ratio = cold_dust[w] / mstar[w]
+        valid = dust_ratio > 0
+        
+        if np.any(valid):
+            log_ratio = np.log10(dust_ratio[valid])
+            log_ms_valid = log_mstar[valid]
+            
+            # Binned median
+            bins = np.arange(8, 12, 0.3)
+            bin_c, bin_med, bin_lo, bin_hi = binned_median(log_ms_valid, log_ratio, bins)
+            ok = np.isfinite(bin_med)
+            
+            ax2.scatter(log_ms_valid[::10], log_ratio[::10], s=1, alpha=0.1, c='gray')
+            ax2.plot(bin_c[ok], bin_med[ok], 'b-', lw=2.5, label='SAGE26')
+            ax2.fill_between(bin_c[ok], bin_lo[ok], bin_hi[ok], alpha=0.3, color='blue')
+            
+            ax2.set_xlabel(r'$\log_{10}\ (M_* / M_\odot)$')
+            ax2.set_ylabel(r'$\log_{10}\ (M_{\mathrm{dust}} / M_*)$')
+            ax2.set_xlim(8, 12)
+            ax2.set_ylim(-5, -1)
+            ax2.legend(loc='upper right', fontsize=9)
+    
+    # Panel 3: Dust-to-Gas Ratio vs Metallicity
+    ax3 = fig.add_subplot(gs[0, 2])
+    cold_gas = data.get('ColdGas', np.array([]))
+    metals_cg = data.get('MetalsColdGas', np.array([]))
+    if len(cold_dust) > 0 and len(cold_gas) > 0 and len(metals_cg) > 0:
+        valid = w & (cold_gas > 0) & (cold_dust > 0) & (metals_cg > 0)
+        
+        if np.any(valid):
+            # Metallicity: 12 + log(O/H)
+            Z_gas = (metals_cg[valid] + cold_dust[valid]) / cold_gas[valid]
+            oh12 = np.log10(Z_gas / Z_SUN) + 8.69
+            
+            # Dust-to-gas ratio
+            dtg = cold_dust[valid] / cold_gas[valid]
+            log_dtg = np.log10(dtg)
+            
+            # Binned median
+            bins = np.arange(7.5, 9.5, 0.15)
+            bin_c, bin_med, bin_lo, bin_hi = binned_median(oh12, log_dtg, bins)
+            ok = np.isfinite(bin_med)
+            
+            ax3.scatter(oh12[::10], log_dtg[::10], s=1, alpha=0.1, c='gray')
+            ax3.plot(bin_c[ok], bin_med[ok], 'b-', lw=2.5, label='SAGE26')
+            ax3.fill_between(bin_c[ok], bin_lo[ok], bin_hi[ok], alpha=0.3, color='blue')
+            
+            # Remy-Ruyer+2014 relation (approximate)
+            oh_rr = np.linspace(7.5, 9.2, 50)
+            dtg_rr = -2.21 + 1.0 * (oh_rr - 8.69)  # Linear approximation
+            ax3.plot(oh_rr, dtg_rr, 'k--', lw=1.5, label='Rémy-Ruyer+14')
+            
+            ax3.set_xlabel(r'$12 + \log_{10}(\mathrm{O/H})$')
+            ax3.set_ylabel(r'$\log_{10}\ (M_{\mathrm{dust}} / M_{\mathrm{gas}})$')
+            ax3.set_xlim(7.5, 9.5)
+            ax3.set_ylim(-5, -1)
+            ax3.legend(loc='lower right', fontsize=9)
+    
+    # ========== ROW 2: RADIAL PROFILES ==========
+    
+    # Panel 4: Surface Density Profiles
+    ax4 = fig.add_subplot(gs[1, 0])
+    disc_gas = data.get('DiscGas')
+    disc_stars = data.get('DiscStars')
+    disc_radii = data.get('DiscRadii')
+    
+    if disc_gas is not None and disc_radii is not None:
+        # Select MW-mass galaxies for profile stacking
+        mw_mass = w & (mstar > 3e10) & (mstar < 1e11)
+        n_mw = np.sum(mw_mass)
+        
+        if n_mw > 10:
+            idx_mw = np.where(mw_mass)[0]
+            
+            # Stack profiles in normalized radius (r/R_d)
+            r_norm_bins = np.linspace(0, 5, 20)
+            r_norm_c = 0.5 * (r_norm_bins[:-1] + r_norm_bins[1:])
+            
+            sigma_gas_stack = []
+            sigma_star_stack = []
+            
+            for gi in idx_mw[:200]:  # Limit for speed
+                radii = disc_radii[gi] * 1000  # Mpc/h -> kpc (approx)
+                r_mid = 0.5 * (radii[:-1] + radii[1:])
+                r_out = radii[1:]
+                r_in = radii[:-1]
+                
+                rd = data.get('DiskRadius')
+                if rd is not None and rd[gi] > 0:
+                    r_scale = rd[gi] * 1000  # Mpc/h -> kpc
+                else:
+                    r_scale = 3.0  # Default 3 kpc
+                
+                # Compute surface densities (Msun/kpc^2)
+                area = np.pi * (r_out**2 - r_in**2)
+                area[area <= 0] = 1e-10
+                
+                gas_i = disc_gas[gi]
+                stars_i = disc_stars[gi] if disc_stars is not None else np.zeros_like(gas_i)
+                
+                sigma_gas = (gas_i * 1e10 / HUBBLE_H) / area
+                sigma_star = (stars_i * 1e10 / HUBBLE_H) / area
+                
+                # Normalize radius
+                r_norm = r_mid / r_scale
+                
+                # Interpolate to common grid
+                valid = (r_norm > 0) & (r_norm < 5) & (sigma_gas > 0)
+                if np.sum(valid) > 3:
+                    sigma_gas_stack.append(np.interp(r_norm_c, r_norm[valid], np.log10(sigma_gas[valid]), 
+                                                     left=np.nan, right=np.nan))
+                valid = (r_norm > 0) & (r_norm < 5) & (sigma_star > 0)
+                if np.sum(valid) > 3:
+                    sigma_star_stack.append(np.interp(r_norm_c, r_norm[valid], np.log10(sigma_star[valid]),
+                                                      left=np.nan, right=np.nan))
+            
+            if sigma_gas_stack:
+                sigma_gas_med = np.nanmedian(sigma_gas_stack, axis=0)
+                sigma_star_med = np.nanmedian(sigma_star_stack, axis=0)
+                
+                ax4.plot(r_norm_c, sigma_gas_med, 'b-', lw=2, label=r'$\Sigma_{\mathrm{gas}}$')
+                ax4.plot(r_norm_c, sigma_star_med, 'r-', lw=2, label=r'$\Sigma_*$')
+                
+                ax4.set_xlabel(r'$r / R_d$')
+                ax4.set_ylabel(r'$\log_{10}\ \Sigma\ [M_\odot\ \mathrm{kpc}^{-2}]$')
+                ax4.set_xlim(0, 5)
+                ax4.set_ylim(4, 10)
+                ax4.legend(loc='upper right', fontsize=9)
+                ax4.text(0.05, 0.95, f'MW-mass (N={n_mw})', transform=ax4.transAxes, 
+                        fontsize=9, va='top')
+    
+    # Panel 5: Metallicity Gradients vs Stellar Mass
+    ax5 = fig.add_subplot(gs[1, 1])
+    disc_gas_metals = data.get('DiscGasMetals')
+    disc_dust = data.get('DiscDust')
+    
+    if disc_gas is not None and disc_gas_metals is not None and disc_radii is not None:
+        # Compute gradient for each galaxy and plot vs stellar mass
+        grad_list = []
+        mstar_list = []
+        
+        for gi in np.where(w)[0]:
+            # Convert radii: Mpc/h -> kpc
+            radii = disc_radii[gi] * 1000 / HUBBLE_H  # kpc
+            r_mid = 0.5 * (radii[:-1] + radii[1:])
+            
+            gas_i = disc_gas[gi]
+            metals_i = disc_gas_metals[gi]
+            dust_i = disc_dust[gi] if disc_dust is not None else np.zeros_like(gas_i)
+            
+            valid = (gas_i > 0) & (r_mid > 0)
+            if np.sum(valid) < 4:
+                continue
+            
+            # 12 + log(O/H) in each annulus  
+            Z_ann = (metals_i[valid] + dust_i[valid]) / gas_i[valid]
+            oh12_ann = np.log10(Z_ann / Z_SUN + 1e-10) + 8.69
+            r_valid = r_mid[valid]
+            
+            # Fit gradient (dex/kpc) - require reasonable radial extent
+            if len(r_valid) >= 4 and r_valid.max() > 0.5:
+                try:
+                    coef = np.polyfit(r_valid, oh12_ann, 1)
+                    grad_list.append(coef[0])
+                    mstar_list.append(np.log10(mstar[gi]))
+                except:
+                    pass
+        
+        if grad_list:
+            grad_arr = np.array(grad_list)
+            mstar_arr = np.array(mstar_list)
+            
+            # Scatter plot
+            ax5.scatter(mstar_arr[::2], grad_arr[::2], s=2, alpha=0.3, c='gray')
+            
+            # Binned median
+            bins = np.arange(8, 12, 0.4)
+            bin_c, bin_med, bin_lo, bin_hi = binned_median(mstar_arr, grad_arr, bins, min_count=10)
+            ok = np.isfinite(bin_med)
+            if np.any(ok):
+                ax5.plot(bin_c[ok], bin_med[ok], 'b-', lw=2.5, label='SAGE26')
+                ax5.fill_between(bin_c[ok], bin_lo[ok], bin_hi[ok], alpha=0.3, color='blue')
+        
+        ax5.axhline(0, color='k', ls=':', lw=1)
+        ax5.axhline(-0.1, color='gray', ls='--', lw=1, label='Typical obs')
+        ax5.set_xlabel(r'$\log_{10}\ (M_* / M_\odot)$')
+        ax5.set_ylabel(r'$\nabla_Z\ [\mathrm{dex\ kpc}^{-1}]$')
+        ax5.set_xlim(8, 12)
+        ax5.set_ylim(-0.5, 0.2)
+        ax5.legend(loc='lower right', fontsize=8)
+    
+    # Panel 6: H2/HI Ratio Profiles
+    ax6 = fig.add_subplot(gs[1, 2])
+    disc_h2 = data.get('DiscH2')
+    disc_hi = data.get('DiscHI')
+    
+    if disc_h2 is not None and disc_hi is not None and disc_radii is not None:
+        # Stack for MW-mass
+        mw_mass = w & (mstar > 3e10) & (mstar < 1e11)
+        n_mw = np.sum(mw_mass)
+        
+        if n_mw > 10:
+            idx_mw = np.where(mw_mass)[0]
+            r_norm_bins = np.linspace(0, 4, 15)
+            r_norm_c = 0.5 * (r_norm_bins[:-1] + r_norm_bins[1:])
+            
+            h2hi_stack = []
+            
+            for gi in idx_mw[:200]:
+                radii = disc_radii[gi] * 1000
+                r_mid = 0.5 * (radii[:-1] + radii[1:])
+                
+                rd = data.get('DiskRadius')
+                r_scale = rd[gi] * 1000 if (rd is not None and rd[gi] > 0) else 3.0
+                
+                h2_i = disc_h2[gi]
+                hi_i = disc_hi[gi]
+                
+                valid = (hi_i > 0) & (h2_i >= 0)
+                if np.sum(valid) < 3:
+                    continue
+                
+                ratio = h2_i[valid] / hi_i[valid]
+                ratio[ratio <= 0] = 1e-3
+                log_ratio = np.log10(ratio)
+                r_norm = r_mid[valid] / r_scale
+                
+                mask = (r_norm > 0) & (r_norm < 4)
+                if np.sum(mask) > 2:
+                    h2hi_stack.append(np.interp(r_norm_c, r_norm[mask], log_ratio[mask],
+                                                left=np.nan, right=np.nan))
+            
+            if h2hi_stack:
+                h2hi_med = np.nanmedian(h2hi_stack, axis=0)
+                h2hi_16 = np.nanpercentile(h2hi_stack, 16, axis=0)
+                h2hi_84 = np.nanpercentile(h2hi_stack, 84, axis=0)
+                
+                ax6.plot(r_norm_c, h2hi_med, 'b-', lw=2, label='SAGE26')
+                ax6.fill_between(r_norm_c, h2hi_16, h2hi_84, alpha=0.3, color='blue')
+                
+                ax6.axhline(0, color='k', ls=':', lw=1)
+                ax6.set_xlabel(r'$r / R_d$')
+                ax6.set_ylabel(r'$\log_{10}\ (M_{\mathrm{H2}} / M_{\mathrm{HI}})$')
+                ax6.set_xlim(0, 4)
+                ax6.set_ylim(-2, 2)
+                ax6.legend(loc='upper right', fontsize=9)
+    
+    # ========== ROW 3: STRUCTURAL RELATIONS ==========
+    
+    # Panel 7: Disk Size-Mass Relation
+    ax7 = fig.add_subplot(gs[2, 0])
+    rd = data.get('DiskRadius')
+    
+    if rd is not None:
+        valid = w & (rd > 0)
+        if np.any(valid):
+            log_ms = np.log10(mstar[valid])
+            log_rd = np.log10(rd[valid] * 1000)  # kpc
+            
+            bins = np.arange(8, 12, 0.3)
+            bin_c, bin_med, bin_lo, bin_hi = binned_median(log_ms, log_rd, bins)
+            ok = np.isfinite(bin_med)
+            
+            ax7.scatter(log_ms[::10], log_rd[::10], s=1, alpha=0.1, c='gray')
+            ax7.plot(bin_c[ok], bin_med[ok], 'b-', lw=2.5, label='SAGE26')
+            ax7.fill_between(bin_c[ok], bin_lo[ok], bin_hi[ok], alpha=0.3, color='blue')
+            
+            # van der Wel+2014 relation (approximate for z~0)
+            ms_vdw = np.linspace(9, 11.5, 20)
+            rd_vdw = 0.25 * (ms_vdw - 10.0) + 0.5  # Approximate
+            ax7.plot(ms_vdw, rd_vdw, 'k--', lw=1.5, label='van der Wel+14')
+            
+            ax7.set_xlabel(r'$\log_{10}\ (M_* / M_\odot)$')
+            ax7.set_ylabel(r'$\log_{10}\ (R_d / \mathrm{kpc})$')
+            ax7.set_xlim(8, 12)
+            ax7.set_ylim(-1, 2)
+            ax7.legend(loc='lower right', fontsize=9)
+    
+    # Panel 8: Angular Momentum - Fall Relation
+    ax8 = fig.add_subplot(gs[2, 1])
+    vvir = data.get('Vvir')
+    
+    if rd is not None and vvir is not None:
+        # j_* ≈ 2 * V_vir * R_d for exponential disk
+        valid = w & (rd > 0) & (vvir > 0)
+        if np.any(valid):
+            # Specific angular momentum in kpc km/s
+            j_star = 2.0 * vvir[valid] * (rd[valid] * 1000)  # kpc km/s
+            log_ms = np.log10(mstar[valid])
+            log_j = np.log10(j_star)
+            
+            bins = np.arange(8, 12, 0.3)
+            bin_c, bin_med, bin_lo, bin_hi = binned_median(log_ms, log_j, bins)
+            ok = np.isfinite(bin_med)
+            
+            ax8.scatter(log_ms[::10], log_j[::10], s=1, alpha=0.1, c='gray')
+            ax8.plot(bin_c[ok], bin_med[ok], 'b-', lw=2.5, label='SAGE26')
+            ax8.fill_between(bin_c[ok], bin_lo[ok], bin_hi[ok], alpha=0.3, color='blue')
+            
+            # Fall+Romanowsky 2013 relation
+            ms_fall = np.linspace(8, 12, 20)
+            j_fall = 3.0 + 0.6 * (ms_fall - 10.0)  # Approximate for disks
+            ax8.plot(ms_fall, j_fall, 'k--', lw=1.5, label='Fall+13 (disks)')
+            
+            ax8.set_xlabel(r'$\log_{10}\ (M_* / M_\odot)$')
+            ax8.set_ylabel(r'$\log_{10}\ (j_* / \mathrm{kpc\ km\ s}^{-1})$')
+            ax8.set_xlim(8, 12)
+            ax8.set_ylim(1, 5)
+            ax8.legend(loc='lower right', fontsize=9)
+    
+    # Panel 9: Toomre Q Profiles
+    ax9 = fig.add_subplot(gs[2, 2])
+    
+    if disc_gas is not None and disc_radii is not None and vvir is not None:
+        # Stack Toomre Q for MW-mass galaxies
+        mw_mass = w & (mstar > 3e10) & (mstar < 1e11)
+        n_mw = np.sum(mw_mass)
+        
+        if n_mw > 10:
+            idx_mw = np.where(mw_mass)[0]
+            r_norm_bins = np.linspace(0.5, 4, 12)
+            r_norm_c = 0.5 * (r_norm_bins[:-1] + r_norm_bins[1:])
+            
+            Q_stack = []
+            
+            for gi in idx_mw[:200]:
+                radii = disc_radii[gi] * 1000  # kpc
+                r_mid = 0.5 * (radii[:-1] + radii[1:])
+                r_out = radii[1:]
+                r_in = radii[:-1]
+                
+                rd_i = data.get('DiskRadius')
+                r_scale = rd_i[gi] * 1000 if (rd_i is not None and rd_i[gi] > 0) else 3.0
+                
+                v_circ = vvir[gi]  # km/s (approximate flat rotation)
+                
+                area = np.pi * (r_out**2 - r_in**2)
+                area[area <= 0] = 1e-10
+                
+                gas_i = disc_gas[gi]
+                stars_i = disc_stars[gi] if disc_stars is not None else np.zeros_like(gas_i)
+                
+                # Surface density in Msun/pc^2
+                sigma_tot = ((gas_i + stars_i) * 1e10 / HUBBLE_H) / (area * 1e6)
+                
+                # Toomre Q ≈ κ σ_v / (π G Σ)
+                # κ ≈ sqrt(2) V/R for flat rotation
+                # σ_v ≈ 10 km/s for gas
+                sigma_v = 10.0  # km/s
+                G_pc = 4.3e-3  # pc Msun^-1 (km/s)^2
+                
+                valid = (r_mid > 0) & (sigma_tot > 0)
+                if np.sum(valid) < 3:
+                    continue
+                
+                kappa = np.sqrt(2) * v_circ / (r_mid[valid] * 1e3)  # 1/Myr approx
+                Q = kappa * sigma_v / (np.pi * G_pc * sigma_tot[valid])
+                
+                r_norm = r_mid[valid] / r_scale
+                
+                mask = (r_norm > 0.5) & (r_norm < 4) & np.isfinite(Q) & (Q > 0)
+                if np.sum(mask) > 2:
+                    Q_stack.append(np.interp(r_norm_c, r_norm[mask], np.log10(Q[mask]),
+                                            left=np.nan, right=np.nan))
+            
+            if Q_stack:
+                Q_med = np.nanmedian(Q_stack, axis=0)
+                Q_16 = np.nanpercentile(Q_stack, 16, axis=0)
+                Q_84 = np.nanpercentile(Q_stack, 84, axis=0)
+                
+                ax9.plot(r_norm_c, Q_med, 'b-', lw=2, label='SAGE26')
+                ax9.fill_between(r_norm_c, Q_16, Q_84, alpha=0.3, color='blue')
+                
+                ax9.axhline(0, color='r', ls='--', lw=1.5, label='Q = 1 (unstable)')
+                ax9.set_xlabel(r'$r / R_d$')
+                ax9.set_ylabel(r'$\log_{10}\ Q$')
+                ax9.set_xlim(0.5, 4)
+                ax9.set_ylim(-1, 2)
+                ax9.legend(loc='upper right', fontsize=9)
+    
+    # ========== ROW 4: DUST EVOLUTION ==========
+    
+    # Panel 10: Cosmic Dust Density Evolution
+    ax10 = fig.add_subplot(gs[3, 0])
+    
+    print('  Computing cosmic dust density evolution...')
+    dust_snaps = list(range(20, 64))
+    dust_snapdata = load_snapshots(PRIMARY_DIR, dust_snaps, ['ColdDust', 'HotDust'])
+    
+    z_dust = []
+    rho_cold_dust = []
+    rho_hot_dust = []
+    
+    for snap in dust_snaps:
+        if snap not in dust_snapdata:
+            continue
+        d = dust_snapdata[snap]
+        cd = d.get('ColdDust')
+        hd = d.get('HotDust')
+        
+        if cd is None or len(cd) == 0:
+            continue
+        
+        z_dust.append(REDSHIFTS[snap])
+        rho_cold_dust.append(np.sum(cd) * 1e10 / HUBBLE_H / VOLUME)  # Msun/Mpc^3
+        if hd is not None:
+            rho_hot_dust.append(np.sum(hd) * 1e10 / HUBBLE_H / VOLUME)
+        else:
+            rho_hot_dust.append(0)
+    
+    if z_dust:
+        z_dust = np.array(z_dust)
+        rho_cold_dust = np.array(rho_cold_dust)
+        rho_hot_dust = np.array(rho_hot_dust)
+        
+        valid = rho_cold_dust > 0
+        ax10.plot(z_dust[valid], np.log10(rho_cold_dust[valid]), 'b-', lw=2, label='Cold dust')
+        
+        if np.any(rho_hot_dust > 0):
+            valid_h = rho_hot_dust > 0
+            ax10.plot(z_dust[valid_h], np.log10(rho_hot_dust[valid_h]), 'r--', lw=2, label='Hot dust')
+        
+        ax10.set_xlabel('Redshift')
+        ax10.set_ylabel(r'$\log_{10}\ \rho_{\mathrm{dust}}\ [M_\odot\ \mathrm{Mpc}^{-3}]$')
+        ax10.set_xlim(0, 6)
+        ax10.invert_xaxis()
+        ax10.legend(loc='lower left', fontsize=9)
+    
+    # Panel 11: Dust Mass vs Stellar Mass (colored by sSFR)
+    ax11 = fig.add_subplot(gs[3, 1])
+    sfr_disk = data.get('SfrDisk', np.zeros_like(mstar))
+    sfr_bulge = data.get('SfrBulge', np.zeros_like(mstar))
+    sfr_tot = sfr_disk + sfr_bulge
+    
+    if len(cold_dust) > 0:
+        valid = w & (cold_dust > 0) & (sfr_tot > 0)
+        if np.any(valid):
+            log_ms = np.log10(mstar[valid])
+            log_md = np.log10(cold_dust[valid])
+            ssfr = sfr_tot[valid] / mstar[valid]
+            log_ssfr = np.log10(ssfr)
+            
+            # Color by sSFR
+            sc = ax11.scatter(log_ms[::5], log_md[::5], c=log_ssfr[::5], 
+                             s=3, alpha=0.5, cmap='coolwarm', vmin=-12, vmax=-9)
+            plt.colorbar(sc, ax=ax11, label=r'$\log_{10}$ sSFR [yr$^{-1}$]')
+            
+            ax11.set_xlabel(r'$\log_{10}\ (M_* / M_\odot)$')
+            ax11.set_ylabel(r'$\log_{10}\ (M_{\mathrm{dust}} / M_\odot)$')
+            ax11.set_xlim(8, 12)
+            ax11.set_ylim(4, 9)
+    
+    # Panel 12: Radial Dust Profile
+    ax12 = fig.add_subplot(gs[3, 2])
+    
+    if disc_dust is not None and disc_radii is not None:
+        mw_mass = w & (mstar > 3e10) & (mstar < 1e11)
+        n_mw = np.sum(mw_mass)
+        
+        if n_mw > 10:
+            idx_mw = np.where(mw_mass)[0]
+            r_norm_bins = np.linspace(0, 4, 15)
+            r_norm_c = 0.5 * (r_norm_bins[:-1] + r_norm_bins[1:])
+            
+            dust_stack = []
+            
+            for gi in idx_mw[:200]:
+                radii = disc_radii[gi] * 1000
+                r_mid = 0.5 * (radii[:-1] + radii[1:])
+                r_out = radii[1:]
+                r_in = radii[:-1]
+                
+                rd_i = data.get('DiskRadius')
+                r_scale = rd_i[gi] * 1000 if (rd_i is not None and rd_i[gi] > 0) else 3.0
+                
+                area = np.pi * (r_out**2 - r_in**2)
+                area[area <= 0] = 1e-10
+                
+                dust_i = disc_dust[gi]
+                sigma_dust = (dust_i * 1e10 / HUBBLE_H) / area  # Msun/kpc^2
+                
+                r_norm = r_mid / r_scale
+                
+                valid = (r_norm > 0) & (r_norm < 4) & (sigma_dust > 0)
+                if np.sum(valid) > 2:
+                    dust_stack.append(np.interp(r_norm_c, r_norm[valid], 
+                                               np.log10(sigma_dust[valid]),
+                                               left=np.nan, right=np.nan))
+            
+            if dust_stack:
+                dust_med = np.nanmedian(dust_stack, axis=0)
+                dust_16 = np.nanpercentile(dust_stack, 16, axis=0)
+                dust_84 = np.nanpercentile(dust_stack, 84, axis=0)
+                
+                ax12.plot(r_norm_c, dust_med, 'b-', lw=2, label='SAGE26')
+                ax12.fill_between(r_norm_c, dust_16, dust_84, alpha=0.3, color='blue')
+                
+                ax12.set_xlabel(r'$r / R_d$')
+                ax12.set_ylabel(r'$\log_{10}\ \Sigma_{\mathrm{dust}}\ [M_\odot\ \mathrm{kpc}^{-2}]$')
+                ax12.set_xlim(0, 4)
+                ax12.set_ylim(2, 7)
+                ax12.legend(loc='upper right', fontsize=9)
+    
+    plt.suptitle('SAGE26 Dust and Radial Structure Diagnostics', fontsize=14, y=0.995)
+    
+    output_path = os.path.join(OUTPUT_DIR, '40.Dust_Structure_Grid.pdf')
+    plt.savefig(output_path, dpi=200, bbox_inches='tight')
+    plt.close()
+    print(f'  Saved: {output_path}')
+
+
 # ==================== MDOT PLOTS ====================
 
 _MDOT_SNAP_PANELS = [
@@ -6691,6 +7270,7 @@ Z0_PLOTS = {
     6: plot_6_bulge_mass_size,
     15: plot_15_sfr_vs_stellar_mass,
     24: plot_24_mass_loading_vs_velocity,
+    40: plot_40_dust_and_structure_grid,
 }
 
 EVOLUTION_PLOTS = {
