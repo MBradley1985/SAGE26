@@ -66,6 +66,24 @@ SNIaYields            0   %0: Iwamoto1999
 DarkModeOn            1   %0: standard SAGE; 1: DarkSage-style radially-resolved disks
 
 %------------------------------------------
+%----- Dust Modelling --------------
+%------------------------------------------
+
+DeltaDustAGB            0.35
+DeltaDustSNII           0.15
+DeltaDustSNIa           0.0
+DustAccretionTimescale  50.0
+EtaSNDust               0.1
+BinaryFraction          0.1    %Fraction of stars in SNIa binaries
+
+%------------------------------------------
+%----- DarkMode (Radially-Resolved Disks) --
+%------------------------------------------
+
+FirstBin                100.0   %First j-bin edge [kpc*km/s] (default 100)
+ExponentBin             1.4     %j-bin geometric growth factor (default 1.4)
+
+%------------------------------------------
 %----- SAGE model parameters --------------
 %------------------------------------------
 
@@ -95,24 +113,6 @@ Reionization_zr         7.0   %using the analytic fit of Kravtsov et al. 2004 (R
 
 EnergySN                1.0e51  %energy per supernova
 EtaSN                   5.0e-3  %supernova efficiency
-
-%------------------------------------------
-%----- Dust Modelling --------------
-%------------------------------------------
-
-DeltaDustAGB            0.35
-DeltaDustSNII           0.15
-DeltaDustSNIa           0.0
-DustAccretionTimescale  50.0
-EtaSNDust               0.1
-BinaryFraction          0.1    %Fraction of stars in SNIa binaries
-
-%------------------------------------------
-%----- DarkMode (Radially-Resolved Disks) --
-%------------------------------------------
-
-FirstBin                100.0   %First j-bin edge [kpc*km/s] (default 100)
-ExponentBin             1.4     %j-bin geometric growth factor (default 1.4)
 
 %------------------------------------------
 %----- Other code-related information -----

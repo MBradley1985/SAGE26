@@ -217,6 +217,35 @@ def _tex_safe(s):
 
 # ========================== DATA I/O ==========================
 
+def get_model_files(directory, filename=MODEL_FILE):
+    """
+    Get list of model HDF5 files in a directory.
+    
+    Supports both single-file and MPI multi-file outputs.
+    In MPI mode, SAGE26 produces model_0.hdf5, model_1.hdf5, etc.
+    
+    Parameters
+    ----------
+    directory : str
+        Path to the model output directory.
+    filename : str
+        Fallback filename if no model_*.hdf5 files found.
+    
+    Returns
+    -------
+    list of str : List of absolute file paths.
+    """
+    import glob
+    pattern = os.path.join(directory, 'model_*.hdf5')
+    filelist = sorted(glob.glob(pattern))
+    if not filelist:
+        # Fallback to single file (legacy)
+        filepath = os.path.join(directory, filename)
+        if os.path.exists(filepath):
+            filelist = [filepath]
+    return filelist
+
+
 def load_model(directory, filename=MODEL_FILE, snapshot=SNAPSHOT,
                properties=None):
     """
@@ -243,14 +272,11 @@ def load_model(directory, filename=MODEL_FILE, snapshot=SNAPSHOT,
     if properties is None:
         properties = _DEFAULT_PROPERTIES
 
-
-    # Find all model_*.hdf5 files in the directory
-    import glob
-    pattern = os.path.join(directory, 'model_*.hdf5')
-    filelist = sorted(glob.glob(pattern))
+    # Find all model files (supports MPI multi-file output)
+    filelist = get_model_files(directory, filename)
     if not filelist:
-        # Fallback to single file (legacy)
-        filelist = [os.path.join(directory, filename)]
+        print(f"  Warning: No model files found in {directory}")
+        return {prop: np.array([]) for prop in properties}
 
     data = {prop: [] for prop in properties}
     for filepath in filelist:
@@ -281,7 +307,10 @@ def load_model(directory, filename=MODEL_FILE, snapshot=SNAPSHOT,
 
 def load_snapshots(directory, snaps, properties=None, filename=MODEL_FILE):
     """
-    Load multiple snapshots from a single HDF5 file.
+    Load multiple snapshots from HDF5 model file(s).
+    
+    Supports both single-file and MPI multi-file outputs.
+    When run in MPI mode, SAGE26 produces model_0.hdf5, model_1.hdf5, etc.
 
     Parameters
     ----------
@@ -292,7 +321,7 @@ def load_snapshots(directory, snaps, properties=None, filename=MODEL_FILE):
     properties : list of str, optional
         Properties to load. Defaults to _EVOLUTION_PROPERTIES.
     filename : str
-        HDF5 filename.
+        HDF5 filename (used as fallback pattern).
 
     Returns
     -------
@@ -301,24 +330,42 @@ def load_snapshots(directory, snaps, properties=None, filename=MODEL_FILE):
     if properties is None:
         properties = _EVOLUTION_PROPERTIES
 
-    filepath = os.path.join(directory, filename)
-    snapdata = {}
+    # Find all model files (supports MPI multi-file output)
+    filelist = get_model_files(directory, filename)
+    if not filelist:
+        print(f"  Warning: No model files found in {directory}")
+        return {snap: {prop: np.array([]) for prop in properties} for snap in snaps}
 
-    with h5.File(filepath, 'r') as f:
-        for snap in snaps:
-            snap_key = f'Snap_{snap}'
-            if snap_key not in f:
-                print(f"  Warning: {snap_key} not found, skipping.")
-                continue
-            grp = f[snap_key]
-            data = {}
-            for prop in properties:
-                if prop in grp:
-                    arr = np.array(grp[prop])
-                    if prop in _MASS_PROPS:
-                        arr *= MASS_CONVERT
-                    data[prop] = arr
-            snapdata[snap] = data
+    # Initialize output structure
+    snapdata = {snap: {prop: [] for prop in properties} for snap in snaps}
+
+    for filepath in filelist:
+        if not os.path.exists(filepath):
+            print(f"  Warning: File {filepath} not found, skipping.")
+            continue
+        with h5.File(filepath, 'r') as f:
+            for snap in snaps:
+                snap_key = f'Snap_{snap}'
+                if snap_key not in f:
+                    continue
+                grp = f[snap_key]
+                for prop in properties:
+                    if prop in grp:
+                        arr = np.array(grp[prop])
+                        if prop in _MASS_PROPS:
+                            arr *= MASS_CONVERT
+                        snapdata[snap][prop].append(arr)
+
+    # Concatenate arrays from all files
+    for snap in snaps:
+        for prop in properties:
+            if snapdata[snap][prop]:
+                snapdata[snap][prop] = np.concatenate(snapdata[snap][prop])
+            else:
+                snapdata[snap][prop] = np.array([])
+        # Remove empty snapshots
+        if not any(len(v) > 0 for v in snapdata[snap].values() if isinstance(v, np.ndarray)):
+            print(f"  Warning: Snap_{snap} not found in any file, skipping.")
 
     return snapdata
 
@@ -5279,42 +5326,70 @@ def plot_30_uvlf_redshift_grid():
             snap_name = f'Snap_{snap_num}'
 
             try:
-                filepath = os.path.join(model['path'], MODEL_FILE)
-                with h5.File(filepath, 'r') as f:
-                    if snap_name not in f:
+                # Find all model files (supports MPI multi-file output)
+                filelist = get_model_files(model['path'])
+                if not filelist:
+                    continue
+                
+                # Aggregate data from all files
+                sfr_history_all = []
+                sfr_disk_all = []
+                sfr_bulge_all = []
+                has_sfr_history = False
+                
+                for filepath in filelist:
+                    with h5.File(filepath, 'r') as f:
+                        if snap_name not in f:
+                            continue
+
+                        # Try to use SfrHistory if available
+                        if 'SfrHistory' in f[snap_name]:
+                            sfr_history_all.append(np.array(f[snap_name]['SfrHistory']))
+                            has_sfr_history = True
+                        else:
+                            # Fall back to instantaneous SFR
+                            if 'SfrDisk' in f[snap_name]:
+                                sfr_disk_all.append(np.array(f[snap_name]['SfrDisk']))
+                            if 'SfrBulge' in f[snap_name]:
+                                sfr_bulge_all.append(np.array(f[snap_name]['SfrBulge']))
+                
+                if has_sfr_history and sfr_history_all:
+                    sfr_history = np.concatenate(sfr_history_all, axis=0)
+                    # Compute M_UV from SFH (100 Myr average)
+                    M_UV = sfh_to_muv_simple(sfr_history, lookback_times, snap_num, t_uv=100.0)
+                    w = np.isfinite(M_UV)
+                elif sfr_disk_all or sfr_bulge_all:
+                    sfr_disk = np.concatenate(sfr_disk_all) if sfr_disk_all else np.array([])
+                    sfr_bulge = np.concatenate(sfr_bulge_all) if sfr_bulge_all else np.array([])
+                    if len(sfr_disk) == 0 and len(sfr_bulge) == 0:
                         continue
+                    if len(sfr_disk) == 0:
+                        sfr_disk = np.zeros_like(sfr_bulge)
+                    if len(sfr_bulge) == 0:
+                        sfr_bulge = np.zeros_like(sfr_disk)
+                    sfr_total = sfr_disk + sfr_bulge
+                    w = sfr_total > 0
+                    M_UV = sfr_to_muv(sfr_total[w])
+                else:
+                    continue
 
-                    # Try to use SfrHistory if available
-                    if 'SfrHistory' in f[snap_name]:
-                        sfr_history = np.array(f[snap_name]['SfrHistory'])
-                        # Compute M_UV from SFH (100 Myr average)
-                        M_UV = sfh_to_muv_simple(sfr_history, lookback_times, snap_num, t_uv=100.0)
-                        w = np.isfinite(M_UV)
-                    else:
-                        # Fall back to instantaneous SFR
-                        sfr_disk = np.array(f[snap_name]['SfrDisk'])
-                        sfr_bulge = np.array(f[snap_name]['SfrBulge'])
-                        sfr_total = sfr_disk + sfr_bulge
-                        w = sfr_total > 0
-                        M_UV = sfr_to_muv(sfr_total[w])
+                if np.sum(w) == 0:
+                    continue
+                M_UV_valid = M_UV[w] if len(M_UV) > np.sum(w) else M_UV
 
-                    if np.sum(w) == 0:
-                        continue
-                    M_UV_valid = M_UV[w] if len(M_UV) > np.sum(w) else M_UV
-
-                    # Compute UV luminosity function with bootstrap
-                    M_bin, log_phi, log_phi_lo, log_phi_hi, _ = uv_luminosity_function_bootstrap(
-                        M_UV_valid, model['volume'], binwidth, n_boot=100)
-                    valid = np.isfinite(log_phi)
-                    ax.plot(M_bin[valid], log_phi[valid],
-                            lw=model['lw'], color=model['color'],
-                            ls=model['ls'],
-                            label=model['label'] if i == 0 else None)
-                    # Bootstrap shading
-                    boot_valid = np.isfinite(log_phi_lo) & np.isfinite(log_phi_hi)
-                    if np.any(boot_valid):
-                        ax.fill_between(M_bin[boot_valid], log_phi_lo[boot_valid], log_phi_hi[boot_valid],
-                                        color=model['color'], alpha=0.2, linewidth=0)
+                # Compute UV luminosity function with bootstrap
+                M_bin, log_phi, log_phi_lo, log_phi_hi, _ = uv_luminosity_function_bootstrap(
+                    M_UV_valid, model['volume'], binwidth, n_boot=100)
+                valid = np.isfinite(log_phi)
+                ax.plot(M_bin[valid], log_phi[valid],
+                        lw=model['lw'], color=model['color'],
+                        ls=model['ls'],
+                        label=model['label'] if i == 0 else None)
+                # Bootstrap shading
+                boot_valid = np.isfinite(log_phi_lo) & np.isfinite(log_phi_hi)
+                if np.any(boot_valid):
+                    ax.fill_between(M_bin[boot_valid], log_phi_lo[boot_valid], log_phi_hi[boot_valid],
+                                    color=model['color'], alpha=0.2, linewidth=0)
             except Exception as e:
                 print(f"  Error loading {snap_name} from {model['path']}: {e}")
                 continue
@@ -5863,37 +5938,29 @@ def plot_22_regime_histogram():
     """
     print('Plot 22: Regime Histogram (Evolution)')
 
-    num_hot_per_snap = []
-    num_cgm_per_snap = []
-    redshifts_list = []
+    # Initialize counts per snapshot
+    num_hot_per_snap = [0] * 64
+    num_cgm_per_snap = [0] * 64
 
-    filepath = os.path.join(PRIMARY_DIR, MODEL_FILE)
-    if not os.path.exists(filepath):
-        print(f"  File not found: {filepath}")
+    # Find all model files (supports MPI multi-file output)
+    filelist = get_model_files(PRIMARY_DIR)
+    if not filelist:
+        print(f"  No model files found in {PRIMARY_DIR}")
         return
 
-    with h5.File(filepath, 'r') as f:
-        for snap in range(64):
-            snap_key = f'Snap_{snap}'
-            if snap_key not in f:
-                num_hot_per_snap.append(0)
-                num_cgm_per_snap.append(0)
-                redshifts_list.append(REDSHIFTS[snap])
-                continue
+    # Aggregate counts from all files
+    for filepath in filelist:
+        with h5.File(filepath, 'r') as f:
+            for snap in range(64):
+                snap_key = f'Snap_{snap}'
+                if snap_key not in f:
+                    continue
+                if 'Regime' in f[snap_key]:
+                    regime = np.array(f[snap_key]['Regime'])
+                    num_hot_per_snap[snap] += np.sum(regime == 1)
+                    num_cgm_per_snap[snap] += np.sum(regime == 0)
 
-            if 'Regime' in f[snap_key]:
-                regime = np.array(f[snap_key]['Regime'])
-                num_hot = np.sum(regime == 1)
-                num_cgm = np.sum(regime == 0)
-            else:
-                num_hot = 0
-                num_cgm = 0
-
-            num_hot_per_snap.append(num_hot)
-            num_cgm_per_snap.append(num_cgm)
-            redshifts_list.append(REDSHIFTS[snap])
-
-    z = np.array(redshifts_list)
+    z = np.array(REDSHIFTS)
     num_hot_plot = np.array(num_hot_per_snap)
     num_cgm_plot = np.array(num_cgm_per_snap)
 
@@ -5962,37 +6029,29 @@ def plot_23_ffb_histogram():
     """
     print('Plot 23: FFB Histogram (Evolution)')
 
-    num_non_ffb_per_snap = []
-    num_ffb_per_snap = []
-    redshifts_list = []
+    # Initialize counts per snapshot
+    num_non_ffb_per_snap = [0] * 64
+    num_ffb_per_snap = [0] * 64
 
-    filepath = os.path.join(PRIMARY_DIR, MODEL_FILE)
-    if not os.path.exists(filepath):
-        print(f"  File not found: {filepath}")
+    # Find all model files (supports MPI multi-file output)
+    filelist = get_model_files(PRIMARY_DIR)
+    if not filelist:
+        print(f"  No model files found in {PRIMARY_DIR}")
         return
 
-    with h5.File(filepath, 'r') as f:
-        for snap in range(64):
-            snap_key = f'Snap_{snap}'
-            if snap_key not in f:
-                num_non_ffb_per_snap.append(0)
-                num_ffb_per_snap.append(0)
-                redshifts_list.append(REDSHIFTS[snap])
-                continue
+    # Aggregate counts from all files
+    for filepath in filelist:
+        with h5.File(filepath, 'r') as f:
+            for snap in range(64):
+                snap_key = f'Snap_{snap}'
+                if snap_key not in f:
+                    continue
+                if 'FFBRegime' in f[snap_key]:
+                    ffb_regime = np.array(f[snap_key]['FFBRegime'])
+                    num_ffb_per_snap[snap] += np.sum(ffb_regime == 1)
+                    num_non_ffb_per_snap[snap] += np.sum(ffb_regime == 0)
 
-            if 'FFBRegime' in f[snap_key]:
-                ffb_regime = np.array(f[snap_key]['FFBRegime'])
-                num_ffb = np.sum(ffb_regime == 1)
-                num_non_ffb = np.sum(ffb_regime == 0)
-            else:
-                num_ffb = 0
-                num_non_ffb = 0
-
-            num_non_ffb_per_snap.append(num_non_ffb)
-            num_ffb_per_snap.append(num_ffb)
-            redshifts_list.append(REDSHIFTS[snap])
-
-    z = np.array(redshifts_list)
+    z = np.array(REDSHIFTS)
     num_non_ffb_plot = np.array(num_non_ffb_per_snap)
     num_ffb_plot = np.array(num_ffb_per_snap)
 
@@ -6504,107 +6563,117 @@ def print_massive_galaxy_stats():
              'VelDisp']
     mass_cut = 10**9.5
 
-    filepath = os.path.join(PRIMARY_DIR, MODEL_FILE)
-    if not os.path.exists(filepath):
-        print(f"  File not found: {filepath}")
+    # Find all model files (supports MPI multi-file output)
+    filelist = get_model_files(PRIMARY_DIR)
+    if not filelist:
+        print(f"  No model files found in {PRIMARY_DIR}")
         return
 
-    with h5.File(filepath, 'r') as f:
-        for snap in range(len(REDSHIFTS)):
-            z = REDSHIFTS[snap]
-            if z < 4.0 or z > 6.0:
-                continue
+    for snap in range(len(REDSHIFTS)):
+        z = REDSHIFTS[snap]
+        if z < 4.0 or z > 6.0:
+            continue
 
-            snap_key = f'Snap_{snap}'
-            if snap_key not in f:
-                continue
+        snap_key = f'Snap_{snap}'
+        
+        # Aggregate data from all files
+        data = {prop: [] for prop in props}
+        for filepath in filelist:
+            with h5.File(filepath, 'r') as f:
+                if snap_key not in f:
+                    continue
+                grp = f[snap_key]
+                for prop in props:
+                    if prop in grp:
+                        arr = np.array(grp[prop])
+                        if prop in _MASS_PROPS:
+                            arr *= MASS_CONVERT
+                        data[prop].append(arr)
+        
+        # Concatenate arrays
+        for prop in props:
+            if data[prop]:
+                data[prop] = np.concatenate(data[prop])
+            else:
+                data[prop] = np.array([])
 
-            grp = f[snap_key]
-            data = {}
-            for prop in props:
-                if prop in grp:
-                    arr = np.array(grp[prop])
-                    if prop in _MASS_PROPS:
-                        arr *= MASS_CONVERT
-                    data[prop] = arr
+        mstar = data.get('StellarMass')
+        if mstar is None or len(mstar) == 0:
+            continue
 
-            mstar = data.get('StellarMass')
-            if mstar is None:
-                continue
+        gal_type = data.get('Type', np.zeros_like(mstar))
+        sfr_total = np.zeros_like(mstar)
+        if data.get('SfrDisk') is not None and len(data['SfrDisk']) > 0:
+            sfr_total += data['SfrDisk']
+        if data.get('SfrBulge') is not None and len(data['SfrBulge']) > 0:
+            sfr_total += data['SfrBulge']
+        mask = (mstar > mass_cut) & (gal_type == 0) & (sfr_total > 30.0)
+        n_gal = np.sum(mask)
+        if n_gal == 0:
+            print(f"  Snap {snap} (z = {z:.3f}): 0 galaxies above cut\n")
+            continue
 
-            gal_type = data.get('Type', np.zeros_like(mstar))
-            sfr_total = np.zeros_like(mstar)
-            if data.get('SfrDisk') is not None:
-                sfr_total += data['SfrDisk']
-            if data.get('SfrBulge') is not None:
-                sfr_total += data['SfrBulge']
-            mask = (mstar > mass_cut) & (gal_type == 0) & (sfr_total > 30.0)
-            n_gal = np.sum(mask)
-            if n_gal == 0:
-                print(f"  Snap {snap} (z = {z:.3f}): 0 galaxies above cut\n")
-                continue
+        print(f"  Snap {snap} (z = {z:.3f}): {n_gal} galaxies with M* > 10^9.5 Msun")
+        print(f"  {'#':>3s}  {'log M*':>8s}  {'log Mhalo':>9s}  {'Vvir':>7s}  {'VelDisp':>7s}  {'log Mcold':>9s}  "
+              f"{'log MH2':>8s}  {'log Meject':>10s}  {'SFR':>8s}  {'eta_rh':>7s}  {'12+log(O/H)':>11s}  {'log MBH':>8s}  {'Regime':>6s}")
+        print(f"  {'':->3s}  {'':->8s}  {'':->9s}  {'':->7s}  {'':->7s}  {'':->9s}  "
+              f"{'':->8s}  {'':->10s}  {'':->8s}  {'':->7s}  {'':->11s}  {'':->8s}  {'':->6s}")
 
-            print(f"  Snap {snap} (z = {z:.3f}): {n_gal} galaxies with M* > 10^9.5 Msun")
-            print(f"  {'#':>3s}  {'log M*':>8s}  {'log Mhalo':>9s}  {'Vvir':>7s}  {'VelDisp':>7s}  {'log Mcold':>9s}  "
-                  f"{'log MH2':>8s}  {'log Meject':>10s}  {'SFR':>8s}  {'eta_rh':>7s}  {'12+log(O/H)':>11s}  {'log MBH':>8s}  {'Regime':>6s}")
-            print(f"  {'':->3s}  {'':->8s}  {'':->9s}  {'':->7s}  {'':->7s}  {'':->9s}  "
-                  f"{'':->8s}  {'':->10s}  {'':->8s}  {'':->7s}  {'':->11s}  {'':->8s}  {'':->6s}")
+        # Top 5 most massive from each regime
+        reg = data.get('Regime')
+        idx_all = np.where(mask)[0]
+        hot_idx = idx_all[reg[idx_all] == 1] if reg is not None else idx_all
+        cgm_idx = idx_all[reg[idx_all] == 0] if reg is not None else np.array([], dtype=int)
+        hot_idx = hot_idx[np.argsort(-mstar[hot_idx])][:5]
+        cgm_idx = cgm_idx[np.argsort(-mstar[cgm_idx])][:5] if len(cgm_idx) > 0 else cgm_idx
+        idx = np.concatenate([hot_idx, cgm_idx])
+        idx = idx[np.argsort(-mstar[idx])]
 
-            # Top 5 most massive from each regime
+        for i, gi in enumerate(idx):
+            log_ms = np.log10(mstar[gi])
+            mvir = data.get('Mvir')
+            log_mh = np.log10(mvir[gi]) if mvir is not None and mvir[gi] > 0 else np.nan
+            cg = data.get('ColdGas')
+            log_cg = np.log10(cg[gi]) if cg is not None and cg[gi] > 0 else np.nan
+            h2 = data.get('H2gas')
+            log_h2 = np.log10(h2[gi]) if h2 is not None and h2[gi] > 0 else np.nan
+            ml = data.get('MassLoading')
+            eta = ml[gi] if ml is not None else np.nan
+            mcg = data.get('MetalsColdGas')
+            if mcg is not None and cg is not None and cg[gi] > 0:
+                z_met = mcg[gi] / cg[gi]
+                # 12 + log10(O/H) assuming O is ~0.5 of metals by mass, H is 0.75 of gas
+                # Simplified: 12 + log10(Z/Z_sun) + 8.69 (solar 12+log(O/H))
+                oh12 = 12.0 + np.log10(z_met / Z_SUN) + np.log10(10**(8.69 - 12.0))
+                # Or more directly: 12+log(O/H) = log10(Z/Zsun) + 8.69
+                oh12 = np.log10(z_met / Z_SUN) + 8.69
+            else:
+                oh12 = np.nan
+            sfrd = data.get('SfrDisk')
+            sfrb = data.get('SfrBulge')
+            sfr_val = 0.0
+            if sfrd is not None:
+                sfr_val += sfrd[gi]
+            if sfrb is not None:
+                sfr_val += sfrb[gi]
+            bh = data.get('BlackHoleMass')
+            log_bh = np.log10(bh[gi]) if bh is not None and bh[gi] > 0 else np.nan
+
+            vv = data.get('Vvir')
+            vvir_val = vv[gi] if vv is not None else np.nan
+            vd = data.get('VelDisp')
+            vdisp_val = vd[gi] if vd is not None else np.nan
+
+            ej = data.get('EjectedMass')
+            log_ej = np.log10(ej[gi]) if ej is not None and ej[gi] > 0 else np.nan
+
             reg = data.get('Regime')
-            idx_all = np.where(mask)[0]
-            hot_idx = idx_all[reg[idx_all] == 1] if reg is not None else idx_all
-            cgm_idx = idx_all[reg[idx_all] == 0] if reg is not None else np.array([], dtype=int)
-            hot_idx = hot_idx[np.argsort(-mstar[hot_idx])][:5]
-            cgm_idx = cgm_idx[np.argsort(-mstar[cgm_idx])][:5] if len(cgm_idx) > 0 else cgm_idx
-            idx = np.concatenate([hot_idx, cgm_idx])
-            idx = idx[np.argsort(-mstar[idx])]
+            regime_str = 'Hot' if (reg is not None and reg[gi] == 1) else 'CGM'
 
-            for i, gi in enumerate(idx):
-                log_ms = np.log10(mstar[gi])
-                mvir = data.get('Mvir')
-                log_mh = np.log10(mvir[gi]) if mvir is not None and mvir[gi] > 0 else np.nan
-                cg = data.get('ColdGas')
-                log_cg = np.log10(cg[gi]) if cg is not None and cg[gi] > 0 else np.nan
-                h2 = data.get('H2gas')
-                log_h2 = np.log10(h2[gi]) if h2 is not None and h2[gi] > 0 else np.nan
-                ml = data.get('MassLoading')
-                eta = ml[gi] if ml is not None else np.nan
-                mcg = data.get('MetalsColdGas')
-                if mcg is not None and cg is not None and cg[gi] > 0:
-                    z_met = mcg[gi] / cg[gi]
-                    # 12 + log10(O/H) assuming O is ~0.5 of metals by mass, H is 0.75 of gas
-                    # Simplified: 12 + log10(Z/Z_sun) + 8.69 (solar 12+log(O/H))
-                    oh12 = 12.0 + np.log10(z_met / Z_SUN) + np.log10(10**(8.69 - 12.0))
-                    # Or more directly: 12+log(O/H) = log10(Z/Zsun) + 8.69
-                    oh12 = np.log10(z_met / Z_SUN) + 8.69
-                else:
-                    oh12 = np.nan
-                sfrd = data.get('SfrDisk')
-                sfrb = data.get('SfrBulge')
-                sfr_val = 0.0
-                if sfrd is not None:
-                    sfr_val += sfrd[gi]
-                if sfrb is not None:
-                    sfr_val += sfrb[gi]
-                bh = data.get('BlackHoleMass')
-                log_bh = np.log10(bh[gi]) if bh is not None and bh[gi] > 0 else np.nan
+            print(f"  {i+1:3d}  {log_ms:8.3f}  {log_mh:9.3f}  {vvir_val:7.1f}  {vdisp_val:7.1f}  {log_cg:9.3f}  "
+                  f"{log_h2:8.3f}  {log_ej:10.3f}  {sfr_val:8.2f}  {eta:7.2f}  {oh12:11.3f}  {log_bh:8.3f}  {regime_str:>6s}")
 
-                vv = data.get('Vvir')
-                vvir_val = vv[gi] if vv is not None else np.nan
-                vd = data.get('VelDisp')
-                vdisp_val = vd[gi] if vd is not None else np.nan
-
-                ej = data.get('EjectedMass')
-                log_ej = np.log10(ej[gi]) if ej is not None and ej[gi] > 0 else np.nan
-
-                reg = data.get('Regime')
-                regime_str = 'Hot' if (reg is not None and reg[gi] == 1) else 'CGM'
-
-                print(f"  {i+1:3d}  {log_ms:8.3f}  {log_mh:9.3f}  {vvir_val:7.1f}  {vdisp_val:7.1f}  {log_cg:9.3f}  "
-                      f"{log_h2:8.3f}  {log_ej:10.3f}  {sfr_val:8.2f}  {eta:7.2f}  {oh12:11.3f}  {log_bh:8.3f}  {regime_str:>6s}")
-
-            print()
+        print()
 
 
 # ========================== MAIN ==========================
