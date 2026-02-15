@@ -439,7 +439,10 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
         galaxies[gal].MetalsCGMgas -= metallicity * cgm_cooling;
         
         if(cooling_dust > 0.0) {
-            galaxies[gal].ColdDust += cooling_dust;
+            // Only update bulk ColdDust if NOT in DarkMode (DarkMode already added to DiscDust)
+            if(run_params->DarkModeOn == 0) {
+                galaxies[gal].ColdDust += cooling_dust;
+            }
             galaxies[gal].CGMDust -= cooling_dust;
         }
     }
@@ -470,7 +473,10 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
         galaxies[gal].MetalsHotGas -= metallicity * hot_cooling;
         
         if(cooling_dust > 0.0) {
-            galaxies[gal].ColdDust += cooling_dust;
+            // Only update bulk ColdDust if NOT in DarkMode (DarkMode already added to DiscDust)
+            if(run_params->DarkModeOn == 0) {
+                galaxies[gal].ColdDust += cooling_dust;
+            }
             galaxies[gal].HotDust -= cooling_dust;
         }
     }
@@ -831,9 +837,10 @@ void cool_gas_onto_galaxy_darkmode_with_dust(const int centralgal, const double 
     update_spin_gas_cooling(centralgal, actual_cooling, galaxies);
     
     // Update bulk quantities
+    // Note: ColdDust NOT updated here - already in DiscDust from per-bin distribution above
     galaxies[centralgal].ColdGas += actual_cooling;
     galaxies[centralgal].MetalsColdGas += metallicity * actual_cooling;
-    galaxies[centralgal].ColdDust += cooling_dust;
+    // Do NOT add cooling_dust to ColdDust - it's already in DiscDust arrays
     galaxies[centralgal].HotGas -= actual_cooling;
     galaxies[centralgal].MetalsHotGas -= metallicity * actual_cooling;
     galaxies[centralgal].HotDust -= cooling_dust;

@@ -1100,8 +1100,17 @@ void update_from_star_formation(const int p, const double stars, const double me
         galaxies[p].ColdDust -= DTG * (1.0 - run_params->RecycleFraction) * stars;
         if(galaxies[p].ColdDust < 0.0) galaxies[p].ColdDust = 0.0;
     }
-    // Note: In DarkMode, DiscDust has already been updated per-bin above,
-    // and ColdDust is recalculated in the main function after dust production/accretion/destruction
+    
+    // DarkMode+Dust: Sync ColdDust with sum(DiscDust) BEFORE dust processes run
+    // This ensures accrete_dust and destruct_dust use correct ColdDust values
+    if(run_params->DustOn == 1 && run_params->DarkModeOn == 1) {
+        galaxies[p].ColdDust = 0.0;
+        for(int i = 0; i < N_BINS; i++) {
+            if(!isnan(galaxies[p].DiscDust[i]) && !isinf(galaxies[p].DiscDust[i])) {
+                galaxies[p].ColdDust += galaxies[p].DiscDust[i];
+            }
+        }
+    }
 }
 
 
