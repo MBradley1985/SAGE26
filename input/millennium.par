@@ -3,8 +3,8 @@
 %------------------------------------------
 
 FileNameGalaxies   model
-%OutputDir         /<absolute>/<root>/<path>/sage-model/output/millennium/
-OutputDir          output/millennium/
+%OutputDir                   output/millennium/
+OutputDir                   output/millennium/
 
 FirstFile         0
 LastFile          7

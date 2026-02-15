@@ -10,6 +10,7 @@
 #include "model_misc.h"
 #include "model_disk_instability.h"
 #include "model_dust.h"
+#include "model_darkmode.h"
 
 #define HYDROGEN_MASS_FRAC 0.74
 
@@ -30,6 +31,66 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         starformation_ffb(p, centralgal, dt, step, galaxies, run_params);
         return;  // Exit early - FFB path complete
     }
+
+    // ========================================================================
+    // DARKMODE: SPATIAL DISK TRACKING (uses bulk SF for calibration)
+    // ========================================================================
+    if(run_params->DarkModeOn == 1) {
+        // Safety: Ensure disc arrays are initialized
+        double total_disc_gas_initial = 0.0;
+        for(int i = 0; i < N_BINS; i++) {
+            total_disc_gas_initial += galaxies[p].DiscGas[i];
+        }
+        
+        // If disc is empty but ColdGas > 0, distribute to first bin
+        if(total_disc_gas_initial <= 0.0 && galaxies[p].ColdGas > 0.0) {
+            galaxies[p].DiscGas[0] = galaxies[p].ColdGas;
+            galaxies[p].DiscGasMetals[0] = galaxies[p].MetalsColdGas;
+            if(run_params->DustOn == 1) {
+                galaxies[p].DiscDust[0] = galaxies[p].ColdDust;
+            }
+        }
+        
+        // Compute diagnostic quantities (H2, HI per annulus) for output
+        // This doesn't affect SF, just tracks molecular/atomic gas
+        double h2_local[N_BINS];
+        double sfr_diagnostic[N_BINS];
+        compute_local_star_formation(p, dt, galaxies, run_params, sfr_diagnostic, h2_local);
+        
+        // Store H2/HI diagnostics in disc arrays (for output only)
+        double total_hydrogen = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+        double disc_h2_sum = 0.0;
+        for(int i = 0; i < N_BINS; i++) {
+            galaxies[p].DiscH2[i] = h2_local[i];
+            disc_h2_sum += h2_local[i];
+        }
+        galaxies[p].H2gas = disc_h2_sum;
+        if(galaxies[p].H2gas > galaxies[p].ColdGas) galaxies[p].H2gas = galaxies[p].ColdGas;
+        galaxies[p].H1gas = total_hydrogen - disc_h2_sum;
+        if(galaxies[p].H1gas < 0.0) galaxies[p].H1gas = 0.0;
+        
+        for(int i = 0; i < N_BINS; i++) {
+            if(total_hydrogen > 0.0) {
+                galaxies[p].DiscHI[i] = galaxies[p].DiscGas[i] * HYDROGEN_MASS_FRAC - h2_local[i];
+                if(galaxies[p].DiscHI[i] < 0.0) galaxies[p].DiscHI[i] = 0.0;
+            } else {
+                galaxies[p].DiscHI[i] = 0.0;
+            }
+        }
+        
+        // Apply radial gas flows BEFORE star formation
+        // This redistributes gas but doesn't change total
+        apply_radial_gas_flows(p, dt, galaxies, run_params);
+        
+        // Now proceed with BULK star formation (preserves calibration)
+        // This uses the same calculation as DarkModeOn=0, but we'll distribute
+        // the results to disc arrays afterwards
+        // Fall through to bulk SF code below...
+    }
+
+    // ========================================================================
+    // BULK STAR FORMATION (used by both DarkMode and non-DarkMode)
+    // ========================================================================
 
     double reff, tdyn, strdot, stars, ejected_mass, metallicity, total_molecular_gas;
 
@@ -790,7 +851,13 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
     // check for disk instability
     if(run_params->DiskInstabilityOn) {
-        check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
+        if(run_params->DarkModeOn == 1) {
+            // DarkMode: use local Toomre Q criterion per annulus
+            check_local_disk_instability(p, centralgal, dt, step, galaxies, run_params);
+        } else {
+            // Bulk: original disk instability model
+            check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
+        }
     }
 
     // formation of new metals - instantaneous recycling approximation - only SNII
@@ -798,7 +865,22 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / 30.0);  // Krumholz & Dekel 2011 Eq. 22
         
         // Metals that stay in disk (same for all regimes)
-        galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        const double metals_staying = run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        galaxies[p].MetalsColdGas += metals_staying;
+        
+        // DarkMode: distribute returned metals to disc annuli based on gas fraction
+        if(run_params->DarkModeOn == 1 && metals_staying > 0.0) {
+            double total_disc_gas = 0.0;
+            for(int i = 0; i < N_BINS; i++) {
+                total_disc_gas += galaxies[p].DiscGas[i];
+            }
+            if(total_disc_gas > 0.0) {
+                for(int i = 0; i < N_BINS; i++) {
+                    double frac = galaxies[p].DiscGas[i] / total_disc_gas;
+                    galaxies[p].DiscGasMetals[i] += metals_staying * frac;
+                }
+            }
+        }
         
         // Metals that leave disk - regime dependent
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
@@ -831,6 +913,28 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         } else {
             // Original SAGE behavior: metals go to HotGas
             galaxies[centralgal].MetalsHotGas += all_metals;
+        }
+    }
+    
+    // DarkMode: Post-processing after bulk SF
+    if(run_params->DarkModeOn == 1 && stars > 0.0) {
+        // Store diagnostic SFR per annulus (distribute bulk SFR proportional to gas)
+        double total_disc_gas = 0.0;
+        for(int i = 0; i < N_BINS; i++) {
+            total_disc_gas += galaxies[p].DiscGas[i];
+        }
+        
+        if(total_disc_gas > 0.0) {
+            double total_sfr = stars / dt;  // Total SFR from bulk calculation
+            for(int i = 0; i < N_BINS; i++) {
+                double gas_frac = galaxies[p].DiscGas[i] / total_disc_gas;
+                galaxies[p].DiscSFR[i] = total_sfr * gas_frac;
+            }
+        } else {
+            // No gas in disk - zero SFR everywhere
+            for(int i = 0; i < N_BINS; i++) {
+                galaxies[p].DiscSFR[i] = 0.0;
+            }
         }
     }
 }
@@ -1712,7 +1816,22 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     if(galaxies[p].ColdGas > 1.0e-8) {
         // Metals that stay in disk
         const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / 30.0);
-        galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        const double metals_staying = run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        galaxies[p].MetalsColdGas += metals_staying;
+        
+        // DarkMode: distribute returned metals to disc annuli based on gas fraction
+        if(run_params->DarkModeOn == 1 && metals_staying > 0.0) {
+            double total_disc_gas = 0.0;
+            for(int i = 0; i < N_BINS; i++) {
+                total_disc_gas += galaxies[p].DiscGas[i];
+            }
+            if(total_disc_gas > 0.0) {
+                for(int i = 0; i < N_BINS; i++) {
+                    double frac = galaxies[p].DiscGas[i] / total_disc_gas;
+                    galaxies[p].DiscGasMetals[i] += metals_staying * frac;
+                }
+            }
+        }
         
         // Metals that leave disk - goes to appropriate reservoir based on CGM regime
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;

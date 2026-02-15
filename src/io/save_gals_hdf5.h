@@ -7,6 +7,7 @@ extern "C" {
 #endif // working with c++ compiler //
 
 #include "../core_allvars.h"
+#include "../macros.h"
 
 struct HDF5_GALAXY_OUTPUT
 {
@@ -129,6 +130,25 @@ struct HDF5_GALAXY_OUTPUT
 
     /* Star formation history array (2D: [ngal * nsnaps]) */
     float *SfrHistory;
+
+    /* DarkMode: radially-resolved disk arrays (2D: [ngal * N_BINS]) */
+    float *DiscGas;         /* Gas mass in each annulus */
+    float *DiscStars;       /* Stellar mass in each annulus */
+    float *DiscGasMetals;   /* Gas metals in each annulus */
+    float *DiscStarsMetals; /* Stellar metals in each annulus */
+    float *DiscH2;          /* H2 molecular gas in each annulus */
+    float *DiscHI;          /* HI atomic gas in each annulus */
+    float *DiscSFR;         /* Star formation rate in each annulus */
+    float *DiscDust;        /* Dust mass in each annulus */
+    float *DiscRadii;       /* Radii of annulus edges (2D: [ngal * (N_BINS+1)]) */
+
+    /* DarkMode: angular momentum tracking (3-component spin vectors) */
+    float *SpinGasx;
+    float *SpinGasy;
+    float *SpinGasz;
+    float *SpinStarsx;
+    float *SpinStarsy;
+    float *SpinStarsz;
 };
     
     // Proto-Types //

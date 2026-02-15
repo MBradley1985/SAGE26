@@ -336,6 +336,54 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     return coolingGas;
 }
 
+// Helper function to distribute cooling gas to disk annuli (DarkMode)
+// This adds to DiscGas/DiscGasMetals/DiscDust arrays based on exponential j-distribution
+static void distribute_cooling_to_disk(const int gal, const double cooling_amount, 
+                                        const double metallicity, const double cooling_dust,
+                                        struct GALAXY *galaxies, const struct params *run_params)
+{
+    if(cooling_amount <= 0.0) return;
+    
+    // CoolScaleRadius defines the exponential decay scale for angular momentum distribution
+    const double jscale = galaxies[gal].Vvir * galaxies[gal].CoolScaleRadius;
+    
+    double coolingGasBinSum = 0.0;
+    double coolingDustBinSum = 0.0;
+    const int track_dust = (cooling_dust > 0.0) ? 1 : 0;
+    
+    for(int i = 0; i < N_BINS; i++) {
+        double coolingGasBin, coolingDustBin = 0.0;
+        
+        if(jscale > 0.0) {
+            // Distribute cooling gas with exponential j-profile: f(j) ~ j * exp(-j/j_scale)
+            const double jfrac1 = run_params->DiscBinEdge[i] / jscale;
+            const double jfrac2 = run_params->DiscBinEdge[i+1] / jscale;
+            const double frac = (jfrac1 + 1.0) * exp(-jfrac1) - (jfrac2 + 1.0) * exp(-jfrac2);
+            coolingGasBin = cooling_amount * frac;
+            if(track_dust) coolingDustBin = cooling_dust * frac;
+        } else {
+            // Fallback: uniform distribution if scale radius is zero
+            coolingGasBin = cooling_amount / N_BINS;
+            if(track_dust) coolingDustBin = cooling_dust / N_BINS;
+        }
+        
+        // Ensure we don't exceed total cooling gas (numerical precision)
+        if(coolingGasBin + coolingGasBinSum > cooling_amount || i == N_BINS - 1) {
+            coolingGasBin = cooling_amount - coolingGasBinSum;
+            if(track_dust) coolingDustBin = cooling_dust - coolingDustBinSum;
+        }
+        if(coolingGasBin < 0.0) coolingGasBin = 0.0;
+        if(coolingDustBin < 0.0) coolingDustBin = 0.0;
+        
+        galaxies[gal].DiscGas[i] += coolingGasBin;
+        galaxies[gal].DiscGasMetals[i] += metallicity * coolingGasBin;
+        if(track_dust) galaxies[gal].DiscDust[i] += coolingDustBin;
+        
+        coolingGasBinSum += coolingGasBin;
+        coolingDustBinSum += coolingDustBin;
+    }
+}
+
 double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     double cgm_cooling = 0.0;
@@ -368,16 +416,27 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
     // Apply CGM cooling
     if(cgm_cooling > 0.0) {
         const double metallicity = get_metallicity(galaxies[gal].CGMgas, galaxies[gal].MetalsCGMgas);
+        
+        // Calculate dust to transfer
+        double cooling_dust = 0.0;
+        if(run_params->DustOn == 1 && galaxies[gal].CGMDust > 0.0) {
+            const double DTGCGM = get_DTG(galaxies[gal].CGMgas, galaxies[gal].CGMDust);
+            cooling_dust = DTGCGM * cgm_cooling;
+            if(cooling_dust > galaxies[gal].CGMDust) cooling_dust = galaxies[gal].CGMDust;
+        }
+        
+        // DarkMode: distribute to disk annuli
+        if(run_params->DarkModeOn == 1) {
+            distribute_cooling_to_disk(gal, cgm_cooling, metallicity, cooling_dust, galaxies, run_params);
+        }
+        
+        // Update bulk quantities (always done, DarkMode just adds disk distribution)
         galaxies[gal].ColdGas += cgm_cooling;
         galaxies[gal].MetalsColdGas += metallicity * cgm_cooling;
         galaxies[gal].CGMgas -= cgm_cooling;
         galaxies[gal].MetalsCGMgas -= metallicity * cgm_cooling;
-
-        // CGMDust → ColdDust with precipitating gas
-        if(run_params->DustOn == 1 && galaxies[gal].CGMDust > 0.0) {
-            const double DTGCGM = get_DTG(galaxies[gal].CGMgas + cgm_cooling, galaxies[gal].CGMDust);
-            double cooling_dust = DTGCGM * cgm_cooling;
-            if(cooling_dust > galaxies[gal].CGMDust) cooling_dust = galaxies[gal].CGMDust;
+        
+        if(cooling_dust > 0.0) {
             galaxies[gal].ColdDust += cooling_dust;
             galaxies[gal].CGMDust -= cooling_dust;
         }
@@ -386,16 +445,27 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
     // Apply HotGas cooling
     if(hot_cooling > 0.0) {
         const double metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);
+        
+        // Calculate dust to transfer
+        double cooling_dust = 0.0;
+        if(run_params->DustOn == 1 && galaxies[gal].HotDust > 0.0) {
+            const double DTGHot = get_DTG(galaxies[gal].HotGas, galaxies[gal].HotDust);
+            cooling_dust = DTGHot * hot_cooling;
+            if(cooling_dust > galaxies[gal].HotDust) cooling_dust = galaxies[gal].HotDust;
+        }
+        
+        // DarkMode: distribute to disk annuli
+        if(run_params->DarkModeOn == 1) {
+            distribute_cooling_to_disk(gal, hot_cooling, metallicity, cooling_dust, galaxies, run_params);
+        }
+        
+        // Update bulk quantities
         galaxies[gal].ColdGas += hot_cooling;
         galaxies[gal].MetalsColdGas += metallicity * hot_cooling;
         galaxies[gal].HotGas -= hot_cooling;
         galaxies[gal].MetalsHotGas -= metallicity * hot_cooling;
-
-        // HotDust → ColdDust with cooling gas (Hot-regime)
-        if(run_params->DustOn == 1 && galaxies[gal].HotDust > 0.0) {
-            const double DTGHot = get_DTG(galaxies[gal].HotGas + hot_cooling, galaxies[gal].HotDust);
-            double cooling_dust = DTGHot * hot_cooling;
-            if(cooling_dust > galaxies[gal].HotDust) cooling_dust = galaxies[gal].HotDust;
+        
+        if(cooling_dust > 0.0) {
             galaxies[gal].ColdDust += cooling_dust;
             galaxies[gal].HotDust -= cooling_dust;
         }

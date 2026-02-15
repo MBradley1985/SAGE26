@@ -432,6 +432,104 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
                                                 "Failed to close dataspace for %s at snapshot %d.\n", sfrdust_names[sd_idx], snap_idx);
             }
         }
+
+        // Create DarkMode 2D datasets (only if DarkModeOn=1)
+        // Dimensions: [ngal (unlimited), N_BINS (fixed)]
+        if(run_params->DarkModeOn == 1) {
+            const char *disc_names[8] = {"DiscGas", "DiscStars", "DiscGasMetals", "DiscStarsMetals",
+                                         "DiscH2", "DiscHI", "DiscSFR", "DiscDust"};
+            const char *disc_desc[8] = {
+                "Gas mass in each radial annulus. Units: 1e10 Msun/h",
+                "Stellar mass in each radial annulus. Units: 1e10 Msun/h",
+                "Gas metals in each radial annulus. Units: 1e10 Msun/h",
+                "Stellar metals in each radial annulus. Units: 1e10 Msun/h",
+                "H2 molecular gas in each radial annulus. Units: 1e10 Msun/h",
+                "HI atomic gas in each radial annulus. Units: 1e10 Msun/h",
+                "Star formation rate in each radial annulus. Units: Msun/yr",
+                "Dust mass in each radial annulus. Units: 1e10 Msun/h"
+            };
+
+            hsize_t disc_dims[2] = {0, (hsize_t)N_BINS};
+            hsize_t disc_maxdims[2] = {H5S_UNLIMITED, (hsize_t)N_BINS};
+            hsize_t disc_chunk_dims[2] = {NUM_GALS_PER_BUFFER, (hsize_t)N_BINS};
+
+            for(int disc_idx = 0; disc_idx < 8; disc_idx++) {
+                snprintf(full_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/%s", run_params->ListOutputSnaps[snap_idx], disc_names[disc_idx]);
+
+                hid_t disc_prop = H5Pcreate(H5P_DATASET_CREATE);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(disc_prop, (int32_t) disc_prop,
+                                                "Could not create property list for %s dataset at snapshot %d.\n", disc_names[disc_idx], snap_idx);
+
+                hid_t disc_dataspace = H5Screate_simple(2, disc_dims, disc_maxdims);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(disc_dataspace, (int32_t) disc_dataspace,
+                                                "Could not create 2D dataspace for %s at snapshot %d.\n", disc_names[disc_idx], snap_idx);
+
+                herr_t disc_status = H5Pset_chunk(disc_prop, 2, disc_chunk_dims);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(disc_status, (int32_t) disc_status,
+                                                "Could not set HDF5 chunking for %s at snapshot %d.\n", disc_names[disc_idx], snap_idx);
+
+                hid_t disc_dataset = H5Dcreate2(file_id, full_field_name, H5T_NATIVE_FLOAT, disc_dataspace,
+                                                H5P_DEFAULT, disc_prop, H5P_DEFAULT);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(disc_dataset, (int32_t) disc_dataset,
+                                                "Could not create %s dataset at snapshot %d.\n", disc_names[disc_idx], snap_idx);
+
+                CREATE_STRING_ATTRIBUTE(disc_dataset, "Description", disc_desc[disc_idx], MAX_STRING_LEN);
+                CREATE_STRING_ATTRIBUTE(disc_dataset, "Units", "1e10 Msun/h", MAX_STRING_LEN);
+
+                disc_status = H5Dclose(disc_dataset);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(disc_status, (int32_t) disc_status,
+                                                "Failed to close %s dataset at snapshot %d.\n", disc_names[disc_idx], snap_idx);
+
+                disc_status = H5Pclose(disc_prop);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(disc_status, (int32_t) disc_status,
+                                                "Failed to close property list for %s at snapshot %d.\n", disc_names[disc_idx], snap_idx);
+
+                disc_status = H5Sclose(disc_dataspace);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(disc_status, (int32_t) disc_status,
+                                                "Failed to close dataspace for %s at snapshot %d.\n", disc_names[disc_idx], snap_idx);
+            }
+
+            // Create DiscRadii dataset (N_BINS+1 edges)
+            {
+                hsize_t radii_dims[2] = {0, (hsize_t)(N_BINS+1)};
+                hsize_t radii_maxdims[2] = {H5S_UNLIMITED, (hsize_t)(N_BINS+1)};
+                hsize_t radii_chunk_dims[2] = {NUM_GALS_PER_BUFFER, (hsize_t)(N_BINS+1)};
+
+                snprintf(full_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/DiscRadii", run_params->ListOutputSnaps[snap_idx]);
+
+                hid_t radii_prop = H5Pcreate(H5P_DATASET_CREATE);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(radii_prop, (int32_t) radii_prop,
+                                                "Could not create property list for DiscRadii dataset at snapshot %d.\n", snap_idx);
+
+                hid_t radii_dataspace = H5Screate_simple(2, radii_dims, radii_maxdims);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(radii_dataspace, (int32_t) radii_dataspace,
+                                                "Could not create 2D dataspace for DiscRadii at snapshot %d.\n", snap_idx);
+
+                herr_t radii_status = H5Pset_chunk(radii_prop, 2, radii_chunk_dims);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(radii_status, (int32_t) radii_status,
+                                                "Could not set HDF5 chunking for DiscRadii at snapshot %d.\n", snap_idx);
+
+                hid_t radii_dataset = H5Dcreate2(file_id, full_field_name, H5T_NATIVE_FLOAT, radii_dataspace,
+                                                 H5P_DEFAULT, radii_prop, H5P_DEFAULT);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(radii_dataset, (int32_t) radii_dataset,
+                                                "Could not create DiscRadii dataset at snapshot %d.\n", snap_idx);
+
+                CREATE_STRING_ATTRIBUTE(radii_dataset, "Description", "Radial bin edges (N_BINS+1 values). Units: Mpc/h", MAX_STRING_LEN);
+                CREATE_STRING_ATTRIBUTE(radii_dataset, "Units", "Mpc/h", MAX_STRING_LEN);
+
+                radii_status = H5Dclose(radii_dataset);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(radii_status, (int32_t) radii_status,
+                                                "Failed to close DiscRadii dataset at snapshot %d.\n", snap_idx);
+
+                radii_status = H5Pclose(radii_prop);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(radii_status, (int32_t) radii_status,
+                                                "Failed to close property list for DiscRadii at snapshot %d.\n", snap_idx);
+
+                radii_status = H5Sclose(radii_dataspace);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(radii_status, (int32_t) radii_status,
+                                                "Failed to close dataspace for DiscRadii at snapshot %d.\n", snap_idx);
+            }
+        }
     }
 
     // Now for each snapshot, we process `buffer_count` galaxies into RAM for every snapshot before
@@ -568,6 +666,74 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
             fprintf(stderr, "Could not allocate %d x %d elements for SfrHistory buffer for snapshot %d\n",
                     save_info->buffer_size, run_params->Snaplistlen, snap_idx);
             return MALLOC_FAILURE;
+        }
+
+        // DarkMode: allocate 2D buffers for disk arrays (only if DarkModeOn=1)
+        if(run_params->DarkModeOn == 1) {
+            // DiscGas, DiscStars, DiscGasMetals, DiscStarsMetals: [buffer_size * N_BINS]
+            save_info->buffer_output_gals[snap_idx].DiscGas = malloc(
+                (size_t)save_info->buffer_size * (size_t)N_BINS * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].DiscStars = malloc(
+                (size_t)save_info->buffer_size * (size_t)N_BINS * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].DiscGasMetals = malloc(
+                (size_t)save_info->buffer_size * (size_t)N_BINS * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].DiscStarsMetals = malloc(
+                (size_t)save_info->buffer_size * (size_t)N_BINS * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].DiscH2 = malloc(
+                (size_t)save_info->buffer_size * (size_t)N_BINS * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].DiscHI = malloc(
+                (size_t)save_info->buffer_size * (size_t)N_BINS * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].DiscSFR = malloc(
+                (size_t)save_info->buffer_size * (size_t)N_BINS * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].DiscDust = malloc(
+                (size_t)save_info->buffer_size * (size_t)N_BINS * sizeof(float));
+            // DiscRadii: [buffer_size * (N_BINS+1)]
+            save_info->buffer_output_gals[snap_idx].DiscRadii = malloc(
+                (size_t)save_info->buffer_size * (size_t)(N_BINS+1) * sizeof(float));
+
+            if(save_info->buffer_output_gals[snap_idx].DiscGas == NULL ||
+               save_info->buffer_output_gals[snap_idx].DiscStars == NULL ||
+               save_info->buffer_output_gals[snap_idx].DiscGasMetals == NULL ||
+               save_info->buffer_output_gals[snap_idx].DiscStarsMetals == NULL ||
+               save_info->buffer_output_gals[snap_idx].DiscH2 == NULL ||
+               save_info->buffer_output_gals[snap_idx].DiscHI == NULL ||
+               save_info->buffer_output_gals[snap_idx].DiscSFR == NULL ||
+               save_info->buffer_output_gals[snap_idx].DiscDust == NULL ||
+               save_info->buffer_output_gals[snap_idx].DiscRadii == NULL) {
+                fprintf(stderr, "Could not allocate DarkMode Disc* buffers for snapshot %d\n", snap_idx);
+                return MALLOC_FAILURE;
+            }
+
+            // SpinGas, SpinStars: simple 1D arrays
+            save_info->buffer_output_gals[snap_idx].SpinGasx = malloc((size_t)save_info->buffer_size * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].SpinGasy = malloc((size_t)save_info->buffer_size * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].SpinGasz = malloc((size_t)save_info->buffer_size * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].SpinStarsx = malloc((size_t)save_info->buffer_size * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].SpinStarsy = malloc((size_t)save_info->buffer_size * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].SpinStarsz = malloc((size_t)save_info->buffer_size * sizeof(float));
+
+            if(save_info->buffer_output_gals[snap_idx].SpinGasx == NULL ||
+               save_info->buffer_output_gals[snap_idx].SpinGasy == NULL ||
+               save_info->buffer_output_gals[snap_idx].SpinGasz == NULL ||
+               save_info->buffer_output_gals[snap_idx].SpinStarsx == NULL ||
+               save_info->buffer_output_gals[snap_idx].SpinStarsy == NULL ||
+               save_info->buffer_output_gals[snap_idx].SpinStarsz == NULL) {
+                fprintf(stderr, "Could not allocate DarkMode Spin* buffers for snapshot %d\n", snap_idx);
+                return MALLOC_FAILURE;
+            }
+        } else {
+            // Set to NULL when DarkModeOn=0
+            save_info->buffer_output_gals[snap_idx].DiscGas = NULL;
+            save_info->buffer_output_gals[snap_idx].DiscStars = NULL;
+            save_info->buffer_output_gals[snap_idx].DiscGasMetals = NULL;
+            save_info->buffer_output_gals[snap_idx].DiscStarsMetals = NULL;
+            save_info->buffer_output_gals[snap_idx].DiscRadii = NULL;
+            save_info->buffer_output_gals[snap_idx].SpinGasx = NULL;
+            save_info->buffer_output_gals[snap_idx].SpinGasy = NULL;
+            save_info->buffer_output_gals[snap_idx].SpinGasz = NULL;
+            save_info->buffer_output_gals[snap_idx].SpinStarsx = NULL;
+            save_info->buffer_output_gals[snap_idx].SpinStarsy = NULL;
+            save_info->buffer_output_gals[snap_idx].SpinStarsz = NULL;
         }
     }
 
@@ -874,6 +1040,25 @@ int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct
 
         // Free 2D SfrHistory buffer
         free(save_info->buffer_output_gals[snap_idx].SfrHistory);
+
+        // Free DarkMode buffers (only if they were allocated)
+        if(save_info->buffer_output_gals[snap_idx].DiscGas != NULL) {
+            free(save_info->buffer_output_gals[snap_idx].DiscGas);
+            free(save_info->buffer_output_gals[snap_idx].DiscStars);
+            free(save_info->buffer_output_gals[snap_idx].DiscGasMetals);
+            free(save_info->buffer_output_gals[snap_idx].DiscStarsMetals);
+            free(save_info->buffer_output_gals[snap_idx].DiscH2);
+            free(save_info->buffer_output_gals[snap_idx].DiscHI);
+            free(save_info->buffer_output_gals[snap_idx].DiscSFR);
+            free(save_info->buffer_output_gals[snap_idx].DiscDust);
+            free(save_info->buffer_output_gals[snap_idx].DiscRadii);
+            free(save_info->buffer_output_gals[snap_idx].SpinGasx);
+            free(save_info->buffer_output_gals[snap_idx].SpinGasy);
+            free(save_info->buffer_output_gals[snap_idx].SpinGasz);
+            free(save_info->buffer_output_gals[snap_idx].SpinStarsx);
+            free(save_info->buffer_output_gals[snap_idx].SpinStarsy);
+            free(save_info->buffer_output_gals[snap_idx].SpinStarsz);
+        }
     }
 
     myfree(save_info->buffer_output_gals);
@@ -1282,6 +1467,36 @@ int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct save_info 
         save_info->buffer_output_gals[output_snap_idx].TimeOfInfall[gals_in_buffer] = 0.0;
     }
 
+    // DarkMode: Copy disk arrays (only if DarkModeOn=1)
+    if(run_params->DarkModeOn == 1) {
+        // 2D arrays: offset = gals_in_buffer * N_BINS
+        int64_t disc_offset = gals_in_buffer * N_BINS;
+        for(int32_t i = 0; i < N_BINS; i++) {
+            save_info->buffer_output_gals[output_snap_idx].DiscGas[disc_offset + i] = (float)g->DiscGas[i];
+            save_info->buffer_output_gals[output_snap_idx].DiscStars[disc_offset + i] = (float)g->DiscStars[i];
+            save_info->buffer_output_gals[output_snap_idx].DiscGasMetals[disc_offset + i] = (float)g->DiscGasMetals[i];
+            save_info->buffer_output_gals[output_snap_idx].DiscStarsMetals[disc_offset + i] = (float)g->DiscStarsMetals[i];
+            save_info->buffer_output_gals[output_snap_idx].DiscH2[disc_offset + i] = (float)g->DiscH2[i];
+            save_info->buffer_output_gals[output_snap_idx].DiscHI[disc_offset + i] = (float)g->DiscHI[i];
+            save_info->buffer_output_gals[output_snap_idx].DiscSFR[disc_offset + i] = (float)g->DiscSFR[i];
+            save_info->buffer_output_gals[output_snap_idx].DiscDust[disc_offset + i] = (float)g->DiscDust[i];
+        }
+
+        // DiscRadii: offset = gals_in_buffer * (N_BINS+1)
+        int64_t radii_offset = gals_in_buffer * (N_BINS+1);
+        for(int32_t i = 0; i < N_BINS+1; i++) {
+            save_info->buffer_output_gals[output_snap_idx].DiscRadii[radii_offset + i] = (float)g->DiscRadii[i];
+        }
+
+        // Spin vectors (1D arrays)
+        save_info->buffer_output_gals[output_snap_idx].SpinGasx[gals_in_buffer] = (float)g->SpinGas[0];
+        save_info->buffer_output_gals[output_snap_idx].SpinGasy[gals_in_buffer] = (float)g->SpinGas[1];
+        save_info->buffer_output_gals[output_snap_idx].SpinGasz[gals_in_buffer] = (float)g->SpinGas[2];
+        save_info->buffer_output_gals[output_snap_idx].SpinStarsx[gals_in_buffer] = (float)g->SpinStars[0];
+        save_info->buffer_output_gals[output_snap_idx].SpinStarsy[gals_in_buffer] = (float)g->SpinStars[1];
+        save_info->buffer_output_gals[output_snap_idx].SpinStarsz[gals_in_buffer] = (float)g->SpinStars[2];
+    }
+
     return EXIT_SUCCESS;
 }
 
@@ -1663,6 +1878,124 @@ int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to_write,
             H5Sclose(sd_memspace);
             H5Sclose(sd_filespace);
             H5Dclose(sd_dataset_id);
+        }
+    }
+
+    // Write DarkMode 2D disk arrays (only if DarkModeOn=1)
+    if(run_params->DarkModeOn == 1) {
+        const char *disc_names[8] = {"DiscGas", "DiscStars", "DiscGasMetals", "DiscStarsMetals",
+                                     "DiscH2", "DiscHI", "DiscSFR", "DiscDust"};
+        float *disc_buffers[8] = {
+            save_info->buffer_output_gals[snap_idx].DiscGas,
+            save_info->buffer_output_gals[snap_idx].DiscStars,
+            save_info->buffer_output_gals[snap_idx].DiscGasMetals,
+            save_info->buffer_output_gals[snap_idx].DiscStarsMetals,
+            save_info->buffer_output_gals[snap_idx].DiscH2,
+            save_info->buffer_output_gals[snap_idx].DiscHI,
+            save_info->buffer_output_gals[snap_idx].DiscSFR,
+            save_info->buffer_output_gals[snap_idx].DiscDust
+        };
+
+        for(int disc_idx = 0; disc_idx < 8; disc_idx++) {
+            char disc_field_name[2*MAX_STRING_LEN];
+            snprintf(disc_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/%s", run_params->ListOutputSnaps[snap_idx], disc_names[disc_idx]);
+
+            hid_t disc_dataset_id = H5Dopen2(save_info->file_id, disc_field_name, H5P_DEFAULT);
+            if(disc_dataset_id < 0) {
+                fprintf(stderr, "Could not access %s dataset for output snapshot %d.\n", disc_names[disc_idx], snap_idx);
+                return (int32_t) disc_dataset_id;
+            }
+
+            // 2D dimensions: [ngal, N_BINS]
+            hsize_t disc_dims_extend[2] = {(hsize_t)num_to_write, (hsize_t)N_BINS};
+            hsize_t disc_old_dims[2] = {(hsize_t)num_already_written, (hsize_t)N_BINS};
+            hsize_t disc_new_dims[2] = {disc_old_dims[0] + disc_dims_extend[0], (hsize_t)N_BINS};
+
+            status = H5Dset_extent(disc_dataset_id, disc_new_dims);
+            if(status < 0) {
+                fprintf(stderr, "Could not resize %s dataset dimensions for snapshot %d.\n", disc_names[disc_idx], snap_idx);
+                return (int32_t) status;
+            }
+
+            hid_t disc_filespace = H5Dget_space(disc_dataset_id);
+            if(disc_filespace < 0) {
+                fprintf(stderr, "Could not get dataspace for %s at snapshot %d.\n", disc_names[disc_idx], snap_idx);
+                return (int32_t) disc_filespace;
+            }
+
+            // Select hyperslab: start at [old_ngal, 0], count [num_to_write, N_BINS]
+            hsize_t disc_start[2] = {disc_old_dims[0], 0};
+            status = H5Sselect_hyperslab(disc_filespace, H5S_SELECT_SET, disc_start, NULL, disc_dims_extend, NULL);
+            if(status < 0) {
+                fprintf(stderr, "Could not select hyperslab for %s at snapshot %d.\n", disc_names[disc_idx], snap_idx);
+                return (int32_t) status;
+            }
+
+            hid_t disc_memspace = H5Screate_simple(2, disc_dims_extend, NULL);
+            if(disc_memspace < 0) {
+                fprintf(stderr, "Could not create memory space for %s at snapshot %d.\n", disc_names[disc_idx], snap_idx);
+                return (int32_t) disc_memspace;
+            }
+
+            status = H5Dwrite(disc_dataset_id, H5T_NATIVE_FLOAT, disc_memspace, disc_filespace, H5P_DEFAULT,
+                              disc_buffers[disc_idx]);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                            "Could not write %s dataset for snapshot %d.\n", disc_names[disc_idx], snap_idx);
+
+            H5Sclose(disc_memspace);
+            H5Sclose(disc_filespace);
+            H5Dclose(disc_dataset_id);
+        }
+
+        // Write DiscRadii (N_BINS+1 edges)
+        {
+            char radii_field_name[2*MAX_STRING_LEN];
+            snprintf(radii_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/DiscRadii", run_params->ListOutputSnaps[snap_idx]);
+
+            hid_t radii_dataset_id = H5Dopen2(save_info->file_id, radii_field_name, H5P_DEFAULT);
+            if(radii_dataset_id < 0) {
+                fprintf(stderr, "Could not access DiscRadii dataset for output snapshot %d.\n", snap_idx);
+                return (int32_t) radii_dataset_id;
+            }
+
+            // 2D dimensions: [ngal, N_BINS+1]
+            hsize_t radii_dims_extend[2] = {(hsize_t)num_to_write, (hsize_t)(N_BINS+1)};
+            hsize_t radii_old_dims[2] = {(hsize_t)num_already_written, (hsize_t)(N_BINS+1)};
+            hsize_t radii_new_dims[2] = {radii_old_dims[0] + radii_dims_extend[0], (hsize_t)(N_BINS+1)};
+
+            status = H5Dset_extent(radii_dataset_id, radii_new_dims);
+            if(status < 0) {
+                fprintf(stderr, "Could not resize DiscRadii dataset dimensions for snapshot %d.\n", snap_idx);
+                return (int32_t) status;
+            }
+
+            hid_t radii_filespace = H5Dget_space(radii_dataset_id);
+            if(radii_filespace < 0) {
+                fprintf(stderr, "Could not get dataspace for DiscRadii at snapshot %d.\n", snap_idx);
+                return (int32_t) radii_filespace;
+            }
+
+            hsize_t radii_start[2] = {radii_old_dims[0], 0};
+            status = H5Sselect_hyperslab(radii_filespace, H5S_SELECT_SET, radii_start, NULL, radii_dims_extend, NULL);
+            if(status < 0) {
+                fprintf(stderr, "Could not select hyperslab for DiscRadii at snapshot %d.\n", snap_idx);
+                return (int32_t) status;
+            }
+
+            hid_t radii_memspace = H5Screate_simple(2, radii_dims_extend, NULL);
+            if(radii_memspace < 0) {
+                fprintf(stderr, "Could not create memory space for DiscRadii at snapshot %d.\n", snap_idx);
+                return (int32_t) radii_memspace;
+            }
+
+            status = H5Dwrite(radii_dataset_id, H5T_NATIVE_FLOAT, radii_memspace, radii_filespace, H5P_DEFAULT,
+                              save_info->buffer_output_gals[snap_idx].DiscRadii);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                            "Could not write DiscRadii dataset for snapshot %d.\n", snap_idx);
+
+            H5Sclose(radii_memspace);
+            H5Sclose(radii_filespace);
+            H5Dclose(radii_dataset_id);
         }
     }
 
