@@ -2217,7 +2217,22 @@ int32_t write_header(hid_t file_id, const struct forest_info *forest_info, const
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "Reionization_zr", run_params->Reionization_zr, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "EnergySN", run_params->EnergySN, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "EtaSN", run_params->EtaSN, H5T_NATIVE_DOUBLE);
+
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RedshiftPowerLawExponent", run_params->RedshiftPowerLawExponent, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ToomreQDiskInstabilityOn", run_params->ToomreQDiskInstabilityOn, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DustOn", run_params->DustOn, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "MetalYieldsOn", run_params->MetalYieldsOn, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DarkModeOn", run_params->DarkModeOn, H5T_NATIVE_INT);
+
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DeltaDustAGB", run_params->DeltaDustAGB, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DeltaDustSNII", run_params->DeltaDustSNII, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DeltaDustSNIa", run_params->DeltaDustSNIa, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DustAccretionTimescale", run_params->DustAccretionTimescale, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "EtaSNDust", run_params->EtaSNDust, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BinaryFraction", run_params->BinaryFraction, H5T_NATIVE_DOUBLE);
+
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FirstBin", run_params->FirstBin, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ExponentBin", run_params->ExponentBin, H5T_NATIVE_DOUBLE);
 
     // Misc runtime Parameters.
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "UnitLength_in_cm", run_params->UnitLength_in_cm, H5T_NATIVE_DOUBLE);

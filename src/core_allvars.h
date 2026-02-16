@@ -545,6 +545,7 @@ struct params
     double     FirstBin;                // First j-bin edge [kpc km/s] (default 100)
     double     ExponentBin;             // j-bin geometric growth factor (default 1.4)
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
+    int32_t    ToomreQDiskInstabilityOn; // 0: standard SAGE disk instability; 1: Toomre Q criterion applied to each annulus (only used when DarkModeOn=1)
 
     /* Yield table data (populated by read_metal_yield when MetalYieldsOn=1) */
     double Qagb[MAXYIELDS][METALGRID];      /* Total AGB yield per mass/Z bin */

@@ -317,6 +317,12 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->ExponentBin);
     ParamID[NParam++] = DOUBLE;
 
+    strncpy(ParamTag[NParam], "ToomreQDiskInstabilityOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->ToomreQDiskInstabilityOn);
+    ParamID[NParam++] = INT;
+
+
+
     
     used_tag = mymalloc(sizeof(int) * NParam);
     for(int i=0; i<NParam; i++) {

@@ -265,7 +265,7 @@ void produce_metals_dust(const double metallicity, const double dt,
     dustdot += 16.0 * delta_sn * (Mg_sn/24.0 + Si_sn/28.0 + S_sn/32.0
                                  + Ca_sn/40.0 + Fe_sn/56.0) / dt;
 
-    // SNIa dust: commented out in dusty-sage, kept disabled here
+    // SNIa dust: commented out in dusty-sage
     dustdot += 16.0 * delta_snia * (Fe_snia/56.0) / dt;
     dustdot += delta_snia * (Cr_snia + Ni_snia) / dt;
 

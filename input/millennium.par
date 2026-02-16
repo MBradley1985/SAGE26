@@ -65,6 +65,7 @@ SNIaYields            0   %0: Iwamoto1999
 
 DarkModeOn            1   %0: standard SAGE; 1: DarkSage-style radially-resolved disks & AM
 
+
 %------------------------------------------
 %----- Dust Modelling --------------
 %------------------------------------------
@@ -80,8 +81,9 @@ BinaryFraction          0.1    %Fraction of stars in SNIa binaries
 %----- DarkMode (Radially-Resolved Disks) --
 %------------------------------------------
 
-FirstBin                1.0     %First j-bin edge [kpc*km/s] (default 100)
-ExponentBin             1.4     %j-bin geometric growth factor (default 1.4)
+FirstBin                  1.0     %First j-bin edge [kpc*km/s] (default 100)
+ExponentBin               1.4     %j-bin geometric growth factor (default 1.4)
+ToomreQDiskInstabilityOn  0       %0: switch off
 
 %------------------------------------------
 %----- SAGE model parameters --------------
