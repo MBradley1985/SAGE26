@@ -250,6 +250,7 @@ void produce_metals_dust(const double metallicity, const double dt,
     double dustdot = 0.0;
     const double delta_agb = run_params->DeltaDustAGB;
     const double delta_sn  = run_params->DeltaDustSNII;
+    const double delta_snia = run_params->DeltaDustSNIa;
 
     /* AGB dust: eq 4-5 */
     if(O_agb > 0.0 && C_agb / O_agb > 1.0) {
@@ -264,10 +265,10 @@ void produce_metals_dust(const double metallicity, const double dt,
     dustdot += 16.0 * delta_sn * (Mg_sn/24.0 + Si_sn/28.0 + S_sn/32.0
                                  + Ca_sn/40.0 + Fe_sn/56.0) / dt;
 
-    /* SNIa dust: commented out in dusty-sage, kept disabled here
-     * dustdot += 16.0 * delta_snia * (Fe_snia/56.0) / dt;
-     * dustdot += delta_snia * (Cr_snia + Ni_snia) / dt;
-     */
+    // SNIa dust: commented out in dusty-sage, kept disabled here
+    dustdot += 16.0 * delta_snia * (Fe_snia/56.0) / dt;
+    dustdot += delta_snia * (Cr_snia + Ni_snia) / dt;
+
 
     /* Store formation rate in code units (will be converted in output) */
     if(dustdot > 0.0 && step >= 0 && step < STEPS) {
