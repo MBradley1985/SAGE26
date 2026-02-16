@@ -56,7 +56,6 @@ extern "C" {
                                   const int npts, const double xi);
 #endif
     extern double compute_imf(const double m);
-    extern double compute_imf_mass_integral(void);
     extern double compute_taum(const double m);
 
 

@@ -229,30 +229,22 @@ void produce_metals_dust(const double metallicity, const double dt,
     /* No more free() calls needed - using stack arrays now */
 
     /* ---------- Element masses produced this timestep ---------- */
-    /* Normalize by IMF mass integral to get yield per unit stellar mass formed.
-     * The Chabrier IMF coefficients are not mass-normalized (integral of m*phi(m)
-     * is ~8.9 instead of 1), so we divide by IMF_mass_norm to correct this. */
-    const double imf_norm = run_params->IMF_mass_norm;
-    
-    double Cr_snia = yCr_snia * dt / imf_norm;
-    double Fe_snia = yFe_snia * dt / imf_norm;
-    double Ni_snia = yNi_snia * dt / imf_norm;
+    double Cr_snia = yCr_snia * dt;
+    double Fe_snia = yFe_snia * dt;
+    double Ni_snia = yNi_snia * dt;
+    (void)Cr_snia; (void)Fe_snia; (void)Ni_snia; /* SNIa dust currently disabled */
 
-    double C_agb = yC_agb * dt / imf_norm;
-    double N_agb = yN_agb * dt / imf_norm;
-    double O_agb = yO_agb * dt / imf_norm;
+    double C_agb = yC_agb * dt;
+    double N_agb = yN_agb * dt;
+    double O_agb = yO_agb * dt;
 
-    double C_sn  = yC_sn  * dt / imf_norm;
-    double O_sn  = yO_sn  * dt / imf_norm;
-    double Mg_sn = yMg_sn * dt / imf_norm;
-    double Si_sn = ySi_sn * dt / imf_norm;
-    double S_sn  = yS_sn  * dt / imf_norm;
-    double Ca_sn = yCa_sn * dt / imf_norm;
-    double Fe_sn = yFe_sn * dt / imf_norm;
-
-    /* NOTE: Metal enrichment is handled by instantaneous recycling (constant yield)
-     * in model_starformation_and_feedback.c. The element masses computed above
-     * are used only for dust condensation below. */
+    double C_sn  = yC_sn  * dt;
+    double O_sn  = yO_sn  * dt;
+    double Mg_sn = yMg_sn * dt;
+    double Si_sn = ySi_sn * dt;
+    double S_sn  = yS_sn  * dt;
+    double Ca_sn = yCa_sn * dt;
+    double Fe_sn = yFe_sn * dt;
 
     /* ---------- Dust condensation (Popping+2017 eqs 4-6) ---------- */
     double dustdot = 0.0;
@@ -284,19 +276,12 @@ void produce_metals_dust(const double metallicity, const double dt,
 
     /* Apply dust to cold phase */
     if(dustdot > 0.0) {
-        const double dust_formed = dustdot * dt;
-        galaxies[p].ColdDust += dust_formed;
-        
-        /* Dust is a subset of metals - subtract from gas-phase metals
-         * (metals condense from gas phase into solid dust grains) */
-        galaxies[p].MetalsColdGas -= dust_formed;
-        if(galaxies[p].MetalsColdGas < 0.0) galaxies[p].MetalsColdGas = 0.0;
+        galaxies[p].ColdDust += dustdot * dt;
     }
 
     /* Safety: can't exceed metals in cold gas */
-    if(galaxies[p].ColdDust > galaxies[p].MetalsColdGas + galaxies[p].ColdDust) {
-        /* Total metals = gas-phase + dust-phase; dust can't exceed total */
-        galaxies[p].ColdDust = galaxies[p].MetalsColdGas + galaxies[p].ColdDust;
+    if(galaxies[p].ColdDust > galaxies[p].MetalsColdGas) {
+        galaxies[p].ColdDust = galaxies[p].MetalsColdGas;
     }
     if(galaxies[p].ColdDust < 0.0) galaxies[p].ColdDust = 0.0;
 }

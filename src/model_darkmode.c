@@ -15,8 +15,6 @@
 #include "core_allvars.h"
 #include "model_darkmode.h"
 #include "model_misc.h"
-#include "model_mergers.h"
-#include "model_disk_instability.h"
 
 #define HYDROGEN_MASS_FRAC 0.74
 
@@ -349,20 +347,19 @@ double compute_toomre_Q(double Sigma_gas, double Sigma_stars, double r_mid, doub
         return 1000.0;
     }
     
-    // Convert r_mid from kpc to pc for consistent units
-    double r_mid_pc = r_mid * 1000.0;  // kpc -> pc
-    
     // Epicyclic frequency κ ≈ Vcirc / r for flat rotation curve
-    double kappa = Vvir / r_mid_pc;  // (km/s) / pc
+    // Vcirc ≈ Vvir
+    double kappa = Vvir / r_mid;  // (km/s) / kpc = (km/s/kpc)
+    
+    // Convert Σ from Msun/pc^2 to Msun/kpc^2 for Q calculation
+    double Sigma_total_kpc2 = Sigma_total * 1.0e6;
     
     // Toomre Q = (σ κ) / (π G Σ)
-    // G = 4.302e-3 (km/s)^2 pc / Msun (standard astronomical units)
-    // Σ is input in Msun/pc^2
-    // [σκ] = (km/s)(km/s/pc) = (km/s)^2 / pc
-    // [GΣ] = (km/s)^2 pc/Msun × Msun/pc^2 = (km/s)^2 / pc  ✓ consistent
-    const double G_pc = 4.302e-3;  // (km/s)^2 pc / Msun
+    // G = 4.302e-3 (km/s)^2 pc / Msun
+    // G in kpc units: 4.302e-3 × 1e-6 = 4.302e-9 (km/s)^2 kpc / Msun
+    const double G_kpc = 4.302e-9;  // (km/s)^2 kpc / Msun
     
-    double Q = (sigma_eff * kappa) / (M_PI * G_pc * Sigma_total);
+    double Q = (sigma_eff * kappa) / (M_PI * G_kpc * Sigma_total_kpc2);
     
     return Q;
 }
@@ -375,8 +372,6 @@ double compute_toomre_Q(double Sigma_gas, double Sigma_stars, double r_mid, doub
  * mass to the bulge. This is the local version of the global disk instability
  * check in model_disk_instability.c
  * 
- * IMPORTANT: Unstable gas must feed black hole growth (like bulk version).
- * 
  * @param p Galaxy index
  * @param centralgal Central galaxy index
  * @param dt Timestep
@@ -388,8 +383,8 @@ void check_local_disk_instability(const int p, const int centralgal, const doubl
                                  struct GALAXY *galaxies, const struct params *run_params)
 {
     (void)centralgal;  // Reserved for future use
-    (void)dt;          // Reserved for future use
-    (void)step;        // Reserved for future use
+    (void)dt;  // Reserved for future use
+    (void)step;  // Reserved for future use
     
     if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
         return;
@@ -399,10 +394,6 @@ void check_local_disk_instability(const int p, const int centralgal, const doubl
     const double Q_crit = 1.0;  // Critical Q for marginal stability
     
     double total_unstable_stars = 0.0;
-    double total_unstable_gas = 0.0;
-    
-    // Save initial disk radius for bulge radius update
-    const double old_disk_radius = galaxies[p].DiskScaleRadius;
     
     for(int i = 0; i < N_BINS; i++) {
         double r_in = galaxies[p].DiscRadii[i] * 1000.0;    // kpc
@@ -429,84 +420,36 @@ void check_local_disk_instability(const int p, const int centralgal, const doubl
             
             double Z_stars = (galaxies[p].DiscStars[i] > 0.0) ?
                 galaxies[p].DiscStarsMetals[i] / galaxies[p].DiscStars[i] : 0.0;
+            double Z_gas = (galaxies[p].DiscGas[i] > 0.0) ?
+                galaxies[p].DiscGasMetals[i] / galaxies[p].DiscGas[i] : 0.0;
             
-            // Remove unstable STARS from disk arrays (these go directly to bulge)
+            // Remove from disk
             galaxies[p].DiscStars[i] -= unstable_stars_bin;
+            galaxies[p].DiscGas[i] -= unstable_gas_bin;
             galaxies[p].DiscStarsMetals[i] -= Z_stars * unstable_stars_bin;
+            galaxies[p].DiscGasMetals[i] -= Z_gas * unstable_gas_bin;
             
             total_unstable_stars += unstable_stars_bin;
             
-            // Track unstable GAS but don't remove from DiscGas yet
-            // This gas will be handled by grow_black_hole and starburst
-            total_unstable_gas += unstable_gas_bin;
-            
             // Safety
             if(galaxies[p].DiscStars[i] < 0.0) galaxies[p].DiscStars[i] = 0.0;
+            if(galaxies[p].DiscGas[i] < 0.0) galaxies[p].DiscGas[i] = 0.0;
             if(galaxies[p].DiscStarsMetals[i] < 0.0) galaxies[p].DiscStarsMetals[i] = 0.0;
+            if(galaxies[p].DiscGasMetals[i] < 0.0) galaxies[p].DiscGasMetals[i] = 0.0;
         }
     }
     
-    // Add unstable STARS to bulge
+    // Add unstable mass to bulge
     if(total_unstable_stars > 0.0) {
         double Z_disk = get_metallicity(galaxies[p].StellarMass - galaxies[p].BulgeMass,
                                        galaxies[p].MetalsStellarMass - galaxies[p].MetalsBulgeMass);
         galaxies[p].BulgeMass += total_unstable_stars;
         galaxies[p].InstabilityBulgeMass += total_unstable_stars;
         galaxies[p].MetalsBulgeMass += Z_disk * total_unstable_stars;
-        
-        // Update bulge radius using Tonini+2016 formula
-        update_instability_bulge_radius(p, total_unstable_stars, old_disk_radius, galaxies, run_params);
     }
     
-    // Handle unstable GAS: feed black hole (like bulk version)
-    if(total_unstable_gas > 0.0 && galaxies[p].ColdGas > 0.0) {
-        double unstable_gas_fraction = total_unstable_gas / galaxies[p].ColdGas;
-        
-        // Clamp fraction to avoid overshoot
-        if(unstable_gas_fraction > 1.0) unstable_gas_fraction = 1.0;
-        
-        // Feed black hole with unstable gas (this is the key fix!)
-        // grow_black_hole accretes BHaccrete = rate × mass_ratio × ColdGas
-        // and removes the accreted gas from ColdGas and DiscGas arrays
-        if(run_params->AGNrecipeOn > 0) {
-            grow_black_hole(p, unstable_gas_fraction, galaxies, run_params);
-        }
-        
-        // Remove remaining unstable gas from disk arrays
-        // (grow_black_hole already removed some for BH accretion)
-        // The remaining gas should either:
-        // a) Convert to stars in a starburst, OR
-        // b) Be removed from ColdGas (simplest approach for now)
-        
-        // Sync DiscGas arrays: remove unstable fraction from each bin
-        double remaining_unstable_frac = unstable_gas_fraction;
-        if(remaining_unstable_frac > 0.0) {
-            for(int i = 0; i < N_BINS; i++) {
-                double remove_gas = remaining_unstable_frac * galaxies[p].DiscGas[i];
-                double Z_gas = (galaxies[p].DiscGas[i] > 0.0) ?
-                    galaxies[p].DiscGasMetals[i] / galaxies[p].DiscGas[i] : 0.0;
-                
-                galaxies[p].DiscGas[i] -= remove_gas;
-                galaxies[p].DiscGasMetals[i] -= Z_gas * remove_gas;
-                galaxies[p].ColdGas -= remove_gas;
-                galaxies[p].MetalsColdGas -= Z_gas * remove_gas;
-                
-                if(run_params->DustOn == 1) {
-                    double DTG = (galaxies[p].DiscGas[i] + remove_gas > 0.0) ?
-                        galaxies[p].DiscDust[i] / (galaxies[p].DiscGas[i] + remove_gas) : 0.0;
-                    galaxies[p].DiscDust[i] -= DTG * remove_gas;
-                    galaxies[p].ColdDust -= DTG * remove_gas;
-                    if(galaxies[p].DiscDust[i] < 0.0) galaxies[p].DiscDust[i] = 0.0;
-                    if(galaxies[p].ColdDust < 0.0) galaxies[p].ColdDust = 0.0;
-                }
-                
-                if(galaxies[p].DiscGas[i] < 0.0) galaxies[p].DiscGas[i] = 0.0;
-                if(galaxies[p].DiscGasMetals[i] < 0.0) galaxies[p].DiscGasMetals[i] = 0.0;
-            }
-            if(galaxies[p].ColdGas < 0.0) galaxies[p].ColdGas = 0.0;
-            if(galaxies[p].MetalsColdGas < 0.0) galaxies[p].MetalsColdGas = 0.0;
-        }
-    }
+    // TODO: Handle unstable gas - for now it stays in disk (could trigger burst)
+    // In DarkSage this might trigger BH growth or starburst
 }
 
 

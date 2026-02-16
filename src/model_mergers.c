@@ -666,8 +666,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         }
     }
 
-    // formation of new metals - instantaneous recycling approximation (constant yield)
-    // Yield tables are used for dust production only (element-specific condensation)
+    // formation of new metals - instantaneous recycling approximation - only SNII
     if(galaxies[merger_centralgal].ColdGas > 1e-8 && mass_ratio < run_params->ThreshMajorMerger) {
         // MINOR MERGER with sufficient cold gas: some metals stay in disk
         const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / 30.0);

@@ -928,14 +928,17 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     update_from_feedback(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 
     // check for disk instability
-    // Use the same Mcrit-based instability for both bulk and DarkMode
-    // The bulk version handles BH growth and starbursts correctly
     if(run_params->DiskInstabilityOn) {
-        check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
+        if(run_params->DarkModeOn == 1) {
+            // DarkMode: use local Toomre Q criterion per annulus
+            check_local_disk_instability(p, centralgal, dt, step, galaxies, run_params);
+        } else {
+            // Bulk: original disk instability model
+            check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
+        }
     }
 
-    // formation of new metals - instantaneous recycling approximation (constant yield)
-    // Yield tables are used for dust production only (element-specific condensation)
+    // formation of new metals - instantaneous recycling approximation - only SNII
     if(galaxies[p].ColdGas > 1.0e-8) {
         const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / 30.0);  // Krumholz & Dekel 2011 Eq. 22
         

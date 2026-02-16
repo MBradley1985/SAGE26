@@ -585,10 +585,6 @@ struct params
     double phi_destruct[20];                /* Cached compute_imf(mass[i]) */
     double taum_destruct[20];               /* Cached compute_taum(mass[i]) in code units */
 
-    /* IMF mass normalization: integral of m*phi(m) dm from 0.1-100 Msun */
-    /* Used to normalize yield table metals to be per unit stellar mass formed */
-    double IMF_mass_norm;
-
     /* Lookback time array (age of universe at each snapshot, in Myr) */
     double lbtime[ABSOLUTEMAXSNAPS];
 

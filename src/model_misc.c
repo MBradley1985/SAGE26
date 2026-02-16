@@ -996,38 +996,6 @@ double compute_imf(const double m)
 }
 
 
-double compute_imf_mass_integral(void)
-{
-    /* Compute integral of m * phi(m) dm from 0.1 to 100 Msun
-     * This is used to normalize yields to be per unit stellar mass formed.
-     * Uses trapezoidal integration with log-spaced mass bins. */
-    const int npts = 1000;
-    const double m_low = 0.1;
-    const double m_high = 100.0;
-    const double log_m_low = log10(m_low);
-    const double log_m_high = log10(m_high);
-    const double dlog_m = (log_m_high - log_m_low) / (npts - 1);
-    
-    double integral = 0.0;
-    double m_prev = m_low;
-    double f_prev = m_low * compute_imf(m_low);
-    
-    for(int i = 1; i < npts; i++) {
-        double log_m = log_m_low + i * dlog_m;
-        double m = pow(10.0, log_m);
-        double f = m * compute_imf(m);
-        
-        /* Trapezoidal rule */
-        integral += 0.5 * (f_prev + f) * (m - m_prev);
-        
-        m_prev = m;
-        f_prev = f;
-    }
-    
-    return integral;
-}
-
-
 double compute_taum(const double m)
 {
     /* Stellar lifetime (eq 3 Raiteri et al. 1996) */
