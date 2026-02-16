@@ -163,18 +163,10 @@ if __name__ == '__main__':
     baldry_q_mass = baldry[:, 2]
     baldry_q_phi = baldry[:, 3]
 
-    smass_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'StellarMass') * 1.0e10 / Hubble_h
-    sfrdisk_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'SfrDisk')
-    sfrbulge_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'SfrBulge')
-
     # calculate all
     w = np.where(StellarMass > 0.0)[0]
     mass = np.log10(StellarMass[w])
     sSFR = np.log10( (SfrDisk[w] + SfrBulge[w]) / StellarMass[w] )
-
-    w2 = np.where(smass_vanilla > 0.0)[0]
-    mass_vanilla = np.log10(smass_vanilla[w2])
-    sSFR_vanilla = np.log10( (sfrdisk_vanilla[w2] + sfrbulge_vanilla[w2]) / smass_vanilla[w2] )
 
     # Bin parameters for original model
     mi = np.floor(min(mass)) - 2
@@ -193,23 +185,6 @@ if __name__ == '__main__':
     massBLU = mass[w]
     (countsBLU, binedges) = np.histogram(massBLU, range=(mi, ma), bins=NB)
 
-    # Bin parameters for vanilla model
-    mi_v = np.floor(min(mass_vanilla)) - 2
-    ma_v = np.floor(max(mass_vanilla)) + 2
-    NB_v = int((ma_v - mi_v) / binwidth)
-    (counts_vanilla, binedges) = np.histogram(mass_vanilla, range=(mi_v, ma_v), bins=NB_v)
-    xaxeshisto_vanilla = binedges[:-1] + 0.5 * binwidth  # Set the x-axis values to be the centre of the bins
-
-    # additionally calculate red for vanilla
-    w2 = np.where(sSFR_vanilla < sSFRcut)[0]
-    massRED_vanilla = mass_vanilla[w2]
-    (countsRED_vanilla, binedges) = np.histogram(massRED_vanilla, range=(mi_v, ma_v), bins=NB_v)
-
-    # # additionally calculate blue for vanilla
-    w2 = np.where(sSFR_vanilla > sSFRcut)[0]
-    massBLU_vanilla = mass_vanilla[w2]
-    (countsBLU_vanilla, binedges) = np.histogram(massBLU_vanilla, range=(mi_v, ma_v), bins=NB_v)
-
 
     # Overplot the model histograms (in log10 space)
     # plt.plot(xaxeshisto, np.log10(counts / volume / binwidth), 'k-', label='SAGE26')
@@ -217,8 +192,6 @@ if __name__ == '__main__':
     plt.plot(xaxeshisto, np.log10(countsRED / volume / binwidth), color='firebrick', lw=4, label='SAGE26 Quiescent')
     plt.plot(xaxeshisto, np.log10(countsBLU / volume / binwidth), color='dodgerblue', lw=4, label='SAGE26 Star Forming')
 
-    plt.plot(xaxeshisto_vanilla, np.log10(countsRED_vanilla / volume / binwidth), color='firebrick', lw=2, ls='--', label='C16 Quiescent')
-    plt.plot(xaxeshisto_vanilla, np.log10(countsBLU_vanilla / volume / binwidth), color='dodgerblue', lw=2, ls='--', label='C16 Star Forming')
 
     # Create shaded regions from observations (GAMA + Baldry combined)
     from scipy import interpolate
@@ -266,7 +239,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    outputFile = OutputDir + '1.StellarMassFunction' + OutputFormat
+    outputFile = OutputDir + 'StellarMassFunction' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved to', outputFile, '\n')
     plt.close()
@@ -342,7 +315,7 @@ if __name__ == '__main__':
     
     plt.tight_layout()
 
-    outputFile = OutputDir + '2.BaryonicMassFunction' + OutputFormat
+    outputFile = OutputDir + 'BaryonicMassFunction' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -472,7 +445,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    outputFile = OutputDir + '3.GasMassFunction' + OutputFormat
+    outputFile = OutputDir + 'GasMassFunction' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -519,7 +492,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
         
-    outputFile = OutputDir + '4.BaryonicTullyFisher' + OutputFormat
+    outputFile = OutputDir + 'BaryonicTullyFisher' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -557,7 +530,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    outputFile = OutputDir + '5.SpecificStarFormationRate' + OutputFormat
+    outputFile = OutputDir + 'SpecificStarFormationRate' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved to', outputFile, '\n')
     plt.close()
@@ -594,7 +567,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
         
-    outputFile = OutputDir + '6.GasFraction' + OutputFormat
+    outputFile = OutputDir + 'GasFraction' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -716,7 +689,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
         
-    outputFile = OutputDir + '7.Metallicity' + OutputFormat
+    outputFile = OutputDir + 'Metallicity' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -770,7 +743,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
         
-    outputFile = OutputDir + '8.BlackHoleBulgeRelationship' + OutputFormat
+    outputFile = OutputDir + 'BlackHoleBulgeRelationship' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -872,7 +845,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
     
-    outputFile = OutputDir + '9.QuiescentFraction' + OutputFormat
+    outputFile = OutputDir + 'QuiescentFraction' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -931,7 +904,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
     
-    outputFile = OutputDir + '10.BulgeMassFraction' + OutputFormat
+    outputFile = OutputDir + 'BulgeMassFraction' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1141,7 +1114,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    outputFile = OutputDir + '11.BaryonFraction' + OutputFormat
+    outputFile = OutputDir + 'BaryonFraction' + OutputFormat
     plt.savefig(outputFile)
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1178,7 +1151,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
         
-    outputFile = OutputDir + '12.MassReservoirScatter' + OutputFormat
+    outputFile = OutputDir + 'MassReservoirScatter' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1224,7 +1197,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
         
-    outputFile = OutputDir + '13.SpatialDistribution' + OutputFormat
+    outputFile = OutputDir + 'SpatialDistribution' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1284,7 +1257,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    outputFile = OutputDir + '13b.SpatialDistribution3D_Box' + OutputFormat
+    outputFile = OutputDir + 'SpatialDistribution3D_Box' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1317,7 +1290,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    outputFile = OutputDir + '14.StarFormationRate' + OutputFormat
+    outputFile = OutputDir + 'StarFormationRate' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved to', outputFile, '\n')
     plt.close()
@@ -1343,7 +1316,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    outputFile = OutputDir + '15.outflow_rate_vs_stellar_mass' + OutputFormat
+    outputFile = OutputDir + 'outflow_rate_vs_stellar_mass' + OutputFormat
     plt.savefig(outputFile)
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1384,7 +1357,7 @@ if __name__ == '__main__':
     plt.tight_layout()
 
 
-    outputFile = OutputDir + '16.stellar_vs_halo_mass_by_regime' + OutputFormat
+    outputFile = OutputDir + 'stellar_vs_halo_mass_by_regime' + OutputFormat
     plt.savefig(outputFile)
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1503,6 +1476,6 @@ if __name__ == '__main__':
     # plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
     plt.tight_layout()
 
-    plt.savefig(OutputDir + '17.specific_star_formation_rate' + OutputFormat, dpi=150)
+    plt.savefig(OutputDir + 'specific_star_formation_rate' + OutputFormat, dpi=150)
     print('Saved file to', outputFile, '\n')
     plt.close()
