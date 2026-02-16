@@ -1,12 +1,3 @@
-/**
- * @file model_darkmode.c
- * @brief DarkSage-style radially-resolved disk physics
- * 
- * Implements local star formation, feedback, disk instabilities, and radial
- * gas flows for DarkModeOn=1. All functions check DarkModeOn and maintain
- * backwards compatibility.
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,7 +10,6 @@
 #define HYDROGEN_MASS_FRAC 0.74
 
 /**
- * @brief Compute local H2 fraction and SFR in each disk annulus
  * 
  * Calculates surface density, H2 fraction, and star formation rate for each
  * radial bin using the specified H2 prescription. Handles all SFprescriptions
@@ -237,7 +227,6 @@ double compute_local_star_formation(const int p, const double dt,
 
 
 /**
- * @brief Apply local star formation in each disk annulus
  * 
  * Updates disk arrays (DiscGas, DiscStars, DiscGasMetals, DiscStarsMetals)
  * based on local SFR computed for each annulus. Enforces local mass conservation.
@@ -308,7 +297,6 @@ double apply_local_star_formation(const int p, const double dt, const int step,
 
 
 /**
- * @brief Compute Toomre Q parameter for disk stability
  * 
  * Q = (σ κ) / (π G Σ)
  * where σ is velocity dispersion, κ is epicyclic frequency, Σ is surface density
@@ -366,8 +354,7 @@ double compute_toomre_Q(double Sigma_gas, double Sigma_stars, double r_mid, doub
 
 
 /**
- * @brief Check for disk instabilities and transfer mass to bulge
- * 
+ *  
  * Checks Toomre Q in each annulus. For Q < Q_crit, transfers unstable
  * mass to the bulge. This is the local version of the global disk instability
  * check in model_disk_instability.c
@@ -454,7 +441,6 @@ void check_local_disk_instability(const int p, const int centralgal, const doubl
 
 
 /**
- * @brief Apply radial gas flows due to viscous evolution
  * 
  * Gas moves inward on viscous timescale: t_visc ~ r² / ν
  * where ν is kinematic viscosity (parameterized by α)
