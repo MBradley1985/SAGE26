@@ -172,7 +172,6 @@ if __name__ == '__main__':
     ax = plt.subplot(111)  # 1 plot on the figure
 
     binwidth = 0.1  # mass function histogram bin width
-    DirName2 = './output/millennium_vanilla/'
 
     # Load GAMA morphological SMF data
     # Columns: log_M, E_HE, E_HE_err, cBD, cBD_err, dBD, dBD_err, D, D_err
