@@ -400,8 +400,6 @@ void check_local_disk_instability(const int p, const int centralgal, const doubl
     
     double total_unstable_stars = 0.0;
     double total_unstable_gas = 0.0;
-    double total_unstable_gas_metals = 0.0;
-    double total_unstable_dust = 0.0;
     
     // Save initial disk radius for bulge radius update
     const double old_disk_radius = galaxies[p].DiskScaleRadius;
@@ -431,8 +429,6 @@ void check_local_disk_instability(const int p, const int centralgal, const doubl
             
             double Z_stars = (galaxies[p].DiscStars[i] > 0.0) ?
                 galaxies[p].DiscStarsMetals[i] / galaxies[p].DiscStars[i] : 0.0;
-            double Z_gas = (galaxies[p].DiscGas[i] > 0.0) ?
-                galaxies[p].DiscGasMetals[i] / galaxies[p].DiscGas[i] : 0.0;
             
             // Remove unstable STARS from disk arrays (these go directly to bulge)
             galaxies[p].DiscStars[i] -= unstable_stars_bin;
@@ -443,14 +439,6 @@ void check_local_disk_instability(const int p, const int centralgal, const doubl
             // Track unstable GAS but don't remove from DiscGas yet
             // This gas will be handled by grow_black_hole and starburst
             total_unstable_gas += unstable_gas_bin;
-            total_unstable_gas_metals += Z_gas * unstable_gas_bin;
-            
-            // Track dust in unstable gas
-            if(run_params->DustOn == 1) {
-                double DTG = (galaxies[p].DiscGas[i] > 0.0) ?
-                    galaxies[p].DiscDust[i] / galaxies[p].DiscGas[i] : 0.0;
-                total_unstable_dust += DTG * unstable_gas_bin;
-            }
             
             // Safety
             if(galaxies[p].DiscStars[i] < 0.0) galaxies[p].DiscStars[i] = 0.0;

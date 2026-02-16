@@ -80,7 +80,7 @@ BinaryFraction          0.1    %Fraction of stars in SNIa binaries
 %----- DarkMode (Radially-Resolved Disks) --
 %------------------------------------------
 
-FirstBin                100.0   %First j-bin edge [kpc*km/s] (default 100)
+FirstBin                1.0     %First j-bin edge [kpc*km/s] (default 100)
 ExponentBin             1.4     %j-bin geometric growth factor (default 1.4)
 
 %------------------------------------------

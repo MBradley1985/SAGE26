@@ -934,7 +934,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
     }
 
-    // formation of new metals - instantaneous recycling approximation - only SNII
+    // formation of new metals - instantaneous recycling approximation (constant yield)
+    // Yield tables are used for dust production only (element-specific condensation)
     if(galaxies[p].ColdGas > 1.0e-8) {
         const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / 30.0);  // Krumholz & Dekel 2011 Eq. 22
         

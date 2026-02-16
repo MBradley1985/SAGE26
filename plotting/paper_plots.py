@@ -6869,7 +6869,7 @@ def plot_40_dust_and_structure_grid(primary, vanilla):
             
             # Color by sSFR
             sc = ax11.scatter(log_ms[::5], log_md[::5], c=log_ssfr[::5], 
-                             s=3, alpha=0.5, cmap='coolwarm', vmin=-12, vmax=-9)
+                             s=3, alpha=0.5, cmap='coolwarm_r', vmin=-12, vmax=-9)
             plt.colorbar(sc, ax=ax11, label=r'$\log_{10}$ sSFR [yr$^{-1}$]')
             
             ax11.set_xlabel(r'$\log_{10}\ (M_* / M_\odot)$')
@@ -6931,6 +6931,405 @@ def plot_40_dust_and_structure_grid(primary, vanilla):
     plt.suptitle('SAGE26 Dust and Radial Structure Diagnostics', fontsize=14, y=0.995)
     
     output_path = os.path.join(OUTPUT_DIR, '40.Dust_Structure_Grid.pdf')
+    plt.savefig(output_path, dpi=200, bbox_inches='tight')
+    plt.close()
+    print(f'  Saved: {output_path}')
+
+
+# ==================== FALL RELATION AND SIZE-MASS PLOTS ====================
+
+def load_posti18_am_data():
+    """Load angular momentum data from Posti et al. (2018)."""
+    filepath = os.path.join(OBS_DIR, 'SizesAndAM/Posti18_AMdata.dat')
+    if not os.path.exists(filepath):
+        print(f'  Warning: {filepath} not found')
+        return None
+    
+    # Fixed-width format file
+    data = {
+        'name': [], 'Mstar': [], 'Mdisc': [], 'e_Mstar': [],
+        'jstar': [], 'jdisc': [], 'e_jstar': []
+    }
+    
+    with open(filepath, 'r') as f:
+        for line in f:
+            if line.startswith('#'):
+                continue
+            if len(line.strip()) < 50:
+                continue
+            try:
+                parts = line.split()
+                if len(parts) >= 10:
+                    data['name'].append(parts[0])
+                    data['Mstar'].append(float(parts[3]))
+                    data['Mdisc'].append(float(parts[4]))
+                    data['e_Mstar'].append(float(parts[5]))
+                    data['jstar'].append(float(parts[6]))
+                    data['jdisc'].append(float(parts[7]))
+                    data['e_jstar'].append(float(parts[8]))
+            except (ValueError, IndexError):
+                continue
+    
+    for key in data:
+        if key != 'name':
+            data[key] = np.array(data[key])
+    
+    return data
+
+
+def load_hardwick22_am_data():
+    """Load angular momentum data from Hardwick et al. (2022)."""
+    filepath = os.path.join(OBS_DIR, 'SizesAndAM/Hardwick+2022_fig3+4.data')
+    if not os.path.exists(filepath):
+        print(f'  Warning: {filepath} not found')
+        return None
+    
+    data = {'log_Mstar': [], 'jstar': [], 'log_Mstar_disc': [], 'jstar_disc': []}
+    
+    with open(filepath, 'r') as f:
+        for line in f:
+            if line.startswith('#'):
+                continue
+            try:
+                parts = line.split()
+                if len(parts) >= 7:
+                    data['log_Mstar'].append(float(parts[3]))
+                    data['jstar'].append(float(parts[4]))
+                    data['log_Mstar_disc'].append(float(parts[5]))
+                    data['jstar_disc'].append(float(parts[6]))
+            except (ValueError, IndexError):
+                continue
+    
+    for key in data:
+        data[key] = np.array(data[key])
+    
+    return data
+
+
+def load_obreschkow14_am_data():
+    """Load angular momentum data from Obreschkow & Glazebrook (2014)."""
+    filepath = os.path.join(OBS_DIR, 'SizesAndAM/Obreschkow14_FP.dat')
+    if not os.path.exists(filepath):
+        print(f'  Warning: {filepath} not found')
+        return None
+    
+    data = {
+        'name': [], 'log_Mstar': [], 'log_Mgas': [], 
+        'log_jb': [], 'log_js': [], 'log_jgas': []
+    }
+    
+    with open(filepath, 'r') as f:
+        for line in f:
+            if line.startswith('#'):
+                continue
+            try:
+                parts = line.split()
+                if len(parts) >= 15:
+                    data['name'].append(parts[0])
+                    data['log_Mstar'].append(float(parts[7]))
+                    data['log_Mgas'].append(float(parts[8]))
+                    data['log_jb'].append(float(parts[11]))
+                    data['log_js'].append(float(parts[12]))
+                    data['log_jgas'].append(float(parts[13]))
+            except (ValueError, IndexError):
+                continue
+    
+    for key in data:
+        if key != 'name':
+            data[key] = np.array(data[key])
+    
+    return data
+
+
+def load_lange16_size_data():
+    """Load disk size-mass data from Lange et al. (2016)."""
+    filepath = os.path.join(OBS_DIR, 'SizesAndAM/rdisk_L16.dat')
+    if not os.path.exists(filepath):
+        print(f'  Warning: {filepath} not found')
+        return None
+    
+    data = {'Mstar': [], 'R_disk': []}
+    
+    with open(filepath, 'r') as f:
+        for line in f:
+            if line.startswith('#'):
+                continue
+            try:
+                parts = line.split()
+                if len(parts) >= 2:
+                    data['Mstar'].append(float(parts[0]))
+                    data['R_disk'].append(float(parts[1]))
+            except (ValueError, IndexError):
+                continue
+    
+    for key in data:
+        data[key] = np.array(data[key])
+    
+    return data
+
+
+def load_lange16_bulge_data():
+    """Load bulge size-mass data from Lange et al. (2016)."""
+    filepath = os.path.join(OBS_DIR, 'SizesAndAM/rbulge_L16.dat')
+    if not os.path.exists(filepath):
+        print(f'  Warning: {filepath} not found')
+        return None
+    
+    data = {'Mstar': [], 'R_bulge': []}
+    
+    with open(filepath, 'r') as f:
+        for line in f:
+            if line.startswith('#'):
+                continue
+            try:
+                parts = line.split()
+                if len(parts) >= 2:
+                    data['Mstar'].append(float(parts[0]))
+                    data['R_bulge'].append(float(parts[1]))
+            except (ValueError, IndexError):
+                continue
+    
+    for key in data:
+        data[key] = np.array(data[key])
+    
+    return data
+
+
+def plot_41_fall_relation(primary, vanilla):
+    """
+    Plot the Fall relation: stellar specific angular momentum vs stellar mass.
+    Compares SAGE26 model with Posti+18, Hardwick+22, Obreschkow+14 data.
+    """
+    print('Generating Fall relation plot...')
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5.5))
+    
+    data = primary
+    mstar = data.get('StellarMass', np.array([]))
+    bulge_mass = data.get('BulgeMass', np.array([]))
+    rd = data.get('DiskRadius', np.array([]))
+    vvir = data.get('Vvir', np.array([]))
+    vmax = data.get('Vmax', np.array([]))
+    gtype = data.get('Type', np.array([]))
+    
+    # Selection: central galaxies with disk
+    w = (mstar > 1e8) & (gtype == 0) & (rd > 0)
+    
+    if len(mstar) == 0 or np.sum(w) == 0:
+        print('  Warning: No valid galaxies for Fall relation')
+        plt.close()
+        return
+    
+    # Compute disk fraction
+    disk_frac = 1.0 - bulge_mass[w] / mstar[w]
+    disk_frac = np.clip(disk_frac, 0, 1)
+    
+    # Use Vmax for rotation velocity (better than Vvir for disk rotation)
+    v_rot = vmax[w] if vmax is not None and len(vmax) > 0 else vvir[w]
+    
+    # j_* = f_d * 2 * V_rot * R_d for exponential disk
+    # where f_d is disk fraction
+    j_star = disk_frac * 2.0 * v_rot * (rd[w] * 1000 / HUBBLE_H)  # kpc km/s
+    
+    log_ms = np.log10(mstar[w])
+    log_j = np.log10(j_star + 1e-10)
+    
+    valid = np.isfinite(log_j) & (j_star > 0)
+    
+    # LEFT PANEL: Fall relation for ALL galaxies
+    ax = ax1
+    
+    # Scatter plot
+    ax.scatter(log_ms[valid][::10], log_j[valid][::10], s=2, alpha=0.15, c='gray', 
+               rasterized=True, label='_nolegend_')
+    
+    # Binned median for SAGE26
+    bins = np.arange(8, 12, 0.3)
+    bin_c, bin_med, bin_lo, bin_hi = binned_median(log_ms[valid], log_j[valid], bins)
+    ok = np.isfinite(bin_med)
+    ax.plot(bin_c[ok], bin_med[ok], 'b-', lw=2.5, label='SAGE26 (all)', zorder=10)
+    ax.fill_between(bin_c[ok], bin_lo[ok], bin_hi[ok], alpha=0.25, color='blue')
+    
+    # Load and plot observational data
+    posti = load_posti18_am_data()
+    if posti is not None and len(posti['Mstar']) > 0:
+        p_log_ms = np.log10(posti['Mstar'])
+        p_log_j = np.log10(posti['jstar'])
+        ax.scatter(p_log_ms, p_log_j, s=35, marker='o', facecolors='none', 
+                  edgecolors='darkgreen', lw=1.2, label='Posti+18', zorder=5)
+    
+    hardwick = load_hardwick22_am_data()
+    if hardwick is not None and len(hardwick['log_Mstar']) > 0:
+        h_log_ms = hardwick['log_Mstar']
+        h_log_j = np.log10(hardwick['jstar'])
+        ax.scatter(h_log_ms, h_log_j, s=25, marker='s', facecolors='none', 
+                  edgecolors='darkorange', lw=1.0, label='Hardwick+22', zorder=5)
+    
+    obreschkow = load_obreschkow14_am_data()
+    if obreschkow is not None and len(obreschkow['log_Mstar']) > 0:
+        ax.scatter(obreschkow['log_Mstar'], obreschkow['log_js'], s=60, marker='*', 
+                  c='purple', label='Obreschkow+14', zorder=5)
+    
+    # Fall & Romanowsky (2013) relation for disks
+    ms_fall = np.linspace(8, 12, 50)
+    j_fall = 3.0 + 0.6 * (ms_fall - 10.0)
+    ax.plot(ms_fall, j_fall, 'k--', lw=1.5, label='Fall+13 (spirals)')
+    
+    ax.set_xlabel(r'$\log_{10}\ (M_* / M_\odot)$')
+    ax.set_ylabel(r'$\log_{10}\ (j_* / \mathrm{kpc\ km\ s}^{-1})$')
+    ax.set_xlim(8, 12)
+    ax.set_ylim(1, 4.5)
+    ax.legend(loc='lower right', fontsize=9, framealpha=0.9)
+    ax.set_title('All Central Galaxies')
+    
+    # RIGHT PANEL: Fall relation for DISK-DOMINATED galaxies (B/T < 0.3)
+    ax = ax2
+    
+    bt_ratio = bulge_mass[w] / mstar[w]
+    disk_dom = valid & (bt_ratio < 0.3)
+    
+    ax.scatter(log_ms[disk_dom][::5], log_j[disk_dom][::5], s=2, alpha=0.15, c='gray',
+               rasterized=True, label='_nolegend_')
+    
+    bin_c, bin_med, bin_lo, bin_hi = binned_median(log_ms[disk_dom], log_j[disk_dom], bins)
+    ok = np.isfinite(bin_med)
+    ax.plot(bin_c[ok], bin_med[ok], 'b-', lw=2.5, label='SAGE26 (B/T<0.3)', zorder=10)
+    ax.fill_between(bin_c[ok], bin_lo[ok], bin_hi[ok], alpha=0.25, color='blue')
+    
+    # Same observational data
+    if posti is not None and len(posti['Mstar']) > 0:
+        p_log_ms = np.log10(posti['Mstar'])
+        p_log_j = np.log10(posti['jstar'])
+        ax.scatter(p_log_ms, p_log_j, s=35, marker='o', facecolors='none', 
+                  edgecolors='darkgreen', lw=1.2, label='Posti+18', zorder=5)
+    
+    if hardwick is not None and len(hardwick['log_Mstar']) > 0:
+        h_log_ms = hardwick['log_Mstar']
+        h_log_j = np.log10(hardwick['jstar'])
+        ax.scatter(h_log_ms, h_log_j, s=25, marker='s', facecolors='none', 
+                  edgecolors='darkorange', lw=1.0, label='Hardwick+22', zorder=5)
+    
+    if obreschkow is not None and len(obreschkow['log_Mstar']) > 0:
+        ax.scatter(obreschkow['log_Mstar'], obreschkow['log_js'], s=60, marker='*', 
+                  c='purple', label='Obreschkow+14', zorder=5)
+    
+    ax.plot(ms_fall, j_fall, 'k--', lw=1.5, label='Fall+13 (spirals)')
+    
+    ax.set_xlabel(r'$\log_{10}\ (M_* / M_\odot)$')
+    ax.set_ylabel(r'$\log_{10}\ (j_* / \mathrm{kpc\ km\ s}^{-1})$')
+    ax.set_xlim(8, 12)
+    ax.set_ylim(1, 4.5)
+    ax.legend(loc='lower right', fontsize=9, framealpha=0.9)
+    ax.set_title('Disk-Dominated (B/T < 0.3)')
+    
+    plt.tight_layout()
+    
+    output_path = os.path.join(OUTPUT_DIR, '41.Fall_Relation.pdf')
+    plt.savefig(output_path, dpi=200, bbox_inches='tight')
+    plt.close()
+    print(f'  Saved: {output_path}')
+
+
+def plot_42_size_mass_relation(primary, vanilla):
+    """
+    Plot disk and bulge size vs stellar mass.
+    Compares SAGE26 model with Lange+16 data.
+    """
+    print('Generating size-mass relation plot...')
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5.5))
+    
+    data = primary
+    mstar = data.get('StellarMass', np.array([]))
+    bulge_mass = data.get('BulgeMass', np.array([]))
+    rd = data.get('DiskRadius', np.array([]))
+    rb = data.get('BulgeRadius', np.array([]))
+    gtype = data.get('Type', np.array([]))
+    
+    # Selection: central galaxies
+    w = (mstar > 1e8) & (gtype == 0)
+    
+    if len(mstar) == 0 or np.sum(w) == 0:
+        print('  Warning: No valid galaxies for size-mass relation')
+        plt.close()
+        return
+    
+    # LEFT PANEL: Disk size vs stellar mass
+    ax = ax1
+    
+    disk_valid = w & (rd > 0)
+    if np.any(disk_valid):
+        log_ms = np.log10(mstar[disk_valid])
+        # Convert DiskRadius from Mpc/h -> kpc
+        log_rd = np.log10(rd[disk_valid] * 1000 / HUBBLE_H)
+        
+        ax.scatter(log_ms[::10], log_rd[::10], s=2, alpha=0.15, c='gray', 
+                   rasterized=True, label='_nolegend_')
+        
+        bins = np.arange(8, 12, 0.3)
+        bin_c, bin_med, bin_lo, bin_hi = binned_median(log_ms, log_rd, bins)
+        ok = np.isfinite(bin_med)
+        ax.plot(bin_c[ok], bin_med[ok], 'b-', lw=2.5, label='SAGE26', zorder=10)
+        ax.fill_between(bin_c[ok], bin_lo[ok], bin_hi[ok], alpha=0.25, color='blue')
+    
+    # Load Lange+16 disk data
+    lange_disk = load_lange16_size_data()
+    if lange_disk is not None and len(lange_disk['Mstar']) > 0:
+        l_log_ms = np.log10(lange_disk['Mstar'])
+        l_log_rd = np.log10(lange_disk['R_disk'])
+        ax.plot(l_log_ms, l_log_rd, 'r-', lw=2, label='Lange+16 (90th pct.)', zorder=5)
+    
+    # van der Wel+14 relation (approximate)
+    ms_vdw = np.linspace(9, 11.5, 30)
+    rd_vdw = 0.25 * (ms_vdw - 10.0) + 0.5
+    ax.plot(ms_vdw, rd_vdw, 'k--', lw=1.5, label='van der Wel+14')
+    
+    ax.set_xlabel(r'$\log_{10}\ (M_* / M_\odot)$')
+    ax.set_ylabel(r'$\log_{10}\ (R_d / \mathrm{kpc})$')
+    ax.set_xlim(8, 12)
+    ax.set_ylim(-1, 2)
+    ax.legend(loc='lower right', fontsize=9, framealpha=0.9)
+    ax.set_title('Disk Half-Mass Radius')
+    
+    # RIGHT PANEL: Bulge size vs stellar mass
+    ax = ax2
+    
+    bulge_valid = w & (rb > 0) & (bulge_mass > 1e8)
+    if np.any(bulge_valid):
+        log_mb = np.log10(bulge_mass[bulge_valid])
+        # Convert BulgeRadius from Mpc/h -> kpc
+        log_rb = np.log10(rb[bulge_valid] * 1000 / HUBBLE_H)
+        
+        ax.scatter(log_mb[::10], log_rb[::10], s=2, alpha=0.15, c='gray',
+                   rasterized=True, label='_nolegend_')
+        
+        bin_c, bin_med, bin_lo, bin_hi = binned_median(log_mb, log_rb, bins)
+        ok = np.isfinite(bin_med)
+        ax.plot(bin_c[ok], bin_med[ok], 'b-', lw=2.5, label='SAGE26', zorder=10)
+        ax.fill_between(bin_c[ok], bin_lo[ok], bin_hi[ok], alpha=0.25, color='blue')
+    
+    # Load Lange+16 bulge data
+    lange_bulge = load_lange16_bulge_data()
+    if lange_bulge is not None and len(lange_bulge['Mstar']) > 0:
+        l_log_ms = np.log10(lange_bulge['Mstar'])
+        l_log_rb = np.log10(lange_bulge['R_bulge'])
+        ax.plot(l_log_ms, l_log_rb, 'r-', lw=2, label='Lange+16 (90th pct.)', zorder=5)
+    
+    # Shen+03 relation for early types
+    ms_shen = np.linspace(9, 12, 30)
+    rb_shen = 0.56 * (ms_shen - 11.0) + 0.3
+    ax.plot(ms_shen, rb_shen, 'k--', lw=1.5, label='Shen+03 (early)')
+    
+    ax.set_xlabel(r'$\log_{10}\ (M_{\mathrm{bulge}} / M_\odot)$')
+    ax.set_ylabel(r'$\log_{10}\ (R_b / \mathrm{kpc})$')
+    ax.set_xlim(8, 12)
+    ax.set_ylim(-1, 2)
+    ax.legend(loc='lower right', fontsize=9, framealpha=0.9)
+    ax.set_title('Bulge Half-Mass Radius')
+    
+    plt.tight_layout()
+    
+    output_path = os.path.join(OUTPUT_DIR, '42.Size_Mass_Relation.pdf')
     plt.savefig(output_path, dpi=200, bbox_inches='tight')
     plt.close()
     print(f'  Saved: {output_path}')
@@ -7271,6 +7670,8 @@ Z0_PLOTS = {
     15: plot_15_sfr_vs_stellar_mass,
     24: plot_24_mass_loading_vs_velocity,
     40: plot_40_dust_and_structure_grid,
+    41: plot_41_fall_relation,
+    42: plot_42_size_mass_relation,
 }
 
 EVOLUTION_PLOTS = {

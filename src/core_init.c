@@ -268,10 +268,17 @@ void init(struct params *run_params)
                                            * SEC_PER_MEGAYEAR / run_params->UnitTime_in_s;
         }
 
+        /* Compute IMF mass normalization: integral of m*phi(m) dm from 0.1-100 Msun
+         * Used to normalize yield tables to be per unit stellar mass formed.
+         * For properly normalized Chabrier IMF this should be ~1, but our coefficients
+         * give ~8.9, so we need to divide yields by this factor. */
+        run_params->IMF_mass_norm = compute_imf_mass_integral();
+
 #ifdef VERBOSE
         if(ThisTask == 0) {
             fprintf(stdout, "metal yield tables read (AGB: %d bins, SNII: %d bins)\n",
                     run_params->countagb, run_params->countsn);
+            fprintf(stdout, "IMF mass normalization: %.4f\n", run_params->IMF_mass_norm);
         }
 #endif
     }
