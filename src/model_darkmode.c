@@ -345,7 +345,7 @@ double compute_toomre_Q(double Sigma_gas, double Sigma_stars, double r_mid, doub
     // Toomre Q = (σ κ) / (π G Σ)
     // G = 4.302e-3 (km/s)^2 pc / Msun
     // G in kpc units: 4.302e-3 × 1e-6 = 4.302e-9 (km/s)^2 kpc / Msun
-    const double G_kpc = 4.302e-9;  // (km/s)^2 kpc / Msun
+    const double G_kpc = 4.302e-6;  // (km/s)^2 kpc / Msun
     
     double Q = (sigma_eff * kappa) / (M_PI * G_kpc * Sigma_total_kpc2);
     
