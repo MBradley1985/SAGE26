@@ -1355,7 +1355,7 @@ def plot_1_stellar_mass_function_ssfr_s(primary, vanilla):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '1.StellarMassFunction_SF' + OUTPUT_FORMAT))
+                'StellarMassFunction_SF' + OUTPUT_FORMAT))
     
 def plot_1_stellar_mass_function_ssfr_q(primary, vanilla):
     """
@@ -1501,7 +1501,7 @@ def plot_1_stellar_mass_function_ssfr_q(primary, vanilla):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '1.StellarMassFunction_Q' + OUTPUT_FORMAT))
+                'StellarMassFunction_Q' + OUTPUT_FORMAT))
 
 # ========================== PLOT 2: BARYON FRACTION vs HALO MASS ==========================
 
@@ -1557,7 +1557,7 @@ def plot_2_baryon_fraction(primary, vanilla):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '2.BaryonFraction' + OUTPUT_FORMAT))
+                'BaryonFraction' + OUTPUT_FORMAT))
 
 
 # ========================== PLOT 3: GAS METALLICITY vs STELLAR MASS ==========================
@@ -1649,7 +1649,7 @@ def plot_3_gas_metallicity_vs_stellar_mass(primary, vanilla):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '3.MetallicityStellarMass' + OUTPUT_FORMAT))
+                'MetallicityStellarMass' + OUTPUT_FORMAT))
 
 
 # ========================== PLOT 4: BLACK HOLE - BULGE MASS RELATION ==========================
@@ -1743,7 +1743,7 @@ def plot_4_bh_bulge_mass(primary, vanilla):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '4.BlackHoleBulgeMass' + OUTPUT_FORMAT))
+                'BlackHoleBulgeMass' + OUTPUT_FORMAT))
 
 
 # ========================== PLOT 5: STELLAR-TO-HALO MASS RELATION ==========================
@@ -1845,7 +1845,7 @@ def plot_5_stellar_halo_mass(primary, vanilla):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '5.StellarHaloMass' + OUTPUT_FORMAT))
+                'StellarHaloMass' + OUTPUT_FORMAT))
 
 
 # ========================== PLOT 6: BULGE MASS-SIZE BY FORMATION TYPE ==========================
@@ -1938,7 +1938,7 @@ def plot_6_bulge_mass_size(primary, vanilla):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '6.BulgeMassSize' + OUTPUT_FORMAT))
+                'BulgeMassSize' + OUTPUT_FORMAT))
 
 
 # ========================== PLOT 7: t_cool/t_ff DISTRIBUTION ==========================
@@ -2022,7 +2022,7 @@ def plot_7_tcool_tff_distribution(snapdata):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '7.TcoolTffDistribution' + OUTPUT_FORMAT))
+                'TcoolTffDistribution' + OUTPUT_FORMAT))
 
 
 # ========================== PLOT 8: PRECIPITATION FRACTION MODEL ==========================
@@ -2098,7 +2098,7 @@ def plot_8_precipitation_fraction(snapdata):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '8.PrecipitationFraction' + OUTPUT_FORMAT))
+                'PrecipitationFraction' + OUTPUT_FORMAT))
 
 
 # ========================== PLOT 9: CGM FRACTIONS & DEPLETION ==========================
@@ -2238,7 +2238,7 @@ def plot_9_cgm_fractions_depletion(snapdata):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '9.CGMFractionsDepletion' + OUTPUT_FORMAT))
+                'CGMFractionsDepletion' + OUTPUT_FORMAT))
 
 
 # ========================== PLOT 10: STAR FORMATION EFFICIENCY ==========================
@@ -2306,7 +2306,7 @@ def plot_10_sfe_ffb(snapdata):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '10.SFE_FFB' + OUTPUT_FORMAT))
+                'SFE_FFB' + OUTPUT_FORMAT))
 
 
 # ========================== PLOT 11: FFB GALAXY PROPERTIES ==========================
@@ -2415,7 +2415,7 @@ def plot_11_ffb_properties(snapdata):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '11.FFBProperties' + OUTPUT_FORMAT))
+                'FFBProperties' + OUTPUT_FORMAT))
 
 
 # ========================== PLOT 12: STAR FORMATION HISTORIES ==========================
@@ -2527,7 +2527,7 @@ def plot_12_sfh_ffb(snapdata):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '12.SFH_FFB' + OUTPUT_FORMAT))
+                'SFH_FFB' + OUTPUT_FORMAT))
 
 
 # ========================== PLOT 13: FFB FRACTION vs HALO MASS ==========================
@@ -2658,7 +2658,7 @@ def plot_13_ffb_vs_redshift(snapdata):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '13.FFBvsRedshift' + OUTPUT_FORMAT))
+                'FFBvsRedshift' + OUTPUT_FORMAT))
 
 
 # ========================== PLOT 14: FFB MODEL COMPARISON ==========================
@@ -3021,7 +3021,7 @@ def plot_14_density_evolution():
 
     fig.tight_layout()
 
-    output_file = os.path.join(output_dir, '14.FFB_Density_Evolution' + OUTPUT_FORMAT)
+    output_file = os.path.join(output_dir, 'FFB_Density_Evolution' + OUTPUT_FORMAT)
     save_figure(fig, output_file)
 
 # ========================== PLOT 15: sSFR vs STELLAR MASS (DENSITY) ==========================
@@ -3129,7 +3129,7 @@ def plot_15_sfr_vs_stellar_mass(primary, vanilla):
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
-                '15.StarFormationRate' + OUTPUT_FORMAT))
+                'StarFormationRate' + OUTPUT_FORMAT))
 
 # ========================== PLOT 16: COSMIC SFR DENSITY HISTORY (CSRDH) ==========================
 
@@ -3343,7 +3343,7 @@ def plot_16_sfrd_history():
 
     fig.tight_layout()
 
-    outputFile = os.path.join(OUTPUT_DIR, '16.SFR_Density_History_Comparison' + OUTPUT_FORMAT)
+    outputFile = os.path.join(OUTPUT_DIR, 'SFR_Density_History_Comparison' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
 
 
@@ -3550,7 +3550,7 @@ def plot_17_smd_history():
     ax.add_artist(leg1)
     _standard_legend(ax, loc='lower left', handles=obs_h, labels=obs_l)
 
-    outputFile = os.path.join(OUTPUT_DIR, '17.Stellar_Mass_Density_History_Comparison' + OUTPUT_FORMAT)
+    outputFile = os.path.join(OUTPUT_DIR, 'Stellar_Mass_Density_History_Comparison' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
 
 
@@ -4119,7 +4119,7 @@ def plot_18_smf_redshift_grid():
     ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
     ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
 
-    outputFile = os.path.join(OUTPUT_DIR, '18.SMF_Redshift_Grid' + OUTPUT_FORMAT)
+    outputFile = os.path.join(OUTPUT_DIR, 'SMF_Redshift_Grid' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
 
 
@@ -4282,7 +4282,7 @@ def plot_18b_smf_redshift_grid_wide():
     fig.tight_layout()
     fig.subplots_adjust(hspace=0.001, wspace=0.001)
 
-    outputFile = os.path.join(OUTPUT_DIR, '18b.SMF_Redshift_Grid_Wide' + OUTPUT_FORMAT)
+    outputFile = os.path.join(OUTPUT_DIR, 'SMF_Redshift_Grid_Wide' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
 
 
@@ -4490,7 +4490,7 @@ def plot_19_smf_ffb_grid():
     cbar = fig.colorbar(sm, ax=axes.tolist(), pad=0.01, fraction=0.046)
     cbar.set_label(r'FFB Efficiency [$\epsilon_{\mathrm{max}}$]')
 
-    outputFile = os.path.join(OUTPUT_DIR, '19.SMF_FFB_Grid' + OUTPUT_FORMAT)
+    outputFile = os.path.join(OUTPUT_DIR, 'SMF_FFB_Grid' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
 
 
@@ -4651,7 +4651,7 @@ def plot_20_smf_lowz_grid():
     fig.tight_layout()
     fig.subplots_adjust(wspace=0.001)
 
-    outputFile = os.path.join(OUTPUT_DIR, '20.SMF_LowZ_Grid' + OUTPUT_FORMAT)
+    outputFile = os.path.join(OUTPUT_DIR, 'SMF_LowZ_Grid' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
 
 
@@ -4815,7 +4815,7 @@ def plot_21_smf_lowz_lowmass_grid():
     ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
     ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
 
-    outputFile = os.path.join(OUTPUT_DIR, '21.SMF_LowZ_LowMass_Grid' + OUTPUT_FORMAT)
+    outputFile = os.path.join(OUTPUT_DIR, 'SMF_LowZ_LowMass_Grid' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
 
 
@@ -4905,7 +4905,7 @@ def plot_22_regime_histogram():
     ax.set_xlim(17, 0)
     plt.tight_layout()
 
-    outputFile = os.path.join(OUTPUT_DIR, '22.Regime_Histogram_Evolution' + OUTPUT_FORMAT)
+    outputFile = os.path.join(OUTPUT_DIR, 'Regime_Histogram_Evolution' + OUTPUT_FORMAT)
     plt.savefig(outputFile)
     print(f'Saved file to {outputFile}\n')
     plt.close()
@@ -4997,7 +4997,7 @@ def plot_23_ffb_histogram():
     ax.set_xlim(17, 0)
     plt.tight_layout()
 
-    outputFile = os.path.join(OUTPUT_DIR, '23.FFB_Histogram_Evolution' + OUTPUT_FORMAT)
+    outputFile = os.path.join(OUTPUT_DIR, 'FFB_Histogram_Evolution' + OUTPUT_FORMAT)
     plt.savefig(outputFile)
     print(f'Saved file to {outputFile}\n')
     plt.close()
@@ -5086,7 +5086,7 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
     ax.yaxis.set_minor_locator(plt.MultipleLocator(1.0))
 
     fig.tight_layout()
-    outputFile = os.path.join(OUTPUT_DIR, '24.MassLoading_vs_Velocity' + OUTPUT_FORMAT)
+    outputFile = os.path.join(OUTPUT_DIR, 'MassLoading_vs_Velocity' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
     print(f'Saved file to {outputFile}\n')
 
@@ -5222,7 +5222,7 @@ def plot_25_hi_mass_ratio():
         obs_file='HIGasRatio_NonDetEQZero.dat',
         obs_label='xGASS',
         ylabel=r'$\log_{10}\ (m_{\mathrm{HI}} / m_{\mathrm{*}})$',
-        output_name='25.HI_Mass_Ratio',
+        output_name='HI_Mass_Ratio',
     )
 
 
@@ -5234,7 +5234,7 @@ def plot_26_h2_mass_ratio():
         obs_file='MolecularGasRatio_NonDetEQZero.dat',
         obs_label='xCOLDGASS',
         ylabel=r'$\log_{10}\ (m_{\mathrm{H2}} / m_{\mathrm{*}})$',
-        output_name='26.H2_Mass_Ratio',
+        output_name='H2_Mass_Ratio',
     )
 
 
@@ -5246,7 +5246,7 @@ def plot_27_cold_gas_mass_ratio():
         obs_file='NeutralGasRatio_NonDetEQZero.dat',
         obs_label='xGASS',
         ylabel=r'$\log_{10}\ (m_{\mathrm{cold\ gas}} / m_{\mathrm{*}})$',
-        output_name='27.Cold_Gas_Mass_Ratio',
+        output_name='Cold_Gas_Mass_Ratio',
     )
 
 
@@ -5374,7 +5374,7 @@ def plot_28_mdot_vs_mvir():
         x_label=r'$\log_{10}\ (M_{\rm vir}\ /\ M_{\odot})$',
         xlim=(9.5, 14.5),
         xbins=np.arange(9.5, 14.5, 0.2),
-        output_name='28.Mdot_vs_Mvir',
+        output_name='Mdot_vs_Mvir',
     )
 
 
@@ -5397,7 +5397,7 @@ def plot_29_mdot_vs_vvir():
         x_label=r'$\log_{10}\ V_{\rm vir}\ [\mathrm{km\,s}^{-1}]$',
         xlim=(1.6, 3.0),
         xbins=np.arange(1.6, 3.0, 0.1),
-        output_name='29.Mdot_vs_Vvir',
+        output_name='Mdot_vs_Vvir',
         upper_axis=_add_tvir_axis,
     )
 

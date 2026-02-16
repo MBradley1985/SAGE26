@@ -241,7 +241,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    outputFile = OutputDir + 'A.StellarMassFunction_z' + OutputFormat
+    outputFile = OutputDir + 'StellarMassFunction_z' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -316,7 +316,7 @@ if __name__ == '__main__':
     plt.axis([0.0, 8.0, -3.0, -0.4])   
     plt.tight_layout()         
 
-    outputFile = OutputDir + 'B.History-SFR-density' + OutputFormat
+    outputFile = OutputDir + 'History-SFR-density' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -404,7 +404,7 @@ if __name__ == '__main__':
     plt.axis([0.0, 4.2, 6.5, 9.0])   
     plt.tight_layout()
 
-    outputFile = OutputDir + 'C.History-stellar-mass-density' + OutputFormat
+    outputFile = OutputDir + 'History-stellar-mass-density' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -496,7 +496,7 @@ if __name__ == '__main__':
 
 
     plt.tight_layout()
-    outputFile = OutputDir + 'D.SFR_evolution' + OutputFormat
+    outputFile = OutputDir + 'SFR_evolution' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -613,7 +613,7 @@ if __name__ == '__main__':
     plt.tight_layout()
     
     # Save the plot
-    outputFile = OutputDir + 'E.StellarMassHaloMassRelation' + OutputFormat
+    outputFile = OutputDir + 'StellarMassHaloMassRelation' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -729,7 +729,7 @@ if __name__ == '__main__':
     plt.tight_layout()
     
     # Save the plot
-    outputFile = OutputDir + 'F.StellarMassFunctionEvolution' + OutputFormat
+    outputFile = OutputDir + 'StellarMassFunctionEvolution' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -831,7 +831,7 @@ if __name__ == '__main__':
     plt.tight_layout()
     
     # Save the plot
-    outputFile = OutputDir + 'F2.BlackHoleMassFunction' + OutputFormat
+    outputFile = OutputDir + 'BlackHoleMassFunction' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1000,7 +1000,7 @@ if __name__ == '__main__':
     plt.legend(loc='upper left', frameon=False, ncol=2, fontsize=10)
     plt.tight_layout()
 
-    outputFile = OutputDir + 'R.stellar_vs_halo_mass_by_regime_redshift' + OutputFormat
+    outputFile = OutputDir + 'stellar_vs_halo_mass_by_regime_redshift' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1075,7 +1075,7 @@ if __name__ == '__main__':
     plt.tight_layout()
     # plt.suptitle('Regime Distribution vs Halo Mass Across Redshift', fontsize=14, y=0.98)
     
-    outputFile = OutputDir + 'S.regime_distribution_histograms_redshift' + OutputFormat
+    outputFile = OutputDir + 'regime_distribution_histograms_redshift' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1133,7 +1133,7 @@ if __name__ == '__main__':
     
     plt.tight_layout()
     
-    outputFile = OutputDir + 'T.regime_distribution_stellar_mass_histograms_redshift' + OutputFormat
+    outputFile = OutputDir + 'regime_distribution_stellar_mass_histograms_redshift' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1236,7 +1236,7 @@ if __name__ == '__main__':
     
     plt.tight_layout()
     
-    outputFile = OutputDir + 'U.effective_radius_vs_stellar_mass_redshift' + OutputFormat
+    outputFile = OutputDir + 'effective_radius_vs_stellar_mass_redshift' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1326,7 +1326,7 @@ if __name__ == '__main__':
     
     plt.tight_layout(rect=[0, 0, 0.92, 1])
     
-    outputFile = OutputDir + 'V.effective_radius_vs_stellar_mass_density_colored' + OutputFormat
+    outputFile = OutputDir + 'effective_radius_vs_stellar_mass_density_colored' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1430,7 +1430,7 @@ if __name__ == '__main__':
     plt.tight_layout()
     
     # Save the plot
-    outputFile = OutputDir + 'W.HaloMassFunctionEvolution' + OutputFormat
+    outputFile = OutputDir + 'HaloMassFunctionEvolution' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1495,7 +1495,7 @@ if __name__ == '__main__':
     ax.set_xlim(17, 0)
     plt.tight_layout()
 
-    outputFile = OutputDir + 'X.GalaxyCountEvolution' + OutputFormat
+    outputFile = OutputDir + 'GalaxyCountEvolution' + OutputFormat
     plt.savefig(outputFile)
     print(f'Saved file to {outputFile}\n')
     plt.close()
@@ -1560,7 +1560,7 @@ if __name__ == '__main__':
     ax.set_xlim(17, 0)
     plt.tight_layout()
 
-    outputFile = OutputDir + 'Y.GalaxyCountEvolution' + OutputFormat
+    outputFile = OutputDir + 'GalaxyCountEvolution2' + OutputFormat
     plt.savefig(outputFile)
     print(f'Saved file to {outputFile}\n')
     plt.close()
