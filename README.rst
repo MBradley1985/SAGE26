@@ -87,9 +87,8 @@ If you're following the above, these scripts can run as-is to produce a series o
 
 .. code::
 
-    $ cd plotting/
-    $ python3 allresults-local.py
-    $ python3 allresults-history.py
+    $ python3 plotting/allresults-local.py
+    $ python3 plotting/allresults-history.py
 
 Near the top of both scripts, there is a "USER OPTIONS" section where you can modify the simulation and plotting details for your own needs. 
 These scripts can be used as a template to read the hdf5 ``SAGE`` model output and to make your own custom figures.
