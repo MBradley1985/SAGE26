@@ -5658,4 +5658,4 @@ if __name__ == '__main__':
     main()
 
 # print_mdot_stream_cool_stats()
-print_massive_galaxy_stats()
+# print_massive_galaxy_stats()
