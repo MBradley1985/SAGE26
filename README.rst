@@ -35,7 +35,7 @@ Downloading
 
 .. code::
 
-    $ git clone https://github.com/sage-home/sage-model
+    $ git clone https://github.com/sage-home/sage-model-update.git
     $ cd sage-model/
 
 Building
@@ -46,14 +46,6 @@ To create the ``SAGE`` executable, simply run the following command:
 .. code::
 
     $ make
-
-``SAGE`` is MPI compatible which can be enabled setting ``USE-MPI = yes`` in
-the ``Makefile``.  To run in parallel, ensure that you have a installed an MPI distribution (OpenMPI, MPICH, Intel MPI etc).
-When compiling with MPI support, the ``Makefile`` expects that the MPI compiler is called ``mpicc`` and is configured appropriately.
-
-Addtionally, ``SAGE`` can be configured to read trees in `HDF5 <https://support.hdfgroup.org/HDF5/>`_ format by setting
-``USE-HDF5 = yes`` in the ``Makefile``. If the input trees are in HDF5 format, or you wish to output the catalogs in HDF5 (rather than the default binary format), then please compile with the ``USE-HDF5 = yes`` option.
-This is set to ``yes`` by default.  Ensure that you have the HDF5 libraries installed and that the ``Makefile`` is configured to find them.
 
 Running the code
 ================
