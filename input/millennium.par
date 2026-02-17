@@ -72,8 +72,8 @@ DarkModeOn            1   %0: standard SAGE; 1: DarkSage-style radially-resolved
 
 DeltaDustAGB            0.2
 DeltaDustSNII           0.2
-DeltaDustSNIa           0.15
-DustAccretionTimescale  50.0
+DeltaDustSNIa           0.0
+DustAccretionTimescale  20.0
 EtaSNDust               0.1
 BinaryFraction          0.1    %Fraction of stars in SNIa binaries
 

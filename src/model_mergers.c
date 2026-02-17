@@ -448,14 +448,17 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
         galaxies[t].HotDust += galaxies[p].HotDust;
         galaxies[t].CGMDust += galaxies[p].CGMDust;
         galaxies[t].EjectedDust += galaxies[p].EjectedDust;
-        if(galaxies[t].ColdDust > galaxies[t].MetalsColdGas) galaxies[t].ColdDust = galaxies[t].MetalsColdGas;
+        /* Safety checks: dust can't be negative */
+        if(galaxies[t].ColdDust < 0.0) galaxies[t].ColdDust = 0.0;
+        if(galaxies[t].HotDust < 0.0) galaxies[t].HotDust = 0.0;
+        if(galaxies[t].CGMDust < 0.0) galaxies[t].CGMDust = 0.0;
+        if(galaxies[t].EjectedDust < 0.0) galaxies[t].EjectedDust = 0.0;
+        /* For Hot/CGM/Ejected, dust can't exceed total metals in that reservoir */
         if(galaxies[t].HotDust > galaxies[t].MetalsHotGas) galaxies[t].HotDust = galaxies[t].MetalsHotGas;
         if(galaxies[t].MetalsCGMgas > 0.0 && galaxies[t].CGMDust > galaxies[t].MetalsCGMgas)
             galaxies[t].CGMDust = galaxies[t].MetalsCGMgas;
-        if(galaxies[t].CGMDust < 0.0) galaxies[t].CGMDust = 0.0;
         if(galaxies[t].MetalsEjectedMass > 0.0 && galaxies[t].EjectedDust > galaxies[t].MetalsEjectedMass)
             galaxies[t].EjectedDust = galaxies[t].MetalsEjectedMass;
-        if(galaxies[t].EjectedDust < 0.0) galaxies[t].EjectedDust = 0.0;
     }
 }
 

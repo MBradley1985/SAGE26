@@ -54,8 +54,11 @@ void produce_dust(const double stars, const double metallicity, const double dt,
     }
 
     galaxies[p].ColdDust += dust_produced;
-    if(galaxies[p].ColdDust > galaxies[p].MetalsColdGas)
-        galaxies[p].ColdDust = galaxies[p].MetalsColdGas;
+    /* Dust is condensed from gas-phase metals, so subtract from metals pool */
+    galaxies[p].MetalsColdGas -= dust_produced;
+
+    /* Safety: neither can be negative */
+    if(galaxies[p].MetalsColdGas < 0.0) galaxies[p].MetalsColdGas = 0.0;
     if(galaxies[p].ColdDust < 0.0) galaxies[p].ColdDust = 0.0;
 }
 
@@ -278,13 +281,14 @@ void produce_metals_dust(const double metallicity, const double dt,
     /* Apply dust to cold phase */
     if(dustdot > 0.0) {
         galaxies[p].ColdDust += dustdot * dt;
+        /* Dust is condensed from gas-phase metals, so subtract from metals pool */
+        galaxies[p].MetalsColdGas -= dustdot * dt;
+        if(galaxies[p].MetalsColdGas < 0.0) galaxies[p].MetalsColdGas = 0.0;
     }
 
-    /* Safety: can't exceed metals in cold gas */
-    if(galaxies[p].ColdDust > galaxies[p].MetalsColdGas) {
-        galaxies[p].ColdDust = galaxies[p].MetalsColdGas;
-    }
+    /* Safety: neither can be negative */
     if(galaxies[p].ColdDust < 0.0) galaxies[p].ColdDust = 0.0;
+    if(galaxies[p].MetalsColdGas < 0.0) galaxies[p].MetalsColdGas = 0.0;
 }
 #endif /* GSL_FOUND */
 
@@ -343,7 +347,7 @@ void accrete_dust(const double metallicity, const double dt, const int p,
      * while leaving low-DtM systems nearly unchanged */
     if(tacc > 0.0 && f_molecular > 0.0) {
         const double one_minus_f = 1.0 - dust_to_metal;
-        const double dustdot = one_minus_f * one_minus_f * f_molecular *
+        const double dustdot = one_minus_f * f_molecular *
                                galaxies[p].ColdDust / tacc;
 
         double delta_dust = dustdot * dt;
@@ -361,6 +365,9 @@ void accrete_dust(const double metallicity, const double dt, const int p,
 
         if(delta_dust > 0.0) {
             galaxies[p].ColdDust += delta_dust;
+            /* Dust accretes from gas-phase metals, so subtract from metals pool */
+            galaxies[p].MetalsColdGas -= delta_dust;
+            if(galaxies[p].MetalsColdGas < 0.0) galaxies[p].MetalsColdGas = 0.0;
         }
     }
 
@@ -368,8 +375,8 @@ void accrete_dust(const double metallicity, const double dt, const int p,
     if(galaxies[p].ColdDust < 0.0) {
         galaxies[p].ColdDust = 0.0;
     }
-    if(galaxies[p].ColdDust > galaxies[p].MetalsColdGas) {
-        galaxies[p].ColdDust = galaxies[p].MetalsColdGas;
+    if(galaxies[p].MetalsColdGas < 0.0) {
+        galaxies[p].MetalsColdGas = 0.0;
     }
 }
 
@@ -468,10 +475,13 @@ void destruct_dust(const double metallicity, const double stars, const double dt
                 galaxies[p].DustDotDestruct[step] += (float)(dustdot);
             }
 
-            /* Subtract destroyed dust */
+            /* Subtract destroyed dust and return to gas-phase metals */
             if(galaxies[p].ColdDust - dustdot * dt > 0.0) {
                 galaxies[p].ColdDust -= dustdot * dt;
+                galaxies[p].MetalsColdGas += dustdot * dt;
             } else {
+                /* All dust destroyed - return it all to gas-phase metals */
+                galaxies[p].MetalsColdGas += galaxies[p].ColdDust;
                 galaxies[p].ColdDust = 0.0;
             }
         }
