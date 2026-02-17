@@ -119,7 +119,7 @@ CGM building can be turned on or off.
 Parameters can be manipulated in the parameter file as follows to allow for extra exploration.
 
 Future work should include black hole recipes from other models, as well as more advanced H2 star formation and feedback models.
-Dust and Angular Momentum incomming.
+Dust and Angular Momentum incoming.
 
 Citation
 =========
