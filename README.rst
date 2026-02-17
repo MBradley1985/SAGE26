@@ -94,7 +94,7 @@ You can clone the PSO package directly from GitHub:
 
 .. code::
 
-    $ git clone https://github.com/MBradley1985/SAGE-PSO.git
+    $ git clone https://github.com/sage-home/sage-pso.git
     $ cd SAGE-PSO/
 
 This system allows you to optimize SAGE model parameters against observational constraints to improve the physical realism of your galaxy formation models.
