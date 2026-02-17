@@ -37,16 +37,16 @@ plt.rcParams["figure.figsize"] = (8.34,6.25)
 plt.rcParams["figure.dpi"] = 96
 plt.rcParams["font.size"] = 14
 
-plt.rcParams['figure.facecolor'] = 'black'
-plt.rcParams['axes.facecolor'] = 'black'
-plt.rcParams['axes.edgecolor'] = 'white'
-plt.rcParams['xtick.color'] = 'white'
-plt.rcParams['ytick.color'] = 'white'
-plt.rcParams['axes.labelcolor'] = 'white'
-plt.rcParams['axes.titlecolor'] = 'white'
-plt.rcParams['text.color'] = 'white'
-plt.rcParams['legend.facecolor'] = 'black'
-plt.rcParams['legend.edgecolor'] = 'white'
+plt.rcParams['figure.facecolor'] = 'white'
+plt.rcParams['axes.facecolor'] = 'white'
+plt.rcParams['axes.edgecolor'] = 'black'
+plt.rcParams['xtick.color'] = 'black'
+plt.rcParams['ytick.color'] = 'black'
+plt.rcParams['axes.labelcolor'] = 'black'
+plt.rcParams['axes.titlecolor'] = 'black'
+plt.rcParams['text.color'] = 'black'
+plt.rcParams['legend.facecolor'] = 'white'
+plt.rcParams['legend.edgecolor'] = 'black'
 
 
 # ==================================================================
@@ -54,25 +54,9 @@ plt.rcParams['legend.edgecolor'] = 'white'
 def read_hdf(filename = None, snap_num = None, param = None):
 
     if filename is None:
-        # Check for multiple model_*.hdf5 files in DirName
-        import glob
-        pattern = os.path.join(DirName, 'model_*.hdf5')
-        filelist = sorted(glob.glob(pattern))
-        if filelist:
-            arrays = []
-            for fname in filelist:
-                with h5.File(fname, 'r') as f:
-                    if snap_num in f and param in f[snap_num]:
-                        arrays.append(np.array(f[snap_num][param]))
-            if arrays:
-                return np.concatenate(arrays)
-            else:
-                raise ValueError(f"Property '{param}' not found in any file for snapshot '{snap_num}'")
-        else:
-            filename = DirName + FileName
-    # Fallback to single file
-    with h5.File(filename, 'r') as property:
-        return np.array(property[snap_num][param])
+        filename = DirName + FileName
+    property = h5.File(filename,'r')
+    return np.array(property[snap_num][param])
 
 def read_obs_data(filename):
     """Read observational data files"""
@@ -141,17 +125,6 @@ if __name__ == '__main__':
 
     MassLoading = read_hdf(snap_num = Snapshot, param = 'MassLoading')
 
-    # Dust properties
-    try:
-        ColdDust = read_hdf(snap_num = Snapshot, param = 'ColdDust') * 1.0e10 / Hubble_h
-        HotDust = read_hdf(snap_num = Snapshot, param = 'HotDust') * 1.0e10 / Hubble_h
-        EjectedDust = read_hdf(snap_num = Snapshot, param = 'EjectedDust') * 1.0e10 / Hubble_h
-        DustOn = True
-        print('Dust properties loaded successfully')
-    except KeyError:
-        DustOn = False
-        print('Dust properties not found in output -- skipping dust plots')
-
 
     w = np.where(StellarMass > 1.0e10)[0]
     print('Number of galaxies read:', len(StellarMass))
@@ -190,18 +163,10 @@ if __name__ == '__main__':
     baldry_q_mass = baldry[:, 2]
     baldry_q_phi = baldry[:, 3]
 
-    smass_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'StellarMass') * 1.0e10 / Hubble_h
-    sfrdisk_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'SfrDisk')
-    sfrbulge_vanilla = read_hdf(filename = DirName2+FileName, snap_num = Snapshot, param = 'SfrBulge')
-
     # calculate all
     w = np.where(StellarMass > 0.0)[0]
     mass = np.log10(StellarMass[w])
     sSFR = np.log10( (SfrDisk[w] + SfrBulge[w]) / StellarMass[w] )
-
-    w2 = np.where(smass_vanilla > 0.0)[0]
-    mass_vanilla = np.log10(smass_vanilla[w2])
-    sSFR_vanilla = np.log10( (sfrdisk_vanilla[w2] + sfrbulge_vanilla[w2]) / smass_vanilla[w2] )
 
     # Bin parameters for original model
     mi = np.floor(min(mass)) - 2
@@ -220,32 +185,13 @@ if __name__ == '__main__':
     massBLU = mass[w]
     (countsBLU, binedges) = np.histogram(massBLU, range=(mi, ma), bins=NB)
 
-    # Bin parameters for vanilla model
-    mi_v = np.floor(min(mass_vanilla)) - 2
-    ma_v = np.floor(max(mass_vanilla)) + 2
-    NB_v = int((ma_v - mi_v) / binwidth)
-    (counts_vanilla, binedges) = np.histogram(mass_vanilla, range=(mi_v, ma_v), bins=NB_v)
-    xaxeshisto_vanilla = binedges[:-1] + 0.5 * binwidth  # Set the x-axis values to be the centre of the bins
-
-    # additionally calculate red for vanilla
-    w2 = np.where(sSFR_vanilla < sSFRcut)[0]
-    massRED_vanilla = mass_vanilla[w2]
-    (countsRED_vanilla, binedges) = np.histogram(massRED_vanilla, range=(mi_v, ma_v), bins=NB_v)
-
-    # # additionally calculate blue for vanilla
-    w2 = np.where(sSFR_vanilla > sSFRcut)[0]
-    massBLU_vanilla = mass_vanilla[w2]
-    (countsBLU_vanilla, binedges) = np.histogram(massBLU_vanilla, range=(mi_v, ma_v), bins=NB_v)
-
 
     # Overplot the model histograms (in log10 space)
     # plt.plot(xaxeshisto, np.log10(counts / volume / binwidth), 'k-', label='SAGE26')
-    plt.plot(xaxeshisto, np.log10(counts / volume / binwidth), color='white', lw=4, label='SAGE26 Total')
+    plt.plot(xaxeshisto, np.log10(counts / volume / binwidth), color='k', lw=4, label='SAGE26 Total')
     plt.plot(xaxeshisto, np.log10(countsRED / volume / binwidth), color='firebrick', lw=4, label='SAGE26 Quiescent')
     plt.plot(xaxeshisto, np.log10(countsBLU / volume / binwidth), color='dodgerblue', lw=4, label='SAGE26 Star Forming')
 
-    plt.plot(xaxeshisto_vanilla, np.log10(countsRED_vanilla / volume / binwidth), color='firebrick', lw=2, ls='--', label='C16 Quiescent')
-    plt.plot(xaxeshisto_vanilla, np.log10(countsBLU_vanilla / volume / binwidth), color='dodgerblue', lw=2, ls='--', label='C16 Star Forming')
 
     # Create shaded regions from observations (GAMA + Baldry combined)
     from scipy import interpolate
@@ -293,7 +239,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    outputFile = OutputDir + '1.StellarMassFunction' + OutputFormat
+    outputFile = OutputDir + 'StellarMassFunction' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved to', outputFile, '\n')
     plt.close()
@@ -351,7 +297,7 @@ if __name__ == '__main__':
         plt.plot(np.log10(10.0**M /0.7 /1.8), yval, 'g--', lw=1.5, label='Bell et al. 2003')  # Plot the SMF
 
     # Overplot the model histograms
-    plt.plot(xaxeshisto, counts / volume / binwidth, 'w-', label='Model')
+    plt.plot(xaxeshisto, counts / volume / binwidth, 'k-', label='Model')
     plt.plot(xaxeshisto_centrals, counts_centrals / volume / binwidth, 'b:', lw=2, label='Model - Centrals')
     plt.plot(xaxeshisto_satellites, counts_satellites / volume / binwidth, 'g--', lw=1.5, label='Model - Satellites')
 
@@ -369,7 +315,7 @@ if __name__ == '__main__':
     
     plt.tight_layout()
 
-    outputFile = OutputDir + '2.BaryonicMassFunction' + OutputFormat
+    outputFile = OutputDir + 'BaryonicMassFunction' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -475,7 +421,7 @@ if __name__ == '__main__':
     ObrRaw_xval = np.log10(10**(ObrRaw[:, 0])  /Hubble_h/Hubble_h)
     ObrRaw_yval = (10**(ObrRaw[:, 1]) * Hubble_h*Hubble_h*Hubble_h)
 
-    plt.plot(ObrCold_xval, ObrCold_yval, color='white', lw = 7, alpha=0.25, label='Obr. & Raw. 2009 (Cold Gas)')
+    plt.plot(ObrCold_xval, ObrCold_yval, color='k', lw = 7, alpha=0.25, label='Obr. & Raw. 2009 (Cold Gas)')
     plt.plot(Zwaan_xval, Zwaan_yval, color='cyan', lw = 7, alpha=0.25, label='Zwaan et al. 2005 (HI)')
     plt.plot(ObrRaw_xval, ObrRaw_yval, color='magenta', lw = 7, alpha=0.25, label='Obr. & Raw. 2009 (H2)')
 
@@ -483,7 +429,7 @@ if __name__ == '__main__':
     plt.plot(xaxeshisto_h1, counts_h1 / volume / binwidth, 'cyan', linestyle='-', label='Model - HI Gas')
     
     # Overplot the model histograms
-    plt.plot(xaxeshisto, counts / volume / binwidth, 'w-', label='Model - Cold Gas')
+    plt.plot(xaxeshisto, counts / volume / binwidth, 'k-', label='Model - Cold Gas')
 
     plt.yscale('log')
     plt.axis([8.0, 11.5, 1.0e-6, 1.0e-1])
@@ -499,7 +445,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    outputFile = OutputDir + '3.GasMassFunction' + OutputFormat
+    outputFile = OutputDir + 'GasMassFunction' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -518,7 +464,7 @@ if __name__ == '__main__':
     mass = np.log10( (StellarMass[w] + ColdGas[w]) )
     vel = np.log10(Vmax[w])
                 
-    plt.scatter(vel, mass, marker='x', s=1, c='magenta', alpha=0.9, label='Model Sb/c galaxies')
+    plt.scatter(vel, mass, marker='x', s=1, c='k', alpha=0.9, label='Model Sb/c galaxies')
             
     # overplot Stark, McGaugh & Swatters 2009 (assumes h=0.75? ... what IMF?)
     w = np.arange(0.5, 10.0, 0.5)
@@ -546,7 +492,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
         
-    outputFile = OutputDir + '4.BaryonicTullyFisher' + OutputFormat
+    outputFile = OutputDir + 'BaryonicTullyFisher' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -562,7 +508,7 @@ if __name__ == '__main__':
     if(len(w) > dilute): w = sample(list(w), dilute)
     mass = np.log10(StellarMass[w])
     sSFR = np.log10( (SfrDisk[w] + SfrBulge[w]) / StellarMass[w] )
-    plt.scatter(mass, sSFR, marker='x', s=1, c='magenta', alpha=0.9, label='Model galaxies')
+    plt.scatter(mass, sSFR, marker='x', s=1, c='k', alpha=0.9, label='Model galaxies')
 
     # overplot dividing line between SF and passive
     w = np.arange(7.0, 13.0, 1.0)
@@ -584,7 +530,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    outputFile = OutputDir + '5.SpecificStarFormationRate' + OutputFormat
+    outputFile = OutputDir + 'SpecificStarFormationRate' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved to', outputFile, '\n')
     plt.close()
@@ -603,7 +549,7 @@ if __name__ == '__main__':
     mass = np.log10(StellarMass[w])
     fraction = ColdGas[w] / (StellarMass[w] + ColdGas[w])
 
-    plt.scatter(mass, fraction, marker='x', s=1, c='magenta', alpha=0.9, label='Model Sb/c galaxies')
+    plt.scatter(mass, fraction, marker='x', s=1, c='k', alpha=0.9, label='Model Sb/c galaxies')
         
     plt.ylabel(r'$\mathrm{Cold\ Mass\ /\ (Cold+Stellar\ Mass)}$')  # Set the y...
     plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')  # and the x-axis labels
@@ -621,7 +567,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
         
-    outputFile = OutputDir + '6.GasFraction' + OutputFormat
+    outputFile = OutputDir + 'GasFraction' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -639,7 +585,7 @@ if __name__ == '__main__':
     mass = np.log10(StellarMass[w])
     Z = np.log10((MetalsColdGas[w] / ColdGas[w]) / 0.02) + 9.0
     
-    plt.scatter(mass, Z, marker='x', s=1, c='magenta', alpha=0.9, label='Model galaxies')
+    plt.scatter(mass, Z, marker='x', s=1, c='gray', alpha=0.9, label='Model galaxies')
 
     # Tremonti et al. 2004 - the primary observational reference
     try:
@@ -656,9 +602,9 @@ if __name__ == '__main__':
         else:
             tremonti_mass_corrected = tremonti_mass
         # Plot main line
-        ax.plot(tremonti_mass_corrected, tremonti_Z, '-', color='orange', linewidth=1.5, alpha=0.7, label='Tremonti+04')
+        ax.plot(tremonti_mass_corrected, tremonti_Z, '-', color='red', linewidth=1.5, alpha=0.7, label='Tremonti+04')
         # Plot error shading
-        ax.fill_between(tremonti_mass_corrected, tremonti_Z_err_low, tremonti_Z_err_high, color='orange', alpha=0.2, zorder=5)
+        ax.fill_between(tremonti_mass_corrected, tremonti_Z_err_low, tremonti_Z_err_high, color='firebrick', alpha=0.2, zorder=5)
     except Exception as e:
         print(f"Warning: Could not load Tremonti04.dat: {e}. Using fallback polynomial fit.")
         w_obs = np.arange(7.0, 13.0, 0.1)
@@ -678,9 +624,9 @@ if __name__ == '__main__':
         curti_Z_low = curti_data[:, 2]
         curti_Z_high = curti_data[:, 3]
         # Plot main line
-        ax.plot(curti_mass, curti_Z, linestyle='-', color='cyan', linewidth=2, label='Curti+20')
+        ax.plot(curti_mass, curti_Z, linestyle='-', color='blue', linewidth=2, label='Curti+20')
         # Plot error shading
-        ax.fill_between(curti_mass, curti_Z_low, curti_Z_high, color='cyan', alpha=0.2, zorder=5)
+        ax.fill_between(curti_mass, curti_Z_low, curti_Z_high, color='darkblue', alpha=0.2, zorder=5)
     except Exception as e:
         print(f"Warning: Could not load Curti2020.dat: {e}")
     
@@ -695,7 +641,7 @@ if __name__ == '__main__':
             andrews_mass_corrected = np.log10(10**andrews_mass * 1.5 / 1.8)
         else:
             andrews_mass_corrected = andrews_mass
-        ax.scatter(andrews_mass_corrected, andrews_Z, marker='s', s=30, color='limegreen', edgecolors='darkgreen', linewidth=0.5, alpha=0.8, label='Andrews & Martini 2013')
+        ax.scatter(andrews_mass_corrected, andrews_Z, marker='s', s=30, color='green', edgecolors='darkgreen', linewidth=0.5, alpha=0.8, label='Andrews & Martini 2013')
     except Exception as e:
         print(f"Warning: Could not load MMAdrews13.dat: {e}")
     
@@ -723,7 +669,7 @@ if __name__ == '__main__':
         gallazzi_Z_stellar = gallazzi_data[7:, 1]
         gallazzi_Z_gas_approx = gallazzi_Z_stellar + 8.69
         gallazzi_mass_corrected = gallazzi_mass
-        ax.scatter(gallazzi_mass_corrected, gallazzi_Z_gas_approx, marker='P', s=100, color='white', edgecolors='gray', linewidth=0.5, alpha=0.8, label='Gallazzi+05')
+        ax.scatter(gallazzi_mass_corrected, gallazzi_Z_gas_approx, marker='P', s=100, color='k', edgecolors='gray', linewidth=0.5, alpha=0.8, label='Gallazzi+05')
     except Exception as e:
         print(f"Warning: Could not load MSZR-Gallazzi05.dat: {e}")
         
@@ -743,7 +689,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
         
-    outputFile = OutputDir + '7.Metallicity' + OutputFormat
+    outputFile = OutputDir + 'Metallicity' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -761,7 +707,7 @@ if __name__ == '__main__':
     bh = np.log10(BlackHoleMass[w])
     bulge = np.log10(BulgeMass[w])
                 
-    plt.scatter(bulge, bh, marker='x', s=1, c='magenta', alpha=0.9, label='Model galaxies', zorder=10)
+    plt.scatter(bulge, bh, marker='x', s=1, c='k', alpha=0.9, label='Model galaxies', zorder=10)
             
     # overplot Haring & Rix 2004
     w = 10. ** np.arange(20)
@@ -797,7 +743,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
         
-    outputFile = OutputDir + '8.BlackHoleBulgeRelationship' + OutputFormat
+    outputFile = OutputDir + 'BlackHoleBulgeRelationship' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -899,7 +845,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
     
-    outputFile = OutputDir + '9.QuiescentFraction' + OutputFormat
+    outputFile = OutputDir + 'QuiescentFraction' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -940,11 +886,11 @@ if __name__ == '__main__':
         facecolor='red', alpha=0.25)
     
     w = np.where(fDisk_ave > 0.0)[0]
-    plt.plot(mass_range[w]+shift, fDisk_ave[w], 'w-', label='disk stars')
+    plt.plot(mass_range[w]+shift, fDisk_ave[w], 'k-', label='disk stars')
     plt.fill_between(mass_range[w]+shift, 
         fDisk_ave[w]+fDisk_var[w], 
         fDisk_ave[w]-fDisk_var[w], 
-        facecolor='white', alpha=0.25)
+        facecolor='k', alpha=0.25)
     
     plt.axis([mass_range[0], mass_range[bins-1], 0.0, 1.05])
 
@@ -958,7 +904,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
     
-    outputFile = OutputDir + '10.BulgeMassFraction' + OutputFormat
+    outputFile = OutputDir + 'BulgeMassFraction' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1131,7 +1077,7 @@ if __name__ == '__main__':
 
     # Add 1-sigma shading for each mass reservoir
     plt.fill_between(MeanCentralHaloMass, MeanBaryonFractionL, MeanBaryonFractionU, 
-                     color='white', alpha=0.2)
+                     color='k', alpha=0.2)
     plt.fill_between(MeanCentralHaloMass, MeanStarsL, MeanStarsU, 
                      color='magenta', alpha=0.2)
     plt.fill_between(MeanCentralHaloMass, MeanColdL, MeanColdU, 
@@ -1145,7 +1091,7 @@ if __name__ == '__main__':
     plt.fill_between(MeanCentralHaloMass, MeanEjectedL, MeanEjectedU, 
                      color='yellow', alpha=0.2)
 
-    plt.plot(MeanCentralHaloMass, MeanBaryonFraction, 'w-', label='Total')
+    plt.plot(MeanCentralHaloMass, MeanBaryonFraction, 'k-', label='Total')
     plt.plot(MeanCentralHaloMass, MeanStars, label='Stars', color='magenta', linestyle='--')
     plt.plot(MeanCentralHaloMass, MeanCold, label='Cold gas', color='blue', linestyle=':')
     plt.plot(MeanCentralHaloMass, MeanHot, label='Hot gas', color='red')
@@ -1168,7 +1114,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    outputFile = OutputDir + '11.BaryonFraction' + OutputFormat
+    outputFile = OutputDir + 'BaryonFraction' + OutputFormat
     plt.savefig(outputFile)
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1205,7 +1151,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
         
-    outputFile = OutputDir + '12.MassReservoirScatter' + OutputFormat
+    outputFile = OutputDir + 'MassReservoirScatter' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1249,9 +1195,18 @@ if __name__ == '__main__':
     plt.ylabel(r'$\mathrm{y}$')  # Set the y...
     plt.xlabel(r'$\mathrm{z}$')  # and the x-axis labels
 
+    # Set face color to black for all 2D plots
+    for ax in plt.gcf().axes:
+        ax.set_facecolor('black')
+        ax.grid(False) # No grid
+        # Set axis ticks to white
+        ax.tick_params(axis='x', colors='w')
+        ax.tick_params(axis='y', colors='w') 
+
+
     plt.tight_layout()
         
-    outputFile = OutputDir + '13.SpatialDistribution' + OutputFormat
+    outputFile = OutputDir + 'SpatialDistribution' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1302,16 +1257,16 @@ if __name__ == '__main__':
     ax.grid(False) # No grid
     
     # Set axis ticks to white
-    ax.tick_params(axis='x', colors='white')
-    ax.tick_params(axis='y', colors='white')
-    ax.tick_params(axis='z', colors='white')
+    ax.tick_params(axis='x', colors='k')
+    ax.tick_params(axis='y', colors='k')
+    ax.tick_params(axis='z', colors='k')
 
     # Make the aspect ratio equal
     ax.set_box_aspect([1,1,1])
 
     plt.tight_layout()
 
-    outputFile = OutputDir + '13b.SpatialDistribution3D_Box' + OutputFormat
+    outputFile = OutputDir + 'SpatialDistribution3D_Box' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1330,7 +1285,7 @@ if __name__ == '__main__':
     starformationrate =  (SfrDisk[w2] + SfrBulge[w2])
 
     # Create scatter plot with metallicity coloring
-    plt.scatter(mass, np.log10(starformationrate), c='magenta', marker='x', s=1, alpha=0.9)
+    plt.scatter(mass, np.log10(starformationrate), c='k', marker='x', s=1, alpha=0.9)
 
     plt.ylabel(r'$\log_{10} \mathrm{SFR}\ (M_{\odot}\ \mathrm{yr^{-1}})$')  # Set the y...
     plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')  # and the x-axis labels
@@ -1344,7 +1299,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    outputFile = OutputDir + '14.StarFormationRate' + OutputFormat
+    outputFile = OutputDir + 'StarFormationRate' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved to', outputFile, '\n')
     plt.close()
@@ -1360,7 +1315,7 @@ if __name__ == '__main__':
     log10_stellar_mass = np.log10(StellarMass[w])
     mass_loading = OutflowRate[w]
 
-    plt.scatter(Vvir[w], mass_loading, c='magenta', marker='x', s=1, alpha=0.9)
+    plt.scatter(Vvir[w], mass_loading, c='k', marker='x', s=1, alpha=0.9)
 
     plt.xlabel(r'$V_{\mathrm{vir}}\ (\mathrm{km/s})$')
     plt.ylabel(r'$\dot{M}_{\mathrm{outflow}}\ (M_{\odot}\ \mathrm{yr}^{-1})$')
@@ -1370,7 +1325,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    outputFile = OutputDir + '15.outflow_rate_vs_stellar_mass' + OutputFormat
+    outputFile = OutputDir + 'outflow_rate_vs_stellar_mass' + OutputFormat
     plt.savefig(outputFile)
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1411,7 +1366,7 @@ if __name__ == '__main__':
     plt.tight_layout()
 
 
-    outputFile = OutputDir + '16.stellar_vs_halo_mass_by_regime' + OutputFormat
+    outputFile = OutputDir + 'stellar_vs_halo_mass_by_regime' + OutputFormat
     plt.savefig(outputFile)
     print('Saved file to', outputFile, '\n')
     plt.close()
@@ -1514,7 +1469,7 @@ if __name__ == '__main__':
     if len(mass_sf) > 0:
         plot_density_contours(mass_sf, sSFR_sf, 'dodgerblue', 'Star-forming', clip_below=sSFRcut)
     # Add the sSFR cut line
-    plt.axhline(y=sSFRcut, color='white', linestyle='--', linewidth=2, 
+    plt.axhline(y=sSFRcut, color='k', linestyle='--', linewidth=2, 
             label=f'sSFR cut = {sSFRcut}', zorder=10)
 
     plt.ylabel(r'$\log_{10} \mathrm{sSFR}\ (\mathrm{yr^{-1}})$', fontsize=14)
@@ -1530,140 +1485,6 @@ if __name__ == '__main__':
     # plt.grid(True, alpha=0.3, linestyle=':', linewidth=0.5)
     plt.tight_layout()
 
-    plt.savefig(OutputDir + '17.specific_star_formation_rate' + OutputFormat, dpi=150)
+    plt.savefig(OutputDir + 'specific_star_formation_rate' + OutputFormat, dpi=150)
     print('Saved file to', outputFile, '\n')
     plt.close()
-
-# ---------------------------------------------------------
-#  Dust plots
-# ---------------------------------------------------------
-
-    if DustOn:
-
-        print('Plotting the dust-to-gas ratio vs stellar mass')
-
-        plt.figure()
-        ax = plt.subplot(111)
-
-        # Select galaxies with meaningful cold gas and dust
-        w = np.where((StellarMass > 0.0) & (ColdGas > 1.0e4) & (ColdDust > 0.0))[0]
-
-        mass = np.log10(StellarMass[w])
-        dtg = np.log10(ColdDust[w] / ColdGas[w])
-
-        # Scatter plot (diluted)
-        if len(w) > dilute:
-            ws = np.array(sample(range(len(w)), dilute))
-        else:
-            ws = np.arange(len(w))
-        plt.scatter(mass[ws], dtg[ws], marker='o', s=1, c='goldenrod', alpha=0.3)
-
-        # Running median
-        mass_bins = np.arange(8.0, 12.5, 0.25)
-        median_dtg = np.zeros(len(mass_bins) - 1)
-        p16_dtg = np.zeros(len(mass_bins) - 1)
-        p84_dtg = np.zeros(len(mass_bins) - 1)
-        mass_centers = 0.5 * (mass_bins[:-1] + mass_bins[1:])
-
-        for i in range(len(mass_bins) - 1):
-            sel = np.where((mass >= mass_bins[i]) & (mass < mass_bins[i+1]))[0]
-            if len(sel) > 10:
-                median_dtg[i] = np.median(dtg[sel])
-                p16_dtg[i] = np.percentile(dtg[sel], 16)
-                p84_dtg[i] = np.percentile(dtg[sel], 84)
-            else:
-                median_dtg[i] = np.nan
-                p16_dtg[i] = np.nan
-                p84_dtg[i] = np.nan
-
-        good = ~np.isnan(median_dtg)
-        plt.plot(mass_centers[good], median_dtg[good], 'w-', lw=3, label='SAGE26 median')
-        plt.fill_between(mass_centers[good], p16_dtg[good], p84_dtg[good],
-                         color='white', alpha=0.15, label=r'16$^{\rm th}$-84$^{\rm th}$ pctl')
-
-        # Milky Way reference: DtG ~ 0.01 (Draine 2003)
-        plt.axhline(y=np.log10(0.01), color='cyan', ls='--', lw=1.5, label='MW DtG (Draine 03)')
-
-        plt.ylabel(r'$\log_{10}\, (M_{\rm dust}^{\rm cold} \,/\, M_{\rm cold\,gas})$')
-        plt.xlabel(r'$\log_{10}\, M_{\rm stars}\ (M_{\odot})$')
-        plt.axis([8.0, 12.0, -6.0, -0.5])
-
-        ax.xaxis.set_minor_locator(plt.MultipleLocator(0.25))
-        ax.yaxis.set_minor_locator(plt.MultipleLocator(0.25))
-
-        leg = plt.legend(loc='lower right', fontsize=11)
-        leg.draw_frame(False)
-        for t in leg.get_texts():
-            t.set_fontsize('medium')
-
-        plt.tight_layout()
-        outputFile = OutputDir + '18.DustToGasRatio' + OutputFormat
-        plt.savefig(outputFile)
-        print('Saved to', outputFile, '\n')
-        plt.close()
-
-# ---------------------------------------------------------
-
-        print('Plotting the dust mass function')
-
-        plt.figure()
-        ax = plt.subplot(111)
-
-        binwidth = 0.2
-
-        # Total dust = Cold + Hot + Ejected
-        TotalDust = ColdDust + HotDust + EjectedDust
-
-        # Total dust mass function
-        w = np.where(TotalDust > 0.0)[0]
-        dustmass = np.log10(TotalDust[w])
-        mi = np.floor(min(dustmass)) - 2
-        ma = np.floor(max(dustmass)) + 2
-        NB = int((ma - mi) / binwidth)
-        (counts_total, binedges) = np.histogram(dustmass, range=(mi, ma), bins=NB)
-        xaxeshisto = binedges[:-1] + 0.5 * binwidth
-
-        plt.plot(xaxeshisto, np.log10(counts_total / volume / binwidth),
-                 color='white', lw=3, label='Total dust')
-
-        # Cold dust only
-        w = np.where(ColdDust > 0.0)[0]
-        dustmass_cold = np.log10(ColdDust[w])
-        (counts_cold, _) = np.histogram(dustmass_cold, range=(mi, ma), bins=NB)
-        plt.plot(xaxeshisto, np.log10(counts_cold / volume / binwidth),
-                 color='goldenrod', lw=2, ls='-', label='Cold dust (ISM)')
-
-        # Hot dust only
-        w = np.where(HotDust > 0.0)[0]
-        if len(w) > 0:
-            dustmass_hot = np.log10(HotDust[w])
-            (counts_hot, _) = np.histogram(dustmass_hot, range=(mi, ma), bins=NB)
-            plt.plot(xaxeshisto, np.log10(counts_hot / volume / binwidth),
-                     color='firebrick', lw=2, ls='--', label='Hot dust (CGM)')
-
-        # Ejected dust only
-        w = np.where(EjectedDust > 0.0)[0]
-        if len(w) > 0:
-            dustmass_ejected = np.log10(EjectedDust[w])
-            (counts_ejected, _) = np.histogram(dustmass_ejected, range=(mi, ma), bins=NB)
-            plt.plot(xaxeshisto, np.log10(counts_ejected / volume / binwidth),
-                     color='dodgerblue', lw=2, ls=':', label='Ejected dust')
-
-        plt.ylabel(r'$\log_{10}\ \phi\ (\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1})$')
-        plt.xlabel(r'$\log_{10}\, M_{\rm dust}\ (M_{\odot})$')
-        plt.axis([4.0, 10.0, -6.0, -1.0])
-
-        ax.xaxis.set_major_locator(plt.MultipleLocator(1))
-        ax.yaxis.set_major_locator(plt.MultipleLocator(1))
-
-        leg = plt.legend(loc='upper right', fontsize=11)
-        leg.draw_frame(False)
-        for t in leg.get_texts():
-            t.set_fontsize('medium')
-
-        plt.tight_layout()
-        outputFile = OutputDir + '19.DustMassFunction' + OutputFormat
-        plt.savefig(outputFile)
-        print('Saved to', outputFile, '\n')
-        plt.close()
-
