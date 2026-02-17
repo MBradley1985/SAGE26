@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <float.h>
 
 #include "core_allvars.h"
 #include "core_cool_func.h"
@@ -317,12 +318,11 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // ========================================================================
 
     // Depletion timescale
-    if(coolingGas > 0.0) {
-        const float depletion_time = galaxies[gal].CGMgas * tff / (precipitation_fraction * galaxies[gal].CGMgas);
-        // const float depletion_time_myr = depletion_time * run_params->UnitTime_in_s / (1e6 * SEC_PER_YEAR);
-
-        // Store depletion time for diagnostics
+    if(precipitation_fraction > 1e-6) {
+        const float depletion_time = tff / precipitation_fraction;
         galaxies[gal].tdeplete = depletion_time;
+    } else {
+        galaxies[gal].tdeplete = FLT_MAX;
     }
         
     //     printf("============================================\n\n");
