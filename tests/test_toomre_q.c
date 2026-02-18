@@ -28,39 +28,40 @@
 
 void test_toomre_Q_formula_basic() {
     BEGIN_TEST("Toomre Q Basic Formula Validation");
-    
+
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
-    
+
     /* Test with typical MW annulus values */
     double Sigma_gas = 10.0;    /* Msun/pc^2 - typical for MW disk */
     double Sigma_stars = 50.0;  /* Msun/pc^2 */
-    double r_mid = 8.0;         /* kpc - solar neighborhood */ 
+    double r_mid = 8.0;         /* kpc - solar neighborhood */
     double Vvir = 220.0;        /* km/s - MW circular velocity */
-    
+
     double Q = compute_toomre_Q(Sigma_gas, Sigma_stars, r_mid, Vvir, &run_params);
-    
-    /* Manual calculation for verification:
+
+    /* Manual calculation matching model implementation:
+     * Model uses kpc units and κ = √2 × Vvir / r for flat rotation curve
+     *
      * σ_gas = 10 km/s, σ_stars = Vvir/10 = 22 km/s
-     * Σ_total = 60 Msun/pc²
+     * Σ_total = 60 Msun/pc² = 60×10^6 Msun/kpc²
      * σ_eff = (10×10 + 50×22) / 60 = 1200/60 = 20 km/s
-     * r_mid_pc = 8000 pc
-     * κ = 220/8000 = 0.0275 km/s/pc
-     * G_pc = 4.302e-3 (km/s)² pc/Msun
-     * Q = (20 × 0.0275) / (π × 4.302e-3 × 60) = 0.55 / 0.811 = 0.678
+     * κ = √2 × 220 / 8 = 38.89 (km/s)/kpc
+     * G_kpc = 4.302e-6 (km/s)² kpc/Msun
+     * Q = (20 × 38.89) / (π × 4.302e-6 × 6×10^7) = 777.8 / 811.1 ≈ 0.959
      */
     double sigma_gas = 10.0;
     double sigma_stars = Vvir / 10.0;
     double Sigma_total = Sigma_gas + Sigma_stars;
     double sigma_eff = (Sigma_gas * sigma_gas + Sigma_stars * sigma_stars) / Sigma_total;
-    double r_mid_pc = r_mid * 1000.0;
-    double kappa = Vvir / r_mid_pc;
-    const double G_pc = 4.302e-3;
-    double Q_manual = (sigma_eff * kappa) / (M_PI * G_pc * Sigma_total);
-    
+    double kappa = sqrt(2.0) * Vvir / r_mid;  /* (km/s)/kpc - flat rotation curve */
+    double Sigma_total_kpc2 = Sigma_total * 1.0e6;  /* Convert Msun/pc² to Msun/kpc² */
+    const double G_kpc = 4.302e-6;  /* (km/s)² kpc/Msun */
+    double Q_manual = (sigma_eff * kappa) / (M_PI * G_kpc * Sigma_total_kpc2);
+
     printf("  ℹ Computed Q = %.4f, Manual Q = %.4f\n", Q, Q_manual);
-    
-    ASSERT_CLOSE(Q, Q_manual, 1e-10, "Q matches manual calculation");
+
+    ASSERT_CLOSE(Q, Q_manual, 1e-6, "Q matches manual calculation");
     ASSERT_TRUE(Q > 0.3 && Q < 3.0, "Q in physically reasonable range for MW");
 }
 

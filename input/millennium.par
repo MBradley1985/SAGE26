@@ -63,7 +63,7 @@ AGBYields             0   %0: Karakas2010
 SNIIYields            0   %0: WoosleyWeaver1995
 SNIaYields            0   %0: Iwamoto1999
 
-DarkModeOn            1   %0: standard SAGE; 1: full DarkSage physics (radial bins, Toomre Q, precession)
+DarkModeOn            0   %0: standard SAGE; 1: full DarkSage physics (radial bins, Toomre Q, precession)
 
 
 %------------------------------------------
@@ -72,7 +72,7 @@ DarkModeOn            1   %0: standard SAGE; 1: full DarkSage physics (radial bi
 
 DeltaDustAGB            0.2
 DeltaDustSNII           0.2
-DeltaDustSNIa           0.15
+DeltaDustSNIa           0.0
 DustAccretionTimescale  50.0
 EtaSNDust               0.1
 BinaryFraction          0.1    %Fraction of stars in SNIa binaries

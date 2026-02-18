@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./test_darkmode_integration:*)",
+      "Bash(gcc -std=gnu99 -Wall -Wextra -g -O2 -I../src -DROOT_DIR='\"\"$\\(cd .. && pwd\\)\"\"' test_dust.c ../src/core_utils.c ../src/model_misc.c ../src/model_starformation_and_feedback.c ../src/model_cooling_heating.c ../src/model_reincorporation.c ../src/model_infall.c ../src/model_disk_instability.c ../src/model_mergers.c ../src/model_dust.c ../src/model_darkmode.c ../src/core_cool_func.c -lm -o test_build/test_dust)",
+      "Bash(gcc:*)",
+      "Bash(./test_build/test_dust)",
+      "Bash(./test_build/test_darkmode:*)",
+      "Bash(./test_build/test_toomre_q:*)",
+      "Bash(git checkout:*)"
+    ]
+  }
+}

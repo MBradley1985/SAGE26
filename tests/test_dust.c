@@ -207,29 +207,34 @@ void test_dust_accretion() {
 
 void test_dust_accretion_saturation() {
     BEGIN_TEST("Dust Accretion Saturation (High DtM)");
-    
+
     struct GALAXY gal;
     struct params run_params;
     initialize_dust_params(&run_params);
     initialize_dust_galaxy(&gal);
-    
+
     // Start with high DtM ratio - should see reduced accretion
     gal.ColdDust = 0.018;  // 90% of metals
     gal.MetalsColdGas = 0.02;
     gal.H2gas = 0.5;
     gal.ColdGas = 1.0;
-    
+
     double initial_dust = gal.ColdDust;
+    double initial_total_metals = gal.ColdDust + gal.MetalsColdGas;
     double metallicity = get_metallicity(gal.ColdGas, gal.MetalsColdGas);
     double dt = 0.1;
-    
+
     accrete_dust(metallicity, dt, 0, 0, &gal, &run_params);
-    
+
     // Some growth should still occur, but less than at low DtM
     ASSERT_TRUE(gal.ColdDust >= initial_dust, "Dust doesn't decrease from accretion");
-    ASSERT_TRUE(gal.ColdDust <= gal.MetalsColdGas + 1e-10, 
-                "ColdDust capped at MetalsColdGas");
-    
+
+    // Note: In this model, MetalsColdGas = gas-phase metals only (not total).
+    // Dust + gas-phase metals = total metals, which should be conserved.
+    double final_total_metals = gal.ColdDust + gal.MetalsColdGas;
+    ASSERT_CLOSE(final_total_metals, initial_total_metals, 1e-10,
+                "Total metals (dust + gas-phase) conserved");
+
     double growth = gal.ColdDust - initial_dust;
     printf("    High-DtM growth: %.4e (saturation slows growth)\n", growth);
 }
