@@ -1,15 +1,3 @@
-/* Dust modeling for SAGE26
- * Based on dusty-sage (Triani et al. 2020, arXiv:2002.05343)
- * Physics from: Popping et al. 2017, Asano et al. 2013, Arrigoni et al. 2010
- *
- * Tracks three dust reservoirs: ColdDust, HotDust, EjectedDust
- * Implements: production, accretion, destruction, thermal sputtering
- *
- * Two production modes controlled by MetalYieldsOn:
- *   0 = Simplified model (weighted-average delta_eff * Yield * stars)
- *   1 = Full yield-table model (per-element, IMF-weighted, delayed enrichment)
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

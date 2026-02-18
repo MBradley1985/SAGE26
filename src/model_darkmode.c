@@ -9,20 +9,6 @@
 
 #define HYDROGEN_MASS_FRAC 0.74
 
-/**
- * 
- * Calculates surface density, H2 fraction, and star formation rate for each
- * radial bin using the specified H2 prescription. Handles all SFprescriptions
- * (0-7) with proper local surface density calculations.
- * 
- * @param p Galaxy index
- * @param dt Timestep [code units]
- * @param galaxies Array of galaxies
- * @param run_params Runtime parameters
- * @param sfr_local [OUTPUT] Star formation rate in each annulus [10^10 Msun/code_time]
- * @param h2_local [OUTPUT] H2 mass in each annulus [10^10 Msun/h]
- * @return Total SFR summed over all annuli [10^10 Msun/code_time]
- */
 double compute_local_star_formation(const int p, const double dt,
                                    struct GALAXY *galaxies, const struct params *run_params,
                                    double sfr_local[N_BINS], double h2_local[N_BINS])
@@ -225,20 +211,6 @@ double compute_local_star_formation(const int p, const double dt,
     return total_sfr;
 }
 
-
-/**
- * 
- * Updates disk arrays (DiscGas, DiscStars, DiscGasMetals, DiscStarsMetals)
- * based on local SFR computed for each annulus. Enforces local mass conservation.
- * 
- * @param p Galaxy index
- * @param dt Timestep [code units]
- * @param step Step index within snapshot
- * @param sfr_local SFR in each annulus [10^10 Msun/code_time]
- * @param galaxies Array of galaxies
- * @param run_params Runtime parameters
- * @return Total stellar mass formed [10^10 Msun/h]
- */
 double apply_local_star_formation(const int p, const double dt, const int step,
                                  const double sfr_local[N_BINS],
                                  struct GALAXY *galaxies, const struct params *run_params)
@@ -295,23 +267,6 @@ double apply_local_star_formation(const int p, const double dt, const int step,
     return total_stars_formed;
 }
 
-
-/**
- * 
- * Q = (σ κ) / (π G Σ)
- * where σ is velocity dispersion, κ is epicyclic frequency, Σ is surface density
- * 
- * For marginally stable disks: Q ~ 1
- * Q < 1: unstable to fragmentation
- * Q > 1: stable
- * 
- * @param Sigma_gas Gas surface density [Msun/pc^2]
- * @param Sigma_stars Stellar surface density [Msun/pc^2]
- * @param r_mid Mid-radius of annulus [kpc]
- * @param Vvir Virial velocity [km/s]
- * @param run_params Runtime parameters
- * @return Toomre Q parameter
- */
 double compute_toomre_Q(double Sigma_gas, double Sigma_stars, double r_mid, double Vvir,
                        const struct params *run_params)
 {
@@ -352,20 +307,6 @@ double compute_toomre_Q(double Sigma_gas, double Sigma_stars, double r_mid, doub
     return Q;
 }
 
-
-/**
- *  
- * Checks Toomre Q in each annulus. For Q < Q_crit, transfers unstable
- * mass to the bulge. This is the local version of the global disk instability
- * check in model_disk_instability.c
- * 
- * @param p Galaxy index
- * @param centralgal Central galaxy index
- * @param dt Timestep
- * @param step Step index
- * @param galaxies Array of galaxies
- * @param run_params Runtime parameters
- */
 void check_local_disk_instability(const int p, const int centralgal, const double dt, const int step,
                                  struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -439,20 +380,6 @@ void check_local_disk_instability(const int p, const int centralgal, const doubl
     // In DarkSage this might trigger BH growth or starburst
 }
 
-
-/**
- * 
- * Gas moves inward on viscous timescale: t_visc ~ r² / ν
- * where ν is kinematic viscosity (parameterized by α)
- * 
- * This is a simplified implementation - full DarkSage uses detailed angular
- * momentum transport. Here we do mass transport maintaining mass conservation.
- * 
- * @param p Galaxy index
- * @param dt Timestep [code units]
- * @param galaxies Array of galaxies
- * @param run_params Runtime parameters
- */
 void apply_radial_gas_flows(const int p, const double dt, struct GALAXY *galaxies,
                            const struct params *run_params)
 {
@@ -553,15 +480,6 @@ void apply_radial_gas_flows(const int p, const double dt, struct GALAXY *galaxie
 /* Enhanced disk physics: combined Q, precession, j-conservation              */
 /* ========================================================================== */
 
-/**
- * Rotate a 3D vector around an axis using Rodrigues' rotation formula.
- *
- * v_rot = v*cos(θ) + (k × v)*sin(θ) + k*(k·v)*(1 - cos(θ))
- *
- * @param v         Input vector to rotate (modified in place)
- * @param axis      Rotation axis (must be unit vector)
- * @param angle_deg Rotation angle in degrees
- */
 void rotate_vector(float v[3], const float axis[3], const double angle_deg)
 {
     if(angle_deg == 0.0) return;
@@ -585,19 +503,6 @@ void rotate_vector(float v[3], const float axis[3], const double angle_deg)
     }
 }
 
-
-/**
- * Compute total angular momentum vector of gas or stellar disc.
- * J = Σ_i m_i * j_i * spin_direction
- * where j_i is the specific angular momentum of annulus i.
- *
- * @param p           Galaxy index
- * @param component   0 = gas, 1 = stars
- * @param J           Output angular momentum vector [3]
- * @param galaxies    Galaxy array
- * @param run_params  Runtime parameters
- * @return            Total angular momentum magnitude
- */
 double get_disc_ang_mom(const int p, const int component, double J[3],
                         struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -628,16 +533,6 @@ double get_disc_ang_mom(const int p, const int component, double J[3],
 }
 
 
-/**
- * Precess gas disc toward stellar disc.
- * The gas disc aligns with the stellar disc over time due to dynamical friction
- * and torques. The precession rate is parameterized by DegPerTdyn.
- *
- * @param p          Galaxy index
- * @param dt         Timestep [code units]
- * @param galaxies   Galaxy array
- * @param run_params Runtime parameters
- */
 void precess_gas(const int p, const double dt, struct GALAXY *galaxies,
                  const struct params *run_params)
 {
@@ -707,24 +602,6 @@ void precess_gas(const int p, const double dt, struct GALAXY *galaxies,
     }
 }
 
-
-/**
- * Compute combined two-fluid Toomre Q parameter (Romeo & Wiegert 2011).
- * Accounts for both gas and stellar components with proper weighting.
- *
- * Q_tot = 1 / (W/Q_gas + 1/Q_star)  if σ_R >= σ_gas
- * Q_tot = 1 / (1/Q_gas + W/Q_star)  if σ_R < σ_gas
- *
- * where W = 2*σ_R*σ_gas / (σ_R² + σ_gas²)
- *
- * @param Sigma_gas    Gas surface density [Msun/pc^2]
- * @param Sigma_stars  Stellar surface density [Msun/pc^2]
- * @param sigma_gas    Gas velocity dispersion [km/s]
- * @param sigma_stars  Stellar radial velocity dispersion [km/s]
- * @param r_mid        Mid-radius of annulus [kpc]
- * @param Vvir         Virial velocity [km/s]
- * @return             Combined Toomre Q parameter
- */
 double compute_combined_toomre_Q(double Sigma_gas, double Sigma_stars,
                                  double sigma_gas, double sigma_stars,
                                  double r_mid, double Vvir)
@@ -778,18 +655,6 @@ double compute_combined_toomre_Q(double Sigma_gas, double Sigma_stars,
     return Q_tot;
 }
 
-
-/**
- * Handle unstable gas: sink it inward with angular momentum conservation.
- * Unstable gas moves inward, losing specific angular momentum.
- * Mass conservation: m_up/m_down = j_lose/j_gain
- *
- * @param p           Galaxy index
- * @param bin         Annulus index of unstable gas
- * @param unstable_gas Mass of unstable gas in this bin
- * @param galaxies    Galaxy array
- * @param run_params  Runtime parameters
- */
 void deal_with_unstable_gas(const int p, const int bin, const double unstable_gas,
                             struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -865,18 +730,6 @@ void deal_with_unstable_gas(const int p, const int bin, const double unstable_ga
     }
 }
 
-
-/**
- * Handle unstable stars: migrate inward one bin with angular momentum conservation.
- * Mirrors deal_with_unstable_gas but for the stellar component.
- * Stars move inward one bin per call, conserving total angular momentum.
- *
- * @param p              Galaxy index
- * @param bin            Annulus index of unstable stars
- * @param unstable_stars Mass of unstable stars to migrate
- * @param galaxies       Galaxy array
- * @param run_params     Runtime parameters
- */
 void deal_with_unstable_stars(const int p, const int bin, const double unstable_stars,
                               struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -939,25 +792,6 @@ void deal_with_unstable_stars(const int p, const int bin, const double unstable_
     if(galaxies[p].DiscStarsMetals[bin] < 0.0) galaxies[p].DiscStarsMetals[bin] = 0.0;
 }
 
-
-/**
- * Check for disk instabilities using combined Toomre Q and j-conservation.
- * Enhanced instability check for FullDarkMode.
- *
- * Approach: compute the exact excess surface density above marginal stability
- * (Q = Q_min) and transfer only that excess. Capped at GasSinkRate per timestep
- * to prevent over-stripping in massive galaxies.
- *
- * Stars migrate inward one bin at a time with j-conservation.
- * Only the innermost bin (bin 0) feeds the secular bulge and BH.
- *
- * @param p           Galaxy index
- * @param centralgal  Central galaxy index
- * @param dt          Timestep [code units]
- * @param step        Step index within snapshot
- * @param galaxies    Galaxy array
- * @param run_params  Runtime parameters
- */
 void check_full_disk_instability(const int p, const int centralgal, const double dt, const int step,
                                  struct GALAXY *galaxies, const struct params *run_params)
 {

@@ -234,12 +234,6 @@ double get_DTG(const double gas, const double dust)
 /* Angular momentum tracking for DarkMode - gas and stellar discs evolve      */
 /* independently based on mass flows (cooling, star formation, mergers)       */
 /* ========================================================================== */
-
-/**
- * Normalize a 3D spin vector to unit length.
- * 
- * @param spin  Input/output spin vector (modified in place)
- */
 void normalize_spin(float spin[3])
 {
     double mag = sqrt((double)spin[0] * spin[0] + 
@@ -253,19 +247,6 @@ void normalize_spin(float spin[3])
     }
 }
 
-
-/**
- * Evolve a spin vector by adding mass with a different angular momentum.
- * Combines existing component with new component weighted by mass.
- * 
- * The new spin direction is: J_new = m_old * J_old + m_new * J_add
- * Then normalized to unit vector.
- * 
- * @param spin_old  Existing spin vector (modified in place)
- * @param m_old     Mass of existing component
- * @param spin_add  Spin vector of material being added
- * @param m_add     Mass of material being added
- */
 void evolve_spin(float spin_old[3], const double m_old, 
                  const float spin_add[3], const double m_add)
 {
@@ -291,15 +272,6 @@ void evolve_spin(float spin_old[3], const double m_old,
     /* If mag == 0 (perfect cancellation), keep old spin direction */
 }
 
-
-/**
- * Update gas disc spin when cooling gas onto disc.
- * The cooling gas carries the hot gas / CGM spin (SpinHot).
- * 
- * @param gal           Galaxy index
- * @param cooling_mass  Mass of gas being cooled onto disc
- * @param galaxies      Galaxy array
- */
 void update_spin_gas_cooling(const int gal, const double cooling_mass, 
                              struct GALAXY *galaxies)
 {
@@ -312,15 +284,6 @@ void update_spin_gas_cooling(const int gal, const double cooling_mass,
                 cooling_mass);               /* Mass being added */
 }
 
-
-/**
- * Update stellar disc spin when forming stars.
- * New stars inherit the gas disc spin at the time of formation.
- * 
- * @param gal          Galaxy index
- * @param stars_formed Mass of stars formed
- * @param galaxies     Galaxy array
- */
 void update_spin_stars_sfr(const int gal, const double stars_formed, 
                            struct GALAXY *galaxies)
 {
@@ -333,15 +296,6 @@ void update_spin_stars_sfr(const int gal, const double stars_formed,
                 stars_formed);                /* Mass of new stars */
 }
 
-
-/**
- * Update hot gas spin when gas is ejected.
- * Ejected gas takes the current disc spin into the hot phase.
- * 
- * @param gal          Galaxy index
- * @param ejected_mass Mass being ejected
- * @param galaxies     Galaxy array
- */
 void update_spin_hot_ejection(const int gal, const double ejected_mass,
                               struct GALAXY *galaxies)
 {
@@ -354,15 +308,6 @@ void update_spin_hot_ejection(const int gal, const double ejected_mass,
                 ejected_mass);
 }
 
-
-/**
- * Combine spins of two galaxies during a merger.
- * Mass-weighted combination of angular momentum vectors.
- * 
- * @param t         Target galaxy index (survives merger)
- * @param p         Progenitor galaxy index (merges into target)
- * @param galaxies  Galaxy array
- */
 void combine_spins_merger(const int t, const int p, struct GALAXY *galaxies)
 {
     /* Combine gas disc spins */
