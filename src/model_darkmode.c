@@ -536,7 +536,7 @@ double get_disc_ang_mom(const int p, const int component, double J[3],
 void precess_gas(const int p, const double dt, struct GALAXY *galaxies,
                  const struct params *run_params)
 {
-    if(run_params->FullDarkModeOn != 1) return;
+    if(run_params->DarkModeOn != 1) return;
 
     /* Calculate angle between gas and stellar spins */
     double cos_theta = 0.0;
@@ -799,13 +799,12 @@ void check_full_disk_instability(const int p, const int centralgal, const double
     (void)step;
     (void)dt;
 
-    if(run_params->FullDarkModeOn != 1) return;
+    if(run_params->DarkModeOn != 1) return;
     if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) return;
 
-    /* --- Global stability check (Mo, Mao & White 1998) --- */
-    /* Only proceed with local ToomreQ instability if disk fails global criterion */
-    /* This prevents intermediate-mass galaxies with globally stable disks from */
-    /* losing mass to bulge through local instabilities */
+    /* --- Global stability factor (soft version of Mo, Mao & White 1998) --- */
+    /* Instead of a hard cutoff, use a smooth suppression factor based on disk/Mcrit ratio */
+    /* This allows gradual transition rather than abrupt on/off behavior */
     const double diskmass = galaxies[p].ColdGas +
                            (galaxies[p].StellarMass - galaxies[p].BulgeMass);
     if(diskmass <= 0.0) return;
@@ -813,15 +812,27 @@ void check_full_disk_instability(const int p, const int centralgal, const double
     const double Mcrit = galaxies[p].Vmax * galaxies[p].Vmax *
                         (3.0 * galaxies[p].DiskScaleRadius) / run_params->G;
 
-    /* If disk mass < critical mass, disk is globally stable - skip local instability */
-    if(diskmass <= Mcrit) return;
+    /* Global stability factor: smoothly transitions from f_floor (stable) to 1 (unstable) */
+    /* DarkSage doesn't use global stability at all, but we need some suppression to */
+    /* prevent the bulge/disk crossover from occurring at too low masses. */
+    /* However, we still allow SOME instability even in globally stable disks (f_floor) */
+    /* to match the gradual bulge buildup seen in observations. */
+    const double f_floor = 0.15;  /* Minimum instability efficiency even for stable disks */
+    double f_global = 1.0;
+    if(Mcrit > 0.0 && diskmass < 2.0 * Mcrit) {
+        /* Linear ramp from f_floor at diskmass=0 to 1.0 at diskmass=2*Mcrit */
+        double ratio = diskmass / (2.0 * Mcrit);
+        f_global = f_floor + (1.0 - f_floor) * ratio;
+        if(f_global > 1.0) f_global = 1.0;
+    }
+    /* f_global now modulates how much instability-driven mass transfer occurs */
 
     const double h = run_params->Hubble_h;
     const double Q_min = run_params->QTotMin;
-    const double sink_rate = run_params->GasSinkRate;  /* max fraction transferred per call */
+    const double gas_sink_rate = run_params->GasSinkRate;  /* base sink rate for gas */
 
-    /* Sound speed for gas (cold ISM) */
-    const double sigma_gas = 10.0;  /* km/s */
+    /* Sound speed for gas (cold ISM) - same as DarkSage */
+    const double c_s = 10.0;  /* km/s */
 
     /* --- Pass 1: bins 1..N_BINS-1 migrate excess mass inward one bin --- */
     for(int i = N_BINS - 1; i >= 1; i--) {
@@ -840,29 +851,26 @@ void check_full_disk_instability(const int p, const int centralgal, const double
         double sigma_stars = (double)galaxies[p].VelDispStars[i];
         if(sigma_stars < 10.0) sigma_stars = 10.0;
 
-        double Q = compute_combined_toomre_Q(Sigma_gas, Sigma_stars, sigma_gas, sigma_stars,
+        double Q = compute_combined_toomre_Q(Sigma_gas, Sigma_stars, c_s, sigma_stars,
                                             r_mid, galaxies[p].Vvir);
 
         if(Q >= Q_min) continue;  /* Stable */
 
-        /* Compute excess mass using combined Q deficit (matches DarkSage approach) */
+        /* StarSinkRate from DarkSage: varies with local velocity dispersion */
+        /* When sigma_stars is small (cold disk), StarSinkRate ~ GasSinkRate */
+        /* When sigma_stars is large (hot disk), StarSinkRate can be larger */
+        double star_sink_rate = 1.0 - (1.0 - gas_sink_rate) * c_s / sigma_stars;
+        if(star_sink_rate < 0.0) star_sink_rate = 0.0;
+        if(star_sink_rate > 1.0) star_sink_rate = 1.0;
+
         /* Q_deficit is the fractional amount Q is below Q_min */
-        /* This ensures we only transfer enough mass to restore stability */
         double Q_deficit = (Q_min - Q) / Q_min;
         if(Q_deficit > 1.0) Q_deficit = 1.0;  /* Safety cap */
 
-        /* Transfer proportionally from both components */
-        /* This respects the two-fluid nature of the combined Q calculation */
-        double gas_excess = Q_deficit * galaxies[p].DiscGas[i];
-        double stars_excess = Q_deficit * galaxies[p].DiscStars[i];
-
-        /* Cap at sink_rate fraction of current bin mass (per-timestep limit) */
-        if(gas_excess > sink_rate * galaxies[p].DiscGas[i]) {
-            gas_excess = sink_rate * galaxies[p].DiscGas[i];
-        }
-        if(stars_excess > sink_rate * galaxies[p].DiscStars[i]) {
-            stars_excess = sink_rate * galaxies[p].DiscStars[i];
-        }
+        /* DarkSage formula: unstable_mass = SinkRate * mass * (1 - Q/Q_min) */
+        /* Apply f_global to smoothly suppress instability in globally stable disks */
+        double gas_excess = f_global * gas_sink_rate * galaxies[p].DiscGas[i] * Q_deficit;
+        double stars_excess = f_global * star_sink_rate * galaxies[p].DiscStars[i] * Q_deficit;
 
         /* Migrate stars inward one bin */
         if(stars_excess > 0.0) {
@@ -875,11 +883,10 @@ void check_full_disk_instability(const int p, const int centralgal, const double
         }
 
         /* Disk heating: increase velocity dispersion to restore stability */
-        /* This is crucial to prevent repeated instability on the same annulus */
-        /* Formula from DarkSage: σ_new = σ_old * [(1-sink_rate) * Q_min/Q + sink_rate] */
+        /* DarkSage formula: σ_new = σ_old * [(1-StarSinkRate) * Q_min/Q + StarSinkRate] */
         /* Part of instability resolved by mass transfer, part by heating */
         if(galaxies[p].DiscStars[i] > 0.0 && Q < Q_min) {
-            double heating_factor = (1.0 - sink_rate) * (Q_min / Q) + sink_rate;
+            double heating_factor = (1.0 - star_sink_rate) * (Q_min / Q) + star_sink_rate;
             if(heating_factor > 2.0) heating_factor = 2.0;  /* Cap extreme heating */
             if(heating_factor > 1.0) {
                 galaxies[p].VelDispStars[i] *= (float)heating_factor;
@@ -907,26 +914,23 @@ void check_full_disk_instability(const int p, const int centralgal, const double
     if(sigma_stars_0 < 10.0) sigma_stars_0 = 10.0;
 
     double r_mid_0 = 0.5 * r_out_0;
-    double Q0 = compute_combined_toomre_Q(Sigma_gas_0, Sigma_stars_0, sigma_gas, sigma_stars_0,
+    double Q0 = compute_combined_toomre_Q(Sigma_gas_0, Sigma_stars_0, c_s, sigma_stars_0,
                                           r_mid_0, galaxies[p].Vvir);
 
     if(Q0 >= Q_min) return;  /* Stable */
+
+    /* StarSinkRate for bin 0 */
+    double star_sink_rate_0 = 1.0 - (1.0 - gas_sink_rate) * c_s / sigma_stars_0;
+    if(star_sink_rate_0 < 0.0) star_sink_rate_0 = 0.0;
+    if(star_sink_rate_0 > 1.0) star_sink_rate_0 = 1.0;
 
     /* Compute excess mass using combined Q deficit (same as outer bins) */
     double Q_deficit_0 = (Q_min - Q0) / Q_min;
     if(Q_deficit_0 > 1.0) Q_deficit_0 = 1.0;
 
-    /* Transfer proportionally from both components */
-    double gas_excess_0 = Q_deficit_0 * galaxies[p].DiscGas[0];
-    double stars_excess_0 = Q_deficit_0 * galaxies[p].DiscStars[0];
-
-    /* Cap at sink_rate fraction */
-    if(gas_excess_0 > sink_rate * galaxies[p].DiscGas[0]) {
-        gas_excess_0 = sink_rate * galaxies[p].DiscGas[0];
-    }
-    if(stars_excess_0 > sink_rate * galaxies[p].DiscStars[0]) {
-        stars_excess_0 = sink_rate * galaxies[p].DiscStars[0];
-    }
+    /* DarkSage formula with f_global suppression */
+    double gas_excess_0 = f_global * gas_sink_rate * galaxies[p].DiscGas[0] * Q_deficit_0;
+    double stars_excess_0 = f_global * star_sink_rate_0 * galaxies[p].DiscStars[0] * Q_deficit_0;
 
     /* Transfer excess stars from bin 0 → secular bulge */
     if(stars_excess_0 > 0.0) {

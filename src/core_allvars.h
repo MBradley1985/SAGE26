@@ -548,15 +548,13 @@ struct params
     int32_t    SNIaYields;              // SNIa yield table selection
     double     BinaryFraction;          // Binary fraction for SNIa (default 0.1)
 
-    /* DarkMode: radially-resolved disk structure */
-    int32_t    DarkModeOn;              // 0: standard SAGE; 1: DarkSage-style disk resolution
+    /* DarkMode: Full DarkSage physics with radially-resolved disk structure */
+    /* When DarkModeOn=1: Enables radial bins, Toomre Q instability, precession, j-conservation */
+    /* When DarkModeOn=0: Standard SAGE behavior */
+    int32_t    DarkModeOn;              // 0: standard SAGE; 1: full DarkSage physics
     double     FirstBin;                // First j-bin edge [kpc km/s] (default 100)
     double     ExponentBin;             // j-bin geometric growth factor (default 1.4)
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
-    int32_t    ToomreQDiskInstabilityOn; // 0: standard SAGE disk instability; 1: Toomre Q criterion applied to each annulus (only used when DarkModeOn=1)
-
-    /* FullDarkMode: Enhanced DarkSage physics */
-    int32_t    FullDarkModeOn;          // 0: standard DarkMode; 1: full DarkSage physics
     double     GasSinkRate;             // Unstable gas sink fraction (default 0.1)
     double     ThetaThresh;             // Coplanar threshold [deg] (default 5.0)
     double     DegPerTdyn;              // Precession rate [deg/tdyn] (default 1.0)

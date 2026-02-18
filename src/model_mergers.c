@@ -663,9 +663,9 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     update_from_feedback(merger_centralgal, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 
     // check for disk instability
-    // Note: If FullDarkModeOn=1, check_full_disk_instability handles instability
+    // Note: If DarkModeOn=1, check_full_disk_instability handles instability
     // with proper global stability check, so skip the standard instability here
-    if(run_params->DiskInstabilityOn && mode == 0 && run_params->FullDarkModeOn != 1) {
+    if(run_params->DiskInstabilityOn && mode == 0 && run_params->DarkModeOn != 1) {
         if(mass_ratio < run_params->ThreshMajorMerger) {
             check_disk_instability(merger_centralgal, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
         }

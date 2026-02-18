@@ -178,8 +178,8 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].GasDiscScaleRadius = galaxies[p].DiskScaleRadius;
         galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;
 
-        /* FullDarkMode: Initialize enhanced physics fields */
-        if(run_params->FullDarkModeOn == 1) {
+        /* DarkMode: Initialize enhanced physics fields */
+        if(run_params->DarkModeOn == 1) {
             /* Initialize velocity dispersion per annulus (default ~10 km/s for gas-dominated) */
             for(int i = 0; i < N_BINS; i++) {
                 galaxies[p].VelDispStars[i] = 10.0f;  /* km/s, will evolve with SF */

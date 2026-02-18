@@ -92,16 +92,12 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // This redistributes gas but doesn't change total
         apply_radial_gas_flows(p, dt, galaxies, run_params);
 
-        // FullDarkMode: Enhanced disk physics (precession and combined Q instability)
-        if(run_params->FullDarkModeOn == 1) {
-            // Precess gas disc toward stellar disc
-            precess_gas(p, dt, galaxies, run_params);
+        // DarkMode: Enhanced disk physics (precession and combined Q instability)
+        // Precess gas disc toward stellar disc
+        precess_gas(p, dt, galaxies, run_params);
 
-            // Check for disk instabilities using combined Toomre Q
-            if(run_params->ToomreQDiskInstabilityOn == 1) {
-                check_full_disk_instability(p, centralgal, dt, step, galaxies, run_params);
-            }
-        }
+        // Check for disk instabilities using combined Toomre Q
+        check_full_disk_instability(p, centralgal, dt, step, galaxies, run_params);
 
         // Now proceed with BULK star formation (preserves calibration)
         // This uses the same calculation as DarkModeOn=0, but we'll distribute
@@ -939,16 +935,11 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     update_from_feedback(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 
     // check for disk instability
-    // Note: If FullDarkModeOn=1, check_full_disk_instability is already called earlier
-    // (in the FullDarkMode section above), so we skip the instability check here
-    if(run_params->DiskInstabilityOn && run_params->FullDarkModeOn != 1) {
-        if(run_params->DarkModeOn == 1 && run_params->ToomreQDiskInstabilityOn == 1) {
-            // DarkMode: use local Toomre Q criterion per annulus
-            check_local_disk_instability(p, centralgal, dt, step, galaxies, run_params);
-        } else {
-            // Bulk: original disk instability model
-            check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
-        }
+    // Note: If DarkModeOn=1, check_full_disk_instability is already called earlier
+    // (in the DarkMode section above), so we skip the standard instability check here
+    if(run_params->DiskInstabilityOn && run_params->DarkModeOn != 1) {
+        // Standard SAGE: original disk instability model
+        check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
     }
 
     // formation of new metals - instantaneous recycling approximation - only SNII
