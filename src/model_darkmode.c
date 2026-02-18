@@ -532,11 +532,98 @@ double get_disc_ang_mom(const int p, const int component, double J[3],
     return total_J;
 }
 
+void project_disc(const float DiscMass[N_BINS], const double cos_angle,
+                  double NewDisc[N_BINS], const struct params *run_params,
+                  const double Rvir, const double Vvir)
+{
+    double cos_ang = fabs(cos_angle);  /* Handle retrograde by taking absolute value */
+
+    /* If nearly aligned, just copy - avoid floating point issues */
+    if(cos_ang > 0.99) {
+        for(int i = 0; i < N_BINS; i++) {
+            NewDisc[i] = (double)DiscMass[i];
+        }
+        return;
+    }
+
+    /* Make a working copy (convert float to double) */
+    double WorkMass[N_BINS];
+    for(int i = 0; i < N_BINS; i++) {
+        WorkMass[i] = (double)DiscMass[i];
+    }
+
+    int j_old = 0;
+
+    for(int i = 0; i < N_BINS; i++) {
+        /* Upper j-boundary of new bin i, projected */
+        double high_bound = run_params->DiscBinEdge[i+1] / cos_ang;
+
+        /* Find which old bins contribute to new bin i */
+        int j = j_old;
+        while(j < N_BINS && run_params->DiscBinEdge[j] < high_bound) {
+            j++;
+        }
+        j--;
+        if(j < 0) j = 0;
+
+        /* Sum mass from old bins that fully fit into new bin i */
+        NewDisc[i] = 0.0;
+        for(int l = j_old; l < j && l < N_BINS; l++) {
+            NewDisc[i] += WorkMass[l];
+            WorkMass[l] = 0.0;
+        }
+
+        /* Handle partial contribution from the boundary bin */
+        if(i < N_BINS - 1 && j < N_BINS) {
+            double ratio_last_bin;
+            if(j < N_BINS - 1) {
+                double dj = run_params->DiscBinEdge[j+1] - run_params->DiscBinEdge[j];
+                if(dj > 0.0) {
+                    ratio_last_bin = (high_bound - run_params->DiscBinEdge[j]) / dj;
+                    ratio_last_bin = ratio_last_bin * ratio_last_bin;  /* Area scaling */
+                    if(ratio_last_bin > 1.0) ratio_last_bin = 1.0;
+                } else {
+                    ratio_last_bin = 1.0;
+                }
+            } else {
+                /* Outermost bin: use virial radius as upper limit */
+                double j_vir = Rvir * Vvir;  /* Approximate max j */
+                if(j_vir > run_params->DiscBinEdge[j]) {
+                    ratio_last_bin = (high_bound - run_params->DiscBinEdge[j]) /
+                                     (j_vir - run_params->DiscBinEdge[j]);
+                    ratio_last_bin = ratio_last_bin * ratio_last_bin;
+                    if(ratio_last_bin > 1.0) ratio_last_bin = 1.0;
+                } else {
+                    ratio_last_bin = 1.0;
+                }
+            }
+            NewDisc[i] += ratio_last_bin * WorkMass[j];
+            WorkMass[j] -= ratio_last_bin * WorkMass[j];
+        } else if(i == N_BINS - 1) {
+            /* Last bin gets all remaining mass */
+            for(int l = j_old; l < N_BINS; l++) {
+                NewDisc[i] += WorkMass[l];
+            }
+        }
+
+        /* Safety check */
+        if(NewDisc[i] < 0.0) NewDisc[i] = 0.0;
+
+        j_old = j;
+    }
+}
 
 void precess_gas(const int p, const double dt, struct GALAXY *galaxies,
                  const struct params *run_params)
 {
     if(run_params->DarkModeOn != 1) return;
+
+    /* Get total disc gas */
+    double DiscGasSum = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        DiscGasSum += galaxies[p].DiscGas[i];
+    }
+    if(DiscGasSum <= 0.0) return;
 
     /* Calculate angle between gas and stellar spins */
     double cos_theta = 0.0;
@@ -548,60 +635,203 @@ void precess_gas(const int p, const double dt, struct GALAXY *galaxies,
     if(cos_theta > 1.0) cos_theta = 1.0;
     if(cos_theta < -1.0) cos_theta = -1.0;
 
-    double theta_deg = acos(cos_theta) * 180.0 / M_PI;
-
     /* If already coplanar (within threshold), no precession needed */
-    if(theta_deg < run_params->ThetaThresh) {
+    if(fabs(cos_theta) > cos(run_params->ThetaThresh * M_PI / 180.0)) {
         return;
     }
 
-    /* Calculate dynamical time at half-mass radius */
-    double r_half = galaxies[p].DiskScaleRadius * 1.68;  /* ~1.68 r_s for exponential */
-    double tdyn = (galaxies[p].Vvir > 0.0) ? r_half / galaxies[p].Vvir : 1.0;
+    /* Calculate mass-weighted precession angle like DarkSage */
+    /* Each annulus precesses at its own rate based on local t_dyn */
+    double deg = 0.0;
+    for(int i = N_BINS - 1; i >= 0; i--) {
+        if(galaxies[p].DiscGas[i] <= 0.0) continue;
+        if(run_params->DiscBinEdge[i+1] <= 0.0) continue;
 
-    if(tdyn <= 0.0) return;
+        /* t_dyn = r²/j (DarkSage formula) */
+        double r_outer = galaxies[p].DiscRadii[i+1];
+        double tdyn = (r_outer * r_outer) / run_params->DiscBinEdge[i+1];
+        if(tdyn <= 0.0) continue;
 
-    /* Precession angle this timestep */
-    double precess_deg = run_params->DegPerTdyn * dt / tdyn;
-
-    /* Don't overshoot */
-    if(precess_deg > theta_deg - run_params->ThetaThresh) {
-        precess_deg = theta_deg - run_params->ThetaThresh;
+        double deg_ann = run_params->DegPerTdyn * dt / tdyn;
+        deg += deg_ann * galaxies[p].DiscGas[i] / DiscGasSum;
     }
 
-    if(precess_deg <= 0.0) return;
+    if(deg <= 0.0) return;
 
-    /* Find rotation axis: perpendicular to both spins */
-    float axis[3];
-    axis[0] = galaxies[p].SpinGas[1] * galaxies[p].SpinStars[2] -
-              galaxies[p].SpinGas[2] * galaxies[p].SpinStars[1];
-    axis[1] = galaxies[p].SpinGas[2] * galaxies[p].SpinStars[0] -
-              galaxies[p].SpinGas[0] * galaxies[p].SpinStars[2];
-    axis[2] = galaxies[p].SpinGas[0] * galaxies[p].SpinStars[1] -
-              galaxies[p].SpinGas[1] * galaxies[p].SpinStars[0];
+    /* Calculate target angle after precession */
+    double cos_angle_precess = cos(deg * M_PI / 180.0);
 
-    /* Normalize axis */
-    double axis_mag = sqrt(axis[0]*axis[0] + axis[1]*axis[1] + axis[2]*axis[2]);
-    if(axis_mag > 0.0) {
-        for(int j = 0; j < 3; j++) {
-            axis[j] /= (float)axis_mag;
+    /* Don't precess past alignment */
+    if(cos_angle_precess < fabs(cos_theta)) {
+        cos_angle_precess = fabs(cos_theta);
+    }
+
+    /* Project disc to new orientation (DarkSage-style) */
+    double NewDiscGas[N_BINS];
+    double NewDiscGasMetals[N_BINS];
+    double NewDiscDust[N_BINS];
+
+    project_disc(galaxies[p].DiscGas, cos_angle_precess, NewDiscGas,
+                 run_params, galaxies[p].Rvir, galaxies[p].Vvir);
+    project_disc(galaxies[p].DiscGasMetals, cos_angle_precess, NewDiscGasMetals,
+                 run_params, galaxies[p].Rvir, galaxies[p].Vvir);
+
+    /* Also project dust if DustOn */
+    if(run_params->DustOn == 1) {
+        project_disc(galaxies[p].DiscDust, cos_angle_precess, NewDiscDust,
+                     run_params, galaxies[p].Rvir, galaxies[p].Vvir);
+    }
+
+    /* Update disc arrays */
+    for(int i = 0; i < N_BINS; i++) {
+        galaxies[p].DiscGas[i] = NewDiscGas[i];
+        galaxies[p].DiscGasMetals[i] = NewDiscGasMetals[i];
+        if(run_params->DustOn == 1) {
+            galaxies[p].DiscDust[i] = NewDiscDust[i];
+        }
+    }
+
+    /* Update spin vector */
+    if(cos_angle_precess == fabs(cos_theta)) {
+        /* Aligned or counter-aligned */
+        if(cos_theta >= 0.0) {
+            for(int j = 0; j < 3; j++) {
+                galaxies[p].SpinGas[j] = galaxies[p].SpinStars[j];
+            }
+        } else {
+            for(int j = 0; j < 3; j++) {
+                galaxies[p].SpinGas[j] = -galaxies[p].SpinStars[j];
+            }
+        }
+    } else {
+        /* Rotate spin vector toward stellar spin */
+        float axis[3];
+        axis[0] = galaxies[p].SpinGas[1] * galaxies[p].SpinStars[2] -
+                  galaxies[p].SpinGas[2] * galaxies[p].SpinStars[1];
+        axis[1] = galaxies[p].SpinGas[2] * galaxies[p].SpinStars[0] -
+                  galaxies[p].SpinGas[0] * galaxies[p].SpinStars[2];
+        axis[2] = galaxies[p].SpinGas[0] * galaxies[p].SpinStars[1] -
+                  galaxies[p].SpinGas[1] * galaxies[p].SpinStars[0];
+
+        if(cos_theta < 0.0) {
+            for(int j = 0; j < 3; j++) axis[j] *= -1.0f;
         }
 
-        /* Rotate gas spin toward stellar spin */
-        rotate_vector(galaxies[p].SpinGas, axis, precess_deg);
-
-        /* Re-normalize after rotation */
-        double spin_mag = sqrt(galaxies[p].SpinGas[0]*galaxies[p].SpinGas[0] +
-                               galaxies[p].SpinGas[1]*galaxies[p].SpinGas[1] +
-                               galaxies[p].SpinGas[2]*galaxies[p].SpinGas[2]);
-        if(spin_mag > 0.0) {
+        double axis_mag = sqrt(axis[0]*axis[0] + axis[1]*axis[1] + axis[2]*axis[2]);
+        if(axis_mag > 0.0) {
             for(int j = 0; j < 3; j++) {
-                galaxies[p].SpinGas[j] /= (float)spin_mag;
+                axis[j] /= (float)axis_mag;
+            }
+            /* Angle to rotate is acos(cos_angle_precess) */
+            rotate_vector(galaxies[p].SpinGas, axis, acos(cos_angle_precess) * 180.0 / M_PI);
+
+            /* Re-normalize */
+            double spin_mag = sqrt(galaxies[p].SpinGas[0]*galaxies[p].SpinGas[0] +
+                                   galaxies[p].SpinGas[1]*galaxies[p].SpinGas[1] +
+                                   galaxies[p].SpinGas[2]*galaxies[p].SpinGas[2]);
+            if(spin_mag > 0.0) {
+                for(int j = 0; j < 3; j++) {
+                    galaxies[p].SpinGas[j] /= (float)spin_mag;
+                }
             }
         }
     }
 }
 
+double compute_epicyclic_frequency(int bin, double r_inner, double r_outer,
+                                   const struct params *run_params)
+{
+    double dj = run_params->DiscBinEdge[bin+1] - run_params->DiscBinEdge[bin];
+    double dr = r_outer - r_inner;
+
+    if(dr <= 0.0 || dj <= 0.0) {
+        return 0.0;
+    }
+
+    double Kappa;
+    if(bin > 0) {
+        double j_inner = run_params->DiscBinEdge[bin];
+        double r_inner_cubed = r_inner * r_inner * r_inner;
+        if(r_inner_cubed <= 0.0) return 0.0;
+        Kappa = sqrt(2.0 * j_inner / r_inner_cubed * dj / dr);
+    } else {
+        /* Innermost bin: use outer edge */
+        double j_outer = run_params->DiscBinEdge[bin+1];
+        double r_outer_cubed = r_outer * r_outer * r_outer;
+        if(r_outer_cubed <= 0.0) return 0.0;
+        Kappa = sqrt(2.0 * j_outer / r_outer_cubed * dj / dr);
+    }
+
+    return Kappa;
+}
+
+double compute_combined_toomre_Q_darkmode(int bin, double DiscGas, double DiscStars,
+                                          double sigma_gas, double sigma_stars,
+                                          double r_inner, double r_outer,
+                                          const struct params *run_params)
+{
+    if(r_outer <= 0.0) {
+        return 1000.0;  /* Stable */
+    }
+
+    /* Epicyclic frequency using DarkSage j-bin formula */
+    double Kappa = compute_epicyclic_frequency(bin, r_inner, r_outer, run_params);
+    if(Kappa <= 0.0) {
+        return 1000.0;
+    }
+
+    /* Annulus area factor: (r_outer² - r_inner²) */
+    double r_out_sq = r_outer * r_outer;
+    double r_in_sq = r_inner * r_inner;
+    double area_factor = r_out_sq - r_in_sq;
+    if(area_factor <= 0.0) {
+        return 1000.0;
+    }
+
+    /* G in code units: (km/s)² * (Mpc/h) / (10^10 Msun/h) */
+    double G = run_params->G;
+
+    /* Individual Q values using DarkSage formula:
+     * Q_gas = c_s * Kappa * (r²_out - r²_in) / (G * M_gas)
+     * Q_star = Kappa * sigma_R * 0.935 * (r²_out - r²_in) / (G * M_stars)
+     * Note: 0.935 ≈ 1/(3.36/π) accounts for stellar disk geometry
+     */
+    double Q_gas = 1000.0;
+    double Q_stars = 1000.0;
+
+    if(DiscGas > 0.0 && sigma_gas > 0.0) {
+        Q_gas = sigma_gas * Kappa * area_factor / (G * DiscGas);
+    }
+
+    if(DiscStars > 0.0 && sigma_stars > 0.0) {
+        Q_stars = Kappa * sigma_stars * 0.935 * area_factor / (G * DiscStars);
+    }
+
+    /* If either component is absent, return single-component Q */
+    if(DiscGas <= 0.0) return Q_stars;
+    if(DiscStars <= 0.0) return Q_gas;
+
+    /* Romeo & Wiegert two-fluid weighting factor */
+    double sigma_R_sq = sigma_stars * sigma_stars;
+    double sigma_g_sq = sigma_gas * sigma_gas;
+    double W = 2.0 * sigma_stars * sigma_gas / (sigma_R_sq + sigma_g_sq);
+
+    /* Combined Q depends on which dispersion is larger */
+    double Q_tot;
+    if(sigma_stars >= sigma_gas) {
+        /* Stars are dynamically hotter */
+        double denom = W / Q_gas + 1.0 / Q_stars;
+        Q_tot = (denom > 0.0) ? 1.0 / denom : 1000.0;
+    } else {
+        /* Gas is dynamically hotter */
+        double denom = 1.0 / Q_gas + W / Q_stars;
+        Q_tot = (denom > 0.0) ? 1.0 / denom : 1000.0;
+    }
+
+    return Q_tot;
+}
+
+/* Legacy Q function for non-DarkMode use (kept for compatibility) */
 double compute_combined_toomre_Q(double Sigma_gas, double Sigma_stars,
                                  double sigma_gas, double sigma_stars,
                                  double r_mid, double Vvir)
@@ -827,7 +1057,6 @@ void check_full_disk_instability(const int p, const int centralgal, const double
     }
     /* f_global now modulates how much instability-driven mass transfer occurs */
 
-    const double h = run_params->Hubble_h;
     const double Q_min = run_params->QTotMin;
     const double gas_sink_rate = run_params->GasSinkRate;  /* base sink rate for gas */
 
@@ -838,21 +1067,18 @@ void check_full_disk_instability(const int p, const int centralgal, const double
     for(int i = N_BINS - 1; i >= 1; i--) {
         if(galaxies[p].DiscGas[i] <= 0.0 && galaxies[p].DiscStars[i] <= 0.0) continue;
 
-        double r_in = galaxies[p].DiscRadii[i] * 1000.0 / h;
-        double r_out = galaxies[p].DiscRadii[i+1] * 1000.0 / h;
-        double r_mid = 0.5 * (r_in + r_out);
-        double area_pc2 = M_PI * (r_out * r_out - r_in * r_in) * 1.0e6;
+        /* Use radii in code units (Mpc/h) for DarkMode Q calculation */
+        double r_inner = galaxies[p].DiscRadii[i];
+        double r_outer = galaxies[p].DiscRadii[i+1];
 
-        if(area_pc2 <= 0.0 || r_mid <= 0.0) continue;
-
-        double Sigma_gas = (galaxies[p].DiscGas[i] * 1.0e10 / h) / area_pc2;
-        double Sigma_stars = (galaxies[p].DiscStars[i] * 1.0e10 / h) / area_pc2;
+        if(r_outer <= 0.0) continue;
 
         double sigma_stars = (double)galaxies[p].VelDispStars[i];
         if(sigma_stars < 10.0) sigma_stars = 10.0;
 
-        double Q = compute_combined_toomre_Q(Sigma_gas, Sigma_stars, c_s, sigma_stars,
-                                            r_mid, galaxies[p].Vvir);
+        /* Use DarkMode Q calculation with mass (not surface density) and j-bin Kappa */
+        double Q = compute_combined_toomre_Q_darkmode(i, galaxies[p].DiscGas[i], galaxies[p].DiscStars[i],
+                                                      c_s, sigma_stars, r_inner, r_outer, run_params);
 
         if(Q >= Q_min) continue;  /* Stable */
 
@@ -903,19 +1129,17 @@ void check_full_disk_instability(const int p, const int centralgal, const double
     /* --- Pass 2: Innermost bin (bin 0) feeds bulge and BH --- */
     if(galaxies[p].DiscStars[0] <= 0.0 && galaxies[p].DiscGas[0] <= 0.0) return;
 
-    double r_out_0 = galaxies[p].DiscRadii[1] * 1000.0 / h;
-    double area_pc2_0 = M_PI * r_out_0 * r_out_0 * 1.0e6;
+    /* Use radii in code units (Mpc/h) for DarkMode Q calculation */
+    double r_outer_0 = galaxies[p].DiscRadii[1];
 
-    if(area_pc2_0 <= 0.0) return;
+    if(r_outer_0 <= 0.0) return;
 
-    double Sigma_gas_0 = (galaxies[p].DiscGas[0] * 1.0e10 / h) / area_pc2_0;
-    double Sigma_stars_0 = (galaxies[p].DiscStars[0] * 1.0e10 / h) / area_pc2_0;
     double sigma_stars_0 = (double)galaxies[p].VelDispStars[0];
     if(sigma_stars_0 < 10.0) sigma_stars_0 = 10.0;
 
-    double r_mid_0 = 0.5 * r_out_0;
-    double Q0 = compute_combined_toomre_Q(Sigma_gas_0, Sigma_stars_0, c_s, sigma_stars_0,
-                                          r_mid_0, galaxies[p].Vvir);
+    /* Use DarkMode Q calculation with mass (not surface density) and j-bin Kappa */
+    double Q0 = compute_combined_toomre_Q_darkmode(0, galaxies[p].DiscGas[0], galaxies[p].DiscStars[0],
+                                                   c_s, sigma_stars_0, 0.0, r_outer_0, run_params);
 
     if(Q0 >= Q_min) return;  /* Stable */
 
@@ -932,40 +1156,59 @@ void check_full_disk_instability(const int p, const int centralgal, const double
     double gas_excess_0 = f_global * gas_sink_rate * galaxies[p].DiscGas[0] * Q_deficit_0;
     double stars_excess_0 = f_global * star_sink_rate_0 * galaxies[p].DiscStars[0] * Q_deficit_0;
 
-    /* Transfer excess stars from bin 0 → secular bulge */
+    /* --- J-conservation for bin 0 (DarkSage formula) --- */
+    /* For bin 0, part of unstable mass goes to bulge/BH (m_down), part to bin 1 (m_up) */
+    /* j_lose = midpoint j of bin 0 */
+    /* j_gain = (DiscBinEdge[2] - DiscBinEdge[0]) / 2 = midpoint distance to bin 1 */
+    double j_lose = 0.5 * (run_params->DiscBinEdge[1] - run_params->DiscBinEdge[0]);
+    double j_gain = 0.5 * (run_params->DiscBinEdge[2] - run_params->DiscBinEdge[0]);
+
+    /* Avoid division by zero if j_gain + j_lose is too small */
+    double j_total = j_gain + j_lose;
+    if(j_total <= 0.0) j_total = 1.0;  /* Safety fallback */
+
+    /* --- Transfer excess stars from bin 0 with j-conservation --- */
     if(stars_excess_0 > 0.0) {
         double Z_s = (galaxies[p].DiscStars[0] > 0.0) ?
             galaxies[p].DiscStarsMetals[0] / galaxies[p].DiscStars[0] : 0.0;
 
+        /* m_up goes to bin 1 to conserve j, m_down goes to bulge */
+        double m_up_stars = j_lose / j_total * stars_excess_0;
+        double m_down_stars = j_gain / j_total * stars_excess_0;
+
+        /* Remove from bin 0 */
         galaxies[p].DiscStars[0] -= stars_excess_0;
         galaxies[p].DiscStarsMetals[0] -= Z_s * stars_excess_0;
 
-        galaxies[p].SecularBulgeMass += stars_excess_0;
-        galaxies[p].SecularMetalsBulgeMass += Z_s * stars_excess_0;
-        galaxies[p].BulgeMass += stars_excess_0;
-        galaxies[p].InstabilityBulgeMass += stars_excess_0;
-        galaxies[p].MetalsBulgeMass += Z_s * stars_excess_0;
+        /* Add m_up to bin 1 */
+        galaxies[p].DiscStars[1] += m_up_stars;
+        galaxies[p].DiscStarsMetals[1] += Z_s * m_up_stars;
+
+        /* Add m_down to bulge */
+        galaxies[p].SecularBulgeMass += m_down_stars;
+        galaxies[p].SecularMetalsBulgeMass += Z_s * m_down_stars;
+        galaxies[p].BulgeMass += m_down_stars;
+        galaxies[p].InstabilityBulgeMass += m_down_stars;
+        galaxies[p].MetalsBulgeMass += Z_s * m_down_stars;
 
         /* Update bulge velocity dispersion */
         double sigma_old = galaxies[p].VelDispBulge;
-        double m_old = galaxies[p].SecularBulgeMass - stars_excess_0;
+        double m_old = galaxies[p].SecularBulgeMass - m_down_stars;
         if(m_old < 0.0) m_old = 0.0;
         double sigma_new = galaxies[p].Vvir / 3.0;
         if(sigma_new < 50.0) sigma_new = 50.0;
-        double m_tot = m_old + stars_excess_0;
+        double m_tot = m_old + m_down_stars;
         if(m_tot > 0.0 && sigma_old > 0.0) {
             double sq = (m_old * sigma_old * sigma_old +
-                         stars_excess_0 * sigma_new * sigma_new) / m_tot;
+                         m_down_stars * sigma_new * sigma_new) / m_tot;
             galaxies[p].VelDispBulge = (float)sqrt(sq);
         } else {
             galaxies[p].VelDispBulge = (float)sigma_new;
         }
     }
 
-    /* Transfer excess gas from bin 0 → BH accretion */
-    /* Apply Vvir-dependent suppression (same as grow_black_hole in model_mergers.c) */
-    /* This prevents low-mass galaxies from growing overly massive BHs */
-    if(gas_excess_0 > 0.0 && run_params->AGNrecipeOn > 0) {
+    /* --- Transfer excess gas from bin 0 with j-conservation --- */
+    if(gas_excess_0 > 0.0) {
         double Z_g = (galaxies[p].DiscGas[0] > 0.0) ?
             galaxies[p].DiscGasMetals[0] / galaxies[p].DiscGas[0] : 0.0;
         double DTG_0 = 0.0;
@@ -973,37 +1216,44 @@ void check_full_disk_instability(const int p, const int centralgal, const double
             DTG_0 = galaxies[p].DiscDust[0] / galaxies[p].DiscGas[0];
         }
 
-        /* Calculate BH accretion with Vvir suppression factor */
-        /* Suppression: 1 / (1 + (280/Vvir)^2) - strongly suppresses BH growth in low-Vvir galaxies */
+        /* m_up goes to bin 1 to conserve j, m_down goes to BH */
+        double m_up_gas = j_lose / j_total * gas_excess_0;
+        double m_down_gas = j_gain / j_total * gas_excess_0;
+
+        /* Apply BH growth rate and Vvir suppression to the m_down portion */
         double Vvir = galaxies[p].Vvir;
         double suppression_factor = 1.0 / (1.0 + (280.0 * 280.0) / (Vvir * Vvir));
-
-        /* BH accretion is limited by efficiency and suppression */
-        double BH_accrete = run_params->BlackHoleGrowthRate * suppression_factor * gas_excess_0;
-
-        /* Cannot accrete more than the excess gas */
-        if(BH_accrete > gas_excess_0) {
-            BH_accrete = gas_excess_0;
+        double BH_accrete = run_params->BlackHoleGrowthRate * suppression_factor * m_down_gas;
+        if(BH_accrete > m_down_gas) {
+            BH_accrete = m_down_gas;
         }
 
-        /* Remove only the accreted gas from innermost bin */
-        galaxies[p].DiscGas[0] -= BH_accrete;
-        galaxies[p].DiscGasMetals[0] -= Z_g * BH_accrete;
-        galaxies[p].ColdGas -= BH_accrete;
-        galaxies[p].MetalsColdGas -= Z_g * BH_accrete;
+        /* Remove gas from bin 0 */
+        galaxies[p].DiscGas[0] -= gas_excess_0;
+        galaxies[p].DiscGasMetals[0] -= Z_g * gas_excess_0;
+        galaxies[p].ColdGas -= (BH_accrete + (m_down_gas - BH_accrete));  /* m_down portion leaves cold gas */
+        galaxies[p].MetalsColdGas -= Z_g * (BH_accrete + (m_down_gas - BH_accrete));
         if(run_params->DustOn == 1) {
-            galaxies[p].DiscDust[0] -= DTG_0 * BH_accrete;
-            galaxies[p].ColdDust -= DTG_0 * BH_accrete;
+            galaxies[p].DiscDust[0] -= DTG_0 * gas_excess_0;
+            galaxies[p].ColdDust -= DTG_0 * (BH_accrete + (m_down_gas - BH_accrete));
+        }
+
+        /* Add m_up to bin 1 */
+        galaxies[p].DiscGas[1] += m_up_gas;
+        galaxies[p].DiscGasMetals[1] += Z_g * m_up_gas;
+        if(run_params->DustOn == 1) {
+            galaxies[p].DiscDust[1] += DTG_0 * m_up_gas;
         }
 
         /* Accrete onto BH */
-        galaxies[p].BlackHoleMass += BH_accrete;
+        if(run_params->AGNrecipeOn > 0) {
+            galaxies[p].BlackHoleMass += BH_accrete;
+        }
 
-        /* Form stars from remaining excess gas (instability-driven starburst) */
-        /* This is crucial for metal production - matches DarkSage behavior */
-        /* Apply SfrEfficiency to control how much of the excess gas forms stars */
-        double gas_for_sf = gas_excess_0 - BH_accrete;
-        if(gas_for_sf > 0.0 && galaxies[p].DiscGas[0] >= gas_for_sf) {
+        /* Form stars from gas that didn't go to BH (m_down - BH_accrete) */
+        /* This is instability-driven star formation */
+        double gas_for_sf = m_down_gas - BH_accrete;
+        if(gas_for_sf > 0.0) {
             const double RecycleFraction = run_params->RecycleFraction;
             const double SfrEfficiency = run_params->SfrEfficiency;
 
@@ -1012,43 +1262,29 @@ void check_full_disk_instability(const int p, const int centralgal, const double
             /* Permanent stellar mass formed */
             double stars_formed = (1.0 - RecycleFraction) * gas_consumed;
 
-            /* Update gas: remove gas that forms stars (net of recycling) */
-            galaxies[p].DiscGas[0] -= stars_formed;
-            galaxies[p].DiscGasMetals[0] -= Z_g * stars_formed;
-            galaxies[p].ColdGas -= stars_formed;
-            galaxies[p].MetalsColdGas -= Z_g * stars_formed;
-            if(run_params->DustOn == 1) {
-                galaxies[p].DiscDust[0] -= DTG_0 * stars_formed;
-                galaxies[p].ColdDust -= DTG_0 * stars_formed;
-            }
-
-            /* Update stars: add newly formed stars to innermost bin */
+            /* Stars form in innermost bin (bin 0) */
             galaxies[p].DiscStars[0] += stars_formed;
             galaxies[p].DiscStarsMetals[0] += Z_g * stars_formed;
             galaxies[p].StellarMass += stars_formed;
             galaxies[p].MetalsStellarMass += Z_g * stars_formed;
 
             /* Produce new metals from star formation (using Yield) */
-            /* New metals go back to the gas phase */
             double new_metals = run_params->Yield * stars_formed;
             galaxies[p].DiscGasMetals[0] += new_metals;
             galaxies[p].MetalsColdGas += new_metals;
-
         }
-
-        /* Safety clamps */
-        if(galaxies[p].DiscGas[0] < 0.0) galaxies[p].DiscGas[0] = 0.0;
-        if(galaxies[p].DiscGasMetals[0] < 0.0) galaxies[p].DiscGasMetals[0] = 0.0;
-        if(galaxies[p].ColdGas < 0.0) galaxies[p].ColdGas = 0.0;
-        if(galaxies[p].MetalsColdGas < 0.0) galaxies[p].MetalsColdGas = 0.0;
-        if(run_params->DustOn == 1) {
-            if(galaxies[p].DiscDust[0] < 0.0) galaxies[p].DiscDust[0] = 0.0;
-            if(galaxies[p].ColdDust < 0.0) galaxies[p].ColdDust = 0.0;
-        }
-        if(galaxies[p].DiscStars[0] < 0.0) galaxies[p].DiscStars[0] = 0.0;
-        if(galaxies[p].DiscStarsMetals[0] < 0.0) galaxies[p].DiscStarsMetals[0] = 0.0;
     }
 
+    /* Safety clamps */
     if(galaxies[p].DiscStars[0] < 0.0) galaxies[p].DiscStars[0] = 0.0;
     if(galaxies[p].DiscStarsMetals[0] < 0.0) galaxies[p].DiscStarsMetals[0] = 0.0;
+    if(galaxies[p].DiscGas[0] < 0.0) galaxies[p].DiscGas[0] = 0.0;
+    if(galaxies[p].DiscGasMetals[0] < 0.0) galaxies[p].DiscGasMetals[0] = 0.0;
+    if(galaxies[p].ColdGas < 0.0) galaxies[p].ColdGas = 0.0;
+    if(galaxies[p].MetalsColdGas < 0.0) galaxies[p].MetalsColdGas = 0.0;
+    if(run_params->DustOn == 1) {
+        if(galaxies[p].DiscDust[0] < 0.0) galaxies[p].DiscDust[0] = 0.0;
+        if(galaxies[p].DiscDust[1] < 0.0) galaxies[p].DiscDust[1] = 0.0;
+        if(galaxies[p].ColdDust < 0.0) galaxies[p].ColdDust = 0.0;
+    }
 }
