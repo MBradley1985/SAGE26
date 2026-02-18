@@ -581,10 +581,11 @@ if __name__ == '__main__':
 
     w = np.where((Type == 0) & (ColdGas / (StellarMass + ColdGas) > 0.1) & (StellarMass > 1.0e8))[0]
     if(len(w) > dilute): w = sample(list(w), dilute)
+
+    ColdDust = read_hdf(snap_num = Snapshot, param = 'ColdDust') * 1.0e10 / Hubble_h
     
     mass = np.log10(StellarMass[w])
-    Z = np.log10((MetalsColdGas[w] / ColdGas[w]) / 0.02) + 9.0
-    
+    Z = np.log10((MetalsColdGas[w] + ColdDust[w]) / ColdGas[w] / 0.02) + 9.0  # Convert to 12 + log(O/H) scale, assuming solar metallicity of 0.02 and that all metals are oxygen (for simplicity)    
     plt.scatter(mass, Z, marker='x', s=1, c='gray', alpha=0.9, label='Model galaxies')
 
     # Tremonti et al. 2004 - the primary observational reference

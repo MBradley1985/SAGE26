@@ -58,12 +58,12 @@ FeedbackFreeModeOn    1   %0: switch off
 BulgeSizeOn           3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 
 DustOn                1   %0: switch off
-MetalYieldsOn         0   %0: use constant yield representing SNII only; 1: use stellar yields from AGB, SN and SNIa (Arrigoni 2012)
+MetalYieldsOn         1   %0: use constant yield representing SNII only; 1: use stellar yields from AGB, SN and SNIa (Arrigoni 2012)
 AGBYields             0   %0: Karakas2010
 SNIIYields            0   %0: WoosleyWeaver1995
 SNIaYields            0   %0: Iwamoto1999
 
-DarkModeOn            0   %0: standard SAGE; 1: DarkSage-style radially-resolved disks & AM
+DarkModeOn            1   %0: standard SAGE; 1: DarkSage-style radially-resolved disks & AM
 
 
 %------------------------------------------
@@ -72,8 +72,8 @@ DarkModeOn            0   %0: standard SAGE; 1: DarkSage-style radially-resolved
 
 DeltaDustAGB            0.2
 DeltaDustSNII           0.2
-DeltaDustSNIa           0.0
-DustAccretionTimescale  20.0
+DeltaDustSNIa           0.15
+DustAccretionTimescale  50.0
 EtaSNDust               0.1
 BinaryFraction          0.1    %Fraction of stars in SNIa binaries
 
@@ -89,7 +89,7 @@ ToomreQDiskInstabilityOn  0       %0: switch off
 %----- FullDarkMode (Enhanced DarkSage) ----
 %------------------------------------------
 
-FullDarkModeOn            0       %0: standard DarkMode; 1: full DarkSage physics
+FullDarkModeOn            1       %0: standard DarkMode; 1: full DarkSage physics
 GasSinkRate               0.1     %Unstable gas sink fraction (default 0.1)
 ThetaThresh               5.0     %Coplanar threshold [deg] (default 5.0)
 DegPerTdyn                1.0     %Precession rate [deg/tdyn] (default 1.0)

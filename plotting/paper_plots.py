@@ -204,7 +204,7 @@ def setup_style():
     # plt.rcParams['font.family'] = 'serif'
     # plt.rcParams['font.serif'] = 'Palatino'
     # plt.rcParams['text.usetex'] = True
-    plt.style.use("./plotting/kieren_cohare_palatino_sty.mplstyle")
+    plt.style.use("./plotting/ciaran_cohare_palatino_sty.mplstyle")
 
 
 def _tex_safe(s):
@@ -487,15 +487,17 @@ def mass_function_bootstrap(log_masses, volume, binwidth=0.1, mass_range=None,
     return centers, phi, phi_lo, phi_hi, mrange
 
 
-def metallicity_12logOH(metals_cold_gas, cold_gas):
+def metallicity_12logOH(metals_cold_gas, cold_gas, cold_dust=0):
     """
     Gas-phase metallicity in 12 + log10(O/H).
 
-    Uses Z_cold = MetalsColdGas / ColdGas, solar reference Z_sun = 0.02,
+    Uses Z_cold = (MetalsColdGas + ColdDust) / ColdGas, solar reference Z_sun = 0.02,
     and 12 + log10(O/H)_sun = 9.0.
+
+    For dusty models, cold_dust should be provided to include dust-locked metals.
     """
     with np.errstate(divide='ignore', invalid='ignore'):
-        return np.log10((metals_cold_gas / cold_gas) / 0.02) + 9.0
+        return np.log10(((metals_cold_gas + cold_dust) / cold_gas) / 0.02) + 9.0
 
 
 def stellar_metallicity(metals_stellar_mass, stellar_mass):
@@ -1649,7 +1651,8 @@ def plot_3_gas_metallicity_vs_stellar_mass(primary, vanilla):
          & (primary['MetalsColdGas'] > 0))
     log_mass = np.log10(primary['StellarMass'][w])
     gas_Z = metallicity_12logOH(primary['MetalsColdGas'][w],
-                                primary['ColdGas'][w])
+                                primary['ColdGas'][w],
+                                primary['ColdDust'][w])
 
     X, Y, Z = density_contour(log_mass, gas_Z,
                               bins=[np.linspace(8.0, 12.0, 101),
