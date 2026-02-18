@@ -197,7 +197,7 @@ def setup_style():
     # plt.rcParams['font.family'] = 'serif'
     # plt.rcParams['font.serif'] = 'Palatino'
     # plt.rcParams['text.usetex'] = True
-    plt.style.use("./plotting/kieren_cohare_palatino_sty.mplstyle")
+    plt.style.use("./plotting/ciaran_cohare_palatino_sty.mplstyle")
 
 
 def _tex_safe(s):
