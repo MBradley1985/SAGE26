@@ -223,6 +223,14 @@ struct GALAXY
     float CoolScaleRadius;           /* Scale radius of cooling gas */
     float GasDiscScaleRadius;        /* Gas disk scale radius */
     float StellarDiscScaleRadius;    /* Stellar disk scale radius */
+
+    /* FullDarkMode: Enhanced disk physics (only used when FullDarkModeOn=1) */
+    float VelDispStars[N_BINS];      /* Stellar velocity dispersion per annulus [km/s] */
+    float VelDispBulge;              /* Secular bulge velocity dispersion [km/s] */
+    float SecularBulgeMass;          /* Mass in secular bulge [10^10 Msun/h] */
+    float SecularMetalsBulgeMass;    /* Metals in secular bulge */
+    float SpinSecularBulge[3];       /* Secular bulge spin vector */
+    float R2_hot_av;                 /* Average <r^2> for hot gas */
 };
 
 
@@ -546,6 +554,13 @@ struct params
     double     ExponentBin;             // j-bin geometric growth factor (default 1.4)
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
     int32_t    ToomreQDiskInstabilityOn; // 0: standard SAGE disk instability; 1: Toomre Q criterion applied to each annulus (only used when DarkModeOn=1)
+
+    /* FullDarkMode: Enhanced DarkSage physics */
+    int32_t    FullDarkModeOn;          // 0: standard DarkMode; 1: full DarkSage physics
+    double     GasSinkRate;             // Unstable gas sink fraction (default 0.1)
+    double     ThetaThresh;             // Coplanar threshold [deg] (default 5.0)
+    double     DegPerTdyn;              // Precession rate [deg/tdyn] (default 1.0)
+    double     QTotMin;                 // Minimum combined Q for stability (default 1.0)
 
     /* Yield table data (populated by read_metal_yield when MetalYieldsOn=1) */
     double Qagb[MAXYIELDS][METALGRID];      /* Total AGB yield per mass/Z bin */

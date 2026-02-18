@@ -177,6 +177,27 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].CoolScaleRadius = galaxies[p].DiskScaleRadius;
         galaxies[p].GasDiscScaleRadius = galaxies[p].DiskScaleRadius;
         galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;
+
+        /* FullDarkMode: Initialize enhanced physics fields */
+        if(run_params->FullDarkModeOn == 1) {
+            /* Initialize velocity dispersion per annulus (default ~10 km/s for gas-dominated) */
+            for(int i = 0; i < N_BINS; i++) {
+                galaxies[p].VelDispStars[i] = 10.0f;  /* km/s, will evolve with SF */
+            }
+
+            /* Initialize secular bulge properties */
+            galaxies[p].VelDispBulge = 0.0f;
+            galaxies[p].SecularBulgeMass = 0.0f;
+            galaxies[p].SecularMetalsBulgeMass = 0.0f;
+
+            /* Secular bulge spin initially zero */
+            for(int j = 0; j < 3; j++) {
+                galaxies[p].SpinSecularBulge[j] = 0.0f;
+            }
+
+            /* Average r^2 for hot gas (used in j-conservation) */
+            galaxies[p].R2_hot_av = 0.0f;
+        }
     }
 }
 

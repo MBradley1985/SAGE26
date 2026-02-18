@@ -91,7 +91,18 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // Apply radial gas flows BEFORE star formation
         // This redistributes gas but doesn't change total
         apply_radial_gas_flows(p, dt, galaxies, run_params);
-        
+
+        // FullDarkMode: Enhanced disk physics (precession and combined Q instability)
+        if(run_params->FullDarkModeOn == 1) {
+            // Precess gas disc toward stellar disc
+            precess_gas(p, dt, galaxies, run_params);
+
+            // Check for disk instabilities using combined Toomre Q
+            if(run_params->ToomreQDiskInstabilityOn == 1) {
+                check_full_disk_instability(p, centralgal, dt, step, galaxies, run_params);
+            }
+        }
+
         // Now proceed with BULK star formation (preserves calibration)
         // This uses the same calculation as DarkModeOn=0, but we'll distribute
         // the results to disc arrays afterwards

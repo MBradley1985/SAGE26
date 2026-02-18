@@ -321,9 +321,27 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->ToomreQDiskInstabilityOn);
     ParamID[NParam++] = INT;
 
+    strncpy(ParamTag[NParam], "FullDarkModeOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->FullDarkModeOn);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "GasSinkRate", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->GasSinkRate);
+    ParamID[NParam++] = DOUBLE;
+
+    strncpy(ParamTag[NParam], "ThetaThresh", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->ThetaThresh);
+    ParamID[NParam++] = DOUBLE;
+
+    strncpy(ParamTag[NParam], "DegPerTdyn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->DegPerTdyn);
+    ParamID[NParam++] = DOUBLE;
+
+    strncpy(ParamTag[NParam], "QTotMin", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->QTotMin);
+    ParamID[NParam++] = DOUBLE;
 
 
-    
     used_tag = mymalloc(sizeof(int) * NParam);
     for(int i=0; i<NParam; i++) {
         used_tag[i]=1;

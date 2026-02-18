@@ -58,12 +58,12 @@ FeedbackFreeModeOn    1   %0: switch off
 BulgeSizeOn           3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 
 DustOn                1   %0: switch off
-MetalYieldsOn         1   %0: use constant yield representing SNII only; 1: use stellar yields from AGB, SN and SNIa (Arrigoni 2012)
+MetalYieldsOn         0   %0: use constant yield representing SNII only; 1: use stellar yields from AGB, SN and SNIa (Arrigoni 2012)
 AGBYields             0   %0: Karakas2010
 SNIIYields            0   %0: WoosleyWeaver1995
 SNIaYields            0   %0: Iwamoto1999
 
-DarkModeOn            1   %0: standard SAGE; 1: DarkSage-style radially-resolved disks & AM
+DarkModeOn            0   %0: standard SAGE; 1: DarkSage-style radially-resolved disks & AM
 
 
 %------------------------------------------
@@ -84,6 +84,16 @@ BinaryFraction          0.1    %Fraction of stars in SNIa binaries
 FirstBin                  1.0     %First j-bin edge [kpc*km/s] (default 100)
 ExponentBin               1.4     %j-bin geometric growth factor (default 1.4)
 ToomreQDiskInstabilityOn  0       %0: switch off
+
+%------------------------------------------
+%----- FullDarkMode (Enhanced DarkSage) ----
+%------------------------------------------
+
+FullDarkModeOn            0       %0: standard DarkMode; 1: full DarkSage physics
+GasSinkRate               0.1     %Unstable gas sink fraction (default 0.1)
+ThetaThresh               5.0     %Coplanar threshold [deg] (default 5.0)
+DegPerTdyn                1.0     %Precession rate [deg/tdyn] (default 1.0)
+QTotMin                   1.0     %Min combined Q for stability (default 1.0)
 
 %------------------------------------------
 %----- SAGE model parameters --------------
