@@ -79,8 +79,8 @@ If you're following the above, these scripts can run as-is to produce a series o
 
 .. code::
 
-    $ python3 plotting/allresults-local.py
-    $ python3 plotting/allresults-history.py
+    $ python plotting/allresults-local.py
+    $ python plotting/allresults-history.py
 
 Near the top of both scripts, there is a "USER OPTIONS" section where you can modify the simulation and plotting details for your own needs. 
 These scripts can be used as a template to read the hdf5 ``SAGE`` model output and to make your own custom figures.
@@ -94,7 +94,7 @@ You can clone the PSO package directly from GitHub:
 
 .. code::
 
-    $ git clone https://github.com/sage-home/sage-pso.git
+    $ git clone https://github.com/MBradley1985/SAGE-PSO.git
     $ cd SAGE-PSO/
 
 This system allows you to optimize SAGE model parameters against observational constraints to improve the physical realism of your galaxy formation models.
@@ -119,7 +119,6 @@ CGM building can be turned on or off.
 Parameters can be manipulated in the parameter file as follows to allow for extra exploration.
 
 Future work should include black hole recipes from other models, as well as more advanced H2 star formation and feedback models.
-Dust and Angular Momentum incoming.
 
 Citation
 =========
