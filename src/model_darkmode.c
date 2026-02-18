@@ -968,15 +968,26 @@ void check_full_disk_instability(const int p, const int centralgal, const double
     if(run_params->FullDarkModeOn != 1) return;
     if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) return;
 
+    /* --- Global stability check (Mo, Mao & White 1998) --- */
+    /* Only proceed with local ToomreQ instability if disk fails global criterion */
+    /* This prevents intermediate-mass galaxies with globally stable disks from */
+    /* losing mass to bulge through local instabilities */
+    const double diskmass = galaxies[p].ColdGas +
+                           (galaxies[p].StellarMass - galaxies[p].BulgeMass);
+    if(diskmass <= 0.0) return;
+
+    const double Mcrit = galaxies[p].Vmax * galaxies[p].Vmax *
+                        (3.0 * galaxies[p].DiskScaleRadius) / run_params->G;
+
+    /* If disk mass < critical mass, disk is globally stable - skip local instability */
+    if(diskmass <= Mcrit) return;
+
     const double h = run_params->Hubble_h;
     const double Q_min = run_params->QTotMin;
     const double sink_rate = run_params->GasSinkRate;  /* max fraction transferred per call */
 
     /* Sound speed for gas (cold ISM) */
     const double sigma_gas = 10.0;  /* km/s */
-
-    /* G constant for critical surface density calculation */
-    const double G_kpc = 4.302e-6;  /* (km/s)^2 kpc / Msun */
 
     /* --- Pass 1: bins 1..N_BINS-1 migrate excess mass inward one bin --- */
     for(int i = N_BINS - 1; i >= 1; i--) {
@@ -1000,24 +1011,18 @@ void check_full_disk_instability(const int p, const int centralgal, const double
 
         if(Q >= Q_min) continue;  /* Stable */
 
-        /* Compute critical surface densities for marginal stability (Q = Q_min) */
-        double kappa = sqrt(2.0) * galaxies[p].Vvir / r_mid;
+        /* Compute excess mass using combined Q deficit (matches DarkSage approach) */
+        /* Q_deficit is the fractional amount Q is below Q_min */
+        /* This ensures we only transfer enough mass to restore stability */
+        double Q_deficit = (Q_min - Q) / Q_min;
+        if(Q_deficit > 1.0) Q_deficit = 1.0;  /* Safety cap */
 
-        double Sigma_gas_crit = (sigma_gas * kappa) / (M_PI * G_kpc * Q_min) / 1.0e6;  /* Msun/pc^2 */
-        double Sigma_stars_crit = (sigma_stars * kappa) / (3.36 * G_kpc * Q_min) / 1.0e6;
+        /* Transfer proportionally from both components */
+        /* This respects the two-fluid nature of the combined Q calculation */
+        double gas_excess = Q_deficit * galaxies[p].DiscGas[i];
+        double stars_excess = Q_deficit * galaxies[p].DiscStars[i];
 
-        /* Excess mass above critical (in code units: 10^10 Msun/h) */
-        double gas_excess = 0.0;
-        if(Sigma_gas > Sigma_gas_crit) {
-            gas_excess = (Sigma_gas - Sigma_gas_crit) * area_pc2 * h / 1.0e10;
-        }
-
-        double stars_excess = 0.0;
-        if(Sigma_stars > Sigma_stars_crit) {
-            stars_excess = (Sigma_stars - Sigma_stars_crit) * area_pc2 * h / 1.0e10;
-        }
-
-        /* Cap at sink_rate fraction of current bin mass */
+        /* Cap at sink_rate fraction of current bin mass (per-timestep limit) */
         if(gas_excess > sink_rate * galaxies[p].DiscGas[i]) {
             gas_excess = sink_rate * galaxies[p].DiscGas[i];
         }
@@ -1033,6 +1038,18 @@ void check_full_disk_instability(const int p, const int centralgal, const double
         /* Migrate gas inward one bin */
         if(gas_excess > 0.0) {
             deal_with_unstable_gas(p, i, gas_excess, galaxies, run_params);
+        }
+
+        /* Disk heating: increase velocity dispersion to restore stability */
+        /* This is crucial to prevent repeated instability on the same annulus */
+        /* Formula from DarkSage: σ_new = σ_old * [(1-sink_rate) * Q_min/Q + sink_rate] */
+        /* Part of instability resolved by mass transfer, part by heating */
+        if(galaxies[p].DiscStars[i] > 0.0 && Q < Q_min) {
+            double heating_factor = (1.0 - sink_rate) * (Q_min / Q) + sink_rate;
+            if(heating_factor > 2.0) heating_factor = 2.0;  /* Cap extreme heating */
+            if(heating_factor > 1.0) {
+                galaxies[p].VelDispStars[i] *= (float)heating_factor;
+            }
         }
 
         /* Safety clamps */
@@ -1061,24 +1078,17 @@ void check_full_disk_instability(const int p, const int centralgal, const double
 
     if(Q0 >= Q_min) return;  /* Stable */
 
-    /* Critical surface densities */
-    double kappa_0 = sqrt(2.0) * galaxies[p].Vvir / r_mid_0;
+    /* Compute excess mass using combined Q deficit (same as outer bins) */
+    double Q_deficit_0 = (Q_min - Q0) / Q_min;
+    if(Q_deficit_0 > 1.0) Q_deficit_0 = 1.0;
 
-    double Sigma_gas_crit_0 = (sigma_gas * kappa_0) / (M_PI * G_kpc * Q_min) / 1.0e6;
-    double Sigma_stars_crit_0 = (sigma_stars_0 * kappa_0) / (3.36 * G_kpc * Q_min) / 1.0e6;
+    /* Transfer proportionally from both components */
+    double gas_excess_0 = Q_deficit_0 * galaxies[p].DiscGas[0];
+    double stars_excess_0 = Q_deficit_0 * galaxies[p].DiscStars[0];
 
-    /* Excess mass in bin 0 */
-    double gas_excess_0 = 0.0;
-    if(Sigma_gas_0 > Sigma_gas_crit_0) {
-        gas_excess_0 = (Sigma_gas_0 - Sigma_gas_crit_0) * area_pc2_0 * h / 1.0e10;
-    }
+    /* Cap at sink_rate fraction */
     if(gas_excess_0 > sink_rate * galaxies[p].DiscGas[0]) {
         gas_excess_0 = sink_rate * galaxies[p].DiscGas[0];
-    }
-
-    double stars_excess_0 = 0.0;
-    if(Sigma_stars_0 > Sigma_stars_crit_0) {
-        stars_excess_0 = (Sigma_stars_0 - Sigma_stars_crit_0) * area_pc2_0 * h / 1.0e10;
     }
     if(stars_excess_0 > sink_rate * galaxies[p].DiscStars[0]) {
         stars_excess_0 = sink_rate * galaxies[p].DiscStars[0];
@@ -1115,8 +1125,9 @@ void check_full_disk_instability(const int p, const int centralgal, const double
     }
 
     /* Transfer excess gas from bin 0 → BH accretion */
-    /* In DarkSage, inner-disk instabilities drive gas onto the BH */
-    if(gas_excess_0 > 0.0) {
+    /* Apply Vvir-dependent suppression (same as grow_black_hole in model_mergers.c) */
+    /* This prevents low-mass galaxies from growing overly massive BHs */
+    if(gas_excess_0 > 0.0 && run_params->AGNrecipeOn > 0) {
         double Z_g = (galaxies[p].DiscGas[0] > 0.0) ?
             galaxies[p].DiscGasMetals[0] / galaxies[p].DiscGas[0] : 0.0;
         double DTG_0 = 0.0;
@@ -1124,18 +1135,68 @@ void check_full_disk_instability(const int p, const int centralgal, const double
             DTG_0 = galaxies[p].DiscDust[0] / galaxies[p].DiscGas[0];
         }
 
-        /* Remove gas from innermost bin */
-        galaxies[p].DiscGas[0] -= gas_excess_0;
-        galaxies[p].DiscGasMetals[0] -= Z_g * gas_excess_0;
-        galaxies[p].ColdGas -= gas_excess_0;
-        galaxies[p].MetalsColdGas -= Z_g * gas_excess_0;
-        if(run_params->DustOn == 1) {
-            galaxies[p].DiscDust[0] -= DTG_0 * gas_excess_0;
-            galaxies[p].ColdDust -= DTG_0 * gas_excess_0;
+        /* Calculate BH accretion with Vvir suppression factor */
+        /* Suppression: 1 / (1 + (280/Vvir)^2) - strongly suppresses BH growth in low-Vvir galaxies */
+        double Vvir = galaxies[p].Vvir;
+        double suppression_factor = 1.0 / (1.0 + (280.0 * 280.0) / (Vvir * Vvir));
+
+        /* BH accretion is limited by efficiency and suppression */
+        double BH_accrete = run_params->BlackHoleGrowthRate * suppression_factor * gas_excess_0;
+
+        /* Cannot accrete more than the excess gas */
+        if(BH_accrete > gas_excess_0) {
+            BH_accrete = gas_excess_0;
         }
 
-        /* Accrete onto BH (all excess gas from bin 0) */
-        galaxies[p].BlackHoleMass += gas_excess_0;
+        /* Remove only the accreted gas from innermost bin */
+        galaxies[p].DiscGas[0] -= BH_accrete;
+        galaxies[p].DiscGasMetals[0] -= Z_g * BH_accrete;
+        galaxies[p].ColdGas -= BH_accrete;
+        galaxies[p].MetalsColdGas -= Z_g * BH_accrete;
+        if(run_params->DustOn == 1) {
+            galaxies[p].DiscDust[0] -= DTG_0 * BH_accrete;
+            galaxies[p].ColdDust -= DTG_0 * BH_accrete;
+        }
+
+        /* Accrete onto BH */
+        galaxies[p].BlackHoleMass += BH_accrete;
+
+        /* Form stars from remaining excess gas (instability-driven starburst) */
+        /* This is crucial for metal production - matches DarkSage behavior */
+        /* Apply SfrEfficiency to control how much of the excess gas forms stars */
+        double gas_for_sf = gas_excess_0 - BH_accrete;
+        if(gas_for_sf > 0.0 && galaxies[p].DiscGas[0] >= gas_for_sf) {
+            const double RecycleFraction = run_params->RecycleFraction;
+            const double SfrEfficiency = run_params->SfrEfficiency;
+
+            /* Gas that participates in SF (controlled by efficiency) */
+            double gas_consumed = SfrEfficiency * gas_for_sf;
+            /* Permanent stellar mass formed */
+            double stars_formed = (1.0 - RecycleFraction) * gas_consumed;
+
+            /* Update gas: remove gas that forms stars (net of recycling) */
+            galaxies[p].DiscGas[0] -= stars_formed;
+            galaxies[p].DiscGasMetals[0] -= Z_g * stars_formed;
+            galaxies[p].ColdGas -= stars_formed;
+            galaxies[p].MetalsColdGas -= Z_g * stars_formed;
+            if(run_params->DustOn == 1) {
+                galaxies[p].DiscDust[0] -= DTG_0 * stars_formed;
+                galaxies[p].ColdDust -= DTG_0 * stars_formed;
+            }
+
+            /* Update stars: add newly formed stars to innermost bin */
+            galaxies[p].DiscStars[0] += stars_formed;
+            galaxies[p].DiscStarsMetals[0] += Z_g * stars_formed;
+            galaxies[p].StellarMass += stars_formed;
+            galaxies[p].MetalsStellarMass += Z_g * stars_formed;
+
+            /* Produce new metals from star formation (using Yield) */
+            /* New metals go back to the gas phase */
+            double new_metals = run_params->Yield * stars_formed;
+            galaxies[p].DiscGasMetals[0] += new_metals;
+            galaxies[p].MetalsColdGas += new_metals;
+
+        }
 
         /* Safety clamps */
         if(galaxies[p].DiscGas[0] < 0.0) galaxies[p].DiscGas[0] = 0.0;
@@ -1146,6 +1207,8 @@ void check_full_disk_instability(const int p, const int centralgal, const double
             if(galaxies[p].DiscDust[0] < 0.0) galaxies[p].DiscDust[0] = 0.0;
             if(galaxies[p].ColdDust < 0.0) galaxies[p].ColdDust = 0.0;
         }
+        if(galaxies[p].DiscStars[0] < 0.0) galaxies[p].DiscStars[0] = 0.0;
+        if(galaxies[p].DiscStarsMetals[0] < 0.0) galaxies[p].DiscStarsMetals[0] = 0.0;
     }
 
     if(galaxies[p].DiscStars[0] < 0.0) galaxies[p].DiscStars[0] = 0.0;

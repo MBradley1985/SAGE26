@@ -939,11 +939,12 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     update_from_feedback(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 
     // check for disk instability
-    if(run_params->DiskInstabilityOn) {
+    // Note: If FullDarkModeOn=1, check_full_disk_instability is already called earlier
+    // (in the FullDarkMode section above), so we skip the instability check here
+    if(run_params->DiskInstabilityOn && run_params->FullDarkModeOn != 1) {
         if(run_params->DarkModeOn == 1 && run_params->ToomreQDiskInstabilityOn == 1) {
             // DarkMode: use local Toomre Q criterion per annulus
             check_local_disk_instability(p, centralgal, dt, step, galaxies, run_params);
-            // check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
         } else {
             // Bulk: original disk instability model
             check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);

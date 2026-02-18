@@ -78,7 +78,7 @@ if __name__ == '__main__':
     seed(2222)
     volume = (BoxSize/Hubble_h)**3.0 * VolumeFraction
 
-    OutputDir = DirName + 'plots/'
+    OutputDir = DirName + 'plots2/'
     if not os.path.exists(OutputDir): os.makedirs(OutputDir)
 
     # Read galaxy properties
