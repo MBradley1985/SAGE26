@@ -226,7 +226,7 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
 {
     double BHaccrete = 0.0, metallicity;
 
-    if(galaxies[merger_centralgal].ColdGas > 0.0) {
+    if(galaxies[merger_centralgal].ColdGas > 0.0 && galaxies[merger_centralgal].Vvir > 0.0) {
         BHaccrete = run_params->BlackHoleGrowthRate * mass_ratio /
             (1.0 + SQR(280.0 / galaxies[merger_centralgal].Vvir)) * galaxies[merger_centralgal].ColdGas;
 

@@ -27,7 +27,7 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 {
     double coolingGas;
 
-    if(galaxies[gal].HotGas > 0.0 && galaxies[gal].Vvir > 0.0) {
+    if(galaxies[gal].HotGas > 0.0 && galaxies[gal].Vvir > 0.0 && galaxies[gal].Rvir > 0.0) {
         const double tcool = galaxies[gal].Rvir / galaxies[gal].Vvir;
         const double temp = 35.9 * galaxies[gal].Vvir * galaxies[gal].Vvir;         // in Kelvin
 

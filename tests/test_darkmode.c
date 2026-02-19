@@ -26,7 +26,7 @@
 static void initialize_darkmode_params(struct params *run_params) {
     memset(run_params, 0, sizeof(struct params));
     
-    run_params->DarkModeOn = 1;
+    run_params->DarkSAGEOn = 1;
     run_params->DustOn = 1;
     run_params->CGMrecipeOn = 1;
     run_params->Hubble_h = 0.73;
@@ -548,15 +548,15 @@ void test_disc_dust_bounded_by_metals() {
 
 
 /* ========================================================================
- * TEST: DarkModeOn Toggle
+ * TEST: DarkSAGEOn Toggle
  * ======================================================================== */
 
 void test_darkmode_off_ignores_disc_arrays() {
-    BEGIN_TEST("DarkModeOn=0 Ignores Disc Arrays");
+    BEGIN_TEST("DarkSAGEOn=0 Ignores Disc Arrays");
     
     struct params run_params;
     initialize_darkmode_params(&run_params);
-    run_params.DarkModeOn = 0;  // Disable DarkMode
+    run_params.DarkSAGEOn = 0;  // Disable DarkMode
     
     struct GALAXY gal;
     memset(&gal, 0, sizeof(struct GALAXY));
@@ -567,12 +567,12 @@ void test_darkmode_off_ignores_disc_arrays() {
     
     // Don't initialize disc arrays - they should be ignored
     
-    // With DarkModeOn=0, bulkSF should still work without touching disc arrays
-    ASSERT_TRUE(run_params.DarkModeOn == 0, "DarkModeOn is 0");
+    // With DarkSAGEOn=0, bulkSF should still work without touching disc arrays
+    ASSERT_TRUE(run_params.DarkSAGEOn == 0, "DarkSAGEOn is 0");
     
     // Disc arrays should remain zero
     double disc_total = sum_disc_gas(&gal);
-    ASSERT_EQUAL_FLOAT(disc_total, 0.0, "DiscGas arrays unused when DarkModeOn=0");
+    ASSERT_EQUAL_FLOAT(disc_total, 0.0, "DiscGas arrays unused when DarkSAGEOn=0");
 }
 
 

@@ -33,7 +33,7 @@ static void initialize_integration_params(struct params *run_params) {
     memset(run_params, 0, sizeof(struct params));
     
     // Enable all DarkMode features
-    run_params->DarkModeOn = 1;
+    run_params->DarkSAGEOn = 1;
     run_params->DustOn = 1;
     run_params->CGMrecipeOn = 1;
     run_params->DiskInstabilityOn = 1;

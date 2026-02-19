@@ -45,6 +45,14 @@ void produce_dust(const double stars, const double metallicity, const double dt,
     /* Dust is condensed from gas-phase metals, so subtract from metals pool */
     galaxies[p].MetalsColdGas -= dust_produced;
 
+    /* DarkMode: distribute produced dust proportionally to gas in each annulus */
+    if(run_params->DarkSAGEOn == 1 && galaxies[p].ColdGas > 0.0 && dust_produced > 0.0) {
+        for(int i = 0; i < N_BINS; i++) {
+            double frac = galaxies[p].DiscGas[i] / galaxies[p].ColdGas;
+            galaxies[p].DiscDust[i] += (float)(dust_produced * frac);
+        }
+    }
+
     /* Safety: neither can be negative */
     if(galaxies[p].MetalsColdGas < 0.0) galaxies[p].MetalsColdGas = 0.0;
     if(galaxies[p].ColdDust < 0.0) galaxies[p].ColdDust = 0.0;
@@ -71,6 +79,12 @@ void produce_metals_dust(const double metallicity, const double dt,
 
     const double A = run_params->BinaryFraction;
     const int snapnum = galaxies[p].SnapNum;
+
+    /* Bounds check: SnapNum must be valid for array access */
+    if(snapnum < 0 || snapnum >= run_params->Snaplistlen) {
+        /* Invalid SnapNum - skip delayed enrichment (fall back to simple produce_dust) */
+        return;
+    }
 
     /* Local copies of SFR history and snapshot ages */
     double age[ABSOLUTEMAXSNAPS], sfh[ABSOLUTEMAXSNAPS];
@@ -269,10 +283,19 @@ void produce_metals_dust(const double metallicity, const double dt,
 
     /* Apply dust to cold phase */
     if(dustdot > 0.0) {
-        galaxies[p].ColdDust += dustdot * dt;
+        double delta_dust = dustdot * dt;
+        galaxies[p].ColdDust += delta_dust;
         /* Dust is condensed from gas-phase metals, so subtract from metals pool */
-        galaxies[p].MetalsColdGas -= dustdot * dt;
+        galaxies[p].MetalsColdGas -= delta_dust;
         if(galaxies[p].MetalsColdGas < 0.0) galaxies[p].MetalsColdGas = 0.0;
+
+        /* DarkMode: distribute produced dust proportionally to gas in each annulus */
+        if(run_params->DarkSAGEOn == 1 && galaxies[p].ColdGas > 0.0) {
+            for(int i = 0; i < N_BINS; i++) {
+                double frac = galaxies[p].DiscGas[i] / galaxies[p].ColdGas;
+                galaxies[p].DiscDust[i] += (float)(delta_dust * frac);
+            }
+        }
     }
 
     /* Safety: neither can be negative */
