@@ -62,7 +62,7 @@ static void print_sage26_progress(FILE *stream, double percent)
             if (i < reveal_up_to) {
                 fprintf(stream, "%c", art_line[i]);
             } else {
-                fprintf(stream, "\033[2m%c\033[0m%s", art_line[i] == ' ' ? ' ' : '.', colors[line % num_colors]);
+                fprintf(stream, "\033[90m%c\033[0m%s", art_line[i] == ' ' ? ' ' : '.', colors[line % num_colors]);
             }
         }
         fprintf(stream, "\033[0m\033[K\n");

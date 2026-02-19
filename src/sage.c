@@ -149,12 +149,6 @@ int run_sage(const int ThisTask, const int NTasks, const char *param_file, void 
     }
 #endif
 
-#if defined(MPI) && defined(VERBOSE)
-    if(NTasks > 1) {
-        fprintf(stderr, "Please Note: The progress bar is not precisely reliable in MPI. "
-                "It should be used as a general indicator only.\n");
-    }
-#endif
 
 
     for(int64_t forestnr = 0; forestnr < Nforests; forestnr++) {
@@ -424,12 +418,6 @@ int convert_trees_to_lhalo(const int ThisTask, const int NTasks, struct params *
 #ifdef VERBOSE
     if(ThisTask == 0) {
         init_my_progressbar(stdout, forest_info->nforests_this_task, &(run_params->interrupted));
-#ifdef MPI
-        if(NTasks > 1) {
-            fprintf(stderr, "Please Note: The progress bar is not precisely reliable in MPI. "
-                    "It should be used as a general indicator only.\n");
-        }
-#endif
     }
 #endif
 
