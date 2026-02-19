@@ -277,7 +277,7 @@ void init(struct params *run_params)
     }
 
     /* Initialize DarkMode: specific angular momentum bin edges */
-    if(run_params->DarkModeOn == 1) {
+    if(run_params->DarkSAGEOn == 1) {
         /* Set defaults if not specified */
         if(run_params->FirstBin <= 0) run_params->FirstBin = 100.0;   /* kpc km/s */
         if(run_params->ExponentBin <= 0) run_params->ExponentBin = 1.4;

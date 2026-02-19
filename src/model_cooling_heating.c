@@ -426,7 +426,7 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
         }
         
         // DarkMode: distribute to disk annuli and evolve spin
-        if(run_params->DarkModeOn == 1) {
+        if(run_params->DarkSAGEOn == 1) {
             distribute_cooling_to_disk(gal, cgm_cooling, metallicity, cooling_dust, galaxies, run_params);
             // CGM gas brings hot gas spin to disc (SpinHot tracks CGM/hot reservoir spin)
             update_spin_gas_cooling(gal, cgm_cooling, galaxies);
@@ -458,7 +458,7 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
         }
         
         // DarkMode: distribute to disk annuli and evolve spin
-        if(run_params->DarkModeOn == 1) {
+        if(run_params->DarkSAGEOn == 1) {
             distribute_cooling_to_disk(gal, hot_cooling, metallicity, cooling_dust, galaxies, run_params);
             // Hot gas brings its spin to disc
             update_spin_gas_cooling(gal, hot_cooling, galaxies);

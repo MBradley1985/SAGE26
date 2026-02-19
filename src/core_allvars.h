@@ -204,7 +204,7 @@ struct GALAXY
     /* SFR history for delayed enrichment (one entry per snapshot) */
     float Sfr[ABSOLUTEMAXSNAPS];
 
-    /* DarkMode: radially-resolved disk structure (only used when DarkModeOn=1) */
+    /* DarkMode: radially-resolved disk structure (only used when DarkSAGEOn=1) */
     float DiscRadii[N_BINS+1];       /* Physical radius of each annulus boundary [Mpc/h] */
     float DiscGas[N_BINS];           /* Cold gas mass in each annulus */
     float DiscStars[N_BINS];         /* Stellar mass in each annulus */
@@ -224,7 +224,7 @@ struct GALAXY
     float GasDiscScaleRadius;        /* Gas disk scale radius */
     float StellarDiscScaleRadius;    /* Stellar disk scale radius */
 
-    /* FullDarkMode: Enhanced disk physics (only used when FullDarkModeOn=1) */
+    /* FullDarkMode: Enhanced disk physics (only used when FullDarkSAGEOn=1) */
     float VelDispStars[N_BINS];      /* Stellar velocity dispersion per annulus [km/s] */
     float VelDispBulge;              /* Secular bulge velocity dispersion [km/s] */
     float SecularBulgeMass;          /* Mass in secular bulge [10^10 Msun/h] */
@@ -549,9 +549,9 @@ struct params
     double     BinaryFraction;          // Binary fraction for SNIa (default 0.1)
 
     /* DarkMode: Full DarkSage physics with radially-resolved disk structure */
-    /* When DarkModeOn=1: Enables radial bins, Toomre Q instability, precession, j-conservation */
-    /* When DarkModeOn=0: Standard SAGE behavior */
-    int32_t    DarkModeOn;              // 0: standard SAGE; 1: full DarkSage physics
+    /* When DarkSAGEOn=1: Enables radial bins, Toomre Q instability, precession, j-conservation */
+    /* When DarkSAGEOn=0: Standard SAGE behavior */
+    int32_t    DarkSAGEOn;              // 0: standard SAGE; 1: full DarkSage physics
     double     FirstBin;                // First j-bin edge [kpc km/s] (default 100)
     double     ExponentBin;             // j-bin geometric growth factor (default 1.4)
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)

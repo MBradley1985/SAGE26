@@ -128,7 +128,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     }
 
     /* DarkMode: Initialize disk arrays and angular momentum vectors */
-    if(run_params->DarkModeOn == 1) {
+    if(run_params->DarkSAGEOn == 1) {
         /* Compute disk radii from j-bin edges: r = j / Vvir */
         /* Cap radii at 100 kpc (0.1 Mpc) to avoid unphysical outer bins */
         const double MAX_RADIUS = 0.1;  // Mpc
@@ -179,7 +179,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;
 
         /* DarkMode: Initialize enhanced physics fields */
-        if(run_params->DarkModeOn == 1) {
+        if(run_params->DarkSAGEOn == 1) {
             /* Initialize velocity dispersion per annulus (default ~10 km/s for gas-dominated) */
             for(int i = 0; i < N_BINS; i++) {
                 galaxies[p].VelDispStars[i] = 10.0f;  /* km/s, will evolve with SF */

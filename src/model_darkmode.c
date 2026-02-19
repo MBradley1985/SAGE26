@@ -616,7 +616,7 @@ void project_disc(const float DiscMass[N_BINS], const double cos_angle,
 void precess_gas(const int p, const double dt, struct GALAXY *galaxies,
                  const struct params *run_params)
 {
-    if(run_params->DarkModeOn != 1) return;
+    if(run_params->DarkSAGEOn != 1) return;
 
     /* Get total disc gas */
     double DiscGasSum = 0.0;
@@ -1029,7 +1029,7 @@ void check_full_disk_instability(const int p, const int centralgal, const double
     (void)step;
     (void)dt;
 
-    if(run_params->DarkModeOn != 1) return;
+    if(run_params->DarkSAGEOn != 1) return;
     if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) return;
 
     /* --- Global stability factor (soft version of Mo, Mao & White 1998) --- */

@@ -63,7 +63,7 @@ AGBYields             0   %0: Karakas2010
 SNIIYields            0   %0: WoosleyWeaver1995
 SNIaYields            0   %0: Iwamoto1999
 
-DarkModeOn            0   %0: standard SAGE; 1: full DarkSage physics (radial bins, Toomre Q, precession)
+DarkSAGEOn            1   %0: standard SAGE; 1: full DarkSAGE physics (radial bins, Toomre Q, precession)
 
 
 %------------------------------------------

@@ -433,9 +433,9 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
             }
         }
 
-        // Create DarkMode 2D datasets (only if DarkModeOn=1)
+        // Create DarkMode 2D datasets (only if DarkSAGEOn=1)
         // Dimensions: [ngal (unlimited), N_BINS (fixed)]
-        if(run_params->DarkModeOn == 1) {
+        if(run_params->DarkSAGEOn == 1) {
             const char *disc_names[8] = {"DiscGas", "DiscStars", "DiscGasMetals", "DiscStarsMetals",
                                          "DiscH2", "DiscHI", "DiscSFR", "DiscDust"};
             const char *disc_desc[8] = {
@@ -722,8 +722,8 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
             return MALLOC_FAILURE;
         }
 
-        // DarkMode: allocate 2D buffers for disk arrays (only if DarkModeOn=1)
-        if(run_params->DarkModeOn == 1) {
+        // DarkMode: allocate 2D buffers for disk arrays (only if DarkSAGEOn=1)
+        if(run_params->DarkSAGEOn == 1) {
             // DiscGas, DiscStars, DiscGasMetals, DiscStarsMetals: [buffer_size * N_BINS]
             save_info->buffer_output_gals[snap_idx].DiscGas = malloc(
                 (size_t)save_info->buffer_size * (size_t)N_BINS * sizeof(float));
@@ -776,7 +776,7 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
                 return MALLOC_FAILURE;
             }
         } else {
-            // Set to NULL when DarkModeOn=0
+            // Set to NULL when DarkSAGEOn=0
             save_info->buffer_output_gals[snap_idx].DiscGas = NULL;
             save_info->buffer_output_gals[snap_idx].DiscStars = NULL;
             save_info->buffer_output_gals[snap_idx].DiscGasMetals = NULL;
@@ -1521,8 +1521,8 @@ int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct save_info 
         save_info->buffer_output_gals[output_snap_idx].TimeOfInfall[gals_in_buffer] = 0.0;
     }
 
-    // DarkMode: Copy disk arrays (only if DarkModeOn=1)
-    if(run_params->DarkModeOn == 1) {
+    // DarkMode: Copy disk arrays (only if DarkSAGEOn=1)
+    if(run_params->DarkSAGEOn == 1) {
         // Unit conversion factor for SFR: code units → M☉/yr (same as SfrDisk)
         const float sfr_conversion = run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / STEPS;
         
@@ -1939,8 +1939,8 @@ int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to_write,
         }
     }
 
-    // Write DarkMode 2D disk arrays (only if DarkModeOn=1)
-    if(run_params->DarkModeOn == 1) {
+    // Write DarkMode 2D disk arrays (only if DarkSAGEOn=1)
+    if(run_params->DarkSAGEOn == 1) {
         const char *disc_names[8] = {"DiscGas", "DiscStars", "DiscGasMetals", "DiscStarsMetals",
                                      "DiscH2", "DiscHI", "DiscSFR", "DiscDust"};
         float *disc_buffers[8] = {
@@ -2221,7 +2221,7 @@ int32_t write_header(hid_t file_id, const struct forest_info *forest_info, const
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RedshiftPowerLawExponent", run_params->RedshiftPowerLawExponent, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DustOn", run_params->DustOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "MetalYieldsOn", run_params->MetalYieldsOn, H5T_NATIVE_INT);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DarkModeOn", run_params->DarkModeOn, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DarkSAGEOn", run_params->DarkSAGEOn, H5T_NATIVE_INT);
 
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DeltaDustAGB", run_params->DeltaDustAGB, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DeltaDustSNII", run_params->DeltaDustSNII, H5T_NATIVE_DOUBLE);

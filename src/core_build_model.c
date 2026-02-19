@@ -225,7 +225,7 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                     }
                     
                     // DarkMode: Zero DiscSFR array for this output step
-                    if(run_params->DarkModeOn == 1) {
+                    if(run_params->DarkSAGEOn == 1) {
                         for(int bin_i = 0; bin_i < N_BINS; bin_i++) {
                             galaxies[ngal].DiscSFR[bin_i] = 0.0;
                         }
@@ -382,7 +382,7 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
     }
 
     // DarkMode: Zero DiscSFR arrays before accumulating over timesteps
-    if(run_params->DarkModeOn == 1) {
+    if(run_params->DarkSAGEOn == 1) {
         for(int p = 0; p < ngal; p++) {
             for(int i = 0; i < N_BINS; i++) {
                 galaxies[p].DiscSFR[i] = 0.0;
@@ -432,7 +432,7 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
                 // cool_gas_onto_galaxy_regime_aware(p, coolingGas, galaxies);
             } else {
                 coolingGas = cooling_recipe(p, deltaT / effective_steps, galaxies, run_params);
-                if(run_params->DarkModeOn == 1) {
+                if(run_params->DarkSAGEOn == 1) {
                     // DarkMode: Distribute cooling gas to radial annuli
                     if(run_params->DustOn == 1) {
                         cool_gas_onto_galaxy_darkmode_with_dust(p, coolingGas, galaxies, run_params);

@@ -35,7 +35,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // ========================================================================
     // DARKMODE: SPATIAL DISK TRACKING (uses bulk SF for calibration)
     // ========================================================================
-    if(run_params->DarkModeOn == 1) {
+    if(run_params->DarkSAGEOn == 1) {
         // Safety: Ensure disc arrays are initialized and NaN-free
         double total_disc_gas_initial = 0.0;
         for(int i = 0; i < N_BINS; i++) {
@@ -100,7 +100,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         check_full_disk_instability(p, centralgal, dt, step, galaxies, run_params);
 
         // Now proceed with BULK star formation (preserves calibration)
-        // This uses the same calculation as DarkModeOn=0, but we'll distribute
+        // This uses the same calculation as DarkSAGEOn=0, but we'll distribute
         // the results to disc arrays afterwards
         // Fall through to bulk SF code below...
     }
@@ -862,7 +862,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         destruct_dust(metallicity, stars, dt, p, step, galaxies, run_params);
         
         // DarkMode: Distribute dust changes to disc arrays
-        if(run_params->DarkModeOn == 1) {
+        if(run_params->DarkSAGEOn == 1) {
             const double dust_delta = galaxies[p].ColdDust - dust_before;
             
             if(fabs(dust_delta) > 1.0e-10) {
@@ -935,9 +935,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     update_from_feedback(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 
     // check for disk instability
-    // Note: If DarkModeOn=1, check_full_disk_instability is already called earlier
+    // Note: If DarkSAGEOn=1, check_full_disk_instability is already called earlier
     // (in the DarkMode section above), so we skip the standard instability check here
-    if(run_params->DiskInstabilityOn && run_params->DarkModeOn != 1) {
+    if(run_params->DiskInstabilityOn && run_params->DarkSAGEOn != 1) {
         // Standard SAGE: original disk instability model
         check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
     }
@@ -951,7 +951,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         galaxies[p].MetalsColdGas += metals_staying;
         
         // DarkMode: distribute returned metals to disc annuli based on gas fraction
-        if(run_params->DarkModeOn == 1 && metals_staying > 0.0) {
+        if(run_params->DarkSAGEOn == 1 && metals_staying > 0.0) {
             double total_disc_gas = 0.0;
             for(int i = 0; i < N_BINS; i++) {
                 total_disc_gas += galaxies[p].DiscGas[i];
@@ -1003,7 +1003,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // NOTE: DiscSFR conserves mass (sum = SfrDisk) but may not match local K-S relation normalization
     //       This is intentional - we preserve SAGE's statistical calibration (SMF, cosmic SFRD)
     //       while adding spatial resolution for radial profiles and gradients
-    if(run_params->DarkModeOn == 1 && stars > 0.0) {
+    if(run_params->DarkSAGEOn == 1 && stars > 0.0) {
         // Distribute SFR proportional to H2 (molecular gas), not total gas
         // This matches bulk SF which uses only molecular gas for star formation
         double total_h2 = 0.0;
@@ -1042,7 +1042,7 @@ void update_from_star_formation(const int p, const double stars, const double me
     const double RecycleFraction = run_params->RecycleFraction;
     
     // DarkMode: Distribute star formation across disk annuli
-    if(run_params->DarkModeOn == 1 && stars > 0.0) {
+    if(run_params->DarkSAGEOn == 1 && stars > 0.0) {
         // Sum total disk gas to get fractions
         double total_disc_gas = 0.0;
         for(int i = 0; i < N_BINS; i++) {
@@ -1088,7 +1088,7 @@ void update_from_star_formation(const int p, const double stars, const double me
     }
     
     // Evolve stellar spin - new stars inherit gas disc spin (DarkMode only)
-    if(run_params->DarkModeOn == 1) {
+    if(run_params->DarkSAGEOn == 1) {
         update_spin_stars_sfr(p, (1 - RecycleFraction) * stars, galaxies);
     }
     
@@ -1098,7 +1098,7 @@ void update_from_star_formation(const int p, const double stars, const double me
     galaxies[p].StellarMass += (1 - RecycleFraction) * stars;
     galaxies[p].MetalsStellarMass += metallicity * (1 - RecycleFraction) * stars;
 
-    if(run_params->DustOn == 1 && run_params->DarkModeOn == 0) {
+    if(run_params->DustOn == 1 && run_params->DarkSAGEOn == 0) {
         // Only do bulk dust update if NOT in DarkMode (DarkMode handles it per-bin above)
         const double DTG = get_DTG(galaxies[p].ColdGas, galaxies[p].ColdDust);
         galaxies[p].ColdDust -= DTG * (1.0 - run_params->RecycleFraction) * stars;
@@ -1107,7 +1107,7 @@ void update_from_star_formation(const int p, const double stars, const double me
     
     // DarkMode+Dust: Sync ColdDust with sum(DiscDust) BEFORE dust processes run
     // This ensures accrete_dust and destruct_dust use correct ColdDust values
-    if(run_params->DustOn == 1 && run_params->DarkModeOn == 1) {
+    if(run_params->DustOn == 1 && run_params->DarkSAGEOn == 1) {
         galaxies[p].ColdDust = 0.0;
         for(int i = 0; i < N_BINS; i++) {
             if(!isnan(galaxies[p].DiscDust[i]) && !isinf(galaxies[p].DiscDust[i])) {
@@ -1139,7 +1139,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
 
     if(run_params->SupernovaRecipeOn == 1) {
         // DarkMode: Remove reheated mass from disc annuli proportionally
-        if(run_params->DarkModeOn == 1 && reheated_mass > 0.0) {
+        if(run_params->DarkSAGEOn == 1 && reheated_mass > 0.0) {
             double total_disc_gas = 0.0;
             for(int i = 0; i < N_BINS; i++) {
                 total_disc_gas += galaxies[p].DiscGas[i];
@@ -1240,7 +1240,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
             galaxies[p].ColdDust -= reheated_dust;
             
             // DarkMode: Also remove dust from disc arrays proportionally
-            if(run_params->DarkModeOn == 1 && reheated_dust > 0.0) {
+            if(run_params->DarkSAGEOn == 1 && reheated_dust > 0.0) {
                 double total_disc_dust = 0.0;
                 for(int i = 0; i < N_BINS; i++) {
                     if(!isnan(galaxies[p].DiscDust[i]) && !isinf(galaxies[p].DiscDust[i])) {
@@ -1948,7 +1948,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         galaxies[p].MetalsColdGas += metals_staying;
         
         // DarkMode: distribute returned metals to disc annuli based on gas fraction
-        if(run_params->DarkModeOn == 1 && metals_staying > 0.0) {
+        if(run_params->DarkSAGEOn == 1 && metals_staying > 0.0) {
             double total_disc_gas = 0.0;
             for(int i = 0; i < N_BINS; i++) {
                 total_disc_gas += galaxies[p].DiscGas[i];

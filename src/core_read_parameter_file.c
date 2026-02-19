@@ -305,8 +305,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->BinaryFraction);
     ParamID[NParam++] = DOUBLE;
 
-    strncpy(ParamTag[NParam], "DarkModeOn", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->DarkModeOn);
+    strncpy(ParamTag[NParam], "DarkSAGEOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->DarkSAGEOn);
     ParamID[NParam++] = INT;
 
     strncpy(ParamTag[NParam], "FirstBin", MAXTAGLEN);
