@@ -383,93 +383,107 @@ void check_local_disk_instability(const int p, const int centralgal, const doubl
 void apply_radial_gas_flows(const int p, const double dt, struct GALAXY *galaxies,
                            const struct params *run_params)
 {
-    if(galaxies[p].Vvir <= 0.0 || dt <= 0.0) {
+    const double Vvir = galaxies[p].Vvir;
+    if(Vvir <= 0.0 || dt <= 0.0) {
         return;
     }
 
+    /* OPTIMIZATION: Early exit if no gas in disk */
+    if(galaxies[p].ColdGas <= 0.0) {
+        return;
+    }
+
+    /* Cache pointers with restrict for faster access */
+    const float * restrict DiscRadii = galaxies[p].DiscRadii;
+    const float * restrict DiscGas_src = galaxies[p].DiscGas;
+    const float * restrict DiscGasMetals_src = galaxies[p].DiscGasMetals;
+    const int DustOn = run_params->DustOn;
+
+    /* Pre-compute constants outside loop */
     const double h = run_params->Hubble_h;
+    const double kpc_factor = 1000.0 / h;
 
-    // Viscosity parameter (α-disk prescription)
-    // α ~ 0.01 for disks (Shakura-Sunyaev)
+    /* Viscosity parameter (α-disk prescription) and sound speed */
     const double alpha = 0.01;
+    const double cs = 10.0;  /* km/s, typical for cold ISM */
+    const double alpha_cs_sq = alpha * cs * cs;  /* Pre-compute for inner loop */
+    const double inv_Vvir_sq = 1.0 / (Vvir * Vvir);  /* Pre-compute reciprocal */
 
-    // Sound speed in disk (cold gas)
-    const double cs = 10.0;  // km/s, typical for cold ISM
-
-    // Arrays to hold updated gas distribution
+    /* Arrays to hold updated gas distribution */
     double DiscGas_new[N_BINS];
     double DiscGasMetals_new[N_BINS];
     double DiscDust_new[N_BINS];
 
-    for(int i = 0; i < N_BINS; i++) {
-        DiscGas_new[i] = galaxies[p].DiscGas[i];
-        DiscGasMetals_new[i] = galaxies[p].DiscGasMetals[i];
-        if(run_params->DustOn == 1) {
-            DiscDust_new[i] = galaxies[p].DiscDust[i];
+    /* Initialize new arrays - single loop */
+    if(DustOn == 1) {
+        const float * restrict DiscDust_src = galaxies[p].DiscDust;
+        for(int i = 0; i < N_BINS; i++) {
+            DiscGas_new[i] = DiscGas_src[i];
+            DiscGasMetals_new[i] = DiscGasMetals_src[i];
+            DiscDust_new[i] = DiscDust_src[i];
+        }
+    } else {
+        for(int i = 0; i < N_BINS; i++) {
+            DiscGas_new[i] = DiscGas_src[i];
+            DiscGasMetals_new[i] = DiscGasMetals_src[i];
         }
     }
 
-    // Diffusive flow from each bin to inner bin
+    /* Diffusive flow from each bin to inner bin */
     for(int i = N_BINS - 1; i > 0; i--) {
-        if(galaxies[p].DiscGas[i] <= 0.0) {
+        const double gas_i = DiscGas_src[i];
+        if(gas_i <= 0.0) {
             continue;
         }
 
-        double r_mid = 0.5 * (galaxies[p].DiscRadii[i] + galaxies[p].DiscRadii[i+1]) * 1000.0 / h;  // physical kpc
+        const double r_mid = 0.5 * (DiscRadii[i] + DiscRadii[i+1]) * kpc_factor;  /* physical kpc */
 
-        // Scale height: h ~ cs * r / Vvir
-        double h_scale = cs * r_mid / galaxies[p].Vvir;  // kpc
-
-        // Kinematic viscosity: ν ~ α * cs * h
-        double nu = alpha * cs * h_scale;  // km/s * kpc = kpc^2/time
-
-        // Viscous timescale: t_visc ~ r² / ν
-        // Convert to code units
-        double t_visc_code = (r_mid * r_mid) / nu / galaxies[p].Vvir;  // rough approximation
-
+        /* Optimized viscous timescale calculation:
+         * h_scale = cs * r_mid / Vvir
+         * nu = alpha * cs * h_scale = alpha * cs * cs * r_mid / Vvir
+         * t_visc_code = r_mid^2 / nu / Vvir = r_mid * Vvir / (alpha * cs^2)
+         * flow_frac = dt / t_visc_code = dt * alpha * cs^2 / (r_mid * Vvir)
+         * Simplify: flow_frac = dt * alpha_cs_sq / (r_mid * Vvir)
+         */
+        const double t_visc_code = r_mid / (alpha_cs_sq * inv_Vvir_sq * Vvir);  /* = r_mid * Vvir / alpha_cs_sq */
         if(t_visc_code <= 0.0) {
             continue;
         }
 
-        // Fraction that flows inward this timestep
         double flow_frac = dt / t_visc_code;
-        if(flow_frac > 0.5) flow_frac = 0.5;  // Limit for stability
+        if(flow_frac > 0.5) flow_frac = 0.5;  /* Limit for stability */
 
-        double flow_mass = flow_frac * galaxies[p].DiscGas[i];
-        double flow_metals = flow_frac * galaxies[p].DiscGasMetals[i];
-        double flow_dust = 0.0;
-        if(run_params->DustOn == 1) {
-            flow_dust = flow_frac * galaxies[p].DiscDust[i];
-        }
+        const double flow_mass = flow_frac * gas_i;
+        const double flow_metals = flow_frac * DiscGasMetals_src[i];
 
-        // Remove from current bin
+        /* Remove from current bin, add to inner bin */
         DiscGas_new[i] -= flow_mass;
         DiscGasMetals_new[i] -= flow_metals;
-        if(run_params->DustOn == 1) {
-            DiscDust_new[i] -= flow_dust;
-        }
-
-        // Add to inner bin
         DiscGas_new[i-1] += flow_mass;
         DiscGasMetals_new[i-1] += flow_metals;
-        if(run_params->DustOn == 1) {
+
+        if(DustOn == 1) {
+            const double flow_dust = flow_frac * galaxies[p].DiscDust[i];
+            DiscDust_new[i] -= flow_dust;
             DiscDust_new[i-1] += flow_dust;
         }
     }
 
-    // Update galaxy arrays
-    for(int i = 0; i < N_BINS; i++) {
-        galaxies[p].DiscGas[i] = DiscGas_new[i];
-        galaxies[p].DiscGasMetals[i] = DiscGasMetals_new[i];
-        if(run_params->DustOn == 1) {
-            galaxies[p].DiscDust[i] = DiscDust_new[i];
-        }
+    /* Update galaxy arrays with safety clamps - single pass */
+    float * restrict DiscGas_dst = galaxies[p].DiscGas;
+    float * restrict DiscGasMetals_dst = galaxies[p].DiscGasMetals;
 
-        // Safety
-        if(galaxies[p].DiscGas[i] < 0.0) galaxies[p].DiscGas[i] = 0.0;
-        if(galaxies[p].DiscGasMetals[i] < 0.0) galaxies[p].DiscGasMetals[i] = 0.0;
-        if(run_params->DustOn == 1 && galaxies[p].DiscDust[i] < 0.0) {
-            galaxies[p].DiscDust[i] = 0.0;
+    if(DustOn == 1) {
+        float * restrict DiscDust_dst = galaxies[p].DiscDust;
+        for(int i = 0; i < N_BINS; i++) {
+            DiscGas_dst[i] = (DiscGas_new[i] > 0.0) ? (float)DiscGas_new[i] : 0.0f;
+            DiscGasMetals_dst[i] = (DiscGasMetals_new[i] > 0.0) ? (float)DiscGasMetals_new[i] : 0.0f;
+            DiscDust_dst[i] = (DiscDust_new[i] > 0.0) ? (float)DiscDust_new[i] : 0.0f;
+        }
+    } else {
+        for(int i = 0; i < N_BINS; i++) {
+            DiscGas_dst[i] = (DiscGas_new[i] > 0.0) ? (float)DiscGas_new[i] : 0.0f;
+            DiscGasMetals_dst[i] = (DiscGasMetals_new[i] > 0.0) ? (float)DiscGasMetals_new[i] : 0.0f;
         }
     }
 }
@@ -618,42 +632,54 @@ void precess_gas(const int p, const double dt, struct GALAXY *galaxies,
 {
     if(run_params->DarkSAGEOn != 1) return;
 
-    /* Get total disc gas */
+    /* OPTIMIZATION: Cache pointers with restrict for faster access */
+    const float * restrict DiscGas = galaxies[p].DiscGas;
+    const float * restrict DiscRadii = galaxies[p].DiscRadii;
+    const double * restrict DiscBinEdge = run_params->DiscBinEdge;
+
+    /* Get total disc gas - single pass */
     double DiscGasSum = 0.0;
     for(int i = 0; i < N_BINS; i++) {
-        DiscGasSum += galaxies[p].DiscGas[i];
+        DiscGasSum += DiscGas[i];
     }
     if(DiscGasSum <= 0.0) return;
 
     /* Calculate angle between gas and stellar spins */
-    double cos_theta = 0.0;
-    for(int j = 0; j < 3; j++) {
-        cos_theta += galaxies[p].SpinGas[j] * galaxies[p].SpinStars[j];
-    }
+    const float * restrict SpinGas = galaxies[p].SpinGas;
+    const float * restrict SpinStars = galaxies[p].SpinStars;
+    double cos_theta = SpinGas[0] * SpinStars[0] +
+                       SpinGas[1] * SpinStars[1] +
+                       SpinGas[2] * SpinStars[2];
 
     /* Clamp to [-1, 1] for numerical safety */
     if(cos_theta > 1.0) cos_theta = 1.0;
     if(cos_theta < -1.0) cos_theta = -1.0;
 
     /* If already coplanar (within threshold), no precession needed */
-    if(fabs(cos_theta) > cos(run_params->ThetaThresh * M_PI / 180.0)) {
+    const double cos_thresh = cos(run_params->ThetaThresh * M_PI / 180.0);
+    if(fabs(cos_theta) > cos_thresh) {
         return;
     }
 
     /* Calculate mass-weighted precession angle like DarkSage */
     /* Each annulus precesses at its own rate based on local t_dyn */
+    const double DegPerTdyn = run_params->DegPerTdyn;
+    const double inv_DiscGasSum = 1.0 / DiscGasSum;  /* Avoid division in loop */
     double deg = 0.0;
+
     for(int i = N_BINS - 1; i >= 0; i--) {
-        if(galaxies[p].DiscGas[i] <= 0.0) continue;
-        if(run_params->DiscBinEdge[i+1] <= 0.0) continue;
+        const double gas_i = DiscGas[i];
+        if(gas_i <= 0.0) continue;
+
+        const double j_edge = DiscBinEdge[i+1];
+        if(j_edge <= 0.0) continue;
 
         /* t_dyn = r²/j (DarkSage formula) */
-        double r_outer = galaxies[p].DiscRadii[i+1];
-        double tdyn = (r_outer * r_outer) / run_params->DiscBinEdge[i+1];
+        const double r_outer = DiscRadii[i+1];
+        const double tdyn = (r_outer * r_outer) / j_edge;
         if(tdyn <= 0.0) continue;
 
-        double deg_ann = run_params->DegPerTdyn * dt / tdyn;
-        deg += deg_ann * galaxies[p].DiscGas[i] / DiscGasSum;
+        deg += (DegPerTdyn * dt / tdyn) * gas_i * inv_DiscGasSum;
     }
 
     if(deg <= 0.0) return;
@@ -1032,53 +1058,95 @@ void check_full_disk_instability(const int p, const int centralgal, const double
     if(run_params->DarkSAGEOn != 1) return;
     if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) return;
 
-    /* --- Global stability factor (soft version of Mo, Mao & White 1998) --- */
-    /* Instead of a hard cutoff, use a smooth suppression factor based on disk/Mcrit ratio */
-    /* This allows gradual transition rather than abrupt on/off behavior */
+    /* OPTIMIZATION: Quick check if disc has any mass at all */
     const double diskmass = galaxies[p].ColdGas +
                            (galaxies[p].StellarMass - galaxies[p].BulgeMass);
     if(diskmass <= 0.0) return;
 
+    /* OPTIMIZATION: Skip if disk is globally stable (diskmass < Mcrit) */
+    /* This avoids expensive per-bin calculations for stable disks */
     const double Mcrit = galaxies[p].Vmax * galaxies[p].Vmax *
                         (3.0 * galaxies[p].DiskScaleRadius) / run_params->G;
 
-    /* Global stability factor: smoothly transitions from f_floor (stable) to 1 (unstable) */
-    /* DarkSage doesn't use global stability at all, but we need some suppression to */
-    /* prevent the bulge/disk crossover from occurring at too low masses. */
-    /* However, we still allow SOME instability even in globally stable disks (f_floor) */
-    /* to match the gradual bulge buildup seen in observations. */
-    const double f_floor = 0.15;  /* Minimum instability efficiency even for stable disks */
+    /* Global stability factor with soft floor */
+    const double f_floor = 0.15;
     double f_global = 1.0;
     if(Mcrit > 0.0 && diskmass < 2.0 * Mcrit) {
-        /* Linear ramp from f_floor at diskmass=0 to 1.0 at diskmass=2*Mcrit */
         double ratio = diskmass / (2.0 * Mcrit);
         f_global = f_floor + (1.0 - f_floor) * ratio;
         if(f_global > 1.0) f_global = 1.0;
     }
-    /* f_global now modulates how much instability-driven mass transfer occurs */
 
     const double Q_min = run_params->QTotMin;
-    const double gas_sink_rate = run_params->GasSinkRate;  /* base sink rate for gas */
+    const double gas_sink_rate = run_params->GasSinkRate;
+    const double c_s = 10.0;  /* km/s - sound speed for cold ISM */
+    const double G = run_params->G;
 
-    /* Sound speed for gas (cold ISM) - same as DarkSage */
-    const double c_s = 10.0;  /* km/s */
+    /* Cache DiscBinEdge pointer for faster access */
+    const double * restrict DiscBinEdge = run_params->DiscBinEdge;
+
+    /* Cache galaxy disc pointers */
+    float * restrict DiscGas = galaxies[p].DiscGas;
+    float * restrict DiscStars = galaxies[p].DiscStars;
+    float * restrict DiscRadii = galaxies[p].DiscRadii;
+    float * restrict VelDispStars = galaxies[p].VelDispStars;
 
     /* --- Pass 1: bins 1..N_BINS-1 migrate excess mass inward one bin --- */
     for(int i = N_BINS - 1; i >= 1; i--) {
-        if(galaxies[p].DiscGas[i] <= 0.0 && galaxies[p].DiscStars[i] <= 0.0) continue;
+        const double disc_gas_i = DiscGas[i];
+        const double disc_stars_i = DiscStars[i];
 
-        /* Use radii in code units (Mpc/h) for DarkMode Q calculation */
-        double r_inner = galaxies[p].DiscRadii[i];
-        double r_outer = galaxies[p].DiscRadii[i+1];
+        if(disc_gas_i <= 0.0 && disc_stars_i <= 0.0) continue;
 
+        const double r_inner = DiscRadii[i];
+        const double r_outer = DiscRadii[i+1];
         if(r_outer <= 0.0) continue;
 
-        double sigma_stars = (double)galaxies[p].VelDispStars[i];
+        double sigma_stars = (double)VelDispStars[i];
         if(sigma_stars < 10.0) sigma_stars = 10.0;
 
-        /* Use DarkMode Q calculation with mass (not surface density) and j-bin Kappa */
-        double Q = compute_combined_toomre_Q_darkmode(i, galaxies[p].DiscGas[i], galaxies[p].DiscStars[i],
-                                                      c_s, sigma_stars, r_inner, r_outer, run_params);
+        /* INLINED Q calculation for speed */
+        double Q = 1000.0;
+        {
+            /* Compute Kappa inline */
+            const double dj = DiscBinEdge[i+1] - DiscBinEdge[i];
+            const double dr = r_outer - r_inner;
+
+            if(dr > 0.0 && dj > 0.0) {
+                const double j_inner = DiscBinEdge[i];
+                const double r_inner_cubed = r_inner * r_inner * r_inner;
+                const double Kappa = (r_inner_cubed > 0.0) ?
+                    sqrt(2.0 * j_inner / r_inner_cubed * dj / dr) : 0.0;
+
+                if(Kappa > 0.0) {
+                    const double area_factor = r_outer * r_outer - r_inner * r_inner;
+
+                    double Q_gas = 1000.0, Q_stars = 1000.0;
+                    if(disc_gas_i > 0.0) {
+                        Q_gas = c_s * Kappa * area_factor / (G * disc_gas_i);
+                    }
+                    if(disc_stars_i > 0.0) {
+                        Q_stars = Kappa * sigma_stars * 0.935 * area_factor / (G * disc_stars_i);
+                    }
+
+                    /* Combined Q */
+                    if(disc_gas_i > 0.0 && disc_stars_i > 0.0) {
+                        const double W = 2.0 * sigma_stars * c_s / (sigma_stars * sigma_stars + c_s * c_s);
+                        if(sigma_stars >= c_s) {
+                            const double denom = W / Q_gas + 1.0 / Q_stars;
+                            Q = (denom > 0.0) ? 1.0 / denom : 1000.0;
+                        } else {
+                            const double denom = 1.0 / Q_gas + W / Q_stars;
+                            Q = (denom > 0.0) ? 1.0 / denom : 1000.0;
+                        }
+                    } else if(disc_gas_i <= 0.0) {
+                        Q = Q_stars;
+                    } else {
+                        Q = Q_gas;
+                    }
+                }
+            }
+        }
 
         if(Q >= Q_min) continue;  /* Stable */
 

@@ -4,6 +4,8 @@ import h5py as h5
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import sys
+import argparse
 from collections import defaultdict
 from scipy.stats import gaussian_kde, stats
 from random import sample, seed
@@ -14,22 +16,11 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # ========================== USER OPTIONS ==========================
+# These are fallback defaults - parameters will be read from HDF5 file
 
-# File details
-DirName = './output/millennium/'
-ObsDataDir = './data/Gas/'
-ObsDataDir2 = './data/MZR/'
-FileName = 'model_0.hdf5'
-Snapshot = 'Snap_63'
-
-# Simulation details
-Hubble_h = 0.73        # Hubble parameter
-BoxSize = 62.5         # h-1 Mpc
-VolumeFraction = 1.0   # Fraction of the full volume output by the model
-
-# Plotting options
-whichimf = 1        # 0=Slapeter; 1=Chabrier
-dilute = 100000       # Number of galaxies to plot in scatter plots
+# Plotting options (these are not in HDF5, so keep as user options)
+whichimf = 1        # 0=Salpeter; 1=Chabrier
+dilute = 100000     # Number of galaxies to plot in scatter plots
 sSFRcut = -11.0     # Divide quiescent from star forming galaxies
 
 OutputFormat = '.pdf'
@@ -51,22 +42,97 @@ plt.rcParams['legend.edgecolor'] = 'black'
 
 # ==================================================================
 
-def read_hdf(filename = None, snap_num = None, param = None):
+def get_script_dir():
+    """Get the directory where this script is located"""
+    return os.path.dirname(os.path.abspath(__file__))
 
-    if filename is None:
-        filename = DirName + FileName
-    property = h5.File(filename,'r')
-    return np.array(property[snap_num][param])
 
-def read_obs_data(filename):
+def read_simulation_params(filepath):
+    """
+    Read simulation parameters from HDF5 file header.
+    Returns a dictionary with all relevant parameters.
+    """
+    params = {}
+
+    with h5.File(filepath, 'r') as f:
+        # Read from Header/Simulation
+        sim = f['Header/Simulation']
+        params['Hubble_h'] = float(sim.attrs['hubble_h'])
+        params['BoxSize'] = float(sim.attrs['box_size'])
+        params['Omega'] = float(sim.attrs['omega_matter'])
+        params['OmegaLambda'] = float(sim.attrs['omega_lambda'])
+        params['PartMass'] = float(sim.attrs['particle_mass'])
+
+        # Read from Header/Runtime
+        runtime = f['Header/Runtime']
+        params['VolumeFraction'] = float(runtime.attrs['frac_volume_processed'])
+        params['SFprescription'] = int(runtime.attrs['SFprescription'])
+        params['DustOn'] = int(runtime.attrs['DustOn'])
+        params['DarkSAGEOn'] = int(runtime.attrs['DarkSAGEOn'])
+
+        # Read snapshot info
+        params['snapshot_redshifts'] = np.array(f['Header/snapshot_redshifts'])
+        params['output_snapshots'] = np.array(f['Header/output_snapshots'])
+
+        # Find available snapshot groups in the file
+        snap_groups = [key for key in f.keys() if key.startswith('Snap_')]
+        snap_numbers = sorted([int(s.replace('Snap_', '')) for s in snap_groups])
+        params['available_snapshots'] = snap_numbers
+        params['latest_snapshot'] = max(snap_numbers) if snap_numbers else None
+
+    return params
+
+
+def get_snapshot_redshift(params, snap_num):
+    """Get the redshift for a given snapshot number"""
+    if snap_num < len(params['snapshot_redshifts']):
+        return params['snapshot_redshifts'][snap_num]
+    return None
+
+
+def read_hdf(filepath, snap_num, param):
+    """Read a parameter from the HDF5 file for a given snapshot"""
+    with h5.File(filepath, 'r') as f:
+        return np.array(f[snap_num][param])
+
+def read_obs_data(obs_dir, filename):
     """Read observational data files"""
-    filepath = os.path.join(ObsDataDir, filename)
+    filepath = os.path.join(obs_dir, filename)
     if not os.path.exists(filepath):
-        print(f"  Warning: Observational data file {filename} not found")
+        print(f"  Warning: Observational data file {filename} not found at {filepath}")
         return None
-    
+
     data = np.loadtxt(filepath)
     return data
+
+
+def parse_arguments():
+    """Parse command-line arguments"""
+    parser = argparse.ArgumentParser(
+        description='Plot SAGE26 galaxy model results',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s output/millennium/model_0.hdf5
+  %(prog)s output/millennium/model_0.hdf5 --snapshot 63
+  %(prog)s output/millennium/model_0.hdf5 -s 58
+        """
+    )
+
+    parser.add_argument('input_file', nargs='?',
+                        default='./output/millennium/model_0.hdf5',
+                        help='Path to model HDF5 file (default: ./output/millennium/model_0.hdf5)')
+
+    parser.add_argument('-s', '--snapshot', type=int, default=None,
+                        help='Snapshot number to plot (default: latest available)')
+
+    parser.add_argument('-o', '--output-dir', type=str, default=None,
+                        help='Output directory for plots (default: <input_dir>/plots/)')
+
+    parser.add_argument('--data-dir', type=str, default=None,
+                        help='Directory containing observational data (default: <script_dir>/../data/)')
+
+    return parser.parse_args()
 
 
 # ==================================================================
@@ -75,67 +141,131 @@ if __name__ == '__main__':
 
     print('Running allresults (local)\n')
 
-    seed(2222)
-    volume = (BoxSize/Hubble_h)**3.0 * VolumeFraction
+    # Parse command-line arguments
+    args = parse_arguments()
 
-    OutputDir = DirName + 'plots2/'
-    if not os.path.exists(OutputDir): os.makedirs(OutputDir)
+    # Determine paths
+    script_dir = get_script_dir()
+    input_file = os.path.abspath(args.input_file)
+    input_dir = os.path.dirname(input_file)
+
+    # Check input file exists
+    if not os.path.exists(input_file):
+        print(f"Error: Input file not found: {input_file}")
+        sys.exit(1)
+
+    # Read simulation parameters from HDF5 header
+    print(f'Reading simulation parameters from {input_file}')
+    sim_params = read_simulation_params(input_file)
+
+    Hubble_h = sim_params['Hubble_h']
+    BoxSize = sim_params['BoxSize']
+    VolumeFraction = sim_params['VolumeFraction']
+
+    print(f'  Hubble_h = {Hubble_h}')
+    print(f'  BoxSize = {BoxSize} h^-1 Mpc')
+    print(f'  VolumeFraction = {VolumeFraction}')
+    print(f'  DustOn = {sim_params["DustOn"]}')
+    print(f'  DarkSAGEOn = {sim_params["DarkSAGEOn"]}')
+
+    # Determine snapshot to use
+    if args.snapshot is not None:
+        snap_num = args.snapshot
+        if snap_num not in sim_params['available_snapshots']:
+            print(f"Error: Snapshot {snap_num} not available in file.")
+            print(f"Available snapshots: {sim_params['available_snapshots']}")
+            sys.exit(1)
+    else:
+        snap_num = sim_params['latest_snapshot']
+        print(f'  Using latest snapshot: {snap_num}')
+
+    Snapshot = f'Snap_{snap_num}'
+    redshift = get_snapshot_redshift(sim_params, snap_num)
+    if redshift is not None:
+        print(f'  Redshift = {redshift:.4f}')
+
+    # Set up directories
+    if args.output_dir:
+        OutputDir = args.output_dir
+    else:
+        OutputDir = os.path.join(input_dir, 'plots')
+    # Ensure OutputDir ends with path separator for string concatenation
+    if not OutputDir.endswith(os.sep):
+        OutputDir += os.sep
+
+    if args.data_dir:
+        DataDir = args.data_dir
+    else:
+        DataDir = os.path.join(script_dir, '..', 'data')
+
+    ObsDataDir = os.path.join(DataDir, 'Gas')
+    ObsDataDir2 = os.path.join(DataDir, 'MZR')
+
+    if not os.path.exists(OutputDir):
+        os.makedirs(OutputDir)
+
+    print(f'  Output directory: {OutputDir}')
+    print(f'  Data directory: {DataDir}')
+    print()
+
+    seed(2222)
+    volume = (BoxSize / Hubble_h)**3.0 * VolumeFraction
 
     # Read galaxy properties
-    print('Reading galaxy properties from', DirName+FileName)
+    print(f'Reading galaxy properties from {input_file}, {Snapshot}')
 
-    CentralMvir = read_hdf(snap_num = Snapshot, param = 'CentralMvir') * 1.0e10 / Hubble_h
-    Mvir = read_hdf(snap_num = Snapshot, param = 'Mvir') * 1.0e10 / Hubble_h
-    StellarMass = read_hdf(snap_num = Snapshot, param = 'StellarMass') * 1.0e10 / Hubble_h
-    MetalsStellarMass = read_hdf(snap_num = Snapshot, param = 'MetalsStellarMass') * 1.0e10 / Hubble_h
-    BulgeMass = read_hdf(snap_num = Snapshot, param = 'BulgeMass') * 1.0e10 / Hubble_h
-    BlackHoleMass = read_hdf(snap_num = Snapshot, param = 'BlackHoleMass') * 1.0e10 / Hubble_h
-    ColdGas = read_hdf(snap_num = Snapshot, param = 'ColdGas') * 1.0e10 / Hubble_h
-    MetalsColdGas = read_hdf(snap_num = Snapshot, param = 'MetalsColdGas') * 1.0e10 / Hubble_h
-    MetalsEjectedMass = read_hdf(snap_num = Snapshot, param = 'MetalsEjectedMass') * 1.0e10 / Hubble_h
-    HotGas = read_hdf(snap_num = Snapshot, param = 'HotGas') * 1.0e10 / Hubble_h
-    MetalsHotGas = read_hdf(snap_num = Snapshot, param = 'MetalsHotGas') * 1.0e10 / Hubble_h
-    EjectedMass = read_hdf(snap_num = Snapshot, param = 'EjectedMass') * 1.0e10 / Hubble_h
-    CGMgas = read_hdf(snap_num = Snapshot, param = 'CGMgas') * 1.0e10 / Hubble_h
-    MetalsCGMgas = read_hdf(snap_num = Snapshot, param = 'MetalsCGMgas') * 1.0e10 / Hubble_h
+    CentralMvir = read_hdf(input_file, Snapshot, 'CentralMvir') * 1.0e10 / Hubble_h
+    Mvir = read_hdf(input_file, Snapshot, 'Mvir') * 1.0e10 / Hubble_h
+    StellarMass = read_hdf(input_file, Snapshot, 'StellarMass') * 1.0e10 / Hubble_h
+    MetalsStellarMass = read_hdf(input_file, Snapshot, 'MetalsStellarMass') * 1.0e10 / Hubble_h
+    BulgeMass = read_hdf(input_file, Snapshot, 'BulgeMass') * 1.0e10 / Hubble_h
+    BlackHoleMass = read_hdf(input_file, Snapshot, 'BlackHoleMass') * 1.0e10 / Hubble_h
+    ColdGas = read_hdf(input_file, Snapshot, 'ColdGas') * 1.0e10 / Hubble_h
+    MetalsColdGas = read_hdf(input_file, Snapshot, 'MetalsColdGas') * 1.0e10 / Hubble_h
+    MetalsEjectedMass = read_hdf(input_file, Snapshot, 'MetalsEjectedMass') * 1.0e10 / Hubble_h
+    HotGas = read_hdf(input_file, Snapshot, 'HotGas') * 1.0e10 / Hubble_h
+    MetalsHotGas = read_hdf(input_file, Snapshot, 'MetalsHotGas') * 1.0e10 / Hubble_h
+    EjectedMass = read_hdf(input_file, Snapshot, 'EjectedMass') * 1.0e10 / Hubble_h
+    CGMgas = read_hdf(input_file, Snapshot, 'CGMgas') * 1.0e10 / Hubble_h
+    MetalsCGMgas = read_hdf(input_file, Snapshot, 'MetalsCGMgas') * 1.0e10 / Hubble_h
 
-    IntraClusterStars = read_hdf(snap_num = Snapshot, param = 'IntraClusterStars') * 1.0e10 / Hubble_h
-    DiskRadius = read_hdf(snap_num = Snapshot, param = 'DiskRadius')
-    BulgeRadius = read_hdf(snap_num = Snapshot, param = 'BulgeRadius')
-    MergerBulgeRadius = read_hdf(snap_num = Snapshot, param = 'MergerBulgeRadius')
-    InstabilityBulgeRadius = read_hdf(snap_num = Snapshot, param = 'InstabilityBulgeRadius')
-    MergerBulgeMass = read_hdf(snap_num = Snapshot, param = 'MergerBulgeMass') * 1.0e10 / Hubble_h
-    InstabilityBulgeMass = read_hdf(snap_num = Snapshot, param = 'InstabilityBulgeMass') * 1.0e10 / Hubble_h
+    IntraClusterStars = read_hdf(input_file, Snapshot, 'IntraClusterStars') * 1.0e10 / Hubble_h
+    DiskRadius = read_hdf(input_file, Snapshot, 'DiskRadius')
+    BulgeRadius = read_hdf(input_file, Snapshot, 'BulgeRadius')
+    MergerBulgeRadius = read_hdf(input_file, Snapshot, 'MergerBulgeRadius')
+    InstabilityBulgeRadius = read_hdf(input_file, Snapshot, 'InstabilityBulgeRadius')
+    MergerBulgeMass = read_hdf(input_file, Snapshot, 'MergerBulgeMass') * 1.0e10 / Hubble_h
+    InstabilityBulgeMass = read_hdf(input_file, Snapshot, 'InstabilityBulgeMass') * 1.0e10 / Hubble_h
 
-    H2gas = read_hdf(snap_num = Snapshot, param = 'H2gas') * 1.0e10 / Hubble_h
-    H1gas = read_hdf(snap_num = Snapshot, param = 'H1gas') * 1.0e10 / Hubble_h
-    Vvir = read_hdf(snap_num = Snapshot, param = 'Vvir')
-    Vmax = read_hdf(snap_num = Snapshot, param = 'Vmax')
-    Rvir = read_hdf(snap_num = Snapshot, param = 'Rvir')
-    SfrDisk = read_hdf(snap_num = Snapshot, param = 'SfrDisk')
-    SfrBulge = read_hdf(snap_num = Snapshot, param = 'SfrBulge')
+    H2gas = read_hdf(input_file, Snapshot, 'H2gas') * 1.0e10 / Hubble_h
+    H1gas = read_hdf(input_file, Snapshot, 'H1gas') * 1.0e10 / Hubble_h
+    Vvir = read_hdf(input_file, Snapshot, 'Vvir')
+    Vmax = read_hdf(input_file, Snapshot, 'Vmax')
+    Rvir = read_hdf(input_file, Snapshot, 'Rvir')
+    SfrDisk = read_hdf(input_file, Snapshot, 'SfrDisk')
+    SfrBulge = read_hdf(input_file, Snapshot, 'SfrBulge')
 
-    CentralGalaxyIndex = read_hdf(snap_num = Snapshot, param = 'CentralGalaxyIndex')
-    Type = read_hdf(snap_num = Snapshot, param = 'Type')
-    Posx = read_hdf(snap_num = Snapshot, param = 'Posx')
-    Posy = read_hdf(snap_num = Snapshot, param = 'Posy')
-    Posz = read_hdf(snap_num = Snapshot, param = 'Posz')
+    CentralGalaxyIndex = read_hdf(input_file, Snapshot, 'CentralGalaxyIndex')
+    Type = read_hdf(input_file, Snapshot, 'Type')
+    Posx = read_hdf(input_file, Snapshot, 'Posx')
+    Posy = read_hdf(input_file, Snapshot, 'Posy')
+    Posz = read_hdf(input_file, Snapshot, 'Posz')
 
-    OutflowRate = read_hdf(snap_num = Snapshot, param = 'OutflowRate')
+    OutflowRate = read_hdf(input_file, Snapshot, 'OutflowRate')
 
-    MassLoading = read_hdf(snap_num = Snapshot, param = 'MassLoading')
+    MassLoading = read_hdf(input_file, Snapshot, 'MassLoading')
 
 
     w = np.where(StellarMass > 1.0e10)[0]
     print('Number of galaxies read:', len(StellarMass))
     print('Galaxies more massive than 10^10 h-1 Msun:', len(w), '\n')
 
-    Cooling = read_hdf(snap_num = Snapshot, param = 'Cooling')
+    Cooling = read_hdf(input_file, Snapshot, 'Cooling')
 
     Tvir = 35.9 * (Vvir)**2  # in Kelvin
     Tmax = 2.5e5  # K, corresponds to Vvir ~52.7 km/s
 
-    Regime = read_hdf(snap_num = Snapshot, param = 'Regime')
+    Regime = read_hdf(input_file, Snapshot, 'Regime')
 
 # --------------------------------------------------------
 
@@ -148,7 +278,7 @@ if __name__ == '__main__':
 
     # Load GAMA morphological SMF data
     # Columns: log_M, E_HE, E_HE_err, cBD, cBD_err, dBD, dBD_err, D, D_err
-    gama = np.genfromtxt('./data/gama_smf_morph.ecsv', comments='#', skip_header=1)
+    gama = np.genfromtxt(os.path.join(DataDir, 'gama_smf_morph.ecsv'), comments='#', skip_header=1)
     gama_mass = gama[:, 0]
     gama_E_HE = gama[:, 1]
     gama_E_HE_err = gama[:, 2]
@@ -157,7 +287,7 @@ if __name__ == '__main__':
 
     # Load Baldry et al. blue/red SMF data
     # Columns: SF_mass, SF_phi, Q_mass, Q_phi (all in log)
-    baldry = np.genfromtxt('./data/baldry_blue_red.csv', delimiter=',', skip_header=2)
+    baldry = np.genfromtxt(os.path.join(DataDir, 'baldry_blue_red.csv'), delimiter=',', skip_header=2)
     baldry_sf_mass = baldry[:, 0]
     baldry_sf_phi = baldry[:, 1]
     baldry_q_mass = baldry[:, 2]
@@ -582,7 +712,7 @@ if __name__ == '__main__':
     w = np.where((Type == 0) & (ColdGas / (StellarMass + ColdGas) > 0.1) & (StellarMass > 1.0e8))[0]
     if(len(w) > dilute): w = sample(list(w), dilute)
 
-    ColdDust = read_hdf(snap_num = Snapshot, param = 'ColdDust') * 1.0e10 / Hubble_h
+    ColdDust = read_hdf(input_file, Snapshot, 'ColdDust') * 1.0e10 / Hubble_h
     
     mass = np.log10(StellarMass[w])
     Z = np.log10((MetalsColdGas[w] + ColdDust[w]) / ColdGas[w] / 0.02) + 9.0  # Convert to 12 + log(O/H) scale, assuming solar metallicity of 0.02 and that all metals are oxygen (for simplicity)    
@@ -590,7 +720,7 @@ if __name__ == '__main__':
 
     # Tremonti et al. 2004 - the primary observational reference
     try:
-        tremonti_data = np.loadtxt('./data/Tremonti04.dat')
+        tremonti_data = np.loadtxt(os.path.join(DataDir, 'Tremonti04.dat'))
         tremonti_mass = tremonti_data[:, 0]
         tremonti_Z = tremonti_data[:, 1]
         tremonti_Z_err_low = tremonti_data[:, 2]
@@ -619,7 +749,7 @@ if __name__ == '__main__':
     
     # Curti et al. 2020
     try:
-        curti_data = np.loadtxt('./data/Curti2020.dat')
+        curti_data = np.loadtxt(os.path.join(DataDir, 'Curti2020.dat'))
         curti_mass = curti_data[:, 0]
         curti_Z = curti_data[:, 1]
         curti_Z_low = curti_data[:, 2]
@@ -633,7 +763,7 @@ if __name__ == '__main__':
     
     # Andrews & Martini 2013
     try:
-        andrews_data = np.loadtxt('./data/MMAdrews13.dat')
+        andrews_data = np.loadtxt(os.path.join(DataDir, 'MMAdrews13.dat'))
         andrews_mass = andrews_data[:, 0]
         andrews_Z = andrews_data[:, 1]
         if whichimf == 0:
@@ -648,7 +778,7 @@ if __name__ == '__main__':
     
     # Kewley & Ellison 2008 - T04 calibration (most commonly used)
     try:
-        kewley_data = np.loadtxt('./data/MMR-Kewley08.dat')
+        kewley_data = np.loadtxt(os.path.join(DataDir, 'MMR-Kewley08.dat'))
         t04_start = 59
         t04_end = 74
         kewley_mass_t04 = kewley_data[t04_start:t04_end, 0]
@@ -665,7 +795,7 @@ if __name__ == '__main__':
     
     # Gallazzi et al. 2005 - Stellar metallicity (note: this is different from gas metallicity)
     try:
-        gallazzi_data = np.loadtxt('./data/MSZR-Gallazzi05.dat')
+        gallazzi_data = np.loadtxt(os.path.join(DataDir, 'MSZR-Gallazzi05.dat'))
         gallazzi_mass = gallazzi_data[7:, 0]
         gallazzi_Z_stellar = gallazzi_data[7:, 1]
         gallazzi_Z_gas_approx = gallazzi_Z_stellar + 8.69
