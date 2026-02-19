@@ -256,9 +256,10 @@ void produce_metals_dust(const double metallicity, const double dt,
     dustdot += 16.0 * delta_sn * (Mg_sn/24.0 + Si_sn/28.0 + S_sn/32.0
                                  + Ca_sn/40.0 + Fe_sn/56.0) / dt;
 
-    // SNIa dust: commented out in dusty-sage
-    dustdot += 16.0 * delta_snia * (Fe_snia/56.0) / dt;
-    dustdot += delta_snia * (Cr_snia + Ni_snia) / dt;
+    // SNIa dust: disabled in dusty-sage (contribution is small and uncertain)
+    // dustdot += 16.0 * delta_snia * (Fe_snia/56.0) / dt;
+    // dustdot += delta_snia * (Cr_snia + Ni_snia) / dt;
+    (void)delta_snia; (void)Fe_snia; (void)Cr_snia; (void)Ni_snia;  // Suppress unused warnings
 
 
     /* Store formation rate in code units (will be converted in output) */

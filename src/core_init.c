@@ -50,17 +50,20 @@ static struct yield_table read_table(const char *fname, const int ncols)
     }
 
     int i = 0;
-    while(!feof(file) && i < 1000) {
+    while(i < 1000) {
         int nread = 0;
         for(int j = 0; j < ncols; j++) {
             if(fscanf(file, " %lf", &dt.tbl[i][j]) == 1)
                 nread++;
         }
+        /* If we couldn't read all columns, we're done */
+        if(nread != ncols) break;
+
         /* skip rest of line */
         int c;
         while((c = fgetc(file)) != '\n' && c != EOF) {}
 
-        if(nread == ncols) i++;
+        i++;
     }
     fclose(file);
     dt.nr = i;
@@ -207,10 +210,8 @@ void init(struct params *run_params)
 
     read_snap_list(run_params);
 
-    //Hack to fix deltaT for snapshot 0
-    //This way, galsnapnum = -1 will not segfault.
-    run_params->Age[0] = time_to_present(1000.0, run_params);//lookback time from z=1000
-    run_params->Age++;
+    /* Store lookback time from z=1000 for delayed enrichment calculations */
+    run_params->Age_at_z1000 = time_to_present(1000.0, run_params);
 
     for(int i = 0; i < run_params->Snaplistlen; i++) {
         run_params->ZZ[i] = 1 / run_params->AA[i] - 1;
@@ -219,7 +220,7 @@ void init(struct params *run_params)
 
     /* Compute age of universe at each snapshot (in Myr) for delayed enrichment */
     for(int i = 0; i < run_params->Snaplistlen; i++) {
-        run_params->lbtime[i] = (run_params->Age[-1] - run_params->Age[i])
+        run_params->lbtime[i] = (run_params->Age_at_z1000 - run_params->Age[i])
                                 * run_params->UnitTime_in_s / SEC_PER_MEGAYEAR;
     }
 

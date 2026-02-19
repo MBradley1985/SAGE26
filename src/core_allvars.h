@@ -635,6 +635,7 @@ struct params
     };
 
     double *Age;
+    double Age_at_z1000;  /* Lookback time from z=1000 for delayed enrichment */
 
     int32_t interrupted;/* to re-print the progress-bar */
 

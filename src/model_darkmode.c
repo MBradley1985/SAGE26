@@ -234,22 +234,25 @@ double apply_local_star_formation(const int p, const double dt, const int step,
             stars_bin = galaxies[p].DiscGas[i];
         }
         
-        // Local metallicity
+        // Calculate local metallicity and DTG BEFORE modifying gas
         double Z_local = (galaxies[p].DiscGas[i] > 0.0) ?
             galaxies[p].DiscGasMetals[i] / galaxies[p].DiscGas[i] : 0.0;
-        
+        double DTG_local = 0.0;
+        if(run_params->DustOn == 1 && galaxies[p].DiscGas[i] > 0.0) {
+            DTG_local = galaxies[p].DiscDust[i] / galaxies[p].DiscGas[i];
+            if(DTG_local > 1.0) DTG_local = 1.0;  // Cap at unity
+        }
+
         // Update gas
         galaxies[p].DiscGas[i] -= (1.0 - RecycleFraction) * stars_bin;
         galaxies[p].DiscGasMetals[i] -= Z_local * (1.0 - RecycleFraction) * stars_bin;
-        
+
         // Update stars
         galaxies[p].DiscStars[i] += (1.0 - RecycleFraction) * stars_bin;
         galaxies[p].DiscStarsMetals[i] += Z_local * (1.0 - RecycleFraction) * stars_bin;
-        
-        // Dust
+
+        // Dust (using pre-computed DTG)
         if(run_params->DustOn == 1) {
-            double DTG_local = (galaxies[p].DiscGas[i] > 0.0) ?
-                galaxies[p].DiscDust[i] / galaxies[p].DiscGas[i] : 0.0;
             galaxies[p].DiscDust[i] -= DTG_local * (1.0 - RecycleFraction) * stars_bin;
             if(galaxies[p].DiscDust[i] < 0.0) galaxies[p].DiscDust[i] = 0.0;
         }

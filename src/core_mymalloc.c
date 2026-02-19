@@ -45,6 +45,11 @@ void *mymalloc(size_t n)
 
 void *mycalloc(const size_t count, const size_t size)
 {
+    /* Check for integer overflow */
+    if(count > 0 && size > SIZE_MAX / count) {
+        fprintf(stderr, "Error: Integer overflow in mycalloc(%zu, %zu)\n", count, size);
+        ABORT(MALLOC_FAILURE);
+    }
     void *p = mymalloc(count * size);
     memset(p, 0, count*size);
     return p;
@@ -83,7 +88,7 @@ void *myrealloc(void *p, size_t n)
     }
     void *newp = realloc(Table[iblock], n);
     if(newp == NULL) {
-        fprintf(stderr, "Error: Failed to re-allocate memory for %g MB (old size = %g MB)\n",  n / (1024.0 * 1024.0), SizeTable[Nblocks-1]/ (1024.0 * 1024.0) );
+        fprintf(stderr, "Error: Failed to re-allocate memory for %g MB (old size = %g MB)\n",  n / (1024.0 * 1024.0), SizeTable[iblock]/ (1024.0 * 1024.0) );
         ABORT(MALLOC_FAILURE);
     }
     Table[iblock] = newp;

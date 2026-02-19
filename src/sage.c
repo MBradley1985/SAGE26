@@ -195,9 +195,6 @@ cleanup:
     /* sage is done running -> do the cleanup */
     cleanup_forests_io(run_params->TreeType, &forest_info);
     if(status == EXIT_SUCCESS) {
-        //free Ages. But first
-        //reset Age to the actual allocated address
-        run_params->Age--;
         myfree(run_params->Age);
     }
 
