@@ -13,12 +13,20 @@ double compute_local_star_formation(const int p, const double dt,
                                    struct GALAXY *galaxies, const struct params *run_params,
                                    double sfr_local[N_BINS], double h2_local[N_BINS])
 {
+    // Validate SFprescription (warn only once)
+    static int sf_prescription_warned = 0;
+    if(!sf_prescription_warned && (run_params->SFprescription < 0 || run_params->SFprescription > 7)) {
+        fprintf(stderr, "Warning: Invalid SFprescription=%d (valid range: 0-7). "
+                        "Using H2-based fallback.\n", run_params->SFprescription);
+        sf_prescription_warned = 1;
+    }
+
     // Initialize outputs
     for(int i = 0; i < N_BINS; i++) {
         sfr_local[i] = 0.0;
         h2_local[i] = 0.0;
     }
-    
+
     // Safety checks
     if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0 || dt <= 0.0) {
         return 0.0;

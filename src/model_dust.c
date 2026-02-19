@@ -358,6 +358,14 @@ void accrete_dust(const double metallicity, const double dt, const int p,
             /* Dust accretes from gas-phase metals, so subtract from metals pool */
             galaxies[p].MetalsColdGas -= delta_dust;
             if(galaxies[p].MetalsColdGas < 0.0) galaxies[p].MetalsColdGas = 0.0;
+
+            /* DarkMode: distribute accreted dust proportionally to gas in each annulus */
+            if(run_params->DarkSAGEOn == 1 && galaxies[p].ColdGas > 0.0) {
+                for(int i = 0; i < N_BINS; i++) {
+                    double frac = galaxies[p].DiscGas[i] / galaxies[p].ColdGas;
+                    galaxies[p].DiscDust[i] += (float)(delta_dust * frac);
+                }
+            }
         }
     }
 
@@ -396,57 +404,69 @@ void destruct_dust(const double metallicity, const double stars, const double dt
 
     /* Compute DELAYED SN rate from past SFR history */
     double Rsn = 0.0;
+    int use_instantaneous = 0;  /* Flag for fallback */
 
 #ifdef GSL_FOUND
     {
         const int snapnum = galaxies[p].SnapNum;
-        
-        /* Local copies of SFR history and snapshot ages */
-        double age[ABSOLUTEMAXSNAPS], sfh[ABSOLUTEMAXSNAPS];
-        for(int i = 0; i < run_params->Snaplistlen; i++) {
-            age[i] = run_params->lbtime[i];
-            sfh[i] = (double)galaxies[p].Sfr[i];
-        }
-        
-        /* Integrate SN rate over massive stars (8-40 Msun) using cached mass grid */
-        const int nbins = 20;
-        const double m_low = 8.0, m_up = 40.0;
-        double sn_rate[20], mphi[20];
-        
-        for(int i = 0; i < nbins; i++) {
-            /* Use pre-computed mass, phi, and taum from init */
-            double time = age[snapnum] - run_params->taum_destruct[i];
-            
-            /* Look up SFR at that past time */
-            double sfr_past = 0.0;
-            if(time >= run_params->lbtime[0] && time <= run_params->lbtime[run_params->Snaplistlen - 1]) {
-                sfr_past = interpolate_arr(age, sfh, run_params->Snaplistlen, time);
+
+        /* Bounds check: SnapNum must be valid for array access */
+        if(snapnum < 0 || snapnum >= run_params->Snaplistlen) {
+            /* Invalid SnapNum - use instantaneous approximation */
+            use_instantaneous = 1;
+        } else {
+            /* Local copies of SFR history and snapshot ages */
+            double age[ABSOLUTEMAXSNAPS], sfh[ABSOLUTEMAXSNAPS];
+            for(int i = 0; i < run_params->Snaplistlen; i++) {
+                age[i] = run_params->lbtime[i];
+                sfh[i] = (double)galaxies[p].Sfr[i];
             }
-            
-            /* SN rate contribution: each massive star that formed at time and is dying now */
-            sn_rate[i] = run_params->phi_destruct[i] * sfr_past;
-            mphi[i] = run_params->mass_destruct[i] * run_params->phi_destruct[i];
-        }
-        
-        /* Integrate over IMF to get total SN rate */
-        double total_sn = integrate_arr(run_params->mass_destruct, sn_rate, nbins, m_low, m_up);
-        double total_phi = integrate_arr(run_params->mass_destruct, run_params->phi_destruct, nbins, m_low, m_up);
-        
-        if(total_phi > 0.0) {
-            /* mean_mass in physical Msun */
-            double mean_mass = integrate_arr(run_params->mass_destruct, mphi, nbins, m_low, m_up) / total_phi;
-            
-            /* Convert mean_mass from Msun to code units */
-            double mean_mass_code = mean_mass * run_params->Hubble_h / 1.0e10;
-            
-            if(mean_mass_code > 0.0 && total_sn > 0.0) {
-                /* Rsn = integrated SN rate / mean mass of SN progenitors */
-                Rsn = total_sn / mean_mass_code;
+
+            /* Integrate SN rate over massive stars (8-40 Msun) using cached mass grid */
+            const int nbins = 20;
+            const double m_low = 8.0, m_up = 40.0;
+            double sn_rate[20], mphi[20];
+
+            for(int i = 0; i < nbins; i++) {
+                /* Use pre-computed mass, phi, and taum from init */
+                double time = age[snapnum] - run_params->taum_destruct[i];
+
+                /* Look up SFR at that past time */
+                double sfr_past = 0.0;
+                if(time >= run_params->lbtime[0] && time <= run_params->lbtime[run_params->Snaplistlen - 1]) {
+                    sfr_past = interpolate_arr(age, sfh, run_params->Snaplistlen, time);
+                }
+
+                /* SN rate contribution: each massive star that formed at time and is dying now */
+                sn_rate[i] = run_params->phi_destruct[i] * sfr_past;
+                mphi[i] = run_params->mass_destruct[i] * run_params->phi_destruct[i];
+            }
+
+            /* Integrate over IMF to get total SN rate */
+            double total_sn = integrate_arr(run_params->mass_destruct, sn_rate, nbins, m_low, m_up);
+            double total_phi = integrate_arr(run_params->mass_destruct, run_params->phi_destruct, nbins, m_low, m_up);
+
+            if(total_phi > 0.0) {
+                /* mean_mass in physical Msun */
+                double mean_mass = integrate_arr(run_params->mass_destruct, mphi, nbins, m_low, m_up) / total_phi;
+
+                /* Convert mean_mass from Msun to code units */
+                double mean_mass_code = mean_mass * run_params->Hubble_h / 1.0e10;
+
+                if(mean_mass_code > 0.0 && total_sn > 0.0) {
+                    /* Rsn = integrated SN rate / mean mass of SN progenitors */
+                    Rsn = total_sn / mean_mass_code;
+                }
             }
         }
     }
+    /* GSL fallback: use instantaneous rate if GSL calculation failed */
+    if(use_instantaneous && stars > 0.0) {
+        Rsn = stars / dt / (100.0 * run_params->Hubble_h / 1.0e10);
+    }
 #else
     /* Fallback without GSL: use instantaneous SFR (less accurate) */
+    (void)use_instantaneous;  /* Avoid unused warning */
     if(stars > 0.0) {
         Rsn = stars / dt / (100.0 * run_params->Hubble_h / 1.0e10);
     }
@@ -467,12 +487,30 @@ void destruct_dust(const double metallicity, const double stars, const double dt
 
             /* Subtract destroyed dust and return to gas-phase metals */
             if(galaxies[p].ColdDust - dustdot * dt > 0.0) {
-                galaxies[p].ColdDust -= dustdot * dt;
-                galaxies[p].MetalsColdGas += dustdot * dt;
+                double delta_dust = dustdot * dt;
+                double old_cold_dust = galaxies[p].ColdDust;
+                galaxies[p].ColdDust -= delta_dust;
+                galaxies[p].MetalsColdGas += delta_dust;
+
+                /* DarkMode: remove destroyed dust proportionally from each annulus */
+                if(run_params->DarkSAGEOn == 1 && old_cold_dust > 0.0) {
+                    for(int i = 0; i < N_BINS; i++) {
+                        double frac = galaxies[p].DiscDust[i] / old_cold_dust;
+                        galaxies[p].DiscDust[i] -= (float)(delta_dust * frac);
+                        if(galaxies[p].DiscDust[i] < 0.0f) galaxies[p].DiscDust[i] = 0.0f;
+                    }
+                }
             } else {
                 /* All dust destroyed - return it all to gas-phase metals */
                 galaxies[p].MetalsColdGas += galaxies[p].ColdDust;
                 galaxies[p].ColdDust = 0.0;
+
+                /* DarkMode: zero all annulus dust */
+                if(run_params->DarkSAGEOn == 1) {
+                    for(int i = 0; i < N_BINS; i++) {
+                        galaxies[p].DiscDust[i] = 0.0f;
+                    }
+                }
             }
         }
     }
