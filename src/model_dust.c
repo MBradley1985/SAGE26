@@ -342,7 +342,8 @@ void accrete_dust(const double metallicity, const double dt, const int p,
         double delta_dust = dustdot * dt;
 
         /* Can't accrete more than available gas-phase metals */
-        const double gas_phase_metals = galaxies[p].MetalsColdGas - galaxies[p].ColdDust;
+        double gas_phase_metals = galaxies[p].MetalsColdGas - galaxies[p].ColdDust;
+        if(gas_phase_metals < 0.0) gas_phase_metals = 0.0;  /* Safety clamp */
         if(delta_dust > gas_phase_metals) {
             delta_dust = gas_phase_metals;
         }

@@ -919,18 +919,14 @@ void deal_with_unstable_gas(const int p, const int bin, const double unstable_ga
 {
     if(unstable_gas <= 0.0 || bin <= 0) return;
 
-    /* Get j-bin edges */
-    double j_this = 0.5 * (run_params->DiscBinEdge[bin] + run_params->DiscBinEdge[bin+1]);
-    double j_inner = 0.5 * (run_params->DiscBinEdge[bin-1] + run_params->DiscBinEdge[bin]);
-
-    /* Angular momentum lost by sinking gas */
-    double j_lose = j_this - j_inner;
-
-    /* Angular momentum gained by gas moving outward (to conserve total j) */
+    /* Use DarkSage j-conservation formula: bin-edge differences, not midpoint differences
+     * j_lose spans from edge [bin-1] to edge [bin+1] (the range being left)
+     * j_gain spans from edge [bin] to edge [bin+2] (the range being gained)
+     */
+    double j_lose = (run_params->DiscBinEdge[bin+1] - run_params->DiscBinEdge[bin-1]) * 0.5;
     double j_gain = 0.0;
     if(bin < N_BINS - 1) {
-        double j_outer = 0.5 * (run_params->DiscBinEdge[bin+1] + run_params->DiscBinEdge[bin+2]);
-        j_gain = j_outer - j_this;
+        j_gain = (run_params->DiscBinEdge[bin+2] - run_params->DiscBinEdge[bin]) * 0.5;
     } else {
         /* Outermost bin: j goes to hot gas / CGM */
         j_gain = j_lose;  /* Approximate */
@@ -940,15 +936,16 @@ void deal_with_unstable_gas(const int p, const int bin, const double unstable_ga
 
     /* Mass fractions for j-conservation: m_up/m_down = j_lose/j_gain */
     double total_ratio = j_lose + j_gain;
-    double m_down = unstable_gas * j_gain / total_ratio;  /* Sinks inward */
-    double m_up = unstable_gas * j_lose / total_ratio;    /* Moves outward */
+    double m_down = unstable_gas * j_lose / total_ratio;  /* Sinks inward */
+    double m_up = unstable_gas * j_gain / total_ratio;    /* Moves outward */
 
-    /* Get metallicity and dust ratios */
+    /* Get metallicity and dust ratios BEFORE modifying gas */
     double Z_gas = (galaxies[p].DiscGas[bin] > 0.0) ?
         galaxies[p].DiscGasMetals[bin] / galaxies[p].DiscGas[bin] : 0.0;
     double DTG = 0.0;
     if(run_params->DustOn == 1 && galaxies[p].DiscGas[bin] > 0.0) {
         DTG = galaxies[p].DiscDust[bin] / galaxies[p].DiscGas[bin];
+        if(DTG > 1.0) DTG = 1.0;  /* Safety clamp */
     }
 
     /* Remove from current bin */
@@ -994,16 +991,14 @@ void deal_with_unstable_stars(const int p, const int bin, const double unstable_
 {
     if(unstable_stars <= 0.0 || bin <= 0) return;
 
-    /* j-bin midpoints for angular momentum conservation */
-    double j_this = 0.5 * (run_params->DiscBinEdge[bin] + run_params->DiscBinEdge[bin+1]);
-    double j_inner = 0.5 * (run_params->DiscBinEdge[bin-1] + run_params->DiscBinEdge[bin]);
-
-    double j_lose = j_this - j_inner;
-
+    /* Use DarkSage j-conservation formula: bin-edge differences, not midpoint differences
+     * j_lose spans from edge [bin-1] to edge [bin+1] (the range being left)
+     * j_gain spans from edge [bin] to edge [bin+2] (the range being gained)
+     */
+    double j_lose = (run_params->DiscBinEdge[bin+1] - run_params->DiscBinEdge[bin-1]) * 0.5;
     double j_gain = 0.0;
     if(bin < N_BINS - 1) {
-        double j_outer = 0.5 * (run_params->DiscBinEdge[bin+1] + run_params->DiscBinEdge[bin+2]);
-        j_gain = j_outer - j_this;
+        j_gain = (run_params->DiscBinEdge[bin+2] - run_params->DiscBinEdge[bin]) * 0.5;
     } else {
         j_gain = j_lose;
     }
@@ -1012,8 +1007,8 @@ void deal_with_unstable_stars(const int p, const int bin, const double unstable_
 
     /* j-conservation: m_down sinks inward, m_up compensates outward */
     double total_ratio = j_lose + j_gain;
-    double m_down = unstable_stars * j_gain / total_ratio;
-    double m_up = unstable_stars * j_lose / total_ratio;
+    double m_down = unstable_stars * j_lose / total_ratio;  /* Sinks inward */
+    double m_up = unstable_stars * j_gain / total_ratio;    /* Moves outward */
 
     double Z_stars = (galaxies[p].DiscStars[bin] > 0.0) ?
         galaxies[p].DiscStarsMetals[bin] / galaxies[p].DiscStars[bin] : 0.0;
@@ -1285,6 +1280,7 @@ void check_full_disk_instability(const int p, const int centralgal, const double
         double DTG_0 = 0.0;
         if(run_params->DustOn == 1 && galaxies[p].DiscGas[0] > 0.0) {
             DTG_0 = galaxies[p].DiscDust[0] / galaxies[p].DiscGas[0];
+            if(DTG_0 > 1.0) DTG_0 = 1.0;  /* Safety clamp */
         }
 
         /* m_up goes to bin 1 to conserve j, m_down goes to BH */

@@ -33,7 +33,9 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 
         double logZ = -10.0;
         if(galaxies[gal].MetalsHotGas > 0) {
-            logZ = log10(galaxies[gal].MetalsHotGas / galaxies[gal].HotGas);
+            double Z_ratio = galaxies[gal].MetalsHotGas / galaxies[gal].HotGas;
+            if(Z_ratio > 1.0) Z_ratio = 1.0;  /* Safety clamp - metals can't exceed gas */
+            logZ = log10(Z_ratio);
         }
 
         double lambda = get_metaldependent_cooling_rate(log10(temp), logZ);
