@@ -668,7 +668,9 @@ void dust_thermal_sputtering(const int gal, const double dt,
         }
     }
 
-    if(galaxies[gal].HotDust < 0.0) galaxies[gal].HotDust = 0.0;
-    if(galaxies[gal].CGMDust < 0.0) galaxies[gal].CGMDust = 0.0;
-    if(galaxies[gal].EjectedDust < 0.0) galaxies[gal].EjectedDust = 0.0;
+    /* Clamp negative and tiny values (floating-point precision floor) */
+    const double DUST_FLOOR = 1.0e-10;
+    if(galaxies[gal].HotDust < DUST_FLOOR) galaxies[gal].HotDust = 0.0;
+    if(galaxies[gal].CGMDust < DUST_FLOOR) galaxies[gal].CGMDust = 0.0;
+    if(galaxies[gal].EjectedDust < DUST_FLOOR) galaxies[gal].EjectedDust = 0.0;
 }

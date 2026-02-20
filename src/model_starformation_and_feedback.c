@@ -1138,6 +1138,11 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
             reheated_mass, galaxies[p].ColdGas);
 
     if(run_params->SupernovaRecipeOn == 1) {
+        // BUG FIX: Calculate DTG BEFORE ColdGas is decremented
+        // Otherwise we get artificially high DTG ratio from the reduced gas reservoir
+        const double DTG_cold_pre = (run_params->DustOn == 1) ?
+            get_DTG(galaxies[p].ColdGas, galaxies[p].ColdDust) : 0.0;
+
         // DarkMode: Remove reheated mass from disc annuli proportionally
         if(run_params->DarkSAGEOn == 1 && reheated_mass > 0.0) {
             double total_disc_gas = 0.0;
@@ -1289,8 +1294,8 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
         galaxies[p].OutflowRate += reheated_mass;
         if(run_params->DustOn == 1) {
             // Dust follows gas: ColdDust → CGMDust/HotDust → EjectedDust
-            const double DTG = get_DTG(galaxies[p].ColdGas, galaxies[p].ColdDust);
-            double reheated_dust = DTG * reheated_mass;
+            // Use pre-calculated DTG (computed BEFORE ColdGas was decremented)
+            double reheated_dust = DTG_cold_pre * reheated_mass;
             if(reheated_dust > galaxies[p].ColdDust) reheated_dust = galaxies[p].ColdDust;
             galaxies[p].ColdDust -= reheated_dust;
             

@@ -523,6 +523,15 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
         galaxies[p].Heating *= inv_deltaT;
         galaxies[p].OutflowRate *= inv_deltaT;
 
+        /* Floor check: clamp tiny dust values from floating-point precision to zero */
+        if(run_params->DustOn == 1) {
+            const double DUST_FLOOR = 1.0e-10;
+            if(galaxies[p].ColdDust < DUST_FLOOR) galaxies[p].ColdDust = 0.0;
+            if(galaxies[p].HotDust < DUST_FLOOR) galaxies[p].HotDust = 0.0;
+            if(galaxies[p].CGMDust < DUST_FLOOR) galaxies[p].CGMDust = 0.0;
+            if(galaxies[p].EjectedDust < DUST_FLOOR) galaxies[p].EjectedDust = 0.0;
+        }
+
         if(p != centralgal) {
             galaxies[centralgal].TotalSatelliteBaryons +=
                 (galaxies[p].StellarMass + galaxies[p].BlackHoleMass + galaxies[p].ColdGas + galaxies[p].HotGas);

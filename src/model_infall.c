@@ -135,7 +135,8 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
     }
 
     if(run_params->DustOn == 1) {
-        if(galaxies[centralgal].CGMDust < 0.0) {
+        /* Floor check: clamp tiny values from floating-point precision to zero */
+        if(galaxies[centralgal].CGMDust < 1.0e-10) {
             galaxies[centralgal].CGMDust = 0.0;
         }
         if(galaxies[centralgal].MetalsCGMgas > 0.0 &&
@@ -379,7 +380,7 @@ void add_infall_to_hot(const int gal, double infallingGas, struct GALAXY *galaxi
                 if(run_params->DustOn == 1) {
                     const double DTG_cgm = get_DTG(galaxies[gal].CGMgas, galaxies[gal].CGMDust);
                     galaxies[gal].CGMDust += infallingGas*DTG_cgm;
-                    if(galaxies[gal].CGMDust < 0.0) galaxies[gal].CGMDust = 0.0;
+                    if(galaxies[gal].CGMDust < 1.0e-10) galaxies[gal].CGMDust = 0.0;
                     if(galaxies[gal].CGMDust > galaxies[gal].MetalsCGMgas) galaxies[gal].CGMDust = galaxies[gal].MetalsCGMgas;
                 }
             }

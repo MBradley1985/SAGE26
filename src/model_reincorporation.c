@@ -26,7 +26,11 @@ void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *gal
             reincorporated = galaxies[centralgal].EjectedMass;
 
         const double metallicity = get_metallicity(galaxies[centralgal].EjectedMass, galaxies[centralgal].MetalsEjectedMass);
-        
+
+        // BUG FIX: Calculate DTG BEFORE EjectedMass is decremented
+        const double DTG_ejected_pre = (run_params->DustOn == 1) ?
+            get_DTG(galaxies[centralgal].EjectedMass, galaxies[centralgal].EjectedDust) : 0.0;
+
         // Remove from ejected reservoir (same for all regimes)
         galaxies[centralgal].EjectedMass -= reincorporated;
         galaxies[centralgal].MetalsEjectedMass -= metallicity * reincorporated;
@@ -63,8 +67,8 @@ void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *gal
         }
 
         if(run_params->DustOn == 1) {
-            const double DTG = get_DTG(galaxies[centralgal].EjectedMass, galaxies[centralgal].EjectedDust);
-            double reinc_dust = DTG * reincorporated;
+            // Use pre-calculated DTG (computed BEFORE EjectedMass was decremented)
+            double reinc_dust = DTG_ejected_pre * reincorporated;
             if(reinc_dust > galaxies[centralgal].EjectedDust) reinc_dust = galaxies[centralgal].EjectedDust;
             galaxies[centralgal].EjectedDust -= reinc_dust;
 
@@ -122,6 +126,10 @@ void reincorporate_fountain_gas(const int centralgal, const double dt, struct GA
         const double metallicity_fountain = get_metallicity(galaxies[centralgal].FountainGas,
                                                             galaxies[centralgal].MetalsFountainGas);
 
+        /* BUG FIX: Calculate DTG BEFORE FountainGas is decremented */
+        const double DTG_fountain_pre = (run_params->DustOn == 1) ?
+            get_DTG(galaxies[centralgal].FountainGas, galaxies[centralgal].FountainDust) : 0.0;
+
         /* Remove from FountainGas */
         galaxies[centralgal].FountainGas -= reincorporated_fountain;
         galaxies[centralgal].MetalsFountainGas -= metallicity_fountain * reincorporated_fountain;
@@ -140,9 +148,8 @@ void reincorporate_fountain_gas(const int centralgal, const double dt, struct GA
 
         /* Handle dust */
         if(run_params->DustOn == 1) {
-            const double DTG_fountain = get_DTG(galaxies[centralgal].FountainGas,
-                                                galaxies[centralgal].FountainDust);
-            double reinc_fountain_dust = DTG_fountain * reincorporated_fountain;
+            /* Use pre-calculated DTG (computed BEFORE FountainGas was decremented) */
+            double reinc_fountain_dust = DTG_fountain_pre * reincorporated_fountain;
             if(reinc_fountain_dust > galaxies[centralgal].FountainDust) {
                 reinc_fountain_dust = galaxies[centralgal].FountainDust;
             }
@@ -179,6 +186,10 @@ void reincorporate_fountain_gas(const int centralgal, const double dt, struct GA
         const double metallicity_outflow = get_metallicity(galaxies[centralgal].OutflowGas,
                                                            galaxies[centralgal].MetalsOutflowGas);
 
+        /* BUG FIX: Calculate DTG BEFORE OutflowGas is decremented */
+        const double DTG_outflow_pre = (run_params->DustOn == 1) ?
+            get_DTG(galaxies[centralgal].OutflowGas, galaxies[centralgal].OutflowDust) : 0.0;
+
         /* Transfer from OutflowGas to EjectedMass */
         galaxies[centralgal].OutflowGas -= transferred_outflow;
         galaxies[centralgal].MetalsOutflowGas -= metallicity_outflow * transferred_outflow;
@@ -189,9 +200,8 @@ void reincorporate_fountain_gas(const int centralgal, const double dt, struct GA
 
         /* Handle dust */
         if(run_params->DustOn == 1) {
-            const double DTG_outflow = get_DTG(galaxies[centralgal].OutflowGas,
-                                               galaxies[centralgal].OutflowDust);
-            double transferred_outflow_dust = DTG_outflow * transferred_outflow;
+            /* Use pre-calculated DTG (computed BEFORE OutflowGas was decremented) */
+            double transferred_outflow_dust = DTG_outflow_pre * transferred_outflow;
             if(transferred_outflow_dust > galaxies[centralgal].OutflowDust) {
                 transferred_outflow_dust = galaxies[centralgal].OutflowDust;
             }
