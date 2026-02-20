@@ -340,22 +340,36 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
 
 // Helper function to distribute cooling gas to disk annuli (DarkMode)
 // This adds to DiscGas/DiscGasMetals/DiscDust arrays based on exponential j-distribution
-static void distribute_cooling_to_disk(const int gal, const double cooling_amount, 
+static void distribute_cooling_to_disk(const int gal, const double cooling_amount,
                                         const double metallicity, const double cooling_dust,
                                         struct GALAXY *galaxies, const struct params *run_params)
 {
     if(cooling_amount <= 0.0) return;
-    
+
+    // Find the last bin with physical area (r_out > r_in)
+    // Bins beyond Rvir are capped and have zero area
+    int last_physical_bin = N_BINS - 1;
+    for(int i = N_BINS - 1; i >= 0; i--) {
+        if(galaxies[gal].DiscRadii[i+1] > galaxies[gal].DiscRadii[i]) {
+            last_physical_bin = i;
+            break;
+        }
+    }
+
     // CoolScaleRadius defines the exponential decay scale for angular momentum distribution
     const double jscale = galaxies[gal].Vvir * galaxies[gal].CoolScaleRadius;
-    
+
     double coolingGasBinSum = 0.0;
     double coolingDustBinSum = 0.0;
     const int track_dust = (cooling_dust > 0.0) ? 1 : 0;
-    
+
+    // Track overflow from zero-area bins to add to last physical bin
+    double overflow_gas = 0.0;
+    double overflow_dust = 0.0;
+
     for(int i = 0; i < N_BINS; i++) {
         double coolingGasBin, coolingDustBin = 0.0;
-        
+
         if(jscale > 0.0) {
             // Distribute cooling gas with exponential j-profile: f(j) ~ j * exp(-j/j_scale)
             const double jfrac1 = run_params->DiscBinEdge[i] / jscale;
@@ -368,7 +382,7 @@ static void distribute_cooling_to_disk(const int gal, const double cooling_amoun
             coolingGasBin = cooling_amount / N_BINS;
             if(track_dust) coolingDustBin = cooling_dust / N_BINS;
         }
-        
+
         // Ensure we don't exceed total cooling gas (numerical precision)
         if(coolingGasBin + coolingGasBinSum > cooling_amount || i == N_BINS - 1) {
             coolingGasBin = cooling_amount - coolingGasBinSum;
@@ -376,13 +390,27 @@ static void distribute_cooling_to_disk(const int gal, const double cooling_amoun
         }
         if(coolingGasBin < 0.0) coolingGasBin = 0.0;
         if(coolingDustBin < 0.0) coolingDustBin = 0.0;
-        
-        galaxies[gal].DiscGas[i] += coolingGasBin;
-        galaxies[gal].DiscGasMetals[i] += metallicity * coolingGasBin;
-        if(track_dust) galaxies[gal].DiscDust[i] += coolingDustBin;
-        
+
+        // Check if this bin has physical area
+        if(i <= last_physical_bin) {
+            galaxies[gal].DiscGas[i] += coolingGasBin;
+            galaxies[gal].DiscGasMetals[i] += metallicity * coolingGasBin;
+            if(track_dust) galaxies[gal].DiscDust[i] += coolingDustBin;
+        } else {
+            // Zero-area bin: accumulate overflow for last physical bin
+            overflow_gas += coolingGasBin;
+            overflow_dust += coolingDustBin;
+        }
+
         coolingGasBinSum += coolingGasBin;
         coolingDustBinSum += coolingDustBin;
+    }
+
+    // Add overflow from zero-area bins to the last physical bin
+    if(overflow_gas > 0.0 && last_physical_bin >= 0) {
+        galaxies[gal].DiscGas[last_physical_bin] += overflow_gas;
+        galaxies[gal].DiscGasMetals[last_physical_bin] += metallicity * overflow_gas;
+        if(track_dust) galaxies[gal].DiscDust[last_physical_bin] += overflow_dust;
     }
 }
 
@@ -742,17 +770,28 @@ void cool_gas_onto_galaxy_darkmode(const int centralgal, const double coolingGas
     // DarkMode: Distribute cooling gas to disk annuli based on exponential j-distribution
     // Following DarkSage approach (Stevens, Croton & Mutch 2016)
     if(coolingGas <= 0.0) return;
-    
+
     const double actual_cooling = (coolingGas < galaxies[centralgal].HotGas) ? coolingGas : galaxies[centralgal].HotGas;
     const double metallicity = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);
-    
+
+    // Find the last bin with physical area (r_out > r_in)
+    int last_physical_bin = N_BINS - 1;
+    for(int i = N_BINS - 1; i >= 0; i--) {
+        if(galaxies[centralgal].DiscRadii[i+1] > galaxies[centralgal].DiscRadii[i]) {
+            last_physical_bin = i;
+            break;
+        }
+    }
+
     // CoolScaleRadius defines the exponential decay scale for angular momentum distribution
     const double jscale = galaxies[centralgal].Vvir * galaxies[centralgal].CoolScaleRadius;
-    
+
     double coolingGasBinSum = 0.0;
+    double overflow_gas = 0.0;
+
     for(int i = 0; i < N_BINS; i++) {
         double coolingGasBin;
-        
+
         if(jscale > 0.0) {
             // Distribute cooling gas with exponential j-profile: f(j) ~ j * exp(-j/j_scale)
             // Integral between bin edges gives mass in each bin
@@ -763,27 +802,38 @@ void cool_gas_onto_galaxy_darkmode(const int centralgal, const double coolingGas
             // Fallback: uniform distribution if scale radius is zero
             coolingGasBin = actual_cooling / N_BINS;
         }
-        
+
         // Ensure we don't exceed total cooling gas (numerical precision)
         if(coolingGasBin + coolingGasBinSum > actual_cooling || i == N_BINS - 1) {
             coolingGasBin = actual_cooling - coolingGasBinSum;
         }
         if(coolingGasBin < 0.0) coolingGasBin = 0.0;
-        
-        galaxies[centralgal].DiscGas[i] += coolingGasBin;
-        galaxies[centralgal].DiscGasMetals[i] += metallicity * coolingGasBin;
+
+        // Check if this bin has physical area
+        if(i <= last_physical_bin) {
+            galaxies[centralgal].DiscGas[i] += coolingGasBin;
+            galaxies[centralgal].DiscGasMetals[i] += metallicity * coolingGasBin;
+        } else {
+            overflow_gas += coolingGasBin;
+        }
         coolingGasBinSum += coolingGasBin;
     }
-    
+
+    // Add overflow to last physical bin
+    if(overflow_gas > 0.0 && last_physical_bin >= 0) {
+        galaxies[centralgal].DiscGas[last_physical_bin] += overflow_gas;
+        galaxies[centralgal].DiscGasMetals[last_physical_bin] += metallicity * overflow_gas;
+    }
+
     // Evolve gas disc spin - cooling gas brings hot gas spin
     update_spin_gas_cooling(centralgal, actual_cooling, galaxies);
-    
-    // Update bulk quantities  
+
+    // Update bulk quantities
     galaxies[centralgal].ColdGas += actual_cooling;
     galaxies[centralgal].MetalsColdGas += metallicity * actual_cooling;
     galaxies[centralgal].HotGas -= actual_cooling;
     galaxies[centralgal].MetalsHotGas -= metallicity * actual_cooling;
-    
+
     if(galaxies[centralgal].HotGas < 0.0) galaxies[centralgal].HotGas = 0.0;
     if(galaxies[centralgal].MetalsHotGas < 0.0) galaxies[centralgal].MetalsHotGas = 0.0;
 }
@@ -792,20 +842,32 @@ void cool_gas_onto_galaxy_darkmode_with_dust(const int centralgal, const double 
 {
     // DarkMode with dust: Distribute cooling gas and dust to disk annuli
     if(coolingGas <= 0.0) return;
-    
+
     const double actual_cooling = (coolingGas < galaxies[centralgal].HotGas) ? coolingGas : galaxies[centralgal].HotGas;
     const double metallicity = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);
     const double DTG = get_DTG(galaxies[centralgal].HotGas, galaxies[centralgal].HotDust);
     double cooling_dust = DTG * actual_cooling;
     if(cooling_dust > galaxies[centralgal].HotDust) cooling_dust = galaxies[centralgal].HotDust;
-    
+
+    // Find the last bin with physical area (r_out > r_in)
+    int last_physical_bin = N_BINS - 1;
+    for(int i = N_BINS - 1; i >= 0; i--) {
+        if(galaxies[centralgal].DiscRadii[i+1] > galaxies[centralgal].DiscRadii[i]) {
+            last_physical_bin = i;
+            break;
+        }
+    }
+
     const double jscale = galaxies[centralgal].Vvir * galaxies[centralgal].CoolScaleRadius;
-    
+
     double coolingGasBinSum = 0.0;
     double coolingDustBinSum = 0.0;
+    double overflow_gas = 0.0;
+    double overflow_dust = 0.0;
+
     for(int i = 0; i < N_BINS; i++) {
         double coolingGasBin, coolingDustBin;
-        
+
         if(jscale > 0.0) {
             const double jfrac1 = run_params->DiscBinEdge[i] / jscale;
             const double jfrac2 = run_params->DiscBinEdge[i+1] / jscale;
@@ -816,24 +878,37 @@ void cool_gas_onto_galaxy_darkmode_with_dust(const int centralgal, const double 
             coolingGasBin = actual_cooling / N_BINS;
             coolingDustBin = cooling_dust / N_BINS;
         }
-        
+
         if(coolingGasBin + coolingGasBinSum > actual_cooling || i == N_BINS - 1) {
             coolingGasBin = actual_cooling - coolingGasBinSum;
             coolingDustBin = cooling_dust - coolingDustBinSum;
         }
         if(coolingGasBin < 0.0) coolingGasBin = 0.0;
         if(coolingDustBin < 0.0) coolingDustBin = 0.0;
-        
-        galaxies[centralgal].DiscGas[i] += coolingGasBin;
-        galaxies[centralgal].DiscGasMetals[i] += metallicity * coolingGasBin;
-        galaxies[centralgal].DiscDust[i] += coolingDustBin;
+
+        // Check if this bin has physical area
+        if(i <= last_physical_bin) {
+            galaxies[centralgal].DiscGas[i] += coolingGasBin;
+            galaxies[centralgal].DiscGasMetals[i] += metallicity * coolingGasBin;
+            galaxies[centralgal].DiscDust[i] += coolingDustBin;
+        } else {
+            overflow_gas += coolingGasBin;
+            overflow_dust += coolingDustBin;
+        }
         coolingGasBinSum += coolingGasBin;
         coolingDustBinSum += coolingDustBin;
     }
-    
+
+    // Add overflow to last physical bin
+    if(overflow_gas > 0.0 && last_physical_bin >= 0) {
+        galaxies[centralgal].DiscGas[last_physical_bin] += overflow_gas;
+        galaxies[centralgal].DiscGasMetals[last_physical_bin] += metallicity * overflow_gas;
+        galaxies[centralgal].DiscDust[last_physical_bin] += overflow_dust;
+    }
+
     // Evolve gas disc spin - cooling gas brings hot gas spin
     update_spin_gas_cooling(centralgal, actual_cooling, galaxies);
-    
+
     // Update bulk quantities
     // ColdDust must stay synchronized with sum(DiscDust) for mass conservation
     galaxies[centralgal].ColdGas += actual_cooling;
@@ -842,7 +917,7 @@ void cool_gas_onto_galaxy_darkmode_with_dust(const int centralgal, const double 
     galaxies[centralgal].HotGas -= actual_cooling;
     galaxies[centralgal].MetalsHotGas -= metallicity * actual_cooling;
     galaxies[centralgal].HotDust -= cooling_dust;
-    
+
     if(galaxies[centralgal].HotGas < 0.0) galaxies[centralgal].HotGas = 0.0;
     if(galaxies[centralgal].MetalsHotGas < 0.0) galaxies[centralgal].MetalsHotGas = 0.0;
     if(galaxies[centralgal].HotDust < 0.0) galaxies[centralgal].HotDust = 0.0;

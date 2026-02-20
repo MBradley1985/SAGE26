@@ -970,20 +970,25 @@ void deal_with_unstable_gas(const int p, const int bin, const double unstable_ga
         galaxies[p].DiscDust[bin-1] += DTG * m_down;
     }
 
-    /* Add to outer bin (or outermost) */
-    if(bin < N_BINS - 1) {
-        galaxies[p].DiscGas[bin+1] += m_up;
-        galaxies[p].DiscGasMetals[bin+1] += Z_gas * m_up;
-        if(run_params->DustOn == 1) {
-            galaxies[p].DiscDust[bin+1] += DTG * m_up;
+    /* Add to outer bin - but only if it has physical area */
+    /* Find the last physical bin (where r_out > r_in) */
+    int last_physical_bin = 0;
+    for(int i = N_BINS - 1; i >= 0; i--) {
+        if(galaxies[p].DiscRadii[i+1] > galaxies[p].DiscRadii[i]) {
+            last_physical_bin = i;
+            break;
         }
-    } else {
-        /* Outermost bin: mass goes to last bin */
-        galaxies[p].DiscGas[N_BINS-1] += m_up;
-        galaxies[p].DiscGasMetals[N_BINS-1] += Z_gas * m_up;
-        if(run_params->DustOn == 1) {
-            galaxies[p].DiscDust[N_BINS-1] += DTG * m_up;
-        }
+    }
+
+    int target_bin = (bin < N_BINS - 1) ? bin + 1 : N_BINS - 1;
+    /* If target bin has no physical area, redirect to last physical bin */
+    if(target_bin > last_physical_bin) {
+        target_bin = last_physical_bin;
+    }
+    galaxies[p].DiscGas[target_bin] += m_up;
+    galaxies[p].DiscGasMetals[target_bin] += Z_gas * m_up;
+    if(run_params->DustOn == 1) {
+        galaxies[p].DiscDust[target_bin] += DTG * m_up;
     }
 
     /* Safety clamps */
@@ -1040,14 +1045,23 @@ void deal_with_unstable_stars(const int p, const int bin, const double unstable_
         galaxies[p].VelDispStars[bin-1] = (float)sqrt(new_sq);
     }
 
-    /* Add compensating mass to outer bin */
-    if(bin < N_BINS - 1) {
-        galaxies[p].DiscStars[bin+1] += m_up;
-        galaxies[p].DiscStarsMetals[bin+1] += Z_stars * m_up;
-    } else {
-        galaxies[p].DiscStars[N_BINS-1] += m_up;
-        galaxies[p].DiscStarsMetals[N_BINS-1] += Z_stars * m_up;
+    /* Add compensating mass to outer bin - but only if it has physical area */
+    /* Find the last physical bin (where r_out > r_in) */
+    int last_physical_bin = 0;
+    for(int i = N_BINS - 1; i >= 0; i--) {
+        if(galaxies[p].DiscRadii[i+1] > galaxies[p].DiscRadii[i]) {
+            last_physical_bin = i;
+            break;
+        }
     }
+
+    int target_bin = (bin < N_BINS - 1) ? bin + 1 : N_BINS - 1;
+    /* If target bin has no physical area, redirect to last physical bin */
+    if(target_bin > last_physical_bin) {
+        target_bin = last_physical_bin;
+    }
+    galaxies[p].DiscStars[target_bin] += m_up;
+    galaxies[p].DiscStarsMetals[target_bin] += Z_stars * m_up;
 
     /* Safety clamps */
     if(galaxies[p].DiscStars[bin] < 0.0) galaxies[p].DiscStars[bin] = 0.0;
@@ -1326,22 +1340,34 @@ void check_full_disk_instability(const int p, const int centralgal, const double
         }
 
         /* Form stars from gas that didn't go to BH (m_down - BH_accrete) */
-        /* This is instability-driven star formation */
+        /* This is instability-driven star formation (starburst) */
+        /* NOTE: SfrEfficiency does NOT apply here - all gas forms stars or is recycled */
         double gas_for_sf = m_down_gas - BH_accrete;
         if(gas_for_sf > 0.0) {
             const double RecycleFraction = run_params->RecycleFraction;
-            const double SfrEfficiency = run_params->SfrEfficiency;
 
-            /* Gas that participates in SF (controlled by efficiency) */
-            double gas_consumed = SfrEfficiency * gas_for_sf;
+            /* All gas participates in instability-driven SF (100% efficiency starburst) */
+            double gas_consumed = gas_for_sf;
             /* Permanent stellar mass formed */
             double stars_formed = (1.0 - RecycleFraction) * gas_consumed;
+            /* Recycled gas returns to disc */
+            double recycled_gas = RecycleFraction * gas_consumed;
 
             /* Stars form in innermost bin (bin 0) */
             galaxies[p].DiscStars[0] += stars_formed;
             galaxies[p].DiscStarsMetals[0] += Z_g * stars_formed;
             galaxies[p].StellarMass += stars_formed;
             galaxies[p].MetalsStellarMass += Z_g * stars_formed;
+
+            /* Return recycled gas to disc (mass conservation) */
+            galaxies[p].DiscGas[0] += recycled_gas;
+            galaxies[p].DiscGasMetals[0] += Z_g * recycled_gas;
+            galaxies[p].ColdGas += recycled_gas;
+            galaxies[p].MetalsColdGas += Z_g * recycled_gas;
+            if(run_params->DustOn == 1) {
+                galaxies[p].DiscDust[0] += DTG_0 * recycled_gas;
+                galaxies[p].ColdDust += DTG_0 * recycled_gas;
+            }
 
             /* Produce new metals from star formation (using Yield) */
             double new_metals = run_params->Yield * stars_formed;
@@ -1466,6 +1492,12 @@ void update_stellardisc_scaleradius(const int p, struct GALAXY *galaxies, const 
     } else {
         galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;
     }
+
+    /* Apply minimum scale radius floor: 1% of Rvir to prevent unrealistic concentration */
+    const double a_min = 0.01 * galaxies[p].Rvir;
+    if(galaxies[p].StellarDiscScaleRadius < a_min && galaxies[p].Rvir > 0.0) {
+        galaxies[p].StellarDiscScaleRadius = a_min;
+    }
 }
 
 
@@ -1522,6 +1554,12 @@ void update_gasdisc_scaleradius(const int p, struct GALAXY *galaxies, const stru
         galaxies[p].GasDiscScaleRadius = Rscale_sum / n_found;
     } else {
         galaxies[p].GasDiscScaleRadius = galaxies[p].DiskScaleRadius;
+    }
+
+    /* Apply minimum scale radius floor: 1% of Rvir to prevent unrealistic concentration */
+    const double a_min = 0.01 * galaxies[p].Rvir;
+    if(galaxies[p].GasDiscScaleRadius < a_min && galaxies[p].Rvir > 0.0) {
+        galaxies[p].GasDiscScaleRadius = a_min;
     }
 }
 
@@ -1741,7 +1779,34 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
             r = r_new;
         }
 
+        /* Cap radius at Rvir - disc can't extend beyond the halo */
+        if(r > Rvir) {
+            r = Rvir;
+        }
+
+        /* Minimum radius floor: 0.01 kpc (10 pc) or 0.001 * Rvir, whichever is larger */
+        /* This prevents unrealistically small radii from runaway collapse */
+        const double r_min_abs = 0.01 / 1000.0;  /* 0.01 kpc in Mpc/h units (assuming UnitLength = Mpc/h) */
+        const double r_min_rel = 0.001 * Rvir;   /* 0.1% of Rvir */
+        const double r_min = (r_min_abs > r_min_rel) ? r_min_abs : r_min_rel;
+        if(r < r_min && j > 0.0) {
+            r = r_min;
+        }
+
         galaxies[p].DiscRadii[i] = r;
+    }
+
+    /* Enforce strictly monotonically increasing radii to prevent zero-area bins */
+    /* This fixes the case where multiple j-bins collapse to the same minimum radius */
+    const double dr_min = 0.001 * Rvir;  /* Minimum radial increment: 0.1% of Rvir */
+    for(int i = 1; i < N_BINS + 1; i++) {
+        if(galaxies[p].DiscRadii[i] <= galaxies[p].DiscRadii[i - 1]) {
+            galaxies[p].DiscRadii[i] = galaxies[p].DiscRadii[i - 1] + dr_min;
+        }
+        /* Still cap at Rvir */
+        if(galaxies[p].DiscRadii[i] > Rvir) {
+            galaxies[p].DiscRadii[i] = Rvir;
+        }
     }
 
     /* Compute potential at each radius for energy calculations */

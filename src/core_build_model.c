@@ -20,6 +20,7 @@
 #include "model_starformation_and_feedback.h"
 #include "model_cooling_heating.h"
 #include "model_dust.h"
+#include "model_darkmode.h"
 
 
 static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals, struct halo_data *halos,
@@ -229,6 +230,10 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                         for(int bin_i = 0; bin_i < N_BINS; bin_i++) {
                             galaxies[ngal].DiscSFR[bin_i] = 0.0;
                         }
+
+                        // Update disc radii as halo grows - rotation curve depends on current mass distribution
+                        // This also fixes galaxies that started with Vvir=0 (zero disc radii)
+                        update_disc_radii(ngal, galaxies, halos, run_params);
                     }
 
                     if(halonr == halos[halonr].FirstHaloInFOFgroup) {
@@ -530,6 +535,38 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
             if(galaxies[p].HotDust < DUST_FLOOR) galaxies[p].HotDust = 0.0;
             if(galaxies[p].CGMDust < DUST_FLOOR) galaxies[p].CGMDust = 0.0;
             if(galaxies[p].EjectedDust < DUST_FLOOR) galaxies[p].EjectedDust = 0.0;
+        }
+
+        /* Safety cleanup: move mass from zero-area disc bins to last physical bin */
+        if(run_params->DarkSAGEOn == 1) {
+            /* Find the last bin with physical area (r_out > r_in) */
+            int last_physical_bin = 0;
+            for(int i = N_BINS - 1; i >= 0; i--) {
+                if(galaxies[p].DiscRadii[i+1] > galaxies[p].DiscRadii[i]) {
+                    last_physical_bin = i;
+                    break;
+                }
+            }
+
+            /* Move mass from zero-area bins to last physical bin */
+            for(int i = last_physical_bin + 1; i < N_BINS; i++) {
+                if(galaxies[p].DiscGas[i] > 0.0) {
+                    galaxies[p].DiscGas[last_physical_bin] += galaxies[p].DiscGas[i];
+                    galaxies[p].DiscGasMetals[last_physical_bin] += galaxies[p].DiscGasMetals[i];
+                    galaxies[p].DiscGas[i] = 0.0;
+                    galaxies[p].DiscGasMetals[i] = 0.0;
+                }
+                if(galaxies[p].DiscStars[i] > 0.0) {
+                    galaxies[p].DiscStars[last_physical_bin] += galaxies[p].DiscStars[i];
+                    galaxies[p].DiscStarsMetals[last_physical_bin] += galaxies[p].DiscStarsMetals[i];
+                    galaxies[p].DiscStars[i] = 0.0;
+                    galaxies[p].DiscStarsMetals[i] = 0.0;
+                }
+                if(run_params->DustOn == 1 && galaxies[p].DiscDust[i] > 0.0) {
+                    galaxies[p].DiscDust[last_physical_bin] += galaxies[p].DiscDust[i];
+                    galaxies[p].DiscDust[i] = 0.0;
+                }
+            }
         }
 
         if(p != centralgal) {

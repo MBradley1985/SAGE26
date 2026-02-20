@@ -388,6 +388,36 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
                 galaxies[t].DiscDust[i] += galaxies[p].DiscDust[i];
             }
         }
+
+        /* Redistribute mass from zero-area bins to last physical bin */
+        /* Find the last bin with physical area (r_out > r_in) */
+        int last_physical_bin = 0;
+        for(int i = N_BINS - 1; i >= 0; i--) {
+            if(galaxies[t].DiscRadii[i+1] > galaxies[t].DiscRadii[i]) {
+                last_physical_bin = i;
+                break;
+            }
+        }
+
+        /* Move mass from zero-area bins to last physical bin */
+        for(int i = last_physical_bin + 1; i < N_BINS; i++) {
+            if(galaxies[t].DiscGas[i] > 0.0) {
+                galaxies[t].DiscGas[last_physical_bin] += galaxies[t].DiscGas[i];
+                galaxies[t].DiscGasMetals[last_physical_bin] += galaxies[t].DiscGasMetals[i];
+                galaxies[t].DiscGas[i] = 0.0;
+                galaxies[t].DiscGasMetals[i] = 0.0;
+            }
+            if(galaxies[t].DiscStars[i] > 0.0) {
+                galaxies[t].DiscStars[last_physical_bin] += galaxies[t].DiscStars[i];
+                galaxies[t].DiscStarsMetals[last_physical_bin] += galaxies[t].DiscStarsMetals[i];
+                galaxies[t].DiscStars[i] = 0.0;
+                galaxies[t].DiscStarsMetals[i] = 0.0;
+            }
+            if(run_params->DustOn == 1 && galaxies[t].DiscDust[i] > 0.0) {
+                galaxies[t].DiscDust[last_physical_bin] += galaxies[t].DiscDust[i];
+                galaxies[t].DiscDust[i] = 0.0;
+            }
+        }
     }
 
     galaxies[t].StellarMass += galaxies[p].StellarMass;
