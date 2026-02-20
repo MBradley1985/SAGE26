@@ -1612,7 +1612,7 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     /* Calculate dark matter mass (subtracting baryons from Mvir) */
     double M_baryons = galaxies[p].HotGas + galaxies[p].ColdGas + galaxies[p].StellarMass +
                        galaxies[p].BlackHoleMass + galaxies[p].ICS;
-    if(run_params->FountainGasOn == 1) {
+    if(run_params->DarkSAGEOn == 1) {
         M_baryons += galaxies[p].FountainGas + galaxies[p].OutflowGas;
     }
     double M_DM = galaxies[p].Mvir - M_baryons;
@@ -1657,7 +1657,7 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     /* Hot gas beta profile parameters */
     const double c_beta = galaxies[p].c_beta;
     double M_hot_total = galaxies[p].HotGas;
-    if(run_params->FountainGasOn == 1) {
+    if(run_params->DarkSAGEOn == 1) {
         M_hot_total += galaxies[p].FountainGas + galaxies[p].OutflowGas;
     }
 

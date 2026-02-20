@@ -128,7 +128,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].Sfr[snap] = 0.0f;
     }
 
-    /* FountainGas/OutflowGas reservoirs (used when FountainGasOn=1) */
+    /* FountainGas/OutflowGas reservoirs (used when DarkSAGEOn=1 for hot-regime haloes) */
     galaxies[p].FountainGas = 0.0f;
     galaxies[p].MetalsFountainGas = 0.0f;
     galaxies[p].FountainDust = 0.0f;

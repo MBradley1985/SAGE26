@@ -415,7 +415,7 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
                 }
 
                 /* FountainGas cycling: FountainGas → HotGas, OutflowGas → EjectedMass */
-                if(run_params->FountainGasOn == 1) {
+                if(run_params->DarkSAGEOn == 1) {
                     reincorporate_fountain_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
                 }
 

@@ -1193,7 +1193,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
             galaxies[centralgal].EjectedMass += ejected_mass;
             galaxies[centralgal].MetalsEjectedMass += metallicityCGM * ejected_mass;
 
-        } else if(run_params->FountainGasOn == 1) {
+        } else if(run_params->DarkSAGEOn == 1) {
             // Hot-regime with FountainGasOn: DarkSage-style gas reservoirs
             // Flow: ColdGas → FountainGas → HotGas
             //       FountainGas → OutflowGas → EjectedMass
@@ -1329,7 +1329,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
                 galaxies[centralgal].CGMDust -= ejected_dust;
                 galaxies[centralgal].EjectedDust += ejected_dust;
 
-            } else if(run_params->FountainGasOn == 1) {
+            } else if(run_params->DarkSAGEOn == 1) {
                 // Hot-regime with FountainGasOn: ColdDust → FountainDust → OutflowDust
                 galaxies[centralgal].FountainDust += reheated_dust;
                 if(galaxies[centralgal].FountainDust > galaxies[centralgal].MetalsFountainGas)

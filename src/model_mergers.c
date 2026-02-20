@@ -400,7 +400,7 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].MetalsEjectedMass += galaxies[p].MetalsEjectedMass;
 
     /* FountainGas/OutflowGas: Add satellite's reservoirs to central */
-    if(run_params->FountainGasOn == 1) {
+    if(run_params->DarkSAGEOn == 1) {
         /* Satellite's fountain gas goes to central's HotGas (short timescale) */
         galaxies[t].HotGas += galaxies[p].FountainGas;
         galaxies[t].MetalsHotGas += galaxies[p].MetalsFountainGas;

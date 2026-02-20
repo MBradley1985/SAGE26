@@ -38,7 +38,7 @@ void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *gal
             // CGM-regime: reincorporate directly to CGM (no fountain)
             galaxies[centralgal].CGMgas += reincorporated;
             galaxies[centralgal].MetalsCGMgas += metallicity * reincorporated;
-        } else if(run_params->FountainGasOn == 1) {
+        } else if(run_params->DarkSAGEOn == 1) {
             // Hot-regime with FountainGasOn: EjectedMass → FountainGas → HotGas
             // Update FountainTime with weighted average using dynamical time
             const double t_dyn = get_dynamical_time(galaxies[centralgal].SnapNum, run_params);
@@ -74,7 +74,7 @@ void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *gal
                 galaxies[centralgal].CGMDust += reinc_dust;
                 if(galaxies[centralgal].CGMDust > galaxies[centralgal].MetalsCGMgas)
                     galaxies[centralgal].CGMDust = galaxies[centralgal].MetalsCGMgas;
-            } else if(run_params->FountainGasOn == 1) {
+            } else if(run_params->DarkSAGEOn == 1) {
                 // Hot-regime with FountainGasOn: reincorporate to FountainDust
                 galaxies[centralgal].FountainDust += reinc_dust;
                 if(galaxies[centralgal].FountainDust > galaxies[centralgal].MetalsFountainGas)
@@ -99,7 +99,7 @@ void reincorporate_fountain_gas(const int centralgal, const double dt, struct GA
                                 const struct params *run_params)
 {
     /* Only run if FountainGasOn is enabled */
-    if(run_params->FountainGasOn != 1) {
+    if(run_params->DarkSAGEOn != 1) {
         return;
     }
 

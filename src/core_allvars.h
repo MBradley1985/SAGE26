@@ -230,7 +230,7 @@ struct GALAXY
     float Potential[N_BINS+1];       /* Gravitational potential at each radius */
     float c_beta;                    /* Beta profile parameter for hot gas (init to 0.1) */
 
-    /* FountainGas/OutflowGas reservoirs (only used when FountainGasOn=1) */
+    /* FountainGas/OutflowGas reservoirs (only used when DarkSAGEOn=1 for hot-regime haloes) */
     float FountainGas;               /* Gas leaving disc but not halo */
     float MetalsFountainGas;         /* Metals in fountain gas */
     float FountainDust;              /* Dust in fountain gas (if DustOn=1) */
@@ -565,10 +565,10 @@ struct params
     double     BinaryFraction;          // Binary fraction for SNIa (default 0.1)
 
     /* DarkMode: Full DarkSage physics with radially-resolved disk structure */
-    /* When DarkSAGEOn=1: Enables radial bins, Toomre Q instability, precession, j-conservation */
+    /* When DarkSAGEOn=1: Enables radial bins, Toomre Q instability, precession, j-conservation, */
+    /*                    fountain gas reservoirs (for hot-regime haloes only) */
     /* When DarkSAGEOn=0: Standard SAGE behavior */
     int32_t    DarkSAGEOn;              // 0: standard SAGE; 1: full DarkSage physics
-    int32_t    FountainGasOn;           // 0: standard SAGE; 1: DarkSage-style fountain/outflow reservoirs
     double     FirstBin;                // First j-bin edge [kpc km/s] (default 100)
     double     ExponentBin;             // j-bin geometric growth factor (default 1.4)
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
