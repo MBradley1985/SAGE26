@@ -64,6 +64,7 @@ SNIIYields            0   %0: WoosleyWeaver1995
 SNIaYields            0   %0: Iwamoto1999
 
 DarkSAGEOn            1   %0: standard SAGE; 1: full DarkSAGE physics (radial bins, Toomre Q, precession)
+FountainGasOn         0
 
 
 %------------------------------------------

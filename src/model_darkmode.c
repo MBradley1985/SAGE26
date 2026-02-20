@@ -1363,3 +1363,389 @@ void check_full_disk_instability(const int p, const int centralgal, const double
         if(galaxies[p].ColdDust < 0.0) galaxies[p].ColdDust = 0.0;
     }
 }
+
+
+/* ========================================================================== */
+/* DISC RADII AND ROTATION CURVE FUNCTIONS                                    */
+/* Adapted from DarkSage for multi-component rotation curve calculation       */
+/* ========================================================================== */
+
+/* Helper: Disc contribution to circular velocity squared (dimensionless form).
+ * Based on Binney & Tremaine (1987) for an exponential disc.
+ * x = r / r_scale, c = R_vir / r_scale */
+static inline double v2_disc_cterm(const double x, const double c)
+{
+    const double cx = c * x;
+    const double inv_cx = 1.0 / cx;
+    return (c + 4.8 * c * exp(-0.35 * cx - 3.5 * inv_cx)) / (cx + inv_cx * inv_cx + 2.0 * sqrt(inv_cx));
+}
+
+
+/* NFW potential at radius r for galaxy p.
+ * Uses pre-computed HaloScaleRadius (r_s = R_vir/c). */
+double NFW_potential(const int p, const double r, struct GALAXY *galaxies, const struct params *run_params)
+{
+    if(r <= 0.0 || galaxies[p].HaloScaleRadius <= 0.0) {
+        return 0.0;
+    }
+
+    const double rs = galaxies[p].HaloScaleRadius;
+    const double Rvir = galaxies[p].Rvir;
+    const double G = run_params->G;
+
+    const double c = Rvir / rs;  // concentration
+    const double norm = log(1.0 + c) - c / (1.0 + c);  // NFW normalization
+
+    if(norm <= 0.0) {
+        return 0.0;
+    }
+
+    double pot = -G * galaxies[p].Mvir / r * log(1.0 + r / rs) / norm;
+
+    return pot;
+}
+
+
+/* Update stellar disc scale radius from mass distribution.
+ * Finds radii enclosing 10%, 20%, ..., 90% of stellar mass and converts to
+ * equivalent exponential scale length. */
+void update_stellardisc_scaleradius(const int p, struct GALAXY *galaxies, const struct params *run_params)
+{
+    (void)run_params;  // May be used for parameters later
+
+    /* Get total disc stellar mass */
+    double DiscMass = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        DiscMass += galaxies[p].DiscStars[i];
+    }
+
+    if(DiscMass <= 0.0) {
+        /* Fall back to DiskScaleRadius if no stars in disc */
+        galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;
+        return;
+    }
+
+    const double inv_DiscMass = 1.0 / DiscMass;
+
+    /* Percentile values: 0.1, 0.2, ..., 0.9 */
+    const double percent_values[9] = {0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
+    /* Conversion factors: r(frac) / r_scale where r(frac) is radius enclosing that fraction
+     * For exponential disc: M(<r) = M_tot * [1 - (1 + r/r_s)*exp(-r/r_s)]
+     * These are pre-computed -log(1-frac) / ln(2) style corrections */
+    const double percent_conversion[9] = {0.3567, 0.4214, 0.4765, 0.5268, 0.5752, 0.6244, 0.6785, 0.7491, 0.8684};
+
+    double cum_mass_frac[N_BINS + 1];
+    cum_mass_frac[0] = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        cum_mass_frac[i + 1] = cum_mass_frac[i] + galaxies[p].DiscStars[i] * inv_DiscMass;
+    }
+
+    double Rscale_sum = 0.0;
+    int n_found = 0;
+    int i_min = 1;
+
+    for(int j = 0; j < 9; j++) {
+        for(int i = i_min; i < N_BINS + 1; i++) {
+            if(cum_mass_frac[i] >= percent_values[j]) {
+                /* Interpolate radius at this percentile */
+                double frac_diff = cum_mass_frac[i] - cum_mass_frac[i - 1];
+                if(frac_diff > 0.0) {
+                    double r_at_frac = (galaxies[p].DiscRadii[i] * (percent_values[j] - cum_mass_frac[i - 1]) +
+                                        galaxies[p].DiscRadii[i - 1] * (cum_mass_frac[i] - percent_values[j])) / frac_diff;
+                    Rscale_sum += r_at_frac * percent_conversion[j];
+                    n_found++;
+                }
+                i_min = i;
+                break;
+            }
+        }
+    }
+
+    if(n_found > 0) {
+        galaxies[p].StellarDiscScaleRadius = Rscale_sum / n_found;
+    } else {
+        galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;
+    }
+}
+
+
+/* Update gas disc scale radius from mass distribution. */
+void update_gasdisc_scaleradius(const int p, struct GALAXY *galaxies, const struct params *run_params)
+{
+    (void)run_params;  // May be used for parameters later
+
+    /* Get total disc gas mass */
+    double DiscMass = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        DiscMass += galaxies[p].DiscGas[i];
+    }
+
+    if(DiscMass <= 0.0) {
+        /* Fall back to DiskScaleRadius if no gas in disc */
+        galaxies[p].GasDiscScaleRadius = galaxies[p].DiskScaleRadius;
+        return;
+    }
+
+    const double inv_DiscMass = 1.0 / DiscMass;
+
+    /* Same percentile approach as stellar */
+    const double percent_values[9] = {0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
+    const double percent_conversion[9] = {0.3567, 0.4214, 0.4765, 0.5268, 0.5752, 0.6244, 0.6785, 0.7491, 0.8684};
+
+    double cum_mass_frac[N_BINS + 1];
+    cum_mass_frac[0] = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        cum_mass_frac[i + 1] = cum_mass_frac[i] + galaxies[p].DiscGas[i] * inv_DiscMass;
+    }
+
+    double Rscale_sum = 0.0;
+    int n_found = 0;
+    int i_min = 1;
+
+    for(int j = 0; j < 9; j++) {
+        for(int i = i_min; i < N_BINS + 1; i++) {
+            if(cum_mass_frac[i] >= percent_values[j]) {
+                double frac_diff = cum_mass_frac[i] - cum_mass_frac[i - 1];
+                if(frac_diff > 0.0) {
+                    double r_at_frac = (galaxies[p].DiscRadii[i] * (percent_values[j] - cum_mass_frac[i - 1]) +
+                                        galaxies[p].DiscRadii[i - 1] * (cum_mass_frac[i] - percent_values[j])) / frac_diff;
+                    Rscale_sum += r_at_frac * percent_conversion[j];
+                    n_found++;
+                }
+                i_min = i;
+                break;
+            }
+        }
+    }
+
+    if(n_found > 0) {
+        galaxies[p].GasDiscScaleRadius = Rscale_sum / n_found;
+    } else {
+        galaxies[p].GasDiscScaleRadius = galaxies[p].DiskScaleRadius;
+    }
+}
+
+
+/* Update rotation support scale radius.
+ * Finds the radius where f_rot = v_circ / sqrt(v_circ^2 + sigma^2) = 0.5 */
+void update_rotation_support_scale_radius(const int p, struct GALAXY *galaxies, const struct params *run_params)
+{
+    double rad_old = 0.0;
+    double f_rot_old = 0.0;
+
+    /* Default gas velocity dispersion ~8 km/s in code units */
+    const double default_sigma = 8.0e5 / run_params->UnitVelocity_in_cm_per_s;
+
+    for(int i = 0; i < N_BINS; i++) {
+        /* Mid-radius of bin */
+        double r_in = galaxies[p].DiscRadii[i];
+        double r_out = galaxies[p].DiscRadii[i + 1];
+        double rad = sqrt(0.5 * (r_in * r_in + r_out * r_out));
+
+        if(rad <= 0.0) continue;
+
+        /* Circular velocity at this radius (from j-bin edges) */
+        double j_mid = 0.5 * (run_params->DiscBinEdge[i] + run_params->DiscBinEdge[i + 1]);
+        double v_circ = j_mid / rad;
+
+        /* Velocity dispersion */
+        double sigma;
+        if(galaxies[p].DiscStars[i] > 0.0) {
+            sigma = galaxies[p].VelDispStars[i];
+        } else {
+            sigma = default_sigma;
+        }
+
+        /* Rotation support fraction */
+        double v2_tot = v_circ * v_circ + sigma * sigma;
+        double f_rot = (v2_tot > 0.0) ? v_circ / sqrt(v2_tot) : 0.0;
+
+        /* Find where f_rot crosses 0.5 */
+        if(f_rot >= 0.5 && f_rot > f_rot_old && rad > rad_old) {
+            double rad_50 = rad - (f_rot - 0.5) / (f_rot - f_rot_old) * (rad - rad_old);
+            galaxies[p].RotSupportScaleRadius = rad_50 * 1.442695;  // -1/ln(0.5)
+            return;
+        }
+
+        rad_old = rad;
+        f_rot_old = f_rot;
+    }
+
+    /* If 50% support radius not found, extrapolate from last valid point */
+    if(f_rot_old > 0.0 && f_rot_old < 1.0) {
+        galaxies[p].RotSupportScaleRadius = -rad_old / log(1.0 - f_rot_old);
+    } else {
+        galaxies[p].RotSupportScaleRadius = galaxies[p].DiskScaleRadius;
+    }
+}
+
+
+/* Main disc radii update function.
+ * Calculates radius of each annulus boundary based on full rotation curve
+ * including NFW halo, bulge, and disc self-gravity. */
+void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_data *halos,
+                       const struct params *run_params)
+{
+    /* Early exit if Vvir is not valid */
+    if(galaxies[p].Vvir <= 0.0 || galaxies[p].Rvir <= 0.0) {
+        return;
+    }
+
+    const double Rvir = galaxies[p].Rvir;
+    const double Vvir = galaxies[p].Vvir;
+    const double G = run_params->G;
+    const double inv_Rvir = 1.0 / Rvir;
+
+    /* Update scale radii from mass distributions */
+    update_stellardisc_scaleradius(p, galaxies, run_params);
+    update_gasdisc_scaleradius(p, galaxies, run_params);
+    update_rotation_support_scale_radius(p, galaxies, run_params);
+
+    /* Get total disc masses */
+    double DiscStars = 0.0;
+    double DiscGas = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        DiscStars += galaxies[p].DiscStars[i];
+        DiscGas += galaxies[p].DiscGas[i];
+    }
+
+    /* Calculate dark matter mass (subtracting baryons from Mvir) */
+    double M_baryons = galaxies[p].HotGas + galaxies[p].ColdGas + galaxies[p].StellarMass +
+                       galaxies[p].BlackHoleMass + galaxies[p].ICS;
+    if(run_params->FountainGasOn == 1) {
+        M_baryons += galaxies[p].FountainGas + galaxies[p].OutflowGas;
+    }
+    double M_DM = galaxies[p].Mvir - M_baryons;
+    if(M_DM < 0.0) M_DM = 0.0;
+
+    /* Calculate NFW concentration using Dutton & Maccio (2014) */
+    const int halonr = galaxies[p].HaloNr;
+    double z = run_params->ZZ[halos[halonr].SnapNum];
+    if(z > 5.0) z = 5.0;
+    double a_conc = 0.520 + (0.905 - 0.520) * exp(-0.617 * pow(z, 1.21));
+    double b_conc = -0.101 + 0.026 * z;
+    double log_Mvir_Msun = log10(galaxies[p].Mvir * run_params->UnitMass_in_g / 1.989e33) - 12.0;
+    double c_DM = pow(10.0, a_conc + b_conc * log_Mvir_Msun);
+
+    /* Scale radius */
+    double r_s = Rvir / c_DM;
+    galaxies[p].HaloScaleRadius = r_s;
+
+    /* NFW normalization */
+    double rho_norm = M_DM / (log(1.0 + Rvir / r_s) - Rvir / (Rvir + r_s));
+    if(rho_norm < 0.0) rho_norm = 0.0;
+
+    /* Bulge-to-total ratio */
+    double BTT = 0.0;
+    double total_stellar_gas = galaxies[p].StellarMass + galaxies[p].ColdGas;
+    if(total_stellar_gas > 0.0) {
+        BTT = galaxies[p].BulgeMass / total_stellar_gas;
+    }
+
+    /* Maximum velocity for convergence check */
+    double v_max = (galaxies[p].Vmax > Vvir) ? 2.0 * galaxies[p].Vmax : 2.0 * Vvir;
+
+    /* Only proceed with full calculation if disc exists */
+    if(galaxies[p].Mvir <= 0.0 || BTT >= 1.0) {
+        /* Fall back to simple j/Vvir radii */
+        for(int i = 0; i < N_BINS + 1; i++) {
+            galaxies[p].DiscRadii[i] = run_params->DiscBinEdge[i] / Vvir;
+        }
+        return;
+    }
+
+    /* Hot gas beta profile parameters */
+    const double c_beta = galaxies[p].c_beta;
+    double M_hot_total = galaxies[p].HotGas;
+    if(run_params->FountainGasOn == 1) {
+        M_hot_total += galaxies[p].FountainGas + galaxies[p].OutflowGas;
+    }
+
+    /* Disc scale radii */
+    double a_stars = galaxies[p].StellarDiscScaleRadius;
+    double a_gas = galaxies[p].GasDiscScaleRadius;
+    if(a_stars <= 0.0) a_stars = galaxies[p].DiskScaleRadius;
+    if(a_gas <= 0.0) a_gas = galaxies[p].DiskScaleRadius;
+
+    /* Iterate over each j-bin edge */
+    for(int i = 0; i < N_BINS + 1; i++) {
+        double j = run_params->DiscBinEdge[i];
+
+        /* Initial guess: flat rotation curve */
+        double r = j / Vvir;
+
+        /* Iteratively solve j = r * V_circ(r) */
+        for(int iter = 0; iter < 20; iter++) {
+            if(r <= 0.0) {
+                r = j / Vvir;
+                break;
+            }
+
+            /* NFW halo contribution to V^2 */
+            double v2_DM = G * rho_norm * (log(1.0 + r / r_s) - r / (r + r_s)) / r;
+            if(v2_DM < 0.0) v2_DM = 0.0;
+
+            /* Bulge contribution (Hernquist profile approximation) */
+            double v2_bulge = 0.0;
+            if(galaxies[p].BulgeMass > 0.0 && galaxies[p].BulgeRadius > 0.0) {
+                double a_b = galaxies[p].BulgeRadius;
+                double M_b_enc = galaxies[p].BulgeMass * r * r / ((r + a_b) * (r + a_b));
+                v2_bulge = G * M_b_enc / r;
+            }
+
+            /* Stellar disc contribution */
+            double v2_sdisc = 0.0;
+            if(DiscStars > 0.0 && a_stars > 0.0) {
+                double x_s = r / a_stars;
+                double c_s = Rvir / a_stars;
+                v2_sdisc = G * DiscStars * inv_Rvir * v2_disc_cterm(x_s, c_s);
+            }
+
+            /* Gas disc contribution */
+            double v2_gdisc = 0.0;
+            if(DiscGas > 0.0 && a_gas > 0.0) {
+                double x_g = r / a_gas;
+                double c_g = Rvir / a_gas;
+                v2_gdisc = G * DiscGas * inv_Rvir * v2_disc_cterm(x_g, c_g);
+            }
+
+            /* Hot gas contribution (beta profile) */
+            double v2_hot = 0.0;
+            if(M_hot_total > 0.0 && c_beta > 0.0) {
+                double x_hot = r * inv_Rvir;
+                double cb_norm = 1.0 / (1.0 - c_beta * atan(1.0 / c_beta));
+                double M_hot_enc = M_hot_total * cb_norm * (atan(x_hot / c_beta) - c_beta * atan(1.0 / c_beta));
+                if(M_hot_enc > 0.0) {
+                    v2_hot = G * M_hot_enc / r;
+                }
+            }
+
+            /* Total circular velocity */
+            double V_circ_sq = v2_DM + v2_bulge + v2_sdisc + v2_gdisc + v2_hot;
+            if(V_circ_sq < 0.0) V_circ_sq = 0.0;
+            double V_circ = sqrt(V_circ_sq);
+
+            /* Clamp to reasonable range */
+            if(V_circ > v_max) V_circ = v_max;
+            if(V_circ < 0.1 * Vvir) V_circ = 0.1 * Vvir;
+
+            /* New radius estimate */
+            double r_new = j / V_circ;
+
+            /* Check convergence */
+            if(fabs(r_new - r) < 1.0e-6 * r) {
+                r = r_new;
+                break;
+            }
+
+            r = r_new;
+        }
+
+        galaxies[p].DiscRadii[i] = r;
+    }
+
+    /* Compute potential at each radius for energy calculations */
+    for(int i = 0; i < N_BINS + 1; i++) {
+        galaxies[p].Potential[i] = NFW_potential(p, galaxies[p].DiscRadii[i], galaxies, run_params);
+    }
+}

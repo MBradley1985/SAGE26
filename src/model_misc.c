@@ -11,6 +11,7 @@
 #include "core_allvars.h"
 
 #include "model_misc.h"
+#include "model_darkmode.h"
 
 void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct halo_data *halos,
                  struct GALAXY *galaxies, const struct params *run_params)
@@ -127,6 +128,16 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].Sfr[snap] = 0.0f;
     }
 
+    /* FountainGas/OutflowGas reservoirs (used when FountainGasOn=1) */
+    galaxies[p].FountainGas = 0.0f;
+    galaxies[p].MetalsFountainGas = 0.0f;
+    galaxies[p].FountainDust = 0.0f;
+    galaxies[p].OutflowGas = 0.0f;
+    galaxies[p].MetalsOutflowGas = 0.0f;
+    galaxies[p].OutflowDust = 0.0f;
+    galaxies[p].FountainTime = 0.0f;
+    galaxies[p].OutflowTime = 0.0f;
+
     /* DarkMode: Initialize disk arrays and angular momentum vectors */
     if(run_params->DarkSAGEOn == 1) {
         /* Compute disk radii from j-bin edges: r = j / Vvir */
@@ -178,6 +189,14 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].GasDiscScaleRadius = galaxies[p].DiskScaleRadius;
         galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;
 
+        /* DarkMode: Initialize rotation curve and potential fields */
+        galaxies[p].HaloScaleRadius = galaxies[p].Rvir / 10.0;  // r_s = Rvir/c, assume c~10
+        galaxies[p].RotSupportScaleRadius = 0.0f;
+        galaxies[p].c_beta = 0.1f;  // Beta profile parameter for hot gas
+        for(int i = 0; i < N_BINS + 1; i++) {
+            galaxies[p].Potential[i] = 0.0f;
+        }
+
         /* DarkMode: Initialize enhanced physics fields */
         if(run_params->DarkSAGEOn == 1) {
             /* Initialize velocity dispersion per annulus (default ~10 km/s for gas-dominated) */
@@ -198,6 +217,9 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
             /* Average r^2 for hot gas (used in j-conservation) */
             galaxies[p].R2_hot_av = 0.0f;
         }
+
+        /* Update disc radii using full rotation curve */
+        update_disc_radii(p, galaxies, halos, run_params);
     }
 }
 

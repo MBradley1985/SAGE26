@@ -399,6 +399,22 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].EjectedMass += galaxies[p].EjectedMass;
     galaxies[t].MetalsEjectedMass += galaxies[p].MetalsEjectedMass;
 
+    /* FountainGas/OutflowGas: Add satellite's reservoirs to central */
+    if(run_params->FountainGasOn == 1) {
+        /* Satellite's fountain gas goes to central's HotGas (short timescale) */
+        galaxies[t].HotGas += galaxies[p].FountainGas;
+        galaxies[t].MetalsHotGas += galaxies[p].MetalsFountainGas;
+
+        /* Satellite's outflow gas also goes to HotGas during merger */
+        galaxies[t].HotGas += galaxies[p].OutflowGas;
+        galaxies[t].MetalsHotGas += galaxies[p].MetalsOutflowGas;
+
+        if(run_params->DustOn == 1) {
+            galaxies[t].HotDust += galaxies[p].FountainDust;
+            galaxies[t].HotDust += galaxies[p].OutflowDust;
+        }
+    }
+
     galaxies[t].ICS += galaxies[p].ICS;
     galaxies[t].MetalsICS += galaxies[p].MetalsICS;
 

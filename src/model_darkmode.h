@@ -89,6 +89,36 @@ extern void deal_with_unstable_stars(const int p, const int bin, const double un
 extern void check_full_disk_instability(const int p, const int centralgal, const double dt, const int step,
                                         struct GALAXY *galaxies, const struct params *run_params);
 
+/* ========================================================================== */
+/* DISC RADII AND ROTATION CURVE FUNCTIONS                                    */
+/* ========================================================================== */
+
+/**
+ * @brief Calculate NFW potential at radius r for galaxy p
+ */
+extern double NFW_potential(const int p, const double r, struct GALAXY *galaxies, const struct params *run_params);
+
+/**
+ * @brief Update stellar disc scale radius from mass distribution
+ */
+extern void update_stellardisc_scaleradius(const int p, struct GALAXY *galaxies, const struct params *run_params);
+
+/**
+ * @brief Update gas disc scale radius from mass distribution
+ */
+extern void update_gasdisc_scaleradius(const int p, struct GALAXY *galaxies, const struct params *run_params);
+
+/**
+ * @brief Update rotation support scale radius (f_rot = 0.5 radius)
+ */
+extern void update_rotation_support_scale_radius(const int p, struct GALAXY *galaxies, const struct params *run_params);
+
+/**
+ * @brief Update disc radii using full rotation curve calculation
+ */
+extern void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_data *halos,
+                              const struct params *run_params);
+
 #ifdef __cplusplus
 }
 #endif

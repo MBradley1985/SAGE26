@@ -224,6 +224,22 @@ struct GALAXY
     float GasDiscScaleRadius;        /* Gas disk scale radius */
     float StellarDiscScaleRadius;    /* Stellar disk scale radius */
 
+    /* DarkMode: Rotation curve and potential (only used when DarkSAGEOn=1) */
+    float HaloScaleRadius;           /* NFW scale radius r_s = Rvir/c */
+    float RotSupportScaleRadius;     /* Radius where f_rot = 0.5 */
+    float Potential[N_BINS+1];       /* Gravitational potential at each radius */
+    float c_beta;                    /* Beta profile parameter for hot gas (init to 0.1) */
+
+    /* FountainGas/OutflowGas reservoirs (only used when FountainGasOn=1) */
+    float FountainGas;               /* Gas leaving disc but not halo */
+    float MetalsFountainGas;         /* Metals in fountain gas */
+    float FountainDust;              /* Dust in fountain gas (if DustOn=1) */
+    float OutflowGas;                /* Higher energy gas escaping beyond Rvir */
+    float MetalsOutflowGas;          /* Metals in outflow gas */
+    float OutflowDust;               /* Dust in outflow gas (if DustOn=1) */
+    float FountainTime;              /* Time for fountain gas to return to hot gas */
+    float OutflowTime;               /* Time for outflow to reach EjectedMass */
+
     /* FullDarkMode: Enhanced disk physics (only used when FullDarkSAGEOn=1) */
     float VelDispStars[N_BINS];      /* Stellar velocity dispersion per annulus [km/s] */
     float VelDispBulge;              /* Secular bulge velocity dispersion [km/s] */
@@ -552,6 +568,7 @@ struct params
     /* When DarkSAGEOn=1: Enables radial bins, Toomre Q instability, precession, j-conservation */
     /* When DarkSAGEOn=0: Standard SAGE behavior */
     int32_t    DarkSAGEOn;              // 0: standard SAGE; 1: full DarkSage physics
+    int32_t    FountainGasOn;           // 0: standard SAGE; 1: DarkSage-style fountain/outflow reservoirs
     double     FirstBin;                // First j-bin edge [kpc km/s] (default 100)
     double     ExponentBin;             // j-bin geometric growth factor (default 1.4)
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)

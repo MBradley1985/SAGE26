@@ -414,6 +414,11 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
                     reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
                 }
 
+                /* FountainGas cycling: FountainGas → HotGas, OutflowGas → EjectedMass */
+                if(run_params->FountainGasOn == 1) {
+                    reincorporate_fountain_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
+                }
+
                 if(run_params->DustOn == 1) {
                     dust_thermal_sputtering(centralgal, deltaT / effective_steps, galaxies, run_params);
                 }

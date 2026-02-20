@@ -1172,7 +1172,44 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
         galaxies[p].ColdGas -= reheated_mass;
         galaxies[p].MetalsColdGas -= metallicity * reheated_mass;
 
-        if(run_params->CGMrecipeOn == 1) {
+        if(run_params->FountainGasOn == 1) {
+            // FountainGas mode: DarkSage-style gas reservoirs
+            // Reheated mass → FountainGas (not HotGas)
+            // Ejected mass → OutflowGas (not EjectedMass)
+
+            // Update FountainTime using weighted average
+            // New fountain time ~0.1/sqrt(H(z)) ≈ 1 Gyr at z=0
+            const double new_fountain_time = 1.0;  // ~1 Gyr in code time units
+            if(galaxies[centralgal].FountainGas > 0.0 && reheated_mass > 0.0) {
+                double total_fountain = galaxies[centralgal].FountainGas + reheated_mass;
+                galaxies[centralgal].FountainTime =
+                    (galaxies[centralgal].FountainGas * galaxies[centralgal].FountainTime +
+                     reheated_mass * new_fountain_time) / total_fountain;
+            } else if(reheated_mass > 0.0) {
+                galaxies[centralgal].FountainTime = new_fountain_time;
+            }
+
+            // Add reheated gas to FountainGas
+            galaxies[centralgal].FountainGas += reheated_mass;
+            galaxies[centralgal].MetalsFountainGas += metallicity * reheated_mass;
+
+            // Update OutflowTime using weighted average
+            // Outflow time scales with energy (longer than fountain)
+            const double new_outflow_time = 2.0;  // ~2 Gyr in code time units
+            if(galaxies[centralgal].OutflowGas > 0.0 && ejected_mass > 0.0) {
+                double total_outflow = galaxies[centralgal].OutflowGas + ejected_mass;
+                galaxies[centralgal].OutflowTime =
+                    (galaxies[centralgal].OutflowGas * galaxies[centralgal].OutflowTime +
+                     ejected_mass * new_outflow_time) / total_outflow;
+            } else if(ejected_mass > 0.0) {
+                galaxies[centralgal].OutflowTime = new_outflow_time;
+            }
+
+            // Add ejected gas to OutflowGas (not EjectedMass)
+            galaxies[centralgal].OutflowGas += ejected_mass;
+            galaxies[centralgal].MetalsOutflowGas += metallicity * ejected_mass;
+
+        } else if(run_params->CGMrecipeOn == 1) {
             if(galaxies[centralgal].Regime == 0) {
                 // CGM-regime: Cold --> CGM --> Ejected
                 
@@ -1261,7 +1298,18 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
                 }
             }
 
-            if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
+            if(run_params->FountainGasOn == 1) {
+                // FountainGas mode: ColdDust → FountainDust, ejected_dust → OutflowDust
+                galaxies[centralgal].FountainDust += reheated_dust;
+                if(galaxies[centralgal].FountainDust > galaxies[centralgal].MetalsFountainGas)
+                    galaxies[centralgal].FountainDust = galaxies[centralgal].MetalsFountainGas;
+
+                const double DTGFountain = get_DTG(galaxies[centralgal].FountainGas, galaxies[centralgal].FountainDust);
+                double ejected_dust = DTGFountain * ejected_mass;
+                if(ejected_dust > galaxies[centralgal].FountainDust) ejected_dust = galaxies[centralgal].FountainDust;
+                galaxies[centralgal].OutflowDust += ejected_dust;
+
+            } else if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
                 // CGM-regime: ColdDust → CGMDust → EjectedDust
                 galaxies[centralgal].CGMDust += reheated_dust;
                 if(galaxies[centralgal].CGMDust > galaxies[centralgal].MetalsCGMgas)

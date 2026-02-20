@@ -309,6 +309,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->DarkSAGEOn);
     ParamID[NParam++] = INT;
 
+    strncpy(ParamTag[NParam], "FountainGasOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->FountainGasOn);
+    ParamID[NParam++] = INT;
+
     strncpy(ParamTag[NParam], "FirstBin", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->FirstBin);
     ParamID[NParam++] = DOUBLE;
