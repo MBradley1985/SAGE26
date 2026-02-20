@@ -545,6 +545,44 @@ double dmax(const double x, const double y)
 }
 
 
+/* ========================================================================== */
+/* Cosmological Helper Functions                                              */
+/* Redshift-dependent calculations for FountainGas timescales                 */
+/* ========================================================================== */
+
+double Hubble_sqr_z(const int snapnum, const struct params *run_params)
+{
+    /* Calculate the square of the Hubble parameter at input snapshot
+       H(z)^2 = H_0^2 * (Omega_m * (1+z)^3 + Omega_k * (1+z)^2 + OmegaLambda)
+       For flat cosmology Omega_k = 0, so:
+       H(z)^2 = H_0^2 * (Omega_m * (1+z)^3 + OmegaLambda)
+    */
+    const double z = run_params->ZZ[snapnum];
+    const double zplus1 = 1.0 + z;
+    const double Omega_k = 1.0 - run_params->Omega - run_params->OmegaLambda;
+
+    return run_params->Hubble * run_params->Hubble *
+           (run_params->Omega * zplus1 * zplus1 * zplus1 +
+            Omega_k * zplus1 * zplus1 +
+            run_params->OmegaLambda);
+}
+
+
+double get_dynamical_time(const int snapnum, const struct params *run_params)
+{
+    /* Calculate the dynamical time at the given redshift
+       t_dyn = 0.1 / sqrt(H(z)^2) = 0.1 / H(z)
+       This gives roughly the time for gas to fall back into halos
+
+       Returns time in code units (same as Hubble)
+    */
+    const double H_sqr = Hubble_sqr_z(snapnum, run_params);
+    if(H_sqr > 0.0) {
+        return 0.1 / sqrt(H_sqr);
+    }
+    return 1.0;  /* Default to ~1 Gyr if something goes wrong */
+}
+
 
 double get_virial_mass(const int halonr, const struct halo_data *halos, const struct params *run_params)
 {

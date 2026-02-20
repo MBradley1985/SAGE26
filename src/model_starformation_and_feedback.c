@@ -1172,14 +1172,36 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
         galaxies[p].ColdGas -= reheated_mass;
         galaxies[p].MetalsColdGas -= metallicity * reheated_mass;
 
-        if(run_params->FountainGasOn == 1) {
-            // FountainGas mode: DarkSage-style gas reservoirs
-            // Reheated mass → FountainGas (not HotGas)
-            // Ejected mass → OutflowGas (not EjectedMass)
+        if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
+            // CGM-regime: ALWAYS use original CGM path (direct to CGMgas)
+            // FountainGas doesn't apply - cold-mode haloes don't have a hot corona
+            // so the fountain concept doesn't make physical sense
+
+            // Add reheated gas to CGM
+            galaxies[centralgal].CGMgas += reheated_mass;
+            galaxies[centralgal].MetalsCGMgas += metallicity * reheated_mass;
+
+            // Check if ejection is possible from CGM
+            if(ejected_mass > galaxies[centralgal].CGMgas) {
+                ejected_mass = galaxies[centralgal].CGMgas;
+            }
+            const double metallicityCGM = get_metallicity(galaxies[centralgal].CGMgas, galaxies[centralgal].MetalsCGMgas);
+
+            // Eject from CGM to EjectedMass
+            galaxies[centralgal].CGMgas -= ejected_mass;
+            galaxies[centralgal].MetalsCGMgas -= metallicityCGM * ejected_mass;
+            galaxies[centralgal].EjectedMass += ejected_mass;
+            galaxies[centralgal].MetalsEjectedMass += metallicityCGM * ejected_mass;
+
+        } else if(run_params->FountainGasOn == 1) {
+            // Hot-regime with FountainGasOn: DarkSage-style gas reservoirs
+            // Flow: ColdGas → FountainGas → HotGas
+            //       FountainGas → OutflowGas → EjectedMass
 
             // Update FountainTime using weighted average
-            // New fountain time ~0.1/sqrt(H(z)) ≈ 1 Gyr at z=0
-            const double new_fountain_time = 1.0;  // ~1 Gyr in code time units
+            // DarkSage uses 0.1/sqrt(H(z)^2) = dynamical time at current redshift
+            // At z=0: ~1.4 Gyr, at z=2: ~0.4 Gyr
+            const double new_fountain_time = get_dynamical_time(galaxies[p].SnapNum, run_params);
             if(galaxies[centralgal].FountainGas > 0.0 && reheated_mass > 0.0) {
                 double total_fountain = galaxies[centralgal].FountainGas + reheated_mass;
                 galaxies[centralgal].FountainTime =
@@ -1193,9 +1215,19 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
             galaxies[centralgal].FountainGas += reheated_mass;
             galaxies[centralgal].MetalsFountainGas += metallicity * reheated_mass;
 
+            // Eject from FountainGas to OutflowGas (mass conservation!)
+            // Clamp ejected_mass to available FountainGas
+            if(ejected_mass > galaxies[centralgal].FountainGas) {
+                ejected_mass = galaxies[centralgal].FountainGas;
+            }
+
+            // Get metallicity of FountainGas for ejection
+            const double metallicityFountain = get_metallicity(galaxies[centralgal].FountainGas,
+                                                                galaxies[centralgal].MetalsFountainGas);
+
             // Update OutflowTime using weighted average
-            // Outflow time scales with energy (longer than fountain)
-            const double new_outflow_time = 2.0;  // ~2 Gyr in code time units
+            // Outflow time should be ~2x the fountain time (gas that escapes further takes longer)
+            const double new_outflow_time = 2.0 * new_fountain_time;
             if(galaxies[centralgal].OutflowGas > 0.0 && ejected_mass > 0.0) {
                 double total_outflow = galaxies[centralgal].OutflowGas + ejected_mass;
                 galaxies[centralgal].OutflowTime =
@@ -1205,49 +1237,35 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
                 galaxies[centralgal].OutflowTime = new_outflow_time;
             }
 
-            // Add ejected gas to OutflowGas (not EjectedMass)
+            // Transfer from FountainGas to OutflowGas
+            galaxies[centralgal].FountainGas -= ejected_mass;
+            galaxies[centralgal].MetalsFountainGas -= metallicityFountain * ejected_mass;
             galaxies[centralgal].OutflowGas += ejected_mass;
-            galaxies[centralgal].MetalsOutflowGas += metallicity * ejected_mass;
+            galaxies[centralgal].MetalsOutflowGas += metallicityFountain * ejected_mass;
+
+            // Safety clamps
+            if(galaxies[centralgal].FountainGas < 0.0) galaxies[centralgal].FountainGas = 0.0;
+            if(galaxies[centralgal].MetalsFountainGas < 0.0) galaxies[centralgal].MetalsFountainGas = 0.0;
 
         } else if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0) {
-                // CGM-regime: Cold --> CGM --> Ejected
-                
-                // Add reheated gas to CGM
-                galaxies[centralgal].CGMgas += reheated_mass;
-                galaxies[centralgal].MetalsCGMgas += metallicity * reheated_mass;
+            // Hot-ICM-regime without FountainGasOn: Cold --> HotGas --> Ejected
 
-                // Check if ejection is possible from CGM
-                if(ejected_mass > galaxies[centralgal].CGMgas) {
-                    ejected_mass = galaxies[centralgal].CGMgas;
-                }
-                const double metallicityCGM = get_metallicity(galaxies[centralgal].CGMgas, galaxies[centralgal].MetalsCGMgas);
+            // Add reheated gas to HotGas
+            galaxies[centralgal].HotGas += reheated_mass;
+            galaxies[centralgal].MetalsHotGas += metallicity * reheated_mass;
 
-                // Eject from CGM to EjectedMass
-                galaxies[centralgal].CGMgas -= ejected_mass;
-                galaxies[centralgal].MetalsCGMgas -= metallicityCGM * ejected_mass;
-                galaxies[centralgal].EjectedMass += ejected_mass;
-                galaxies[centralgal].MetalsEjectedMass += metallicityCGM * ejected_mass;
-
-            } else {
-                // Hot-ICM-regime: Cold --> HotGas --> Ejected
-                
-                // Add reheated gas to HotGas
-                galaxies[centralgal].HotGas += reheated_mass;
-                galaxies[centralgal].MetalsHotGas += metallicity * reheated_mass;
-
-                // Check if ejection is possible from HotGas
-                if(ejected_mass > galaxies[centralgal].HotGas) {
-                    ejected_mass = galaxies[centralgal].HotGas;
-                }
-                const double metallicityHot = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);
-
-                // Eject from HotGas to EjectedMass
-                galaxies[centralgal].HotGas -= ejected_mass;
-                galaxies[centralgal].MetalsHotGas -= metallicityHot * ejected_mass;
-                galaxies[centralgal].EjectedMass += ejected_mass;
-                galaxies[centralgal].MetalsEjectedMass += metallicityHot * ejected_mass;
+            // Check if ejection is possible from HotGas
+            if(ejected_mass > galaxies[centralgal].HotGas) {
+                ejected_mass = galaxies[centralgal].HotGas;
             }
+            const double metallicityHot = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);
+
+            // Eject from HotGas to EjectedMass
+            galaxies[centralgal].HotGas -= ejected_mass;
+            galaxies[centralgal].MetalsHotGas -= metallicityHot * ejected_mass;
+            galaxies[centralgal].EjectedMass += ejected_mass;
+            galaxies[centralgal].MetalsEjectedMass += metallicityHot * ejected_mass;
+
         } else {
             // Original SAGE behavior: Cold --> HotGas --> Ejected
             
@@ -1298,19 +1316,9 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
                 }
             }
 
-            if(run_params->FountainGasOn == 1) {
-                // FountainGas mode: ColdDust → FountainDust, ejected_dust → OutflowDust
-                galaxies[centralgal].FountainDust += reheated_dust;
-                if(galaxies[centralgal].FountainDust > galaxies[centralgal].MetalsFountainGas)
-                    galaxies[centralgal].FountainDust = galaxies[centralgal].MetalsFountainGas;
-
-                const double DTGFountain = get_DTG(galaxies[centralgal].FountainGas, galaxies[centralgal].FountainDust);
-                double ejected_dust = DTGFountain * ejected_mass;
-                if(ejected_dust > galaxies[centralgal].FountainDust) ejected_dust = galaxies[centralgal].FountainDust;
-                galaxies[centralgal].OutflowDust += ejected_dust;
-
-            } else if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
-                // CGM-regime: ColdDust → CGMDust → EjectedDust
+            if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
+                // CGM-regime: ALWAYS use original CGM path (direct to CGMDust)
+                // FountainGas doesn't apply to CGM haloes
                 galaxies[centralgal].CGMDust += reheated_dust;
                 if(galaxies[centralgal].CGMDust > galaxies[centralgal].MetalsCGMgas)
                     galaxies[centralgal].CGMDust = galaxies[centralgal].MetalsCGMgas;
@@ -1320,6 +1328,20 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
                 if(ejected_dust > galaxies[centralgal].CGMDust) ejected_dust = galaxies[centralgal].CGMDust;
                 galaxies[centralgal].CGMDust -= ejected_dust;
                 galaxies[centralgal].EjectedDust += ejected_dust;
+
+            } else if(run_params->FountainGasOn == 1) {
+                // Hot-regime with FountainGasOn: ColdDust → FountainDust → OutflowDust
+                galaxies[centralgal].FountainDust += reheated_dust;
+                if(galaxies[centralgal].FountainDust > galaxies[centralgal].MetalsFountainGas)
+                    galaxies[centralgal].FountainDust = galaxies[centralgal].MetalsFountainGas;
+
+                // Transfer dust from FountainDust to OutflowDust (mass conservation!)
+                const double DTGFountain = get_DTG(galaxies[centralgal].FountainGas, galaxies[centralgal].FountainDust);
+                double ejected_dust = DTGFountain * ejected_mass;
+                if(ejected_dust > galaxies[centralgal].FountainDust) ejected_dust = galaxies[centralgal].FountainDust;
+                galaxies[centralgal].FountainDust -= ejected_dust;  // SUBTRACT from FountainDust
+                galaxies[centralgal].OutflowDust += ejected_dust;   // ADD to OutflowDust
+
             } else {
                 // Hot-ICM-regime or original: ColdDust → HotDust → EjectedDust
                 galaxies[centralgal].HotDust += reheated_dust;

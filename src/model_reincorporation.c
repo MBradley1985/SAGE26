@@ -33,30 +33,29 @@ void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *gal
         if(galaxies[centralgal].MetalsEjectedMass < 0.0) galaxies[centralgal].MetalsEjectedMass = 0.0;
         
         // Add to appropriate hot reservoir (regime-dependent)
-        if(run_params->FountainGasOn == 1) {
-            // FountainGas mode: EjectedMass → FountainGas (not directly to HotGas)
-            // Update FountainTime with weighted average
-            const double new_fountain_time = 1.0;  // ~1 Gyr
+        // CGM haloes ALWAYS bypass FountainGas - fountain concept doesn't apply
+        if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
+            // CGM-regime: reincorporate directly to CGM (no fountain)
+            galaxies[centralgal].CGMgas += reincorporated;
+            galaxies[centralgal].MetalsCGMgas += metallicity * reincorporated;
+        } else if(run_params->FountainGasOn == 1) {
+            // Hot-regime with FountainGasOn: EjectedMass → FountainGas → HotGas
+            // Update FountainTime with weighted average using dynamical time
+            const double t_dyn = get_dynamical_time(galaxies[centralgal].SnapNum, run_params);
             if(galaxies[centralgal].FountainGas > 0.0) {
                 double total = galaxies[centralgal].FountainGas + reincorporated;
                 galaxies[centralgal].FountainTime =
                     (galaxies[centralgal].FountainGas * galaxies[centralgal].FountainTime +
-                     reincorporated * new_fountain_time) / total;
+                     reincorporated * t_dyn) / total;
             } else {
-                galaxies[centralgal].FountainTime = new_fountain_time;
+                galaxies[centralgal].FountainTime = t_dyn;
             }
             galaxies[centralgal].FountainGas += reincorporated;
             galaxies[centralgal].MetalsFountainGas += metallicity * reincorporated;
         } else if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0) {
-                // CGM-regime: reincorporate to CGM
-                galaxies[centralgal].CGMgas += reincorporated;
-                galaxies[centralgal].MetalsCGMgas += metallicity * reincorporated;
-            } else {
-                // Hot-ICM-regime: reincorporate to HotGas
-                galaxies[centralgal].HotGas += reincorporated;
-                galaxies[centralgal].MetalsHotGas += metallicity * reincorporated;
-            }
+            // Hot-ICM-regime without FountainGasOn: reincorporate to HotGas
+            galaxies[centralgal].HotGas += reincorporated;
+            galaxies[centralgal].MetalsHotGas += metallicity * reincorporated;
         } else {
             // Original SAGE behavior: reincorporate to HotGas
             galaxies[centralgal].HotGas += reincorporated;
@@ -69,16 +68,17 @@ void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *gal
             if(reinc_dust > galaxies[centralgal].EjectedDust) reinc_dust = galaxies[centralgal].EjectedDust;
             galaxies[centralgal].EjectedDust -= reinc_dust;
 
-            if(run_params->FountainGasOn == 1) {
-                // FountainGas mode: reincorporate to FountainDust
-                galaxies[centralgal].FountainDust += reinc_dust;
-                if(galaxies[centralgal].FountainDust > galaxies[centralgal].MetalsFountainGas)
-                    galaxies[centralgal].FountainDust = galaxies[centralgal].MetalsFountainGas;
-            } else if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
-                // CGM-regime: reincorporate dust to CGMDust
+            // Match same logic for dust
+            if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
+                // CGM-regime: reincorporate dust directly to CGMDust
                 galaxies[centralgal].CGMDust += reinc_dust;
                 if(galaxies[centralgal].CGMDust > galaxies[centralgal].MetalsCGMgas)
                     galaxies[centralgal].CGMDust = galaxies[centralgal].MetalsCGMgas;
+            } else if(run_params->FountainGasOn == 1) {
+                // Hot-regime with FountainGasOn: reincorporate to FountainDust
+                galaxies[centralgal].FountainDust += reinc_dust;
+                if(galaxies[centralgal].FountainDust > galaxies[centralgal].MetalsFountainGas)
+                    galaxies[centralgal].FountainDust = galaxies[centralgal].MetalsFountainGas;
             } else {
                 // Hot-ICM-regime or original: reincorporate dust to HotDust
                 galaxies[centralgal].HotDust += reinc_dust;
@@ -104,7 +104,9 @@ void reincorporate_fountain_gas(const int centralgal, const double dt, struct GA
     }
 
     /* ================================================================== */
-    /* 1. FountainGas → HotGas (on FountainTime timescale)                */
+    /* 1. FountainGas → HotGas/CGMgas (on FountainTime timescale)         */
+    /*    CGM regime (Regime=0): FountainGas → CGMgas                     */
+    /*    Hot regime (Regime=1): FountainGas → HotGas                     */
     /* ================================================================== */
     if(galaxies[centralgal].FountainGas > 0.0 && galaxies[centralgal].FountainTime > 0.0) {
         /* Exponential decay: amount = FountainGas * (1 - exp(-dt/FountainTime)) */
@@ -120,13 +122,21 @@ void reincorporate_fountain_gas(const int centralgal, const double dt, struct GA
         const double metallicity_fountain = get_metallicity(galaxies[centralgal].FountainGas,
                                                             galaxies[centralgal].MetalsFountainGas);
 
-        /* Transfer from FountainGas to HotGas */
+        /* Remove from FountainGas */
         galaxies[centralgal].FountainGas -= reincorporated_fountain;
         galaxies[centralgal].MetalsFountainGas -= metallicity_fountain * reincorporated_fountain;
         if(galaxies[centralgal].MetalsFountainGas < 0.0) galaxies[centralgal].MetalsFountainGas = 0.0;
 
-        galaxies[centralgal].HotGas += reincorporated_fountain;
-        galaxies[centralgal].MetalsHotGas += metallicity_fountain * reincorporated_fountain;
+        /* Add to appropriate reservoir based on regime */
+        if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
+            /* CGM regime: FountainGas → CGMgas */
+            galaxies[centralgal].CGMgas += reincorporated_fountain;
+            galaxies[centralgal].MetalsCGMgas += metallicity_fountain * reincorporated_fountain;
+        } else {
+            /* Hot regime or standard: FountainGas → HotGas */
+            galaxies[centralgal].HotGas += reincorporated_fountain;
+            galaxies[centralgal].MetalsHotGas += metallicity_fountain * reincorporated_fountain;
+        }
 
         /* Handle dust */
         if(run_params->DustOn == 1) {
@@ -137,9 +147,19 @@ void reincorporate_fountain_gas(const int centralgal, const double dt, struct GA
                 reinc_fountain_dust = galaxies[centralgal].FountainDust;
             }
             galaxies[centralgal].FountainDust -= reinc_fountain_dust;
-            galaxies[centralgal].HotDust += reinc_fountain_dust;
-            if(galaxies[centralgal].HotDust > galaxies[centralgal].MetalsHotGas) {
-                galaxies[centralgal].HotDust = galaxies[centralgal].MetalsHotGas;
+
+            if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
+                /* CGM regime: dust → CGMDust */
+                galaxies[centralgal].CGMDust += reinc_fountain_dust;
+                if(galaxies[centralgal].CGMDust > galaxies[centralgal].MetalsCGMgas) {
+                    galaxies[centralgal].CGMDust = galaxies[centralgal].MetalsCGMgas;
+                }
+            } else {
+                /* Hot regime: dust → HotDust */
+                galaxies[centralgal].HotDust += reinc_fountain_dust;
+                if(galaxies[centralgal].HotDust > galaxies[centralgal].MetalsHotGas) {
+                    galaxies[centralgal].HotDust = galaxies[centralgal].MetalsHotGas;
+                }
             }
         }
     }

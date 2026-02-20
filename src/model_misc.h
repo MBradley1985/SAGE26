@@ -58,6 +58,10 @@ extern "C" {
     extern double compute_imf(const double m);
     extern double compute_taum(const double m);
 
+    /* Cosmological helper functions for redshift-dependent calculations */
+    extern double Hubble_sqr_z(const int snapnum, const struct params *run_params);
+    extern double get_dynamical_time(const int snapnum, const struct params *run_params);
+
 
 #ifdef __cplusplus
 }
