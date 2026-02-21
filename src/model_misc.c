@@ -141,17 +141,15 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     /* DarkMode: Initialize disk arrays and angular momentum vectors */
     if(run_params->DarkSAGEOn == 1) {
         /* Compute disk radii from j-bin edges: r = j / Vvir */
-        /* Cap radii at 100 kpc (0.1 Mpc) to avoid unphysical outer bins */
-        const double MAX_RADIUS = 0.1;  // Mpc
+        /* Cap radii at Rvir to avoid unphysical outer bins */
         for(int i = 0; i < N_BINS + 1; i++) {
             if(galaxies[p].Vvir > 0.0) {
                 double r_calc = run_params->DiscBinEdge[i] / galaxies[p].Vvir;
-                galaxies[p].DiscRadii[i] = (r_calc < MAX_RADIUS) ? r_calc : MAX_RADIUS;
+                galaxies[p].DiscRadii[i] = (r_calc < galaxies[p].Rvir) ? r_calc : galaxies[p].Rvir;
             } else {
                 galaxies[p].DiscRadii[i] = 0.0;
             }
         }
-
         /* Initialize disk arrays to zero */
         for(int i = 0; i < N_BINS; i++) {
             galaxies[p].DiscGas[i] = 0.0f;

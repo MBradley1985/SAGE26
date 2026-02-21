@@ -1629,6 +1629,15 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
         return;
     }
 
+    /* Calculate the CURRENT virial radius (which shrinks due to tidal stripping)
+     * rather than using the historical maximum stored in galaxies[p].Rvir */
+    double current_Rvir = get_virial_radius(galaxies[p].HaloNr, halos, run_params);
+    
+    /* For orphans (Mvir=0), current_Rvir is 0. Fall back to historical Rvir. */
+    if (galaxies[p].Type == 2 || current_Rvir <= 0.0) {
+        current_Rvir = galaxies[p].Rvir;
+    }
+
     const double Rvir = galaxies[p].Rvir;
     const double Vvir = galaxies[p].Vvir;
     const double G = run_params->G;
@@ -1685,9 +1694,24 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
 
     /* Only proceed with full calculation if disc exists */
     if(galaxies[p].Mvir <= 0.0 || BTT >= 1.0) {
-        /* Fall back to simple j/Vvir radii */
+        /* Fall back to simple j/Vvir radii, but strictly capped at current_Rvir */
         for(int i = 0; i < N_BINS + 1; i++) {
-            galaxies[p].DiscRadii[i] = run_params->DiscBinEdge[i] / Vvir;
+            double r = run_params->DiscBinEdge[i] / Vvir;
+            if(r > current_Rvir) {
+                r = current_Rvir;
+            }
+            galaxies[p].DiscRadii[i] = r;
+        }
+        
+        /* Enforce strictly monotonically increasing radii */
+        const double dr_min = 0.001 * current_Rvir;
+        for(int i = 1; i < N_BINS + 1; i++) {
+            if(galaxies[p].DiscRadii[i] <= galaxies[p].DiscRadii[i - 1]) {
+                galaxies[p].DiscRadii[i] = galaxies[p].DiscRadii[i - 1] + dr_min;
+            }
+            if(galaxies[p].DiscRadii[i] > current_Rvir) {
+                galaxies[p].DiscRadii[i] = current_Rvir;
+            }
         }
         return;
     }
@@ -1779,15 +1803,14 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
             r = r_new;
         }
 
-        /* Cap radius at Rvir - disc can't extend beyond the halo */
-        if(r > Rvir) {
-            r = Rvir;
+        /* Cap radius at current_Rvir - disc can't extend beyond the current halo size */
+        if(r > current_Rvir) {
+            r = current_Rvir;
         }
 
-        /* Minimum radius floor: 0.01 kpc (10 pc) or 0.001 * Rvir, whichever is larger */
-        /* This prevents unrealistically small radii from runaway collapse */
-        const double r_min_abs = 0.01 / 1000.0;  /* 0.01 kpc in Mpc/h units (assuming UnitLength = Mpc/h) */
-        const double r_min_rel = 0.001 * Rvir;   /* 0.1% of Rvir */
+        /* Minimum radius floor */
+        const double r_min_abs = 0.01 / 1000.0;
+        const double r_min_rel = 0.001 * current_Rvir;
         const double r_min = (r_min_abs > r_min_rel) ? r_min_abs : r_min_rel;
         if(r < r_min && j > 0.0) {
             r = r_min;
@@ -1797,15 +1820,14 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     }
 
     /* Enforce strictly monotonically increasing radii to prevent zero-area bins */
-    /* This fixes the case where multiple j-bins collapse to the same minimum radius */
-    const double dr_min = 0.001 * Rvir;  /* Minimum radial increment: 0.1% of Rvir */
+    const double dr_min = 0.001 * current_Rvir;
     for(int i = 1; i < N_BINS + 1; i++) {
         if(galaxies[p].DiscRadii[i] <= galaxies[p].DiscRadii[i - 1]) {
             galaxies[p].DiscRadii[i] = galaxies[p].DiscRadii[i - 1] + dr_min;
         }
-        /* Still cap at Rvir */
-        if(galaxies[p].DiscRadii[i] > Rvir) {
-            galaxies[p].DiscRadii[i] = Rvir;
+        /* Still cap at current_Rvir */
+        if(galaxies[p].DiscRadii[i] > current_Rvir) {
+            galaxies[p].DiscRadii[i] = current_Rvir;
         }
     }
 
