@@ -6612,9 +6612,9 @@ Z0_PLOTS = {
     6: plot_6_bulge_mass_size,
     15: plot_15_sfr_vs_stellar_mass,
     24: plot_24_mass_loading_vs_velocity,
-    40: plot_40_dust_and_structure_grid,
-    41: plot_41_fall_relation,
-    42: plot_42_size_mass_relation,
+    # 40: plot_40_dust_and_structure_grid,
+    # 41: plot_41_fall_relation,
+    # 42: plot_42_size_mass_relation,
 }
 
 EVOLUTION_PLOTS = {
