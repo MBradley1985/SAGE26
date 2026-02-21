@@ -944,8 +944,8 @@ void deal_with_unstable_gas(const int p, const int bin, const double unstable_ga
 
     /* Mass fractions for j-conservation: m_up/m_down = j_lose/j_gain */
     double total_ratio = j_lose + j_gain;
-    double m_down = unstable_gas * j_gain / total_ratio;  /* Sinks inward */
-    double m_up = unstable_gas * j_lose / total_ratio;    /* Moves outward */
+    double m_down = unstable_gas * j_lose / total_ratio;  /* Sinks inward */
+    double m_up = unstable_gas * j_gain / total_ratio;    /* Moves outward */
 
     /* Get metallicity and dust ratios BEFORE modifying gas */
     double Z_gas = (galaxies[p].DiscGas[bin] > 0.0) ?

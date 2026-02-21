@@ -62,11 +62,13 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
     }
 
     // Calculate infall: total baryons allowed by Mvir minus all existing baryonic mass
-    // DO NOT subtract dust, as dust mass is physically already included within the 
-    // ColdGas, HotGas, CGMgas, and EjectedMass arrays.
+    // Dust is baryonic, so must be subtracted from available baryon budget
+    double tot_dust = (run_params->DustOn == 1) ? 
+        (tot_coldDust + tot_hotDust + tot_ejectedDust + tot_CGMDust) : 0.0;
+    
     infallingMass =
         reionization_modifier * run_params->BaryonFrac * galaxies[centralgal].Mvir - 
-        (tot_stellarMass + tot_coldMass + tot_hotMass + tot_ejected + tot_BHMass + tot_ICS + tot_CGMgas);
+        (tot_stellarMass + tot_coldMass + tot_hotMass + tot_ejected + tot_BHMass + tot_ICS + tot_CGMgas + tot_dust);
 
     // the central galaxy keeps all the ejected mass
     galaxies[centralgal].EjectedMass = tot_ejected;
@@ -175,11 +177,12 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
         reionization_modifier = 1.0;
     }
 
-    // DO NOT subtract dust, as it is already included within the gas mass reservoirs
     double strippedGas = -1.0 *
         (reionization_modifier * run_params->BaryonFrac * galaxies[gal].Mvir - 
         (galaxies[gal].StellarMass + galaxies[gal].ColdGas + galaxies[gal].HotGas + galaxies[gal].CGMgas + 
-         galaxies[gal].BlackHoleMass + galaxies[gal].ICS + galaxies[gal].EjectedMass)) / STEPS;
+         galaxies[gal].BlackHoleMass + galaxies[gal].ICS + galaxies[gal].EjectedMass +
+         ((run_params->DustOn == 1) ? (galaxies[gal].ColdDust + galaxies[gal].HotDust + 
+                                        galaxies[gal].CGMDust + galaxies[gal].EjectedDust) : 0.0))) / STEPS;
     // ( reionization_modifier * run_params->BaryonFrac * galaxies[gal].deltaMvir ) / STEPS;
 
     if(strippedGas > 0.0) {
