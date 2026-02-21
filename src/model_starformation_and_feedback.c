@@ -1043,16 +1043,21 @@ void update_from_star_formation(const int p, const double stars, const double me
     
     // DarkMode: Distribute star formation across disk annuli
     if(run_params->DarkSAGEOn == 1 && stars > 0.0) {
-        // Sum total disk gas to get fractions
+        // Sum total disk H2 and Gas to get fractions
         double total_disc_gas = 0.0;
+        double total_disc_h2 = 0.0;
         for(int i = 0; i < N_BINS; i++) {
             total_disc_gas += galaxies[p].DiscGas[i];
+            total_disc_h2 += galaxies[p].DiscH2[i];
         }
         
-        // Distribute SF across annuli based on gas fraction
+        // Distribute SF across annuli based on H2 fraction (fallback to Gas)
         if(total_disc_gas > 0.0) {
             for(int i = 0; i < N_BINS; i++) {
-                double frac = galaxies[p].DiscGas[i] / total_disc_gas;
+                // Use H2 fraction if available, otherwise fallback to total gas fraction
+                double frac = (total_disc_h2 > 0.0) ? 
+                              (galaxies[p].DiscH2[i] / total_disc_h2) : 
+                              (galaxies[p].DiscGas[i] / total_disc_gas);
                 double stars_bin = stars * frac;
                 
                 // Can't form more stars than gas available in bin
@@ -1060,10 +1065,14 @@ void update_from_star_formation(const int p, const double stars, const double me
                     stars_bin = galaxies[p].DiscGas[i];
                 }
                 
-                // Update disc arrays
+                // EXTRACT METALLICITY AND DTG BEFORE MODIFYING GAS
                 const double local_metallicity = (galaxies[p].DiscGas[i] > 0.0) ?
                     galaxies[p].DiscGasMetals[i] / galaxies[p].DiscGas[i] : 0.0;
                 
+                const double DTG = (run_params->DustOn == 1 && galaxies[p].DiscGas[i] > 0.0) ?
+                    galaxies[p].DiscDust[i] / galaxies[p].DiscGas[i] : 0.0;
+                
+                // Update disc arrays
                 galaxies[p].DiscGas[i] -= (1 - RecycleFraction) * stars_bin;
                 galaxies[p].DiscGasMetals[i] -= local_metallicity * (1 - RecycleFraction) * stars_bin;
                 galaxies[p].DiscStars[i] += (1 - RecycleFraction) * stars_bin;
@@ -1072,10 +1081,8 @@ void update_from_star_formation(const int p, const double stars, const double me
                 // Track SFR per annulus (divide by dt somehow - but we don't have dt here)
                 // For now just store stars formed; caller can track SFR
                 
-                // Dusty disks
+                // Dusty disks (using pre-calculated DTG)
                 if(run_params->DustOn == 1) {
-                    const double DTG = (galaxies[p].DiscGas[i] > 0.0) ?
-                        galaxies[p].DiscDust[i] / galaxies[p].DiscGas[i] : 0.0;
                     galaxies[p].DiscDust[i] -= DTG * (1 - RecycleFraction) * stars_bin;
                     if(galaxies[p].DiscDust[i] < 0.0) galaxies[p].DiscDust[i] = 0.0;
                 }
@@ -1621,6 +1628,12 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         } else {
             galaxies[p].H2gas = 0.0;
         }
+    }
+
+    // Calculate HI (atomic hydrogen) as the remainder of hydrogen after H2
+    galaxies[p].H1gas = (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) - galaxies[p].H2gas;
+    if(galaxies[p].H1gas < 0.0) {
+        galaxies[p].H1gas = 0.0;
     }
 
     // Update star formation rate tracking
