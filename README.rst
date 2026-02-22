@@ -121,7 +121,7 @@ Extra OPTIONS
 **There are three options for area calculation in the H2 star formation model.**
 
 * Area = pi * r_disc^2
-* Area = pi * 3 * r_disk^2
+* Area = pi * (3 * r_disk^2)
 * Area = 2pi * r_disk^2
 
 **FIRE feedback can be enabled to run the model with the FIRE physics.**
