@@ -993,7 +993,7 @@ if __name__ == '__main__':
     
     binwidth = 0.2
     shift = binwidth/2.0
-    mass_range = np.arange(8.5-shift, 12.0+shift, binwidth)
+    mass_range = np.arange(8.0-shift, 12.0+shift, binwidth)
     bins = len(mass_range)
     
     fBulge_ave = np.zeros(bins)

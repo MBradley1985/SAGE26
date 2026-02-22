@@ -49,8 +49,8 @@ double estimate_merging_time(const int sat_halo, const int mother_halo, const in
 double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GALAXY *g2)
 {
     // 1. Calculate Total Baryonic Mass (Stars + Gas) for both progenitors
-    double M1 = g1->StellarMass + g1->ColdGas;
-    double M2 = g2->StellarMass + g2->ColdGas;
+    double M1 = g1->StellarMass + g1->ColdGas + g1->ColdDust; // Include Dust if DustOn is active
+    double M2 = g2->StellarMass + g2->ColdGas + g2->ColdDust; // Include Dust if DustOn is active
     double M_tot = M1 + M2;
 
     if (M_tot <= 0.0) return 0.0;
@@ -139,6 +139,12 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     } else {
         mi = galaxies[merger_centralgal].StellarMass + galaxies[merger_centralgal].ColdGas;
         ma = galaxies[p].StellarMass + galaxies[p].ColdGas;
+    }
+
+    // FIX: Add Dust to the mass ratio if DustOn is active
+    if (run_params->DustOn == 1) {
+        mi += galaxies[p].ColdDust;
+        ma += galaxies[merger_centralgal].ColdDust;
     }
 
     // BUG FIX: Handle zero-mass edge case properly

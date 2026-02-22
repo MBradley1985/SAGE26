@@ -17,7 +17,10 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
     // For unstable stars and gas, we transfer the required ammount to the bulge to make the disk stable again
 
     // Disk mass has to be > 0.0
-    const double diskmass = galaxies[p].ColdGas + (galaxies[p].StellarMass - galaxies[p].BulgeMass);
+    double diskmass = galaxies[p].ColdGas + (galaxies[p].StellarMass - galaxies[p].BulgeMass);
+    if (run_params->DustOn == 1) {
+        diskmass += galaxies[p].ColdDust;
+    }
     if(diskmass > 0.0) {
         // calculate critical disk mass
         double Mcrit = galaxies[p].Vmax * galaxies[p].Vmax * (3.0 * galaxies[p].DiskScaleRadius) / run_params->G;
