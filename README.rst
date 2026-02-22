@@ -82,8 +82,6 @@ If you're following the above, these scripts can run as-is to produce a series o
     $ python plotting/allresults-local.py
     $ python plotting/allresults-history.py
 
-Near the top of both scripts, there is a "USER OPTIONS" section where you can modify the simulation and plotting details for your own needs. 
-These scripts can be used as a template to read the hdf5 ``SAGE`` model output and to make your own custom figures.
 
 Parameter Optimization with PSO
 ================================
@@ -111,14 +109,34 @@ To get started with SAGE-PSO, please refer to the documentation available in the
 Extra OPTIONS
 =============
 
-There are several H2 star formation and feedback model options that can be enabled by modifying the parameter file.
-There are three options for area calculation in the H2 star formation model.
-Feedback-free burst galaxies can also be enabled.
-CGM building can be turned on or off.
+**There are several H2 star formation and feedback model options that can be enabled by modifying the parameter file.**
 
-Parameters can be manipulated in the parameter file as follows to allow for extra exploration.
+* Blitz and Rosolosky (2006)
+* Krumholz, McKee and Tumlinson (2009)
+* Krumholz and Dekel (2012)
+* Krumholz (2013)
+* Gnedin and Draine (2014)
+* Somerville et al. (2025)
 
-Future work should include black hole recipes from other models, as well as more advanced H2 star formation and feedback models.
+**There are three options for area calculation in the H2 star formation model.**
+
+* Area = pi * r_disc^2
+* Area = pi * (3 * r_disk^2)
+* Area = 2pi * r_disk^2
+
+**FIRE feedback can be enabled to run the model with the FIRE physics.**
+
+**Bulge tracking can be turned on or off.**
+
+* Shen et al. (2020), equation 33
+* Shen et al. (2020), equation 32
+* Tonini et al. (2016)
+
+**Feedback-free burst galaxies can also be enabled.**
+
+**CGM building can be turned on or off.**
+
+**Parameters can be manipulated in the parameter file to allow for extra exploration, either manually or with the PSO framework.**
 
 Citation
 =========
