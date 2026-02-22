@@ -124,8 +124,11 @@ Bulge tracking can be turned on or off.
 Feedback-free burst galaxies can also be enabled.
 CGM building can be turned on or off.
 Dust from dusty-sage can be toggled on or off.
+
 * **Metal yield tables can be turned on or off**
+
 DarkSAGE mode can be enabled to run the model with the DarkSAGE physics. (this is off by default)
+
 * **Adds spatially-resolved disc properties and processes**
 * **Adds angular momentum tracking and exchange**
 
