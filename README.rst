@@ -82,8 +82,6 @@ If you're following the above, these scripts can run as-is to produce a series o
     $ python plotting/allresults-local.py
     $ python plotting/allresults-history.py
 
-Near the top of both scripts, there is a "USER OPTIONS" section where you can modify the simulation and plotting details for your own needs. 
-These scripts can be used as a template to read the hdf5 ``SAGE`` model output and to make your own custom figures.
 
 Parameter Optimization with PSO
 ================================
@@ -112,12 +110,14 @@ Extra OPTIONS
 =============
 
 There are several H2 star formation and feedback model options that can be enabled by modifying the parameter file.
+
 * **Blitz and Rosolosky (2006)**
 * **Krumholz, McKee and Tumlinson (2009)**
 * **Krumholz and Dekel (2012)**
 * **Krumholz (2013)**
 * **Gnedin and Draine (2014)**
 * **Somerville et al. (2025)**
+
 There are three options for area calculation in the H2 star formation model.
 FIRE feedback can be enabled to run the model with the FIRE physics.
 Bulge tracking can be turned on or off.
