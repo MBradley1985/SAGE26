@@ -8,8 +8,8 @@ Semi-Analytic Galaxy Evolution (SAGE)
 
 ``SAGE`` is a publicly available code-base for modelling galaxy formation in a
 cosmological context. A description of the model and its default calibration
-results can be found in `Croton et al. (2016) <https://arxiv.org/abs/1601.04709>`_.
-``SAGE`` is a significant update to that previously used in `Croton et al. (2006) <http://arxiv.org/abs/astro-ph/0508046>`_.
+results can be found in `Bradley et al. (2025) In Preparation`.
+``SAGE`` is a significant update to that previously used in `Croton et al. (2016) <https://arxiv.org/abs/1601.04709>`_.
 
 ``SAGE`` is written in C and was built to be modular and customisable.
 It will run on any N-body simulation whose trees are organised in a supported format and contain a minimum set of basic halo properties.
