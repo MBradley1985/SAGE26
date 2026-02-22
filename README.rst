@@ -119,10 +119,15 @@ There are several H2 star formation and feedback model options that can be enabl
 * **Somerville et al. (2025)**
 
 There are three options for area calculation in the H2 star formation model.
+
 FIRE feedback can be enabled to run the model with the FIRE physics.
+
 Bulge tracking can be turned on or off.
+
 Feedback-free burst galaxies can also be enabled.
+
 CGM building can be turned on or off.
+
 Dust from dusty-sage can be toggled on or off.
 
 * **Metal yield tables can be turned on or off**
