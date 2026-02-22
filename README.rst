@@ -109,35 +109,35 @@ To get started with SAGE-PSO, please refer to the documentation available in the
 Extra OPTIONS
 =============
 
-There are several H2 star formation and feedback model options that can be enabled by modifying the parameter file.
+**There are several H2 star formation and feedback model options that can be enabled by modifying the parameter file.**
 
-* **Blitz and Rosolosky (2006)**
-* **Krumholz, McKee and Tumlinson (2009)**
-* **Krumholz and Dekel (2012)**
-* **Krumholz (2013)**
-* **Gnedin and Draine (2014)**
-* **Somerville et al. (2025)**
+* Blitz and Rosolosky (2006)
+* Krumholz, McKee and Tumlinson (2009)
+* Krumholz and Dekel (2012)
+* Krumholz (2013)
+* Gnedin and Draine (2014)
+* Somerville et al. (2025)
 
-There are three options for area calculation in the H2 star formation model.
+**There are three options for area calculation in the H2 star formation model.**
 
-FIRE feedback can be enabled to run the model with the FIRE physics.
+**FIRE feedback can be enabled to run the model with the FIRE physics.**
 
-Bulge tracking can be turned on or off.
+**Bulge tracking can be turned on or off.**
 
-Feedback-free burst galaxies can also be enabled.
+**Feedback-free burst galaxies can also be enabled.**
 
-CGM building can be turned on or off.
+**CGM building can be turned on or off.**
 
-Dust from dusty-sage can be toggled on or off.
+**Dust from dusty-sage can be toggled on or off.**
 
-* **Metal yield tables can be turned on or off**
+* Metal yield tables can be turned on or off
 
-DarkSAGE mode can be enabled to run the model with the DarkSAGE physics. (this is off by default)
+**DarkSAGE mode can be enabled to run the model with the DarkSAGE physics.** (this is off by default)
 
-* **Adds spatially-resolved disc properties and processes**
-* **Adds angular momentum tracking and exchange**
+* Adds spatially-resolved disc properties and processes
+* Adds angular momentum tracking and exchange
 
-Parameters can be manipulated in the parameter file to allow for extra exploration, either manually or with the PSO framework.
+**Parameters can be manipulated in the parameter file to allow for extra exploration, either manually or with the PSO framework.**
 
 Citation
 =========
