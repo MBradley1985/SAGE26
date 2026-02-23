@@ -35,8 +35,8 @@ Downloading
 
 .. code::
 
-    $ git clone https://github.com/sage-home/sage-model-update.git
-    $ cd sage-model/
+    $ git clone https://github.com/MBradley1985/SAGE26.git
+    $ cd SAGE26/
 
 Building
 --------
