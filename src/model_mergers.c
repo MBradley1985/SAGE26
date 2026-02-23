@@ -29,8 +29,14 @@ double estimate_merging_time(const int sat_halo, const int mother_halo, const in
     const double SatelliteRadius = get_virial_radius(mother_halo, halos, run_params);
 
     if(SatelliteMass > 0.0 && coulomb > 0.0 && halos[sat_halo].Len >= MinNumPartSatHalo) {
-        mergtime = 2.0 *
-            1.17 * SatelliteRadius * SatelliteRadius * get_virial_velocity(mother_halo, halos, run_params) / (coulomb * run_params->G * SatelliteMass);
+        if (run_params->DarkSAGEOn == 1)
+        {
+            // DarkSAGE: use the satellite's infall Vvir instead of the host's Vvir for a more accurate timescale estimate
+            mergtime = 1.17 * SatelliteRadius * SatelliteRadius * get_virial_velocity(mother_halo, halos, run_params) / (coulomb * run_params->G * SatelliteMass);
+        }
+        else
+            mergtime = 2.0 *
+                1.17 * SatelliteRadius * SatelliteRadius * get_virial_velocity(mother_halo, halos, run_params) / (coulomb * run_params->G * SatelliteMass);
     } else {
         mergtime = -1.0;
     }
@@ -388,8 +394,8 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
         for(int i = 0; i < N_BINS; i++) {
             galaxies[t].DiscGas[i] += galaxies[p].DiscGas[i];
             galaxies[t].DiscGasMetals[i] += galaxies[p].DiscGasMetals[i];
-            galaxies[t].DiscStars[i] += galaxies[p].DiscStars[i];
-            galaxies[t].DiscStarsMetals[i] += galaxies[p].DiscStarsMetals[i];
+            // galaxies[t].DiscStars[i] += galaxies[p].DiscStars[i];
+            // galaxies[t].DiscStarsMetals[i] += galaxies[p].DiscStarsMetals[i];
             if(run_params->DustOn == 1) {
                 galaxies[t].DiscDust[i] += galaxies[p].DiscDust[i];
             }
@@ -525,6 +531,11 @@ void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
     galaxies[p].MetalsBulgeMass = galaxies[p].MetalsStellarMass;
 
     // galaxies[p].BulgeRadius = get_bulge_radius(p, galaxies, run_params);
+    // BUG FIX: Clear the DarkSAGE arrays since the disk is totally destroyed
+    for(int i = 0; i < N_BINS; i++) {
+        galaxies[p].DiscStars[i] = 0.0;
+        galaxies[p].DiscStarsMetals[i] = 0.0;
+    }
 
     // update the star formation rate
     for(int step = 0; step < STEPS; step++) {
@@ -617,7 +628,6 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         reheated_mass *= fac;
     }
 
-    // [... ejected_mass calculation - unchanged ...]
     // determine ejection
     if(run_params->SupernovaRecipeOn == 1) {
         if(galaxies[merger_centralgal].Vvir > 0.0) {
@@ -680,6 +690,28 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     
     galaxies[merger_centralgal].BulgeMass += recycled_stars;
     galaxies[merger_centralgal].MetalsBulgeMass += metallicity * recycled_stars;
+
+    // BUG FIX: Remove the burst stars from the DarkSAGE DiscStars array
+    // update_from_star_formation just put them there, but they belong in the bulge!
+    if(run_params->DarkSAGEOn == 1 && recycled_stars > 0.0) {
+        double total_disc_gas = 0.0;
+        for(int i = 0; i < N_BINS; i++) total_disc_gas += galaxies[merger_centralgal].DiscGas[i];
+        
+        if(total_disc_gas > 0.0) {
+            for(int i = 0; i < N_BINS; i++) {
+                double frac = galaxies[merger_centralgal].DiscGas[i] / total_disc_gas;
+                double stars_bin = recycled_stars * frac;
+                double Z_bin = (galaxies[merger_centralgal].DiscGas[i] > 0) ? 
+                                galaxies[merger_centralgal].DiscGasMetals[i] / galaxies[merger_centralgal].DiscGas[i] : 0.0;
+                
+                galaxies[merger_centralgal].DiscStars[i] -= stars_bin;
+                galaxies[merger_centralgal].DiscStarsMetals[i] -= Z_bin * stars_bin;
+                
+                if(galaxies[merger_centralgal].DiscStars[i] < 0.0) galaxies[merger_centralgal].DiscStars[i] = 0.0;
+                if(galaxies[merger_centralgal].DiscStarsMetals[i] < 0.0) galaxies[merger_centralgal].DiscStarsMetals[i] = 0.0;
+            }
+        }
+    }
     
     if(burst_to_merger_bulge) {
         // Add to merger-driven bulge
@@ -780,8 +812,6 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         }
     }
 }
-
-
 
 void disrupt_satellite_to_ICS(const int centralgal, const int gal, struct GALAXY *galaxies, const struct params *run_params)
 {
