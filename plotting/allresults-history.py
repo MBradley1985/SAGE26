@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import os
 import sys
 import argparse
+import glob
 
 from random import sample, seed
 
@@ -64,8 +65,6 @@ def read_simulation_params(filepath):
         runtime = f['Header/Runtime']
         params['VolumeFraction'] = float(runtime.attrs['frac_volume_processed'])
         params['SFprescription'] = int(runtime.attrs['SFprescription'])
-        params['DustOn'] = int(runtime.attrs['DustOn'])
-        params['DarkSAGEOn'] = int(runtime.attrs['DarkSAGEOn'])
 
         # Read snapshot info - these are the redshifts for ALL snapshots
         params['redshifts'] = np.array(f['Header/snapshot_redshifts'])
@@ -81,10 +80,21 @@ def read_simulation_params(filepath):
     return params
 
 
-def read_hdf(filepath, snap_num, param):
-    """Read a parameter from the HDF5 file for a given snapshot"""
-    with h5.File(filepath, 'r') as f:
-        return np.array(f[snap_num][param])
+def read_hdf(filepaths, snap_num, param):
+    """Read and concatenate a parameter from multiple HDF5 files for a given snapshot"""
+    data_list = []
+    for filepath in filepaths:
+        with h5.File(filepath, 'r') as f:
+            if snap_num in f and param in f[snap_num]:
+                data = np.array(f[snap_num][param])
+                # Only append if the array has data
+                if data.size > 0:
+                    data_list.append(data)
+    
+    if not data_list:
+        return np.array([])
+    
+    return np.concatenate(data_list)
 
 
 def parse_arguments():
@@ -94,15 +104,15 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s output/millennium/model_0.hdf5
-  %(prog)s output/millennium/model_0.hdf5 --first-snap 10 --last-snap 63
-  %(prog)s output/millennium/model_0.hdf5 -o my_plots/
+  %(prog)s "output/millennium/model_*.hdf5"
+  %(prog)s "output/millennium/model_*.hdf5" --first-snap 10 --last-snap 63
+  %(prog)s "output/millennium/model_*.hdf5" -o my_plots/
         """
     )
 
-    parser.add_argument('input_file', nargs='?',
-                        default='./output/millennium/model_0.hdf5',
-                        help='Path to model HDF5 file (default: ./output/millennium/model_0.hdf5)')
+    parser.add_argument('input_pattern', nargs='?',
+                        default='./output/millennium/model_*.hdf5',
+                        help='Path pattern to model HDF5 files (default: ./output/millennium/model_*.hdf5)')
 
     parser.add_argument('--first-snap', type=int, default=None,
                         help='First snapshot to read (default: earliest available)')
@@ -128,19 +138,33 @@ if __name__ == '__main__':
     # Parse command-line arguments
     args = parse_arguments()
 
-    # Determine paths
+    # Determine paths and find files
     script_dir = get_script_dir()
-    input_file = os.path.abspath(args.input_file)
-    input_dir = os.path.dirname(input_file)
+    
+    # Use glob to find all files matching the pattern
+    file_list = glob.glob(args.input_pattern)
+    file_list.sort() # Ensure consistent ordering
 
-    # Check input file exists
-    if not os.path.exists(input_file):
-        print(f"Error: Input file not found: {input_file}")
+    if not file_list:
+        print(f"Error: No files found matching: {args.input_pattern}")
         sys.exit(1)
 
-    # Read simulation parameters from HDF5 header
-    print(f'Reading simulation parameters from {input_file}')
-    sim_params = read_simulation_params(input_file)
+    print(f"Found {len(file_list)} model files.")
+    
+    first_file = os.path.abspath(file_list[0])
+    input_dir = os.path.dirname(first_file)
+
+    # Read simulation parameters from the first HDF5 header
+    print(f'Reading simulation parameters from {first_file}')
+    sim_params = read_simulation_params(first_file)
+    
+    # Calculate the total volume fraction across ALL files
+    total_volume_fraction = 0.0
+    for f in file_list:
+        p = read_simulation_params(f)
+        total_volume_fraction += p['VolumeFraction']
+    
+    sim_params['VolumeFraction'] = total_volume_fraction
 
     Hubble_h = sim_params['Hubble_h']
     BoxSize = sim_params['BoxSize']
@@ -149,9 +173,7 @@ if __name__ == '__main__':
 
     print(f'  Hubble_h = {Hubble_h}')
     print(f'  BoxSize = {BoxSize} h^-1 Mpc')
-    print(f'  VolumeFraction = {VolumeFraction}')
-    print(f'  DustOn = {sim_params["DustOn"]}')
-    print(f'  DarkSAGEOn = {sim_params["DarkSAGEOn"]}')
+    print(f'  Total VolumeFraction = {VolumeFraction}')
     print(f'  Available snapshots: {sim_params["first_snapshot"]} to {sim_params["last_snapshot"]}')
 
     # Determine snapshot range
@@ -169,7 +191,6 @@ if __name__ == '__main__':
     print(f'  Reading snapshots: {FirstSnap} to {LastSnap}')
 
     # Determine SMFsnaps based on available snapshots (filter to only available ones)
-    # Default SMF snapshots correspond to z ~ 0, 1, 2, 3, 4, 5, 6, 7
     default_smf_snaps = [LastSnap, 37, 32, 27, 23, 20, 18, 16]
     SMFsnaps = [s for s in default_smf_snaps if s in sim_params['available_snapshots'] and FirstSnap <= s <= LastSnap]
     if not SMFsnaps:
@@ -180,7 +201,6 @@ if __name__ == '__main__':
         OutputDir = args.output_dir
     else:
         OutputDir = os.path.join(input_dir, 'plots')
-    # Ensure OutputDir ends with path separator for string concatenation
     if not OutputDir.endswith(os.sep):
         OutputDir += os.sep
 
@@ -199,11 +219,10 @@ if __name__ == '__main__':
     seed(2222)
     volume = (BoxSize / Hubble_h)**3.0 * VolumeFraction
 
-    # Read galaxy properties
-    print(f'Reading galaxy properties from {input_file}\n')
+    # Read galaxy properties across ALL files
+    print(f'Reading galaxy properties from {len(file_list)} files...\n')
 
-    # Initialize arrays indexed by snapshot number (for compatibility with rest of code)
-    # Arrays are sized to LastSnap+1 so we can index directly by snap number
+    # Initialize arrays indexed by snapshot number
     StellarMassFull = [0] * (LastSnap + 1)
     SfrDiskFull = [0] * (LastSnap + 1)
     SfrBulgeFull = [0] * (LastSnap + 1)
@@ -226,24 +245,32 @@ if __name__ == '__main__':
     for snap in range(FirstSnap, LastSnap + 1):
         Snapshot = f'Snap_{snap}'
 
-        StellarMassFull[snap] = read_hdf(input_file, Snapshot, 'StellarMass') * 1.0e10 / Hubble_h
-        SfrDiskFull[snap] = read_hdf(input_file, Snapshot, 'SfrDisk')
-        SfrBulgeFull[snap] = read_hdf(input_file, Snapshot, 'SfrBulge')
-        BlackHoleMassFull[snap] = read_hdf(input_file, Snapshot, 'BlackHoleMass') * 1.0e10 / Hubble_h
-        BulgeMassFull[snap] = read_hdf(input_file, Snapshot, 'BulgeMass') * 1.0e10 / Hubble_h
-        HaloMassFull[snap] = read_hdf(input_file, Snapshot, 'Mvir') * 1.0e10 / Hubble_h
-        cgmFull[snap] = read_hdf(input_file, Snapshot, 'CGMgas') * 1.0e10 / Hubble_h
-        hotgasFull[snap] = read_hdf(input_file, Snapshot, 'HotGas') * 1.0e10 / Hubble_h
-        fullcgmFull[snap] = (read_hdf(input_file, Snapshot, 'CGMgas') + read_hdf(input_file, Snapshot, 'HotGas')) * 1.0e10 / Hubble_h
-        TypeFull[snap] = read_hdf(input_file, Snapshot, 'Type')
-        OutflowRateFull[snap] = read_hdf(input_file, Snapshot, 'OutflowRate')
-        coldgasFull[snap] = read_hdf(input_file, Snapshot, 'ColdGas') * 1.0e10 / Hubble_h
-        dT[snap] = read_hdf(input_file, Snapshot, 'dT')
-        RegimeFull[snap] = read_hdf(input_file, Snapshot, 'Regime')
-        FFBRegimeFull[snap] = read_hdf(input_file, Snapshot, 'FFBRegime')
-        DiskRadiusFull[snap] = read_hdf(input_file, Snapshot, 'DiskRadius') / Hubble_h
-        BulgeRadiusFull[snap] = read_hdf(input_file, Snapshot, 'BulgeRadius') / Hubble_h
-        RvirFull[snap] = read_hdf(input_file, Snapshot, 'Rvir') / Hubble_h
+        StellarMassFull[snap] = read_hdf(file_list, Snapshot, 'StellarMass') * 1.0e10 / Hubble_h
+        SfrDiskFull[snap] = read_hdf(file_list, Snapshot, 'SfrDisk')
+        SfrBulgeFull[snap] = read_hdf(file_list, Snapshot, 'SfrBulge')
+        BlackHoleMassFull[snap] = read_hdf(file_list, Snapshot, 'BlackHoleMass') * 1.0e10 / Hubble_h
+        BulgeMassFull[snap] = read_hdf(file_list, Snapshot, 'BulgeMass') * 1.0e10 / Hubble_h
+        HaloMassFull[snap] = read_hdf(file_list, Snapshot, 'Mvir') * 1.0e10 / Hubble_h
+        cgmFull[snap] = read_hdf(file_list, Snapshot, 'CGMgas') * 1.0e10 / Hubble_h
+        hotgasFull[snap] = read_hdf(file_list, Snapshot, 'HotGas') * 1.0e10 / Hubble_h
+        
+        # Calculate full CGM
+        cgm_temp = read_hdf(file_list, Snapshot, 'CGMgas')
+        hot_temp = read_hdf(file_list, Snapshot, 'HotGas')
+        if len(cgm_temp) > 0 and len(hot_temp) > 0:
+            fullcgmFull[snap] = (cgm_temp + hot_temp) * 1.0e10 / Hubble_h
+        else:
+            fullcgmFull[snap] = np.array([])
+            
+        TypeFull[snap] = read_hdf(file_list, Snapshot, 'Type')
+        OutflowRateFull[snap] = read_hdf(file_list, Snapshot, 'OutflowRate')
+        coldgasFull[snap] = read_hdf(file_list, Snapshot, 'ColdGas') * 1.0e10 / Hubble_h
+        dT[snap] = read_hdf(file_list, Snapshot, 'dT')
+        RegimeFull[snap] = read_hdf(file_list, Snapshot, 'Regime')
+        FFBRegimeFull[snap] = read_hdf(file_list, Snapshot, 'FFBRegime')
+        DiskRadiusFull[snap] = read_hdf(file_list, Snapshot, 'DiskRadius') / Hubble_h
+        BulgeRadiusFull[snap] = read_hdf(file_list, Snapshot, 'BulgeRadius') / Hubble_h
+        RvirFull[snap] = read_hdf(file_list, Snapshot, 'Rvir') / Hubble_h
 
 
 # --------------------------------------------------------
