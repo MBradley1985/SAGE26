@@ -32,7 +32,7 @@ double estimate_merging_time(const int sat_halo, const int mother_halo, const in
         {
             // New Physics / DarkSAGE: Drop the legacy 2.0 multiplier to speed up 
             // dynamical friction, allowing satellites to merge before tidal disruption (fixes excessive ICL and suprisingly bulge/disk fraction).
-            mergtime = 1.17 * SatelliteRadius * SatelliteRadius * get_virial_velocity(mother_halo, halos, run_params) / (coulomb * run_params->G * SatelliteMass);
+            mergtime = 2.0 * SatelliteRadius * SatelliteRadius * get_virial_velocity(mother_halo, halos, run_params) / (coulomb * run_params->G * SatelliteMass);
         }
         else
             mergtime = 2.0 *

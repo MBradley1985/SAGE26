@@ -124,7 +124,7 @@ Extra OPTIONS
 * Area = pi * (3 * r_disk^2)
 * Area = 2pi * r_disk^2
 
-**FIRE feedback can be enabled to run the model with the FIRE physics.**
+**FIRE feedback can be enabled to run the model with the FIRE feedback physics.**
 
 **Bulge tracking can be turned on or off.**
 
