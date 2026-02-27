@@ -475,6 +475,7 @@ struct params
     double Reionization_z0;
     double Reionization_zr;
     double ThresholdSatDisruption;
+    double FractionDisruptedToICS;  // Fraction of disrupted satellite stellar mass that goes to ICS (rest goes to BCG)
     double RedshiftPowerLawExponent;
 
     double UnitLength_in_cm;

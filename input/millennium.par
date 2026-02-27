@@ -77,6 +77,7 @@ BlackHoleGrowthRate     0.015 %fraction of cold gas added to the BH during merge
 
 ThreshMajorMerger       0.3   %major merger when mass ratio greater than this
 ThresholdSatDisruption  1.0   %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption
+FractionDisruptedToICS  0.7   %fraction of disrupted satellite stellar mass to ICS (rest goes to BCG); 1.0 = original behavior
 
 Yield                   0.025 %fraction of SF mass produced as metals
 RecycleFraction         0.43  %fraction of SF mass instantaneously recycled back to cold

@@ -221,6 +221,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->ThresholdSatDisruption);
     ParamID[NParam++] = DOUBLE;
 
+    strncpy(ParamTag[NParam], "FractionDisruptedToICS", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->FractionDisruptedToICS);
+    ParamID[NParam++] = DOUBLE;
+
     strncpy(ParamTag[NParam], "NumOutputs", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->NumSnapOutputs);
     ParamID[NParam++] = INT;

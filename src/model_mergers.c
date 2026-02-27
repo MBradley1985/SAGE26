@@ -632,9 +632,21 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, struct GALAXY
     galaxies[centralgal].ICS += galaxies[gal].ICS;
     galaxies[centralgal].MetalsICS += galaxies[gal].MetalsICS;
 
-    // Disrupt stellar mass to ICS (same for all regimes)
-    galaxies[centralgal].ICS += galaxies[gal].StellarMass;
-    galaxies[centralgal].MetalsICS += galaxies[gal].MetalsStellarMass;
+    // Disrupt stellar mass: split between ICS and BCG based on FractionDisruptedToICS
+    // FractionDisruptedToICS = 1.0 means all to ICS (original behavior)
+    // FractionDisruptedToICS = 0.5 means half to ICS, half to BCG
+    const double frac_to_ICS = run_params->FractionDisruptedToICS;
+    const double frac_to_BCG = 1.0 - frac_to_ICS;
+
+    galaxies[centralgal].ICS += frac_to_ICS * galaxies[gal].StellarMass;
+    galaxies[centralgal].MetalsICS += frac_to_ICS * galaxies[gal].MetalsStellarMass;
+
+    // Add remainder to BCG bulge (accreted onto outer envelope)
+    galaxies[centralgal].StellarMass += frac_to_BCG * galaxies[gal].StellarMass;
+    galaxies[centralgal].MetalsStellarMass += frac_to_BCG * galaxies[gal].MetalsStellarMass;
+    galaxies[centralgal].BulgeMass += frac_to_BCG * galaxies[gal].StellarMass;
+    galaxies[centralgal].MetalsBulgeMass += frac_to_BCG * galaxies[gal].MetalsStellarMass;
+    galaxies[centralgal].MergerBulgeMass += frac_to_BCG * galaxies[gal].StellarMass;  // Track as merger-driven
 
     // what should we do with the disrupted satellite BH?
     galaxies[gal].mergeType = 4;  // mark as disruption to the ICS
