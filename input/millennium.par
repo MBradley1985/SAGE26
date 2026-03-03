@@ -19,7 +19,6 @@ NumOutputs        -1  % sets the desired number of galaxy outputs; use -1 for al
 -> 63 37 32 27 23 20 18 16
 
 OutputFormat      sage_hdf5 % sets the desired output format. Either 'sage_binary' or 'sage_hdf5'.
-SaveFullSFH       1         % 0: save averaged SFR (default, smaller files); 1: save full SfrDisk[STEPS] and SfrBulge[STEPS] arrays (larger files, enables detailed ICS formation analysis)
 
 %------------------------------------------
 %----- Simulation information  ------------
@@ -57,6 +56,7 @@ CGMrecipeOn           1   %0: switch off
 FIREmodeOn            1   %0: switch off
 FeedbackFreeModeOn    1   %0: switch off
 BulgeSizeOn           3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
+SaveFullSFH           1   %0: switch off
 
 %------------------------------------------
 %----- SAGE model parameters --------------
