@@ -288,6 +288,65 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
                                             "Failed to close the dataspace for output snapshot number %d.\n", snap_idx);
 
         }
+        
+        // Conditionally create 2D datasets for full SFH arrays if SaveFullSFH is enabled
+        if(run_params->SaveFullSFH) {
+            herr_t sfh_status;  // Use different name to avoid shadowing macro's 'status'
+            const int steps_value = STEPS;  // Create variable from macro for attribute
+            const char *sfh_names[4] = {"SfrDiskSTEPS", "SfrBulgeSTEPS", "SfrDiskZSTEPS", "SfrBulgeZSTEPS"};
+            const char *sfh_descriptions[4] = {
+                "Full star formation history in disk over STEPS substeps between snapshots (Msun/yr)",
+                "Full star formation history in bulge over STEPS substeps between snapshots (Msun/yr)",
+                "Full metallicity history in disk over STEPS substeps between snapshots (dimensionless)",
+                "Full metallicity history in bulge over STEPS substeps between snapshots (dimensionless)"
+            };
+            const char *sfh_units[4] = {"Msun/yr", "Msun/yr", "dimensionless", "dimensionless"};
+            
+            for(int sfh_idx = 0; sfh_idx < 4; sfh_idx++) {
+                snprintf(full_field_name, 2*MAX_STRING_LEN - 1,"Snap_%d/%s", run_params->ListOutputSnaps[snap_idx], sfh_names[sfh_idx]);
+                
+                // Create 2D dataset with shape [0, STEPS] initially, extensible in first dimension
+                hsize_t dims_2d[2] = {0, STEPS};
+                hsize_t maxdims_2d[2] = {H5S_UNLIMITED, STEPS};
+                hsize_t chunk_dims_2d[2] = {NUM_GALS_PER_BUFFER, STEPS};
+                
+                hid_t prop_2d = H5Pcreate(H5P_DATASET_CREATE);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(prop_2d, (int32_t) prop_2d,
+                                                "Could not create property list for 2D SFH dataset %s", sfh_names[sfh_idx]);
+                
+                sfh_status = H5Pset_chunk(prop_2d, 2, chunk_dims_2d);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(sfh_status, (int32_t) sfh_status,
+                                                "Could not set chunking for 2D SFH dataset %s", sfh_names[sfh_idx]);
+                
+                hid_t dataspace_2d = H5Screate_simple(2, dims_2d, maxdims_2d);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(dataspace_2d, (int32_t) dataspace_2d,
+                                                "Could not create dataspace for 2D SFH dataset %s", sfh_names[sfh_idx]);
+                
+                hid_t dataset_2d = H5Dcreate2(file_id, full_field_name, H5T_NATIVE_FLOAT, dataspace_2d, 
+                                              H5P_DEFAULT, prop_2d, H5P_DEFAULT);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(dataset_2d, (int32_t) dataset_2d,
+                                                "Could not create 2D SFH dataset %s", sfh_names[sfh_idx]);
+                
+                // Set metadata attributes
+                CREATE_STRING_ATTRIBUTE(dataset_2d, "Description", sfh_descriptions[sfh_idx], MAX_STRING_LEN);
+                CREATE_STRING_ATTRIBUTE(dataset_2d, "Units", sfh_units[sfh_idx], MAX_STRING_LEN);
+                
+                // Create attribute for STEPS value
+                CREATE_SINGLE_ATTRIBUTE(dataset_2d, "STEPS", steps_value, H5T_NATIVE_INT);
+                
+                sfh_status = H5Dclose(dataset_2d);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(sfh_status, (int32_t) sfh_status,
+                                                "Failed to close 2D SFH dataset %s", sfh_names[sfh_idx]);
+                
+                sfh_status = H5Pclose(prop_2d);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(sfh_status, (int32_t) sfh_status,
+                                                "Failed to close property list for 2D SFH dataset %s", sfh_names[sfh_idx]);
+                
+                sfh_status = H5Sclose(dataspace_2d);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(sfh_status, (int32_t) sfh_status,
+                                                "Failed to close dataspace for 2D SFH dataset %s", sfh_names[sfh_idx]);
+            }
+        }
     }
 
     // Now for each snapshot, we process `buffer_count` galaxies into RAM for every snapshot before
@@ -386,6 +445,30 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, mdot_stream);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ICS_disrupt);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ICS_accrete);
+        
+        /* Conditionally allocate full SFH arrays if SaveFullSFH is enabled */
+        if(run_params->SaveFullSFH) {
+            /* Allocate memory for STEPS elements per galaxy */
+            save_info->buffer_output_gals[snap_idx].SfrDiskSTEPS = malloc(save_info->buffer_size * STEPS * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].SfrBulgeSTEPS = malloc(save_info->buffer_size * STEPS * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].SfrDiskZSTEPS = malloc(save_info->buffer_size * STEPS * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].SfrBulgeZSTEPS = malloc(save_info->buffer_size * STEPS * sizeof(float));
+            
+            if(save_info->buffer_output_gals[snap_idx].SfrDiskSTEPS == NULL ||
+               save_info->buffer_output_gals[snap_idx].SfrBulgeSTEPS == NULL ||
+               save_info->buffer_output_gals[snap_idx].SfrDiskZSTEPS == NULL ||
+               save_info->buffer_output_gals[snap_idx].SfrBulgeZSTEPS == NULL) {
+                fprintf(stderr, "Could not allocate memory for full SFH arrays (STEPS=%d, buffer_size=%d)\n", 
+                        STEPS, save_info->buffer_size);
+                return MALLOC_FAILURE;
+            }
+        } else {
+            /* Set pointers to NULL if not saving full SFH */
+            save_info->buffer_output_gals[snap_idx].SfrDiskSTEPS = NULL;
+            save_info->buffer_output_gals[snap_idx].SfrBulgeSTEPS = NULL;
+            save_info->buffer_output_gals[snap_idx].SfrDiskZSTEPS = NULL;
+            save_info->buffer_output_gals[snap_idx].SfrBulgeZSTEPS = NULL;
+        }
     }
 
     return EXIT_SUCCESS;
@@ -676,6 +759,14 @@ int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, mdot_stream);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ICS_disrupt);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ICS_accrete);
+        
+        /* Conditionally free full SFH arrays if they were allocated */
+        if(run_params->SaveFullSFH) {
+            free(save_info->buffer_output_gals[snap_idx].SfrDiskSTEPS);
+            free(save_info->buffer_output_gals[snap_idx].SfrBulgeSTEPS);
+            free(save_info->buffer_output_gals[snap_idx].SfrDiskZSTEPS);
+            free(save_info->buffer_output_gals[snap_idx].SfrBulgeZSTEPS);
+        }
     }
 
     myfree(save_info->buffer_output_gals);
@@ -999,6 +1090,34 @@ int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct save_info 
     save_info->buffer_output_gals[output_snap_idx].SfrBulge[gals_in_buffer] = tmp_SfrBulge;
     save_info->buffer_output_gals[output_snap_idx].SfrDiskZ[gals_in_buffer] = tmp_SfrDiskZ;
     save_info->buffer_output_gals[output_snap_idx].SfrBulgeZ[gals_in_buffer] = tmp_SfrBulgeZ;
+    
+    // Conditionally save full SFH arrays if SaveFullSFH is enabled
+    if(run_params->SaveFullSFH) {
+        for(int step = 0; step < STEPS; step++) {
+            const int idx = gals_in_buffer * STEPS + step;  // Index into flattened 2D array
+            
+            // Save SFR in physical units (Msun/yr)
+            save_info->buffer_output_gals[output_snap_idx].SfrDiskSTEPS[idx] = 
+                g->SfrDisk[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS;
+            save_info->buffer_output_gals[output_snap_idx].SfrBulgeSTEPS[idx] = 
+                g->SfrBulge[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS;
+            
+            // Save metallicity (dimensionless)
+            if(g->SfrDiskColdGas[step] > 0.0) {
+                save_info->buffer_output_gals[output_snap_idx].SfrDiskZSTEPS[idx] = 
+                    g->SfrDiskColdGasMetals[step] / g->SfrDiskColdGas[step];
+            } else {
+                save_info->buffer_output_gals[output_snap_idx].SfrDiskZSTEPS[idx] = 0.0;
+            }
+            
+            if(g->SfrBulgeColdGas[step] > 0.0) {
+                save_info->buffer_output_gals[output_snap_idx].SfrBulgeZSTEPS[idx] = 
+                    g->SfrBulgeColdGasMetals[step] / g->SfrBulgeColdGas[step];
+            } else {
+                save_info->buffer_output_gals[output_snap_idx].SfrBulgeZSTEPS[idx] = 0.0;
+            }
+        }
+    }
 
     save_info->buffer_output_gals[output_snap_idx].DiskScaleRadius[gals_in_buffer] = g->DiskScaleRadius;
     save_info->buffer_output_gals[output_snap_idx].BulgeRadius[gals_in_buffer] = g->BulgeRadius;
@@ -1248,6 +1367,63 @@ int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to_write,
     EXTEND_AND_WRITE_GALAXY_DATASET(mdot_stream);
     EXTEND_AND_WRITE_GALAXY_DATASET(ICS_disrupt);
     EXTEND_AND_WRITE_GALAXY_DATASET(ICS_accrete);
+
+    // Conditionally write 2D SFH datasets if SaveFullSFH is enabled
+    if(run_params->SaveFullSFH) {
+        const char *sfh_field_names[4] = {"SfrDiskSTEPS", "SfrBulgeSTEPS", "SfrDiskZSTEPS", "SfrBulgeZSTEPS"};
+        float *sfh_data_ptrs[4] = {
+            save_info->buffer_output_gals[snap_idx].SfrDiskSTEPS,
+            save_info->buffer_output_gals[snap_idx].SfrBulgeSTEPS,
+            save_info->buffer_output_gals[snap_idx].SfrDiskZSTEPS,
+            save_info->buffer_output_gals[snap_idx].SfrBulgeZSTEPS
+        };
+        
+        for(int sfh_idx = 0; sfh_idx < 4; sfh_idx++) {
+            char full_field_name[2*MAX_STRING_LEN];
+            snprintf(full_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/%s", 
+                     run_params->ListOutputSnaps[snap_idx], sfh_field_names[sfh_idx]);
+            
+            // Open dataset
+            hid_t dataset_2d = H5Dopen2(save_info->file_id, full_field_name, H5P_DEFAULT);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(dataset_2d, (int32_t) dataset_2d,
+                                            "Could not open 2D SFH dataset %s", sfh_field_names[sfh_idx]);
+            
+            // Get current dimensions
+            hid_t space_2d = H5Dget_space(dataset_2d);
+            hsize_t current_dims_2d[2];
+            H5Sget_simple_extent_dims(space_2d, current_dims_2d, NULL);
+            H5Sclose(space_2d);
+            
+            // Set new dimensions [old_ngals + num_to_write, STEPS]
+            hsize_t new_dims_2d[2] = {current_dims_2d[0] + num_to_write, STEPS};
+            status = H5Dset_extent(dataset_2d, new_dims_2d);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                            "Could not extend 2D SFH dataset %s", sfh_field_names[sfh_idx]);
+            
+            // Select hyperslab in file space (where to write in the file)
+            hid_t filespace_2d = H5Dget_space(dataset_2d);
+            hsize_t offset_2d[2] = {current_dims_2d[0], 0};  // Start at old ngals, column 0
+            hsize_t count_2d[2] = {(hsize_t)num_to_write, STEPS};  // Write num_to_write rows, STEPS columns
+            status = H5Sselect_hyperslab(filespace_2d, H5S_SELECT_SET, offset_2d, NULL, count_2d, NULL);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                            "Could not select hyperslab for 2D SFH dataset %s", sfh_field_names[sfh_idx]);
+            
+            // Create memory space (describes shape of data in memory)
+            hid_t memspace_2d = H5Screate_simple(2, count_2d, NULL);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(memspace_2d, (int32_t) memspace_2d,
+                                            "Could not create memspace for 2D SFH dataset %s", sfh_field_names[sfh_idx]);
+            
+            // Write data
+            status = H5Dwrite(dataset_2d, H5T_NATIVE_FLOAT, memspace_2d, filespace_2d, H5P_DEFAULT, sfh_data_ptrs[sfh_idx]);
+            CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                            "Could not write 2D SFH dataset %s", sfh_field_names[sfh_idx]);
+            
+            // Cleanup
+            H5Sclose(memspace_2d);
+            H5Sclose(filespace_2d);
+            H5Dclose(dataset_2d);
+        }
+    }
 
 #endif
     // We've performed a write, so future galaxies will overwrite the old data.

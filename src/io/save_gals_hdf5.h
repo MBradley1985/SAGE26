@@ -79,6 +79,12 @@ struct HDF5_GALAXY_OUTPUT
     float *SfrDiskZ;
     float *SfrBulgeZ;
     
+    /* full star formation history arrays (optional, controlled by SaveFullSFH parameter) */
+    float *SfrDiskSTEPS;     /* Shape: [ngalaxies, STEPS] stored as 1D array */
+    float *SfrBulgeSTEPS;    /* Shape: [ngalaxies, STEPS] stored as 1D array */
+    float *SfrDiskZSTEPS;    /* Shape: [ngalaxies, STEPS] stored as 1D array */
+    float *SfrBulgeZSTEPS;   /* Shape: [ngalaxies, STEPS] stored as 1D array */
+    
     /* misc */
     float *DiskScaleRadius;
     float *BulgeRadius;

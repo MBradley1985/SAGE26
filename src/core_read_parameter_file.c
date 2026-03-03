@@ -265,6 +265,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->BulgeSizeOn);
     ParamID[NParam++] = INT;
 
+    strncpy(ParamTag[NParam], "SaveFullSFH", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->SaveFullSFH);
+    ParamID[NParam++] = INT;
+
     
     used_tag = mymalloc(sizeof(int) * NParam);
     for(int i=0; i<NParam; i++) {

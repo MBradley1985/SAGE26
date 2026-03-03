@@ -2241,6 +2241,224 @@ def plot_9_cgm_fractions_depletion(snapdata):
                 'CGMFractionsDepletion' + OUTPUT_FORMAT))
 
 
+# ========================== PLOT 9b: CGM FRACTIONS REDSHIFT GRID ==========================
+
+def plot_9b_cgm_fractions_grid(snapdata):
+    """
+    1x3 redshift grid: CGM/hot gas fraction vs halo mass.
+    Each panel shows one redshift with solid line for CGM and dashed for HotGas.
+    """
+    print('Plot 9b: CGM fractions redshift grid')
+
+    snap_list = [
+        (SNAP_Z0, f'z={REDSHIFTS[SNAP_Z0]:.0f}'),
+        (SNAP_Z1, f'z={REDSHIFTS[SNAP_Z1]:.1f}'),
+        (SNAP_Z2, f'z={REDSHIFTS[SNAP_Z2]:.1f}'),
+        # (SNAP_Z3, f'z={REDSHIFTS[SNAP_Z3]:.1f}'),
+        # (SNAP_Z4, f'z={REDSHIFTS[SNAP_Z4]:.1f}'),
+        # (SNAP_Z5, f'z={REDSHIFTS[SNAP_Z5]:.1f}'),
+    ]
+
+    mass_bins = np.arange(10.0, 15.0, 0.3)
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5), sharex=True, sharey=True)
+    axes_flat = axes.flatten()
+
+    # Detect CGM recipe
+    cgm_active = (SNAP_Z0 in snapdata
+                  and np.any(snapdata[SNAP_Z0]['tcool_over_tff'] > 0))
+
+    for idx, (snap, label) in enumerate(snap_list):
+        ax = axes_flat[idx]
+
+        if snap not in snapdata:
+            ax.text(0.5, 0.5, 'No data', transform=ax.transAxes,
+                    ha='center', va='center')
+            ax.text(0.95, 0.95, label, transform=ax.transAxes,
+                    ha='right', va='top', fontsize=12)
+            continue
+
+        d = snapdata[snap]
+
+        if cgm_active:
+            # CGM regime galaxies - solid line
+            w_cgm = np.where(
+                (d['Regime'] == 0) & (d['Mvir'] > 1e10) &
+                (d['CGMgas'] > 0) & (d['Type'] == 0)
+            )[0]
+            # Hot regime galaxies - dashed line
+            w_hot = np.where(
+                (d['Regime'] == 1) & (d['Mvir'] > 1e10) &
+                (d['HotGas'] > 0) & (d['Type'] == 0)
+            )[0]
+
+            if len(w_cgm) > 0:
+                log_mv = np.log10(d['Mvir'][w_cgm])
+                frac = d['CGMgas'][w_cgm] / (BARYON_FRAC * d['Mvir'][w_cgm])
+                bc, med, _, _ = binned_median(log_mv, frac, mass_bins)
+                valid = ~np.isnan(med)
+                ax.plot(bc[valid], med[valid], '-', color='black', lw=2,
+                        label='CGM' if idx == 0 else None)
+
+            if len(w_hot) > 0:
+                log_mv = np.log10(d['Mvir'][w_hot])
+                frac = d['HotGas'][w_hot] / (BARYON_FRAC * d['Mvir'][w_hot])
+                bc, med, _, _ = binned_median(log_mv, frac, mass_bins)
+                valid = ~np.isnan(med)
+                ax.plot(bc[valid], med[valid], '--', color='black', lw=2,
+                        label='HotGas' if idx == 0 else None)
+        else:
+            # No CGM recipe - just plot HotGas
+            w = np.where(
+                (d['Mvir'] > 1e10) & (d['HotGas'] > 0) & (d['Type'] == 0)
+            )[0]
+            if len(w) > 0:
+                log_mv = np.log10(d['Mvir'][w])
+                frac = d['HotGas'][w] / (BARYON_FRAC * d['Mvir'][w])
+                bc, med, _, _ = binned_median(log_mv, frac, mass_bins)
+                valid = ~np.isnan(med)
+                ax.plot(bc[valid], med[valid], '-', color='black', lw=2,
+                        label='HotGas' if idx == 0 else None)
+
+        # Reference line at unity (full baryon retention)
+        ax.axhline(y=1.0, color='gray', ls=':', lw=1.5, alpha=1.0)
+
+        # Redshift label
+        ax.text(0.95, 0.95, label, transform=ax.transAxes,
+                ha='right', va='top', fontsize=12)
+
+    # Common formatting
+    for ax in axes_flat:
+        ax.set_yscale('log')
+        ax.set_xlim(10.2, 14.5)
+        ax.set_ylim(1e-3, 3.0)
+        ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
+        ax.tick_params(axis='both', which='both', direction='in',
+                       top=True, bottom=True, left=True, right=True)
+
+    # Axis labels
+    for ax in axes_flat:
+        ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/M_{\odot})$')
+    axes[0].set_ylabel(r'$m_{\rm CGM,\ Hot}/(f_b\ M_{\rm vir})$')
+
+    # Legend in first panel only
+    _standard_legend(axes_flat[0], loc='lower right')
+
+    fig.tight_layout()
+
+    save_figure(fig, os.path.join(OUTPUT_DIR,
+                'CGMFractionsGrid' + OUTPUT_FORMAT))
+
+
+# ========================== PLOT 9c: DEPLETION TIMESCALE REDSHIFT GRID ==========================
+
+def plot_9c_depletion_grid(snapdata):
+    """
+    1x3 redshift grid: depletion timescale vs halo mass.
+    Each panel shows one redshift with solid line for CGM and dashed for HotGas.
+    """
+    print('Plot 9c: Depletion timescale redshift grid')
+
+    snap_list = [
+        (SNAP_Z0, f'z={REDSHIFTS[SNAP_Z0]:.0f}'),
+        (SNAP_Z1, f'z={REDSHIFTS[SNAP_Z1]:.1f}'),
+        (SNAP_Z2, f'z={REDSHIFTS[SNAP_Z2]:.1f}'),
+        # (SNAP_Z3, f'z={REDSHIFTS[SNAP_Z3]:.1f}'),
+        # (SNAP_Z4, f'z={REDSHIFTS[SNAP_Z4]:.1f}'),
+        # (SNAP_Z5, f'z={REDSHIFTS[SNAP_Z5]:.1f}'),
+    ]
+
+    mass_bins = np.arange(10.0, 15.0, 0.3)
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5), sharex=True, sharey=True)
+    axes_flat = axes.flatten()
+
+    # Detect CGM recipe
+    cgm_active = (SNAP_Z0 in snapdata
+                  and np.any(snapdata[SNAP_Z0]['tcool_over_tff'] > 0))
+
+    for idx, (snap, label) in enumerate(snap_list):
+        ax = axes_flat[idx]
+
+        if snap not in snapdata:
+            ax.text(0.5, 0.5, 'No data', transform=ax.transAxes,
+                    ha='center', va='center')
+            ax.text(0.95, 0.95, label, transform=ax.transAxes,
+                    ha='right', va='top', fontsize=12)
+            continue
+
+        d = snapdata[snap]
+
+        if cgm_active:
+            # CGM regime galaxies - solid line
+            w_cgm = np.where(
+                (d['Regime'] == 0) & (d['Mvir'] > 1e10) &
+                (d['tdeplete'] > 0) & np.isfinite(d['tdeplete']) &
+                (d['Type'] == 0)
+            )[0]
+            # Hot regime galaxies - dashed line
+            w_hot = np.where(
+                (d['Regime'] == 1) & (d['Mvir'] > 1e10) &
+                (d['tdeplete'] > 0) & np.isfinite(d['tdeplete']) &
+                (d['Type'] == 0)
+            )[0]
+
+            if len(w_cgm) > 0:
+                log_mv = np.log10(d['Mvir'][w_cgm])
+                td = d['tdeplete'][w_cgm] * (977.8 / HUBBLE_H)  # code units -> Gyr
+                bc, med, _, _ = binned_median(log_mv, td, mass_bins)
+                valid = ~np.isnan(med)
+                ax.plot(bc[valid], med[valid], '-', color='black', lw=2,
+                        label='CGM' if idx == 0 else None)
+
+            if len(w_hot) > 0:
+                log_mv = np.log10(d['Mvir'][w_hot])
+                td = d['tdeplete'][w_hot] * (977.8 / HUBBLE_H)  # code units -> Gyr
+                bc, med, _, _ = binned_median(log_mv, td, mass_bins)
+                valid = ~np.isnan(med)
+                ax.plot(bc[valid], med[valid], '--', color='black', lw=2,
+                        label='HotGas' if idx == 0 else None)
+        else:
+            # No CGM recipe - just plot all galaxies
+            w = np.where(
+                (d['Mvir'] > 1e10) &
+                (d['tdeplete'] > 0) & np.isfinite(d['tdeplete']) &
+                (d['Type'] == 0)
+            )[0]
+            if len(w) > 0:
+                log_mv = np.log10(d['Mvir'][w])
+                td = d['tdeplete'][w] * (977.8 / HUBBLE_H)  # code units -> Gyr
+                bc, med, _, _ = binned_median(log_mv, td, mass_bins)
+                valid = ~np.isnan(med)
+                ax.plot(bc[valid], med[valid], '-', color='black', lw=2,
+                        label='All' if idx == 0 else None)
+
+        # Redshift label
+        ax.text(0.95, 0.95, label, transform=ax.transAxes,
+                ha='right', va='top', fontsize=12)
+
+    # Common formatting
+    for ax in axes_flat:
+        ax.set_yscale('log')
+        ax.set_xlim(10.2, 14.5)
+        ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
+        ax.tick_params(axis='both', which='both', direction='in',
+                       top=True, bottom=True, left=True, right=True)
+
+    # Axis labels
+    for ax in axes_flat:
+        ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/M_{\odot})$')
+    axes[0].set_ylabel(r'$t_{\rm deplete}$ [Gyr]')
+
+    # Legend in first panel only
+    _standard_legend(axes_flat[0], loc='upper right')
+
+    fig.tight_layout()
+
+    save_figure(fig, os.path.join(OUTPUT_DIR,
+                'DepletionGrid' + OUTPUT_FORMAT))
+
+
 # ========================== PLOT 10: STAR FORMATION EFFICIENCY ==========================
 
 def plot_10_sfe_ffb(snapdata):
@@ -2363,6 +2581,10 @@ def plot_11_ffb_properties(snapdata):
     ax1.set_yscale('log')
     ax1.set_xlabel(r'$\log_{10}(m_*/M_{\odot})$')
     ax1.set_ylabel(r'$R_e$ [kpc]')
+
+    # Add redshift text in upper right corner
+    ax1.text(0.05, 0.95, f'z={REDSHIFTS[snap]:.1f}', transform=ax1.transAxes,
+             ha='left', va='top', fontsize=12, fontweight='bold')
     _standard_legend(ax1, loc='lower left')
 
     # ----- Panel (b): Mass-metallicity relation -----
@@ -2390,6 +2612,9 @@ def plot_11_ffb_properties(snapdata):
                 alpha=1.0, label=r'$0.1\,Z_{\odot}$')
     ax2.set_xlabel(r'$\log_{10}(m_*/M_{\odot})$')
     ax2.set_ylabel(r'$\log_{10}(Z_*/Z_{\odot})$')
+    # Add redshift text in upper right corner
+    ax2.text(0.05, 0.95, f'z={REDSHIFTS[snap]:.1f}', transform=ax2.transAxes,
+             ha='left', va='top', fontsize=12, fontweight='bold')
     _standard_legend(ax2, loc='lower right')
 
     # ----- Panel (c): SFR vs M_* -----
@@ -2410,6 +2635,9 @@ def plot_11_ffb_properties(snapdata):
                         linewidths=0.8, label='non FFB galaxies', zorder=3, rasterized=True)
     ax3.set_xlabel(r'$\log_{10}(m_*/M_{\odot})$')
     ax3.set_ylabel(r'$\log_{10}(\mathrm{SFR}\ [M_{\odot}\,\mathrm{yr}^{-1}])$')
+    # Add redshift text in upper right corner
+    ax3.text(0.05, 0.95, f'z={REDSHIFTS[snap]:.1f}', transform=ax3.transAxes,
+             ha='left', va='top', fontsize=12, fontweight='bold')
     _standard_legend(ax3, loc='lower left')
 
     fig.tight_layout()
@@ -2446,19 +2674,30 @@ def plot_12_sfh_ffb(snapdata):
         print('  No FFB galaxies found at z~10. Skipping.')
         return
 
-    # Select top galaxies by mass
+    # Select top FFB galaxies by mass, then mass-match non-FFB galaxies
     N_track = min(5, len(w_ffb))
     mass_order = np.argsort(d['StellarMass'][w_ffb])[::-1]
     ffb_idx = w_ffb[mass_order[:N_track]]
     ffb_gal_ids = d['GalaxyIndex'][ffb_idx]
 
-    N_norm_track = min(5, len(w_normal))
-    if N_norm_track > 0:
-        mass_order_n = np.argsort(d['StellarMass'][w_normal])[::-1]
-        norm_idx = w_normal[mass_order_n[:N_norm_track]]
+    # For each selected FFB galaxy, find the closest-mass non-FFB galaxy
+    norm_gal_ids = np.array([], dtype=np.int64)
+    if len(w_normal) > 0:
+        norm_masses = d['StellarMass'][w_normal]
+        matched_norm_idx = []
+        used = set()
+        for fi in ffb_idx:
+            ffb_mass = d['StellarMass'][fi]
+            diffs = np.abs(norm_masses - ffb_mass)
+            # Pick closest unused match
+            order = np.argsort(diffs)
+            for j in order:
+                if j not in used:
+                    matched_norm_idx.append(w_normal[j])
+                    used.add(j)
+                    break
+        norm_idx = np.array(matched_norm_idx)
         norm_gal_ids = d['GalaxyIndex'][norm_idx]
-    else:
-        norm_gal_ids = np.array([], dtype=np.int64)
 
     # Snapshots to track through
     fig_g_snaps = [s for s in range(8, 64) if s in snapdata]
@@ -2769,6 +3008,53 @@ def plot_14_density_evolution():
     sfrd_noffb_sorted = sfrd_noffb_arr[sort_idx]
     smd_ffb_sorted = smd_ffb_arr[sort_idx]
     smd_noffb_sorted = smd_noffb_arr[sort_idx]
+
+    # ===== QUANTITATIVE COMPARISON: SAGE26 vs No FFB =====
+    print("\n" + "="*60)
+    print("QUANTITATIVE COMPARISON: SAGE26 vs No FFB")
+    print("="*60)
+
+    # Find common valid indices
+    valid_both_sfrd = ~np.isnan(sfrd_ffb_sorted) & ~np.isnan(sfrd_noffb_sorted)
+    valid_both_smd = ~np.isnan(smd_ffb_sorted) & ~np.isnan(smd_noffb_sorted)
+
+    # --- SFRD Comparison ---
+    sfrd_diff = sfrd_ffb_sorted[valid_both_sfrd] - sfrd_noffb_sorted[valid_both_sfrd]
+    z_sfrd = z_sorted[valid_both_sfrd]
+
+    print("\n--- COSMIC STAR FORMATION RATE DENSITY (SFRD) ---")
+    print(f"  Mean difference (SAGE26 - No FFB):  {np.mean(sfrd_diff):+.3f} dex")
+    print(f"  Median difference:                  {np.median(sfrd_diff):+.3f} dex")
+    print(f"  Std of difference:                  {np.std(sfrd_diff):.3f} dex")
+    print(f"  Max enhancement at z={z_sfrd[np.argmax(sfrd_diff)]:.1f}: {np.max(sfrd_diff):+.3f} dex ({10**np.max(sfrd_diff):.1f}x)")
+    print(f"  Min enhancement at z={z_sfrd[np.argmin(sfrd_diff)]:.1f}: {np.min(sfrd_diff):+.3f} dex ({10**np.min(sfrd_diff):.1f}x)")
+
+    print("\n  SFRD at specific redshifts:")
+    for target_z in [6, 8, 10, 12, 14]:
+        idx = np.argmin(np.abs(z_sorted - target_z))
+        if valid_both_sfrd[idx]:
+            diff = sfrd_ffb_sorted[idx] - sfrd_noffb_sorted[idx]
+            print(f"    z~{z_sorted[idx]:.1f}: SAGE26={sfrd_ffb_sorted[idx]:.2f}, NoFFB={sfrd_noffb_sorted[idx]:.2f}, Δ={diff:+.2f} dex ({10**diff:.1f}x)")
+
+    # --- SMD Comparison ---
+    smd_diff = smd_ffb_sorted[valid_both_smd] - smd_noffb_sorted[valid_both_smd]
+    z_smd = z_sorted[valid_both_smd]
+
+    print("\n--- STELLAR MASS DENSITY (SMD) ---")
+    print(f"  Mean difference (SAGE26 - No FFB):  {np.mean(smd_diff):+.3f} dex")
+    print(f"  Median difference:                  {np.median(smd_diff):+.3f} dex")
+    print(f"  Std of difference:                  {np.std(smd_diff):.3f} dex")
+    print(f"  Max enhancement at z={z_smd[np.argmax(smd_diff)]:.1f}: {np.max(smd_diff):+.3f} dex ({10**np.max(smd_diff):.1f}x)")
+    print(f"  Min enhancement at z={z_smd[np.argmin(smd_diff)]:.1f}: {np.min(smd_diff):+.3f} dex ({10**np.min(smd_diff):.1f}x)")
+
+    print("\n  SMD at specific redshifts:")
+    for target_z in [6, 8, 10, 12, 14]:
+        idx = np.argmin(np.abs(z_sorted - target_z))
+        if valid_both_smd[idx]:
+            diff = smd_ffb_sorted[idx] - smd_noffb_sorted[idx]
+            print(f"    z~{z_sorted[idx]:.1f}: SAGE26={smd_ffb_sorted[idx]:.2f}, NoFFB={smd_noffb_sorted[idx]:.2f}, Δ={diff:+.2f} dex ({10**diff:.1f}x)")
+
+    print("="*60 + "\n")
 
     # --- miniUchuu (if available) ---
     mu_filepath = os.path.join(MINIUCHUU_DIR, MODEL_FILE)
@@ -3250,6 +3536,7 @@ def plot_16_sfrd_history():
 
     # --- 3. PROCESS & PLOT MODELS ---
     N_BOOT = 100
+    model_results = {}  # Store results for comparison
     for sim in sim_dirs:
         sim_path = sim['path']
         sim_label = sim['label']
@@ -3303,6 +3590,56 @@ def plot_16_sfrd_history():
                                     np.log10(sfr_density_lo[valid]),
                                     np.log10(sfr_density_hi[valid]),
                                     color=sim['color'], alpha=0.2)
+
+            # Store results for comparison
+            model_results[sim_label] = {
+                'z': z_vals[nonzero],
+                'sfrd': np.log10(sfr_density[nonzero])
+            }
+
+    # ===== QUANTITATIVE COMPARISON: SAGE26 vs C16 =====
+    if 'SAGE26 (Millennium)' in model_results and 'C16' in model_results:
+        print("\n" + "="*60)
+        print("QUANTITATIVE COMPARISON: SAGE26 vs C16 (SFRD)")
+        print("="*60)
+
+        z_sage = model_results['SAGE26 (Millennium)']['z']
+        sfrd_sage = model_results['SAGE26 (Millennium)']['sfrd']
+        z_c16 = model_results['C16']['z']
+        sfrd_c16 = model_results['C16']['sfrd']
+
+        # Filter to plot range (z <= 7.5)
+        z_mask = z_sage <= 7.5
+        z_sage = z_sage[z_mask]
+        sfrd_sage = sfrd_sage[z_mask]
+
+        # Interpolate C16 to SAGE26 redshifts for direct comparison
+        from scipy.interpolate import interp1d
+        c16_interp = interp1d(z_c16, sfrd_c16, bounds_error=False, fill_value=np.nan)
+        sfrd_c16_matched = c16_interp(z_sage)
+
+        # Find valid comparison points
+        valid = ~np.isnan(sfrd_c16_matched)
+        z_valid = z_sage[valid]
+        sfrd_diff = sfrd_c16_matched[valid] - sfrd_sage[valid]
+
+        print(f"\n  Comparison over z = {z_valid.min():.1f} to {z_valid.max():.1f}")
+        print(f"  Mean difference (C16 - SAGE26):  {np.mean(sfrd_diff):+.3f} dex")
+        print(f"  Median difference:               {np.median(sfrd_diff):+.3f} dex")
+        print(f"  Std of difference:               {np.std(sfrd_diff):.3f} dex")
+        print(f"  Max difference at z={z_valid[np.argmax(sfrd_diff)]:.1f}: {np.max(sfrd_diff):+.3f} dex ({10**np.max(sfrd_diff):.1f}x)")
+        print(f"  Min difference at z={z_valid[np.argmin(sfrd_diff)]:.1f}: {np.min(sfrd_diff):+.3f} dex ({10**np.min(sfrd_diff):.1f}x)")
+
+        print("\n  SFRD at specific redshifts:")
+        for target_z in [0, 1, 2, 3, 4, 5, 6]:
+            idx = np.argmin(np.abs(z_valid - target_z))
+            if np.abs(z_valid[idx] - target_z) < 0.5:
+                sage_val = sfrd_sage[valid][idx]
+                c16_val = sfrd_c16_matched[valid][idx]
+                diff = c16_val - sage_val
+                print(f"    z~{z_valid[idx]:.1f}: C16={c16_val:.2f}, SAGE26={sage_val:.2f}, Δ={diff:+.2f} dex ({10**diff:.1f}x)")
+
+        print("="*60 + "\n")
 
     # --- COSMOS-Web ---
     if HAS_ASTROPY:
@@ -4290,111 +4627,61 @@ def plot_18b_smf_redshift_grid_wide():
 
 def plot_19_smf_ffb_grid():
     """
-    Plot: 1x3 grid of Stellar Mass Functions at high-z bins (6-7, 8-10, 11-13).
-    Shows SAGE26 (Millennium), SAGE26 (miniUchuu), SAGE26 (no FFB), and
-    FFB efficiency gradient (10%-100%).
+    Plot: 2x3 grid of Stellar Mass Functions at high-z bins.
+    Shows SAGE26 (no FFB), SAGE26 (default, sfe=0.2), and SAGE26 (FFB 100%)
+    with bootstrap errors.
     """
     print('Plot 19: SMF FFB Grid')
 
-    # Redshift bins: (z_lo, z_hi)
-    z_bins = [(6.0, 7.0), (7.0, 9.0), (9.0, 11.0)]
+    # Redshift bins: (z_lo, z_hi) - 2 rows x 3 cols
+    z_bins = [
+        (3.0, 4.0), (4.0, 5.0), (5.0, 6.0),
+        (6.0, 7.0), (7.0, 9.0), (9.0, 11.0),
+    ]
 
     # Redshift arrays
     mill_redshifts = np.array(REDSHIFTS)
-    mu_redshifts = np.array(MINIUCHUU_REDSHIFTS)
 
-    # Main model lines
+    # FFB models to compare: no FFB, default (0.2), and 100%
+    FFB100_DIR = './output/millennium_ffb100/'
     models = []
+    if os.path.exists(NOFFB_DIR):
+        models.append({
+            'path': NOFFB_DIR, 'label': r'No FFB',
+            'color': 'firebrick', 'ls': '-', 'lw': 3.0,
+            'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+            'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+        })
     if os.path.exists(PRIMARY_DIR):
         models.append({
-            'path': PRIMARY_DIR, 'label': 'SAGE26 (Millennium)',
+            'path': PRIMARY_DIR, 'label': r'$\epsilon_{\rm max}=0.2$',
             'color': 'black', 'ls': '-', 'lw': 3.5,
             'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
             'volume': VOLUME, 'mass_convert': MASS_CONVERT,
         })
-    if os.path.exists(MINIUCHUU_DIR):
+    if os.path.exists(FFB100_DIR):
         models.append({
-            'path': MINIUCHUU_DIR, 'label': 'SAGE26 (miniUchuu)',
-            'color': 'dodgerblue', 'ls': '--', 'lw': 2.5,
-            'redshifts': mu_redshifts, 'first_snap': MINIUCHUU_FIRST_SNAP, 'last_snap': MINIUCHUU_LAST_SNAP,
-            'volume': MINIUCHUU_VOLUME, 'mass_convert': MINIUCHUU_MASS_CONVERT,
-        })
-    if os.path.exists(NOFFB_DIR):
-        models.append({
-            'path': NOFFB_DIR, 'label': 'SAGE26 (no FFB)',
-            'color': 'firebrick', 'ls': '--', 'lw': 2.5,
+            'path': FFB100_DIR, 'label': r'$\epsilon_{\rm max}=1.0$',
+            'color': 'dodgerblue', 'ls': '-', 'lw': 3.0,
             'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
             'volume': VOLUME, 'mass_convert': MASS_CONVERT,
         })
-
-    # FFB efficiency colormap
-    cmap_sfe = cm.plasma_r
-    sfe_min, sfe_max = 0.1, 1.0
 
     # Load observational data
     all_obs = _load_smf_grid_observations()
     labels_used = set()
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6), sharex=True, sharey=True)
+    nrows, ncols = 2, 3
+    fig, axes = plt.subplots(nrows, ncols, figsize=(18, 12), sharex=True, sharey=True)
     fig.set_tight_layout(False)
+    axes_flat = axes.flatten()
     binwidth = 0.2
 
     for i, (z_lo, z_hi) in enumerate(z_bins):
-        ax = axes[i]
+        ax = axes_flat[i]
         z_mid = 0.5 * (z_lo + z_hi)
 
-        # --- FFB efficiency gradient ---
-        ffb_curves = []  # list of (sfe, x_bins, phi_vals)
-        for ffb_model in FFB_MODELS:
-            model_dir = ffb_model['dir']
-            sfe = ffb_model['sfe']
-            filepath = os.path.join(model_dir, MODEL_FILE)
-
-            if not os.path.exists(filepath):
-                continue
-
-            # Find snapshot closest to bin centre that falls within the bin
-            snap_redshifts = mill_redshifts[0:64]
-            in_bin = np.where((snap_redshifts >= z_lo) & (snap_redshifts <= z_hi))[0]
-            if len(in_bin) == 0:
-                continue
-            snap_idx = in_bin[np.argmin(np.abs(snap_redshifts[in_bin] - z_mid))]
-            snap_name = f'Snap_{snap_idx}'
-
-            try:
-                with h5.File(filepath, 'r') as f:
-                    if snap_name not in f:
-                        continue
-                    m_stars = np.array(f[snap_name]['StellarMass']) * MASS_CONVERT
-                    w = m_stars > 0
-                    if np.sum(w) == 0:
-                        continue
-                    log_m = np.log10(m_stars[w])
-                    x, phi, _ = mass_function(log_m, VOLUME, binwidth)
-                    valid = np.isfinite(phi)
-                    if np.any(valid):
-                        ffb_curves.append((sfe, x[valid], phi[valid]))
-            except Exception as e:
-                print(f"  Error loading FFB {sfe:.0%} {snap_name}: {e}")
-                continue
-
-        # Plot FFB models as a gradient band
-        if len(ffb_curves) >= 2:
-            ffb_curves.sort(key=lambda c: c[0])
-            all_x = np.sort(np.unique(np.concatenate([c[1] for c in ffb_curves])))
-            interp = [(s, np.interp(all_x, xv, yv, left=np.nan, right=np.nan))
-                      for s, xv, yv in ffb_curves]
-            for j in range(len(interp) - 1):
-                sfe_mid = 0.5 * (interp[j][0] + interp[j + 1][0])
-                color = cmap_sfe((sfe_mid - sfe_min) / (sfe_max - sfe_min))
-                y1 = interp[j][1]
-                y2 = interp[j + 1][1]
-                ok = ~np.isnan(y1) & ~np.isnan(y2)
-                if np.any(ok):
-                    ax.fill_between(all_x[ok], y1[ok], y2[ok],
-                                    color=color, alpha=0.6, linewidth=0)
-
-        # --- Main model lines ---
+        # --- Model lines with bootstrap errors ---
         for model in models:
             mod_redshifts = model['redshifts']
             first_snap = model['first_snap']
@@ -4410,21 +4697,25 @@ def plot_19_smf_ffb_grid():
             snap_name = f'Snap_{snap_num}'
 
             try:
-                filepath = os.path.join(model['path'], MODEL_FILE)
-                with h5.File(filepath, 'r') as f:
-                    if snap_name not in f:
-                        continue
-                    m_stars = np.array(f[snap_name]['StellarMass']) * model['mass_convert']
-                    w = m_stars > 0
-                    if np.sum(w) == 0:
-                        continue
-                    log_m = np.log10(m_stars[w])
-                    x, phi, _ = mass_function(log_m, model['volume'], binwidth)
-                    valid = np.isfinite(phi)
-                    ax.plot(x[valid], phi[valid],
-                            lw=model['lw'], color=model['color'],
-                            ls=model['ls'],
-                            label=model['label'] if i == 0 else None)
+                data = load_model(model['path'], snapshot=snap_name, properties=['StellarMass'])
+                m_stars = data['StellarMass']
+                w = m_stars > 0
+                if np.sum(w) == 0:
+                    continue
+                log_m = np.log10(m_stars[w])
+                # Bootstrap SMF
+                x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
+                    log_m, model['volume'], binwidth, n_boot=100)
+                valid = np.isfinite(phi)
+                ax.plot(x[valid], phi[valid],
+                        lw=model['lw'], color=model['color'],
+                        ls=model['ls'],
+                        label=model['label'] if i == 0 else None)
+                # Bootstrap shading
+                boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
+                if np.any(boot_valid):
+                    ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
+                                    color=model['color'], alpha=0.2, linewidth=0)
             except Exception as e:
                 print(f"  Error loading {snap_name} from {model['path']}: {e}")
                 continue
@@ -4447,7 +4738,7 @@ def plot_19_smf_ffb_grid():
             ax.errorbar(od['log_mass'], od['log_phi'], yerr=yerr,
                         fmt=od['marker'], color='grey', ms=od['ms'],
                         markeredgecolor='k', markeredgewidth=0.8,
-                            markerfacecolor = 'gray',
+                        markerfacecolor='gray',
                         alpha=0.6, lw=1.0, label=lbl, zorder=1)
 
         # Redshift label in each panel
@@ -4455,12 +4746,15 @@ def plot_19_smf_ffb_grid():
                 transform=ax.transAxes, ha='right', va='top')
 
     # Axis limits and labels
-    axes[0].set_xlim(8, 12.3)
-    axes[0].set_ylim(-6, -1.5)
+    axes_flat[0].set_xlim(8, 12.3)
+    axes_flat[0].set_ylim(-6, -1.5)
 
-    axes[0].set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
-    for i, ax in enumerate(axes):
-        ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{*}}\ [M_{\odot}]$')
+    for i, ax in enumerate(axes_flat):
+        row, col = divmod(i, ncols)
+        if col == 0:
+            ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
+        if row == nrows - 1:
+            ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{*}}\ [M_{\odot}]$')
         ax.tick_params(axis='both', which='both', direction='in',
                        top=True, bottom=True, left=True, right=True)
         ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
@@ -4468,31 +4762,27 @@ def plot_19_smf_ffb_grid():
         ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
         ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
 
-    # Split legends: SAGE26 models lower left, observations upper right
-    handles, labels = axes[0].get_legend_handles_labels()
-    sim_h = [h for h, l in zip(handles, labels) if l.startswith('SAGE26') or l == 'C16']
-    sim_l = [l for l in labels if l.startswith('SAGE26') or l == 'C16']
-    obs_h = [h for h, l in zip(handles, labels) if not (l.startswith('SAGE26') or l == 'C16')]
-    obs_l = [l for l in labels if not (l.startswith('SAGE26') or l == 'C16')]
+    # Legend in first panel
+    handles, labels = axes_flat[0].get_legend_handles_labels()
+    model_labels_set = {m['label'] for m in models}
+    sim_h = [h for h, l in zip(handles, labels) if l in model_labels_set]
+    sim_l = [l for l in labels if l in model_labels_set]
+    obs_h = [h for h, l in zip(handles, labels) if l not in model_labels_set]
+    obs_l = [l for l in labels if l not in model_labels_set]
     if sim_l:
-        leg1 = axes[0].legend(sim_h, sim_l, loc='lower left', frameon=False)
-        axes[0].add_artist(leg1)
+        leg1 = axes_flat[0].legend(sim_h, sim_l, loc='lower left', frameon=False,
+                                   title='SAGE26')
+        leg1.get_title().set_fontweight('bold')
+        axes_flat[0].add_artist(leg1)
     if obs_l:
-        axes[0].legend(obs_h, obs_l, loc='upper right', frameon=False,
-                       bbox_to_anchor=(1.0, 0.88))
+        axes_flat[0].legend(obs_h, obs_l, loc='upper right', frameon=False,
+                            bbox_to_anchor=(1.0, 0.88))
 
     fig.tight_layout()
-    fig.subplots_adjust(wspace=0.001)
-
-    # Colorbar for FFB efficiency (vertical on right side)
-    sm = cm.ScalarMappable(cmap=cmap_sfe, norm=plt.Normalize(vmin=sfe_min*100, vmax=sfe_max*100))
-    sm.set_array([])
-    cbar = fig.colorbar(sm, ax=axes.tolist(), pad=0.01, fraction=0.046)
-    cbar.set_label(r'FFB Efficiency [$\epsilon_{\mathrm{max}}$]')
+    fig.subplots_adjust(hspace=0.001, wspace=0.001)
 
     outputFile = os.path.join(OUTPUT_DIR, 'SMF_FFB_Grid' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
-
 
 # ========================== PLOT 20: SMF LOW-Z GRID ==========================
 
@@ -5568,6 +5858,8 @@ EVOLUTION_PLOTS = {
     7: plot_7_tcool_tff_distribution,
     8: plot_8_precipitation_fraction,
     9: plot_9_cgm_fractions_depletion,
+    91: plot_9b_cgm_fractions_grid,
+    92: plot_9c_depletion_grid,
     10: plot_10_sfe_ffb,
     11: plot_11_ffb_properties,
     12: plot_12_sfh_ffb,
