@@ -59,8 +59,6 @@ struct HDF5_GALAXY_OUTPUT
     float *EjectedMass;
     float *BlackHoleMass;
     float *ICS;
-    float *ICS_disrupt;
-    float *ICS_accrete;
     float *H2gas;
     float *H1gas;
 
@@ -79,11 +77,13 @@ struct HDF5_GALAXY_OUTPUT
     float *SfrDiskZ;
     float *SfrBulgeZ;
     
-    /* full star formation history arrays (optional, controlled by SaveFullSFH parameter) */
-    float *SfrDiskSTEPS;     /* Shape: [ngalaxies, STEPS] stored as 1D array */
-    float *SfrBulgeSTEPS;    /* Shape: [ngalaxies, STEPS] stored as 1D array */
-    float *SfrDiskZSTEPS;    /* Shape: [ngalaxies, STEPS] stored as 1D array */
-    float *SfrBulgeZSTEPS;   /* Shape: [ngalaxies, STEPS] stored as 1D array */
+    /* cumulative star formation history - tracks stellar mass formed at each snapshot (controlled by SaveFullSFH) */
+    float *SFHMassDisk;      /* Shape: [ngalaxies, SimMaxSnaps] - mass formed in disk at each snapshot */
+    float *SFHMassBulge;     /* Shape: [ngalaxies, SimMaxSnaps] - mass formed in bulge at each snapshot */
+    
+    /* ICS assembly tracking - cumulative mass through each channel */
+    float *ICS_disrupt;      /* cumulative stellar mass disrupted to ICS */
+    float *ICS_accrete;      /* cumulative ICS accreted from satellites */
     
     /* misc */
     float *DiskScaleRadius;

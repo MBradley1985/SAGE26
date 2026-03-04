@@ -130,8 +130,6 @@ struct GALAXY
     float EjectedMass;
     float BlackHoleMass;
     float ICS;
-    float ICS_disrupt;   /* ICS from tidal disruption of pure field satellites (no prior ICS) */
-    float ICS_accrete;    /* ICS accreted from former group centrals that already carried ICS */
     float CGMgas;
     float H2gas;
     float H1gas;
@@ -152,6 +150,12 @@ struct GALAXY
     float SfrDiskColdGasMetals[STEPS];
     float SfrBulgeColdGas[STEPS];
     float SfrBulgeColdGasMetals[STEPS];
+
+    /* full star formation history - tracks stellar mass formed at each snapshot */
+    float SFHMassDisk[ABSOLUTEMAXSNAPS];   /* stellar mass formed in disk at each snapshot */
+    float SFHMassBulge[ABSOLUTEMAXSNAPS];  /* stellar mass formed in bulge (starbursts) at each snapshot */
+    float ICS_disrupt;                     /* cumulative stellar mass disrupted to ICS (assembly tracking) */
+    float ICS_accrete;                     /* cumulative ICS accreted from satellites (assembly tracking) */
 
     /* misc */
     float DiskScaleRadius;

@@ -758,6 +758,13 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
     update_from_star_formation(p, stars, metallicity, galaxies, run_params);
 
+    // Track star formation history - accumulate stellar mass formed at this snapshot
+    // Note: RecycleFraction * stars is instantly recycled, so actual stellar mass added is (1 - RecycleFraction) * stars
+    const int snapnum = galaxies[p].SnapNum;
+    if(snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS) {
+        galaxies[p].SFHMassDisk[snapnum] += (1.0 - run_params->RecycleFraction) * stars;
+    }
+
     // recompute the metallicity of the cold phase
     metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
 
@@ -1198,6 +1205,14 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     // Update for star formation (convert gas to stars)
     metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
     update_from_star_formation(p, stars, metallicity, galaxies, run_params);
+    
+    // Track star formation history - accumulate stellar mass formed at this snapshot
+    {
+        const int snapnum = galaxies[p].SnapNum;
+        if(snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS) {
+            galaxies[p].SFHMassDisk[snapnum] += (1.0 - run_params->RecycleFraction) * stars;
+        }
+    }
     
     // ========================================================================
     // Stars first form, then feedback acts on them

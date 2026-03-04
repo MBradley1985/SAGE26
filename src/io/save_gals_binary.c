@@ -273,6 +273,8 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
     o->EjectedMass = g->EjectedMass;
     o->BlackHoleMass = g->BlackHoleMass;
     o->ICS = g->ICS;
+    o->ICS_disrupt = g->ICS_disrupt;
+    o->ICS_accrete = g->ICS_accrete;
     o->H2gas = g->H2gas;
     o->H1gas = g->H1gas;
 
@@ -353,6 +355,8 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
     o->RcoolToRvir = g->RcoolToRvir;
 
     o->FFBRegime = g->FFBRegime;
+    o->mdot_cool = g->mdot_cool * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS;
+    o->mdot_stream = g->mdot_stream * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS;
 
     return EXIT_SUCCESS;
 }

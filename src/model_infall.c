@@ -14,13 +14,11 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
 {
     double tot_stellarMass, tot_BHMass, tot_coldMass, tot_hotMass, tot_ejected, tot_ICS;
     double tot_ejectedMetals, tot_ICSMetals;
-    double tot_ICS_disrupt, tot_ICS_accrete;
     double infallingMass, reionization_modifier;
     double tot_CGMgas, tot_MetalsCGMgas;
 
     // need to add up all the baryonic mass asociated with the full halo
     tot_stellarMass = tot_coldMass = tot_hotMass = tot_ejected = tot_BHMass = tot_ejectedMetals = tot_ICS = tot_ICSMetals = tot_CGMgas = tot_MetalsCGMgas = 0.0;
-    tot_ICS_disrupt = tot_ICS_accrete = 0.0;
 
     // loop over all galaxies in the FoF-halo
     for(int i = 0; i < ngal; i++) {
@@ -35,22 +33,22 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
         tot_CGMgas += galaxies[i].CGMgas;
         tot_MetalsCGMgas += galaxies[i].MetalsCGMgas;
 
-        if(i == centralgal) {
-            // Central's own channel history carries forward unchanged
-            tot_ICS_disrupt += galaxies[i].ICS_disrupt;
-            tot_ICS_accrete  += galaxies[i].ICS_accrete;
-        } else {
+        if(i != centralgal) {
             // satellite ejected gas goes to central ejected reservior
             galaxies[i].EjectedMass = galaxies[i].MetalsEjectedMass = 0.0;
 
-            // satellite ICS goes to central ICS;
-            // if the satellite carried ICS it was a former group central -> accretion channel
+            // satellite ICS (and its assembly history) goes to central
+            // if the satellite carried ICS it was a former group central
             if(galaxies[i].ICS > 0.0) {
-                tot_ICS_accrete += galaxies[i].ICS;
+                // Track this ICS mass as accretion (pre-existing ICS being transferred)
+                galaxies[centralgal].ICS_accrete += galaxies[i].ICS;
+                // Also transfer the satellite's ICS assembly history
+                galaxies[centralgal].ICS_disrupt += galaxies[i].ICS_disrupt;
+                galaxies[centralgal].ICS_accrete += galaxies[i].ICS_accrete;
+                galaxies[i].ICS_disrupt = 0.0;
+                galaxies[i].ICS_accrete = 0.0;
             }
-            // else: pure field satellite, ICS_disrupt = ICS_accrete = 0 already
             galaxies[i].ICS = galaxies[i].MetalsICS = 0.0;
-            galaxies[i].ICS_disrupt = galaxies[i].ICS_accrete = 0.0;
 
             // satellite CGM goes to central CGM
             galaxies[i].CGMgas = galaxies[i].MetalsCGMgas = 0.0;
@@ -121,8 +119,6 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
     // the central galaxy keeps all the ICS (mostly for numerical convenience)
     galaxies[centralgal].ICS = tot_ICS;
     galaxies[centralgal].MetalsICS = tot_ICSMetals;
-    galaxies[centralgal].ICS_disrupt = tot_ICS_disrupt;
-    galaxies[centralgal].ICS_accrete = tot_ICS_accrete;
 
     if(galaxies[centralgal].MetalsICS > galaxies[centralgal].ICS) {
         galaxies[centralgal].MetalsICS = galaxies[centralgal].ICS;

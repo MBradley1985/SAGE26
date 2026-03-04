@@ -60,8 +60,6 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     }
     
     galaxies[p].ICS = 0.0;
-    galaxies[p].ICS_disrupt = 0.0;
-    galaxies[p].ICS_accrete = 0.0;
     galaxies[p].CGMgas = 0.0;
     galaxies[p].H2gas = 0.0;
     galaxies[p].H1gas = 0.0;
@@ -82,6 +80,15 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].SfrBulgeColdGas[step] = 0.0;
         galaxies[p].SfrBulgeColdGasMetals[step] = 0.0;
     }
+
+    // Initialize star formation history arrays (tracks mass formed at each snapshot)
+    for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
+        galaxies[p].SFHMassDisk[snap] = 0.0;
+        galaxies[p].SFHMassBulge[snap] = 0.0;
+    }
+    // Initialize ICS assembly tracking (cumulative mass through each channel)
+    galaxies[p].ICS_disrupt = 0.0;
+    galaxies[p].ICS_accrete = 0.0;
 
     galaxies[p].DiskScaleRadius = get_disk_radius(halonr, p, halos, galaxies);
     galaxies[p].BulgeRadius = get_bulge_radius(p, galaxies, run_params);

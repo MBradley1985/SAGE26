@@ -369,6 +369,13 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
         galaxies[t].SfrBulgeColdGas[step] += galaxies[p].SfrDiskColdGas[step] + galaxies[p].SfrBulgeColdGas[step];
         galaxies[t].SfrBulgeColdGasMetals[step] += galaxies[p].SfrDiskColdGasMetals[step] + galaxies[p].SfrBulgeColdGasMetals[step];
     }
+
+    // Transfer star formation history from satellite to central
+    // During a merger, the central inherits all star formation history from the satellite
+    for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
+        galaxies[t].SFHMassDisk[snap] += galaxies[p].SFHMassDisk[snap];
+        galaxies[t].SFHMassBulge[snap] += galaxies[p].SFHMassBulge[snap];
+    }
 }
 
 
@@ -529,6 +536,14 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     metallicity = get_metallicity(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].MetalsColdGas);
     update_from_star_formation(merger_centralgal, stars, metallicity, galaxies, run_params);
 
+    // Track star formation history for bulge starbursts
+    {
+        const int snapnum = galaxies[merger_centralgal].SnapNum;
+        if(snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS) {
+            galaxies[merger_centralgal].SFHMassBulge[snapnum] += (1.0 - run_params->RecycleFraction) * stars;
+        }
+    }
+
     // FIX: Track burst stars in the appropriate bulge component
     const double recycled_stars = (1 - run_params->RecycleFraction) * stars;
     
@@ -635,6 +650,12 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, struct GALAXY
     galaxies[centralgal].ICS += galaxies[gal].ICS;
     galaxies[centralgal].MetalsICS += galaxies[gal].MetalsICS;
 
+    // Track ICS assembly: pre-existing satellite ICS goes to ICS_accrete
+    galaxies[centralgal].ICS_accrete += galaxies[gal].ICS;
+    // Also transfer the satellite's ICS assembly history
+    galaxies[centralgal].ICS_disrupt += galaxies[gal].ICS_disrupt;
+    galaxies[centralgal].ICS_accrete += galaxies[gal].ICS_accrete;
+
     // Disrupt stellar mass: split between ICS and BCG based on FractionDisruptedToICS
     // FractionDisruptedToICS = 1.0 means all to ICS (original behavior)
     // FractionDisruptedToICS = 0.5 means half to ICS, half to BCG
@@ -644,10 +665,8 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, struct GALAXY
 
     galaxies[centralgal].ICS += new_ICS_from_stripping;
     galaxies[centralgal].MetalsICS += frac_to_ICS * galaxies[gal].MetalsStellarMass;
-
-    // All stellar disruptions credit the disruption channel.
-    // Former group centrals carrying ICS are handled in infall_recipe (where their ICS
-    // is still visible before zeroing) and credited to ICS_accrete there.
+    
+    // Track ICS assembly: newly disrupted stellar mass goes to ICS_disrupt
     galaxies[centralgal].ICS_disrupt += new_ICS_from_stripping;
 
     // Add remainder to BCG bulge (accreted onto outer envelope)
@@ -656,6 +675,15 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, struct GALAXY
     galaxies[centralgal].BulgeMass += frac_to_BCG * galaxies[gal].StellarMass;
     galaxies[centralgal].MetalsBulgeMass += frac_to_BCG * galaxies[gal].MetalsStellarMass;
     galaxies[centralgal].MergerBulgeMass += frac_to_BCG * galaxies[gal].StellarMass;  // Track as merger-driven
+
+    // Transfer star formation history from disrupted satellite to central
+    // - Fraction going to BCG bulge: track in SFHMassBulge (stellar ages)
+    // Note: For ICS stellar ages, we would need SFHMassICS, but that's been replaced
+    // by ICS_disrupt/ICS_accrete which track assembly times, not stellar ages
+    for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
+        const double sat_sfh = galaxies[gal].SFHMassDisk[snap] + galaxies[gal].SFHMassBulge[snap];
+        galaxies[centralgal].SFHMassBulge[snap] += frac_to_BCG * sat_sfh;
+    }
 
     // what should we do with the disrupted satellite BH?
     galaxies[gal].mergeType = 4;  // mark as disruption to the ICS
