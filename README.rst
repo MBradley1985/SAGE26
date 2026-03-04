@@ -136,6 +136,8 @@ Extra OPTIONS
 
 **CGM building can be turned on or off.**
 
+**Full star formation histories can be tracked.**
+
 **Parameters can be manipulated in the parameter file to allow for extra exploration, either manually or with the PSO framework.**
 
 Citation
