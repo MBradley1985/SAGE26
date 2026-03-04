@@ -653,11 +653,9 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, struct GALAXY
     galaxies[centralgal].MetalsICS += galaxies[gal].MetalsICS;
 
     // Track ICS assembly: pre-existing satellite ICS goes to ICS_accrete
-    if(run_params->TrackICSAssembly) {
+    // This ICS was formed elsewhere (in the satellite's halo) and is being brought in
+    if(run_params->TrackICSAssembly && galaxies[gal].ICS > 0.0) {
         galaxies[centralgal].ICS_accrete += galaxies[gal].ICS;
-        // Also transfer the satellite's ICS assembly history
-        galaxies[centralgal].ICS_disrupt += galaxies[gal].ICS_disrupt;
-        galaxies[centralgal].ICS_accrete += galaxies[gal].ICS_accrete;
     }
 
     // Disrupt stellar mass: split between ICS and BCG based on FractionDisruptedToICS

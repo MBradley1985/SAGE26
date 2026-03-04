@@ -40,12 +40,11 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
             // satellite ICS (and its assembly history) goes to central
             // if the satellite carried ICS it was a former group central
             if(galaxies[i].ICS > 0.0) {
-                // Track this ICS mass as accretion (pre-existing ICS being transferred)
+                // Track this ICS mass as accretion - this ICS was formed elsewhere
+                // and is now being brought in by the infalling satellite
                 if(run_params->TrackICSAssembly) {
                     galaxies[centralgal].ICS_accrete += galaxies[i].ICS;
-                    // Also transfer the satellite's ICS assembly history
-                    galaxies[centralgal].ICS_disrupt += galaxies[i].ICS_disrupt;
-                    galaxies[centralgal].ICS_accrete += galaxies[i].ICS_accrete;
+                    // Zero out satellite's history (absorbed into central's accretion channel)
                     galaxies[i].ICS_disrupt = 0.0;
                     galaxies[i].ICS_accrete = 0.0;
                 }
