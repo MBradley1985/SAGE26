@@ -82,9 +82,12 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     }
 
     // Initialize star formation history arrays (tracks mass formed at each snapshot)
-    for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
-        galaxies[p].SFHMassDisk[snap] = 0.0;
-        galaxies[p].SFHMassBulge[snap] = 0.0;
+    // Only need to initialize if SaveFullSFH is enabled, otherwise these arrays are unused
+    if(run_params->SaveFullSFH) {
+        for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
+            galaxies[p].SFHMassDisk[snap] = 0.0;
+            galaxies[p].SFHMassBulge[snap] = 0.0;
+        }
     }
     // Initialize ICS assembly tracking (cumulative mass through each channel)
     galaxies[p].ICS_disrupt = 0.0;

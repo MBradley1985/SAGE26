@@ -56,7 +56,8 @@ CGMrecipeOn           1   %0: switch off
 FIREmodeOn            1   %0: switch off
 FeedbackFreeModeOn    1   %0: switch off
 BulgeSizeOn           3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
-SaveFullSFH           1   %0: switch off
+SaveFullSFH           0   %0: switch off
+TrackICSAssembly      0   %0: switch off; 1: track ICS_disrupt and ICS_accrete
 
 %------------------------------------------
 %----- SAGE model parameters --------------

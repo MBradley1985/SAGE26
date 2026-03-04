@@ -465,6 +465,7 @@ struct params
     int32_t    BulgeSizeOn;
     int32_t    H2DiskAreaOption;  // 0 = π*r_s², 1 = π*(3*r_s)², 2 = 2π*r_s² (central Σ₀)
     int32_t    SaveFullSFH;       // 0 = save averaged SFR (default), 1 = save full SfrDisk[STEPS] and SfrBulge[STEPS] arrays
+    int32_t    TrackICSAssembly;  // 0 = off, 1 = track ICS_disrupt and ICS_accrete
 
     double RecycleFraction;
     double Yield;
