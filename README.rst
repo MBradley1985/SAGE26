@@ -50,7 +50,15 @@ To create the ``SAGE`` executable, simply run the following command:
 Running the code
 ================
 
-The model can be run using:
+If this the first time running the code, we recommend executing
+``first_run.sh``.  This script will initialize the directories for the default
+parameter file and download the Mini-millennium dark matter halo trees:
+
+.. code::
+
+    $ ./first_run.sh
+
+After this, the model can be run using:
 
 .. code::
 
