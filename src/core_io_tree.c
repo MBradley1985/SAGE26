@@ -87,7 +87,8 @@ int setup_forests_io(struct params *run_params, struct forest_info *forests_info
         return -1;
     }
 
-    if(forests_info->frac_volume_processed <= 0.0 || forests_info->frac_volume_processed > 1.0) {
+    /* BUG FIX: Changed <= 0.0 to < 0.0 to allow zero volume (no processing) as valid */
+    if(forests_info->frac_volume_processed < 0.0 || forests_info->frac_volume_processed > 1.0) {
         fprintf(stderr,"Error: The fraction of the entire simulation volume processed should be in [0.0, 1.0]. Instead, found %g\n",
                 forests_info->frac_volume_processed);
         return -1;

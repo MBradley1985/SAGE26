@@ -238,6 +238,10 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
         galaxies[merger_centralgal].BlackHoleMass += BHaccrete;
         galaxies[merger_centralgal].ColdGas -= BHaccrete;
         galaxies[merger_centralgal].MetalsColdGas -= metallicity * BHaccrete;
+        /* BUG FIX: Ensure metals don't go negative due to numerical precision */
+        if(galaxies[merger_centralgal].MetalsColdGas < 0.0) {
+            galaxies[merger_centralgal].MetalsColdGas = 0.0;
+        }
 
         galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
 
