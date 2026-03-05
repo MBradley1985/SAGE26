@@ -451,8 +451,17 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
             
             if(save_info->buffer_output_gals[snap_idx].SFHMassDisk == NULL ||
                save_info->buffer_output_gals[snap_idx].SFHMassBulge == NULL) {
-                fprintf(stderr, "Could not allocate memory for SFH arrays (SimMaxSnaps=%d, buffer_size=%d)\n", 
+                fprintf(stderr, "Could not allocate memory for SFH arrays (SimMaxSnaps=%d, buffer_size=%d)\n",
                         run_params->SimMaxSnaps, save_info->buffer_size);
+                /* BUG FIX: Free SFHMassDisk if it was allocated but SFHMassBulge failed */
+                if(save_info->buffer_output_gals[snap_idx].SFHMassDisk != NULL) {
+                    free(save_info->buffer_output_gals[snap_idx].SFHMassDisk);
+                    save_info->buffer_output_gals[snap_idx].SFHMassDisk = NULL;
+                }
+                if(save_info->buffer_output_gals[snap_idx].SFHMassBulge != NULL) {
+                    free(save_info->buffer_output_gals[snap_idx].SFHMassBulge);
+                    save_info->buffer_output_gals[snap_idx].SFHMassBulge = NULL;
+                }
                 return MALLOC_FAILURE;
             }
         } else {

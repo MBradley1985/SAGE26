@@ -75,7 +75,8 @@ void get_forest_metadata_filename(const char *forestfilename, const size_t strin
     }
 
     char *start = strstr(metadata_filename, searchstring);
-    strcpy(start, replacestring);
+    /* BUG FIX: Use memmove instead of strcpy for safer string replacement */
+    memmove(start, replacestring, replacelen);
 
     return;
 }
@@ -582,7 +583,7 @@ int64_t load_forest_genesis_hdf5(int64_t forestnr, struct halo_data **halos, str
         fprintf(stderr, "The HDF5 file '%d' (corresponding to '%d'th file on ThisTask) should still be opened when reading the halos in the forest.\n",
                 filenum_for_forest, filenum);
         fprintf(stderr, "For forest %"PRId64" we encountered error\n", forestnr);
-        H5Eprint(gen->h5_fds[filenum], stderr);
+        H5Eprint(H5E_DEFAULT, stderr);  /* BUG FIX: Use H5E_DEFAULT for error stack */
         ABORT(NULL_POINTER_FOUND);
     }
 

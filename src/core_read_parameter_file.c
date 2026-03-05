@@ -300,7 +300,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
         /* Allowing for spaces in the filenames (but requires comments to ALWAYS start with '%' or ';') */
         int buf2len = strnlen(buf2, MAX_STRING_LEN-1);
-        for(int i=0;i<=buf2len;i++) {
+        for(int i=0;i<buf2len;i++) {  /* BUG FIX: Changed <= to < to avoid buffer over-read */
             if(buf2[i] == '%' || buf2[i] == ';' || buf2[i] == '#') {
                 int null_pos = i;
                 //Ignore all preceeding whitespace
@@ -354,9 +354,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     fclose(fd);
 
     const size_t outlen = strlen(run_params->OutputDir);
-    if(outlen > 0) {
+    if(outlen > 0 && outlen < MAX_STRING_LEN - 1) {  /* BUG FIX: Added bounds check */
         if(run_params->OutputDir[outlen - 1] != '/')
-            strcat(run_params->OutputDir, "/");
+            strncat(run_params->OutputDir, "/", MAX_STRING_LEN - outlen - 1);  /* BUG FIX: Use strncat */
     }
 
 
