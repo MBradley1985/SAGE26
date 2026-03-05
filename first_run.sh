@@ -61,7 +61,7 @@ if [ ! -f trees_063.7 ]; then
 
     # Now that we have confirmed we have either `wget` or `curl`, proceed to downloading the trees.
     echo "Fetching Mini-Millennium trees."
-    wget "https://www.dropbox.com/s/l5ukpo7ar3rgxo4/mini-millennium-treefiles.tar?dl=0" -O "mini-millennium-treefiles.tar"
+    wget "https://www.dropbox.com/s/l5ukpo7ar3rgxo4/mini-millennium-treefiles.tar?dl=1" -O "mini-millennium-treefiles.tar"
     if [[ $? != 0 ]]; then
         echo "Could not download tree files from the Manodeep Sinha's Dropbox."
         echo "Please open an issue on the 'sage-model' repository and we will assist ASAP :)"

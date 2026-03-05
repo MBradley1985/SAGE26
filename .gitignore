@@ -1,8 +1,8 @@
 sage
 tests/test_data/
-input/millennium/
+
 output/
-input/
+
 tests/test_build/
 tests/test_output/
 plotting/presentation_plots/
