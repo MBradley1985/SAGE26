@@ -223,9 +223,20 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // ========================================================================
     
     // Gravitational acceleration at Rvir
-    const float g_accel = run_params->G * galaxies[gal].Mvir / (galaxies[gal].Rvir * galaxies[gal].Rvir);
+    const float g_accel = (galaxies[gal].Mvir > 0.0) 
+        ? run_params->G * galaxies[gal].Mvir / (galaxies[gal].Rvir * galaxies[gal].Rvir)
+        : 0.0f;
     
     // Free-fall time: tff = sqrt(2*R/g)
+    // Guard against g_accel == 0 (Mvir ~ 0 galaxies) to avoid Inf
+    if(g_accel <= 0.0) {
+        galaxies[gal].tcool = tcool;
+        galaxies[gal].tff = -1.0;
+        galaxies[gal].tcool_over_tff = -1.0;
+        galaxies[gal].tdeplete = -1.0;
+        galaxies[gal].RcoolToRvir = -1.0;
+        return 0.0;
+    }
     const float tff = sqrt(2.0 * galaxies[gal].Rvir / g_accel); // code units
 
     // Critical ratio for precipitation
@@ -273,16 +284,22 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     }
 
     // Adding this diagnostic for output
-    const double x = (tcool_over_tff - precipitation_threshold) / transition_width;
+    // Only compute RcoolToRvir when the formula is valid (transition/stable regime)
+    // In the precipitation regime (tcool_over_tff < threshold), x < 0 making rho_rcool < 0
+    // which produces NaN from sqrt(negative). Use -1.0 sentinel for undefined.
+    {
+        const double x_diag = (tcool_over_tff - precipitation_threshold) / transition_width;
+        const double rho_rcool = x_diag / tcool * 0.885;  // 0.885 = 3/2 * mu, mu=0.59 for a fully ionized gas
 
-    const double rho_rcool = x / tcool * 0.885;  // 0.885 = 3/2 * mu, mu=0.59 for a fully ionized gas
-
-    // an isothermal density profile for the hot gas is assumed here
-    const double rho0 = galaxies[gal].CGMgas / (4 * M_PI * galaxies[gal].Rvir);
-    const double rcool = sqrt(rho0 / rho_rcool);
-
-    galaxies[gal].RcoolToRvir = rcool / galaxies[gal].Rvir;
-    // else: tcool_over_tff >= 15, precipitation_fraction = 0.0 (thermally stable)
+        if(rho_rcool > 0.0 && isfinite(rho_rcool)) {
+            // an isothermal density profile for the hot gas is assumed here
+            const double rho0 = galaxies[gal].CGMgas / (4 * M_PI * galaxies[gal].Rvir);
+            const double rcool = sqrt(rho0 / rho_rcool);
+            galaxies[gal].RcoolToRvir = rcool / galaxies[gal].Rvir;
+        } else {
+            galaxies[gal].RcoolToRvir = -1.0;
+        }
+    }
 
     // ========================================================================
     // STEP 4: CALCULATE PRECIPITATION RATE
@@ -318,11 +335,11 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // ========================================================================
 
     // Depletion timescale
-    if(precipitation_fraction > 1e-6) {
+    if(precipitation_fraction > 1e-6 && isfinite(tff)) {
         const float depletion_time = tff / precipitation_fraction;
-        galaxies[gal].tdeplete = depletion_time;
+        galaxies[gal].tdeplete = isfinite(depletion_time) ? depletion_time : -1.0f;
     } else {
-        galaxies[gal].tdeplete = FLT_MAX;
+        galaxies[gal].tdeplete = -1.0;
     }
         
     //     printf("============================================\n\n");

@@ -106,11 +106,12 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].TimeOfLastMinorMerger = -1.0;
     galaxies[p].OutflowRate = 0.0;
 	galaxies[p].TotalSatelliteBaryons = 0.0;
-    galaxies[p].RcoolToRvir = 0.0;
+    galaxies[p].RcoolToRvir = -1.0;
     galaxies[p].MassLoading = 0.0;
     galaxies[p].tcool = -1.0;
     galaxies[p].tff = -1.0;
     galaxies[p].tcool_over_tff = -1.0;
+    galaxies[p].tdeplete = -1.0;
 
 	// infall properties
     galaxies[p].infallMvir = -1.0;
