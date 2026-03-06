@@ -50,73 +50,181 @@ K13_DIR = './output/millennium_k13/'
 MINIUCHUU_DIR = './output/miniuchuu/'
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
-SNAPSHOT = 'Snap_63'
 
-# Simulation parameters
-HUBBLE_H = 0.73
-BOX_SIZE = 62.5        # h^-1 Mpc
-VOLUME_FRACTION = 1.0
-VOLUME = (BOX_SIZE / HUBBLE_H)**3 * VOLUME_FRACTION  # Mpc^3
-
-# miniUchuu simulation parameters
-MINIUCHUU_HUBBLE_H = 0.677
-MINIUCHUU_BOX_SIZE = 400.0    # h^-1 Mpc
-MINIUCHUU_VOLUME_FRACTION = 0.3
-MINIUCHUU_VOLUME = (MINIUCHUU_BOX_SIZE / MINIUCHUU_HUBBLE_H)**3 * MINIUCHUU_VOLUME_FRACTION  # Mpc^3
-MINIUCHUU_MASS_CONVERT = 1.0e10 / MINIUCHUU_HUBBLE_H
-MINIUCHUU_FIRST_SNAP = 0
-MINIUCHUU_LAST_SNAP = 49
-
-# Physics thresholds
-SSFR_CUT = -11.0       # log10(sSFR/yr^-1) dividing quiescent from star-forming
-BARYON_FRAC = 0.17      # Universal baryon fraction
-
-# Unit conversion: HDF5 internal mass units -> solar masses
-MASS_CONVERT = 1.0e10 / HUBBLE_H
-
-# Plotting
-OUTPUT_DIR = './output/millennium/plots/'
+# Plotting (analysis choices — not simulation parameters)
 OUTPUT_FORMAT = '.pdf'
 DILUTE = 7500
 SEED = 2222
 
-# Cosmological parameters
-OMEGA_M = 0.25
-OMEGA_L = 0.75
-OMEGA_B = 0.045
-
-# Redshift array (snap 0 -> snap 63)
-REDSHIFTS = [
-    127.000, 79.998, 50.000, 30.000, 19.916, 18.244, 16.725, 15.343,
-     14.086, 12.941, 11.897, 10.944, 10.073,  9.278,  8.550,  7.883,
-      7.272,  6.712,  6.197,  5.724,  5.289,  4.888,  4.520,  4.179,
-      3.866,  3.576,  3.308,  3.060,  2.831,  2.619,  2.422,  2.239,
-      2.070,  1.913,  1.766,  1.630,  1.504,  1.386,  1.276,  1.173,
-      1.078,  0.989,  0.905,  0.828,  0.755,  0.687,  0.624,  0.564,
-      0.509,  0.457,  0.408,  0.362,  0.320,  0.280,  0.242,  0.208,
-      0.175,  0.144,  0.116,  0.089,  0.064,  0.041,  0.020,  0.000,
-]
-
-# Snapshot aliases for key redshifts
-SNAP_Z0 = 63    # z = 0.000
-SNAP_Z1 = 39    # z = 1.173
-SNAP_Z2 = 32    # z = 2.070
-SNAP_Z3 = 27    # z = 3.060
-SNAP_Z4 = 23    # z = 4.179
-SNAP_Z5 = 20    # z = 5.289
-SNAP_Z10 = 12   # z = 10.073
-
-# miniUchuu redshift array (snap 0 -> snap 49)
-MINIUCHUU_REDSHIFTS = [
-    13.9334, 12.67409, 11.50797, 10.44649, 9.480752, 8.58543, 7.77447, 7.032387, 6.344409, 5.721695,
-    5.153127, 4.629078, 4.26715, 3.929071, 3.610462, 3.314082, 3.128427, 2.951226, 2.77809, 2.616166,
-    2.458114, 2.309724, 2.16592, 2.027963, 1.8962, 1.770958, 1.65124, 1.535928, 1.426272, 1.321656,
-    1.220303, 1.124166, 1.031983, 0.9441787, 0.8597281, 0.779046, 0.7020205, 0.6282588, 0.5575475, 0.4899777,
-    0.4253644, 0.3640053, 0.3047063, 0.2483865, 0.1939743, 0.1425568, 0.09296665, 0.0455745, 0.02265383, 0.0001130128,
-]
+# Analysis thresholds (not simulation parameters)
+SSFR_CUT = -11.0       # log10(sSFR/yr^-1) dividing quiescent from star-forming
 
 # Solar metallicity (Asplund et al. 2009)
 Z_SUN = 0.0134
+
+# Solar mass in grams (for MASS_CONVERT derivation)
+_MSUN_CGS = 1.989e33
+
+
+# --------------- HDF5 header reader ---------------
+
+import glob as _glob_early
+
+
+def _find_model_files_early(directory):
+    """Minimal file discovery used during module init (before full I/O helpers)."""
+    pattern = os.path.join(directory, 'model_*.hdf5')
+    files = sorted(_glob_early.glob(pattern))
+    if not files:
+        single = os.path.join(directory, MODEL_FILE)
+        if os.path.exists(single):
+            files = [single]
+    return files
+
+
+def _read_sim_header(directory):
+    """
+    Read simulation parameters from the HDF5 header of the first model
+    file found in *directory*.
+
+    Returns a dict of parameters, or ``None`` if no model files exist.
+    The ``volume_fraction`` key is the *total* fraction across all MPI
+    files (summed ``frac_volume_processed``).
+    """
+    files = _find_model_files_early(directory)
+    if not files:
+        return None
+
+    try:
+        with h5.File(files[0], 'r') as f:
+            sim = f['Header/Simulation']
+            runtime = f['Header/Runtime']
+
+            header = {
+                'hubble_h':       float(sim.attrs['hubble_h']),
+                'box_size':       float(sim.attrs['box_size']),
+                'omega_matter':   float(sim.attrs['omega_matter']),
+                'omega_lambda':   float(sim.attrs['omega_lambda']),
+                'last_snap_nr':   int(sim.attrs['LastSnapshotNr']),
+                'unit_mass_in_g': float(runtime.attrs['UnitMass_in_g']),
+                'baryon_frac':    float(runtime.attrs.get('BaryonFrac', 0.17)),
+                'redshifts':      list(f['Header/snapshot_redshifts'][:]),
+                'output_snaps':   list(f['Header/output_snapshots'][:]),
+            }
+
+        # Sum frac_volume_processed across all MPI files to get the total
+        total_fvp = 0.0
+        for fp in files:
+            with h5.File(fp, 'r') as f:
+                total_fvp += float(f['Header/Runtime'].attrs['frac_volume_processed'])
+        header['volume_fraction'] = total_fvp
+    except Exception as e:
+        print(f"Warning: could not read header from {directory}: {e}")
+        return None
+
+    return header
+
+
+def _snap_for_z(redshifts, target_z):
+    """
+    Return the snapshot index of the last output snapshot whose redshift
+    is >= *target_z*.  This reproduces the standard convention of choosing
+    the snapshot just above the target redshift (e.g. z=4.179 for target 4).
+    """
+    neg_z = -np.array(redshifts)          # make increasing for searchsorted
+    idx = int(np.searchsorted(neg_z, -target_z, side='right')) - 1
+    return max(idx, 0)
+
+
+# --------------- Primary simulation parameters (from HDF5) ---------------
+
+_primary_hdr = _read_sim_header(PRIMARY_DIR)
+if _primary_hdr is not None:
+    HUBBLE_H         = _primary_hdr['hubble_h']
+    BOX_SIZE         = _primary_hdr['box_size']
+    VOLUME_FRACTION  = _primary_hdr['volume_fraction']
+    VOLUME           = (BOX_SIZE / HUBBLE_H)**3 * VOLUME_FRACTION  # Mpc^3
+    MASS_CONVERT     = _primary_hdr['unit_mass_in_g'] / _MSUN_CGS / HUBBLE_H
+    OMEGA_M          = _primary_hdr['omega_matter']
+    OMEGA_L          = _primary_hdr['omega_lambda']
+    BARYON_FRAC      = _primary_hdr['baryon_frac']
+    OMEGA_B          = BARYON_FRAC * OMEGA_M
+    SNAPSHOT         = f"Snap_{_primary_hdr['last_snap_nr']}"
+    REDSHIFTS        = _primary_hdr['redshifts']
+    OUTPUT_DIR       = os.path.join(PRIMARY_DIR, 'plots/')
+
+    # Snapshot aliases for key redshifts (derived from the redshift table)
+    SNAP_Z0  = _snap_for_z(REDSHIFTS, 0.0)
+    SNAP_Z1  = _snap_for_z(REDSHIFTS, 1.0)
+    SNAP_Z2  = _snap_for_z(REDSHIFTS, 2.0)
+    SNAP_Z3  = _snap_for_z(REDSHIFTS, 3.0)
+    SNAP_Z4  = _snap_for_z(REDSHIFTS, 4.0)
+    SNAP_Z5  = _snap_for_z(REDSHIFTS, 5.0)
+    SNAP_Z10 = _snap_for_z(REDSHIFTS, 10.0)
+else:
+    # Fallback if primary HDF5 files are not available
+    print("Warning: could not read primary model header — using hardcoded defaults")
+    HUBBLE_H         = 0.73
+    BOX_SIZE         = 62.5
+    VOLUME_FRACTION  = 1.0
+    VOLUME           = (BOX_SIZE / HUBBLE_H)**3 * VOLUME_FRACTION
+    MASS_CONVERT     = 1.0e10 / HUBBLE_H
+    OMEGA_M          = 0.25
+    OMEGA_L          = 0.75
+    BARYON_FRAC      = 0.17
+    OMEGA_B          = 0.045
+    SNAPSHOT         = 'Snap_63'
+    REDSHIFTS        = [
+        127.000, 79.998, 50.000, 30.000, 19.916, 18.244, 16.725, 15.343,
+         14.086, 12.941, 11.897, 10.944, 10.073,  9.278,  8.550,  7.883,
+          7.272,  6.712,  6.197,  5.724,  5.289,  4.888,  4.520,  4.179,
+          3.866,  3.576,  3.308,  3.060,  2.831,  2.619,  2.422,  2.239,
+          2.070,  1.913,  1.766,  1.630,  1.504,  1.386,  1.276,  1.173,
+          1.078,  0.989,  0.905,  0.828,  0.755,  0.687,  0.624,  0.564,
+          0.509,  0.457,  0.408,  0.362,  0.320,  0.280,  0.242,  0.208,
+          0.175,  0.144,  0.116,  0.089,  0.064,  0.041,  0.020,  0.000,
+    ]
+    OUTPUT_DIR = './output/millennium/plots/'
+    SNAP_Z0  = 63
+    SNAP_Z1  = 39
+    SNAP_Z2  = 32
+    SNAP_Z3  = 27
+    SNAP_Z4  = 23
+    SNAP_Z5  = 20
+    SNAP_Z10 = 12
+
+
+# --------------- miniUchuu simulation parameters (from HDF5) ---------------
+
+_miniuchuu_hdr = _read_sim_header(MINIUCHUU_DIR)
+if _miniuchuu_hdr is not None:
+    MINIUCHUU_HUBBLE_H        = _miniuchuu_hdr['hubble_h']
+    MINIUCHUU_BOX_SIZE        = _miniuchuu_hdr['box_size']
+    MINIUCHUU_VOLUME_FRACTION = _miniuchuu_hdr['volume_fraction']
+    MINIUCHUU_VOLUME          = (MINIUCHUU_BOX_SIZE / MINIUCHUU_HUBBLE_H)**3 * MINIUCHUU_VOLUME_FRACTION
+    MINIUCHUU_MASS_CONVERT    = _miniuchuu_hdr['unit_mass_in_g'] / _MSUN_CGS / MINIUCHUU_HUBBLE_H
+    MINIUCHUU_FIRST_SNAP      = min(_miniuchuu_hdr['output_snaps'])
+    MINIUCHUU_LAST_SNAP       = max(_miniuchuu_hdr['output_snaps'])
+    MINIUCHUU_REDSHIFTS       = _miniuchuu_hdr['redshifts']
+else:
+    # Fallback if miniUchuu HDF5 files are not available
+    MINIUCHUU_HUBBLE_H        = 0.677
+    MINIUCHUU_BOX_SIZE        = 400.0
+    MINIUCHUU_VOLUME_FRACTION = 0.3
+    MINIUCHUU_VOLUME          = (MINIUCHUU_BOX_SIZE / MINIUCHUU_HUBBLE_H)**3 * MINIUCHUU_VOLUME_FRACTION
+    MINIUCHUU_MASS_CONVERT    = 1.0e10 / MINIUCHUU_HUBBLE_H
+    MINIUCHUU_FIRST_SNAP      = 0
+    MINIUCHUU_LAST_SNAP       = 49
+    MINIUCHUU_REDSHIFTS       = [
+        13.9334, 12.67409, 11.50797, 10.44649, 9.480752, 8.58543, 7.77447,
+        7.032387, 6.344409, 5.721695, 5.153127, 4.629078, 4.26715, 3.929071,
+        3.610462, 3.314082, 3.128427, 2.951226, 2.77809, 2.616166, 2.458114,
+        2.309724, 2.16592, 2.027963, 1.8962, 1.770958, 1.65124, 1.535928,
+        1.426272, 1.321656, 1.220303, 1.124166, 1.031983, 0.9441787, 0.8597281,
+        0.779046, 0.7020205, 0.6282588, 0.5575475, 0.4899777, 0.4253644,
+        0.3640053, 0.3047063, 0.2483865, 0.1939743, 0.1425568, 0.09296665,
+        0.0455745, 0.02265383, 0.0001130128,
+    ]
 
 # FFB model variants (different max star-formation efficiencies)
 FFB_MODELS = [
@@ -169,34 +277,6 @@ _EVOLUTION_PROPERTIES = [
 
 def setup_style():
     """Configure matplotlib for publication-quality white-background plots."""
-    # plt.rcParams["figure.figsize"] = (8.34, 6.25)
-    # plt.rcParams["figure.dpi"] = 150
-    # plt.rcParams["font.size"] = 14
-    # plt.rcParams['figure.facecolor'] = 'white'
-    # plt.rcParams['axes.facecolor'] = 'white'
-    # plt.rcParams['axes.edgecolor'] = 'black'
-    # plt.rcParams['axes.linewidth'] = 1.2
-    # plt.rcParams['xtick.color'] = 'black'
-    # plt.rcParams['ytick.color'] = 'black'
-    # plt.rcParams['xtick.direction'] = 'in'
-    # plt.rcParams['ytick.direction'] = 'in'
-    # plt.rcParams['xtick.major.size'] = 6
-    # plt.rcParams['ytick.major.size'] = 6
-    # plt.rcParams['xtick.minor.size'] = 3
-    # plt.rcParams['ytick.minor.size'] = 3
-    # plt.rcParams['xtick.minor.visible'] = True
-    # plt.rcParams['ytick.minor.visible'] = True
-    # plt.rcParams['xtick.top'] = True
-    # plt.rcParams['ytick.right'] = True
-    # plt.rcParams['axes.labelcolor'] = 'black'
-    # plt.rcParams['text.color'] = 'black'
-    # plt.rcParams['legend.facecolor'] = 'white'
-    # plt.rcParams['legend.edgecolor'] = 'none'
-    # plt.rcParams['legend.framealpha'] = 0.8
-    # plt.rcParams['legend.fontsize'] = 'medium'
-    # plt.rcParams['font.family'] = 'serif'
-    # plt.rcParams['font.serif'] = 'Palatino'
-    # plt.rcParams['text.usetex'] = True
     plt.style.use("./plotting/ciaran_ohare_palatino_sty.mplstyle")
 
 
@@ -210,24 +290,94 @@ def _tex_safe(s):
 
 # ========================== DATA I/O ==========================
 
-def load_model(directory, filename=MODEL_FILE, snapshot=SNAPSHOT,
+
+def find_model_files(directory):
+    """
+    Find all model_*.hdf5 files in *directory*.
+
+    Returns a sorted list of absolute paths.  Falls back to the single
+    ``model_0.hdf5`` if no files match (backward-compatible).
+    """
+    return _find_model_files_early(directory)
+
+
+def model_files_exist(directory):
+    """Return True if at least one model HDF5 file exists in *directory*."""
+    return len(find_model_files(directory)) > 0
+
+
+def read_snap_from_files(filepaths, snap_key, properties, mass_convert=MASS_CONVERT):
+    """
+    Read *properties* from *snap_key* across multiple HDF5 files and
+    concatenate the results.
+
+    Parameters
+    ----------
+    filepaths : list of str
+        HDF5 file paths (e.g. from ``find_model_files``).
+    snap_key : str
+        Snapshot group name, e.g. ``'Snap_63'``.
+    properties : list of str
+        Dataset names to read.
+    mass_convert : float
+        Multiplicative factor applied to properties in ``_MASS_PROPS``.
+
+    Returns
+    -------
+    dict : property name -> numpy array (concatenated across files).
+           Empty dict if no file contains *snap_key*.
+    """
+    chunks = {prop: [] for prop in properties}
+    found_snap = False
+
+    for fp in filepaths:
+        try:
+            with h5.File(fp, 'r') as f:
+                if snap_key not in f:
+                    continue
+                found_snap = True
+                grp = f[snap_key]
+                for prop in properties:
+                    if prop in grp:
+                        chunks[prop].append(np.array(grp[prop]))
+        except Exception as e:
+            print(f"  Warning: could not read {fp}: {e}")
+            continue
+
+    if not found_snap:
+        return {}
+
+    data = {}
+    for prop in properties:
+        if chunks[prop]:
+            arr = np.concatenate(chunks[prop])
+            if prop in _MASS_PROPS:
+                arr = arr * mass_convert
+            data[prop] = arr
+
+    return data
+
+
+def load_model(directory, filename=None, snapshot=SNAPSHOT,
                properties=None):
     """
-    Load galaxy properties from an HDF5 model file.
+    Load galaxy properties from one or more model HDF5 files.
 
-    Opens the file once and reads all requested properties.
-    Mass properties are automatically converted to solar masses.
+    When SAGE is run with MPI each rank writes its own file
+    (``model_0.hdf5``, ``model_1.hdf5``, …).  This function automatically
+    discovers all such files and concatenates their datasets.
 
     Parameters
     ----------
     directory : str
         Path to the model output directory.
-    filename : str
-        HDF5 filename.
+    filename : str, optional
+        Kept for backward compatibility.  If given, only that single file
+        is read; otherwise every ``model_*.hdf5`` in *directory* is used.
     snapshot : str
-        Snapshot key (e.g. 'Snap_63').
+        Snapshot key (e.g. ``'Snap_63'``).
     properties : list of str, optional
-        Properties to load. If None, loads _DEFAULT_PROPERTIES.
+        Properties to load.  If *None*, loads ``_DEFAULT_PROPERTIES``.
 
     Returns
     -------
@@ -236,26 +386,24 @@ def load_model(directory, filename=MODEL_FILE, snapshot=SNAPSHOT,
     if properties is None:
         properties = _DEFAULT_PROPERTIES
 
-    filepath = os.path.join(directory, filename)
-    data = {}
+    if filename is not None:
+        filepaths = [os.path.join(directory, filename)]
+    else:
+        filepaths = find_model_files(directory)
 
-    with h5.File(filepath, 'r') as f:
-        snap = f[snapshot]
-        for prop in properties:
-            if prop in snap:
-                arr = np.array(snap[prop])
-                if prop in _MASS_PROPS:
-                    arr *= MASS_CONVERT
-                data[prop] = arr
-            else:
-                print(f"  Warning: '{prop}' not found in {filepath}")
+    if not filepaths:
+        print(f"  Warning: no model files found in {directory}")
+        return {}
 
+    data = read_snap_from_files(filepaths, snapshot, properties)
+    if not data:
+        print(f"  Warning: {snapshot} not found in any file in {directory}")
     return data
 
 
-def load_snapshots(directory, snaps, properties=None, filename=MODEL_FILE):
+def load_snapshots(directory, snaps, properties=None, filename=None):
     """
-    Load multiple snapshots from a single HDF5 file.
+    Load multiple snapshots from one or more HDF5 files.
 
     Parameters
     ----------
@@ -264,9 +412,10 @@ def load_snapshots(directory, snaps, properties=None, filename=MODEL_FILE):
     snaps : list of int
         Snapshot numbers to load.
     properties : list of str, optional
-        Properties to load. Defaults to _EVOLUTION_PROPERTIES.
-    filename : str
-        HDF5 filename.
+        Properties to load.  Defaults to ``_EVOLUTION_PROPERTIES``.
+    filename : str, optional
+        If given, only that single file is read; otherwise every
+        ``model_*.hdf5`` in *directory* is used.
 
     Returns
     -------
@@ -275,24 +424,23 @@ def load_snapshots(directory, snaps, properties=None, filename=MODEL_FILE):
     if properties is None:
         properties = _EVOLUTION_PROPERTIES
 
-    filepath = os.path.join(directory, filename)
-    snapdata = {}
+    if filename is not None:
+        filepaths = [os.path.join(directory, filename)]
+    else:
+        filepaths = find_model_files(directory)
 
-    with h5.File(filepath, 'r') as f:
-        for snap in snaps:
-            snap_key = f'Snap_{snap}'
-            if snap_key not in f:
-                print(f"  Warning: {snap_key} not found, skipping.")
-                continue
-            grp = f[snap_key]
-            data = {}
-            for prop in properties:
-                if prop in grp:
-                    arr = np.array(grp[prop])
-                    if prop in _MASS_PROPS:
-                        arr *= MASS_CONVERT
-                    data[prop] = arr
+    if not filepaths:
+        print(f"  Warning: no model files found in {directory}")
+        return {}
+
+    snapdata = {}
+    for snap in snaps:
+        snap_key = f'Snap_{snap}'
+        data = read_snap_from_files(filepaths, snap_key, properties)
+        if data:
             snapdata[snap] = data
+        else:
+            print(f"  Warning: {snap_key} not found, skipping.")
 
     return snapdata
 
@@ -2960,11 +3108,11 @@ def plot_14_density_evolution():
         props = ['StellarMass', 'SfrDisk', 'SfrBulge']
         
         # Load Primary (FFB)
-        data_FFB = load_model(PRIMARY_DIR, filename=MODEL_FILE, 
+        data_FFB = load_model(PRIMARY_DIR,
                               snapshot=Snapshot, properties=props)
         
         # Load Vanilla (No FFB)
-        data_noFFB = load_model(NOFFB_DIR, filename=MODEL_FILE, 
+        data_noFFB = load_model(NOFFB_DIR,
                                 snapshot=Snapshot, properties=props)
 
         if not data_FFB and not data_noFFB:
@@ -3057,9 +3205,8 @@ def plot_14_density_evolution():
     print("="*60 + "\n")
 
     # --- miniUchuu (if available) ---
-    mu_filepath = os.path.join(MINIUCHUU_DIR, MODEL_FILE)
     mu_z_list, mu_sfrd_list, mu_smd_list = [], [], []
-    if os.path.exists(mu_filepath):
+    if model_files_exist(MINIUCHUU_DIR):
         mu_redshifts = np.array(MINIUCHUU_REDSHIFTS)
         mu_volume = MINIUCHUU_VOLUME
         for snap_idx in range(MINIUCHUU_FIRST_SNAP, MINIUCHUU_LAST_SNAP + 1):
@@ -3068,7 +3215,7 @@ def plot_14_density_evolution():
                 continue
             snap_key = f'Snap_{snap_idx}'
             try:
-                d = load_model(MINIUCHUU_DIR, filename=MODEL_FILE,
+                d = load_model(MINIUCHUU_DIR,
                                snapshot=snap_key,
                                properties=['StellarMass', 'SfrDisk', 'SfrBulge'])
                 if not d:
@@ -3114,9 +3261,9 @@ def plot_14_density_evolution():
     for model in FFB_MODELS:
         model_dir = model['dir']
         sfe = model['sfe']
-        filepath = os.path.join(model_dir, MODEL_FILE)
+        model_files = find_model_files(model_dir)
 
-        if not os.path.exists(filepath):
+        if not model_files:
             continue
 
         m_redshifts = []
@@ -3128,18 +3275,18 @@ def plot_14_density_evolution():
             z = REDSHIFTS[snapnum]
 
             try:
-                with h5.File(filepath, 'r') as f:
-                    if Snapshot in f:
-                        grp = f[Snapshot]
-                        sfr_disk = np.array(grp['SfrDisk'])
-                        sfr_bulge = np.array(grp['SfrBulge'])
-                        total_sfr = np.sum(sfr_disk + sfr_bulge)
-                        stellar_mass = np.array(grp['StellarMass']) * MASS_CONVERT
-                        total_sm = np.sum(stellar_mass)
-                        if total_sfr > 0 or total_sm > 0:
-                            m_redshifts.append(z)
-                            m_sfrd.append(np.log10(total_sfr / volume) if total_sfr > 0 else np.nan)
-                            m_smd.append(np.log10(total_sm / volume) if total_sm > 0 else np.nan)
+                d = read_snap_from_files(model_files, Snapshot,
+                                         ['SfrDisk', 'SfrBulge', 'StellarMass'])
+                if d:
+                    sfr_disk = d['SfrDisk']
+                    sfr_bulge = d['SfrBulge']
+                    total_sfr = np.sum(sfr_disk + sfr_bulge)
+                    stellar_mass = d['StellarMass']
+                    total_sm = np.sum(stellar_mass)
+                    if total_sfr > 0 or total_sm > 0:
+                        m_redshifts.append(z)
+                        m_sfrd.append(np.log10(total_sfr / volume) if total_sfr > 0 else np.nan)
+                        m_smd.append(np.log10(total_sm / volume) if total_sm > 0 else np.nan)
             except Exception:
                 continue
 
@@ -3556,23 +3703,23 @@ def plot_16_sfrd_history():
             idx = snap - sim_first
 
             try:
-                filepath = os.path.join(sim_path, MODEL_FILE)
+                model_files = find_model_files(sim_path)
+                d = read_snap_from_files(model_files, snap_name,
+                                         ['SfrDisk', 'SfrBulge'])
+                if d:
+                    sfr_disk = d['SfrDisk']
+                    sfr_bulge = d['SfrBulge']
+                    sfr_total = sfr_disk + sfr_bulge
+                    sfr_density[idx] = np.sum(sfr_total) / sim_volume
 
-                with h5.File(filepath, 'r') as f:
-                    if snap_name in f:
-                        sfr_disk = np.array(f[snap_name]['SfrDisk'])
-                        sfr_bulge = np.array(f[snap_name]['SfrBulge'])
-                        sfr_total = sfr_disk + sfr_bulge
-                        sfr_density[idx] = np.sum(sfr_total) / sim_volume
-
-                        if do_bootstrap and len(sfr_total) > 0:
-                            n_gal = len(sfr_total)
-                            boot = np.array([
-                                np.sum(sfr_total[np.random.randint(0, n_gal, n_gal)])
-                                for _ in range(N_BOOT)
-                            ]) / sim_volume
-                            sfr_density_lo[idx] = np.percentile(boot, 16)
-                            sfr_density_hi[idx] = np.percentile(boot, 84)
+                    if do_bootstrap and len(sfr_total) > 0:
+                        n_gal = len(sfr_total)
+                        boot = np.array([
+                            np.sum(sfr_total[np.random.randint(0, n_gal, n_gal)])
+                            for _ in range(N_BOOT)
+                        ]) / sim_volume
+                        sfr_density_lo[idx] = np.percentile(boot, 16)
+                        sfr_density_hi[idx] = np.percentile(boot, 84)
             except Exception:
                 continue
 
@@ -3809,27 +3956,27 @@ def plot_17_smd_history():
             idx = snap - sim_first
 
             try:
-                filepath = os.path.join(sim_path, MODEL_FILE)
-                with h5.File(filepath, 'r') as f:
-                    if snap_name in f:
-                        # Mass is in 10^10 Msol/h
-                        # Convert to Msol: * 1e10 / h
-                        m_stars = np.array(f[snap_name]['StellarMass']) * sim_mass_convert
+                model_files = find_model_files(sim_path)
+                d = read_snap_from_files(model_files, snap_name,
+                                         ['StellarMass'],
+                                         mass_convert=sim_mass_convert)
+                if d:
+                    m_stars = d['StellarMass']
 
-                        # Apply limits 1e8 < M < 1e13 (from uploaded script)
-                        w = np.where((m_stars > 1.0e8) & (m_stars < 1.0e13))[0]
-                        if len(w) > 0:
-                            m_sel = m_stars[w]
-                            smd[idx] = np.sum(m_sel) / sim_volume
+                    # Apply limits 1e8 < M < 1e13 (from uploaded script)
+                    w = np.where((m_stars > 1.0e8) & (m_stars < 1.0e13))[0]
+                    if len(w) > 0:
+                        m_sel = m_stars[w]
+                        smd[idx] = np.sum(m_sel) / sim_volume
 
-                            if do_bootstrap:
-                                n_gal = len(m_sel)
-                                boot = np.array([
-                                    np.sum(m_sel[np.random.randint(0, n_gal, n_gal)])
-                                    for _ in range(N_BOOT)
-                                ]) / sim_volume
-                                smd_lo[idx] = np.percentile(boot, 16)
-                                smd_hi[idx] = np.percentile(boot, 84)
+                        if do_bootstrap:
+                            n_gal = len(m_sel)
+                            boot = np.array([
+                                np.sum(m_sel[np.random.randint(0, n_gal, n_gal)])
+                                for _ in range(N_BOOT)
+                            ]) / sim_volume
+                            smd_lo[idx] = np.percentile(boot, 16)
+                            smd_hi[idx] = np.percentile(boot, 84)
             except Exception:
                 continue
 
@@ -4367,37 +4514,39 @@ def plot_18_smf_redshift_grid():
             snap_name = f'Snap_{snap_num}'
 
             try:
-                filepath = os.path.join(model['path'], MODEL_FILE)
-                with h5.File(filepath, 'r') as f:
-                    if snap_name not in f:
-                        continue
-                    m_stars = np.array(f[snap_name]['StellarMass']) * model['mass_convert']
-                    w = m_stars > 0
-                    if np.sum(w) == 0:
-                        continue
-                    log_m = np.log10(m_stars[w])
+                model_files = find_model_files(model['path'])
+                d = read_snap_from_files(model_files, snap_name,
+                                         ['StellarMass'],
+                                         mass_convert=model['mass_convert'])
+                if not d:
+                    continue
+                m_stars = d['StellarMass']
+                w = m_stars > 0
+                if np.sum(w) == 0:
+                    continue
+                log_m = np.log10(m_stars[w])
 
                     # Use bootstrap for SAGE26 models
-                    if model['label'].startswith('SAGE26'):
-                        x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
-                            log_m, model['volume'], binwidth, n_boot=100)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
-                        # Bootstrap shading
-                        boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
-                        if np.any(boot_valid):
-                            ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
-                                            color=model['color'], alpha=0.2, linewidth=0)
-                    else:
-                        x, phi, _ = mass_function(log_m, model['volume'], binwidth)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
+                if model['label'].startswith('SAGE26'):
+                    x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
+                        log_m, model['volume'], binwidth, n_boot=100)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
+                    # Bootstrap shading
+                    boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
+                    if np.any(boot_valid):
+                        ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
+                                        color=model['color'], alpha=0.2, linewidth=0)
+                else:
+                    x, phi, _ = mass_function(log_m, model['volume'], binwidth)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
             except Exception as e:
                 print(f"  Error loading {snap_name} from {model['path']}: {e}")
                 continue
@@ -4533,37 +4682,39 @@ def plot_18b_smf_redshift_grid_wide():
             snap_name = f'Snap_{snap_num}'
 
             try:
-                filepath = os.path.join(model['path'], MODEL_FILE)
-                with h5.File(filepath, 'r') as f:
-                    if snap_name not in f:
-                        continue
-                    m_stars = np.array(f[snap_name]['StellarMass']) * model['mass_convert']
-                    w = m_stars > 0
-                    if np.sum(w) == 0:
-                        continue
-                    log_m = np.log10(m_stars[w])
+                model_files = find_model_files(model['path'])
+                d = read_snap_from_files(model_files, snap_name,
+                                         ['StellarMass'],
+                                         mass_convert=model['mass_convert'])
+                if not d:
+                    continue
+                m_stars = d['StellarMass']
+                w = m_stars > 0
+                if np.sum(w) == 0:
+                    continue
+                log_m = np.log10(m_stars[w])
 
-                    # Use bootstrap for SAGE26 models
-                    if model['label'].startswith('SAGE26'):
-                        x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
-                            log_m, model['volume'], binwidth, n_boot=100)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
-                        # Bootstrap shading
-                        boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
-                        if np.any(boot_valid):
-                            ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
-                                            color=model['color'], alpha=0.2, linewidth=0)
-                    else:
-                        x, phi, _ = mass_function(log_m, model['volume'], binwidth)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
+                # Use bootstrap for SAGE26 models
+                if model['label'].startswith('SAGE26'):
+                    x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
+                        log_m, model['volume'], binwidth, n_boot=100)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
+                    # Bootstrap shading
+                    boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
+                    if np.any(boot_valid):
+                        ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
+                                        color=model['color'], alpha=0.2, linewidth=0)
+                else:
+                    x, phi, _ = mass_function(log_m, model['volume'], binwidth)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
             except Exception as e:
                 print(f"  Error loading {snap_name} from {model['path']}: {e}")
                 continue
@@ -4851,37 +5002,39 @@ def plot_20_smf_lowz_grid():
             snap_name = f'Snap_{snap_num}'
 
             try:
-                filepath = os.path.join(model['path'], MODEL_FILE)
-                with h5.File(filepath, 'r') as f:
-                    if snap_name not in f:
-                        continue
-                    m_stars = np.array(f[snap_name]['StellarMass']) * model['mass_convert']
-                    w = m_stars > 0
-                    if np.sum(w) == 0:
-                        continue
-                    log_m = np.log10(m_stars[w])
+                model_files = find_model_files(model['path'])
+                d = read_snap_from_files(model_files, snap_name,
+                                         ['StellarMass'],
+                                         mass_convert=model['mass_convert'])
+                if not d:
+                    continue
+                m_stars = d['StellarMass']
+                w = m_stars > 0
+                if np.sum(w) == 0:
+                    continue
+                log_m = np.log10(m_stars[w])
 
-                    # Use bootstrap for SAGE26 models
-                    if model['label'].startswith('SAGE26'):
-                        x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
-                            log_m, model['volume'], binwidth, n_boot=100)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
-                        # Bootstrap shading
-                        boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
-                        if np.any(boot_valid):
-                            ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
-                                            color=model['color'], alpha=0.2, linewidth=0)
-                    else:
-                        x, phi, _ = mass_function(log_m, model['volume'], binwidth)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
+                # Use bootstrap for SAGE26 models
+                if model['label'].startswith('SAGE26'):
+                    x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
+                        log_m, model['volume'], binwidth, n_boot=100)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
+                    # Bootstrap shading
+                    boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
+                    if np.any(boot_valid):
+                        ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
+                                        color=model['color'], alpha=0.2, linewidth=0)
+                else:
+                    x, phi, _ = mass_function(log_m, model['volume'], binwidth)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
             except Exception as e:
                 print(f"  Error loading {snap_name} from {model['path']}: {e}")
                 continue
@@ -5013,37 +5166,39 @@ def plot_21_smf_lowz_lowmass_grid():
             snap_name = f'Snap_{snap_num}'
 
             try:
-                filepath = os.path.join(model['path'], MODEL_FILE)
-                with h5.File(filepath, 'r') as f:
-                    if snap_name not in f:
-                        continue
-                    m_stars = np.array(f[snap_name]['StellarMass']) * model['mass_convert']
-                    w = m_stars > 0
-                    if np.sum(w) == 0:
-                        continue
-                    log_m = np.log10(m_stars[w])
+                model_files = find_model_files(model['path'])
+                d = read_snap_from_files(model_files, snap_name,
+                                         ['StellarMass'],
+                                         mass_convert=model['mass_convert'])
+                if not d:
+                    continue
+                m_stars = d['StellarMass']
+                w = m_stars > 0
+                if np.sum(w) == 0:
+                    continue
+                log_m = np.log10(m_stars[w])
 
-                    # Use bootstrap for SAGE26 models
-                    if model['label'].startswith('SAGE26'):
-                        x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
-                            log_m, model['volume'], binwidth, n_boot=100)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
-                        # Bootstrap shading
-                        boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
-                        if np.any(boot_valid):
-                            ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
-                                            color=model['color'], alpha=0.2, linewidth=0)
-                    else:
-                        x, phi, _ = mass_function(log_m, model['volume'], binwidth)
-                        valid = np.isfinite(phi)
-                        ax.plot(x[valid], phi[valid],
-                                lw=model['lw'], color=model['color'],
-                                ls=model['ls'],
-                                label=model['label'] if i == 0 else None)
+                # Use bootstrap for SAGE26 models
+                if model['label'].startswith('SAGE26'):
+                    x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
+                        log_m, model['volume'], binwidth, n_boot=100)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
+                    # Bootstrap shading
+                    boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
+                    if np.any(boot_valid):
+                        ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
+                                        color=model['color'], alpha=0.2, linewidth=0)
+                else:
+                    x, phi, _ = mass_function(log_m, model['volume'], binwidth)
+                    valid = np.isfinite(phi)
+                    ax.plot(x[valid], phi[valid],
+                            lw=model['lw'], color=model['color'],
+                            ls=model['ls'],
+                            label=model['label'] if i == 0 else None)
             except Exception as e:
                 print(f"  Error loading {snap_name} from {model['path']}: {e}")
                 continue
@@ -5123,31 +5278,25 @@ def plot_22_regime_histogram():
     num_cgm_per_snap = []
     redshifts_list = []
 
-    filepath = os.path.join(PRIMARY_DIR, MODEL_FILE)
-    if not os.path.exists(filepath):
-        print(f"  File not found: {filepath}")
+    model_files = find_model_files(PRIMARY_DIR)
+    if not model_files:
+        print(f"  No model files found in {PRIMARY_DIR}")
         return
 
-    with h5.File(filepath, 'r') as f:
-        for snap in range(64):
-            snap_key = f'Snap_{snap}'
-            if snap_key not in f:
-                num_hot_per_snap.append(0)
-                num_cgm_per_snap.append(0)
-                redshifts_list.append(REDSHIFTS[snap])
-                continue
+    for snap in range(64):
+        snap_key = f'Snap_{snap}'
+        d = read_snap_from_files(model_files, snap_key, ['Regime'])
+        if d and 'Regime' in d:
+            regime = d['Regime']
+            num_hot = np.sum(regime == 1)
+            num_cgm = np.sum(regime == 0)
+        else:
+            num_hot = 0
+            num_cgm = 0
 
-            if 'Regime' in f[snap_key]:
-                regime = np.array(f[snap_key]['Regime'])
-                num_hot = np.sum(regime == 1)
-                num_cgm = np.sum(regime == 0)
-            else:
-                num_hot = 0
-                num_cgm = 0
-
-            num_hot_per_snap.append(num_hot)
-            num_cgm_per_snap.append(num_cgm)
-            redshifts_list.append(REDSHIFTS[snap])
+        num_hot_per_snap.append(num_hot)
+        num_cgm_per_snap.append(num_cgm)
+        redshifts_list.append(REDSHIFTS[snap])
 
     z = np.array(redshifts_list)
     num_hot_plot = np.array(num_hot_per_snap)
@@ -5215,31 +5364,25 @@ def plot_23_ffb_histogram():
     num_ffb_per_snap = []
     redshifts_list = []
 
-    filepath = os.path.join(PRIMARY_DIR, MODEL_FILE)
-    if not os.path.exists(filepath):
-        print(f"  File not found: {filepath}")
+    model_files = find_model_files(PRIMARY_DIR)
+    if not model_files:
+        print(f"  No model files found in {PRIMARY_DIR}")
         return
 
-    with h5.File(filepath, 'r') as f:
-        for snap in range(64):
-            snap_key = f'Snap_{snap}'
-            if snap_key not in f:
-                num_non_ffb_per_snap.append(0)
-                num_ffb_per_snap.append(0)
-                redshifts_list.append(REDSHIFTS[snap])
-                continue
+    for snap in range(64):
+        snap_key = f'Snap_{snap}'
+        d = read_snap_from_files(model_files, snap_key, ['FFBRegime'])
+        if d and 'FFBRegime' in d:
+            ffb_regime = d['FFBRegime']
+            num_ffb = np.sum(ffb_regime == 1)
+            num_non_ffb = np.sum(ffb_regime == 0)
+        else:
+            num_ffb = 0
+            num_non_ffb = 0
 
-            if 'FFBRegime' in f[snap_key]:
-                ffb_regime = np.array(f[snap_key]['FFBRegime'])
-                num_ffb = np.sum(ffb_regime == 1)
-                num_non_ffb = np.sum(ffb_regime == 0)
-            else:
-                num_ffb = 0
-                num_non_ffb = 0
-
-            num_non_ffb_per_snap.append(num_non_ffb)
-            num_ffb_per_snap.append(num_ffb)
-            redshifts_list.append(REDSHIFTS[snap])
+        num_non_ffb_per_snap.append(num_non_ffb)
+        num_ffb_per_snap.append(num_ffb)
+        redshifts_list.append(REDSHIFTS[snap])
 
     z = np.array(redshifts_list)
     num_non_ffb_plot = np.array(num_non_ffb_per_snap)
@@ -5409,7 +5552,7 @@ def _gas_ratio_plot(gas_prop, obs_file, obs_label, ylabel, output_name):
 
     for i, model in enumerate(_GAS_MODELS):
         dirpath = model['dir']
-        if not os.path.exists(os.path.join(dirpath, MODEL_FILE)):
+        if not model_files_exist(dirpath):
             print(f"  Skipping {model['label']}: directory not found")
             continue
 
@@ -5745,97 +5888,88 @@ def print_massive_galaxy_stats():
              'SfrDisk', 'SfrBulge', 'Vvir', 'Regime', 'EjectedMass']
     mass_cut = 10**9.5
 
-    filepath = os.path.join(PRIMARY_DIR, MODEL_FILE)
-    if not os.path.exists(filepath):
-        print(f"  File not found: {filepath}")
+    model_files = find_model_files(PRIMARY_DIR)
+    if not model_files:
+        print(f"  No model files found in {PRIMARY_DIR}")
         return
 
-    with h5.File(filepath, 'r') as f:
-        for snap in range(len(REDSHIFTS)):
-            z = REDSHIFTS[snap]
-            if z < 4.0 or z > 6.0:
-                continue
+    for snap in range(len(REDSHIFTS)):
+        z = REDSHIFTS[snap]
+        if z < 4.0 or z > 6.0:
+            continue
 
-            snap_key = f'Snap_{snap}'
-            if snap_key not in f:
-                continue
+        snap_key = f'Snap_{snap}'
+        data = read_snap_from_files(model_files, snap_key, props)
+        if not data:
+            continue
 
-            grp = f[snap_key]
-            data = {}
-            for prop in props:
-                if prop in grp:
-                    arr = np.array(grp[prop])
-                    if prop in _MASS_PROPS:
-                        arr *= MASS_CONVERT
-                    data[prop] = arr
+        mstar = data.get('StellarMass')
+        if mstar is None:
+            continue
 
-            mstar = data.get('StellarMass')
-            if mstar is None:
-                continue
+        gal_type = data.get('Type', np.zeros_like(mstar))
+        mask = (mstar > mass_cut) & (gal_type == 0)
+        n_gal = np.sum(mask)
+        if n_gal == 0:
+            print(f"  Snap {snap} (z = {z:.3f}): 0 galaxies above cut\n")
+            continue
 
-            gal_type = data.get('Type', np.zeros_like(mstar))
-            mask = (mstar > mass_cut) & (gal_type == 0)
-            n_gal = np.sum(mask)
-            if n_gal == 0:
-                print(f"  Snap {snap} (z = {z:.3f}): 0 galaxies above cut\n")
-                continue
+        print(f"  Snap {snap} (z = {z:.3f}): {n_gal} galaxies with M* > 10^9.5 Msun")
+        print(f"  {'#':>3s}  {'log M*':>8s}  {'log Mhalo':>9s}  {'Vvir':>7s}  {'log Mcold':>9s}  "
+              f"{'log MH2':>8s}  {'log Meject':>10s}  {'SFR':>8s}  {'eta_rh':>7s}  {'12+log(O/H)':>11s}  {'log MBH':>8s}  {'Regime':>6s}")
+        print(f"  {'':->3s}  {'':->8s}  {'':->9s}  {'':->7s}  {'':->9s}  "
+              f"{'':->8s}  {'':->10s}  {'':->8s}  {'':->7s}  {'':->11s}  {'':->8s}  {'':->6s}")
 
-            print(f"  Snap {snap} (z = {z:.3f}): {n_gal} galaxies with M* > 10^9.5 Msun")
-            print(f"  {'#':>3s}  {'log M*':>8s}  {'log Mhalo':>9s}  {'Vvir':>7s}  {'log Mcold':>9s}  "
-                  f"{'log MH2':>8s}  {'log Meject':>10s}  {'SFR':>8s}  {'eta_rh':>7s}  {'12+log(O/H)':>11s}  {'log MBH':>8s}  {'Regime':>6s}")
-            print(f"  {'':->3s}  {'':->8s}  {'':->9s}  {'':->7s}  {'':->9s}  "
-                  f"{'':->8s}  {'':->10s}  {'':->8s}  {'':->7s}  {'':->11s}  {'':->8s}  {'':->6s}")
+        # Top 10 most massive CGM regime galaxies
+        reg = data.get('Regime')
+        idx = np.where(mask)[0]
+        if reg is not None:
+            idx = idx[reg[idx] == 0]
+        idx = idx[np.argsort(-mstar[idx])][:10]
 
-            # Top 10 most massive CGM regime galaxies
+        for i, gi in enumerate(idx):
+            log_ms = np.log10(mstar[gi])
+            mvir = data.get('Mvir')
+            log_mh = np.log10(mvir[gi]) if mvir is not None and mvir[gi] > 0 else np.nan
+            cg = data.get('ColdGas')
+            log_cg = np.log10(cg[gi]) if cg is not None and cg[gi] > 0 else np.nan
+            h2 = data.get('H2gas')
+            log_h2 = np.log10(h2[gi]) if h2 is not None and h2[gi] > 0 else np.nan
+            ml = data.get('MassLoading')
+            eta = ml[gi] if ml is not None else np.nan
+            mcg = data.get('MetalsColdGas')
+            if mcg is not None and cg is not None and cg[gi] > 0:
+                z_met = mcg[gi] / cg[gi]
+                # 12 + log10(O/H) assuming O is ~0.5 of metals by mass, H is 0.75 of gas
+                # Simplified: 12 + log10(Z/Z_sun) + 8.69 (solar 12+log(O/H))
+                oh12 = 12.0 + np.log10(z_met / Z_SUN) + np.log10(10**(8.69 - 12.0))
+                # Or more directly: 12+log(O/H) = log10(Z/Zsun) + 8.69
+                oh12 = np.log10(z_met / Z_SUN) + 8.69
+            else:
+                oh12 = np.nan
+            sfrd = data.get('SfrDisk')
+            sfrb = data.get('SfrBulge')
+            sfr_val = 0.0
+            if sfrd is not None:
+                sfr_val += sfrd[gi]
+            if sfrb is not None:
+                sfr_val += sfrb[gi]
+            bh = data.get('BlackHoleMass')
+            log_bh = np.log10(bh[gi]) if bh is not None and bh[gi] > 0 else np.nan
+
+            vv = data.get('Vvir')
+            vvir_val = vv[gi] if vv is not None else np.nan
+
+            ej = data.get('EjectedMass')
+            log_ej = np.log10(ej[gi]) if ej is not None and ej[gi] > 0 else np.nan
+
             reg = data.get('Regime')
-            idx = np.where(mask)[0]
-            if reg is not None:
-                idx = idx[reg[idx] == 0]
-            idx = idx[np.argsort(-mstar[idx])][:10]
+            regime_str = 'Hot' if (reg is not None and reg[gi] == 1) else 'CGM'
 
-            for i, gi in enumerate(idx):
-                log_ms = np.log10(mstar[gi])
-                mvir = data.get('Mvir')
-                log_mh = np.log10(mvir[gi]) if mvir is not None and mvir[gi] > 0 else np.nan
-                cg = data.get('ColdGas')
-                log_cg = np.log10(cg[gi]) if cg is not None and cg[gi] > 0 else np.nan
-                h2 = data.get('H2gas')
-                log_h2 = np.log10(h2[gi]) if h2 is not None and h2[gi] > 0 else np.nan
-                ml = data.get('MassLoading')
-                eta = ml[gi] if ml is not None else np.nan
-                mcg = data.get('MetalsColdGas')
-                if mcg is not None and cg is not None and cg[gi] > 0:
-                    z_met = mcg[gi] / cg[gi]
-                    # 12 + log10(O/H) assuming O is ~0.5 of metals by mass, H is 0.75 of gas
-                    # Simplified: 12 + log10(Z/Z_sun) + 8.69 (solar 12+log(O/H))
-                    oh12 = 12.0 + np.log10(z_met / Z_SUN) + np.log10(10**(8.69 - 12.0))
-                    # Or more directly: 12+log(O/H) = log10(Z/Zsun) + 8.69
-                    oh12 = np.log10(z_met / Z_SUN) + 8.69
-                else:
-                    oh12 = np.nan
-                sfrd = data.get('SfrDisk')
-                sfrb = data.get('SfrBulge')
-                sfr_val = 0.0
-                if sfrd is not None:
-                    sfr_val += sfrd[gi]
-                if sfrb is not None:
-                    sfr_val += sfrb[gi]
-                bh = data.get('BlackHoleMass')
-                log_bh = np.log10(bh[gi]) if bh is not None and bh[gi] > 0 else np.nan
+            print(f"  {i+1:3d}  {log_ms:8.3f}  {log_mh:9.3f}  {vvir_val:7.1f}  {log_cg:9.3f}  "
+                  f"{log_h2:8.3f}  {log_ej:10.3f}  {sfr_val:8.2f}  {eta:7.2f}  {oh12:11.3f}  {log_bh:8.3f}  {regime_str:>6s}")
 
-                vv = data.get('Vvir')
-                vvir_val = vv[gi] if vv is not None else np.nan
-
-                ej = data.get('EjectedMass')
-                log_ej = np.log10(ej[gi]) if ej is not None and ej[gi] > 0 else np.nan
-
-                reg = data.get('Regime')
-                regime_str = 'Hot' if (reg is not None and reg[gi] == 1) else 'CGM'
-
-                print(f"  {i+1:3d}  {log_ms:8.3f}  {log_mh:9.3f}  {vvir_val:7.1f}  {log_cg:9.3f}  "
-                      f"{log_h2:8.3f}  {log_ej:10.3f}  {sfr_val:8.2f}  {eta:7.2f}  {oh12:11.3f}  {log_bh:8.3f}  {regime_str:>6s}")
-
-            print()
+        print()
 
 
 # ========================== MAIN ==========================
