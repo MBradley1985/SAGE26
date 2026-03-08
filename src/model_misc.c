@@ -117,6 +117,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].infallMvir = -1.0;
     galaxies[p].infallVvir = -1.0;
     galaxies[p].infallVmax = -1.0;
+    galaxies[p].infallStellarMass = -1.0;
     galaxies[p].TimeOfInfall = -1.0;
 
     galaxies[p].mdot_cool = 0.0;
@@ -430,7 +431,15 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
     for(int p = 0; p < ngal; p++) {
         if(galaxies[p].mergeType > 0) continue;
 
-        const double Mvir = galaxies[p].Mvir;  // in 10^10 M☉/h
+        const double Mvir = galaxies[p].Mvir;
+        const double stellar_mass = galaxies[p].StellarMass;
+
+        // Massive galaxies (>= 10^12 M☉) are never FFB
+        const double stellar_mass_threshold = 100.0;  // 10^12 M☉ in code units
+        if(stellar_mass >= stellar_mass_threshold) {
+            galaxies[p].FFBRegime = 0;  // Normal halo - too massive for FFB
+            continue;
+        }
 
         // Calculate smooth FFB fraction using sigmoid transition (Li et al. 2024, eq. 3)
         const double f_ffb = calculate_ffb_fraction(Mvir, Zcurr, run_params);

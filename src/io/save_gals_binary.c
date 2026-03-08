@@ -336,11 +336,13 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
         o->infallMvir = g->infallMvir;
         o->infallVvir = g->infallVvir;
         o->infallVmax = g->infallVmax;
+        o->infallStellarMass = g->infallStellarMass;
         o->TimeOfInfall = g->TimeOfInfall * run_params->UnitTime_in_Megayears;
     } else {
         o->infallMvir = 0.0;
         o->infallVvir = 0.0;
         o->infallVmax = 0.0;
+        o->infallStellarMass = 0.0;
         o->TimeOfInfall = 0.0;
     }
 

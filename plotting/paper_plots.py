@@ -2164,7 +2164,7 @@ def plot_7_tcool_tff_distribution(snapdata):
     ax.set_xticks(violin_positions)
     ax.set_xticklabels(violin_labels)
     ax.set_ylabel(r'$\log_{10}(t_{\rm cool}/t_{\rm ff})$')
-    ax.set_ylim(-3.5, 5.0)
+    ax.set_ylim(-3.5, 6.0)
 
     _standard_legend(ax, loc='lower left')
     fig.tight_layout()
