@@ -239,6 +239,7 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                             galaxies[ngal].infallMvir = previousMvir;
                             galaxies[ngal].infallVvir = previousVvir;
                             galaxies[ngal].infallVmax = previousVmax;
+                            galaxies[ngal].infallStellarMass = galaxies[ngal].StellarMass;
                             galaxies[ngal].TimeOfInfall = halos[halonr].SnapNum;  // Track snapshot of infall
 
                         }
@@ -262,6 +263,7 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                         galaxies[ngal].infallMvir = previousMvir;
                         galaxies[ngal].infallVvir = previousVvir;
                         galaxies[ngal].infallVmax = previousVmax;
+                        galaxies[ngal].infallStellarMass = galaxies[ngal].StellarMass;
                     }
 
                     galaxies[ngal].Type = 2;

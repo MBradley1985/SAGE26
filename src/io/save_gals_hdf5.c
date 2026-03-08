@@ -18,7 +18,7 @@
 #define NUM_OUTPUT_FIELDS 2
 #pragma message "Using SAGE in MCMC mode (will only write " STR(NUM_OUTPUT_FIELDS) " fields into the hdf5 file)"
 #else
-#define NUM_OUTPUT_FIELDS 76
+#define NUM_OUTPUT_FIELDS 77
 #endif
 
 #define NUM_GALS_PER_BUFFER 8192
@@ -425,6 +425,7 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallMvir);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallVvir);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallVmax);
+        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallStellarMass);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Regime);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, CGMgas);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsCGMgas);
@@ -742,6 +743,7 @@ int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallMvir);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallVvir);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallVmax);
+        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallStellarMass);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Regime);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, CGMgas);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsCGMgas);
@@ -888,7 +890,7 @@ int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char (*fiel
                                                          "MetalsHotGas", "MetalsEjectedMass", "MetalsIntraClusterStars", "SfrDisk", "SfrBulge", "SfrDiskZ",
                                                          "SfrBulgeZ", "DiskRadius", "BulgeRadius", "MergerBulgeRadius", "InstabilityBulgeRadius", "MergerBulgeMass", "InstabilityBulgeMass", "Cooling", "Heating", "QuasarModeBHaccretionMass",
                                                          "TimeOfLastMajorMerger", "TimeOfLastMinorMerger", "OutflowRate", "infallMvir",
-                                                         "infallVvir", "infallVmax", "Regime", "CGMgas", "MetalsCGMgas", "MassLoading", "H2gas", "H1gas",
+                                                         "infallVvir", "infallVmax", "infallStellarMass", "Regime", "CGMgas", "MetalsCGMgas", "MassLoading", "H2gas", "H1gas",
                                                          "tcool", "tff", "tcool_over_tff", "tdeplete", "RcoolToRvir", "TimeOfInfall", "FFBRegime", "mdot_cool", "mdot_stream",
                                                          "ICS_disrupt", "ICS_accrete"};
 
@@ -929,6 +931,7 @@ int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char (*fiel
                                                                 "Virial mass of this galaxy's halo at the previous timestep.",
                                                                 "Virial velocity of this galaxy's halo at the previous timestep.",
                                                                 "Maximum circular speed of this galaxy's halo at the previous timestep.",
+                                                                "Stellar mass of this galaxy at the time it became a satellite.",
                                                                 "Regime of gas accretion onto this galaxy's halo: 0 = CGM-regime 1 = ICM-regime.",
                                                                 "Mass of gas in the circum-galactic medium (CGM).",
                                                                 "Mass of metals in the circum-galactic medium (CGM).",
@@ -953,7 +956,7 @@ int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char (*fiel
                                                          "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h",
                                                          "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "Msun/yr", "Msun/yr", "Msun/yr",
                                                          "Msun/yr", "Mpc/h", "Mpc/h", "Mpc/h", "Mpc/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "erg/s", "erg/s", "1.0e10 Msun/h",
-                                                         "Myr", "Myr", "Msun/yr", "1.0e10 Msun/yr", "km/s", "km/s", "Unitless", "1.0e10 Msun/h", "1.0e10 Msun/h", "Unitless", "1.0e10 Msun/h", "1.0e10 Msun/h",
+                                                         "Myr", "Myr", "Msun/yr", "1.0e10 Msun/yr", "km/s", "km/s", "1.0e10 Msun/h", "Unitless", "1.0e10 Msun/h", "1.0e10 Msun/h", "Unitless", "1.0e10 Msun/h", "1.0e10 Msun/h",
                                                          "Myr", "Myr", "Unitless", "Myr", "Unitless", "Myr", "Unitless", "1.0e10 Msun/yr", "1.0e10 Msun/yr",
                                                          "1.0e10 Msun/h", "1.0e10 Msun/h"};
 
@@ -967,7 +970,7 @@ int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char (*fiel
                                             H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
                                             H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
                                             H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
-                                            H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_INT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
+                                            H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_INT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
                                             H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_INT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
                                             H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT};
 #endif
@@ -1134,11 +1137,13 @@ int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct save_info 
         save_info->buffer_output_gals[output_snap_idx].infallMvir[gals_in_buffer] = g->infallMvir;
         save_info->buffer_output_gals[output_snap_idx].infallVvir[gals_in_buffer] = g->infallVvir;
         save_info->buffer_output_gals[output_snap_idx].infallVmax[gals_in_buffer] = g->infallVmax;
+        save_info->buffer_output_gals[output_snap_idx].infallStellarMass[gals_in_buffer] = g->infallStellarMass;
         save_info->buffer_output_gals[output_snap_idx].TimeOfInfall[gals_in_buffer] = g->TimeOfInfall;
     } else {
         save_info->buffer_output_gals[output_snap_idx].infallMvir[gals_in_buffer] = 0.0;
         save_info->buffer_output_gals[output_snap_idx].infallVvir[gals_in_buffer] = 0.0;
         save_info->buffer_output_gals[output_snap_idx].infallVmax[gals_in_buffer] = 0.0;
+        save_info->buffer_output_gals[output_snap_idx].infallStellarMass[gals_in_buffer] = 0.0;
         save_info->buffer_output_gals[output_snap_idx].TimeOfInfall[gals_in_buffer] = 0.0;
     }
 
@@ -1332,6 +1337,7 @@ int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to_write,
     EXTEND_AND_WRITE_GALAXY_DATASET(infallMvir);
     EXTEND_AND_WRITE_GALAXY_DATASET(infallVvir);
     EXTEND_AND_WRITE_GALAXY_DATASET(infallVmax);
+    EXTEND_AND_WRITE_GALAXY_DATASET(infallStellarMass);
     EXTEND_AND_WRITE_GALAXY_DATASET(Regime);
     EXTEND_AND_WRITE_GALAXY_DATASET(CGMgas);
     EXTEND_AND_WRITE_GALAXY_DATASET(MetalsCGMgas);

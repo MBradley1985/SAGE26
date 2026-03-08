@@ -103,6 +103,7 @@ struct HDF5_GALAXY_OUTPUT
     float *infallMvir;
     float *infallVvir;
     float *infallVmax;
+    float *infallStellarMass;
     float *TimeOfInfall;
 
     /* CGM properties */

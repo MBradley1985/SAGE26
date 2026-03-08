@@ -88,6 +88,7 @@ extern "C" {
       float infallMvir;
       float infallVvir;
       float infallVmax;
+      float infallStellarMass;
       float TimeOfInfall;
 
       /* CGM properties */
