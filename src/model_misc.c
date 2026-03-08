@@ -432,7 +432,7 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
         if(galaxies[p].mergeType > 0) continue;
 
         const double Mvir = galaxies[p].Mvir;
-        const double stellar_mass = galaxies[p].StellarMass;
+        // const double stellar_mass = galaxies[p].StellarMass;
 
         // Massive galaxies (>= 10^12 M☉) are never FFB
         // const double stellar_mass_threshold = 100.0;  // 10^12 M☉ in code units
