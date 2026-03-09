@@ -1763,12 +1763,12 @@ def plot_3_gas_metallicity_vs_stellar_mass(primary, vanilla):
             ax.errorbar(obs['mass'], obs['Z'], yerr=obs['yerr'],
                         fmt=obs['fmt'], color=obs['color'],
                         markeredgecolor='k', markeredgewidth=1.0, linewidth=1.0,
-                        markerfacecolor = 'gray', ms=8,
+                        markerfacecolor = 'lightgray', ms=8,
                         label=obs['label'], alpha=0.6, zorder=9)
         else:
             ax.plot(obs['mass'], obs['Z'], obs['fmt'],
                     markeredgecolor='k', markeredgewidth=1.0, linewidth=1.0,
-                    markerfacecolor = 'gray', ms=8,
+                    markerfacecolor = 'lightgray', ms=8,
                     color=obs['color'], label=obs['label'], alpha=0.6, zorder=9)
 
     ax.set_xlim(8.0, 12.0)
@@ -1852,14 +1852,14 @@ def plot_4_bh_bulge_mass(primary, vanilla):
                 xerr=[obs['xerr'][0][sersic], obs['xerr'][1][sersic]],
                 color='k', ls='none', lw=1, marker='d', ms=8, alpha=0.6, zorder=10,
                 markeredgecolor='k', markeredgewidth=0.8,
-                        markerfacecolor = 'gray',
+                        markerfacecolor = 'lightgray',
                 label='S13 core')
     ax.errorbar(obs['log_M_sph'][obs['core']], obs['log_M_BH'][obs['core']],
                 yerr=[obs['yerr'][0][obs['core']], obs['yerr'][1][obs['core']]],
                 xerr=[obs['xerr'][0][obs['core']], obs['xerr'][1][obs['core']]],
                 color='k', ls='none', lw=1, marker='o', ms=8,
                 markeredgecolor='k', markeredgewidth=0.8, alpha=0.6, zorder=10,
-                        markerfacecolor = 'gray',
+                        markerfacecolor = 'lightgray',
                 label=_tex_safe(r'S13 S\'{e}rsic'))
 
     ax.plot(obs['haring_rix_x'], obs['haring_rix_y'], 'k--',
@@ -1955,7 +1955,7 @@ def plot_5_stellar_halo_mass(primary, vanilla):
         ax.errorbar(k['mvir'], k['mstar'], xerr=xerr,
                     fmt='s', color='k', ms=8, lw=1,
                     markeredgecolor='k', markeredgewidth=0.8,
-                    markerfacecolor = 'gray', alpha=0.6, zorder=8,
+                    markerfacecolor = 'lightgray', alpha=0.6, zorder=8,
                     label='Kravtsov+18')
 
     if 'taylor' in obs:
@@ -1964,7 +1964,7 @@ def plot_5_stellar_halo_mass(primary, vanilla):
                     xerr=t['xerr'], yerr=t['yerr'],
                     fmt='d', color='k', ms=8, lw=1,
                     markeredgecolor='k', markeredgewidth=0.8,
-                    markerfacecolor = 'gray', alpha=0.6, zorder=9,
+                    markerfacecolor = 'lightgray', alpha=0.6, zorder=9,
                     label='Taylor+20')
 
     ax.set_xlim(10.0, 15.0)
@@ -2199,9 +2199,9 @@ def plot_8_precipitation_fraction(snapdata):
     ax.axvspan(10, 12, alpha=0.06, color='goldenrod')
     ax.axvspan(12, 300, alpha=0.06, color='dodgerblue')
 
-    ax.text(3, 0.65, 'Thermally\nUnstable', fontsize=14, ha='center',
+    ax.text(3, 0.55, 'Thermally\nUnstable', fontsize=14, ha='center',
             va='center', color='firebrick', fontweight='bold')
-    ax.text(11, 0.50, 'Transition', fontsize=11, ha='center',
+    ax.text(11, 0.70, 'Transition', fontsize=11, ha='center',
             va='center', color='goldenrod', fontweight='bold', rotation=90)
     ax.text(50, 0.12, 'Thermally\nStable', fontsize=14, ha='center',
             va='center', color='dodgerblue', fontweight='bold')
@@ -2423,7 +2423,7 @@ def plot_9b_cgm_fractions_grid(snapdata):
             ax.text(0.5, 0.5, 'No data', transform=ax.transAxes,
                     ha='center', va='center')
             ax.text(0.95, 0.95, label, transform=ax.transAxes,
-                    ha='right', va='top', fontsize=12)
+                    ha='right', va='top')
             continue
 
         d = snapdata[snap]
@@ -2473,7 +2473,7 @@ def plot_9b_cgm_fractions_grid(snapdata):
 
         # Redshift label
         ax.text(0.95, 0.95, label, transform=ax.transAxes,
-                ha='right', va='top', fontsize=12)
+                ha='right', va='top')
 
     # Common formatting
     for ax in axes_flat:
@@ -2532,7 +2532,7 @@ def plot_9c_depletion_grid(snapdata):
             ax.text(0.5, 0.5, 'No data', transform=ax.transAxes,
                     ha='center', va='center')
             ax.text(0.95, 0.95, label, transform=ax.transAxes,
-                    ha='right', va='top', fontsize=12)
+                    ha='right', va='top')
             continue
 
         d = snapdata[snap]
@@ -2583,7 +2583,7 @@ def plot_9c_depletion_grid(snapdata):
 
         # Redshift label
         ax.text(0.95, 0.95, label, transform=ax.transAxes,
-                ha='right', va='top', fontsize=12)
+                ha='right', va='top')
 
     # Common formatting
     for ax in axes_flat:
@@ -2732,7 +2732,7 @@ def plot_11_ffb_properties(snapdata):
 
     # Add redshift text in upper right corner
     ax1.text(0.05, 0.95, f'z={REDSHIFTS[snap]:.1f}', transform=ax1.transAxes,
-             ha='left', va='top', fontsize=12, fontweight='bold')
+             ha='left', va='top')
     _standard_legend(ax1, loc='lower left')
 
     # ----- Panel (b): Mass-metallicity relation -----
@@ -2762,7 +2762,7 @@ def plot_11_ffb_properties(snapdata):
     ax2.set_ylabel(r'$\log_{10}(Z_*/Z_{\odot})$')
     # Add redshift text in upper right corner
     ax2.text(0.05, 0.95, f'z={REDSHIFTS[snap]:.1f}', transform=ax2.transAxes,
-             ha='left', va='top', fontsize=12, fontweight='bold')
+             ha='left', va='top')
     _standard_legend(ax2, loc='lower right')
 
     # ----- Panel (c): SFR vs M_* -----
@@ -2785,7 +2785,7 @@ def plot_11_ffb_properties(snapdata):
     ax3.set_ylabel(r'$\log_{10}(\mathrm{SFR}\ [M_{\odot}\,\mathrm{yr}^{-1}])$')
     # Add redshift text in upper right corner
     ax3.text(0.05, 0.95, f'z={REDSHIFTS[snap]:.1f}', transform=ax3.transAxes,
-             ha='left', va='top', fontsize=12, fontweight='bold')
+             ha='left', va='top')
     _standard_legend(ax3, loc='lower left')
 
     fig.tight_layout()
@@ -2822,16 +2822,34 @@ def plot_12_sfh_ffb(snapdata):
         print('  No FFB galaxies found at z~10. Skipping.')
         return
 
-    # Select top FFB galaxies by mass, then mass-match non-FFB galaxies
+    # Select top FFB galaxies by mass
     N_track = min(5, len(w_ffb))
     mass_order = np.argsort(d['StellarMass'][w_ffb])[::-1]
     ffb_idx = w_ffb[mass_order[:N_track]]
     ffb_gal_ids = d['GalaxyIndex'][ffb_idx]
 
-    # For each selected FFB galaxy, find the closest-mass non-FFB galaxy
+    # Snapshots to track through
+    fig_g_snaps = [s for s in range(8, 64) if s in snapdata]
+
+    # First, find all GalaxyIndex values that are EVER in FFB regime
+    print('  Building set of galaxies that are ever FFB...')
+    ever_ffb_gids = set()
+    for s in fig_g_snaps:
+        sd = snapdata[s]
+        w_ffb_snap = np.where(sd['FFBRegime'] == 1)[0]
+        ever_ffb_gids.update(sd['GalaxyIndex'][w_ffb_snap].astype(int))
+    print(f'  Found {len(ever_ffb_gids)} galaxies that are FFB at some snapshot')
+
+    # Filter non-FFB candidates to only those NEVER in FFB regime
+    never_ffb_mask = np.array([int(d['GalaxyIndex'][i]) not in ever_ffb_gids
+                               for i in w_normal])
+    w_never_ffb = w_normal[never_ffb_mask]
+    print(f'  Non-FFB candidates at z~10: {len(w_normal)}, never-FFB: {len(w_never_ffb)}')
+
+    # Mass-match from the never-FFB pool
     norm_gal_ids = np.array([], dtype=np.int64)
-    if len(w_normal) > 0:
-        norm_masses = d['StellarMass'][w_normal]
+    if len(w_never_ffb) > 0:
+        norm_masses = d['StellarMass'][w_never_ffb]
         matched_norm_idx = []
         used = set()
         for fi in ffb_idx:
@@ -2841,14 +2859,30 @@ def plot_12_sfh_ffb(snapdata):
             order = np.argsort(diffs)
             for j in order:
                 if j not in used:
-                    matched_norm_idx.append(w_normal[j])
+                    matched_norm_idx.append(w_never_ffb[j])
                     used.add(j)
                     break
-        norm_idx = np.array(matched_norm_idx)
-        norm_gal_ids = d['GalaxyIndex'][norm_idx]
+        if matched_norm_idx:
+            norm_idx = np.array(matched_norm_idx)
+            norm_gal_ids = d['GalaxyIndex'][norm_idx]
 
-    # Snapshots to track through
-    fig_g_snaps = [s for s in range(8, 64) if s in snapdata]
+    print(f'  Selected {len(norm_gal_ids)} never-FFB galaxies for comparison')
+
+    # Diagnostic: print FFB history for selected galaxies
+    print('  --- FFB galaxies ---')
+    for gid in ffb_gal_ids:
+        ffb_snaps = []
+        for s in fig_g_snaps:
+            sd = snapdata[s]
+            match = np.where(sd['GalaxyIndex'] == gid)[0]
+            if len(match) > 0 and sd['FFBRegime'][match[0]] == 1:
+                ffb_snaps.append(s)
+        print(f'    GalaxyIndex {int(gid)}: FFB at snapshots {ffb_snaps}')
+
+    if len(norm_gal_ids) > 0:
+        print('  --- Non-FFB galaxies (verified never-FFB) ---')
+        for gid in norm_gal_ids:
+            print(f'    GalaxyIndex {int(gid)}: never FFB (verified)')
 
     cosmic_times = {s: cosmic_time_gyr(REDSHIFTS[s]) for s in fig_g_snaps}
 
@@ -3506,7 +3540,7 @@ def plot_15_sfr_vs_stellar_mass(primary, vanilla):
     bz04_mass, bz04_sfr = load_brinchmann_sfr_mass_2004_data()
     if bz04_mass is not None and bz04_sfr is not None:
         ax.scatter(bz04_mass, bz04_sfr, marker='d', alpha=0.6, zorder=10,
-                facecolors='gray', edgecolors='black', s=50,
+                facecolors='lightgray', edgecolors='black', s=50,
                 label='Brinchmann+04')
         
     # --- Load Terrazas et al. (2017) data ---
@@ -3514,7 +3548,7 @@ def plot_15_sfr_vs_stellar_mass(primary, vanilla):
     if ter_mass is not None and ter_sfr is not None:
         # Plot with error bars
         ax.errorbar(ter_mass, ter_sfr, xerr=0.2, yerr=0.3, fmt='o', ecolor='black', alpha=0.6, zorder=10,
-                   mfc='gray', mec='black', ms=8, mew=1.0, elinewidth=1.0, label='Terrazas+17')
+                   mfc='lightgray', mec='black', ms=8, mew=1.0, elinewidth=1.0, label='Terrazas+17')
         
      # --- Load and plot GAMA ProSpect Claudia data ---
         log_ms, log_sfr = load_gama_prospect_claudia()
@@ -3532,7 +3566,7 @@ def plot_15_sfr_vs_stellar_mass(primary, vanilla):
             valid = ~np.isnan(med)
             ax.errorbar(centers[valid], med[valid], yerr=[med[valid] - p25[valid], p75[valid] - med[valid]],
                         fmt='s', color='black', label='Bellstedt+20', markersize=8, alpha=0.6, zorder=10,
-                        markeredgewidth=0.8, markerfacecolor='gray',
+                        markeredgewidth=0.8, markerfacecolor='lightgray',
                         markeredgecolor='black')
         
 
@@ -5483,10 +5517,10 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
     sugahara_x = sugahara_ml[0]  # First column
     sugahara_y = sugahara_ml[1]  # Second column 
 
-    ax.scatter(chisholm_x, chisholm_y, color='k', marker='o', s=50, label='Chisholm+17', edgecolors='k', linewidths=1.0, facecolors='gray', alpha=0.6)
-    ax.scatter(heckman_x, heckman_y, color='k', marker='x', s=50, label='Heckman+15', edgecolors='k', linewidths=1.0, facecolors='gray', alpha=0.6)
-    ax.scatter(rupke_x, rupke_y, color='k', marker='s', s=50, label='Rupke+05', edgecolors='k', linewidths=1.0, facecolors='gray', alpha=0.6)
-    ax.scatter(sugahara_x, sugahara_y, color='k', marker='d', s=50, label='Sugahara+17', edgecolors='k', linewidths=1.0, facecolors='gray', alpha=0.6)
+    ax.scatter(chisholm_x, chisholm_y, color='k', marker='o', s=50, label='Chisholm+17', edgecolors='k', linewidths=1.0, facecolors='lightgray', alpha=0.6)
+    ax.scatter(heckman_x, heckman_y, color='k', marker='x', s=50, label='Heckman+15', edgecolors='k', linewidths=1.0, facecolors='lightgray', alpha=0.6)
+    ax.scatter(rupke_x, rupke_y, color='k', marker='s', s=50, label='Rupke+05', edgecolors='k', linewidths=1.0, facecolors='lightgray', alpha=0.6)
+    ax.scatter(sugahara_x, sugahara_y, color='k', marker='d', s=50, label='Sugahara+17', edgecolors='k', linewidths=1.0, facecolors='lightgray', alpha=0.6)
             
     ax.set_xlim(0, 500)
     # ax.set_xscale('log')
@@ -5623,7 +5657,7 @@ def _gas_ratio_plot(gas_prop, obs_file, obs_label, ylabel, output_name):
         ax.errorbar(log_ms[omask], med[omask], yerr=[yerr_lo, yerr_hi],
                     fmt='o', color='k', markersize=8,
                     label=obs_label, zorder=10, linewidth=1.0,
-                    markerfacecolor='gray', markeredgecolor='k',
+                    markerfacecolor='lightgray', markeredgecolor='k',
                     markeredgewidth=1.0, alpha=0.6)
 
     ax.set_xlim(8, 12)
@@ -5634,8 +5668,7 @@ def _gas_ratio_plot(gas_prop, obs_file, obs_label, ylabel, output_name):
     handles, labels = ax.get_legend_handles_labels()
     n_items = len(handles)
     ax.legend(handles, labels, loc='upper center',
-              bbox_to_anchor=(0.5, -0.18), ncol=n_items/2, frameon=False,
-              fontsize=12)
+              bbox_to_anchor=(0.5, -0.18), ncol=n_items/2, frameon=False)
     
     ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
     ax.yaxis.set_major_locator(plt.MultipleLocator(1.0))
@@ -5769,8 +5802,7 @@ def _plot_mdot_panels(x_prop, x_label, xlim, xbins, output_name,
 
         ax.set_ylabel(r'$\log_{10}\,\dot{m}_{\mathrm{cool}}\ [M_{\odot}\,\mathrm{yr}^{-1}]$')
         ax.set_xlim(*xlim)
-        ax.text(0.05, 0.92, zlabel, transform=ax.transAxes,
-            fontsize=15, va='top', fontweight='bold')
+        ax.text(0.05, 0.92, zlabel, transform=ax.transAxes, va='top')
         # ax.tick_params(axis='y')  # Use style sheet for y-axis ticks
         ax.set_ylim(-1, 3.5)
 
