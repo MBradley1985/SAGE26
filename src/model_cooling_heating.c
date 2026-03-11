@@ -12,6 +12,262 @@
 #include "model_misc.h"
 
 
+// ============================================================================
+// CGM Density Profile Helper Functions
+// ============================================================================
+
+// NFW profile: ρ(r) = ρ_s / [(r/r_s)(1 + r/r_s)²]
+// Returns the normalization ρ_s given total mass M_CGM within R_vir
+static double nfw_rho_s(const double M_CGM, const double Rvir, const double c_NFW)
+{
+    const double r_s = Rvir / c_NFW;
+    // M_CGM = 4π ρ_s r_s³ × [ln(1+c) - c/(1+c)]
+    const double f_c = log(1.0 + c_NFW) - c_NFW / (1.0 + c_NFW);
+    return M_CGM / (4.0 * M_PI * r_s * r_s * r_s * f_c);
+}
+
+// NFW density at radius r
+static double nfw_density(const double r, const double rho_s, const double r_s)
+{
+    const double x = r / r_s;
+    if(x < 1e-10) return rho_s / (1e-10 * 1.0 * 1.0);  // Avoid singularity at r=0
+    return rho_s / (x * (1.0 + x) * (1.0 + x));
+}
+
+// NFW concentration parameter (Duffy et al. 2008 relation)
+static double nfw_concentration(const double Mvir_Msun, const double z)
+{
+    // c = 7.85 * (M/2e12)^(-0.081) * (1+z)^(-0.71)
+    return 7.85 * pow(Mvir_Msun / 2.0e12, -0.081) * pow(1.0 + z, -0.71);
+}
+
+// Beta profile: ρ(r) = ρ_0 / [1 + (r/r_c)²]^(3β/2)
+// For β = 2/3: ρ(r) = ρ_0 / [1 + (r/r_c)²]
+// Returns the normalization ρ_0 given total mass M_CGM within R_vir
+static double beta_rho_0(const double M_CGM, const double Rvir, const double r_c, const double beta)
+{
+    // For general β, the enclosed mass integral is:
+    // M(<R) = 4π ρ_0 ∫_0^R r² / [1 + (r/r_c)²]^(3β/2) dr
+    //
+    // For β = 2/3 (common value), this simplifies to:
+    // M(<R) = 4π ρ_0 r_c³ × [arctan(R/r_c) - (R/r_c)/(1 + (R/r_c)²)]
+    // But we need the more general form...
+    //
+    // Use numerical approximation for general β:
+    // For large R/r_c, M ≈ 4π ρ_0 r_c³ × (some function of β)
+
+    const double x = Rvir / r_c;
+    double mass_integral;
+
+    if(fabs(beta - 2.0/3.0) < 0.01) {
+        // β ≈ 2/3: use analytic form
+        // M = 4π ρ_0 r_c³ × [arctan(x) - x/(1+x²)]
+        mass_integral = atan(x) - x / (1.0 + x * x);
+    } else {
+        // General β: numerical integration using Simpson's rule
+        const int n_steps = 100;
+        const double dr = Rvir / n_steps;
+        double integral = 0.0;
+        for(int i = 0; i <= n_steps; i++) {
+            const double r = i * dr;
+            const double y = r / r_c;
+            const double rho_factor = 1.0 / pow(1.0 + y * y, 1.5 * beta);
+            double weight = (i == 0 || i == n_steps) ? 1.0 : ((i % 2 == 0) ? 2.0 : 4.0);
+            integral += weight * r * r * rho_factor;
+        }
+        integral *= dr / 3.0;
+        // M = 4π ρ_0 × integral, so mass_integral = integral / r_c³
+        mass_integral = integral / (r_c * r_c * r_c);
+    }
+
+    if(mass_integral <= 0.0) return 0.0;
+    return M_CGM / (4.0 * M_PI * r_c * r_c * r_c * mass_integral);
+}
+
+// Beta-profile density at radius r
+static double beta_density(const double r, const double rho_0, const double r_c, const double beta)
+{
+    const double y = r / r_c;
+    return rho_0 / pow(1.0 + y * y, 1.5 * beta);
+}
+
+// ============================================================================
+// Enclosed Mass Functions for each profile
+// ============================================================================
+
+// NFW enclosed mass: M(<r) = M_total × [ln(1+x) - x/(1+x)] / [ln(1+c) - c/(1+c)]
+static double nfw_enclosed_mass(const double r, const double M_total, const double Rvir, const double c_NFW)
+{
+    const double r_s = Rvir / c_NFW;
+    const double x = r / r_s;
+
+    // M(<r) / M_total = f(x) / f(c)
+    const double f_x = log(1.0 + x) - x / (1.0 + x);
+    const double f_c = log(1.0 + c_NFW) - c_NFW / (1.0 + c_NFW);
+
+    if(f_c <= 0.0) return M_total;
+    return M_total * f_x / f_c;
+}
+
+// Beta-profile enclosed mass for β = 2/3
+// M(<r) = M_total × [arctan(x) - x/(1+x²)] / [arctan(X) - X/(1+X²)]
+static double beta_enclosed_mass(const double r, const double M_total, const double Rvir, const double r_c)
+{
+    const double x = r / r_c;
+    const double X = Rvir / r_c;
+
+    const double f_x = atan(x) - x / (1.0 + x * x);
+    const double f_X = atan(X) - X / (1.0 + X * X);
+
+    if(f_X <= 0.0) return M_total;
+    return M_total * f_x / f_X;
+}
+
+// Unified enclosed mass function
+static double cgm_enclosed_mass(const double r, const double M_total, const double Rvir,
+                                 const double Mvir_Msun, const double z, const int profile_type)
+{
+    if(r >= Rvir) return M_total;
+    if(r <= 0.0) return 0.0;
+
+    if(profile_type == 0) {
+        // Uniform density: M(<r) = M_total × (r/Rvir)³
+        const double ratio = r / Rvir;
+        return M_total * ratio * ratio * ratio;
+    } else if(profile_type == 1) {
+        // NFW profile
+        const double c_NFW = nfw_concentration(Mvir_Msun, z);
+        return nfw_enclosed_mass(r, M_total, Rvir, c_NFW);
+    } else if(profile_type == 2) {
+        // Beta profile (β = 2/3, r_c = 0.1 Rvir)
+        const double r_c = 0.1 * Rvir;
+        return beta_enclosed_mass(r, M_total, Rvir, r_c);
+    } else {
+        // Default to uniform
+        const double ratio = r / Rvir;
+        return M_total * ratio * ratio * ratio;
+    }
+}
+
+// Calculate CGM gas density at radius r given the profile choice
+// Returns density in CGS units (g/cm³)
+static double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const double Rvir_cgs,
+                                    const double Mvir_Msun, const double z, const int profile_type)
+{
+    if(profile_type == 0) {
+        // Uniform density
+        const double volume_cgs = (4.0 * M_PI / 3.0) * Rvir_cgs * Rvir_cgs * Rvir_cgs;
+        return CGMgas_cgs / volume_cgs;
+
+    } else if(profile_type == 1) {
+        // NFW profile
+        const double c_NFW = nfw_concentration(Mvir_Msun, z);
+        const double r_s_cgs = Rvir_cgs / c_NFW;
+        const double rho_s = nfw_rho_s(CGMgas_cgs, Rvir_cgs, c_NFW);
+        return nfw_density(r_cgs, rho_s, r_s_cgs);
+
+    } else if(profile_type == 2) {
+        // Beta profile with β = 2/3 and r_c = 0.1 R_vir
+        const double beta = 2.0 / 3.0;
+        const double r_c_cgs = 0.1 * Rvir_cgs;
+        const double rho_0 = beta_rho_0(CGMgas_cgs, Rvir_cgs, r_c_cgs, beta);
+        return beta_density(r_cgs, rho_0, r_c_cgs, beta);
+
+    } else {
+        // Default to uniform if unknown profile type
+        const double volume_cgs = (4.0 * M_PI / 3.0) * Rvir_cgs * Rvir_cgs * Rvir_cgs;
+        return CGMgas_cgs / volume_cgs;
+    }
+}
+
+// Iteratively solve for cooling radius r_cool where t_cool(r) = t_ff(r)
+// Returns r_cool in CGS units
+// Uses the correct enclosed mass for each density profile
+static double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, const double Mvir_cgs,
+                              const double Mvir_Msun, const double temp, const double lambda,
+                              const double z, const int profile_type,
+                              __attribute__((unused)) const struct params *run_params)
+{
+    const double G_cgs = 6.674e-8;  // cm³ g⁻¹ s⁻²
+    const double mu = 0.59;
+
+    // ========================================================================
+    // UNIFORM / BETA: Use isothermal r_cool formula (like hot-regime)
+    // ========================================================================
+    // For uniform density, t_cool and t_ff are both roughly constant with radius,
+    // so the iterative solver doesn't converge meaningfully.
+    // For beta profile (β=2/3), the profile is too flat and has similar issues.
+    // Instead, use the isothermal approach: assume ρ(r) ∝ 1/r² for r_cool,
+    // which gives r_cool = sqrt(ρ0 / ρ_cool) where ρ_cool is the critical density.
+    if(profile_type == 0 || profile_type == 2) {
+        // t_ff at R_vir: t_ff = sqrt(2 R³ / (G M))
+        const double t_ff_Rvir = sqrt(2.0 * Rvir_cgs * Rvir_cgs * Rvir_cgs / (G_cgs * Mvir_cgs));
+
+        // Critical density where t_cool = t_ff
+        // ρ_cool = (3/2) μ m_p k T / (Λ t_ff)
+        const double rho_cool = (1.5 * mu * PROTONMASS * BOLTZMANN * temp) / (lambda * t_ff_Rvir);
+
+        // Isothermal profile normalization: ρ0 = M / (4π R)
+        const double rho0 = CGMgas_cgs / (4.0 * M_PI * Rvir_cgs);
+
+        // r_cool from isothermal: ρ(r_cool) = ρ0/r_cool² = ρ_cool
+        double r_cool = sqrt(rho0 / rho_cool);
+
+        // Apply bounds
+        if(r_cool > Rvir_cgs) r_cool = Rvir_cgs;
+        if(r_cool < 0.001 * Rvir_cgs) r_cool = 0.001 * Rvir_cgs;
+
+        return r_cool;
+    }
+
+    // ========================================================================
+    // NFW PROFILE: Iterative solver (cuspy profile converges well)
+    // ========================================================================
+    const double prefactor = 1.5 * mu * PROTONMASS * BOLTZMANN * temp / lambda;
+
+    double r_cool = 0.5 * Rvir_cgs;
+    const int max_iter = 30;
+    const double tolerance = 0.01;
+
+    for(int iter = 0; iter < max_iter; iter++) {
+        const double rho = cgm_density_at_radius(r_cool, CGMgas_cgs, Rvir_cgs, Mvir_Msun, z, profile_type);
+
+        if(rho <= 0.0) {
+            r_cool = Rvir_cgs;
+            break;
+        }
+
+        const double t_cool = prefactor / rho;
+
+        const double M_enclosed = cgm_enclosed_mass(r_cool, Mvir_cgs, Rvir_cgs, Mvir_Msun, z, profile_type);
+        const double g_accel = (M_enclosed > 0.0) ? G_cgs * M_enclosed / (r_cool * r_cool) : 0.0;
+
+        if(g_accel <= 0.0) {
+            r_cool = Rvir_cgs;
+            break;
+        }
+
+        const double t_ff = sqrt(2.0 * r_cool / g_accel);
+        const double ratio = t_cool / t_ff;
+
+        const double r_cool_new = r_cool * pow(ratio, -0.3);
+
+        double r_bounded = r_cool_new;
+        if(r_bounded > Rvir_cgs) r_bounded = Rvir_cgs;
+        if(r_bounded < 0.001 * Rvir_cgs) r_bounded = 0.001 * Rvir_cgs;
+
+        if(fabs(r_bounded - r_cool) / r_cool < tolerance) {
+            r_cool = r_bounded;
+            break;
+        }
+
+        r_cool = r_bounded;
+    }
+
+    return r_cool;
+}
+
+
 double cooling_recipe(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     // Check if CGM recipe is enabled for backwards compatibility
@@ -167,12 +423,12 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 }
 
 
-double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxies, 
+double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxies,
                          const struct params *run_params)
 {
     static long precipitation_debug_counter = 0;
     precipitation_debug_counter++;
-    
+
     double coolingGas = 0.0;
 
     // ========================================================================
@@ -181,54 +437,81 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     if(galaxies[gal].CGMgas <= 0.0 || galaxies[gal].Vvir <= 0.0 || galaxies[gal].Rvir <= 0.0) {
         if(precipitation_debug_counter % 50000 == 0) {
             printf("DEBUG PRECIP [%ld]: Early exit - CGMgas=%.2e, Vvir=%.2f, Rvir=%.2e\n",
-                   precipitation_debug_counter, galaxies[gal].CGMgas, 
+                   precipitation_debug_counter, galaxies[gal].CGMgas,
                    galaxies[gal].Vvir, galaxies[gal].Rvir);
         }
         return 0.0;
     }
 
     // ========================================================================
-    // STEP 1: CALCULATE COOLING TIME (CGS UNITS)
+    // STEP 1: CALCULATE COOLING TIME (CGS UNITS) WITH DENSITY PROFILE
     // ========================================================================
-    
+
     // Virial temperature
     const double temp = 35.9 * galaxies[gal].Vvir * galaxies[gal].Vvir; // Kelvin
-    
+
     // Metallicity
     double logZ = -10.0;
     if(galaxies[gal].MetalsCGMgas > 0) {
         logZ = log10(galaxies[gal].MetalsCGMgas / galaxies[gal].CGMgas);
     }
-    
+
     // Cooling function (erg cm^3 s^-1)
     double lambda = get_metaldependent_cooling_rate(log10(temp), logZ);
 
-    
+
     // Convert CGM mass and radius to CGS
     const double CGMgas_cgs = galaxies[gal].CGMgas * 1e10 * SOLAR_MASS / run_params->Hubble_h; // g
     const double Rvir_cgs = galaxies[gal].Rvir * CM_PER_MPC / run_params->Hubble_h; // cm
-    
-    // Volume and mass density
-    const double volume_cgs = (4.0 * M_PI / 3.0) * Rvir_cgs * Rvir_cgs * Rvir_cgs; // cm^3
-    const double mass_density_cgs = CGMgas_cgs / volume_cgs; // g cm^-3
-    
-    // Cooling time: tcool = (3/2) * μ * m_p * k * T / (ρ * Λ)
-    // where μ = 0.59 for fully ionized gas
+    const double Mvir_cgs = galaxies[gal].Mvir * 1e10 * SOLAR_MASS / run_params->Hubble_h; // g
+    const double Mvir_Msun = galaxies[gal].Mvir * 1e10 / run_params->Hubble_h; // Msun
+    const double z = run_params->ZZ[galaxies[gal].SnapNum];
+
+    // Get density profile type (0: uniform, 1: NFW, 2: beta)
+    // IMPORTANT: Density profile physics only applies to CGM-regime haloes (Regime == 0)
+    // Hot-regime haloes always use uniform density for simple CGM depletion
+    const int profile_type = (galaxies[gal].Regime == 0) ? run_params->CGMDensityProfile : 0;
+
+    // ========================================================================
+    // STEP 1b: SOLVE FOR COOLING RADIUS (consistent with hot regime approach)
+    // ========================================================================
+    // Find r_cool where t_cool(r_cool) = t_ff(r_cool)
+    // This is done iteratively for all profile types
+
+    const double r_cool_cgs = solve_for_rcool(CGMgas_cgs, Rvir_cgs, Mvir_cgs, Mvir_Msun,
+                                               temp, lambda, z, profile_type, run_params);
+
+    // Get density at the cooling radius
+    const double mass_density_cgs = cgm_density_at_radius(r_cool_cgs, CGMgas_cgs, Rvir_cgs,
+                                                           Mvir_Msun, z, profile_type);
+
+    // Store r_cool / R_vir for diagnostics
+    galaxies[gal].RcoolToRvir = r_cool_cgs / Rvir_cgs;
+
+    // Convert r_cool to code units
+    const double r_cool = r_cool_cgs / (CM_PER_MPC / run_params->Hubble_h);
+
+    // Cooling time at r_cool: tcool = (3/2) * μ * m_p * k * T / (ρ * Λ)
     const double mu = 0.59;
-    const double tcool_cgs = (1.5 * mu * PROTONMASS * BOLTZMANN * temp) / (mass_density_cgs * lambda); // s
+    const double tcool_cgs = (1.5 * mu * PROTONMASS * BOLTZMANN * temp) / (mass_density_cgs * lambda);
     const double tcool = tcool_cgs / run_params->UnitTime_in_s; // code units
 
     // ========================================================================
-    // STEP 2: CALCULATE FREE-FALL TIME
+    // STEP 2: CALCULATE FREE-FALL TIME AT r_cool
     // ========================================================================
-    
-    // Gravitational acceleration at Rvir
-    const float g_accel = (galaxies[gal].Mvir > 0.0) 
-        ? run_params->G * galaxies[gal].Mvir / (galaxies[gal].Rvir * galaxies[gal].Rvir)
-        : 0.0f;
-    
-    // Free-fall time: tff = sqrt(2*R/g)
-    // Guard against g_accel == 0 (Mvir ~ 0 galaxies) to avoid Inf
+
+    // Enclosed mass at r_cool (using proper profile)
+    const double M_enclosed_rcool = cgm_enclosed_mass(r_cool_cgs, Mvir_cgs, Rvir_cgs,
+                                                       Mvir_Msun, z, profile_type);
+    // Convert to code units
+    const double M_enclosed_code = M_enclosed_rcool / (1e10 * SOLAR_MASS / run_params->Hubble_h);
+
+    // Gravitational acceleration at r_cool
+    const double g_accel = (M_enclosed_code > 0.0 && r_cool > 0.0)
+        ? run_params->G * M_enclosed_code / (r_cool * r_cool)
+        : 0.0;
+
+    // Free-fall time at r_cool: tff = sqrt(2*r_cool/g)
     if(g_accel <= 0.0) {
         galaxies[gal].tcool = tcool;
         galaxies[gal].tff = -1.0;
@@ -237,10 +520,10 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         galaxies[gal].RcoolToRvir = -1.0;
         return 0.0;
     }
-    const float tff = sqrt(2.0 * galaxies[gal].Rvir / g_accel); // code units
+    const double tff = sqrt(2.0 * r_cool / g_accel); // code units
 
     // Critical ratio for precipitation
-    const float tcool_over_tff = tcool / tff;
+    const double tcool_over_tff = tcool / tff;
 
 
     // Save to galaxy struct for potential diagnostics
@@ -283,24 +566,6 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
 
     }
 
-    // Adding this diagnostic for output
-    // Only compute RcoolToRvir when the formula is valid (transition/stable regime)
-    // In the precipitation regime (tcool_over_tff < threshold), x < 0 making rho_rcool < 0
-    // which produces NaN from sqrt(negative). Use -1.0 sentinel for undefined.
-    {
-        const double x_diag = (tcool_over_tff - precipitation_threshold) / transition_width;
-        const double rho_rcool = x_diag / tcool * 0.885;  // 0.885 = 3/2 * mu, mu=0.59 for a fully ionized gas
-
-        if(rho_rcool > 0.0 && isfinite(rho_rcool)) {
-            // an isothermal density profile for the hot gas is assumed here
-            const double rho0 = galaxies[gal].CGMgas / (4 * M_PI * galaxies[gal].Rvir);
-            const double rcool = sqrt(rho0 / rho_rcool);
-            galaxies[gal].RcoolToRvir = rcool / galaxies[gal].Rvir;
-        } else {
-            galaxies[gal].RcoolToRvir = -1.0;
-        }
-    }
-
     // ========================================================================
     // STEP 4: CALCULATE PRECIPITATION RATE
     // ========================================================================
@@ -334,47 +599,53 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // STEP 6: CALCULATE DEPLETION TIMESCALE (DIAGNOSTIC)
     // ========================================================================
 
-    // Depletion timescale
-    if(precipitation_fraction > 1e-6 && isfinite(tff)) {
-        const float depletion_time = tff / precipitation_fraction;
-        galaxies[gal].tdeplete = isfinite(depletion_time) ? depletion_time : -1.0f;
+    // Depletion timescale (only meaningful for CGM-regime haloes)
+    if(galaxies[gal].Regime == 0) {
+        if(precipitation_fraction > 1e-6 && isfinite(tff)) {
+            const double depletion_time = tff / precipitation_fraction;
+            galaxies[gal].tdeplete = isfinite(depletion_time) ? (float)depletion_time : -1.0f;
+        } else {
+            galaxies[gal].tdeplete = -1.0f;
+        }
     } else {
-        galaxies[gal].tdeplete = -1.0;
+        // Hot-regime haloes: reset diagnostic fields (density profile physics doesn't apply)
+        galaxies[gal].tcool = -1.0f;
+        galaxies[gal].tff = -1.0f;
+        galaxies[gal].tcool_over_tff = -1.0f;
+        galaxies[gal].tdeplete = -1.0f;
     }
-        
-    //     printf("============================================\n\n");
-    // }
 
     // Sanity check
     XASSERT(coolingGas >= 0.0, -1, "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
     XASSERT(coolingGas <= galaxies[gal].CGMgas + 1e-12, -1,
             "Error: Cooling gas = %g exceeds CGM gas = %g", coolingGas, galaxies[gal].CGMgas);
-    
+
     return coolingGas;
 }
+
 
 double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     double cgm_cooling = 0.0;
     double hot_cooling = 0.0;
-    
+
     if(galaxies[gal].Regime == 0) {
         // CGM REGIME: CGM physics dominates
-        
+
         // Primary: Precipitation cooling from CGMgas
         if(galaxies[gal].CGMgas > 0.0) {
             cgm_cooling = cooling_recipe_cgm(gal, dt, galaxies, run_params);
         }
-        
-    
+
+
     } else {
         // HOT REGIME: Traditional physics dominates
-        
+
         // Primary: Traditional cooling from HotGas
         if(galaxies[gal].HotGas > 0.0) {
             hot_cooling = cooling_recipe_hot(gal, dt, galaxies, run_params);
         }
-        
+
         // Secondary: Precipitation cooling from CGMgas (gradually depletes)
         if(galaxies[gal].CGMgas > 0.0) {
             cgm_cooling = cooling_recipe_cgm(gal, dt, galaxies, run_params);
@@ -390,7 +661,7 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
         galaxies[gal].CGMgas -= cgm_cooling;
         galaxies[gal].MetalsCGMgas -= metallicity * cgm_cooling;
     }
-    
+
     // Apply HotGas cooling
     if(hot_cooling > 0.0) {
         const double metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);

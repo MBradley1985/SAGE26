@@ -53,6 +53,7 @@ ReionizationOn        1   %0: switch off
 DiskInstabilityOn     1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
 
 CGMrecipeOn           1   %0: switch off
+CGMDensityProfile     0   %0: uniform; 1: NFW; 2: beta-profile (β=2/3)
 FIREmodeOn            1   %0: switch off
 FeedbackFreeModeOn    1   %0: switch off
 BulgeSizeOn           3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
