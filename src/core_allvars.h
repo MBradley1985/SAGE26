@@ -541,6 +541,9 @@ struct params
 
     int32_t ThisTask;
     int32_t NTasks;
+
+    /* Random seed for reproducibility (if 0, uses time-based seed) */
+    int32_t RandomSeed;
 };
 
 
