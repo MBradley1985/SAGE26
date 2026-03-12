@@ -277,11 +277,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->TrackICSAssembly);
     ParamID[NParam++] = INT;
 
-    strncpy(ParamTag[NParam], "RandomSeed", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->RandomSeed);
-    ParamID[NParam++] = INT;
-
-
+    
     used_tag = mymalloc(sizeof(int) * NParam);
     for(int i=0; i<NParam; i++) {
         used_tag[i]=1;

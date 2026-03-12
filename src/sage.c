@@ -4,7 +4,6 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/time.h>
-#include <time.h>
 
 #include <fcntl.h> //open/close
 #include <unistd.h> //pwrite
@@ -52,20 +51,6 @@ int run_sage(const int ThisTask, const int NTasks, const char *param_file, void 
     int32_t status = read_parameter_file(param_file, run_params);
     if(status != EXIT_SUCCESS) {
         return status;
-    }
-
-    /* Initialize random number generator for reproducibility */
-    if(run_params->RandomSeed != 0) {
-        srand((unsigned int)run_params->RandomSeed);
-        if(ThisTask == 0) {
-            fprintf(stdout, "Random seed set to %d for reproducibility\n", run_params->RandomSeed);
-        }
-    } else {
-        /* Use time-based seed (original non-reproducible behavior) */
-        srand((unsigned int)time(NULL) + ThisTask);
-        if(ThisTask == 0) {
-            fprintf(stdout, "Random seed: time-based (non-reproducible)\n");
-        }
     }
 
     /* Now start the model */
