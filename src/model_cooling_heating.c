@@ -592,6 +592,13 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         }
     }
 
+    // double x = PROTONMASS * BOLTZMANN * temp / lambda;        // now this has units sec g/cm^3
+    // x /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);         // now in internal units
+
+    // if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
+	// 		coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x, r_cool, galaxies, run_params);
+    // }
+
     // ========================================================================
     // STEP 5: TRACK COOLING ENERGY
     // ========================================================================
@@ -705,8 +712,8 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
 
 	// now calculate the new heating rate
     if(galaxies[centralgal].HotGas > 0.0) {
-        if(run_params->AGNrecipeOn == 2 || run_params->AGNrecipeOn == 4) {
-            // Bondi-Hoyle accretion recipe (AGNrecipeOn==4 uses seeded BHs)
+        if(run_params->AGNrecipeOn == 2) {
+            // Bondi-Hoyle accretion recipe
             AGNrate = (2.5 * M_PI * run_params->G) * (0.375 * 0.6 * x) * galaxies[centralgal].BlackHoleMass * run_params->RadioModeEfficiency;
         } else if(run_params->AGNrecipeOn == 3) {
             // Cold cloud accretion: trigger: rBH > 1.0e-4 Rsonic, and accretion rate = 0.01% cooling rate
@@ -801,8 +808,8 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
 
 	// now calculate the new heating rate
     if(galaxies[centralgal].CGMgas > 0.0) {
-        if(run_params->AGNrecipeOn == 2 || run_params->AGNrecipeOn == 4) {
-            // Bondi-Hoyle accretion recipe (AGNrecipeOn==4 uses seeded BHs)
+        if(run_params->AGNrecipeOn == 2) {
+            // Bondi-Hoyle accretion recipe
             AGNrate = (2.5 * M_PI * run_params->G) * (0.375 * 0.6 * x) * galaxies[centralgal].BlackHoleMass * run_params->RadioModeEfficiency;
         } else if(run_params->AGNrecipeOn == 3) {
             // Cold cloud accretion: trigger: rBH > 1.0e-4 Rsonic, and accretion rate = 0.01% cooling rate
