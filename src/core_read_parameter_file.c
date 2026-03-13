@@ -235,6 +235,15 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->BHGrowthVelocityScale);
     ParamID[NParam++] = DOUBLE;
 
+    // Hot halo BH accretion parameters (SHARK-style continuous growth)
+    strncpy(ParamTag[NParam], "HotHaloBHaccretionOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->HotHaloBHaccretionOn);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "HotHaloBHaccretionKappa", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->HotHaloBHaccretionKappa);
+    ParamID[NParam++] = DOUBLE;
+
     strncpy(ParamTag[NParam], "RadioModeEfficiency", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->RadioModeEfficiency);
     ParamID[NParam++] = DOUBLE;

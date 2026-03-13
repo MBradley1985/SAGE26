@@ -496,6 +496,10 @@ struct params
     int32_t BHGrowthVelocityDep;       // 0: off (fixed efficiency); 1: velocity-dependent efficiency
     double BHGrowthVelocityScale;      // Characteristic velocity in km/s (default 400, like SHARK)
 
+    // Hot halo BH accretion (SHARK-style continuous growth)
+    int32_t HotHaloBHaccretionOn;      // 0: off; 1: continuous BH accretion from hot halo
+    double HotHaloBHaccretionKappa;    // Efficiency parameter (SHARK default ~0.005)
+
     double Reionization_z0;
     double Reionization_zr;
     double ThresholdSatDisruption;

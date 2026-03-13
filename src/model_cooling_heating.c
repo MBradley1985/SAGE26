@@ -593,9 +593,23 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     }
 
     // ========================================================================
-    // STEP 5: TRACK COOLING ENERGY
+    // STEP 5: AGN HEATING (reduces cooling, grows BH)
     // ========================================================================
-    
+
+    // Apply AGN heating to reduce cooling rate and grow BH from CGM
+    // This was missing before, causing a dip in the BHMF at ~10^7 Msun
+    if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
+        // Calculate x parameter needed for Bondi-Hoyle accretion
+        double x = PROTONMASS * BOLTZMANN * temp / lambda;
+        x /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);
+
+        coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x, r_cool, galaxies, run_params);
+    }
+
+    // ========================================================================
+    // STEP 6: TRACK COOLING ENERGY
+    // ========================================================================
+
     // Energy associated with cooling (for feedback balance tracking)
     if(coolingGas > 0.0) {
         // Specific energy ~ 0.5 * Vvir^2 (thermal + kinetic)
@@ -763,10 +777,14 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
         }
 
         // accreted mass onto black hole
-        metallicity = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);
-        galaxies[centralgal].BlackHoleMass += AGNaccreted;
-        galaxies[centralgal].HotGas -= AGNaccreted;
-        galaxies[centralgal].MetalsHotGas -= metallicity * AGNaccreted;
+        // When HotHaloBHaccretionOn=1, BH growth is handled separately by hot_halo_BH_accretion()
+        // Here we only do heating, not BH growth (to avoid double-counting)
+        if(run_params->HotHaloBHaccretionOn == 0) {
+            metallicity = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);
+            galaxies[centralgal].BlackHoleMass += AGNaccreted;
+            galaxies[centralgal].HotGas -= AGNaccreted;
+            galaxies[centralgal].MetalsHotGas -= metallicity * AGNaccreted;
+        }
 
         // update the heating radius as needed
         if(galaxies[centralgal].r_heat < rcool && coolingGas > 0.0) {
@@ -784,7 +802,7 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
     return coolingGas;
 }
 
-double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool, 
+double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
                          struct GALAXY *galaxies, const struct params *run_params)
 {
     double AGNrate, EDDrate, AGNaccreted, AGNcoeff, AGNheating, metallicity;
@@ -859,10 +877,14 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
         }
 
         // accreted mass onto black hole
-        metallicity = get_metallicity(galaxies[centralgal].CGMgas, galaxies[centralgal].MetalsCGMgas);
-        galaxies[centralgal].BlackHoleMass += AGNaccreted;
-        galaxies[centralgal].CGMgas -= AGNaccreted;
-        galaxies[centralgal].MetalsCGMgas -= metallicity * AGNaccreted;
+        // When HotHaloBHaccretionOn=1, BH growth is handled separately by hot_halo_BH_accretion()
+        // Here we only do heating, not BH growth (to avoid double-counting)
+        if(run_params->HotHaloBHaccretionOn == 0) {
+            metallicity = get_metallicity(galaxies[centralgal].CGMgas, galaxies[centralgal].MetalsCGMgas);
+            galaxies[centralgal].BlackHoleMass += AGNaccreted;
+            galaxies[centralgal].CGMgas -= AGNaccreted;
+            galaxies[centralgal].MetalsCGMgas -= metallicity * AGNaccreted;
+        }
 
         // update the heating radius as needed
         if(galaxies[centralgal].r_heat < rcool && coolingGas > 0.0) {
@@ -896,4 +918,106 @@ void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct 
             galaxies[centralgal].MetalsHotGas = 0.0;
         }
     }
+}
+
+
+void hot_halo_BH_accretion(const int centralgal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
+{
+    // SHARK-style continuous BH accretion from hot halo
+    // This provides steady BH growth independent of AGN heating requirements
+    // Formula: dM_BH/dt = kappa * (M_BH/1e8) * (f_hot/0.1) * (V_vir/200)^3
+    //
+    // This fills the gap between merger-driven and instability-driven BH growth,
+    // preventing the dip at ~10^7 Msun in the BHMF
+
+    if(run_params->HotHaloBHaccretionOn == 0) {
+        return;
+    }
+
+    // Need a BH to accrete onto
+    if(galaxies[centralgal].BlackHoleMass <= 0.0) {
+        return;
+    }
+
+    // Need hot gas reservoir (use HotGas or CGMgas depending on regime)
+    double hot_reservoir, metals_hot;
+    if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
+        // CGM regime: use CGM gas
+        hot_reservoir = galaxies[centralgal].CGMgas;
+        metals_hot = galaxies[centralgal].MetalsCGMgas;
+    } else {
+        // Hot ICM regime: use HotGas
+        hot_reservoir = galaxies[centralgal].HotGas;
+        metals_hot = galaxies[centralgal].MetalsHotGas;
+    }
+
+    if(hot_reservoir <= 0.0 || galaxies[centralgal].Mvir <= 0.0 || galaxies[centralgal].Vvir <= 0.0) {
+        return;
+    }
+
+    // Calculate hot gas fraction
+    const double f_hot = hot_reservoir / (run_params->BaryonFrac * galaxies[centralgal].Mvir);
+
+    // Simplified hot halo accretion: macc = kappa * (f_hot/0.1) * (V_vir/200)^2 * suppression
+    // Removed M_BH dependence to allow intermediate-mass BHs to grow
+    // Added V_vir threshold to suppress accretion in low-mass halos (Hot regime only)
+    const double f_hot_scaled = f_hot / 0.1;
+    const double V_vir_scaled = galaxies[centralgal].Vvir / 200.0;
+
+    // Smooth suppression in low-mass halos: suppression = 1 / (1 + (V_thresh/V_vir)^2)
+    // Only apply suppression in Hot regime (Regime=1)
+    // CGM regime halos use precipitation physics which is already self-limiting
+    // Applying V_thresh there causes a dip in BHMF at ~10^7 Msun
+    double suppression = 1.0;
+    if(run_params->CGMrecipeOn == 0 || galaxies[centralgal].Regime == 1) {
+        // Hot regime: suppress accretion in low-mass halos
+        const double V_thresh = 150.0;  // km/s
+        suppression = 1.0 / (1.0 + SQR(V_thresh / galaxies[centralgal].Vvir));
+    }
+
+    // Accretion rate in code units (mass per unit time)
+    // kappa sets the base accretion rate in Msun/yr for a halo with f_hot=0.1, Vvir=200 km/s
+    const double unit_conversion = run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS;
+    double accretion_rate = run_params->HotHaloBHaccretionKappa / unit_conversion
+                            * f_hot_scaled * SQR(V_vir_scaled) * suppression;
+
+    // Eddington limit
+    // L_Edd = 1.3e38 * (M_BH/Msun) erg/s
+    // Mdot_Edd = L_Edd / (eta * c^2) where eta ~ 0.1
+    // Mdot_Edd = 1.3e38 * M_BH / (0.1 * 9e20) = 1.44e16 * M_BH g/s = 2.3e-9 * M_BH Msun/yr
+    const double EDDrate = (1.3e38 * galaxies[centralgal].BlackHoleMass * 1e10 / run_params->Hubble_h)
+                           / (run_params->UnitEnergy_in_cgs / run_params->UnitTime_in_s) / (0.1 * 9e10);
+
+    if(accretion_rate > EDDrate) {
+        accretion_rate = EDDrate;
+    }
+
+    // Mass accreted this timestep
+    double BHaccrete = accretion_rate * dt;
+
+    // Cannot accrete more than available
+    if(BHaccrete > hot_reservoir) {
+        BHaccrete = hot_reservoir;
+    }
+
+    // Update reservoirs
+    const double metallicity = get_metallicity(hot_reservoir, metals_hot);
+    galaxies[centralgal].BlackHoleMass += BHaccrete;
+
+    if(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0) {
+        galaxies[centralgal].CGMgas -= BHaccrete;
+        galaxies[centralgal].MetalsCGMgas -= metallicity * BHaccrete;
+        if(galaxies[centralgal].MetalsCGMgas < 0.0) {
+            galaxies[centralgal].MetalsCGMgas = 0.0;
+        }
+    } else {
+        galaxies[centralgal].HotGas -= BHaccrete;
+        galaxies[centralgal].MetalsHotGas -= metallicity * BHaccrete;
+        if(galaxies[centralgal].MetalsHotGas < 0.0) {
+            galaxies[centralgal].MetalsHotGas = 0.0;
+        }
+    }
+
+    // Track as radio mode accretion (not quasar mode)
+    // Note: We don't call quasar_mode_wind here as this is quiescent accretion
 }

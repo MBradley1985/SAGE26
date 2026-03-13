@@ -416,6 +416,11 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
                 cool_gas_onto_galaxy(p, coolingGas, galaxies);
             }
 
+            // SHARK-style continuous BH accretion from hot halo (independent of AGN heating)
+            if(run_params->HotHaloBHaccretionOn == 1) {
+                hot_halo_BH_accretion(p, deltaT / effective_steps, galaxies, run_params);
+            }
+
             // stars form and then explode!
             // Map adaptive step to fixed STEPS bins for SFR arrays
             int step_bin = (step * STEPS) / effective_steps;

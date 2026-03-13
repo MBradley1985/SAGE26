@@ -79,16 +79,19 @@ QuasarModeEfficiency    0.005 %AGN quasar mode wind heating efficiency (AGNrecip
 BlackHoleGrowthRate     0.015 %fraction of cold gas accreted by BH during mergers (AGNrecipeOn>0)
 InstabilityBHGrowthRate 0.015 %fraction of unstable gas accreted by BH during disk instabilities (DiskInstabilityOn=1)
 
-QuasarEfficiencyMode    1     %0: fixed radiative efficiency; 1: Eddington ratio-dependent
+QuasarEfficiencyMode    0     %0: fixed radiative efficiency; 1: Eddington ratio-dependent
 QuasarRadiativeEfficiency 0.1 %base radiative efficiency for quasar mode thin disk
 ADAFCriticalEddington   0.01  %Eddington ratio below which ADAF (low efficiency) regime applies
 
 BHSeedingOn             1     %0: no seeding; 1: seed BHs in halos above threshold
-BHSeedMass              1.0e-5 %Seed BH mass in 10^10 Msun/h (1e-5 = 10^5 Msun/h)
+BHSeedMass              1.0e-6 %Seed BH mass in 10^10 Msun/h (1e-6 = 10^4 Msun/h)
 BHSeedMinHaloMass       1.0   %Minimum halo mass for seeding in 10^10 Msun/h (1.0 = 10^10 Msun/h)
 
-BHGrowthVelocityDep     1     %0: off; 1: velocity-dependent BH growth efficiency (mergers only)
+BHGrowthVelocityDep     0     %0: off; 1: velocity-dependent BH growth efficiency (mergers only)
 BHGrowthVelocityScale   280.0 %Characteristic velocity in km/s (original SAGE: 280)
+
+HotHaloBHaccretionOn    0     %0: off; 1: SHARK-style continuous BH accretion from hot halo
+HotHaloBHaccretionKappa 0.005 %Efficiency parameter (SHARK default ~0.005)
 
 ThreshMajorMerger       0.3   %major merger when mass ratio greater than this
 ThresholdSatDisruption  1.0   %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption
