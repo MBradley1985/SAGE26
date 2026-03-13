@@ -207,9 +207,10 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                     }
                     galaxies[ngal].Mvir = get_virial_mass(halonr, halos, run_params);
 
-                    // AGNrecipeOn==4: Seed BH if halo grew above 10^10 Msun/h and has no BH
-                    if(run_params->AGNrecipeOn == 4 && galaxies[ngal].BlackHoleMass == 0.0 && galaxies[ngal].Mvir > 1.0) {
-                        galaxies[ngal].BlackHoleMass = 1.0e-6;  // 10^4 Msun/h seed
+                    // Independent BH seeding: seed BH if halo grew above threshold and has no BH
+                    if(run_params->BHSeedingOn == 1 && galaxies[ngal].BlackHoleMass == 0.0 &&
+                       galaxies[ngal].Mvir > run_params->BHSeedMinHaloMass) {
+                        galaxies[ngal].BlackHoleMass = run_params->BHSeedMass;
                     }
 
                     galaxies[ngal].Cooling = 0.0;

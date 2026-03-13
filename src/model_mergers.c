@@ -226,8 +226,21 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
     double BHaccrete, metallicity;
 
     if(galaxies[merger_centralgal].ColdGas > 0.0) {
-        BHaccrete = run_params->BlackHoleGrowthRate * mass_ratio /
-            (1.0 + SQR(280.0 / galaxies[merger_centralgal].Vvir)) * galaxies[merger_centralgal].ColdGas;
+        // Calculate BH accretion during merger
+        // Velocity dependence: efficiency = f / (1 + (v_scale/Vvir)^2)
+        // This suppresses BH growth in low-mass halos (low Vvir) where feedback is strong
+        // Original SAGE always had this with v_scale=280 km/s hardcoded
+        double v_scale = 280.0;  // Original hardcoded value
+        if(run_params->BHGrowthVelocityDep == 1) {
+            v_scale = run_params->BHGrowthVelocityScale;  // Use configurable value
+        }
+
+        double velocity_factor = 1.0;
+        if(galaxies[merger_centralgal].Vvir > 0.0) {
+            velocity_factor = 1.0 / (1.0 + SQR(v_scale / galaxies[merger_centralgal].Vvir));
+        }
+
+        BHaccrete = run_params->BlackHoleGrowthRate * mass_ratio * velocity_factor * galaxies[merger_centralgal].ColdGas;
 
         // cannot accrete more gas than is available!
         if(BHaccrete > galaxies[merger_centralgal].ColdGas) {
@@ -256,6 +269,8 @@ void grow_black_hole_instability(const int gal, const double unstable_gas, const
     // Dedicated BH growth model for disk instabilities
     // Unlike merger-driven growth, this uses a simple efficiency parameter
     // applied directly to the unstable gas mass (no mass_ratio substitution)
+    // Note: No velocity dependence here - instabilities occur in massive disk galaxies
+    // where the disk becomes self-gravitating, independent of halo velocity
 
     if(unstable_gas <= 0.0 || galaxies[gal].ColdGas <= 0.0) {
         return;

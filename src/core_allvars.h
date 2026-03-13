@@ -486,6 +486,16 @@ struct params
     double InstabilityBHGrowthRate;    // Fraction of unstable gas accreted by BH during disk instabilities
     double QuasarRadiativeEfficiency;  // Base radiative efficiency for quasar mode (default 0.1)
     double ADAFCriticalEddington;      // Critical Eddington ratio for ADAF transition (default 0.01)
+
+    // BH seeding parameters (independent of AGN recipe)
+    int32_t BHSeedingOn;               // 0: no seeding; 1: seed BHs in halos above threshold
+    double BHSeedMass;                 // Seed BH mass in units of 10^10 Msun/h (e.g., 1e-6 = 10^4 Msun/h)
+    double BHSeedMinHaloMass;          // Minimum halo mass for seeding in units of 10^10 Msun/h
+
+    // Velocity-dependent BH growth (SHARK-style)
+    int32_t BHGrowthVelocityDep;       // 0: off (fixed efficiency); 1: velocity-dependent efficiency
+    double BHGrowthVelocityScale;      // Characteristic velocity in km/s (default 400, like SHARK)
+
     double Reionization_z0;
     double Reionization_zr;
     double ThresholdSatDisruption;
