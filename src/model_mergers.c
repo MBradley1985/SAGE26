@@ -236,6 +236,7 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
 
         metallicity = get_metallicity(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].MetalsColdGas);
         galaxies[merger_centralgal].BlackHoleMass += BHaccrete;
+        update_bh_spin_parameter(merger_centralgal, galaxies, run_params);
         galaxies[merger_centralgal].ColdGas -= BHaccrete;
         galaxies[merger_centralgal].MetalsColdGas -= metallicity * BHaccrete;
         /* BUG FIX: Ensure metals don't go negative due to numerical precision */
@@ -325,6 +326,7 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].MetalsICS += galaxies[p].MetalsICS;
 
     galaxies[t].BlackHoleMass += galaxies[p].BlackHoleMass;
+    update_bh_spin_parameter(t, galaxies, run_params);
 
     galaxies[t].CGMgas += galaxies[p].CGMgas;
     galaxies[t].MetalsCGMgas += galaxies[p].MetalsCGMgas;

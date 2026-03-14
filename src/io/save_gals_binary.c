@@ -272,6 +272,7 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
     o->HotGas = g->HotGas;
     o->EjectedMass = g->EjectedMass;
     o->BlackHoleMass = g->BlackHoleMass;
+    o->BHSpin = g->BHSpin;
     o->ICS = g->ICS;
     o->ICS_disrupt = g->ICS_disrupt;
     o->ICS_accrete = g->ICS_accrete;

@@ -219,16 +219,19 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                             galaxies[ngal].CGMgas -= seed_mass;
                             galaxies[ngal].MetalsCGMgas -= metallicity * seed_mass;
                             galaxies[ngal].BlackHoleMass = seed_mass;
+                            update_bh_spin_parameter(ngal, galaxies, run_params);
                         } else if(galaxies[ngal].HotGas >= seed_mass) {
                             double metallicity = get_metallicity(galaxies[ngal].HotGas, galaxies[ngal].MetalsHotGas);
                             galaxies[ngal].HotGas -= seed_mass;
                             galaxies[ngal].MetalsHotGas -= metallicity * seed_mass;
                             galaxies[ngal].BlackHoleMass = seed_mass;
+                            update_bh_spin_parameter(ngal, galaxies, run_params);
                         } else if(galaxies[ngal].ColdGas >= seed_mass) {
                             double metallicity = get_metallicity(galaxies[ngal].ColdGas, galaxies[ngal].MetalsColdGas);
                             galaxies[ngal].ColdGas -= seed_mass;
                             galaxies[ngal].MetalsColdGas -= metallicity * seed_mass;
                             galaxies[ngal].BlackHoleMass = seed_mass;
+                            update_bh_spin_parameter(ngal, galaxies, run_params);
                         }
                         // If no gas available, don't seed (galaxy too gas-poor)
                     }

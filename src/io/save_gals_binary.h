@@ -49,6 +49,7 @@ extern "C" {
       float HotGas;
       float EjectedMass;
       float BlackHoleMass;
+      float BHSpin;
       float ICS;
       float ICS_disrupt;
       float ICS_accrete;

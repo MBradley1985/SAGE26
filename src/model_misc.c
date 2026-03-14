@@ -53,13 +53,16 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].HotGas = 0.0;
     galaxies[p].EjectedMass = 0.0;
     galaxies[p].BlackHoleMass = 0.0;
+    galaxies[p].BHSpin = 0.0;
     
     galaxies[p].ICS = 0.0;
+
     galaxies[p].CGMgas = 0.0;
     galaxies[p].H2gas = 0.0;
     galaxies[p].H1gas = 0.0;
 
     galaxies[p].MetalsColdGas = 0.0;
+
     galaxies[p].MetalsStellarMass = 0.0;
     galaxies[p].MetalsBulgeMass = 0.0;
     galaxies[p].MetalsHotGas = 0.0;
@@ -119,6 +122,33 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].mdot_stream = 0.0;
 
 
+}
+
+double calculate_bh_spin_volonteri2007(const double black_hole_mass, const struct params *run_params)
+{
+    if(black_hole_mass <= 0.0 || run_params->Hubble_h <= 0.0) {
+        return 0.0;
+    }
+
+    const double mbh_msun = black_hole_mass * 1.0e10 / run_params->Hubble_h;
+    if(mbh_msun <= 0.0) {
+        return 0.0;
+    }
+
+    double spin = 0.305 * log10(mbh_msun) - 1.7475;
+    if(spin > 1.0) spin = 1.0;
+    if(spin < 0.0) spin = 0.0;
+    return spin;
+}
+
+
+void update_bh_spin_parameter(const int gal, struct GALAXY *galaxies, const struct params *run_params)
+{
+    if(run_params->BHSpinModelOn == 1) {
+        galaxies[gal].BHSpin = calculate_bh_spin_volonteri2007(galaxies[gal].BlackHoleMass, run_params);
+    } else {
+        galaxies[gal].BHSpin = 0.0;
+    }
 }
 
 

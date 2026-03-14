@@ -281,6 +281,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->BHSeedingOn);
     ParamID[NParam++] = INT;
 
+    strncpy(ParamTag[NParam], "BHSpinModelOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->BHSpinModelOn);
+    ParamID[NParam++] = INT;
+
     strncpy(ParamTag[NParam], "BHSeedMass", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->BHSeedMass);
     ParamID[NParam++] = DOUBLE;

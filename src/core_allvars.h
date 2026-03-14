@@ -129,6 +129,7 @@ struct GALAXY
     float HotGas;
     float EjectedMass;
     float BlackHoleMass;
+    float BHSpin;
     float ICS;
     float CGMgas;
     float H2gas;
@@ -470,6 +471,7 @@ struct params
     int32_t    TrackICSAssembly;  // 0 = off, 1 = track ICS_disrupt and ICS_accrete
 
     int32_t BHSeedingOn;               // 0: no seeding; 1: seed BHs in halos above threshold
+    int32_t BHSpinModelOn;             // 0: off; 1: Volonteri+2007 mass-spin relation
     double BHSeedMass;                 // Seed BH mass in units of 10^10 Msun/h (e.g., 1e-6 = 10^4 Msun/h)
     double BHSeedMinHaloMass;          // Minimum halo mass for seeding in units of 10^10 Msun/h
 

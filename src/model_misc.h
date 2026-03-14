@@ -26,6 +26,8 @@ extern "C" {
 
     extern double calculate_ffb_threshold_mass(const double z, const struct params *run_params);
     extern double calculate_ffb_fraction(const double Mvir, const double z, const struct params *run_params);
+    extern double calculate_bh_spin_volonteri2007(const double black_hole_mass, const struct params *run_params);
+    extern void update_bh_spin_parameter(const int gal, struct GALAXY *galaxies, const struct params *run_params);
 
     extern void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct GALAXY *galaxies,
                                             const struct params *run_params);
