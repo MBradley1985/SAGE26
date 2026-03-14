@@ -481,7 +481,7 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
 
         if(p != centralgal) {
             galaxies[centralgal].TotalSatelliteBaryons +=
-                (galaxies[p].StellarMass + galaxies[p].BlackHoleMass + galaxies[p].ColdGas + galaxies[p].HotGas);
+                (galaxies[p].StellarMass + galaxies[p].BlackHoleMass + galaxies[p].ColdGas + galaxies[p].HotGas + galaxies[p].CGMgas);
         }
     }
 
