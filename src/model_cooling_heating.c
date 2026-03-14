@@ -592,12 +592,17 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         }
     }
 
-    // double x = PROTONMASS * BOLTZMANN * temp / lambda;        // now this has units sec g/cm^3
-    // x /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);         // now in internal units
+    // Calculate the "x" parameter for AGN heating (proportional to cooling time and density)
+    // For AGN feedback coupling: x = (3/2) μ m_p k T / (Λ ρ) in code units
 
-    // if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
-	// 		coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x, r_cool, galaxies, run_params);
-    // }
+    double x = PROTONMASS * BOLTZMANN * temp / lambda;        // now this has units sec g/cm^3
+    x /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);         // now in internal units
+
+    // If AGN feedback is enabled, apply heating to reduce coolingGas before proceeding
+
+    if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0 && run_params->BHSeedingOn == 1) {
+			coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x, r_cool, galaxies, run_params);
+    }
 
     // ========================================================================
     // STEP 5: TRACK COOLING ENERGY
