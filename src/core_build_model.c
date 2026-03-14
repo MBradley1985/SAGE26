@@ -208,32 +208,20 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                     galaxies[ngal].Mvir = get_virial_mass(halonr, halos, run_params);
 
                     // Independent BH seeding: seed BH if halo grew above threshold and has no BH
-                    // Seed mass must be taken from gas to conserve baryons
+                    // Following SHARK: seed mass is not deducted from gas reservoirs
+                    // (seed mass ~10^4 M_sun is negligible compared to gas masses ~10^9-10^10 M_sun)
+                    // IMPORTANT: Only seed in CENTRAL galaxies (FirstHaloInFOFgroup) to avoid
+                    // seeding in satellites that will become orphans and can't grow their BHs
+                    // IMPORTANT: Only seed if galaxy has HotGas > 0 for radio-mode AGN accretion.
+                    // CGM-regime galaxies (HotGas=0, CGMgas>0) grow BHs too slowly at seed mass
+                    // because AGNrate scales with M_BH/0.01 which is tiny for seeds (~10^-5).
+                    // Once galaxy accumulates HotGas, seeding will occur and BH can grow faster.
                     if(run_params->BHSeedingOn == 1 && galaxies[ngal].BlackHoleMass == 0.0 &&
-                       galaxies[ngal].Mvir > run_params->BHSeedMinHaloMass) {
-                        double seed_mass = run_params->BHSeedMass;
-
-                        // Take seed mass from available gas reservoir (CGMgas -> HotGas -> ColdGas)
-                        if(galaxies[ngal].CGMgas >= seed_mass) {
-                            double metallicity = get_metallicity(galaxies[ngal].CGMgas, galaxies[ngal].MetalsCGMgas);
-                            galaxies[ngal].CGMgas -= seed_mass;
-                            galaxies[ngal].MetalsCGMgas -= metallicity * seed_mass;
-                            galaxies[ngal].BlackHoleMass = seed_mass;
-                            update_bh_spin_parameter(ngal, galaxies, run_params);
-                        } else if(galaxies[ngal].HotGas >= seed_mass) {
-                            double metallicity = get_metallicity(galaxies[ngal].HotGas, galaxies[ngal].MetalsHotGas);
-                            galaxies[ngal].HotGas -= seed_mass;
-                            galaxies[ngal].MetalsHotGas -= metallicity * seed_mass;
-                            galaxies[ngal].BlackHoleMass = seed_mass;
-                            update_bh_spin_parameter(ngal, galaxies, run_params);
-                        } else if(galaxies[ngal].ColdGas >= seed_mass) {
-                            double metallicity = get_metallicity(galaxies[ngal].ColdGas, galaxies[ngal].MetalsColdGas);
-                            galaxies[ngal].ColdGas -= seed_mass;
-                            galaxies[ngal].MetalsColdGas -= metallicity * seed_mass;
-                            galaxies[ngal].BlackHoleMass = seed_mass;
-                            update_bh_spin_parameter(ngal, galaxies, run_params);
-                        }
-                        // If no gas available, don't seed (galaxy too gas-poor)
+                       galaxies[ngal].Mvir > run_params->BHSeedMinHaloMass &&
+                       halonr == halos[halonr].FirstHaloInFOFgroup &&
+                       galaxies[ngal].HotGas > 0.0) {
+                        galaxies[ngal].BlackHoleMass = run_params->BHSeedMass;
+                        galaxies[ngal].BHSpin = 0.0;  // Seeds start with zero spin
                     }
 
                     galaxies[ngal].Cooling = 0.0;
@@ -444,6 +432,12 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
             int step_bin = (step * STEPS) / effective_steps;
             if(step_bin >= STEPS) step_bin = STEPS - 1;
             starformation_and_feedback(p, centralgal, time, deltaT / effective_steps, halonr, step_bin, galaxies, run_params);
+
+            // Torque-driven BH accretion (Hopkins & Quataert 2011)
+            // Secular accretion from disk instabilities and gravitational torques
+            if(run_params->TorqueAccretionOn == 1) {
+                torque_driven_BH_accretion(p, deltaT / effective_steps, galaxies, run_params);
+            }
         }
 
         // check for satellite disruption and merger events

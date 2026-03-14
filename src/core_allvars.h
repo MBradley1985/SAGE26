@@ -462,6 +462,7 @@ struct params
     int32_t    DiskInstabilityOn;
     int32_t    CGMrecipeOn;
     int32_t    CGMDensityProfile;  // 0: uniform, 1: NFW, 2: beta-profile
+    int32_t    AGNheatingCGMOn;    // 0: off, 1: enable AGN heating in CGM-regime haloes
     int32_t    FIREmodeOn;
     int32_t    CGMrecipeSAGEOn;
     int32_t    FeedbackFreeModeOn;
@@ -472,8 +473,10 @@ struct params
 
     int32_t BHSeedingOn;               // 0: no seeding; 1: seed BHs in halos above threshold
     int32_t BHSpinModelOn;             // 0: off; 1: Volonteri+2007 mass-spin relation
+    int32_t TorqueAccretionOn;         // 0: off; 1: Hopkins & Quataert 2011 torque-driven BH accretion
     double BHSeedMass;                 // Seed BH mass in units of 10^10 Msun/h (e.g., 1e-6 = 10^4 Msun/h)
     double BHSeedMinHaloMass;          // Minimum halo mass for seeding in units of 10^10 Msun/h
+    double TorqueAccretionEfficiency;  // Efficiency for torque-driven accretion (HQ11), typical ~0.01-0.1
 
     double RecycleFraction;
     double Yield;

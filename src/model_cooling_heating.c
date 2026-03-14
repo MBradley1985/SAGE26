@@ -406,6 +406,7 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 		// at this point we have calculated the maximal cooling rate
 		// if AGNrecipeOn we now reduce it in line with past heating before proceeding
 
+        // BH growth diagnostic: if we have a BH but no cooling, BH can't grow
 		if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
 			coolingGas = do_AGN_heating(coolingGas, gal, dt, x, rcool, galaxies, run_params);
         }
@@ -426,20 +427,12 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxies,
                          const struct params *run_params)
 {
-    static long precipitation_debug_counter = 0;
-    precipitation_debug_counter++;
-
     double coolingGas = 0.0;
 
     // ========================================================================
     // EARLY EXIT CONDITIONS
     // ========================================================================
     if(galaxies[gal].CGMgas <= 0.0 || galaxies[gal].Vvir <= 0.0 || galaxies[gal].Rvir <= 0.0) {
-        if(precipitation_debug_counter % 50000 == 0) {
-            printf("DEBUG PRECIP [%ld]: Early exit - CGMgas=%.2e, Vvir=%.2f, Rvir=%.2e\n",
-                   precipitation_debug_counter, galaxies[gal].CGMgas,
-                   galaxies[gal].Vvir, galaxies[gal].Rvir);
-        }
         return 0.0;
     }
 
@@ -601,8 +594,9 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // If AGN feedback is enabled, apply heating to reduce coolingGas before proceeding
     // Only apply CGM AGN heating for CGM-regime haloes (Regime == 0)
     // Hot-regime haloes already get AGN heating from HotGas via do_AGN_heating
-
-    if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0 && run_params->BHSeedingOn == 1
+    // Toggle: AGNheatingCGMOn controls whether CGM-regime haloes get AGN heating
+    // Note: BHs at seed mass grow slower via this pathway (AGNrate scales with M_BH/0.01)
+    if(run_params->AGNheatingCGMOn == 1 && run_params->AGNrecipeOn > 0 && coolingGas > 0.0
        && galaxies[gal].Regime == 0) {
         coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x, r_cool, galaxies, run_params);
     }
@@ -947,5 +941,134 @@ void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct 
             galaxies[centralgal].HotGas = 0.0;
             galaxies[centralgal].MetalsHotGas = 0.0;
         }
+    }
+}
+
+
+void torque_driven_BH_accretion(const int p, const double dt, struct GALAXY *galaxies, const struct params *run_params)
+{
+    // Hopkins & Quataert (2011) / Anglés-Alcázar et al. (2017) torque-driven accretion
+    //
+    // Gravitational torques from disk structures (bars, spiral arms) drive gas inflow
+    // to the central black hole. This provides a secular (non-merger) channel for BH growth.
+    //
+    // Ṁ_BH = ε_TD × f_attn × f_gas × M_BH / t_dyn
+    //
+    // Where:
+    //   ε_TD   = efficiency parameter (~0.01-0.1)
+    //   f_attn = min(1, M_disk/M_BH) = attenuation factor preventing runaway
+    //   f_gas  = M_cold / M_disk = disk gas fraction
+    //   t_dyn  = R_disk / V_vir = dynamical time
+    //
+    // Capped at the Eddington rate.
+
+    if(run_params->TorqueAccretionOn == 0) {
+        return;
+    }
+
+    // Need a black hole and cold gas
+    if(galaxies[p].BlackHoleMass <= 0.0 || galaxies[p].ColdGas <= 0.0) {
+        return;
+    }
+
+    // Need Vvir for suppression and dynamical time
+    if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
+        return;
+    }
+
+    // Torque-driven accretion requires a bulge to drive gravitational torques
+    // In low-mass pure disk galaxies, bars and spiral arms are weak/absent
+    // Suppress accretion when bulge fraction is low
+    const double bulge_fraction = (galaxies[p].StellarMass > 0.0) ?
+                                   galaxies[p].BulgeMass / galaxies[p].StellarMass : 0.0;
+
+    // Also suppress in low-mass halos (similar to merger BH growth formula)
+    // Factor goes from ~0.2 at Vvir=140 km/s to ~0.8 at Vvir=560 km/s
+    const double Vvir_suppress = 1.0 / (1.0 + SQR(200.0 / galaxies[p].Vvir));
+
+    // Combined suppression: need both a bulge AND a massive enough halo
+    // Minimum bulge fraction of ~5% for torques to be effective
+    const double f_suppress = Vvir_suppress * (bulge_fraction / (bulge_fraction + 0.05));
+
+    if(f_suppress < 0.01) {
+        return;  // Too suppressed to matter
+    }
+
+    // Disk mass = cold gas + disk stars
+    const double disk_stellar = galaxies[p].StellarMass - galaxies[p].BulgeMass;
+    const double disk_mass = galaxies[p].ColdGas + (disk_stellar > 0.0 ? disk_stellar : 0.0);
+
+    if(disk_mass <= 0.0) {
+        return;
+    }
+
+    // Disk gas fraction
+    const double f_gas = galaxies[p].ColdGas / disk_mass;
+
+    // Attenuation factor: prevents runaway when M_BH >> M_disk
+    // When disk is much more massive than BH, f_attn = 1
+    // When BH dominates, accretion is suppressed
+    const double f_attn = (disk_mass > galaxies[p].BlackHoleMass) ? 1.0 : (disk_mass / galaxies[p].BlackHoleMass);
+
+    // Dynamical time: t_dyn = R_disk / V_vir
+    // Convert to consistent units
+    // R_disk is in Mpc/h, V_vir is in km/s
+    // t_dyn in code units (same as Age array)
+    // t_dyn [Mpc/km*s] * (3.086e19 km/Mpc) = t_dyn [s], then / UnitTime_in_s
+    const double t_dyn_seconds = (galaxies[p].DiskScaleRadius / galaxies[p].Vvir) * 3.086e19;
+    const double t_dyn = t_dyn_seconds / run_params->UnitTime_in_s;
+
+    if(t_dyn <= 0.0) {
+        return;
+    }
+
+    // Torque-driven accretion rate: Ṁ_BH = ε × f_suppress × f_attn × f_gas × M_BH / t_dyn
+    double Mdot_torque = run_params->TorqueAccretionEfficiency * f_suppress * f_attn * f_gas * galaxies[p].BlackHoleMass / t_dyn;
+
+    // Calculate Eddington rate limit
+    // L_Edd = 1.3e38 * (M_BH / M_sun) erg/s
+    // Mdot_Edd = L_Edd / (η * c²)
+    double eta_rad;
+    if(run_params->BHSpinModelOn == 1) {
+        eta_rad = calculate_radiative_efficiency(galaxies[p].BHSpin);
+    } else {
+        eta_rad = 0.1;
+    }
+
+    const double Mdot_Edd = (1.3e38 * galaxies[p].BlackHoleMass * 1e10 / run_params->Hubble_h)
+                          / (run_params->UnitEnergy_in_cgs / run_params->UnitTime_in_s)
+                          / (eta_rad * 9e10);
+
+    // Cap at Eddington
+    if(Mdot_torque > Mdot_Edd) {
+        Mdot_torque = Mdot_Edd;
+    }
+
+    // Mass accreted this timestep
+    double accreted = Mdot_torque * dt;
+
+    // Cannot accrete more than available cold gas
+    if(accreted > galaxies[p].ColdGas) {
+        accreted = galaxies[p].ColdGas;
+    }
+
+    // Perform the accretion
+    if(accreted > 0.0) {
+        const double metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
+
+        galaxies[p].BlackHoleMass += accreted;
+        galaxies[p].ColdGas -= accreted;
+        galaxies[p].MetalsColdGas -= metallicity * accreted;
+
+        // Ensure metals don't go negative
+        if(galaxies[p].MetalsColdGas < 0.0) {
+            galaxies[p].MetalsColdGas = 0.0;
+        }
+
+        // Update spin after growth
+        update_bh_spin_parameter(p, galaxies, run_params);
+
+        // Track as quasar-mode accretion (secular accretion contributes to AGN activity)
+        galaxies[p].QuasarModeBHaccretionMass += accreted;
     }
 }

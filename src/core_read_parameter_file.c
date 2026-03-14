@@ -249,6 +249,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->CGMDensityProfile);
     ParamID[NParam++] = INT;
 
+    strncpy(ParamTag[NParam], "AGNheatingCGMOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->AGNheatingCGMOn);
+    ParamID[NParam++] = INT;
+
     strncpy(ParamTag[NParam], "FIREmodeOn", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->FIREmodeOn);
     ParamID[NParam++] = INT;
@@ -293,7 +297,15 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->BHSeedMinHaloMass);
     ParamID[NParam++] = DOUBLE;
 
-    
+    strncpy(ParamTag[NParam], "TorqueAccretionOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->TorqueAccretionOn);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "TorqueAccretionEfficiency", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->TorqueAccretionEfficiency);
+    ParamID[NParam++] = DOUBLE;
+
+
     used_tag = mymalloc(sizeof(int) * NParam);
     for(int i=0; i<NParam; i++) {
         used_tag[i]=1;

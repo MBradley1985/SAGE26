@@ -915,14 +915,14 @@ if __name__ == '__main__':
     colors_bhmf = plt.cm.plasma(np.linspace(0.1, 0.9, len(bhmf_redshifts)))
     
     # Define mass bins for BHMF
-    bhmf_mass_bins = np.arange(6.0, 11.5, 0.1)
+    bhmf_mass_bins = np.arange(4.0, 11.5, 0.1)
     bhmf_mass_centers = bhmf_mass_bins[:-1] + 0.05
     bin_width = bhmf_mass_bins[1] - bhmf_mass_bins[0]
     
     # Plot SAGE model predictions for each redshift
     for i, (snap_idx, target_z, actual_z) in enumerate(zip(bhmf_snapshots, bhmf_redshifts, actual_redshifts)):
         # Filter for galaxies with black holes
-        w = np.where(BlackHoleMassFull[snap_idx] > 0.0)[0]
+        w = np.where((BlackHoleMassFull[snap_idx] > 0.0) & (TypeFull[snap_idx] == 0))[0]
         
         if len(w) > 0:
             bh_masses = np.log10(BlackHoleMassFull[snap_idx][w])
@@ -971,7 +971,7 @@ if __name__ == '__main__':
     
     # Set log scale and limits
     ax.set_yscale('log')
-    ax.set_xlim(6.0, 11.0)
+    ax.set_xlim(4.0, 11.0)
     ax.set_ylim(1e-5, 1e-1)
     
     # Labels and formatting
