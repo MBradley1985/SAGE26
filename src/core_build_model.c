@@ -212,14 +212,12 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                     // (seed mass ~10^4 M_sun is negligible compared to gas masses ~10^9-10^10 M_sun)
                     // IMPORTANT: Only seed in CENTRAL galaxies (FirstHaloInFOFgroup) to avoid
                     // seeding in satellites that will become orphans and can't grow their BHs
-                    // IMPORTANT: Only seed if galaxy has HotGas > 0 for radio-mode AGN accretion.
-                    // CGM-regime galaxies (HotGas=0, CGMgas>0) grow BHs too slowly at seed mass
-                    // because AGNrate scales with M_BH/0.01 which is tiny for seeds (~10^-5).
-                    // Once galaxy accumulates HotGas, seeding will occur and BH can grow faster.
+                    // Seed if galaxy has either HotGas > 0 (hot-regime) OR CGMgas > 0 (CGM-regime)
+                    // This ensures all centrals with baryonic gas can host a BH
                     if(run_params->BHSeedingOn == 1 && galaxies[ngal].BlackHoleMass == 0.0 &&
                        galaxies[ngal].Mvir > run_params->BHSeedMinHaloMass &&
                        halonr == halos[halonr].FirstHaloInFOFgroup &&
-                       galaxies[ngal].HotGas > 0.0) {
+                       (galaxies[ngal].HotGas > 0.0 || galaxies[ngal].CGMgas > 0.0)) {
                         galaxies[ngal].BlackHoleMass = run_params->BHSeedMass;
                         galaxies[ngal].BHSpin = 0.0;  // Seeds start with zero spin
                     }
@@ -437,6 +435,12 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
             // Secular accretion from disk instabilities and gravitational torques
             if(run_params->TorqueAccretionOn == 1) {
                 torque_driven_BH_accretion(p, deltaT / effective_steps, galaxies, run_params);
+            }
+
+            // Seed-mode BH accretion: M_BH-independent channel for small BH growth
+            // This helps BHs grow from seed mass where other channels are ineffective
+            if(run_params->SeedModeEfficiency > 0.0) {
+                seed_mode_BH_accretion(p, deltaT / effective_steps, galaxies, run_params);
             }
         }
 

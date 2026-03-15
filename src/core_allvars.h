@@ -460,6 +460,7 @@ struct params
     int32_t    SupernovaRecipeOn;
     int32_t    ReionizationOn;
     int32_t    DiskInstabilityOn;
+    int32_t    DiskInstabilityMode;  // 0: original partial transfer, 1: SHARK-style full transfer
     int32_t    CGMrecipeOn;
     int32_t    CGMDensityProfile;  // 0: uniform, 1: NFW, 2: beta-profile
     int32_t    AGNheatingCGMOn;    // 0: off, 1: enable AGN heating in CGM-regime haloes
@@ -477,6 +478,7 @@ struct params
     double BHSeedMass;                 // Seed BH mass in units of 10^10 Msun/h (e.g., 1e-6 = 10^4 Msun/h)
     double BHSeedMinHaloMass;          // Minimum halo mass for seeding in units of 10^10 Msun/h
     double TorqueAccretionEfficiency;  // Efficiency for torque-driven accretion (HQ11), typical ~0.01-0.1
+    double SeedModeEfficiency;         // Efficiency for M_BH-independent accretion, helps small BHs grow
 
     double RecycleFraction;
     double Yield;

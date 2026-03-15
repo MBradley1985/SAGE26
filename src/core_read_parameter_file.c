@@ -137,6 +137,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->DiskInstabilityOn);
     ParamID[NParam++] = INT;
 
+    strncpy(ParamTag[NParam], "DiskInstabilityMode", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->DiskInstabilityMode);
+    ParamID[NParam++] = INT;
+
     strncpy(ParamTag[NParam], "SFprescription", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->SFprescription);
     ParamID[NParam++] = INT;
@@ -303,6 +307,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
     strncpy(ParamTag[NParam], "TorqueAccretionEfficiency", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->TorqueAccretionEfficiency);
+    ParamID[NParam++] = DOUBLE;
+
+    strncpy(ParamTag[NParam], "SeedModeEfficiency", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->SeedModeEfficiency);
     ParamID[NParam++] = DOUBLE;
 
 

@@ -20,6 +20,7 @@ extern "C" {
     extern double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
                                      struct GALAXY *galaxies, const struct params *run_params);
     extern void torque_driven_BH_accretion(const int p, const double dt, struct GALAXY *galaxies, const struct params *run_params);
+    extern void seed_mode_BH_accretion(const int p, const double dt, struct GALAXY *galaxies, const struct params *run_params);
     // extern double calculate_adaptive_sfr_norm(const int gal, struct GALAXY *galaxies, const struct params *run_params);
 
 #ifdef __cplusplus

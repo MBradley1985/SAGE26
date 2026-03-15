@@ -19,8 +19,8 @@ def read_hdf(file_list, snap, field):
 
 def main():
     # Configuration
-    output_dir = '../output/millennium/'
-    data_dir = '../data/'
+    output_dir = './output/millennium/'
+    data_dir = './data/'
     Hubble_h = 0.73
     BoxSize = 62.5
 

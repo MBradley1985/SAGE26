@@ -48,12 +48,13 @@ BoxSize         62.5 % Size of the simulation box in Mpc/h.
 SFprescription        1   %0: original Croton et al. 2006; 1: BR06 H2 Stars; 2: Somerville et al. 2025 SFR; 3: Somerville et al. 2025 SFR + H2; 4: KD12 H2 Stars; 5: KMT09; 6: K13; 7: GD14
 AGNrecipeOn           2   %0: switch off; 1: empirical model; 2: Bondi-Hoyle model; 3: cold cloud accretion model
 BHSeedingOn           1   %0: switch off
-BHSpinModelOn         0   %0: off; 1: Volonteri+2007 a(M_BH) relation
+BHSpinModelOn         1   %0: off; 1: Volonteri+2007 a(M_BH) relation
 TorqueAccretionOn     1   %0: off; 1: Hopkins & Quataert 2011 torque-driven BH accretion
 H2DiskAreaOption      2   %0: π*r_s²; 1: π*(3*r_s)² (default); 2: 2π*r_s² (central Σ₀)
 SupernovaRecipeOn     1   %0: switch off; 1: original Croton et al. 2016
 ReionizationOn        1   %0: switch off
 DiskInstabilityOn     1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
+DiskInstabilityMode   0   %0: original partial transfer; 1: SHARK-style full transfer
 
 CGMrecipeOn           1   %0: switch off
 CGMDensityProfile     0   %0: uniform; 1: NFW; 2: beta-profile (β=2/3)
@@ -78,14 +79,15 @@ FeedbackEjectionEfficiency  0.5   %mixing efficiency of SN energy with hot gas t
 
 ReIncorporationFactor   0.15    %fraction of ejected mass reincorporated per dynamical time to hot
 
-RadioModeEfficiency     0.08    %AGN radio mode efficiency (AGNrecipeOn=2)
+RadioModeEfficiency     0.04    %AGN radio mode efficiency (AGNrecipeOn=2)
 QuasarModeEfficiency    0.005   %AGN quasar mode wind heating efficiency (AGNrecipeOn>0)
 BlackHoleGrowthRate     0.015   %fraction of cold gas accreted by BH during mergers (AGNrecipeOn>0)
 
-BHSeedMass              1.0e-4  %Seed BH mass in 10^10 Msun/h (1e-4 = 10^6 Msun/h)
-BHSeedMinHaloMass       3.0    %Minimum halo mass for seeding in 10^10 Msun/h (10.0 = 10^11 Msun/h)
+BHSeedMass              1.0e-6  %Seed BH mass in 10^10 Msun/h (1e-6 = 10^4 Msun/h)
+BHSeedMinHaloMass       1.0    %Minimum halo mass for seeding in 10^10 Msun/h (10.0 = 10^11 Msun/h)
 
-TorqueAccretionEfficiency  0.003    %Efficiency for torque-driven accretion (HQ11), tune 0.001-0.03
+TorqueAccretionEfficiency  0.025    %Efficiency for torque-driven accretion (HQ11), tune 0.001-0.03
+SeedModeEfficiency         0.0      %M_BH-independent accretion efficiency for small BH growth, tune 0.0001-0.01
 
 ThreshMajorMerger       0.3   %major merger when mass ratio greater than this
 ThresholdSatDisruption  1.0   %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption

@@ -976,21 +976,14 @@ void torque_driven_BH_accretion(const int p, const double dt, struct GALAXY *gal
         return;
     }
 
-    // Torque-driven accretion requires a bulge to drive gravitational torques
-    // In low-mass pure disk galaxies, bars and spiral arms are weak/absent
-    // Suppress accretion when bulge fraction is low
-    const double bulge_fraction = (galaxies[p].StellarMass > 0.0) ?
-                                   galaxies[p].BulgeMass / galaxies[p].StellarMass : 0.0;
+    // Torque-driven accretion from disk self-gravity, bars, and spiral arms
+    // Remove bulge requirement - disk instabilities can drive gas inflows
+    // even in pure disk galaxies (e.g., bar-driven fueling)
 
-    // Also suppress in low-mass halos (similar to merger BH growth formula)
-    // Factor goes from ~0.2 at Vvir=140 km/s to ~0.8 at Vvir=560 km/s
+    // Suppress in low-mass halos where disk self-gravity is weak
     const double Vvir_suppress = 1.0 / (1.0 + SQR(200.0 / galaxies[p].Vvir));
 
-    // Combined suppression: need both a bulge AND a massive enough halo
-    // Minimum bulge fraction of ~5% for torques to be effective
-    const double f_suppress = Vvir_suppress * (bulge_fraction / (bulge_fraction + 0.05));
-
-    if(f_suppress < 0.01) {
+    if(Vvir_suppress < 0.01) {
         return;  // Too suppressed to matter
     }
 
@@ -1022,8 +1015,8 @@ void torque_driven_BH_accretion(const int p, const double dt, struct GALAXY *gal
         return;
     }
 
-    // Torque-driven accretion rate: Ṁ_BH = ε × f_suppress × f_attn × f_gas × M_BH / t_dyn
-    double Mdot_torque = run_params->TorqueAccretionEfficiency * f_suppress * f_attn * f_gas * galaxies[p].BlackHoleMass / t_dyn;
+    // Torque-driven accretion rate: Ṁ_BH = ε × Vvir_suppress × f_attn × f_gas × M_BH / t_dyn
+    double Mdot_torque = run_params->TorqueAccretionEfficiency * Vvir_suppress * f_attn * f_gas * galaxies[p].BlackHoleMass / t_dyn;
 
     // Calculate Eddington rate limit
     // L_Edd = 1.3e38 * (M_BH / M_sun) erg/s
@@ -1069,6 +1062,102 @@ void torque_driven_BH_accretion(const int p, const double dt, struct GALAXY *gal
         update_bh_spin_parameter(p, galaxies, run_params);
 
         // Track as quasar-mode accretion (secular accretion contributes to AGN activity)
+        galaxies[p].QuasarModeBHaccretionMass += accreted;
+    }
+}
+
+
+void seed_mode_BH_accretion(const int p, const double dt, struct GALAXY *galaxies, const struct params *run_params)
+{
+    // "Seed mode" accretion: M_BH-independent channel to help small BHs grow
+    //
+    // This provides continuous accretion that doesn't scale with M_BH, allowing
+    // small (seed-mass) BHs to grow steadily rather than being stuck at seed mass.
+    //
+    // Formula: Mdot = epsilon × ColdGas / t_dyn × f_taper
+    //
+    // Where:
+    //   epsilon = SeedModeEfficiency parameter (~0.001-0.01)
+    //   t_dyn   = dynamical time of the disk
+    //   f_taper = 1 / (1 + M_BH/M_transition) - tapers off as BH grows
+    //
+    // The taper ensures this channel dominates for small BHs but becomes
+    // negligible compared to M_BH-dependent channels as the BH grows.
+
+    if(run_params->SeedModeEfficiency <= 0.0) {
+        return;
+    }
+
+    // Need a black hole and cold gas
+    if(galaxies[p].BlackHoleMass <= 0.0 || galaxies[p].ColdGas <= 0.0) {
+        return;
+    }
+
+    // Need valid dynamical time
+    if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
+        return;
+    }
+
+    // Dynamical time: t_dyn = R_disk / V_vir
+    const double t_dyn_seconds = (galaxies[p].DiskScaleRadius / galaxies[p].Vvir) * 3.086e19;
+    const double t_dyn = t_dyn_seconds / run_params->UnitTime_in_s;
+
+    if(t_dyn <= 0.0) {
+        return;
+    }
+
+    // Taper factor: this channel is most important for small BHs
+    // M_transition ~ 10^-5 in code units = 10^5 Msun/h
+    // When M_BH << M_transition: f_taper ~ 1
+    // When M_BH >> M_transition: f_taper ~ M_transition/M_BH (suppressed)
+    const double M_transition = 1.0e-5;  // 10^5 Msun/h in code units
+    const double f_taper = 1.0 / (1.0 + galaxies[p].BlackHoleMass / M_transition);
+
+    // Base accretion rate: Mdot = epsilon × ColdGas / t_dyn × f_taper
+    double Mdot_seed = run_params->SeedModeEfficiency * galaxies[p].ColdGas / t_dyn * f_taper;
+
+    // Calculate Eddington rate limit
+    double eta_rad;
+    if(run_params->BHSpinModelOn == 1) {
+        eta_rad = calculate_radiative_efficiency(galaxies[p].BHSpin);
+    } else {
+        eta_rad = 0.1;
+    }
+
+    const double Mdot_Edd = (1.3e38 * galaxies[p].BlackHoleMass * 1e10 / run_params->Hubble_h)
+                          / (run_params->UnitEnergy_in_cgs / run_params->UnitTime_in_s)
+                          / (eta_rad * 9e10);
+
+    // Cap at Eddington (though this channel is designed for sub-Eddington growth)
+    if(Mdot_seed > Mdot_Edd) {
+        Mdot_seed = Mdot_Edd;
+    }
+
+    // Mass accreted this timestep
+    double accreted = Mdot_seed * dt;
+
+    // Cannot accrete more than available cold gas
+    if(accreted > galaxies[p].ColdGas) {
+        accreted = galaxies[p].ColdGas;
+    }
+
+    // Perform the accretion
+    if(accreted > 0.0) {
+        const double metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
+
+        galaxies[p].BlackHoleMass += accreted;
+        galaxies[p].ColdGas -= accreted;
+        galaxies[p].MetalsColdGas -= metallicity * accreted;
+
+        // Ensure metals don't go negative
+        if(galaxies[p].MetalsColdGas < 0.0) {
+            galaxies[p].MetalsColdGas = 0.0;
+        }
+
+        // Update spin after growth
+        update_bh_spin_parameter(p, galaxies, run_params);
+
+        // Track as quasar-mode accretion
         galaxies[p].QuasarModeBHaccretionMass += accreted;
     }
 }

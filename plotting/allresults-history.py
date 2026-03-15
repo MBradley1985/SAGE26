@@ -971,7 +971,7 @@ if __name__ == '__main__':
     
     # Set log scale and limits
     ax.set_yscale('log')
-    ax.set_xlim(4.0, 11.0)
+    ax.set_xlim(6.0, 11.0)
     ax.set_ylim(1e-5, 1e-1)
     
     # Labels and formatting
