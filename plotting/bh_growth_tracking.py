@@ -88,6 +88,8 @@ def main():
     print("Reading black hole data...")
     BlackHoleMass = read_hdf(file_list, snap_num, 'BlackHoleMass') * 1.0e10 / Hubble_h
     QuasarMode = read_hdf(file_list, snap_num, 'QuasarModeBHaccretionMass') * 1.0e10 / Hubble_h
+    MergerDriven = read_hdf(file_list, snap_num, 'MergerDrivenBHaccretionMass') * 1.0e10 / Hubble_h
+    InstabilityDriven = read_hdf(file_list, snap_num, 'InstabilityDrivenBHaccretionMass') * 1.0e10 / Hubble_h
     RadioMode = read_hdf(file_list, snap_num, 'RadioModeBHaccretionMass') * 1.0e10 / Hubble_h
     BHMerger = read_hdf(file_list, snap_num, 'BHMergerMass') * 1.0e10 / Hubble_h
     StellarMass = read_hdf(file_list, snap_num, 'StellarMass') * 1.0e10 / Hubble_h
@@ -110,24 +112,30 @@ def main():
     print("VALIDATION: Channel sum vs BlackHoleMass")
     print("="*60)
 
-    channel_sum = QuasarMode + RadioMode + BHMerger
-    residual = BlackHoleMass - channel_sum
+    # Growth budget: QuasarMode + RadioMode = BlackHoleMass
+    # BHMergerMass is a diagnostic (how much BH mass came via coalescence) but is NOT
+    # part of the growth sum — mergers don't create new mass, they transfer it between
+    # galaxies, and the satellite's growth history is already carried over in the
+    # QuasarMode and RadioMode channel totals.
+    growth_sum = QuasarMode + RadioMode
+    residual = BlackHoleMass - growth_sum
 
     # Only check galaxies with BHs
     if n_bh > 0:
         bh = BlackHoleMass[bh_mask]
-        cs = channel_sum[bh_mask]
+        gs = growth_sum[bh_mask]
         res = residual[bh_mask]
         frac_res = res / bh
 
         print(f"\nBlackHoleMass total:  {bh.sum():.6e} M_sun")
-        print(f"Channel sum total:    {cs.sum():.6e} M_sun")
-        print(f"  Quasar mode:        {QuasarMode[bh_mask].sum():.6e} M_sun  ({100*QuasarMode[bh_mask].sum()/bh.sum():.1f}%)")
+        print(f"Growth sum total:     {gs.sum():.6e} M_sun  (QuasarMode + RadioMode)")
+        print(f"  Quasar mode total:  {QuasarMode[bh_mask].sum():.6e} M_sun  ({100*QuasarMode[bh_mask].sum()/bh.sum():.1f}%)")
+        print(f"    Merger-driven:    {MergerDriven[bh_mask].sum():.6e} M_sun  ({100*MergerDriven[bh_mask].sum()/bh.sum():.1f}%)")
+        print(f"    Instability:      {InstabilityDriven[bh_mask].sum():.6e} M_sun  ({100*InstabilityDriven[bh_mask].sum()/bh.sum():.1f}%)")
         print(f"  Radio mode:         {RadioMode[bh_mask].sum():.6e} M_sun  ({100*RadioMode[bh_mask].sum()/bh.sum():.1f}%)")
-        print(f"  BH-BH mergers:      {BHMerger[bh_mask].sum():.6e} M_sun  ({100*BHMerger[bh_mask].sum()/bh.sum():.1f}%)")
-        print(f"\nResidual (BH - sum):  {res.sum():.6e} M_sun")
-        print(f"  This is the seed mass contribution (should be small).")
-        print(f"\nPer-galaxy fractional residual (BH - sum) / BH:")
+        print(f"\n  BH-BH mergers:      {BHMerger[bh_mask].sum():.6e} M_sun  (diagnostic — mass received via coalescence)")
+        print(f"\nResidual (BH - growth sum):  {res.sum():.6e} M_sun")
+        print(f"\nPer-galaxy fractional residual (BH - growth sum) / BH:")
         print(f"  Median: {np.median(frac_res):.6f}")
         print(f"  Max:    {np.max(np.abs(frac_res)):.6f}")
         print(f"  99th percentile: {np.percentile(np.abs(frac_res), 99):.6f}")
@@ -135,9 +143,38 @@ def main():
         # Flag any large discrepancies
         bad = np.abs(frac_res) > 0.01
         if np.sum(bad) > 0:
-            print(f"\n  WARNING: {np.sum(bad)} galaxies have >1% residual")
+            print(f"\n  PASS/FAIL: WARNING — {np.sum(bad)} galaxies have >1% residual")
         else:
             print(f"\n  PASS: All galaxies have <1% residual")
+
+        # Sub-channel consistency: MergerDriven + InstabilityDriven == QuasarMode
+        print(f"\n{'='*60}")
+        print("SUB-CHANNEL CONSISTENCY CHECK")
+        print(f"{'='*60}")
+        print("Checking: MergerDriven + InstabilityDriven = QuasarModeBHaccretionMass")
+
+        quasar_sub = MergerDriven[bh_mask] + InstabilityDriven[bh_mask]
+        quasar_tot = QuasarMode[bh_mask]
+        sub_residual = quasar_sub - quasar_tot
+
+        # Fractional residual only for galaxies with quasar mode accretion
+        has_quasar = quasar_tot > 0
+        if np.sum(has_quasar) > 0:
+            sub_frac_res = sub_residual[has_quasar] / quasar_tot[has_quasar]
+            print(f"\nGalaxies with QuasarMode > 0: {np.sum(has_quasar)}")
+            print(f"  Absolute residual sum: {np.sum(np.abs(sub_residual[has_quasar])):.6e} M_sun")
+            print(f"  Per-galaxy fractional residual (Merger+Instab - Quasar) / Quasar:")
+            print(f"    Median: {np.median(sub_frac_res):.6f}")
+            print(f"    Max:    {np.max(np.abs(sub_frac_res)):.6f}")
+            print(f"    99th percentile: {np.percentile(np.abs(sub_frac_res), 99):.6f}")
+
+            sub_bad = np.abs(sub_frac_res) > 0.01
+            if np.sum(sub_bad) > 0:
+                print(f"\n  PASS/FAIL: WARNING — {np.sum(sub_bad)} galaxies have >1% sub-channel residual")
+            else:
+                print(f"\n  PASS: MergerDriven + InstabilityDriven = QuasarMode for all galaxies (<1% residual)")
+        else:
+            print(f"\n  No galaxies with QuasarMode accretion — skipping sub-channel check")
 
     # ===================== STATISTICS =====================
     print("\n" + "="*60)
@@ -145,24 +182,27 @@ def main():
     print("="*60)
 
     if n_bh > 0:
-        qm = QuasarMode[bh_mask]
+        md = MergerDriven[bh_mask]
+        id_ = InstabilityDriven[bh_mask]
         rm = RadioMode[bh_mask]
         bm = BHMerger[bh_mask]
 
-        has_qm = qm > 0
+        has_md = md > 0
+        has_id = id_ > 0
         has_rm = rm > 0
         has_bm = bm > 0
 
-        print(f"\nGalaxies with quasar mode accretion: {np.sum(has_qm)} ({100*np.sum(has_qm)/n_bh:.1f}%)")
-        print(f"Galaxies with radio mode accretion:  {np.sum(has_rm)} ({100*np.sum(has_rm)/n_bh:.1f}%)")
-        print(f"Galaxies with BH-BH mergers:         {np.sum(has_bm)} ({100*np.sum(has_bm)/n_bh:.1f}%)")
+        print(f"\nGalaxies with merger-driven accretion:      {np.sum(has_md)} ({100*np.sum(has_md)/n_bh:.1f}%)")
+        print(f"Galaxies with instability-driven accretion: {np.sum(has_id)} ({100*np.sum(has_id)/n_bh:.1f}%)")
+        print(f"Galaxies with radio mode accretion:         {np.sum(has_rm)} ({100*np.sum(has_rm)/n_bh:.1f}%)")
+        print(f"Galaxies with BH-BH mergers:                {np.sum(has_bm)} ({100*np.sum(has_bm)/n_bh:.1f}%)")
 
-        # Dominant channel per galaxy
-        dominant = np.argmax(np.column_stack([qm, rm, bm]), axis=1)
-        labels = ['Quasar mode', 'Radio mode', 'BH mergers']
+        # Dominant growth channel per galaxy (excluding BH mergers as it's not a growth channel)
+        dominant = np.argmax(np.column_stack([md, id_, rm]), axis=1)
+        labels = ['Merger-driven', 'Instability-driven', 'Radio mode']
         for i, lab in enumerate(labels):
             n = np.sum(dominant == i)
-            print(f"  Dominant channel = {lab}: {n} ({100*n/n_bh:.1f}%)")
+            print(f"  Dominant growth channel = {lab}: {n} ({100*n/n_bh:.1f}%)")
 
     # ===================== PLOTS =====================
     print(f"\nGenerating plots in {OutputDir}...")
@@ -174,7 +214,8 @@ def main():
     bin_centres = 0.5 * (mass_bins[:-1] + mass_bins[1:])
     log_bh = np.log10(BlackHoleMass[bh_mask])
 
-    qm_frac_bins = np.zeros(len(bin_centres))
+    md_frac_bins = np.zeros(len(bin_centres))
+    id_frac_bins = np.zeros(len(bin_centres))
     rm_frac_bins = np.zeros(len(bin_centres))
     bm_frac_bins = np.zeros(len(bin_centres))
 
@@ -182,17 +223,18 @@ def main():
         in_bin = (log_bh >= mass_bins[i]) & (log_bh < mass_bins[i+1])
         if np.sum(in_bin) > 5:
             total = BlackHoleMass[bh_mask][in_bin].sum()
-            qm_frac_bins[i] = QuasarMode[bh_mask][in_bin].sum() / total
+            md_frac_bins[i] = MergerDriven[bh_mask][in_bin].sum() / total
+            id_frac_bins[i] = InstabilityDriven[bh_mask][in_bin].sum() / total
             rm_frac_bins[i] = RadioMode[bh_mask][in_bin].sum() / total
             bm_frac_bins[i] = BHMerger[bh_mask][in_bin].sum() / total
 
     # Use grouped bars (not stacked) with log y-axis so small fractions are visible
-    bar_width = 0.14
-    offsets = [-bar_width, 0, bar_width]
-    for frac, offset, label, colour in zip([qm_frac_bins, rm_frac_bins, bm_frac_bins],
+    bar_width = 0.11
+    offsets = [-1.5*bar_width, -0.5*bar_width, 0.5*bar_width, 1.5*bar_width]
+    for frac, offset, label, colour in zip([md_frac_bins, id_frac_bins, rm_frac_bins, bm_frac_bins],
                                             offsets,
-                                            ['Quasar mode', 'Radio mode', 'BH-BH mergers'],
-                                            ['#2196F3', '#FF5722', '#4CAF50']):
+                                            ['Merger-driven', 'Instability-driven', 'Radio mode', 'BH-BH mergers'],
+                                            ['#2196F3', '#9C27B0', '#FF5722', '#4CAF50']):
         mask = frac > 0
         if np.any(mask):
             ax.bar(bin_centres[mask] + offset, frac[mask], width=bar_width,
@@ -211,20 +253,21 @@ def main():
     print(f"  Saved: bh_growth_channels_by_mass{OutputFormat}")
 
     # -- Plot 2: BH mass vs channel contributions (scatter) --
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5.5))
+    fig, axes = plt.subplots(1, 4, figsize=(22, 5.5))
 
     dilute = min(5000, n_bh)
     idx = np.random.choice(n_bh, size=dilute, replace=False) if n_bh > dilute else np.arange(n_bh)
 
     bh_plot = BlackHoleMass[bh_mask][idx]
-    qm_plot = QuasarMode[bh_mask][idx]
+    md_plot = MergerDriven[bh_mask][idx]
+    id_plot = InstabilityDriven[bh_mask][idx]
     rm_plot = RadioMode[bh_mask][idx]
     bm_plot = BHMerger[bh_mask][idx]
 
     for ax, channel, label, colour in zip(axes,
-                                           [qm_plot, rm_plot, bm_plot],
-                                           ['Quasar Mode', 'Radio Mode', 'BH-BH Mergers'],
-                                           ['#2196F3', '#FF5722', '#4CAF50']):
+                                           [md_plot, id_plot, rm_plot, bm_plot],
+                                           ['Merger-driven', 'Instability-driven', 'Radio Mode', 'BH-BH Mergers'],
+                                           ['#2196F3', '#9C27B0', '#FF5722', '#4CAF50']):
         pos = channel > 0
         if np.sum(pos) > 0:
             log_bh_pos = np.log10(bh_plot[pos])
@@ -257,7 +300,8 @@ def main():
         halo_centres = 0.5 * (halo_bins[:-1] + halo_bins[1:])
         log_mvir = np.log10(Mvir[central_bh])
 
-        qm_halo = np.zeros(len(halo_centres))
+        md_halo = np.zeros(len(halo_centres))
+        id_halo = np.zeros(len(halo_centres))
         rm_halo = np.zeros(len(halo_centres))
         bm_halo = np.zeros(len(halo_centres))
 
@@ -265,14 +309,15 @@ def main():
             in_bin = (log_mvir >= halo_bins[i]) & (log_mvir < halo_bins[i+1])
             if np.sum(in_bin) > 5:
                 total = BlackHoleMass[central_bh][in_bin].sum()
-                qm_halo[i] = QuasarMode[central_bh][in_bin].sum() / total
+                md_halo[i] = MergerDriven[central_bh][in_bin].sum() / total
+                id_halo[i] = InstabilityDriven[central_bh][in_bin].sum() / total
                 rm_halo[i] = RadioMode[central_bh][in_bin].sum() / total
                 bm_halo[i] = BHMerger[central_bh][in_bin].sum() / total
 
-        for frac, marker, label, colour in zip([qm_halo, rm_halo, bm_halo],
-                                                  ['o', 's', '^'],
-                                                  ['Quasar mode', 'Radio mode', 'BH-BH mergers'],
-                                                  ['#2196F3', '#FF5722', '#4CAF50']):
+        for frac, marker, label, colour in zip([md_halo, id_halo, rm_halo, bm_halo],
+                                                  ['o', 'D', 's', '^'],
+                                                  ['Merger-driven', 'Instability-driven', 'Radio mode', 'BH-BH mergers'],
+                                                  ['#2196F3', '#9C27B0', '#FF5722', '#4CAF50']):
             mask = frac > 0
             if np.any(mask):
                 ax.plot(halo_centres[mask], frac[mask], marker=marker, linestyle='-',
@@ -293,7 +338,7 @@ def main():
     # -- Plot 4: Validation - residual histogram --
     if n_bh > 0:
         fig, ax = plt.subplots()
-        frac_res = residual[bh_mask] / BlackHoleMass[bh_mask]
+        frac_res = (BlackHoleMass[bh_mask] - growth_sum[bh_mask]) / BlackHoleMass[bh_mask]
 
         ax.hist(frac_res, bins=100, color='grey', edgecolor='black', linewidth=0.5)
         ax.axvline(0, color='red', ls='--', lw=1.5)
@@ -305,21 +350,37 @@ def main():
         plt.close()
         print(f"  Saved: bh_growth_validation{OutputFormat}")
 
-    # -- Plot 5: Channel fractions as a function of redshift --
+    # -- Plots 5 & 6: Channel fractions and rates as a function of redshift --
     if 'snapshot_redshifts' in sim_params:
         print("  Computing BH growth channels across all snapshots...")
         all_snaps = sim_params['available_snapshots']
         all_redshifts = sim_params['snapshot_redshifts']
 
+        # Read cosmology for time calculations
+        with h5py.File(file_list[0], 'r') as f:
+            omega_m = float(f['Header/Simulation'].attrs['omega_matter'])
+            omega_l = float(f['Header/Simulation'].attrs['omega_lambda'])
+
+        def redshift_to_age_gyr(z, H0=Hubble_h*100, Om=omega_m, Ol=omega_l):
+            """Convert redshift to age of universe in Gyr using numerical integration."""
+            from scipy.integrate import quad
+            H0_per_gyr = H0 * 1.0222e-3  # km/s/Mpc -> 1/Gyr
+            integrand = lambda a: 1.0 / (a * np.sqrt(Om / a**3 + Ol))
+            age, _ = quad(integrand, 0, 1.0 / (1.0 + z))
+            return age / H0_per_gyr
+
         snap_z = []
-        snap_qm_frac = []
-        snap_rm_frac = []
-        snap_bm_frac = []
+        snap_age = []
+        snap_md_total = []
+        snap_id_total = []
+        snap_rm_total = []
+        snap_bm_total = []
         snap_total_bh = []
 
         for sn in all_snaps:
             bh = read_hdf(file_list, sn, 'BlackHoleMass') * 1.0e10 / Hubble_h
-            qm = read_hdf(file_list, sn, 'QuasarModeBHaccretionMass') * 1.0e10 / Hubble_h
+            md = read_hdf(file_list, sn, 'MergerDrivenBHaccretionMass') * 1.0e10 / Hubble_h
+            id_ = read_hdf(file_list, sn, 'InstabilityDrivenBHaccretionMass') * 1.0e10 / Hubble_h
             rm = read_hdf(file_list, sn, 'RadioModeBHaccretionMass') * 1.0e10 / Hubble_h
             bm = read_hdf(file_list, sn, 'BHMergerMass') * 1.0e10 / Hubble_h
 
@@ -332,35 +393,47 @@ def main():
                 continue
 
             snap_z.append(z)
-            snap_qm_frac.append(qm.sum() / total)
-            snap_rm_frac.append(rm.sum() / total)
-            snap_bm_frac.append(bm.sum() / total)
+            snap_age.append(redshift_to_age_gyr(z))
+            snap_md_total.append(md.sum())
+            snap_id_total.append(id_.sum())
+            snap_rm_total.append(rm.sum())
+            snap_bm_total.append(bm.sum())
             snap_total_bh.append(total)
 
         snap_z = np.array(snap_z)
-        snap_qm_frac = np.array(snap_qm_frac)
-        snap_rm_frac = np.array(snap_rm_frac)
-        snap_bm_frac = np.array(snap_bm_frac)
+        snap_age = np.array(snap_age)
+        snap_md_total = np.array(snap_md_total)
+        snap_id_total = np.array(snap_id_total)
+        snap_rm_total = np.array(snap_rm_total)
+        snap_bm_total = np.array(snap_bm_total)
         snap_total_bh = np.array(snap_total_bh)
 
         if len(snap_z) > 1:
-            # Sort by redshift (high to low for time progression left to right)
-            order = np.argsort(snap_z)[::-1]
+            # Sort by time (increasing age = decreasing redshift)
+            order = np.argsort(snap_age)
             snap_z = snap_z[order]
-            snap_qm_frac = snap_qm_frac[order]
-            snap_rm_frac = snap_rm_frac[order]
-            snap_bm_frac = snap_bm_frac[order]
+            snap_age = snap_age[order]
+            snap_md_total = snap_md_total[order]
+            snap_id_total = snap_id_total[order]
+            snap_rm_total = snap_rm_total[order]
+            snap_bm_total = snap_bm_total[order]
             snap_total_bh = snap_total_bh[order]
 
+            # Compute fractions
+            snap_md_frac = snap_md_total / snap_total_bh
+            snap_id_frac = snap_id_total / snap_total_bh
+            snap_rm_frac = snap_rm_total / snap_total_bh
+            snap_bm_frac = snap_bm_total / snap_total_bh
+
+            # -- Plot 5: Channel fractions vs redshift --
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8.34, 10), sharex=True,
                                             gridspec_kw={'height_ratios': [2, 1]})
 
-            # Top panel: channel fractions vs redshift
             for frac, marker, label, colour in zip(
-                    [snap_qm_frac, snap_rm_frac, snap_bm_frac],
-                    ['o', 's', '^'],
-                    ['Quasar mode', 'Radio mode', 'BH-BH mergers'],
-                    ['#2196F3', '#FF5722', '#4CAF50']):
+                    [snap_md_frac, snap_id_frac, snap_rm_frac, snap_bm_frac],
+                    ['o', 'D', 's', '^'],
+                    ['Merger-driven', 'Instability-driven', 'Radio mode', 'BH-BH mergers'],
+                    ['#2196F3', '#9C27B0', '#FF5722', '#4CAF50']):
                 mask = frac > 0
                 if np.any(mask):
                     ax1.plot(snap_z[mask], frac[mask], marker=marker, linestyle='-',
@@ -373,7 +446,6 @@ def main():
             ax1.set_ylim(1e-7, 2.0)
             ax1.invert_xaxis()
 
-            # Bottom panel: total BH mass density vs redshift
             ax2.plot(snap_z, np.log10(snap_total_bh), 'k-o', markersize=4)
             ax2.set_xlabel('Redshift')
             ax2.set_ylabel(r'$\log_{10}(\Sigma\, M_{\rm BH}\, /\, M_\odot)$')
@@ -383,6 +455,50 @@ def main():
             plt.savefig(os.path.join(OutputDir, f'bh_growth_channels_vs_redshift{OutputFormat}'))
             plt.close()
             print(f"  Saved: bh_growth_channels_vs_redshift{OutputFormat}")
+
+            # -- Plot 6: BH growth rates vs redshift --
+            # Rates = d(cumulative mass) / dt between snapshots
+            dt = np.diff(snap_age) * 1e9  # Gyr -> yr
+            md_rate = np.diff(snap_md_total) / dt  # M_sun/yr
+            id_rate = np.diff(snap_id_total) / dt
+            rm_rate = np.diff(snap_rm_total) / dt
+            bm_rate = np.diff(snap_bm_total) / dt
+            total_rate = np.diff(snap_total_bh) / dt
+            mid_z = 0.5 * (snap_z[:-1] + snap_z[1:])
+
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8.34, 10), sharex=True,
+                                            gridspec_kw={'height_ratios': [2, 1]})
+
+            # Top panel: rates per channel
+            for rate, marker, label, colour in zip(
+                    [md_rate, id_rate, rm_rate, bm_rate],
+                    ['o', 'D', 's', '^'],
+                    ['Merger-driven', 'Instability-driven', 'Radio mode', 'BH-BH mergers'],
+                    ['#2196F3', '#9C27B0', '#FF5722', '#4CAF50']):
+                mask = rate > 0
+                if np.any(mask):
+                    ax1.plot(mid_z[mask], rate[mask], marker=marker, linestyle='-',
+                             color=colour, label=label, markersize=5, linewidth=1.5)
+
+            ax1.set_ylabel(r'BH Growth Rate  $[M_\odot\, \mathrm{yr}^{-1}]$')
+            ax1.set_title('BH Growth Rates vs Redshift (all galaxies)')
+            ax1.legend(loc='best')
+            ax1.set_yscale('log')
+            ax1.invert_xaxis()
+
+            # Bottom panel: total BH growth rate
+            mask = total_rate > 0
+            if np.any(mask):
+                ax2.plot(mid_z[mask], total_rate[mask], 'k-o', markersize=4)
+            ax2.set_xlabel('Redshift')
+            ax2.set_ylabel(r'Total BH Growth Rate  $[M_\odot\, \mathrm{yr}^{-1}]$')
+            ax2.set_yscale('log')
+            ax2.invert_xaxis()
+
+            plt.tight_layout()
+            plt.savefig(os.path.join(OutputDir, f'bh_growth_rates_vs_redshift{OutputFormat}'))
+            plt.close()
+            print(f"  Saved: bh_growth_rates_vs_redshift{OutputFormat}")
 
     print("\nDone.")
 

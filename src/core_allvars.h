@@ -166,6 +166,8 @@ struct GALAXY
     double Heating;
     float r_heat;
     float QuasarModeBHaccretionMass;
+    float MergerDrivenBHaccretionMass;
+    float InstabilityDrivenBHaccretionMass;
     float RadioModeBHaccretionMass;
     float BHMergerMass;
     float TimeOfLastMajorMerger;

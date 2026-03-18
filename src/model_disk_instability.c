@@ -114,7 +114,7 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
 
             const double unstable_gas_fraction = unstable_gas / galaxies[p].ColdGas;
             if(run_params->AGNrecipeOn > 0) {
-                grow_black_hole(p, unstable_gas_fraction, galaxies, run_params);
+                grow_black_hole(p, unstable_gas_fraction, 1, galaxies, run_params);
             }
 
             collisional_starburst_recipe(unstable_gas_fraction, p, centralgal, time, dt, halonr, 1, step,
@@ -161,7 +161,7 @@ static void shark_style_disk_instability(const int p, const int centralgal, cons
     if(cold_gas > 0.0) {
         // BH growth: use mass_ratio = 1.0 since we're using all gas
         if(run_params->AGNrecipeOn > 0) {
-            grow_black_hole(p, 1.0, galaxies, run_params);
+            grow_black_hole(p, 1.0, 1, galaxies, run_params);
         }
 
         // Starburst: use mass_ratio = 1.0 for full gas consumption
