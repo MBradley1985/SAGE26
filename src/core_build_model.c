@@ -337,7 +337,13 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
     if (run_params->FeedbackFreeModeOn >= 1) {
         determine_and_store_ffb_regime(ngal, Zcurr, galaxies, run_params);
     }
-    
+
+    // Compute and store halo concentration (Ishiyama+21) for all galaxies
+    for(int p = 0; p < ngal; p++) {
+        if(galaxies[p].mergeType > 0) continue;
+        galaxies[p].Concentration = (float)get_halo_concentration(p, Zcurr, galaxies, run_params);
+    }
+
     const double halo_age = run_params->Age[halo_snapnum];
     const double infallingGas = infall_recipe(centralgal, ngal, Zcurr, galaxies, run_params);
 

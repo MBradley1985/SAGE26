@@ -102,6 +102,7 @@ extern "C" {
       float RcoolToRvir;
 
       int FFBRegime;
+      float Concentration;
       float mdot_cool;
       float mdot_stream;
     };

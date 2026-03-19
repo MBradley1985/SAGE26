@@ -121,6 +121,7 @@ struct GALAXY
     float Rvir;
     float Vvir;
     float Vmax;
+    float Concentration;
 
     /* baryonic reservoirs */
     float ColdGas;

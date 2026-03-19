@@ -18,7 +18,7 @@
 
 // NFW profile: ρ(r) = ρ_s / [(r/r_s)(1 + r/r_s)²]
 // Returns the normalization ρ_s given total mass M_CGM within R_vir
-static double nfw_rho_s(const double M_CGM, const double Rvir, const double c_NFW)
+double nfw_rho_s(const double M_CGM, const double Rvir, const double c_NFW)
 {
     const double r_s = Rvir / c_NFW;
     // M_CGM = 4π ρ_s r_s³ × [ln(1+c) - c/(1+c)]
@@ -27,7 +27,7 @@ static double nfw_rho_s(const double M_CGM, const double Rvir, const double c_NF
 }
 
 // NFW density at radius r
-static double nfw_density(const double r, const double rho_s, const double r_s)
+double nfw_density(const double r, const double rho_s, const double r_s)
 {
     const double x = r / r_s;
     if(x < 1e-10) return rho_s / (1e-10 * 1.0 * 1.0);  // Avoid singularity at r=0
@@ -35,7 +35,7 @@ static double nfw_density(const double r, const double rho_s, const double r_s)
 }
 
 // NFW concentration parameter (Duffy et al. 2008 relation)
-static double nfw_concentration(const double Mvir_Msun, const double z)
+double nfw_concentration(const double Mvir_Msun, const double z)
 {
     // c = 7.85 * (M/2e12)^(-0.081) * (1+z)^(-0.71)
     return 7.85 * pow(Mvir_Msun / 2.0e12, -0.081) * pow(1.0 + z, -0.71);
@@ -44,7 +44,7 @@ static double nfw_concentration(const double Mvir_Msun, const double z)
 // Beta profile: ρ(r) = ρ_0 / [1 + (r/r_c)²]^(3β/2)
 // For β = 2/3: ρ(r) = ρ_0 / [1 + (r/r_c)²]
 // Returns the normalization ρ_0 given total mass M_CGM within R_vir
-static double beta_rho_0(const double M_CGM, const double Rvir, const double r_c, const double beta)
+double beta_rho_0(const double M_CGM, const double Rvir, const double r_c, const double beta)
 {
     // For general β, the enclosed mass integral is:
     // M(<R) = 4π ρ_0 ∫_0^R r² / [1 + (r/r_c)²]^(3β/2) dr
@@ -85,7 +85,7 @@ static double beta_rho_0(const double M_CGM, const double Rvir, const double r_c
 }
 
 // Beta-profile density at radius r
-static double beta_density(const double r, const double rho_0, const double r_c, const double beta)
+double beta_density(const double r, const double rho_0, const double r_c, const double beta)
 {
     const double y = r / r_c;
     return rho_0 / pow(1.0 + y * y, 1.5 * beta);
@@ -96,7 +96,7 @@ static double beta_density(const double r, const double rho_0, const double r_c,
 // ============================================================================
 
 // NFW enclosed mass: M(<r) = M_total × [ln(1+x) - x/(1+x)] / [ln(1+c) - c/(1+c)]
-static double nfw_enclosed_mass(const double r, const double M_total, const double Rvir, const double c_NFW)
+double nfw_enclosed_mass(const double r, const double M_total, const double Rvir, const double c_NFW)
 {
     const double r_s = Rvir / c_NFW;
     const double x = r / r_s;
@@ -111,7 +111,7 @@ static double nfw_enclosed_mass(const double r, const double M_total, const doub
 
 // Beta-profile enclosed mass for β = 2/3
 // M(<r) = M_total × [arctan(x) - x/(1+x²)] / [arctan(X) - X/(1+X²)]
-static double beta_enclosed_mass(const double r, const double M_total, const double Rvir, const double r_c)
+double beta_enclosed_mass(const double r, const double M_total, const double Rvir, const double r_c)
 {
     const double x = r / r_c;
     const double X = Rvir / r_c;
@@ -124,7 +124,7 @@ static double beta_enclosed_mass(const double r, const double M_total, const dou
 }
 
 // Unified enclosed mass function
-static double cgm_enclosed_mass(const double r, const double M_total, const double Rvir,
+double cgm_enclosed_mass(const double r, const double M_total, const double Rvir,
                                  const double Mvir_Msun, const double z, const int profile_type)
 {
     if(r >= Rvir) return M_total;
@@ -151,7 +151,7 @@ static double cgm_enclosed_mass(const double r, const double M_total, const doub
 
 // Calculate CGM gas density at radius r given the profile choice
 // Returns density in CGS units (g/cm³)
-static double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const double Rvir_cgs,
+double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const double Rvir_cgs,
                                     const double Mvir_Msun, const double z, const int profile_type)
 {
     if(profile_type == 0) {
@@ -183,7 +183,7 @@ static double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs,
 // Iteratively solve for cooling radius r_cool where t_cool(r) = t_ff(r)
 // Returns r_cool in CGS units
 // Uses the correct enclosed mass for each density profile
-static double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, const double Mvir_cgs,
+double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, const double Mvir_cgs,
                               const double Mvir_Msun, const double temp, const double lambda,
                               const double z, const int profile_type,
                               __attribute__((unused)) const struct params *run_params)
@@ -426,7 +426,7 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxies,
                          const struct params *run_params)
 {
-    static long precipitation_debug_counter = 0;
+    long precipitation_debug_counter = 0;
     precipitation_debug_counter++;
 
     double coolingGas = 0.0;

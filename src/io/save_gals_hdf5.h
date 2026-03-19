@@ -117,6 +117,7 @@ struct HDF5_GALAXY_OUTPUT
     float *RcoolToRvir;
 
     int32_t *FFBRegime;
+    float *Concentration;
     float *mdot_cool;
     float *mdot_stream;
 };
