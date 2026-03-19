@@ -451,9 +451,13 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
             const double g_max = calculate_gmax_BK25(p, galaxies, run_params);
 
             // g_crit/G = 3100 M_sun/pc^2 (Boylan-Kolchin 2025, Table 1)
-            const double g_crit_over_G = 3100.0;  // M_sun / pc^2
+            // g_crit = G * 3100 * M_sun / pc^2  (~4.3e-10 m/s^2)
+            // In code units: g_crit = run_params->G * 3100 * (M_sun/UnitMass) / (pc/UnitLength)^2
+            const double Msun_code = SOLAR_MASS / run_params->UnitMass_in_g;
+            const double pc_code = 3.08568e18 / run_params->UnitLength_in_cm;  // 1 pc in cm
+            const double g_crit = run_params->G * 3100.0 * Msun_code / (pc_code * pc_code);
 
-            if(g_max > g_crit_over_G) {
+            if(g_max > g_crit) {
                 galaxies[p].FFBRegime = 1;  // FFB halo - above critical acceleration
             } else {
                 galaxies[p].FFBRegime = 0;  // Normal halo
@@ -555,27 +559,23 @@ double get_halo_concentration(const int p, const double z, const struct GALAXY *
 double calculate_gmax_BK25(const int p, const struct GALAXY *galaxies,
                             const struct params *run_params)
 {
-    // Boylan-Kolchin 2025: maximum NFW acceleration in units of g/G [M_sun / pc^2]
+    // Boylan-Kolchin 2025: maximum NFW gravitational acceleration
     //
     // g_vir = G * M_vir / R_vir^2                                (Eq. 2)
-    // g_max = (g_vir / mu(c)) * c^2 / 2                          (Eq. 4)
+    // g_max = (g_vir / mu(c)) * (c^2 / 2)                         (Eq. 4)
     // where mu(x) = ln(1+x) - x/(1+x)
     //
-    // We return g_max / G in M_sun / pc^2
+    // Returns g_max in code units (UnitLength / UnitTime^2)
 
-    const double Mvir = galaxies[p].Mvir;  // 10^10 M_sun / h
-    const double Rvir = galaxies[p].Rvir;  // Mpc / h
+    const double Mvir = galaxies[p].Mvir;  // code mass units (10^10 M_sun / h)
+    const double Rvir = galaxies[p].Rvir;  // code length units (Mpc / h)
 
     if(Mvir <= 0.0 || Rvir <= 0.0) {
         return 0.0;
     }
 
-    // Convert to physical units
-    const double Mvir_Msun = Mvir * 1.0e10 / run_params->Hubble_h;
-    const double Rvir_pc = Rvir * 1.0e6 / run_params->Hubble_h;
-
-    // g_vir / G = M_vir / R_vir^2  [M_sun / pc^2]
-    const double g_vir_over_G = Mvir_Msun / (Rvir_pc * Rvir_pc);
+    // g_vir = G * M_vir / R_vir^2  (code units)
+    const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
 
     // Use pre-computed concentration from the galaxy struct
     double c = galaxies[p].Concentration;
@@ -584,10 +584,8 @@ double calculate_gmax_BK25(const int p, const struct GALAXY *galaxies,
     // mu(c) = ln(1+c) - c/(1+c)
     const double mu_c = log(1.0 + c) - c / (1.0 + c);
 
-    // g_max / G = (g_vir/G) * c^2 / (2 * mu(c))   [BK25 Eq. 4]
-    const double g_max_over_G = g_vir_over_G * (c * c) / (2.0 * mu_c);
-
-    return g_max_over_G;
+    // g_max = (g_vir / mu(c)) * (c^2 / 2)   [BK25 Eq. 4]
+    return (g_vir / mu_c) * (c * c / 2.0);
 }
 
 
