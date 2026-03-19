@@ -47,6 +47,7 @@ GD14_DIR = './output/millennium_gd14/'
 KD12_DIR = './output/millennium_kd12/'
 KMT09_DIR = './output/millennium_kmt09/'
 K13_DIR = './output/millennium_k13/'
+FFB_BK25_DIR = './output/millennium_ffb_bk25/'
 MINIUCHUU_DIR = './output/miniuchuu/'
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
@@ -5692,6 +5693,104 @@ def plot_23_ffb_histogram():
     print(f'Saved file to {outputFile}\n')
     plt.close()
 
+
+def plot_23b_ffb_histogram_bk25():
+    """
+    Plot: Stacked bar chart of FFB vs Non-FFB Galaxies as a function of redshift,
+    with Li+24 and BK25 FFB bars overplotted on the same axis.
+    Non-FFB: Greys, FFB Li+24: RdPu, FFB BK25: Blues (semi-transparent, overplotted).
+    """
+    print('Plot 23b: FFB Histogram - Li+24 vs BK25')
+
+    models = [
+        {'dir': FFB_BK25_DIR, 'label': 'FFB (BK25)',   'cmap': 'Blues',  'alpha': 0.8},
+        {'dir': PRIMARY_DIR,  'label': 'FFB (Li+24)',  'cmap': 'RdPu',  'alpha': 0.6},
+    ]
+
+    fig = plt.figure()
+    ax = plt.subplot(111)
+
+    # We'll use the first model's non-FFB counts as background (they should be similar)
+    non_ffb_drawn = False
+
+    for model in models:
+        model_files = find_model_files(model['dir'])
+        if not model_files:
+            print(f"  No model files found in {model['dir']}")
+            continue
+
+        num_non_ffb_per_snap = []
+        num_ffb_per_snap = []
+        redshifts_list = []
+
+        for snap in range(64):
+            snap_key = f'Snap_{snap}'
+            d = read_snap_from_files(model_files, snap_key, ['FFBRegime'])
+            if d and 'FFBRegime' in d:
+                ffb_regime = d['FFBRegime']
+                num_ffb = np.sum(ffb_regime == 1)
+                num_non_ffb = np.sum(ffb_regime == 0)
+            else:
+                num_ffb = 0
+                num_non_ffb = 0
+
+            num_non_ffb_per_snap.append(num_non_ffb)
+            num_ffb_per_snap.append(num_ffb)
+            redshifts_list.append(REDSHIFTS[snap])
+
+        z = np.array(redshifts_list)
+        num_non_ffb_plot = np.array(num_non_ffb_per_snap)
+        num_ffb_plot = np.array(num_ffb_per_snap)
+
+        # Filter for z <= 15
+        z_mask = z <= 15
+        z_filtered = z[z_mask]
+        num_non_ffb_filtered = num_non_ffb_plot[z_mask]
+        num_ffb_filtered = num_ffb_plot[z_mask]
+
+        # Define bin edges in log10(1+z) space
+        z_edges = [15.0]
+        for i in range(len(z_filtered) - 1):
+            mid_point = (z_filtered[i] + z_filtered[i+1]) / 2.0
+            z_edges.append(mid_point)
+        z_edges.append(0.0)
+        z_edges = np.array(z_edges)
+
+        log1pz_edges = np.log10(1 + z_edges)
+        widths = log1pz_edges[:-1] - log1pz_edges[1:]
+
+        log1pz_values = np.log10(1 + z_edges[:-1])
+        norm = plt.Normalize(vmin=np.min(log1pz_values), vmax=np.max(log1pz_values))
+
+        # Draw non-FFB background only once
+        if not non_ffb_drawn:
+            cmap_non_ffb = plt.get_cmap('Greys')
+            colors_non_ffb = cmap_non_ffb(norm(log1pz_values))
+            ax.bar(log1pz_edges[:-1], num_non_ffb_filtered, width=widths, align='edge',
+                   label='Non-FFB', edgecolor='black', color=colors_non_ffb)
+            non_ffb_drawn = True
+
+        # Draw FFB bars
+        cmap_ffb = plt.get_cmap(model['cmap'])
+        colors_ffb = cmap_ffb(norm(log1pz_values))
+        # Set alpha on colors
+        colors_ffb[:, 3] = model['alpha']
+        ax.bar(log1pz_edges[:-1], num_ffb_filtered, width=widths, align='edge',
+               label=model['label'], edgecolor='black', color=colors_ffb)
+
+    ax.set_yscale('log')
+    ax.set_ylabel('Number of Galaxies')
+    ax.set_xlabel(r'$\log_{10}(1+z)$')
+    ax.set_xlim(np.log10(1+15), 0)
+    ax.legend(loc='best', frameon=False)
+
+    fig.tight_layout()
+    outputFile = os.path.join(OUTPUT_DIR, 'FFB_Histogram_Li24_vs_BK25' + OUTPUT_FORMAT)
+    plt.savefig(outputFile)
+    print(f'Saved file to {outputFile}\n')
+    plt.close()
+
+
 # ========================== PLOT 24: MASS LOADING VS VELOCITY  ==========================
 
 def plot_24_mass_loading_vs_velocity(primary, vanilla):
@@ -6387,6 +6486,7 @@ STANDALONE_PLOTS = {
     21: plot_21_smf_lowz_lowmass_grid,
     22: plot_22_regime_histogram,
     23: plot_23_ffb_histogram,
+    231: plot_23b_ffb_histogram_bk25,
     25: plot_25_hi_mass_ratio,
     26: plot_26_h2_mass_ratio,
     27: plot_27_cold_gas_mass_ratio,

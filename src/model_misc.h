@@ -29,6 +29,8 @@ extern "C" {
 
     extern void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct GALAXY *galaxies,
                                             const struct params *run_params);
+    extern double calculate_gmax_BK25(const int p, const double z, const struct GALAXY *galaxies,
+                                       const struct params *run_params);
     extern void update_instability_bulge_radius(const int p, const double delta_mass, 
                                      const double old_disk_radius,
                                      struct GALAXY *galaxies, const struct params *run_params);
