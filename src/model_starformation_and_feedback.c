@@ -974,37 +974,25 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
        isnan(reff) || isinf(reff) || isnan(tdyn) || isinf(tdyn)) {
         stars = 0.0;
     } else if(tdyn > 0.0 && galaxies[p].ColdGas > 0.0) {
-        // Equation (4): SFR = ε_FFB × M_gas / t_dyn
-        // Use maximum FFB efficiency (typically 0.2, can be up to 1.0)
+        // SFR = ε_FFB × M_gas / t_dyn
+        // FFB: all cold gas forms stars efficiently (no critical density threshold)
         const double epsilon_ffb = run_params->FFBMaxEfficiency;
-        const double cold_crit = 0.19 * galaxies[p].Vvir * reff;
-        
-        // Safety check on cold_crit
-        if(isnan(cold_crit) || isinf(cold_crit) || cold_crit < 0.0) {
+        strdot = epsilon_ffb * galaxies[p].ColdGas / tdyn;
+
+        if(isnan(strdot) || isinf(strdot) || strdot < 0.0) {
             stars = 0.0;
-        } else if(galaxies[p].ColdGas > 0.0) {
-            // Only form stars if above critical density
-            strdot = epsilon_ffb * (galaxies[p].ColdGas) / tdyn;
-            
-            // Safety check on strdot
-            if(isnan(strdot) || isinf(strdot) || strdot < 0.0) {
-                stars = 0.0;
-            } else {
-                stars = strdot * dt;
-                
-                // Can't form more stars than gas available
-                if(stars > galaxies[p].ColdGas) {
-                    stars = galaxies[p].ColdGas;
-                }
-                
-                // Final safety check
-                if(isnan(stars) || isinf(stars) || stars < 0.0) {
-                    stars = 0.0;
-                }
-            }
         } else {
-            // Below critical density - no star formation
-            stars = 0.0;
+            stars = strdot * dt;
+
+            // Can't form more stars than gas available
+            if(stars > galaxies[p].ColdGas) {
+                stars = galaxies[p].ColdGas;
+            }
+
+            // Final safety check
+            if(isnan(stars) || isinf(stars) || stars < 0.0) {
+                stars = 0.0;
+            }
         }
     } else {
         stars = 0.0;
