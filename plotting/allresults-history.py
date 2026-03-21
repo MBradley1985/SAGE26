@@ -241,6 +241,7 @@ if __name__ == '__main__':
     BulgeRadiusFull = [0] * (LastSnap + 1)
     RvirFull = [0] * (LastSnap + 1)
     FFBRegimeFull = [0] * (LastSnap + 1)
+    ConcentrationFull = [0] * (LastSnap + 1)
 
     for snap in range(FirstSnap, LastSnap + 1):
         Snapshot = f'Snap_{snap}'
@@ -271,6 +272,7 @@ if __name__ == '__main__':
         DiskRadiusFull[snap] = read_hdf(file_list, Snapshot, 'DiskRadius') / Hubble_h
         BulgeRadiusFull[snap] = read_hdf(file_list, Snapshot, 'BulgeRadius') / Hubble_h
         RvirFull[snap] = read_hdf(file_list, Snapshot, 'Rvir') / Hubble_h
+        ConcentrationFull[snap] = read_hdf(file_list, Snapshot, 'Concentration')
 
 
 # --------------------------------------------------------
@@ -1212,3 +1214,70 @@ if __name__ == '__main__':
     plt.close()
 
     print('\nAll mass evolution plots completed!')
+
+# --------------------------------------------------------
+
+    print('Plotting median concentration vs redshift by mass bin')
+
+    plt.figure(figsize=(10, 7))
+    ax = plt.subplot(111)
+
+    mass_bins = [
+        (1e10, 1e11, r'$10^{10} - 10^{11}$'),
+        (1e11, 1e12, r'$10^{11} - 10^{12}$'),
+        (1e12, 1e13, r'$10^{12} - 10^{13}$'),
+        (1e13, 1e15, r'$10^{13} - 10^{15}$'),
+    ]
+    colors_cm = ['dodgerblue', 'forestgreen', 'darkorange', 'firebrick']
+
+    z_arr = []
+    medians = {i: [] for i in range(len(mass_bins))}
+    p16 = {i: [] for i in range(len(mass_bins))}
+    p84 = {i: [] for i in range(len(mass_bins))}
+
+    for snap in range(FirstSnap, LastSnap + 1):
+        conc = ConcentrationFull[snap]
+        mvir = HaloMassFull[snap]
+
+        if not isinstance(conc, np.ndarray) or len(conc) == 0:
+            continue
+        if not isinstance(mvir, np.ndarray) or len(mvir) == 0:
+            continue
+
+        z = redshifts[snap]
+        z_arr.append(z)
+
+        for i, (mlo, mhi, _) in enumerate(mass_bins):
+            w = np.where((conc > 0) & (mvir >= mlo) & (mvir < mhi))[0]
+            if len(w) >= 5:
+                medians[i].append(np.median(conc[w]))
+                p16[i].append(np.percentile(conc[w], 16))
+                p84[i].append(np.percentile(conc[w], 84))
+            else:
+                medians[i].append(np.nan)
+                p16[i].append(np.nan)
+                p84[i].append(np.nan)
+
+    z_arr = np.array(z_arr)
+    for i, (_, _, label) in enumerate(mass_bins):
+        med = np.array(medians[i])
+        lo = np.array(p16[i])
+        hi = np.array(p84[i])
+        valid = np.isfinite(med)
+        if np.any(valid):
+            ax.plot(z_arr[valid], med[valid], color=colors_cm[i], lw=2.5,
+                    label=label + r' $M_\odot$')
+            ax.fill_between(z_arr[valid], lo[valid], hi[valid],
+                            color=colors_cm[i], alpha=0.15)
+
+    ax.set_xlabel(r'Redshift $z$', fontsize=14)
+    ax.set_ylabel(r'Concentration $c$', fontsize=14)
+    ax.legend(loc='upper right', fontsize=12, frameon=False)
+    ax.set_xlim(0, 15)
+    ax.set_ylim(0, 30)
+
+    plt.tight_layout()
+    outputFile = OutputDir + 'ConcentrationEvolution' + OutputFormat
+    plt.savefig(outputFile, dpi=300, bbox_inches='tight')
+    print('Saved file to', outputFile, '\n')
+    plt.close()

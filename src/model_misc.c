@@ -653,13 +653,28 @@ double get_halo_concentration(const int p, const double z, const struct GALAXY *
     }
 
     if(run_params->ConcentrationOn == 2) {
-        // Vmax/Vvir from simulation (current values for all galaxy types)
+        // Vmax/Vvir from simulation for all galaxy types
         double c = concentration_from_vmax_vvir(galaxies[p].Vmax, galaxies[p].Vvir);
         if(c < 1.0) c = 1.0;
         return c;
     }
 
-    // ConcentrationOn == 1: Ishiyama+21 lookup table (default)
+    if(run_params->ConcentrationOn == 3) {
+        // Hybrid: Vmax/Vvir for centrals, infall-frozen Vmax/Vvir for satellites
+        double vmax, vvir;
+        if(galaxies[p].Type == 0) {
+            vmax = galaxies[p].Vmax;
+            vvir = galaxies[p].Vvir;
+        } else {
+            vmax = galaxies[p].infallVmax;
+            vvir = galaxies[p].infallVvir;
+        }
+        double c = concentration_from_vmax_vvir(vmax, vvir);
+        if(c < 1.0) c = 1.0;
+        return c;
+    }
+
+    // ConcentrationOn == 1 or 3 (satellite): Ishiyama+21 lookup table
     const double Mvir = galaxies[p].Mvir;  // 10^10 M_sun / h
     if(Mvir <= 0.0) return 1.0;
 
@@ -668,8 +683,6 @@ double get_halo_concentration(const int p, const double z, const struct GALAXY *
 
     double c = interpolate_concentration_ishiyama21(logM, z, run_params);
     if(c < 1.0) c = 1.0;
-
-    (void)z;  // used by lookup table path above
     return c;
 }
 
