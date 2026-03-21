@@ -330,10 +330,12 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
     const int halo_snapnum = halos[halonr].SnapNum;
     const double Zcurr = run_params->ZZ[halo_snapnum];
 
-    // Compute and store halo concentration (Ishiyama+21) for all galaxies
-    for(int p = 0; p < ngal; p++) {
-        if(galaxies[p].mergeType > 0) continue;
-        galaxies[p].Concentration = (float)get_halo_concentration(p, Zcurr, galaxies, run_params);
+    // Compute and store halo concentration if enabled
+    if(run_params->ConcentrationOn > 0) {
+        for(int p = 0; p < ngal; p++) {
+            if(galaxies[p].mergeType > 0) continue;
+            galaxies[p].Concentration = (float)get_halo_concentration(p, Zcurr, galaxies, run_params);
+        }
     }
     
     if (run_params->CGMrecipeOn == 1) {
