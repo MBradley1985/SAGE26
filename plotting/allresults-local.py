@@ -277,6 +277,8 @@ if __name__ == '__main__':
     Tvir = 35.9 * (Vvir)**2  # in Kelvin
     Tmax = 2.5e5  # K, corresponds to Vvir ~52.7 km/s
 
+    Concentration = read_hdf(file_list, Snapshot, 'Concentration')
+
     g_max = read_hdf(file_list, Snapshot, 'g_max')  # in code units of G * Mvir / Rvir^2
     print('g_max read for', len(g_max), 'galaxies')
     print('Sample g_max values:', g_max[:10], '\n')
@@ -1638,5 +1640,45 @@ if __name__ == '__main__':
     plt.tight_layout()
 
     plt.savefig(OutputDir + 'specific_star_formation_rate' + OutputFormat, dpi=150)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# --------------------------------------------------------
+
+    print('Plotting concentration vs Mvir colored by stellar mass (centrals & satellites)')
+
+    fig, (ax_cen, ax_sat) = plt.subplots(1, 2, figsize=(16, 7), sharey=True)
+
+    base = np.where((Concentration > 0) & (Mvir > 0) & (StellarMass > 0))[0]
+    w_cen = np.intersect1d(base, np.where(Type == 0)[0])
+    w_sat = np.intersect1d(base, np.where(Type > 0)[0])
+
+    # Shared color limits
+    vmin = np.log10(StellarMass[base]).min()
+    vmax = np.log10(StellarMass[base]).max()
+
+    for ax, w, title in [(ax_cen, w_cen, 'Centrals'), (ax_sat, w_sat, 'Satellites')]:
+        if len(w) > dilute:
+            sel = sorted(sample(list(w), dilute))
+        else:
+            sel = w
+
+        sc = ax.scatter(np.log10(Mvir[sel]), Concentration[sel],
+                        c=np.log10(StellarMass[sel]), s=3, alpha=0.4,
+                        cmap='viridis', vmin=vmin, vmax=vmax, rasterized=True)
+        ax.set_xlabel(r'$\log_{10} M_{\rm vir}\ [M_{\odot}]$', fontsize=14)
+        ax.set_title(f'{title} — z = {redshift:.2f}', fontsize=14)
+        ax.set_xlim(9.5, 15.0)
+        ax.set_ylim(0, 40)
+
+    ax_cen.set_ylabel(r'Concentration $c$', fontsize=14)
+
+    cbar = fig.colorbar(sc, ax=ax_sat, pad=0.02)
+    cbar.set_label(r'$\log_{10} M_{\star}\ [M_{\odot}]$', fontsize=14)
+    cbar.solids.set_alpha(1.0)
+
+    plt.tight_layout()
+    outputFile = OutputDir + 'concentration_vs_mvir' + OutputFormat
+    plt.savefig(outputFile, dpi=150)
     print('Saved file to', outputFile, '\n')
     plt.close()
