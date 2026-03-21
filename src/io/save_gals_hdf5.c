@@ -1499,6 +1499,10 @@ int32_t write_header(hid_t file_id, const struct forest_info *forest_info, const
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FeedbackFreeModeOn", run_params->FeedbackFreeModeOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BulgeSizeOn", run_params->BulgeSizeOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2DiskAreaOption", run_params->H2DiskAreaOption, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "CGMDensityProfile", run_params->CGMDensityProfile, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ConcentrationOn", run_params->ConcentrationOn, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SaveFullSFH", run_params->SaveFullSFH, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "TrackICSAssembly", run_params->TrackICSAssembly, H5T_NATIVE_INT);
 
     // Model parameters.
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SfrEfficiency", run_params->SfrEfficiency, H5T_NATIVE_DOUBLE);
