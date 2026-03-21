@@ -1649,7 +1649,7 @@ if __name__ == '__main__':
 
     fig, (ax_cen, ax_sat) = plt.subplots(1, 2, figsize=(16, 7), sharey=True)
 
-    base = np.where((Concentration > 0) & (Mvir > 0) & (StellarMass > 0))[0]
+    base = np.where((Concentration > 0) & (Mvir > 0) & (StellarMass > 1.0e8))[0]
     w_cen = np.intersect1d(base, np.where(Type == 0)[0])
     w_sat = np.intersect1d(base, np.where(Type > 0)[0])
 

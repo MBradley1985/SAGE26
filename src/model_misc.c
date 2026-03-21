@@ -618,7 +618,7 @@ double concentration_from_vmax_vvir(const double Vmax, const double Vvir)
     // where mu(c) = ln(1+c) - c/(1+c)
     // Uses bisection since the RHS is monotonically increasing in c.
 
-    if(Vvir <= 0.0 || Vmax <= 0.0) return 1.0;
+    if(Vvir <= 0.0 || Vmax <= 0.0) return 0.0;
 
     const double ratio_sq = (Vmax / Vvir) * (Vmax / Vvir);
 
@@ -629,8 +629,8 @@ double concentration_from_vmax_vvir(const double Vmax, const double Vvir)
 
     double c_lo = 1.0, c_hi = 200.0;
 
-    // Quick sanity: if ratio < 1 it's unphysical for NFW, return floor
-    if(ratio_sq < 1.0) return 1.0;
+    // Quick sanity: if ratio < 1 it's unphysical for NFW, return 0 (unresolved)
+    if(ratio_sq < 1.0) return 0.0;
 
     for(int iter = 0; iter < 60; iter++) {
         const double c_mid = 0.5 * (c_lo + c_hi);
@@ -649,14 +649,12 @@ double get_halo_concentration(const int p, const double z, const struct GALAXY *
                                const struct params *run_params)
 {
     if(run_params->ConcentrationOn == 0) {
-        return 1.0;  // Concentration disabled
+        return 0.0;  // Concentration disabled
     }
 
     if(run_params->ConcentrationOn == 2) {
         // Vmax/Vvir from simulation for all galaxy types
-        double c = concentration_from_vmax_vvir(galaxies[p].Vmax, galaxies[p].Vvir);
-        if(c < 1.0) c = 1.0;
-        return c;
+        return concentration_from_vmax_vvir(galaxies[p].Vmax, galaxies[p].Vvir);
     }
 
     if(run_params->ConcentrationOn == 3) {
@@ -669,20 +667,18 @@ double get_halo_concentration(const int p, const double z, const struct GALAXY *
             vmax = galaxies[p].infallVmax;
             vvir = galaxies[p].infallVvir;
         }
-        double c = concentration_from_vmax_vvir(vmax, vvir);
-        if(c < 1.0) c = 1.0;
-        return c;
+        return concentration_from_vmax_vvir(vmax, vvir);
     }
 
     // ConcentrationOn == 1 or 3 (satellite): Ishiyama+21 lookup table
     const double Mvir = galaxies[p].Mvir;  // 10^10 M_sun / h
-    if(Mvir <= 0.0) return 1.0;
+    if(Mvir <= 0.0) return 0.0;
 
     const double Mvir_Msun_h = Mvir * 1.0e10;  // Msun/h (table units)
     const double logM = log10(Mvir_Msun_h);
 
     double c = interpolate_concentration_ishiyama21(logM, z, run_params);
-    if(c < 1.0) c = 1.0;
+    if(c < 1.0) c = 0.0;  // table extrapolation failure
     return c;
 }
 
