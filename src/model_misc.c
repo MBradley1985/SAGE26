@@ -458,7 +458,7 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
         } else if(run_params->FeedbackFreeModeOn == 2) {
             // Boylan-Kolchin 2025 acceleration-based method
             // FFB regime when g_max > g_crit (sharp cutoff)
-            const double g_max = calculate_gmax_BK25(p, galaxies, run_params);
+            const double g_max = calculate_gmax_BK25(p, Zcurr, galaxies, run_params);
 
             galaxies[p].g_max = g_max;
 
@@ -559,26 +559,68 @@ double interpolate_concentration_ishiyama21(const double logM, const double z)
          + c11 * fm * fz;
 }
 
+double concentration_from_vmax_vvir(const double Vmax, const double Vvir)
+{
+    // Invert the NFW relation: (Vmax/Vvir)^2 = 0.2162 * c / mu(c)
+    // where mu(c) = ln(1+c) - c/(1+c)
+    // Uses bisection since the RHS is monotonically increasing in c.
+
+    if(Vvir <= 0.0 || Vmax <= 0.0) return 1.0;
+
+    const double ratio_sq = (Vmax / Vvir) * (Vmax / Vvir);
+
+    // Target function: f(c) = 0.2162 * c / mu(c) - ratio_sq
+    // The constant 0.2162 = f(s_max)/s_max where s_max ~ 2.1626 is the
+    // location of max V_circ for an NFW profile.
+    const double A = 0.21621;  // f(2.1626)/2.1626
+
+    double c_lo = 1.0, c_hi = 200.0;
+
+    // Quick sanity: if ratio < 1 it's unphysical for NFW, return floor
+    if(ratio_sq < 1.0) return 1.0;
+
+    for(int iter = 0; iter < 60; iter++) {
+        const double c_mid = 0.5 * (c_lo + c_hi);
+        const double mu = log(1.0 + c_mid) - c_mid / (1.0 + c_mid);
+        const double f_mid = A * c_mid / mu;
+        if(f_mid < ratio_sq) {
+            c_lo = c_mid;
+        } else {
+            c_hi = c_mid;
+        }
+    }
+    return 0.5 * (c_lo + c_hi);
+}
+
 double get_halo_concentration(const int p, const double z, const struct GALAXY *galaxies,
                                const struct params *run_params)
 {
-    (void)run_params;  // reserved for future c-M options
+    if(run_params->ConcentrationOn == 0) {
+        return 1.0;  // Concentration disabled
+    }
+
+    if(run_params->ConcentrationOn == 2) {
+        // Vmax/Vvir from simulation (current values for all galaxy types)
+        double c = concentration_from_vmax_vvir(galaxies[p].Vmax, galaxies[p].Vvir);
+        if(c < 1.0) c = 1.0;
+        return c;
+    }
+
+    // ConcentrationOn == 1: Ishiyama+21 lookup table (default)
     const double Mvir = galaxies[p].Mvir;  // 10^10 M_sun / h
     if(Mvir <= 0.0) return 1.0;
 
     const double Mvir_Msun_h = Mvir * 1.0e10;  // Msun/h (table units)
     const double logM = log10(Mvir_Msun_h);
 
-    // Ishiyama+21 c-M relation (lookup table from Colossus)
     double c = interpolate_concentration_ishiyama21(logM, z);
     if(c < 1.0) c = 1.0;
 
-    // printf("Galaxy %d: Mvir = %.3e (Msun/h), logM = %.3f, z = %.2f, c = %.3f\n", p, Mvir_Msun_h, logM, z, c);
-
+    (void)z;  // used by lookup table path above
     return c;
 }
 
-double calculate_gmax_BK25(const int p, const struct GALAXY *galaxies,
+double calculate_gmax_BK25(const int p, const double z, const struct GALAXY *galaxies,
                             const struct params *run_params)
 {
     // Boylan-Kolchin 2025: maximum NFW gravitational acceleration
@@ -586,6 +628,11 @@ double calculate_gmax_BK25(const int p, const struct GALAXY *galaxies,
     // g_vir = G * M_vir / R_vir^2                                (Eq. 2)
     // g_max = (g_vir / mu(c)) * (c^2 / 2)                         (Eq. 4)
     // where mu(x) = ln(1+x) - x/(1+x)
+    //
+    // Always uses the Ishiyama+21 lookup table concentration for the FFB
+    // threshold, even when ConcentrationOn=2 (Vmax/Vvir).  The BK25 threshold
+    // is derived from average halo properties; using individual scatter would
+    // produce spurious FFB activation at low redshift.
     //
     // Returns g_max in code units (UnitLength / UnitTime^2)
 
@@ -597,10 +644,12 @@ double calculate_gmax_BK25(const int p, const struct GALAXY *galaxies,
     }
 
     // g_vir = G * M_vir / R_vir^2  (code units)
-    const double g_vir = run_params->G * Mvir / (Rvir * Rvir);  // in code units
+    const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
 
-    // Use pre-computed concentration from the galaxy struct
-    double c = galaxies[p].Concentration;
+    // Always use the lookup table concentration for the FFB determination
+    const double Mvir_Msun_h = Mvir * 1.0e10;
+    const double logM = log10(Mvir_Msun_h);
+    double c = interpolate_concentration_ishiyama21(logM, z);
     if(c < 1.0) c = 1.0;
 
     // mu(c) = ln(1+c) - c/(1+c)
