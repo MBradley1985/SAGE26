@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import h5py as h5
+import h5py as h5 # type: ignore
 import numpy as np
 import matplotlib.pyplot as plt
 import os

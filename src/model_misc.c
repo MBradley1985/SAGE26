@@ -19,6 +19,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].Type = 0;
     galaxies[p].Regime = -1;
     galaxies[p].FFBRegime = 0;
+    galaxies[p].FFBRandom = (float)rand() / (float)RAND_MAX;
     galaxies[p].Concentration = 0.0;
 
     galaxies[p].GalaxyNr = *galaxycounter;
@@ -421,10 +422,10 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
         return;
     }
 
-    // Pre-compute g_crit in code units for BK25 mode (constant, doesn't depend on galaxy)
+    // Pre-compute g_crit in code units for BK25 modes (constant, doesn't depend on galaxy)
     // g_crit/G = 3100 M_sun/pc^2 (Boylan-Kolchin 2025, Table 1)
     double g_crit = 0.0;
-    if(run_params->FeedbackFreeModeOn == 2) {
+    if(run_params->FeedbackFreeModeOn == 2 || run_params->FeedbackFreeModeOn == 3) {
         const double Msun_code = SOLAR_MASS / run_params->UnitMass_in_g;
         const double pc_code = 3.08568e18 / run_params->UnitLength_in_cm;
         g_crit = run_params->G * 3100.0 * Msun_code / (pc_code * pc_code) / run_params->Hubble_h;
@@ -447,8 +448,9 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
             // Calculate smooth FFB fraction using sigmoid transition (Li et al. 2024, eq. 3)
             const double f_ffb = calculate_ffb_fraction(Mvir, Zcurr, run_params);
 
-            // Probabilistic assignment based on smooth sigmoid function
-            const double random_uniform = (double)rand() / (double)RAND_MAX;
+            // Use persistent random number for consistent sigmoid-based determination
+            // (avoids re-rolling each timestep, while still allowing transitions as mass evolves)
+            const double random_uniform = (double)galaxies[p].FFBRandom;
 
             if(random_uniform < f_ffb) {
                 galaxies[p].FFBRegime = 1;  // FFB halo
@@ -456,9 +458,35 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
                 galaxies[p].FFBRegime = 0;  // Normal halo
             }
         } else if(run_params->FeedbackFreeModeOn == 2) {
-            // Boylan-Kolchin 2025 acceleration-based method
+            // Boylan-Kolchin 2025 acceleration-based method (Ishiyama+21 lookup table concentration)
             // FFB regime when g_max > g_crit (sharp cutoff)
             const double g_max = calculate_gmax_BK25(p, Zcurr, galaxies, run_params);
+
+            galaxies[p].g_max = g_max;
+
+            if(g_max > g_crit) {
+                galaxies[p].FFBRegime = 1;  // FFB halo - above critical acceleration
+            } else {
+                galaxies[p].FFBRegime = 0;  // Normal halo
+            }
+        } else if(run_params->FeedbackFreeModeOn == 3) {
+            // BK25 acceleration-based method using galaxy's stored concentration
+            // (Vmax/Vvir with infall freeze when ConcentrationOn=3)
+            const double Mvir = galaxies[p].Mvir;
+            const double Rvir = galaxies[p].Rvir;
+
+            if(Mvir <= 0.0 || Rvir <= 0.0) {
+                galaxies[p].FFBRegime = 0;
+                galaxies[p].g_max = 0.0;
+                continue;
+            }
+
+            double c = (double)galaxies[p].Concentration;
+            if(c < 1.0) c = 1.0;
+
+            const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
+            const double mu_c = log(1.0 + c) - c / (1.0 + c);
+            const double g_max = (g_vir / mu_c) * (c * c / 2.0);
 
             galaxies[p].g_max = g_max;
 
@@ -906,7 +934,11 @@ double calculate_ffb_fraction(const double Mvir, const double z, const struct pa
     const double f_ffb = 1.0 / (1.0 + exp(-x));
     // Steeper transition
     // const double f_ffb = 1.0 / (1.0 + exp(-k * x));
-    
+
+    // Hard cutoff at the lower tail (P=0.1 bound) to prevent FFB
+    // galaxies well below the threshold mass
+    if(run_params->FFBSigmoidCutoff == 1 && f_ffb < 0.1) return 0.0;
+
     return f_ffb;
 }
 

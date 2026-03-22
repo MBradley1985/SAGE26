@@ -95,6 +95,7 @@ struct GALAXY
     int32_t   Type;
     int32_t   Regime;
     int32_t   FFBRegime;
+    float     FFBRandom;  // Persistent random number for sigmoid-based FFB determination
 
     int32_t   GalaxyNr;
     int32_t   CentralGal;
@@ -481,6 +482,7 @@ struct params
     double BaryonFrac;
     double SfrEfficiency;
     double FFBMaxEfficiency;
+    int    FFBSigmoidCutoff;  // 0: no cutoff on sigmoid tail; 1: hard cutoff at P=0.1 lower bound
     double FeedbackReheatingEpsilon;
     double FeedbackEjectionEfficiency;
     double RadioModeEfficiency;
