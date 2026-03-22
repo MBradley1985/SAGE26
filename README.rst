@@ -76,11 +76,21 @@ Plotting the output
 If you already have Python 3 installed, you can switch to the plotting directory, where you will find two scripts, 
 ``allresults-local.py`` (for z=0 results) and ``allresults-history.py`` (for higher redshift results). 
 If you're following the above, these scripts can run as-is to produce a series of figures you can use to check the model output.
+The model used can be easily changed by providing the path to the model output file as an argument to the script.
+
+For example, to run the scripts on the default model output, you can use:
 
 .. code::
 
     $ python plotting/allresults-local.py
     $ python plotting/allresults-history.py
+
+To run the scripts on a different model output, you can use:
+
+.. code::
+
+    $ python plotting/allresults-local.py path/to/your/model/output
+    $ python plotting/allresults-history.py path/to/your/model/output
 
 
 Parameter Optimization with PSO
@@ -132,11 +142,15 @@ Extra OPTIONS
 * Shen et al. (2020), equation 32
 * Tonini et al. (2016)
 
-**Feedback-free burst galaxies can also be enabled.**
+**Feedback-free burst galaxies can also be enabled. Dekel et al. (2023) and Li et al. (2024) for one method. Boylan-Kolchin (2025) for another.**
 
 **CGM building can be turned on or off.**
 
 **Full star formation histories can be tracked.**
+
+**The option to track the formation of intracluster stars (ICS) is also available.**
+
+**Concentration can be calculated with a variety of methods.**
 
 **Parameters can be manipulated in the parameter file to allow for extra exploration, either manually or with the PSO framework.**
 
