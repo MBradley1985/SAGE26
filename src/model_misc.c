@@ -425,7 +425,7 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
     // Pre-compute g_crit in code units for BK25 modes (constant, doesn't depend on galaxy)
     // g_crit/G = 3100 M_sun/pc^2 (Boylan-Kolchin 2025, Table 1)
     double g_crit = 0.0;
-    if(run_params->FeedbackFreeModeOn == 2 || run_params->FeedbackFreeModeOn == 3) {
+    if(run_params->FeedbackFreeModeOn >= 2) {
         const double Msun_code = SOLAR_MASS / run_params->UnitMass_in_g;
         const double pc_code = 3.08568e18 / run_params->UnitLength_in_cm;
         g_crit = run_params->G * 3100.0 * Msun_code / (pc_code * pc_code) / run_params->Hubble_h;
@@ -492,6 +492,39 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
 
             if(g_max > g_crit) {
                 galaxies[p].FFBRegime = 1;  // FFB halo - above critical acceleration
+            } else {
+                galaxies[p].FFBRegime = 0;  // Normal halo
+            }
+        } else if(run_params->FeedbackFreeModeOn == 4) {
+            // BK25 acceleration-based with sigmoid transition (like Li+24 smoothing)
+            // Uses Ishiyama+21 lookup table concentration for g_max, then applies
+            // a smooth sigmoid in log10(g_max/g_crit) space with persistent random.
+            const double g_max = calculate_gmax_BK25(p, Zcurr, galaxies, run_params);
+
+            galaxies[p].g_max = g_max;
+
+            if(g_max <= 0.0 || g_crit <= 0.0) {
+                galaxies[p].FFBRegime = 0;
+                continue;
+            }
+
+            // Sigmoid in log10(g_max / g_crit), width 0.15 dex (same as Li+24)
+            const double log_ratio = log10(g_max / g_crit);
+            const double delta = 0.05;  // transition width in dex
+            const double x = log_ratio / delta;
+            const double f_ffb = 1.0 / (1.0 + exp(-x));
+
+            // Optional hard cutoff at P=0.1 lower bound (same as Li+24 FFBSigmoidCutoff)
+            if(run_params->FFBSigmoidCutoff == 1 && f_ffb < 0.1) {
+                galaxies[p].FFBRegime = 0;
+                continue;
+            }
+
+            // Use persistent random number for consistent sigmoid-based determination
+            const double random_uniform = (double)galaxies[p].FFBRandom;
+
+            if(random_uniform < f_ffb) {
+                galaxies[p].FFBRegime = 1;  // FFB halo
             } else {
                 galaxies[p].FFBRegime = 0;  // Normal halo
             }

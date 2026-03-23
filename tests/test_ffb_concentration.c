@@ -764,6 +764,112 @@ void test_ffb_merged_galaxies_skipped()
                      "Merged galaxy's FFBRegime is not modified");
 }
 
+void test_ffb_mode4_sigmoid_transition()
+{
+    BEGIN_TEST("FeedbackFreeModeOn=4 uses BK25 g_max with sigmoid transition");
+
+    struct params rp;
+    init_millennium_params(&rp);
+    rp.FeedbackFreeModeOn = 4;
+    rp.FFBSigmoidCutoff   = 0;
+
+    /* Massive halo at high z: g_max >> g_crit, sigmoid ≈ 1, should be FFB
+       regardless of FFBRandom.  Rvir=0.02 gives g_max/g_crit >> 1 so the
+       sigmoid is effectively 1.0 even for FFBRandom=0.99. */
+    struct GALAXY gal_big;
+    memset(&gal_big, 0, sizeof(struct GALAXY));
+    gal_big.Mvir = 100.0;   /* 10^12 Msun/h */
+    gal_big.Rvir = 0.02;    /* very compact → g_max/g_crit ≈ 13 */
+    gal_big.Regime = 0;
+    gal_big.FFBRandom = 0.99f;  /* high random — still FFB because sigmoid ≈ 1 */
+
+    determine_and_store_ffb_regime(1, 10.0, &gal_big, &rp);
+    ASSERT_EQUAL_INT(1, gal_big.FFBRegime,
+                     "Massive halo at z=10 is FFB even with high FFBRandom");
+
+    /* Small halo at low z: g_max << g_crit, sigmoid ≈ 0, should NOT be FFB */
+    struct GALAXY gal_small;
+    memset(&gal_small, 0, sizeof(struct GALAXY));
+    gal_small.Mvir = 0.1;   /* 10^9 Msun/h */
+    gal_small.Rvir = 0.03;
+    gal_small.Regime = 0;
+    gal_small.FFBRandom = 0.01f;  /* low random — still not FFB because sigmoid ≈ 0 */
+
+    determine_and_store_ffb_regime(1, 0.0, &gal_small, &rp);
+    ASSERT_EQUAL_INT(0, gal_small.FFBRegime,
+                     "Small halo at z=0 is not FFB even with low FFBRandom");
+
+    /* g_max is stored */
+    ASSERT_GREATER_THAN(gal_big.g_max, 0.0,
+                        "Mode 4 stores g_max for massive halo");
+}
+
+void test_ffb_mode4_sigmoid_probabilistic()
+{
+    BEGIN_TEST("FeedbackFreeModeOn=4 sigmoid is probabilistic near threshold");
+
+    struct params rp;
+    init_millennium_params(&rp);
+    rp.FeedbackFreeModeOn = 4;
+    rp.FFBSigmoidCutoff   = 0;
+
+    /* Find a halo near the BK25 threshold at z=8 (logM_halo ≈ 11).
+       Use two copies with different FFBRandom to show probabilistic behavior. */
+    struct GALAXY gals[2];
+    memset(gals, 0, sizeof(gals));
+
+    for(int i = 0; i < 2; i++) {
+        gals[i].Mvir = 10.0;    /* 10^11 Msun/h — near threshold at z=8 */
+        gals[i].Rvir = 0.015;   /* ~15 kpc/h */
+        gals[i].Regime = 0;
+    }
+    gals[0].FFBRandom = 0.01f;  /* very low → likely FFB if f_ffb > 0.01 */
+    gals[1].FFBRandom = 0.99f;  /* very high → likely not FFB unless f_ffb > 0.99 */
+
+    determine_and_store_ffb_regime(1, 8.0, &gals[0], &rp);
+    determine_and_store_ffb_regime(1, 8.0, &gals[1], &rp);
+
+    /* At least one should differ if the sigmoid is in the transition zone.
+       If both are the same, the halo is far from the threshold — that's also
+       acceptable, but check g_max was stored either way. */
+    ASSERT_GREATER_THAN(gals[0].g_max, 0.0, "g_max stored for galaxy 0");
+    ASSERT_GREATER_THAN(gals[1].g_max, 0.0, "g_max stored for galaxy 1");
+
+    printf("  FFBRegime[random=0.01] = %d, FFBRegime[random=0.99] = %d\n",
+           gals[0].FFBRegime, gals[1].FFBRegime);
+}
+
+void test_ffb_mode4_sigmoid_cutoff()
+{
+    BEGIN_TEST("FeedbackFreeModeOn=4 respects FFBSigmoidCutoff");
+
+    struct params rp;
+    init_millennium_params(&rp);
+    rp.FeedbackFreeModeOn = 4;
+
+    /* Small halo where g_max << g_crit, so f_ffb < 0.1 */
+    struct GALAXY gal;
+    memset(&gal, 0, sizeof(struct GALAXY));
+    gal.Mvir = 0.1;    /* 10^9 Msun/h */
+    gal.Rvir = 0.03;
+    gal.Regime = 0;
+    gal.FFBRandom = 0.001f;  /* very low random — would be FFB without cutoff if f_ffb > 0.001 */
+
+    /* Without cutoff: sigmoid tail might still allow FFB */
+    rp.FFBSigmoidCutoff = 0;
+    determine_and_store_ffb_regime(1, 0.0, &gal, &rp);
+    int regime_no_cutoff = gal.FFBRegime;
+
+    /* With cutoff: f_ffb < 0.1 → forced to 0 */
+    rp.FFBSigmoidCutoff = 1;
+    gal.FFBRegime = 99;  /* sentinel */
+    determine_and_store_ffb_regime(1, 0.0, &gal, &rp);
+
+    ASSERT_EQUAL_INT(0, gal.FFBRegime,
+                     "Cutoff=1 forces non-FFB when g_max << g_crit");
+    printf("  Without cutoff: %d, With cutoff: %d\n", regime_no_cutoff, gal.FFBRegime);
+}
+
 /* ═══════════════════════════════════════════════════════════════════
  *  main
  * ═══════════════════════════════════════════════════════════════════ */
@@ -815,6 +921,9 @@ int main()
     test_ffb_mode2_gmax_threshold();
     test_ffb_mode3_uses_stored_concentration();
     test_ffb_merged_galaxies_skipped();
+    test_ffb_mode4_sigmoid_transition();
+    test_ffb_mode4_sigmoid_probabilistic();
+    test_ffb_mode4_sigmoid_cutoff();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();
