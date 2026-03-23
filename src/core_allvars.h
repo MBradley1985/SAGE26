@@ -468,7 +468,7 @@ struct params
     int32_t    FIREmodeOn;
     int32_t    CGMrecipeSAGEOn;
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation
-    int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 sigmoid
+    int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid)
     int32_t    BulgeSizeOn;
     int32_t    H2DiskAreaOption;  // 0 = π*r_s², 1 = π*(3*r_s)², 2 = 2π*r_s² (central Σ₀)
     int32_t    SaveFullSFH;       // 0 = save averaged SFR (default), 1 = save full SfrDisk[STEPS] and SfrBulge[STEPS] arrays
@@ -482,7 +482,7 @@ struct params
     double BaryonFrac;
     double SfrEfficiency;
     double FFBMaxEfficiency;
-    int    FFBSigmoidCutoff;  // 0: no cutoff on sigmoid tail; 1: hard cutoff at P=0.1 lower bound
+    double FFBConcSigma;      // σ_c for log-normal concentration scatter (ln c); typical ~0.2 (Jing 2000, Bullock+01)
     double FeedbackReheatingEpsilon;
     double FeedbackEjectionEfficiency;
     double RadioModeEfficiency;

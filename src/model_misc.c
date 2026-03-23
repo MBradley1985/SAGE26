@@ -410,6 +410,44 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
     }
 }
 
+// Inverse normal CDF (probit function) — Peter Acklam's rational approximation.
+// Converts a uniform variate p ∈ (0,1) to a standard normal variate.
+// Accurate to ~1e-9 across the full range.
+static double inverse_normal_cdf(double p)
+{
+    const double a[] = {-3.969683028665376e+01,  2.209460984245205e+02,
+                        -2.759285104469687e+02,  1.383577518672690e+02,
+                        -3.066479806614716e+01,  2.506628277459239e+00};
+    const double b[] = {-5.447609879822406e+01,  1.615858368580409e+02,
+                        -1.556989798598866e+02,  6.680131188771972e+01,
+                        -1.328068155288572e+01};
+    const double c[] = {-7.784894002430293e-03, -3.223964580411365e-01,
+                        -2.400758277161838e+00, -2.549732539343734e+00,
+                         4.374664141464968e+00,  2.938163982698783e+00};
+    const double d[] = { 7.784695709041462e-03,  3.224671290700398e-01,
+                         2.445134137142996e+00,  3.754408661907416e+00};
+
+    const double p_low  = 0.02425;
+    const double p_high = 1.0 - p_low;
+
+    double q, r;
+
+    if(p < p_low) {
+        q = sqrt(-2.0 * log(p));
+        return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
+                ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1.0);
+    } else if(p <= p_high) {
+        q = p - 0.5;
+        r = q * q;
+        return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q /
+               (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1.0);
+    } else {
+        q = sqrt(-2.0 * log(1.0 - p));
+        return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
+                 ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1.0);
+    }
+}
+
 void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct GALAXY *galaxies,
                                      const struct params *run_params)
 {
@@ -496,35 +534,58 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
                 galaxies[p].FFBRegime = 0;  // Normal halo
             }
         } else if(run_params->FeedbackFreeModeOn == 4) {
-            // BK25 acceleration-based with sigmoid transition (like Li+24 smoothing)
-            // Uses Ishiyama+21 lookup table concentration for g_max, then applies
-            // a smooth sigmoid in log10(g_max/g_crit) space with persistent random.
-            const double g_max = calculate_gmax_BK25(p, Zcurr, galaxies, run_params);
+            // BK25 acceleration-based with log-normal concentration scatter.
+            // The Ishiyama+21 table gives the mean concentration; individual halos
+            // scatter around it following p(c)dc ∝ exp(-(ln c - ln c0)^2 / 2σ_c^2) d(ln c)
+            // with σ_c ≈ 0.2 (Jing 2000; Bullock+01; Dolag+04).
+            // The persistent FFBRandom draws a fixed quantile for each halo,
+            // giving a deterministic scattered concentration and thus a smooth
+            // FFb transition across the halo population.
+            const double Mvir = galaxies[p].Mvir;
+            const double Rvir = galaxies[p].Rvir;
+
+            if(Mvir <= 0.0 || Rvir <= 0.0) {
+                galaxies[p].FFBRegime = 0;
+                galaxies[p].g_max = 0.0;
+                continue;
+            }
+
+            // Mean concentration from Ishiyama+21 lookup table
+            const double Mvir_Msun_h = Mvir * 1.0e10;
+            const double logM = log10(Mvir_Msun_h);
+            double c = interpolate_concentration_ishiyama21(logM, Zcurr, run_params);
+            if(c < 1.0) c = 1.0;
+
+            // Apply log-normal scatter: ln(c) ~ Normal(ln(c_mean), σ_c)
+            if(run_params->FFBConcSigma > 0.0) {
+                double u = (double)galaxies[p].FFBRandom;
+                if(u < 1.0e-6) u = 1.0e-6;
+                if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
+                const double z_normal = inverse_normal_cdf(u);
+                c = c * exp(run_params->FFBConcSigma * z_normal);
+                if(c < 1.0) c = 1.0;
+            }
+
+            // g_max with scattered concentration (BK25 Eq. 4)
+            const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
+            const double mu_c = log(1.0 + c) - c / (1.0 + c);
+            const double g_max = (g_vir / mu_c) * (c * c / 2.0);
 
             galaxies[p].g_max = g_max;
 
-            if(g_max <= 0.0 || g_crit <= 0.0) {
-                galaxies[p].FFBRegime = 0;
-                continue;
-            }
-
-            // Sigmoid in log10(g_max / g_crit), width 0.15 dex (same as Li+24)
-            const double log_ratio = log10(g_max / g_crit);
-            const double delta = 0.05;  // transition width in dex
-            const double x = log_ratio / delta;
-            const double f_ffb = 1.0 / (1.0 + exp(-x));
-
-            // Optional hard cutoff at P=0.1 lower bound (same as Li+24 FFBSigmoidCutoff)
-            if(run_params->FFBSigmoidCutoff == 1 && f_ffb < 0.1) {
-                galaxies[p].FFBRegime = 0;
-                continue;
-            }
-
-            // Use persistent random number for consistent sigmoid-based determination
-            const double random_uniform = (double)galaxies[p].FFBRandom;
-
-            if(random_uniform < f_ffb) {
+            if(g_max > g_crit) {
                 galaxies[p].FFBRegime = 1;  // FFB halo
+            } else {
+                galaxies[p].FFBRegime = 0;  // Normal halo
+            }
+        } else if(run_params->FeedbackFreeModeOn == 5) {
+            // Li et al. 2024 mass-based method with hard cutoff (no sigmoid)
+            // FFB regime when Mvir > Mvir_ffb (sharp threshold)
+            const double Mvir = galaxies[p].Mvir;
+            const double Mvir_ffb = calculate_ffb_threshold_mass(Zcurr, run_params);
+
+            if(Mvir > Mvir_ffb) {
+                galaxies[p].FFBRegime = 1;  // FFB halo - above threshold mass
             } else {
                 galaxies[p].FFBRegime = 0;  // Normal halo
             }
@@ -968,9 +1029,6 @@ double calculate_ffb_fraction(const double Mvir, const double z, const struct pa
     // Steeper transition
     // const double f_ffb = 1.0 / (1.0 + exp(-k * x));
 
-    // Hard cutoff at the lower tail (P=0.1 bound) to prevent FFB
-    // galaxies well below the threshold mass
-    if(run_params->FFBSigmoidCutoff == 1 && f_ffb < 0.1) return 0.0;
 
     return f_ffb;
 }

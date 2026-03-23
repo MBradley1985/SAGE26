@@ -261,9 +261,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->FFBMaxEfficiency);
     ParamID[NParam++] = DOUBLE;
 
-    strncpy(ParamTag[NParam], "FFBSigmoidCutoff", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->FFBSigmoidCutoff);
-    ParamID[NParam++] = INT;
+    strncpy(ParamTag[NParam], "FFBConcSigma", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->FFBConcSigma);
+    ParamID[NParam++] = DOUBLE;
 
     strncpy(ParamTag[NParam], "ConcentrationOn", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->ConcentrationOn);
