@@ -280,7 +280,7 @@ _EVOLUTION_PROPERTIES = [
 
 def setup_style():
     """Configure matplotlib for publication-quality white-background plots."""
-    plt.style.use("./plotting/ciaran_ohare_palatino_sty.mplstyle")
+    plt.style.use("./plotting/kieren_cohare_palatino_sty.mplstyle")
 
 
 def _tex_safe(s):
