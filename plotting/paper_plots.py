@@ -3351,7 +3351,7 @@ def plot_14_density_evolution():
                                  snapshot=Snapshot, properties=props)
 
         # Load FFB BK25
-        data_FFB_BK25 = load_model(FFB_BK25_DIR, filename=MODEL_FILE,
+        data_FFB_BK25 = load_model(FFB_BK25_SMOOTH_DIR, filename=MODEL_FILE,
                                    snapshot=Snapshot, properties=props)
 
         if not data_FFB and not data_noFFB and not data_FFB100 and not data_FFB_BK25:
@@ -3715,6 +3715,401 @@ def plot_14_density_evolution():
     fig.tight_layout()
 
     output_file = os.path.join(output_dir, 'FFB_Density_Evolution' + OUTPUT_FORMAT)
+    save_figure(fig, output_file)
+
+# ========================== PLOT 14c: DENSITY EVOLUTION WITH MBK25 ==========================
+
+def plot_14c_density_evolution_mbk25():
+    """
+    Create 2x1 figure with SFRD and SMD vs redshift (stacked vertically).
+    Same as plot_14 but with an additional MBK25 (smooth) green line and
+    updated legend labels with (Li+24)/(MBK25) suffixes.
+    """
+    print('Plot 14c: Density evolution (SFRD & SMD) with MBK25')
+    seed(SEED)
+
+    output_dir = OUTPUT_DIR
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    fig, axes = plt.subplots(2, 1, figsize=(8, 10))
+    volume = VOLUME
+
+    target_snaps = []
+    for snap_idx, z in enumerate(REDSHIFTS):
+        if 4.8 <= z <= 20.0:
+            target_snaps.append(f'Snap_{snap_idx}')
+
+    print("Loading data for density evolution plots...")
+
+    redshifts_density = []
+    sfrd_ffb_list, sfrd_noffb_list, sfrd_ffb100_list, sfrd_ffb_bk25_list = [], [], [], []
+    smd_ffb_list, smd_noffb_list, smd_ffb100_list, smd_ffb_bk25_list = [], [], [], []
+    sfrd_ffb_lo, sfrd_ffb_hi = [], []
+    sfrd_noffb_lo, sfrd_noffb_hi = [], []
+    sfrd_ffb100_lo, sfrd_ffb100_hi = [], []
+    sfrd_ffb_bk25_lo, sfrd_ffb_bk25_hi = [], []
+    smd_ffb_lo, smd_ffb_hi = [], []
+    smd_noffb_lo, smd_noffb_hi = [], []
+    smd_ffb100_lo, smd_ffb100_hi = [], []
+    smd_ffb_bk25_lo, smd_ffb_bk25_hi = [], []
+
+    N_BOOT = 100
+    rng = np.random.default_rng(SEED)
+
+    def bootstrap_density(values, n_boot=N_BOOT):
+        """Bootstrap resampling for density (sum of values / volume)."""
+        if len(values) == 0:
+            return np.nan, np.nan, np.nan
+        total = np.sum(values)
+        n = len(values)
+        boot_sums = np.array([np.sum(rng.choice(values, size=n, replace=True))
+                              for _ in range(n_boot)])
+        lo = np.log10(np.percentile(boot_sums, 16) / volume) if np.percentile(boot_sums, 16) > 0 else np.nan
+        hi = np.log10(np.percentile(boot_sums, 84) / volume) if np.percentile(boot_sums, 84) > 0 else np.nan
+        med = np.log10(total / volume) if total > 0 else np.nan
+        return med, lo, hi
+
+    for Snapshot in target_snaps:
+        snapnum = int(Snapshot.split('_')[1])
+        z = REDSHIFTS[snapnum]
+        print(f'  Processing {Snapshot} (z = {z:.2f})')
+
+        props = ['StellarMass', 'SfrDisk', 'SfrBulge']
+
+        data_FFB = load_model(PRIMARY_DIR, filename=MODEL_FILE,
+                              snapshot=Snapshot, properties=props)
+        data_noFFB = load_model(NOFFB_DIR, filename=MODEL_FILE,
+                                snapshot=Snapshot, properties=props)
+        FFB100_DIR = './output/millennium_ffb100/'
+        data_FFB100 = load_model(FFB100_DIR, filename=MODEL_FILE,
+                                 snapshot=Snapshot, properties=props)
+        data_FFB_BK25 = load_model(FFB_BK25_SMOOTH_DIR, filename=MODEL_FILE,
+                                   snapshot=Snapshot, properties=props)
+
+        if not data_FFB and not data_noFFB and not data_FFB100 and not data_FFB_BK25:
+            continue
+
+        redshifts_density.append(z)
+
+        if data_FFB:
+            sfr_vals = data_FFB['SfrDisk'] + data_FFB['SfrBulge']
+            sm_vals = data_FFB['StellarMass']
+            sfrd_med, sfrd_l, sfrd_h = bootstrap_density(sfr_vals)
+            smd_med, smd_l, smd_h = bootstrap_density(sm_vals)
+        else:
+            sfrd_med, sfrd_l, sfrd_h = np.nan, np.nan, np.nan
+            smd_med, smd_l, smd_h = np.nan, np.nan, np.nan
+        sfrd_ffb_list.append(sfrd_med)
+        sfrd_ffb_lo.append(sfrd_l)
+        sfrd_ffb_hi.append(sfrd_h)
+        smd_ffb_list.append(smd_med)
+        smd_ffb_lo.append(smd_l)
+        smd_ffb_hi.append(smd_h)
+
+        if data_noFFB:
+            sfr_vals = data_noFFB['SfrDisk'] + data_noFFB['SfrBulge']
+            sm_vals = data_noFFB['StellarMass']
+            sfrd_med, sfrd_l, sfrd_h = bootstrap_density(sfr_vals)
+            smd_med, smd_l, smd_h = bootstrap_density(sm_vals)
+        else:
+            sfrd_med, sfrd_l, sfrd_h = np.nan, np.nan, np.nan
+            smd_med, smd_l, smd_h = np.nan, np.nan, np.nan
+        sfrd_noffb_list.append(sfrd_med)
+        sfrd_noffb_lo.append(sfrd_l)
+        sfrd_noffb_hi.append(sfrd_h)
+        smd_noffb_list.append(smd_med)
+        smd_noffb_lo.append(smd_l)
+        smd_noffb_hi.append(smd_h)
+
+        if data_FFB100:
+            sfr_vals = data_FFB100['SfrDisk'] + data_FFB100['SfrBulge']
+            sm_vals = data_FFB100['StellarMass']
+            sfrd_med, sfrd_l, sfrd_h = bootstrap_density(sfr_vals)
+            smd_med, smd_l, smd_h = bootstrap_density(sm_vals)
+        else:
+            sfrd_med, sfrd_l, sfrd_h = np.nan, np.nan, np.nan
+            smd_med, smd_l, smd_h = np.nan, np.nan, np.nan
+        sfrd_ffb100_list.append(sfrd_med)
+        sfrd_ffb100_lo.append(sfrd_l)
+        sfrd_ffb100_hi.append(sfrd_h)
+        smd_ffb100_list.append(smd_med)
+        smd_ffb100_lo.append(smd_l)
+        smd_ffb100_hi.append(smd_h)
+
+        if data_FFB_BK25:
+            sfr_vals = data_FFB_BK25['SfrDisk'] + data_FFB_BK25['SfrBulge']
+            sm_vals = data_FFB_BK25['StellarMass']
+            sfrd_med, sfrd_l, sfrd_h = bootstrap_density(sfr_vals)
+            smd_med, smd_l, smd_h = bootstrap_density(sm_vals)
+        else:
+            sfrd_med, sfrd_l, sfrd_h = np.nan, np.nan, np.nan
+            smd_med, smd_l, smd_h = np.nan, np.nan, np.nan
+        sfrd_ffb_bk25_list.append(sfrd_med)
+        sfrd_ffb_bk25_lo.append(sfrd_l)
+        sfrd_ffb_bk25_hi.append(sfrd_h)
+        smd_ffb_bk25_list.append(smd_med)
+        smd_ffb_bk25_lo.append(smd_l)
+        smd_ffb_bk25_hi.append(smd_h)
+
+    redshifts_density = np.array(redshifts_density)
+    sort_idx = np.argsort(redshifts_density)
+    z_sorted = redshifts_density[sort_idx]
+
+    sfrd_ffb_sorted = np.array(sfrd_ffb_list)[sort_idx]
+    sfrd_ffb_lo_sorted = np.array(sfrd_ffb_lo)[sort_idx]
+    sfrd_ffb_hi_sorted = np.array(sfrd_ffb_hi)[sort_idx]
+    sfrd_noffb_sorted = np.array(sfrd_noffb_list)[sort_idx]
+    sfrd_noffb_lo_sorted = np.array(sfrd_noffb_lo)[sort_idx]
+    sfrd_noffb_hi_sorted = np.array(sfrd_noffb_hi)[sort_idx]
+    sfrd_ffb100_sorted = np.array(sfrd_ffb100_list)[sort_idx]
+    sfrd_ffb100_lo_sorted = np.array(sfrd_ffb100_lo)[sort_idx]
+    sfrd_ffb100_hi_sorted = np.array(sfrd_ffb100_hi)[sort_idx]
+    sfrd_ffb_bk25_sorted = np.array(sfrd_ffb_bk25_list)[sort_idx]
+    sfrd_ffb_bk25_lo_sorted = np.array(sfrd_ffb_bk25_lo)[sort_idx]
+    sfrd_ffb_bk25_hi_sorted = np.array(sfrd_ffb_bk25_hi)[sort_idx]
+
+    smd_ffb_sorted = np.array(smd_ffb_list)[sort_idx]
+    smd_ffb_lo_sorted = np.array(smd_ffb_lo)[sort_idx]
+    smd_ffb_hi_sorted = np.array(smd_ffb_hi)[sort_idx]
+    smd_noffb_sorted = np.array(smd_noffb_list)[sort_idx]
+    smd_noffb_lo_sorted = np.array(smd_noffb_lo)[sort_idx]
+    smd_noffb_hi_sorted = np.array(smd_noffb_hi)[sort_idx]
+    smd_ffb100_sorted = np.array(smd_ffb100_list)[sort_idx]
+    smd_ffb100_lo_sorted = np.array(smd_ffb100_lo)[sort_idx]
+    smd_ffb100_hi_sorted = np.array(smd_ffb100_hi)[sort_idx]
+    smd_ffb_bk25_sorted = np.array(smd_ffb_bk25_list)[sort_idx]
+    smd_ffb_bk25_lo_sorted = np.array(smd_ffb_bk25_lo)[sort_idx]
+    smd_ffb_bk25_hi_sorted = np.array(smd_ffb_bk25_hi)[sort_idx]
+
+    # --- miniUchuu (if available) ---
+    mu_filepath = os.path.join(MINIUCHUU_DIR, MODEL_FILE)
+    mu_z_list, mu_sfrd_list, mu_smd_list = [], [], []
+    if os.path.exists(mu_filepath):
+        mu_redshifts = np.array(MINIUCHUU_REDSHIFTS)
+        mu_volume = MINIUCHUU_VOLUME
+        for snap_idx in range(MINIUCHUU_FIRST_SNAP, MINIUCHUU_LAST_SNAP + 1):
+            z = mu_redshifts[snap_idx]
+            if not (4.8 <= z <= 20.0):
+                continue
+            snap_key = f'Snap_{snap_idx}'
+            try:
+                d = load_model(MINIUCHUU_DIR, filename=MODEL_FILE,
+                               snapshot=snap_key,
+                               properties=['StellarMass', 'SfrDisk', 'SfrBulge'])
+                if not d:
+                    continue
+                mstar_mu = d['StellarMass'] / MASS_CONVERT * MINIUCHUU_MASS_CONVERT
+                sfr_mu = d['SfrDisk'] + d['SfrBulge']
+                tot_sfr = np.sum(sfr_mu)
+                tot_sm = np.sum(mstar_mu)
+                mu_z_list.append(z)
+                mu_sfrd_list.append(np.log10(tot_sfr / mu_volume) if tot_sfr > 0 else np.nan)
+                mu_smd_list.append(np.log10(tot_sm / mu_volume) if tot_sm > 0 else np.nan)
+            except Exception:
+                continue
+
+    if len(mu_z_list) > 1:
+        mu_z_arr = np.array(mu_z_list)
+        mu_si = np.argsort(mu_z_arr)
+        mu_z_sorted = mu_z_arr[mu_si]
+        mu_sfrd_sorted = np.array(mu_sfrd_list)[mu_si]
+        mu_smd_sorted = np.array(mu_smd_list)[mu_si]
+
+    print("Generating density evolution plots...")
+
+    # ----- Top Panel: SFRD vs Redshift -----
+    valid_ffb = ~np.isnan(sfrd_ffb_sorted)
+    valid_noffb = ~np.isnan(sfrd_noffb_sorted)
+    valid_ffb100 = ~np.isnan(sfrd_ffb100_sorted)
+    valid_ffb_bk25 = ~np.isnan(sfrd_ffb_bk25_sorted)
+    if np.sum(valid_noffb) > 1:
+        axes[0].plot(z_sorted[valid_noffb], sfrd_noffb_sorted[valid_noffb], '-',
+                    color='firebrick', linewidth=3.0, label='No FFB')
+        boot_valid = valid_noffb & ~np.isnan(sfrd_noffb_lo_sorted) & ~np.isnan(sfrd_noffb_hi_sorted)
+        if np.sum(boot_valid) > 1:
+            axes[0].fill_between(z_sorted[boot_valid], sfrd_noffb_lo_sorted[boot_valid],
+                                sfrd_noffb_hi_sorted[boot_valid], color='firebrick', alpha=0.2)
+    if np.sum(valid_ffb) > 1:
+        axes[0].plot(z_sorted[valid_ffb], sfrd_ffb_sorted[valid_ffb], '-',
+                    color='black', linewidth=3.5, label=r'$\epsilon_{\rm max}=0.2$ (Li+24)')
+        boot_valid = valid_ffb & ~np.isnan(sfrd_ffb_lo_sorted) & ~np.isnan(sfrd_ffb_hi_sorted)
+        if np.sum(boot_valid) > 1:
+            axes[0].fill_between(z_sorted[boot_valid], sfrd_ffb_lo_sorted[boot_valid],
+                                sfrd_ffb_hi_sorted[boot_valid], color='black', alpha=0.2)
+    if np.sum(valid_ffb_bk25) > 1:
+        axes[0].plot(z_sorted[valid_ffb_bk25], sfrd_ffb_bk25_sorted[valid_ffb_bk25], '-',
+                    color='green', linewidth=3.0, label=r'$\epsilon_{\rm max}=0.2$ (MBK25)')
+        boot_valid = valid_ffb_bk25 & ~np.isnan(sfrd_ffb_bk25_lo_sorted) & ~np.isnan(sfrd_ffb_bk25_hi_sorted)
+        if np.sum(boot_valid) > 1:
+            axes[0].fill_between(z_sorted[boot_valid], sfrd_ffb_bk25_lo_sorted[boot_valid],
+                                sfrd_ffb_bk25_hi_sorted[boot_valid], color='green', alpha=0.2)
+    if np.sum(valid_ffb100) > 1:
+        axes[0].plot(z_sorted[valid_ffb100], sfrd_ffb100_sorted[valid_ffb100], '-',
+                    color='dodgerblue', linewidth=3.0, label=r'$\epsilon_{\rm max}=1.0$ (Li+24)')
+        boot_valid = valid_ffb100 & ~np.isnan(sfrd_ffb100_lo_sorted) & ~np.isnan(sfrd_ffb100_hi_sorted)
+        if np.sum(boot_valid) > 1:
+            axes[0].fill_between(z_sorted[boot_valid], sfrd_ffb100_lo_sorted[boot_valid],
+                                sfrd_ffb100_hi_sorted[boot_valid], color='dodgerblue', alpha=0.2)
+    if len(mu_z_list) > 1:
+        valid_mu = ~np.isnan(mu_sfrd_sorted)
+        if np.sum(valid_mu) > 1:
+            axes[0].plot(mu_z_sorted[valid_mu], mu_sfrd_sorted[valid_mu], '--',
+                        color='steelblue', linewidth=2.5, label='miniUchuu')
+
+    # Add SFRD observational data
+    z_madau, re_madau, re_err_plus_madau, re_err_minus_madau = load_madau_dickinson_2014_data()
+    if z_madau is not None:
+        mask = (z_madau >= 5) & (z_madau <= 16)
+        if np.sum(mask) > 0:
+            axes[0].errorbar(z_madau[mask], re_madau[mask],
+                            yerr=[re_err_minus_madau[mask], re_err_plus_madau[mask]],
+                            fmt='o', color='black', markersize=8, alpha=0.6,
+                            markeredgecolor='k', markeredgewidth=0.8,
+                            markerfacecolor = 'gray',
+                            label=_tex_safe(r'Madau \& Dickinson 14'), linewidth=1.0, zorder=5)
+
+    z_oesch, re_oesch, re_err_plus_oesch, re_err_minus_oesch = load_oesch_sfrd_2018_data()
+    if z_oesch is not None:
+        mask = (z_oesch >= 5) & (z_oesch <= 16)
+        if np.sum(mask) > 0:
+            axes[0].errorbar(z_oesch[mask], re_oesch[mask],
+                            yerr=[re_err_minus_oesch[mask], re_err_plus_oesch[mask]],
+                            fmt='*', color='black', markersize=8, alpha=0.6,
+                            markeredgecolor='k', markeredgewidth=0.8,
+                            markerfacecolor = 'gray',
+                            label='Oesch+18', linewidth=1.0, zorder=5)
+
+    z_mcleod, re_mcleod, re_err_plus_mcleod, re_err_minus_mcleod = load_mcleod_rho_sfr_2024_data()
+    if z_mcleod is not None:
+        mask = (z_mcleod >= 5) & (z_mcleod <= 16)
+        if np.sum(mask) > 0:
+            axes[0].errorbar(z_mcleod[mask], re_mcleod[mask],
+                            yerr=[re_err_minus_mcleod[mask], re_err_plus_mcleod[mask]],
+                            fmt='v', color='black', markersize=8, alpha=0.6,
+                            markeredgecolor='k', markeredgewidth=0.8,
+                            markerfacecolor = 'gray',
+                            label='McLeod+24', linewidth=1.0, zorder=5)
+
+    z_harikane, re_harikane, re_err_plus_harikane, re_err_minus_harikane = load_harikane_sfr_density_2023_data()
+    if z_harikane is not None:
+        mask = (z_harikane >= 5) & (z_harikane <= 16)
+        if np.sum(mask) > 0:
+            axes[0].errorbar(z_harikane[mask], re_harikane[mask],
+                            yerr=[re_err_minus_harikane[mask], re_err_plus_harikane[mask]],
+                            fmt='D', color='black', markersize=8, alpha=0.6,
+                            markeredgecolor='k', markeredgewidth=0.8,
+                            markerfacecolor = 'gray',
+                            label='Harikane+23', linewidth=1.0, zorder=5)
+
+    # ----- Bottom Panel: SMD vs Redshift -----
+    valid_smd_noffb = ~np.isnan(smd_noffb_sorted)
+    valid_smd_ffb = ~np.isnan(smd_ffb_sorted)
+    valid_smd_ffb100 = ~np.isnan(smd_ffb100_sorted)
+    valid_smd_bk25 = ~np.isnan(smd_ffb_bk25_sorted)
+    if np.sum(valid_smd_noffb) > 1:
+        axes[1].plot(z_sorted[valid_smd_noffb], smd_noffb_sorted[valid_smd_noffb], '-',
+                    color='firebrick', linewidth=3.0, label='No FFB')
+        boot_valid = valid_smd_noffb & ~np.isnan(smd_noffb_lo_sorted) & ~np.isnan(smd_noffb_hi_sorted)
+        if np.sum(boot_valid) > 1:
+            axes[1].fill_between(z_sorted[boot_valid], smd_noffb_lo_sorted[boot_valid],
+                                smd_noffb_hi_sorted[boot_valid], color='firebrick', alpha=0.2)
+    if np.sum(valid_smd_ffb) > 1:
+        axes[1].plot(z_sorted[valid_smd_ffb], smd_ffb_sorted[valid_smd_ffb], '-',
+                    color='black', linewidth=3.5, label=r'$\epsilon_{\rm max}=0.2$ (Li+24)')
+        boot_valid = valid_smd_ffb & ~np.isnan(smd_ffb_lo_sorted) & ~np.isnan(smd_ffb_hi_sorted)
+        if np.sum(boot_valid) > 1:
+            axes[1].fill_between(z_sorted[boot_valid], smd_ffb_lo_sorted[boot_valid],
+                                smd_ffb_hi_sorted[boot_valid], color='black', alpha=0.2)
+    if np.sum(valid_smd_bk25) > 1:
+        axes[1].plot(z_sorted[valid_smd_bk25], smd_ffb_bk25_sorted[valid_smd_bk25], '-',
+                    color='green', linewidth=3.0, label=r'$\epsilon_{\rm max}=0.2$ (MBK25)')
+        boot_valid = valid_smd_bk25 & ~np.isnan(smd_ffb_bk25_lo_sorted) & ~np.isnan(smd_ffb_bk25_hi_sorted)
+        if np.sum(boot_valid) > 1:
+            axes[1].fill_between(z_sorted[boot_valid], smd_ffb_bk25_lo_sorted[boot_valid],
+                                smd_ffb_bk25_hi_sorted[boot_valid], color='green', alpha=0.2)
+    if np.sum(valid_smd_ffb100) > 1:
+        axes[1].plot(z_sorted[valid_smd_ffb100], smd_ffb100_sorted[valid_smd_ffb100], '-',
+                    color='dodgerblue', linewidth=3.0, label=r'$\epsilon_{\rm max}=1.0$ (Li+24)')
+        boot_valid = valid_smd_ffb100 & ~np.isnan(smd_ffb100_lo_sorted) & ~np.isnan(smd_ffb100_hi_sorted)
+        if np.sum(boot_valid) > 1:
+            axes[1].fill_between(z_sorted[boot_valid], smd_ffb100_lo_sorted[boot_valid],
+                                smd_ffb100_hi_sorted[boot_valid], color='dodgerblue', alpha=0.2)
+    if len(mu_z_list) > 1:
+        valid_mu_smd = ~np.isnan(mu_smd_sorted)
+        if np.sum(valid_mu_smd) > 1:
+            axes[1].plot(mu_z_sorted[valid_mu_smd], mu_smd_sorted[valid_mu_smd], '--',
+                        color='steelblue', linewidth=2.5, label='SAGE26 (miniUchuu)')
+
+    # Add SMD observational data
+    z_madau_smd, re_madau_smd, re_err_plus_madau_smd, re_err_minus_madau_smd = load_madau_dickinson_smd_2014_data()
+    if z_madau_smd is not None:
+        mask = (z_madau_smd >= 5) & (z_madau_smd <= 16)
+        if np.sum(mask) > 0:
+            axes[1].errorbar(z_madau_smd[mask], re_madau_smd[mask],
+                            yerr=[re_err_minus_madau_smd[mask], re_err_plus_madau_smd[mask]],
+                            fmt='o', color='black', markersize=8, alpha=0.6,
+                            markeredgecolor='k', markeredgewidth=0.8,
+                            markerfacecolor = 'gray',
+                            label=_tex_safe(r'Madau \& Dickinson 14'), linewidth=1.0, zorder=5)
+
+    z_kiku, re_kiku, re_err_plus_kiku, re_err_minus_kiku = load_kikuchihara_smd_2020_data()
+    if z_kiku is not None:
+        mask = (z_kiku >= 5) & (z_kiku <= 16)
+        if np.sum(mask) > 0:
+            axes[1].errorbar(z_kiku[mask], re_kiku[mask],
+                            yerr=[re_err_minus_kiku[mask], re_err_plus_kiku[mask]],
+                            fmt='d', color='black', markersize=8, alpha=0.6,
+                            markeredgecolor='k', markeredgewidth=0.8,
+                            markerfacecolor = 'gray',
+                            label='Kikuchihara+20', linewidth=1.0, zorder=5)
+
+    z_papovich, re_papovich, re_err_plus_papovich, re_err_minus_papovich = load_papovich_smd_2023_data()
+    if z_papovich is not None:
+        mask = (z_papovich >= 5) & (z_papovich <= 16)
+        if np.sum(mask) > 0:
+            axes[1].errorbar(z_papovich[mask], re_papovich[mask],
+                            yerr=[re_err_minus_papovich[mask], re_err_plus_papovich[mask]],
+                            fmt='s', color='black', markersize=8, alpha=0.6,
+                            markeredgecolor='k', markeredgewidth=0.8,
+                            markerfacecolor = 'gray',
+                            label='Papovich+23', linewidth=1.0, zorder=5)
+
+    # Configure axes and split legends
+    def is_sim_label(l):
+        return 'SAGE26' in l or 'FFB' in l or 'miniUchuu' in l or 'epsilon' in l or 'MBK25' in l
+    for idx, panel in enumerate(axes):
+        handles, labels = panel.get_legend_handles_labels()
+        sim_h = [h for h, l in zip(handles, labels) if is_sim_label(l)]
+        sim_l = [l for l in labels if is_sim_label(l)]
+        obs_h = [h for h, l in zip(handles, labels) if not is_sim_label(l)]
+        obs_l = [l for l in labels if not is_sim_label(l)]
+        if idx == 0 and sim_l:
+            leg1 = _standard_legend(panel, loc='upper right', handles=sim_h, labels=sim_l)
+            panel.add_artist(leg1)
+        if obs_l:
+            _standard_legend(panel, loc='lower left', handles=obs_h, labels=obs_l)
+
+    axes[0].set_ylabel(r'$\log_{10} \rho_{\mathrm{SFR}}\ (M_\odot\,\mathrm{yr}^{-1}\,\mathrm{Mpc}^{-3})$')
+    axes[0].set_xlim(5, 16)
+    axes[0].set_ylim(-5, -1)
+    axes[0].xaxis.set_major_locator(plt.MultipleLocator(2.0))
+    axes[0].yaxis.set_major_locator(plt.MultipleLocator(1.0))
+    axes[0].xaxis.set_minor_locator(plt.MultipleLocator(0.2))
+    axes[0].yaxis.set_minor_locator(plt.MultipleLocator(0.2))
+
+    axes[1].set_xlabel(r'Redshift')
+    axes[1].set_ylabel(r'$\log_{10} \rho_\star\ [M_\odot\,\mathrm{Mpc}^{-3}]$')
+    axes[1].set_xlim(5, 16)
+    axes[1].set_ylim(3, 8)
+    axes[1].xaxis.set_major_locator(plt.MultipleLocator(2.0))
+    axes[1].yaxis.set_major_locator(plt.MultipleLocator(1.0))
+    axes[1].xaxis.set_minor_locator(plt.MultipleLocator(0.2))
+    axes[1].yaxis.set_minor_locator(plt.MultipleLocator(0.2))
+
+    fig.tight_layout()
+
+    output_file = os.path.join(output_dir, 'FFB_Density_Evolution_MBK25' + OUTPUT_FORMAT)
     save_figure(fig, output_file)
 
 # ========================== PLOT 14b: FFB METHOD COMPARISON ==========================
@@ -5474,6 +5869,161 @@ def plot_19_smf_ffb_grid():
     outputFile = os.path.join(OUTPUT_DIR, 'SMF_FFB_Grid' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
 
+# ========================== PLOT 19c: SMF FFB GRID WITH MBK25 ==========================
+
+def plot_19c_smf_ffb_grid_mbk25():
+    """
+    Plot: 1x4 grid of Stellar Mass Functions at high-z bins.
+    Same as plot_19 but with an additional MBK25 (smooth) line in green.
+    """
+    print('Plot 19c: SMF FFB Grid with MBK25')
+
+    z_bins = [
+        (5.0, 6.0), (6.0, 7.0),
+        (7.0, 9.0), (9.0, 11.0),
+    ]
+
+    mill_redshifts = np.array(REDSHIFTS)
+
+    FFB100_DIR = './output/millennium_ffb100/'
+    models = []
+    if os.path.exists(NOFFB_DIR):
+        models.append({
+            'path': NOFFB_DIR, 'label': r'No FFB',
+            'color': 'firebrick', 'ls': '-', 'lw': 3.0,
+            'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+            'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+        })
+    if os.path.exists(PRIMARY_DIR):
+        models.append({
+            'path': PRIMARY_DIR, 'label': r'$\epsilon_{\rm max}=0.2$ (Li+24)',
+            'color': 'black', 'ls': '-', 'lw': 3.5,
+            'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+            'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+        })
+    if os.path.exists(FFB_BK25_SMOOTH_DIR):
+        models.append({
+            'path': FFB_BK25_SMOOTH_DIR, 'label': r'$\epsilon_{\rm max}=0.2$ (MBK25)',
+            'color': 'green', 'ls': '-', 'lw': 3.0,
+            'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+            'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+        })
+    if os.path.exists(FFB100_DIR):
+        models.append({
+            'path': FFB100_DIR, 'label': r'$\epsilon_{\rm max}=1.0$ (Li+24)',
+            'color': 'dodgerblue', 'ls': '-', 'lw': 3.0,
+            'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+            'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+        })
+
+    all_obs = _load_smf_grid_observations()
+    labels_used = set()
+
+    nrows, ncols = 1, 4
+    fig, axes = plt.subplots(nrows, ncols, figsize=(24, 6), sharex=True, sharey=True)
+    fig.set_tight_layout(False)
+    axes_flat = axes.flatten()
+    binwidth = 0.2
+
+    for i, (z_lo, z_hi) in enumerate(z_bins):
+        ax = axes_flat[i]
+        z_mid = 0.5 * (z_lo + z_hi)
+
+        for model in models:
+            mod_redshifts = model['redshifts']
+            first_snap = model['first_snap']
+            last_snap = model['last_snap']
+
+            snap_redshifts = mod_redshifts[first_snap:last_snap + 1]
+            in_bin = np.where((snap_redshifts >= z_lo) & (snap_redshifts <= z_hi))[0]
+            if len(in_bin) == 0:
+                continue
+            snap_idx = in_bin[np.argmin(np.abs(snap_redshifts[in_bin] - z_mid))]
+            snap_num = snap_idx + first_snap
+            snap_name = f'Snap_{snap_num}'
+
+            try:
+                data = load_model(model['path'], snapshot=snap_name, properties=['StellarMass'])
+                m_stars = data['StellarMass']
+                w = m_stars > 0
+                if np.sum(w) == 0:
+                    continue
+                log_m = np.log10(m_stars[w])
+                x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
+                    log_m, model['volume'], binwidth, n_boot=100)
+                valid = np.isfinite(phi)
+                ax.plot(x[valid], phi[valid],
+                        lw=model['lw'], color=model['color'],
+                        ls=model['ls'],
+                        label=model['label'] if i == 0 else None)
+                boot_valid = np.isfinite(phi_lo) & np.isfinite(phi_hi)
+                if np.any(boot_valid):
+                    ax.fill_between(x[boot_valid], phi_lo[boot_valid], phi_hi[boot_valid],
+                                    color=model['color'], alpha=0.2, linewidth=0)
+            except Exception as e:
+                print(f"  Error loading {snap_name} from {model['path']}: {e}")
+                continue
+
+        for od in all_obs:
+            z_obs = od['z']
+            if i == len(z_bins) - 1:
+                in_bin = z_lo <= z_obs <= z_hi
+            else:
+                in_bin = z_lo <= z_obs < z_hi
+            if not in_bin:
+                continue
+            lbl = od['label'] if od['label'] not in labels_used else None
+            if lbl is not None:
+                labels_used.add(od['label'])
+            yerr = None
+            if od['err_lo'] is not None and od['err_hi'] is not None:
+                yerr = [od['err_lo'], od['err_hi']]
+            ax.errorbar(od['log_mass'], od['log_phi'], yerr=yerr,
+                        fmt=od['marker'], color='grey', ms=od['ms'],
+                        markeredgecolor='k', markeredgewidth=0.8,
+                        markerfacecolor='gray',
+                        alpha=0.6, lw=1.0, label=lbl, zorder=1)
+
+        ax.text(0.95, 0.95, rf'${z_lo:.0f} < z < {z_hi:.0f}$',
+                transform=ax.transAxes, ha='right', va='top')
+
+    axes_flat[0].set_xlim(9, 12.3)
+    axes_flat[0].set_ylim(-6, -1.5)
+
+    for i, ax in enumerate(axes_flat):
+        row, col = divmod(i, ncols)
+        if col == 0:
+            ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
+        if row == nrows - 1:
+            ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{*}}\ [M_{\odot}]$')
+        ax.tick_params(axis='both', which='both', direction='in',
+                       top=True, bottom=True, left=True, right=True)
+        ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
+        ax.yaxis.set_major_locator(plt.MultipleLocator(1.0))
+        ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
+        ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
+
+    handles, labels = axes_flat[0].get_legend_handles_labels()
+    model_labels_set = {m['label'] for m in models}
+    sim_h = [h for h, l in zip(handles, labels) if l in model_labels_set]
+    sim_l = [l for l in labels if l in model_labels_set]
+    obs_h = [h for h, l in zip(handles, labels) if l not in model_labels_set]
+    obs_l = [l for l in labels if l not in model_labels_set]
+    if sim_l:
+        leg1 = axes_flat[0].legend(sim_h, sim_l, loc='lower left', frameon=False,
+                                   title='SAGE26')
+        leg1.get_title().set_fontweight('bold')
+        axes_flat[0].add_artist(leg1)
+    if obs_l:
+        axes_flat[0].legend(obs_h, obs_l, loc='upper right', frameon=False,
+                            bbox_to_anchor=(1.0, 0.88))
+
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=0.001, wspace=0.001)
+
+    outputFile = os.path.join(OUTPUT_DIR, 'SMF_FFB_Grid_MBK25' + OUTPUT_FORMAT)
+    save_figure(fig, outputFile)
+
 # ========================== PLOT 19b: SMF FFB METHOD COMPARISON GRID ==========================
 
 def plot_19b_smf_ffb_methods_grid():
@@ -6113,7 +6663,7 @@ def plot_23_ffb_histogram():
     ax.set_yscale('log')
     ax.set_ylabel('Number of Galaxies')
     ax.set_xlabel(r'$\log_{10}(1+z)$')
-    ax.legend(loc='best', frameon=False)
+    ax.legend(loc='upper left', frameon=False)
 
     ax.set_xlim(np.log10(1+15), 0)
     plt.tight_layout()
@@ -6133,8 +6683,8 @@ def plot_23b_ffb_histogram_bk25():
     print('Plot 23b: FFB Histogram - Li+24 vs BK25')
 
     models = [
-        {'dir': FFB_BK25_DIR, 'label': 'FFB (BK25)',   'cmap': 'Blues',  'alpha': 0.8},
         {'dir': PRIMARY_DIR,  'label': 'FFB (Li+24)',  'cmap': 'RdPu',  'alpha': 0.6},
+        {'dir': FFB_BK25_SMOOTH_DIR, 'label': 'FFB (MBK25)',   'cmap': 'Blues',  'alpha': 0.6},
     ]
 
     fig = plt.figure()
@@ -6209,6 +6759,7 @@ def plot_23b_ffb_histogram_bk25():
                label=model['label'], edgecolor='black', color=colors_ffb)
 
     ax.set_yscale('log')
+    ax.set_ylim(top=1e9)
     ax.set_ylabel('Number of Galaxies')
     ax.set_xlabel(r'$\log_{10}(1+z)$')
     ax.set_xlim(np.log10(1+15), 0)
@@ -6907,12 +7458,14 @@ EVOLUTION_PLOTS = {
 # Standalone plots (load their own data)
 STANDALONE_PLOTS = {
     14: plot_14_density_evolution,
+    142: plot_14c_density_evolution_mbk25,
     141: plot_14b_density_evolution_methods,
     16: plot_16_sfrd_history,
     17: plot_17_smd_history,
     18: plot_18_smf_redshift_grid,
     181: plot_18b_smf_redshift_grid_wide,
     19: plot_19_smf_ffb_grid,
+    192: plot_19c_smf_ffb_grid_mbk25,
     191: plot_19b_smf_ffb_methods_grid,
     20: plot_20_smf_lowz_grid,
     21: plot_21_smf_lowz_lowmass_grid,
