@@ -7,3 +7,4 @@ matplotlib
 scipy
 pandas
 astropy
+colossus
