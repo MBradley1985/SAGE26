@@ -494,6 +494,9 @@ struct params
     double Reionization_zr;
     double ThresholdSatDisruption;
     double FractionDisruptedToICS;  // Fraction of disrupted satellite stellar mass that goes to ICS (rest goes to BCG)
+    int32_t DynamicDisruptionSplit;  // 0: fixed fraction; 1: mass-ratio f_ICL = 1-(Msub/Mhost)^alpha; 2: concentration-weighted
+    double DisruptionSplitAlpha;     // Base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
+    double DisruptionSplitCref;      // Reference concentration for concentration weighting (DynamicDisruptionSplit=2)
     double RedshiftPowerLawExponent;
 
     double UnitLength_in_cm;

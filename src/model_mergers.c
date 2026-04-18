@@ -669,10 +669,38 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
         galaxies[centralgal].ICS_sum_mt += galaxies[gal].ICS_sum_mt;
     }
 
-    // Disrupt stellar mass: split between ICS and BCG based on FractionDisruptedToICS
-    // FractionDisruptedToICS = 1.0 means all to ICS (original behavior)
-    // FractionDisruptedToICS = 0.5 means half to ICS, half to BCG
-    const double frac_to_ICS = run_params->FractionDisruptedToICS;
+    // Disrupt stellar mass: split between ICS and BCG
+    double frac_to_ICS;
+    if(run_params->DynamicDisruptionSplit >= 1) {
+        // Dynamic split based on halo mass ratio: f_ICL = 1 - (Msub/Mhost)^alpha_eff
+        // Low mass-ratio satellites -> mostly ICL (disrupted on wide orbits)
+        // High mass-ratio satellites -> more to BCG (deposited near centre)
+        const double Msub = (double)galaxies[gal].infallMvir;
+        const double Mhost = (double)galaxies[centralgal].Mvir;
+        if(Msub > 0.0 && Mhost > 0.0) {
+            double mass_ratio = Msub / Mhost;
+            if(mass_ratio > 1.0) mass_ratio = 1.0;
+
+            double alpha_eff = run_params->DisruptionSplitAlpha;
+            if(run_params->DynamicDisruptionSplit == 2) {
+                // Concentration-weighted: concentrated satellites resist stripping
+                // alpha_eff = alpha_0 * (c_ref / c_sat)
+                // High c_sat -> small alpha -> f_ICL closer to 0 -> more to BCG
+                // Low c_sat  -> large alpha -> f_ICL closer to 1 -> more to ICL
+                const double c_sat = (double)galaxies[gal].Concentration;
+                if(c_sat > 0.0) {
+                    alpha_eff *= run_params->DisruptionSplitCref / c_sat;
+                }
+            }
+
+            frac_to_ICS = 1.0 - pow(mass_ratio, alpha_eff);
+        } else {
+            frac_to_ICS = run_params->FractionDisruptedToICS;  // fallback
+        }
+    } else {
+        // Fixed fraction mode (original behavior)
+        frac_to_ICS = run_params->FractionDisruptedToICS;
+    }
     const double frac_to_BCG = 1.0 - frac_to_ICS;
     const double new_ICS_from_stripping = frac_to_ICS * galaxies[gal].StellarMass;
 

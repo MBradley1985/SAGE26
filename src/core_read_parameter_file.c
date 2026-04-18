@@ -225,6 +225,18 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->FractionDisruptedToICS);
     ParamID[NParam++] = DOUBLE;
 
+    strncpy(ParamTag[NParam], "DynamicDisruptionSplit", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->DynamicDisruptionSplit);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "DisruptionSplitAlpha", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->DisruptionSplitAlpha);
+    ParamID[NParam++] = DOUBLE;
+
+    strncpy(ParamTag[NParam], "DisruptionSplitCref", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->DisruptionSplitCref);
+    ParamID[NParam++] = DOUBLE;
+
     strncpy(ParamTag[NParam], "NumOutputs", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->NumSnapOutputs);
     ParamID[NParam++] = INT;

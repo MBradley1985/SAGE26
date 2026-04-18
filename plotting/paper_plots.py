@@ -2699,38 +2699,54 @@ def plot_10_sfe_ffb(snapdata):
         (d['StellarMass'] > 0) & (d['Mvir'] > 0) &
         (d['FFBRegime'] == 1) & (d['Type'] == 0)
     )[0]
-    if len(w_ffb) >= DILUTE:
-        w_ffb = np.random.choice(w_ffb, DILUTE, replace=False)
     w_normal = np.where(
         (d['StellarMass'] > 0) & (d['Mvir'] > 0) &
         (d['FFBRegime'] == 0) & (d['Type'] == 0)
     )[0]
-    if len(w_normal) >= DILUTE:
-        w_normal = np.random.choice(w_normal, DILUTE, replace=False)
 
-    if len(w_ffb) > 0:
-        eps_ffb = d['StellarMass'][w_ffb] / (BARYON_FRAC * d['Mvir'][w_ffb])
-        log_mvir_ffb = np.log10(d['Mvir'][w_ffb])
-        ax.scatter(log_mvir_ffb, eps_ffb, s=50, c='firebrick', alpha=0.8,
-                   edgecolors='darkred', linewidths=0.8,
-                   label=f'FFB galaxies', zorder=2, rasterized=True)
+    def _median_percentile(log_mvir, eps, nbins=20):
+        """Return bin centres, median, 16th and 84th percentiles."""
+        bins = np.linspace(log_mvir.min(), log_mvir.max(), nbins + 1)
+        centres = 0.5 * (bins[:-1] + bins[1:])
+        median = np.full(nbins, np.nan)
+        lo = np.full(nbins, np.nan)
+        hi = np.full(nbins, np.nan)
+        for i in range(nbins):
+            mask = (log_mvir >= bins[i]) & (log_mvir < bins[i + 1])
+            if np.sum(mask) >= 10:
+                median[i] = np.median(eps[mask])
+                lo[i] = np.percentile(eps[mask], 16)
+                hi[i] = np.percentile(eps[mask], 84)
+        good = ~np.isnan(median)
+        return centres[good], median[good], lo[good], hi[good]
+
+    # Compute epsilon for both populations
+    eps_normal, log_mvir_normal = None, None
+    eps_ffb, log_mvir_ffb = None, None
 
     if len(w_normal) > 0:
         eps_normal = d['StellarMass'][w_normal] / (BARYON_FRAC * d['Mvir'][w_normal])
         log_mvir_normal = np.log10(d['Mvir'][w_normal])
-        ax.scatter(log_mvir_normal, eps_normal, s=50, c='dodgerblue',
-                   alpha=0.1, edgecolors='navy', linewidths=0.8,
-                   label=f'non FFB galaxies', zorder=3, rasterized=True)
 
-    ax.axhline(y=0.2, color='firebrick', ls='--', lw=1.5, alpha=1.0,
-               label=r'$\varepsilon = 0.2$ (FFB expectation)')
-    ax.axhline(y=0.03, color='dodgerblue', ls='--', lw=1.5, alpha=1.0,
-               label=r'$\varepsilon = 0.03$ (normal)')
+    if len(w_ffb) > 0:
+        eps_ffb = d['StellarMass'][w_ffb] / (BARYON_FRAC * d['Mvir'][w_ffb])
+        log_mvir_ffb = np.log10(d['Mvir'][w_ffb])
+
+    # Median lines with percentile bands
+    if log_mvir_normal is not None:
+        x, med, lo, hi = _median_percentile(log_mvir_normal, eps_normal)
+        ax.plot(x, med, color='dodgerblue', lw=2, label='Non-FFB galaxies', zorder=3)
+        ax.fill_between(x, lo, hi, color='dodgerblue', alpha=0.2, zorder=2)
+
+    if log_mvir_ffb is not None:
+        x, med, lo, hi = _median_percentile(log_mvir_ffb, eps_ffb)
+        ax.plot(x, med, color='firebrick', lw=2, label='FFB galaxies', zorder=5)
+        ax.fill_between(x, lo, hi, color='firebrick', alpha=0.2, zorder=4)
 
     M_ffb = ffb_threshold_mass_msun(z_snap)
     ax.axvline(x=np.log10(M_ffb), color='goldenrod', ls=':', lw=2,
                alpha=0.6,
-               label=fr'$M_{{\rm ffb}}$ = {M_ffb:.1e} $M_\odot$')
+               label=fr'$M_{{\rm vir, FFB}}$ = {M_ffb:.1e} $M_\odot$')
 
     ax.set_yscale('log')
     ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/M_{\odot})$')
@@ -6573,10 +6589,21 @@ def plot_22_regime_histogram():
     ax.set_yscale('log')
     ax.set_ylabel('Number of Galaxies')
     ax.set_xlabel(r'$\log_{10}(1+z)$')
-    ax.legend(loc='best', frameon=False)
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), frameon=False, ncol=2)
 
     ax.set_xlim(np.log10(1+15), 0)
+
+    # Add top x-axis for redshift
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    z_ticks = [0, 1, 2, 3, 5, 7, 10, 15]
+    log1pz_ticks = [np.log10(1 + zt) for zt in z_ticks]
+    ax2.set_xticks(log1pz_ticks)
+    ax2.set_xticklabels([str(zt) for zt in z_ticks])
+    ax2.set_xlabel(r'$z$')
+
     plt.tight_layout()
+    plt.subplots_adjust(bottom=0.2)
 
     outputFile = os.path.join(OUTPUT_DIR, 'Regime_Histogram_Evolution' + OUTPUT_FORMAT)
     plt.savefig(outputFile)
@@ -6663,10 +6690,21 @@ def plot_23_ffb_histogram():
     ax.set_yscale('log')
     ax.set_ylabel('Number of Galaxies')
     ax.set_xlabel(r'$\log_{10}(1+z)$')
-    ax.legend(loc='upper left', frameon=False)
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), frameon=False, ncol=2)
 
     ax.set_xlim(np.log10(1+15), 0)
+
+    # Add top x-axis for redshift
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    z_ticks = [0, 1, 2, 3, 5, 7, 10, 15]
+    log1pz_ticks = [np.log10(1 + zt) for zt in z_ticks]
+    ax2.set_xticks(log1pz_ticks)
+    ax2.set_xticklabels([str(zt) for zt in z_ticks])
+    ax2.set_xlabel(r'$z$')
+
     plt.tight_layout()
+    plt.subplots_adjust(bottom=0.2)
 
     outputFile = os.path.join(OUTPUT_DIR, 'FFB_Histogram_Evolution' + OUTPUT_FORMAT)
     plt.savefig(outputFile)
@@ -6759,13 +6797,22 @@ def plot_23b_ffb_histogram_bk25():
                label=model['label'], edgecolor='black', color=colors_ffb)
 
     ax.set_yscale('log')
-    ax.set_ylim(top=1e9)
     ax.set_ylabel('Number of Galaxies')
     ax.set_xlabel(r'$\log_{10}(1+z)$')
     ax.set_xlim(np.log10(1+15), 0)
-    ax.legend(loc='best', frameon=False)
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), frameon=False, ncol=3)
+
+    # Add top x-axis for redshift
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    z_ticks = [0, 1, 2, 3, 5, 7, 10, 15]
+    log1pz_ticks = [np.log10(1 + zt) for zt in z_ticks]
+    ax2.set_xticks(log1pz_ticks)
+    ax2.set_xticklabels([str(zt) for zt in z_ticks])
+    ax2.set_xlabel(r'$z$')
 
     fig.tight_layout()
+    plt.subplots_adjust(bottom=0.2)
     outputFile = os.path.join(OUTPUT_DIR, 'FFB_Histogram_Li24_vs_BK25' + OUTPUT_FORMAT)
     plt.savefig(outputFile)
     print(f'Saved file to {outputFile}\n')
