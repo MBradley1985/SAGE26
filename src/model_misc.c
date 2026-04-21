@@ -464,7 +464,8 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
     // Pre-compute g_crit in code units for BK25 modes (constant, doesn't depend on galaxy)
     // g_crit/G = 3100 M_sun/pc^2 (Boylan-Kolchin 2025, Table 1)
     double g_crit = 0.0;
-    if(run_params->FeedbackFreeModeOn >= 2) {
+    if(run_params->FeedbackFreeModeOn == 2 || run_params->FeedbackFreeModeOn == 3 ||
+       run_params->FeedbackFreeModeOn == 4 || run_params->FeedbackFreeModeOn == 7) {
         const double Msun_code = SOLAR_MASS / run_params->UnitMass_in_g;
         const double pc_code = 3.08568e18 / run_params->UnitLength_in_cm;
         g_crit = run_params->G * 3100.0 * Msun_code / (pc_code * pc_code) / run_params->Hubble_h;
@@ -587,6 +588,42 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
 
             if(Mvir > Mvir_ffb) {
                 galaxies[p].FFBRegime = 1;  // FFB halo - above threshold mass
+            } else {
+                galaxies[p].FFBRegime = 0;  // Normal halo
+            }
+        } else if(run_params->FeedbackFreeModeOn == 6) {
+            // Li+24 sigmoid + H2-based SF (same regime detection as mode 1)
+            const double Mvir = galaxies[p].Mvir;
+            const double f_ffb = calculate_ffb_fraction(Mvir, Zcurr, run_params);
+            const double random_uniform = (double)galaxies[p].FFBRandom;
+
+            if(random_uniform < f_ffb) {
+                galaxies[p].FFBRegime = 1;  // FFB halo
+            } else {
+                galaxies[p].FFBRegime = 0;  // Normal halo
+            }
+        } else if(run_params->FeedbackFreeModeOn == 7) {
+            // BK25 stored-c + H2-based SF (same regime detection as mode 3)
+            const double Mvir = galaxies[p].Mvir;
+            const double Rvir = galaxies[p].Rvir;
+
+            if(Mvir <= 0.0 || Rvir <= 0.0) {
+                galaxies[p].FFBRegime = 0;
+                galaxies[p].g_max = 0.0;
+                continue;
+            }
+
+            double c = (double)galaxies[p].Concentration;
+            if(c < 1.0) c = 1.0;
+
+            const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
+            const double mu_c = log(1.0 + c) - c / (1.0 + c);
+            const double g_max = (g_vir / mu_c) * (c * c / 2.0);
+
+            galaxies[p].g_max = g_max;
+
+            if(g_max > g_crit) {
+                galaxies[p].FFBRegime = 1;  // FFB halo - above critical acceleration
             } else {
                 galaxies[p].FFBRegime = 0;  // Normal halo
             }
@@ -867,27 +904,25 @@ float calculate_stellar_scale_height_BR06(float disk_scale_length_pc)
 float calculate_midplane_pressure_BR06(float sigma_gas, float sigma_stars, float disk_scale_length_pc)
 {
     // Early termination for edge cases
-    if (sigma_gas <= 0.5 || disk_scale_length_pc <= 0.0) {
+    if (sigma_gas <= 0.0 || disk_scale_length_pc <= 0.0) {
         return 0.0;
     }
-    
+
     // For very low stellar surface density, use a minimal value to avoid numerical issues
-    // but don't artificially boost it like before
     float effective_sigma_stars = sigma_stars;
     if (sigma_stars < 0.1) {
-        effective_sigma_stars = 0.1;  // Minimal floor just to avoid sqrt(0)
+        effective_sigma_stars = 0.1;
     }
-    
+
     // Calculate stellar scale height using exact BR06 equation (9)
     float h_star_pc = calculate_stellar_scale_height_BR06(disk_scale_length_pc);
-    
-    // BR06 hardcoded parameters EXACTLY as in paper
-    const float v_g = 8.0;          // km/s, gas velocity dispersion (BR06 Table text)
-    
-    // BR06 Equation (5) EXACTLY as written in paper:
-    // P_ext/k = 272 cm⁻³ K × (Σ_gas/M_⊙ pc⁻²) × (Σ_*/M_⊙ pc⁻²)^0.5 × (v_g/km s⁻¹) × (h_*/pc)^-0.5
-    float pressure = 272.0 * sigma_gas * sqrt(effective_sigma_stars) * v_g / sqrt(h_star_pc);
+    if (h_star_pc <= 0.0) return 0.0;
 
+    const float v_g = 8.0;  // km/s, gas velocity dispersion (BR06)
+
+    // BR06 Equation (5) - stellar-dominated approximation:
+    // P_ext/k = 272 × Σ_gas × √Σ_* × v_g × h_*^(-0.5)
+    float pressure = 272.0 * sigma_gas * sqrt(effective_sigma_stars) * v_g / sqrt(h_star_pc);
 
     return pressure; // K cm⁻³
 }

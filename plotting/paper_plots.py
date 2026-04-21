@@ -38,7 +38,7 @@ except ImportError:
 # ========================== CONFIGURATION ==========================
 
 # File paths
-PRIMARY_DIR = './output/millennium/'
+PRIMARY_DIR = './output/millennium_ffb_mbk_h2/'
 VANILLA_DIR = './output/millennium_vanilla/'
 NOFFB_DIR = './output/millennium_noffb/'
 NOCGM_DIR = './output/millennium_nocgm/'
@@ -47,10 +47,10 @@ GD14_DIR = './output/millennium_gd14/'
 KD12_DIR = './output/millennium_kd12/'
 KMT09_DIR = './output/millennium_kmt09/'
 K13_DIR = './output/millennium_k13/'
-FFB_BK25_DIR = './output/millennium_ffb_bk25/'
-FFB_BK25_SMOOTH_DIR = './output/millennium_ffb_bk25_smooth/'
+FFB_BK25_DIR = './output/millennium_ffb_mbk25/'
+FFB_BK25_SMOOTH_DIR = './output/millennium_ffb_mbk25_smooth/'
 FFB_NOSIGMOID_DIR = './output/millennium_nosigmoid/'
-MINIUCHUU_DIR = './output/miniuchuu/'
+MINIUCHUU_DIR = './output/microuchuu/'
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
 
@@ -187,7 +187,7 @@ else:
           0.509,  0.457,  0.408,  0.362,  0.320,  0.280,  0.242,  0.208,
           0.175,  0.144,  0.116,  0.089,  0.064,  0.041,  0.020,  0.000,
     ]
-    OUTPUT_DIR = './output/millennium/plots/'
+    OUTPUT_DIR = './output/millennium_ffb_mbk_h2/plots/'
     SNAP_Z0  = 63
     SNAP_Z1  = 39
     SNAP_Z2  = 32
@@ -610,6 +610,74 @@ def binned_median(x, y, bins, min_count=5):
             p75[i] = np.percentile(vals, 75)
 
     return centers, med, p25, p75
+
+
+def binned_percentiles(x, y, bins, percentiles=(16, 50, 84), min_count=20):
+    """Compute binned percentiles of *y* as a function of *x*.
+
+    Parameters
+    ----------
+    x, y : array-like
+        Data arrays.
+    bins : array-like
+        Bin edges in x.
+    percentiles : tuple
+        Percentiles to compute (e.g. (16, 50, 84)).
+    min_count : int
+        Minimum number of points required in a bin.
+
+    Returns
+    -------
+    centers : array
+        Bin centers.
+    pct : array, shape (len(percentiles), nbins)
+        Percentiles per bin; NaN for bins with insufficient counts.
+    """
+    x = np.asarray(x)
+    y = np.asarray(y)
+    ok = np.isfinite(x) & np.isfinite(y)
+    x = x[ok]
+    y = y[ok]
+
+    centers = 0.5 * (bins[:-1] + bins[1:])
+    nbins = len(bins) - 1
+    pct = np.full((len(percentiles), nbins), np.nan)
+
+    for i in range(nbins):
+        m = (x >= bins[i]) & (x < bins[i + 1])
+        if np.sum(m) >= min_count:
+            pct[:, i] = np.percentile(y[m], percentiles)
+
+    return centers, pct
+
+
+def plot_binned_median_1sigma(
+    ax,
+    x,
+    y,
+    bins,
+    *,
+    color,
+    label,
+    alpha=0.25,
+    lw=3.0,
+    ls='-',
+    min_count=20,
+    zorder_fill=3,
+    zorder_line=4,
+):
+    """Plot a median line with a 16--84% (1\u03c3) shaded band."""
+    centers, pct = binned_percentiles(x, y, bins, percentiles=(16, 50, 84), min_count=min_count)
+    p16, p50, p84 = pct
+    valid = np.isfinite(p50) & np.isfinite(p16) & np.isfinite(p84)
+    if not np.any(valid):
+        return None
+
+    ax.fill_between(centers[valid], p16[valid], p84[valid],
+                    color=color, alpha=alpha, lw=0.0, zorder=zorder_fill)
+    (line,) = ax.plot(centers[valid], p50[valid],
+                      color=color, lw=lw, ls=ls, label=label, zorder=zorder_line)
+    return line
 
 
 def density_contour(x, y, bins=100, weights=None, smooth=1.5):
@@ -1522,7 +1590,7 @@ def plot_1_stellar_mass_function_ssfr_s(primary, vanilla):
     ax.fill_between(x, phi_sf_lo, phi_sf_hi, color='dodgerblue', alpha=0.3, edgecolor='none', zorder=10)
     # C16 (vanilla)
     # ax.plot(x_v, phi_q_v, color='firebrick', lw=2, ls='--', label='C16 Quiescent')
-    ax.plot(x_v, phi_sf_v, color='dodgerblue', lw=2, ls='--', label='C16 Star-forming')
+    ax.plot(x_v, phi_sf_v, color='dodgerblue', lw=2, ls='--', label='SAGE16 Star-forming')
 
     # Observational data: GAMA (Moffett+16) with 'd' markers
     valid_D = ~np.isnan(gama['D'])
@@ -1562,8 +1630,8 @@ def plot_1_stellar_mass_function_ssfr_s(primary, vanilla):
     ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{*}}\ [M_{\odot}]$')
 
     handles, labels = ax.get_legend_handles_labels()
-    sim_h = [h for h, l in zip(handles, labels) if l.startswith(('SAGE26', 'C16'))]
-    sim_l = [l for l in labels if l.startswith(('SAGE26', 'C16'))]
+    sim_h = [h for h, l in zip(handles, labels) if l.startswith(('SAGE26', 'SAGE16'))]
+    sim_l = [l for l in labels if l.startswith(('SAGE26', 'SAGE16'))]
     obs_h = [h for h, l in zip(handles, labels) if l.startswith('Baldry') or l.startswith('Moffett') or l.startswith('Bell')]
     obs_l = [l for l in labels if l.startswith('Baldry') or l.startswith('Moffett') or l.startswith('Bell')]
     leg1 = _standard_legend(ax, loc='lower left', handles=sim_h, labels=sim_l)
@@ -1669,7 +1737,7 @@ def plot_1_stellar_mass_function_ssfr_q(primary, vanilla):
     # ax.plot(x, phi_sf, color='dodgerblue', lw=3, label='SAGE26 Star-forming')
     # ax.fill_between(x, phi_sf_lo, phi_sf_hi, color='dodgerblue', alpha=0.3, edgecolor='none', zorder=10)
     # C16 (vanilla)
-    ax.plot(x_v, phi_q_v, color='firebrick', lw=2, ls='--', label='C16 Quiescent')
+    ax.plot(x_v, phi_q_v, color='firebrick', lw=2, ls='--', label='SAGE16 Quiescent')
     # ax.plot(x_v, phi_sf_v, color='dodgerblue', lw=2, ls='--', label='C16 Star-forming')
 
     # Observational data: GAMA (Moffett+16) with 'd' markers
@@ -1708,8 +1776,8 @@ def plot_1_stellar_mass_function_ssfr_q(primary, vanilla):
     ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{*}}\ [M_{\odot}]$')
 
     handles, labels = ax.get_legend_handles_labels()
-    sim_h = [h for h, l in zip(handles, labels) if l.startswith(('SAGE26', 'C16'))]
-    sim_l = [l for l in labels if l.startswith(('SAGE26', 'C16'))]
+    sim_h = [h for h, l in zip(handles, labels) if l.startswith(('SAGE26', 'SAGE16'))]
+    sim_l = [l for l in labels if l.startswith(('SAGE26', 'SAGE16'))]
     obs_h = [h for h, l in zip(handles, labels) if l.startswith('Baldry') or l.startswith('Moffett') or l.startswith('Bell')]
     obs_l = [l for l in labels if l.startswith('Baldry') or l.startswith('Moffett') or l.startswith('Bell')]
     leg1 = _standard_legend(ax, loc='lower left', handles=sim_h, labels=sim_l)
@@ -1796,20 +1864,17 @@ def plot_3_gas_metallicity_vs_stellar_mass(primary, vanilla):
     gas_Z = metallicity_12logOH(primary['MetalsColdGas'][w],
                                 primary['ColdGas'][w])
 
-    X, Y, Z = density_contour(log_mass, gas_Z,
-                              bins=[np.linspace(8.0, 12.0, 101),
-                                    np.linspace(8.0, 10.0, 101)])
-
     # --- Plot ---
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
-    if Z.max() > 0:
-        levels = sigma_contour_levels(Z)
-        if levels is not None:
-            ax.contourf(X, Y, Z, levels=levels, cmap='Blues_r', alpha=0.6, zorder=9)
-            ax.contour(X, Y, Z, levels=levels, colors='steelblue',
-                       linestyles='-', alpha=1.0, linewidths=1.5)
+    mass_bins = np.arange(8.0, 12.0 + 0.1, 0.1)
+    plot_binned_median_1sigma(
+        ax, log_mass, gas_Z, mass_bins,
+        color='steelblue', label='SAGE26',
+        alpha=0.25, lw=3.5, min_count=50,
+        zorder_fill=2, zorder_line=3,
+    )
 
     # --- C16 (Vanilla) model ---
     w_v = ((vanilla['StellarMass'] > 1e8)
@@ -1819,12 +1884,12 @@ def plot_3_gas_metallicity_vs_stellar_mass(primary, vanilla):
         log_mass_v = np.log10(vanilla['StellarMass'][w_v])
         gas_Z_v = metallicity_12logOH(vanilla['MetalsColdGas'][w_v],
                                       vanilla['ColdGas'][w_v])
-        if DILUTE and len(log_mass_v) > DILUTE:
-            idx_v = sample(range(len(log_mass_v)), DILUTE)
-            log_mass_v = log_mass_v[idx_v]
-            gas_Z_v = gas_Z_v[idx_v]
-        ax.scatter(log_mass_v, gas_Z_v, marker='x', s=50, c='purple',
-                   alpha=0.1, label='C16', rasterized=True, zorder=9)
+        plot_binned_median_1sigma(
+            ax, log_mass_v, gas_Z_v, mass_bins,
+            color='purple', label='SAGE16',
+            alpha=0.20, lw=3.0, min_count=50,
+            zorder_fill=4, zorder_line=5,
+        )
 
     # --- Observational data ---
     for obs in load_mzr_observations():
@@ -1849,20 +1914,15 @@ def plot_3_gas_metallicity_vs_stellar_mass(primary, vanilla):
     ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{*}}\ [M_{\odot}]$')
     ax.set_ylabel(r'$12\ +\ \log_{10}\ (\mathrm{O/H})$')
 
-    from matplotlib.patches import Patch
-    sim_handles = [Patch(facecolor='steelblue', alpha=0.6, label='SAGE26')]
-    sim_labels = ['SAGE26']
-    obs_handles, obs_labels = [], []
-    for h, l in zip(*ax.get_legend_handles_labels()):
-        if l == 'C16':
-            sim_handles.append(h)
-            sim_labels.append(l)
-        else:
-            obs_handles.append(h)
-            obs_labels.append(l)
-    leg1 = _standard_legend(ax, loc='upper right', handles=sim_handles, labels=sim_labels)
+    handles, labels = ax.get_legend_handles_labels()
+    sim_set = {'SAGE26', 'SAGE16'}
+    sim_h = [h for h, l in zip(handles, labels) if l in sim_set]
+    sim_l = [l for l in labels if l in sim_set]
+    obs_h = [h for h, l in zip(handles, labels) if l not in sim_set]
+    obs_l = [l for l in labels if l not in sim_set]
+    leg1 = _standard_legend(ax, loc='upper right', handles=sim_h, labels=sim_l)
     ax.add_artist(leg1)
-    _standard_legend(ax, loc='upper left', handles=obs_handles, labels=obs_labels)
+    _standard_legend(ax, loc='upper left', handles=obs_h, labels=obs_l)
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
@@ -1885,32 +1945,29 @@ def plot_4_bh_bulge_mass(primary, vanilla):
     log_bulge = np.log10(primary['BulgeMass'][w])
     log_bh = np.log10(primary['BlackHoleMass'][w])
 
-    X, Y, Z = density_contour(log_bulge, log_bh,
-                              bins=[np.linspace(8.0, 12.0, 101),
-                                    np.linspace(6.0, 10.0, 101)])
-
     # --- Plot ---
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
-    if Z.max() > 0:
-        levels = sigma_contour_levels(Z)
-        if levels is not None:
-            ax.contourf(X, Y, Z, levels=levels, cmap='Blues_r', alpha=0.6, zorder=8)
-            ax.contour(X, Y, Z, levels=levels, colors='steelblue',
-                       linestyles='-', alpha=1.0, linewidths=1.5)
+    bulge_bins = np.arange(8.0, 12.0 + 0.1, 0.1)
+    plot_binned_median_1sigma(
+        ax, log_bulge, log_bh, bulge_bins,
+        color='steelblue', label='SAGE26',
+        alpha=0.25, lw=3.5, min_count=50,
+        zorder_fill=2, zorder_line=3,
+    )
 
     # --- C16 (Vanilla) model ---
     w_v = (vanilla['BlackHoleMass'] > 0) & (vanilla['BulgeMass'] > 0)
     if np.any(w_v):
         log_bulge_v = np.log10(vanilla['BulgeMass'][w_v])
         log_bh_v = np.log10(vanilla['BlackHoleMass'][w_v])
-        if DILUTE and len(log_bulge_v) > DILUTE:
-            idx_v = sample(range(len(log_bulge_v)), DILUTE)
-            log_bulge_v = log_bulge_v[idx_v]
-            log_bh_v = log_bh_v[idx_v]
-        ax.scatter(log_bulge_v, log_bh_v, marker='x', s=50, c='purple',
-                   alpha=0.1, label='C16', rasterized=True, zorder=9)
+        plot_binned_median_1sigma(
+            ax, log_bulge_v, log_bh_v, bulge_bins,
+            color='purple', label='SAGE16',
+            alpha=0.20, lw=3.0, min_count=50,
+            zorder_fill=4, zorder_line=5,
+        )
 
     # --- Observational data ---
     obs = load_bh_bulge_observations()
@@ -1943,20 +2000,15 @@ def plot_4_bh_bulge_mass(primary, vanilla):
     ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{bulge}}\ [M_{\odot}]$')
     ax.set_ylabel(r'$\log_{10}\ m_{\mathrm{BH}}\ [M_{\odot}]$')
 
-    from matplotlib.patches import Patch
-    sim_handles = [Patch(facecolor='steelblue', alpha=0.6, label='SAGE26')]
-    sim_labels = ['SAGE26']
-    obs_handles, obs_labels = [], []
-    for h, l in zip(*ax.get_legend_handles_labels()):
-        if l == 'C16':
-            sim_handles.append(h)
-            sim_labels.append(l)
-        else:
-            obs_handles.append(h)
-            obs_labels.append(l)
-    leg1 = _standard_legend(ax, loc='upper left', handles=obs_handles, labels=obs_labels)
+    handles, labels = ax.get_legend_handles_labels()
+    sim_set = {'SAGE26', 'SAGE16'}
+    sim_h = [h for h, l in zip(handles, labels) if l in sim_set]
+    sim_l = [l for l in labels if l in sim_set]
+    obs_h = [h for h, l in zip(handles, labels) if l not in sim_set]
+    obs_l = [l for l in labels if l not in sim_set]
+    leg1 = _standard_legend(ax, loc='upper left', handles=obs_h, labels=obs_l)
     ax.add_artist(leg1)
-    _standard_legend(ax, loc='lower right', handles=sim_handles, labels=sim_labels)
+    _standard_legend(ax, loc='lower right', handles=sim_h, labels=sim_l)
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
@@ -1979,32 +2031,29 @@ def plot_5_stellar_halo_mass(primary, vanilla):
     log_mvir = np.log10(primary['Mvir'][w])
     log_mstar = np.log10(primary['StellarMass'][w])
 
-    X, Y, Z = density_contour(log_mvir, log_mstar,
-                              bins=[np.linspace(10.0, 15.0, 101),
-                                    np.linspace(8.0, 12.0, 101)])
-
     # --- Plot ---
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
-    if Z.max() > 0:
-        levels = sigma_contour_levels(Z)
-        if levels is not None:
-            ax.contourf(X, Y, Z, levels=levels, cmap='Blues_r', alpha=0.6, zorder=8)
-            ax.contour(X, Y, Z, levels=levels, colors='steelblue',
-                       linestyles='-', alpha=1.0, linewidths=1.5)
+    mvir_bins = np.arange(10.0, 15.0 + 0.1, 0.1)
+    plot_binned_median_1sigma(
+        ax, log_mvir, log_mstar, mvir_bins,
+        color='steelblue', label='SAGE26',
+        alpha=0.25, lw=3.5, min_count=50,
+        zorder_fill=2, zorder_line=3,
+    )
 
     # --- C16 (Vanilla) model ---
     w_v = (vanilla['StellarMass'] > 0) & (vanilla['Mvir'] > 0)
     if np.any(w_v):
         log_mvir_v = np.log10(vanilla['Mvir'][w_v])
         log_mstar_v = np.log10(vanilla['StellarMass'][w_v])
-        if DILUTE and len(log_mvir_v) > DILUTE:
-            idx_v = sample(range(len(log_mvir_v)), DILUTE)
-            log_mvir_v = log_mvir_v[idx_v]
-            log_mstar_v = log_mstar_v[idx_v]
-        ax.scatter(log_mvir_v, log_mstar_v, marker='x', s=50, c='purple',
-                   alpha=0.1, label='C16', rasterized=True, zorder=9)
+        plot_binned_median_1sigma(
+            ax, log_mvir_v, log_mstar_v, mvir_bins,
+            color='purple', label='SAGE16',
+            alpha=0.20, lw=3.0, min_count=50,
+            zorder_fill=4, zorder_line=5,
+        )
 
     # --- Observational data ---
     obs = load_shmr_observations()
@@ -2045,20 +2094,15 @@ def plot_5_stellar_halo_mass(primary, vanilla):
     ax.set_xlabel(r'$\log_{10}\ M_{\mathrm{vir}}\ [M_{\odot}]$')
     ax.set_ylabel(r'$\log_{10}\ m_{\mathrm{*}}\ [M_{\odot}]$')
 
-    from matplotlib.patches import Patch
-    sim_handles = [Patch(facecolor='steelblue', alpha=0.6, label='SAGE26')]
-    sim_labels = ['SAGE26']
-    obs_handles, obs_labels = [], []
-    for h, l in zip(*ax.get_legend_handles_labels()):
-        if l == 'C16':
-            sim_handles.append(h)
-            sim_labels.append(l)
-        else:
-            obs_handles.append(h)
-            obs_labels.append(l)
-    leg1 = _standard_legend(ax, loc='upper left', handles=sim_handles, labels=sim_labels)
+    handles, labels = ax.get_legend_handles_labels()
+    sim_set = {'SAGE26', 'SAGE16'}
+    sim_h = [h for h, l in zip(handles, labels) if l in sim_set]
+    sim_l = [l for l in labels if l in sim_set]
+    obs_h = [h for h, l in zip(handles, labels) if l not in sim_set]
+    obs_l = [l for l in labels if l not in sim_set]
+    leg1 = _standard_legend(ax, loc='upper left', handles=sim_h, labels=sim_l)
     ax.add_artist(leg1)
-    _standard_legend(ax, loc='lower right', handles=obs_handles, labels=obs_labels)
+    _standard_legend(ax, loc='lower right', handles=obs_h, labels=obs_l)
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
@@ -4406,20 +4450,17 @@ def plot_15_sfr_vs_stellar_mass(primary, vanilla):
     log_mass = np.log10(primary['StellarMass'][w])
     log_sfr = np.log10(sfr[w])
 
-    X, Y, Z = density_contour(log_mass, log_sfr,
-                               bins=[np.linspace(8.0, 12.0, 101),
-                                     np.linspace(-4.0, 2.0, 101)])
-
     # --- Plot ---
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
-    if Z.max() > 0:
-        levels = sigma_contour_levels(Z)
-        if levels is not None:
-            ax.contourf(X, Y, Z, levels=levels, cmap='Blues_r', alpha=0.6, zorder=8)
-            ax.contour(X, Y, Z, levels=levels, colors='steelblue',
-                       linestyles='-', alpha=1.0, linewidths=1.0)
+    mass_bins = np.arange(8.0, 12.0 + 0.1, 0.1)
+    plot_binned_median_1sigma(
+        ax, log_mass, log_sfr, mass_bins,
+        color='steelblue', label='SAGE26',
+        alpha=0.25, lw=3.5, min_count=50,
+        zorder_fill=2, zorder_line=3,
+    )
 
     # --- C16 (Vanilla) model ---
     sfr_v = vanilla['SfrDisk'] + vanilla['SfrBulge']
@@ -4427,12 +4468,12 @@ def plot_15_sfr_vs_stellar_mass(primary, vanilla):
     if np.any(w_v):
         log_mass_v = np.log10(vanilla['StellarMass'][w_v])
         log_sfr_v = np.log10(sfr_v[w_v])
-        if DILUTE and len(log_mass_v) > DILUTE:
-            idx_v = sample(range(len(log_mass_v)), DILUTE)
-            log_mass_v = log_mass_v[idx_v]
-            log_sfr_v = log_sfr_v[idx_v]
-        ax.scatter(log_mass_v, log_sfr_v, marker='x', s=50, c='purple', zorder=9,
-                   alpha=0.1, label='C16', rasterized=True)
+        plot_binned_median_1sigma(
+            ax, log_mass_v, log_sfr_v, mass_bins,
+            color='purple', label='SAGE16',
+            alpha=0.20, lw=3.0, min_count=50,
+            zorder_fill=4, zorder_line=5,
+        )
         
     # --- Load Brinchmann et al. (2004) data ---
     bz04_mass, bz04_sfr = load_brinchmann_sfr_mass_2004_data()
@@ -4477,20 +4518,15 @@ def plot_15_sfr_vs_stellar_mass(primary, vanilla):
     ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{*}}\ [M_{\odot}]$')
     ax.set_ylabel(r'$\log_{10}\ \mathrm{SFR}\ [M_{\odot}\,\mathrm{yr}^{-1}]$')
 
-    from matplotlib.patches import Patch
-    sim_handles = [Patch(facecolor='steelblue', alpha=0.6, label='SAGE26')]
-    sim_labels = ['SAGE26']
-    obs_handles, obs_labels = [], []
-    for h, l in zip(*ax.get_legend_handles_labels()):
-        if l == 'C16':
-            sim_handles.append(h)
-            sim_labels.append(l)
-        else:
-            obs_handles.append(h)
-            obs_labels.append(l)
-    leg1 = _standard_legend(ax, loc='lower right', handles=sim_handles, labels=sim_labels)
+    handles, labels = ax.get_legend_handles_labels()
+    sim_set = {'SAGE26', 'SAGE16'}
+    sim_h = [h for h, l in zip(handles, labels) if l in sim_set]
+    sim_l = [l for l in labels if l in sim_set]
+    obs_h = [h for h, l in zip(handles, labels) if l not in sim_set]
+    obs_l = [l for l in labels if l not in sim_set]
+    leg1 = _standard_legend(ax, loc='lower right', handles=sim_h, labels=sim_l)
     ax.add_artist(leg1)
-    _standard_legend(ax, loc='upper left', handles=obs_handles, labels=obs_labels)
+    _standard_legend(ax, loc='upper left', handles=obs_h, labels=obs_l)
     fig.tight_layout()
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
@@ -4538,7 +4574,7 @@ def plot_16_sfrd_history():
     # 2. Vanilla Model (C16)
     if os.path.exists(VANILLA_DIR):
         sim_dirs.append({
-            'path': VANILLA_DIR, 'label': 'C16',
+            'path': VANILLA_DIR, 'label': 'SAGE16',
             'color': 'firebrick', 'ls': '--', 'lw': 1.5,
             'redshifts': redshifts, 'first_snap': FirstSnap, 'last_snap': LastSnap,
             'volume': VOLUME,
@@ -4676,16 +4712,16 @@ def plot_16_sfrd_history():
                 'sfrd': np.log10(sfr_density[nonzero])
             }
 
-    # ===== QUANTITATIVE COMPARISON: SAGE26 vs C16 =====
-    if 'SAGE26 (Millennium)' in model_results and 'C16' in model_results:
+    # ===== QUANTITATIVE COMPARISON: SAGE26 vs SAGE16 =====
+    if 'SAGE26 (Millennium)' in model_results and 'SAGE16' in model_results:
         print("\n" + "="*60)
-        print("QUANTITATIVE COMPARISON: SAGE26 vs C16 (SFRD)")
+        print("QUANTITATIVE COMPARISON: SAGE26 vs SAGE16 (SFRD)")
         print("="*60)
 
         z_sage = model_results['SAGE26 (Millennium)']['z']
         sfrd_sage = model_results['SAGE26 (Millennium)']['sfrd']
-        z_c16 = model_results['C16']['z']
-        sfrd_c16 = model_results['C16']['sfrd']
+        z_c16 = model_results['SAGE16']['z']
+        sfrd_c16 = model_results['SAGE16']['sfrd']
 
         # Filter to plot range (z <= 7.5)
         z_mask = z_sage <= 7.5
@@ -4703,7 +4739,7 @@ def plot_16_sfrd_history():
         sfrd_diff = sfrd_c16_matched[valid] - sfrd_sage[valid]
 
         print(f"\n  Comparison over z = {z_valid.min():.1f} to {z_valid.max():.1f}")
-        print(f"  Mean difference (C16 - SAGE26):  {np.mean(sfrd_diff):+.3f} dex")
+        print(f"  Mean difference (SAGE16 - SAGE26):  {np.mean(sfrd_diff):+.3f} dex")
         print(f"  Median difference:               {np.median(sfrd_diff):+.3f} dex")
         print(f"  Std of difference:               {np.std(sfrd_diff):.3f} dex")
         print(f"  Max difference at z={z_valid[np.argmax(sfrd_diff)]:.1f}: {np.max(sfrd_diff):+.3f} dex ({10**np.max(sfrd_diff):.1f}x)")
@@ -4716,7 +4752,7 @@ def plot_16_sfrd_history():
                 sage_val = sfrd_sage[valid][idx]
                 c16_val = sfrd_c16_matched[valid][idx]
                 diff = c16_val - sage_val
-                print(f"    z~{z_valid[idx]:.1f}: C16={c16_val:.2f}, SAGE26={sage_val:.2f}, Δ={diff:+.2f} dex ({10**diff:.1f}x)")
+                print(f"    z~{z_valid[idx]:.1f}: SAGE16={c16_val:.2f}, SAGE26={sage_val:.2f}, Δ={diff:+.2f} dex ({10**diff:.1f}x)")
 
         print("="*60 + "\n")
 
@@ -4747,7 +4783,7 @@ def plot_16_sfrd_history():
     ax.set_xlim(0.0, 7.5)
     ax.set_ylim(-3.0, -0.5)
 
-    sim_names = {'SAGE26 (Millennium)', 'SAGE26 (miniUchuu)', 'C16'}
+    sim_names = {'SAGE26 (Millennium)', 'SAGE26 (miniUchuu)', 'SAGE16'}
     handles, labels = ax.get_legend_handles_labels()
     sim_h = [h for h, l in zip(handles, labels) if l in sim_names]
     sim_l = [l for l in labels if l in sim_names]
@@ -4796,7 +4832,7 @@ def plot_17_smd_history():
         })
     if os.path.exists(VANILLA_DIR):
         sim_dirs.append({
-            'path': VANILLA_DIR, 'label': 'C16', 'color': 'firebrick', 'ls': '--', 'lw': 2.0,
+            'path': VANILLA_DIR, 'label': 'SAGE16', 'color': 'firebrick', 'ls': '--', 'lw': 2.0,
             'redshifts': redshifts, 'first_snap': FirstSnap, 'last_snap': LastSnap,
             'volume': VOLUME, 'mass_convert': MASS_CONVERT,
         })
@@ -4956,7 +4992,7 @@ def plot_17_smd_history():
 
     fig.tight_layout()
 
-    sim_names = {'SAGE26 (Millennium)', 'SAGE26 (miniUchuu)', 'C16'}
+    sim_names = {'SAGE26 (Millennium)', 'SAGE26 (miniUchuu)', 'SAGE16'}
     handles, labels = ax.get_legend_handles_labels()
     sim_h = [h for h, l in zip(handles, labels) if l in sim_names]
     sim_l = [l for l in labels if l in sim_names]
@@ -5412,7 +5448,7 @@ def plot_18_smf_redshift_grid():
         })
     if os.path.exists(VANILLA_DIR):
         models.append({
-            'path': VANILLA_DIR, 'label': 'C16',
+            'path': VANILLA_DIR, 'label': 'SAGE16',
             'color': 'firebrick', 'ls': '--', 'lw': 2.5,
             'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
             'volume': VOLUME, 'mass_convert': MASS_CONVERT,
@@ -5580,7 +5616,7 @@ def plot_18b_smf_redshift_grid_wide():
         })
     if os.path.exists(VANILLA_DIR):
         models.append({
-            'path': VANILLA_DIR, 'label': 'C16',
+            'path': VANILLA_DIR, 'label': 'SAGE16',
             'color': 'firebrick', 'ls': '-', 'lw': 4.5,
             'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
             'volume': VOLUME, 'mass_convert': MASS_CONVERT,
@@ -6214,7 +6250,7 @@ def plot_20_smf_lowz_grid():
         })
     if os.path.exists(VANILLA_DIR):
         models.append({
-            'path': VANILLA_DIR, 'label': 'C16',
+            'path': VANILLA_DIR, 'label': 'SAGE16',
             'color': 'firebrick', 'ls': '--', 'lw': 2.5,
             'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
             'volume': VOLUME, 'mass_convert': MASS_CONVERT,
@@ -6326,10 +6362,10 @@ def plot_20_smf_lowz_grid():
 
     # Split legends: SAGE26 models lower left, observations upper right
     handles, labels = axes[0].get_legend_handles_labels()
-    sim_h = [h for h, l in zip(handles, labels) if l.startswith('SAGE26') or l == 'C16']
-    sim_l = [l for l in labels if l.startswith('SAGE26') or l == 'C16']
-    obs_h = [h for h, l in zip(handles, labels) if not (l.startswith('SAGE26') or l == 'C16')]
-    obs_l = [l for l in labels if not (l.startswith('SAGE26') or l == 'C16')]
+    sim_h = [h for h, l in zip(handles, labels) if l.startswith('SAGE26') or l == 'SAGE16']
+    sim_l = [l for l in labels if l.startswith('SAGE26') or l == 'SAGE16']
+    obs_h = [h for h, l in zip(handles, labels) if not (l.startswith('SAGE26') or l == 'SAGE16')]
+    obs_l = [l for l in labels if not (l.startswith('SAGE26') or l == 'SAGE16')]
     if sim_l:
         leg1 = axes[0].legend(sim_h, sim_l, loc='lower left', frameon=False)
         axes[0].add_artist(leg1)
@@ -6378,7 +6414,7 @@ def plot_21_smf_lowz_lowmass_grid():
         })
     if os.path.exists(VANILLA_DIR):
         models.append({
-            'path': VANILLA_DIR, 'label': 'C16',
+            'path': VANILLA_DIR, 'label': 'SAGE16',
             'color': 'firebrick', 'ls': '--', 'lw': 2.5,
             'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
             'volume': VOLUME, 'mass_convert': MASS_CONVERT,
@@ -6488,10 +6524,10 @@ def plot_21_smf_lowz_lowmass_grid():
 
     # Split legends: SAGE26 models lower left, observations lower right
     handles, labels = axes[0].get_legend_handles_labels()
-    sim_h = [h for h, l in zip(handles, labels) if l.startswith('SAGE26') or l == 'C16']
-    sim_l = [l for l in labels if l.startswith('SAGE26') or l == 'C16']
-    obs_h = [h for h, l in zip(handles, labels) if not (l.startswith('SAGE26') or l == 'C16')]
-    obs_l = [l for l in labels if not (l.startswith('SAGE26') or l == 'C16')]
+    sim_h = [h for h, l in zip(handles, labels) if l.startswith('SAGE26') or l == 'SAGE16']
+    sim_l = [l for l in labels if l.startswith('SAGE26') or l == 'SAGE16']
+    obs_h = [h for h, l in zip(handles, labels) if not (l.startswith('SAGE26') or l == 'SAGE16')]
+    obs_l = [l for l in labels if not (l.startswith('SAGE26') or l == 'SAGE16')]
     if sim_l:
         leg1 = axes[0].legend(sim_h, sim_l, loc='lower left', frameon=False)
         axes[0].add_artist(leg1)
@@ -6829,27 +6865,25 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
 
     # --- Primary model ---
     w = (primary['MassLoading'] > 0) & (primary['Vvir'] > 0)
-    log_vvir =primary['Vvir'][w]
-    log_massloading = primary['MassLoading'][w]
-
-    X, Y, Z = density_contour(log_vvir, log_massloading,
-                              bins=[np.linspace(0, 500, 101),
-                                    np.linspace(0, 30.0, 101)])
+    vvir = primary['Vvir'][w]
+    mass_loading = primary['MassLoading'][w]
 
     # --- Plot ---
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
-    if Z.max() > 0:
-        levels = sigma_contour_levels(Z)
-        if levels is not None:
-            ax.contourf(X, Y, Z, levels=levels, cmap='Blues_r', alpha=0.6)
-            ax.contour(X, Y, Z, levels=levels, colors='steelblue',
-                       linestyles='-', alpha=1.0, linewidths=1.5)
+    vvir_bins = np.linspace(0.0, 500.0, 51)
+    plot_binned_median_1sigma(
+        ax, vvir, mass_loading, vvir_bins,
+        color='steelblue', label='SAGE26',
+        alpha=0.25, lw=3.5, min_count=50,
+        zorder_fill=2, zorder_line=3,
+    )
 
     vvir_theory = np.logspace(1, 3, 100)  # 10 to 1000 km/s
     mass_loading_theory = calculate_muratov_mass_loading(vvir_theory, z=0.0)
-    ax.plot(vvir_theory, mass_loading_theory, color='k', lw=2.5, ls='--')
+    ax.plot(vvir_theory, mass_loading_theory, color='k', lw=2.5, ls='--',
+            label='Muratov+16 Theory')
 
     chisholm_ml = pd.read_csv('./data/Chisholm_17_ml.csv', header=None, delimiter='\t')
     chisholm_x = chisholm_ml[0]  # First column
@@ -6880,22 +6914,15 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
     ax.set_xlabel(r'$V_{\mathrm{vir}}\ [\mathrm{km/s}]$')
     ax.set_ylabel(r'$\eta_{\mathrm{reheat}}$')
 
-    from matplotlib.patches import Patch
-    from matplotlib.lines import Line2D
-    sim_handles = [Patch(facecolor='steelblue', alpha=0.6, label='SAGE26'),
-                   Line2D([0], [0], color='k', linestyle='--', label='Muratov+16 Theory')]
-    sim_labels = ['SAGE26', 'Muratov+16 Theory']
-    obs_handles, obs_labels = [], []
-    for h, l in zip(*ax.get_legend_handles_labels()):
-        if l == 'C16':
-            sim_handles.append(h)
-            sim_labels.append(l)
-        else:
-            obs_handles.append(h)
-            obs_labels.append(l)
-    leg1 = _standard_legend(ax, loc='upper right', handles=sim_handles, labels=sim_labels)
+    handles, labels = ax.get_legend_handles_labels()
+    sim_set = {'SAGE26', 'Muratov+16 Theory'}
+    sim_h = [h for h, l in zip(handles, labels) if l in sim_set]
+    sim_l = [l for l in labels if l in sim_set]
+    obs_h = [h for h, l in zip(handles, labels) if l not in sim_set]
+    obs_l = [l for l in labels if l not in sim_set]
+    leg1 = _standard_legend(ax, loc='upper right', handles=sim_h, labels=sim_l)
     ax.add_artist(leg1)
-    _standard_legend(ax, loc='center right', handles=obs_handles, labels=obs_labels)
+    _standard_legend(ax, loc='center right', handles=obs_h, labels=obs_l)
 
     ax.xaxis.set_major_locator(plt.MultipleLocator(100.0))
     ax.yaxis.set_major_locator(plt.MultipleLocator(2.0))
@@ -7473,6 +7500,156 @@ def plot_32_hi_mass_function():
     save_figure(fig, os.path.join(OUTPUT_DIR, 'HI_Mass_Function' + OUTPUT_FORMAT))
 
 
+# ========================== PLOT 33: H2 MASS FUNCTION ==========================
+
+def load_h2mf_observations():
+    """
+    Load H2 mass function observations from Fletcher+21.
+
+    Returns a list of dicts with 'label', 'mass', 'phi', 'phi_lo', 'phi_hi',
+    'marker', 'color'.
+    """
+    observations = []
+
+    # Fletcher et al. (2021) - Detected + Non-detected
+    path_det = os.path.join(OBS_DIR, 'H2MF_Fletcher21_DetNonDet.dat')
+    if os.path.exists(path_det):
+        try:
+            data = np.loadtxt(path_det, comments='#')
+            observations.append({
+                'label': 'Fletcher+21 (Det+NonDet)',
+                'mass': data[:, 0],
+                'phi': data[:, 1],
+                'phi_lo': data[:, 2],
+                'phi_hi': data[:, 3],
+                'marker': 's',
+                'color': 'k',
+            })
+        except Exception as e:
+            print(f"  Warning: could not load {path_det}: {e}")
+
+    # Fletcher et al. (2021) - Estimated
+    path_est = os.path.join(OBS_DIR, 'H2MF_Fletcher21_Estimated.dat')
+    if os.path.exists(path_est):
+        try:
+            data = np.loadtxt(path_est, comments='#')
+            observations.append({
+                'label': 'Fletcher+21 (Estimated)',
+                'mass': data[:, 0],
+                'phi': data[:, 1],
+                'phi_lo': data[:, 2],
+                'phi_hi': data[:, 3],
+                'marker': 'o',
+                'color': 'gray',
+            })
+        except Exception as e:
+            print(f"  Warning: could not load {path_est}: {e}")
+
+    return observations
+
+
+def plot_33_h2_mass_function():
+    """
+    H2 mass function at z=0 with bootstrap error shading.
+
+    Compares multiple H2 prescription models with observational data from
+    Fletcher+21 (xCOLD GASS).
+    """
+    print('Plot 33: H2 Mass Function')
+
+    binwidth = 0.2
+    N_BOOT = 100
+    MASS_CUT = 1e8  # Minimum H2 mass
+
+    # --- Plot ---
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    # Loop over all H2 models
+    for i, model in enumerate(_GAS_MODELS):
+        dirpath = model['dir']
+        if not model_files_exist(dirpath):
+            print(f"  Skipping {model['label']}: directory not found")
+            continue
+
+        # Load model data
+        data = load_model(dirpath, properties=['H2gas'])
+        h2gas = data['H2gas']
+
+        # Select galaxies with H2 mass > cut
+        valid = h2gas > MASS_CUT
+        log_mh2 = np.log10(h2gas[valid])
+
+        print(f"  {model['label']}: {np.sum(valid):,} galaxies with H2gas > {MASS_CUT:.0e}")
+
+        # Compute mass function with bootstrap errors
+        centers, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
+            log_mh2, VOLUME, binwidth=binwidth, n_boot=N_BOOT
+        )
+
+        # Model line with bootstrap shading
+        good = np.isfinite(phi)
+        lw = 3.5 if i == 0 else 2.0
+        ax.plot(centers[good], phi[good], color=model['color'], lw=lw,
+                label=model['label'], zorder=10 - i)
+        ax.fill_between(centers[good], phi_lo[good], phi_hi[good],
+                        color=model['color'], alpha=0.2, edgecolor='none', zorder=9 - i)
+
+    # Load and plot observations
+    obs_list = load_h2mf_observations()
+    for obs in obs_list:
+        mass = obs['mass']
+        phi_obs = obs['phi']
+
+        obs_mask = mass >= 8.0
+
+        # Fletcher+21 uses absolute phi bounds
+        phi_lo_obs = obs['phi_lo'][obs_mask]
+        phi_hi_obs = obs['phi_hi'][obs_mask]
+        yerr_lo = phi_obs[obs_mask] - phi_lo_obs
+        yerr_hi = phi_hi_obs - phi_obs[obs_mask]
+        ax.errorbar(mass[obs_mask], phi_obs[obs_mask], yerr=[yerr_lo, yerr_hi],
+                    fmt=obs['marker'], color=obs['color'],
+                    markerfacecolor='lightgray' if obs['color'] == 'gray' else 'white',
+                    markeredgecolor=obs['color'] if obs['color'] != 'gray' else 'k',
+                    markeredgewidth=1.0,
+                    ms=7, lw=1.0, capsize=2, alpha=0.8,
+                    label=obs['label'], zorder=8)
+
+    # Axis settings
+    ax.set_xlim(8.0, 11.0)
+    ax.set_ylim(-5.5, -0.5)
+    ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
+    ax.yaxis.set_major_locator(plt.MultipleLocator(1.0))
+    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
+    ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
+
+    ax.set_xlabel(r'$\log_{10}\ M_{\mathrm{H_2}}\ [M_{\odot}]$')
+    ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
+
+    # Separate legends: models below x-axis, observations in plot
+    handles, labels = ax.get_legend_handles_labels()
+    model_labels = [m['label'] for m in _GAS_MODELS]
+    model_h = [h for h, l in zip(handles, labels) if l in model_labels]
+    model_l = [l for l in labels if l in model_labels]
+    obs_h = [h for h, l in zip(handles, labels) if l not in model_labels]
+    obs_l = [l for l in labels if l not in model_labels]
+
+    # Model legend below x-axis
+    ax.legend(model_h, model_l, loc='upper center',
+              bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=False)
+
+    # Observation legend inside plot
+    if obs_h:
+        obs_leg = ax.legend(obs_h, obs_l, loc='lower left', frameon=False)
+        ax.add_artist(obs_leg)
+        ax.legend(model_h, model_l, loc='upper center',
+                  bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=False)
+
+    fig.subplots_adjust(bottom=0.22)
+    save_figure(fig, os.path.join(OUTPUT_DIR, 'H2_Mass_Function' + OUTPUT_FORMAT))
+
+
 # ========================== MAIN ==========================
 
 # Registry of plot functions
@@ -7525,6 +7702,7 @@ STANDALONE_PLOTS = {
     28: plot_28_mdot_vs_mvir,
     29: plot_29_mdot_vs_vvir,
     32: plot_32_hi_mass_function,
+    33: plot_33_h2_mass_function,
 }
 
 ALL_PLOTS = {**Z0_PLOTS, **EVOLUTION_PLOTS, **STANDALONE_PLOTS}
