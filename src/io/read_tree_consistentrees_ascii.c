@@ -328,8 +328,36 @@ int64_t load_forest_ctrees(const int32_t forestnr, struct halo_data **halos, str
     const int64_t ntrees = ctr->ntrees_per_forest[forestnr];
     const int64_t start_treenum = ctr->start_treenum_per_forest[forestnr];
 
-    const int64_t default_nhalos_per_tree = 1000;/* allocate for a 100k halos per tree by default */
-    int64_t nhalos_allocated = default_nhalos_per_tree * ntrees;
+    const int64_t default_nhalos_per_tree = 1000;
+    XRETURN(ntrees > 0, -EXIT_FAILURE, "Error: ntrees = %"PRId64" should be > 0 for forestnr = %d\n", ntrees, forestnr);
+
+    /* The CTrees ASCII reader historically pre-allocates (default_nhalos_per_tree * ntrees).
+       For very large forests this can explode to multi-TB and fail immediately.
+       Cap the initial allocation to keep memory bounded; parsing will grow buffers via realloc if needed. */
+    const size_t bytes_per_halo = sizeof(struct halo_data) + sizeof(struct additional_info);
+    const size_t cap_bytes = (size_t)4ULL * 1024ULL * 1024ULL * 1024ULL; /* 4 GiB cap for initial allocation */
+    int64_t cap_nhalos = (bytes_per_halo > 0) ? (int64_t)(cap_bytes / bytes_per_halo) : 1;
+    if(cap_nhalos < 1) cap_nhalos = 1;
+
+    /* safe multiply in int128 to avoid overflow */
+    const __int128 est_nhalos_128 = (__int128)default_nhalos_per_tree * (__int128)ntrees;
+    XRETURN(est_nhalos_128 > 0 && est_nhalos_128 <= (__int128)INT64_MAX,
+            -EXIT_FAILURE,
+            "Error: estimated nhalos (= default_nhalos_per_tree * ntrees) overflowed int64_t for forestnr=%d: default_nhalos_per_tree=%"PRId64" ntrees=%"PRId64"\n",
+            forestnr, default_nhalos_per_tree, ntrees);
+    int64_t nhalos_allocated = (int64_t)est_nhalos_128;
+
+    if(nhalos_allocated > cap_nhalos) {
+        const int64_t global_forestnr = (forests_info->original_treenr != NULL) ? forests_info->original_treenr[forestnr] : -1;
+        const int32_t first_file_for_forest = (forests_info->FileNr != NULL) ? forests_info->FileNr[forestnr] : -1;
+        const long double est_gib = ((long double)nhalos_allocated * (long double)bytes_per_halo) / (1024.0L * 1024.0L * 1024.0L);
+        const long double cap_gib = ((long double)cap_nhalos * (long double)bytes_per_halo) / (1024.0L * 1024.0L * 1024.0L);
+        fprintf(stderr,
+                "Warning: Task %d forestnr=%d (global=%"PRId64", first_file=%d): ntrees=%"PRId64" -> initial nhalos_est=%"PRId64" (%.2Lf GiB) exceeds cap; capping initial allocation to %"PRId64" halos (%.2Lf GiB).\n",
+                run_params->ThisTask, forestnr, global_forestnr, first_file_for_forest,
+                ntrees, nhalos_allocated, est_gib, cap_nhalos, cap_gib);
+        nhalos_allocated = cap_nhalos;
+    }
 
     *halos = mymalloc(nhalos_allocated * sizeof(struct halo_data));
     XRETURN( *halos != NULL, -MALLOC_FAILURE, "Error: Could not allocate memory to store halos\n"

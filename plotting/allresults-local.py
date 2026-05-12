@@ -130,7 +130,7 @@ Examples:
     )
 
     parser.add_argument('input_pattern', nargs='?',
-                        default='./output/microuchuu/model_*.hdf5',
+                        default='./output/millennium/model_*.hdf5',
                         help='Path pattern to model HDF5 files (default: ./output/millennium/model_*.hdf5)')
 
     parser.add_argument('-s', '--snapshot', type=int, default=None,
