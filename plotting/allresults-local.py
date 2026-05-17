@@ -430,11 +430,15 @@ if __name__ == '__main__':
     (counts_centrals, binedges_centrals) = np.histogram(centrals_mass, range=(mi, ma), bins=NB)
     xaxeshisto_centrals = binedges_centrals[:-1] + 0.5 * binwidth  # Set the x-axis values to be the centre of the bins
 
-    mi = np.floor(min(satellites_mass)) - 2
-    ma = np.floor(max(satellites_mass)) + 2
-    NB = int((ma - mi) / binwidth)
-    (counts_satellites, binedges_satellites) = np.histogram(satellites_mass, range=(mi, ma), bins=NB)
-    xaxeshisto_satellites = binedges_satellites[:-1] + 0.5 * binwidth  # Set the x-axis values to be the centre of the bins
+    if len(satellites_mass) > 0:
+        mi = np.floor(min(satellites_mass)) - 2
+        ma = np.floor(max(satellites_mass)) + 2
+        NB = int((ma - mi) / binwidth)
+        (counts_satellites, binedges_satellites) = np.histogram(satellites_mass, range=(mi, ma), bins=NB)
+        xaxeshisto_satellites = binedges_satellites[:-1] + 0.5 * binwidth  # Set the x-axis values to be the centre of the bins
+    else:
+        counts_satellites = np.array([])
+        xaxeshisto_satellites = np.array([])
 
     # Bell et al. 2003 BMF (h=1.0 converted to h=0.73)
     M = np.arange(7.0, 13.0, 0.01)
@@ -454,7 +458,8 @@ if __name__ == '__main__':
     # Overplot the model histograms
     plt.plot(xaxeshisto, counts / volume / binwidth, 'k-', label='Model')
     plt.plot(xaxeshisto_centrals, counts_centrals / volume / binwidth, 'b:', lw=2, label='Model - Centrals')
-    plt.plot(xaxeshisto_satellites, counts_satellites / volume / binwidth, 'g--', lw=1.5, label='Model - Satellites')
+    if len(counts_satellites) > 0:
+        plt.plot(xaxeshisto_satellites, counts_satellites / volume / binwidth, 'g--', lw=1.5, label='Model - Satellites')
 
     plt.yscale('log')
     plt.axis([8.0, 12.2, 1.0e-6, 1.0e-1])

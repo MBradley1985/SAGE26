@@ -575,35 +575,12 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // ========================================================================
 
     const double precipitation_threshold = 10;  // default=10, McCourt et al. 2012
-    const double transition_width = 2.0;  // Smooth transition over factor ~2
+    const double delta_width = 2.0;  // transition width around threshold
 
-    double precipitation_fraction = 0.0;
-
-    if(tcool_over_tff_char < precipitation_threshold) {
-        // UNSTABLE: Precipitation cooling
-        double instability_factor = precipitation_threshold / tcool_over_tff_char;
-        instability_factor = fmin(instability_factor, 3.0);
-        precipitation_fraction = tanh(instability_factor / 2.0);
-
-    } else if(tcool_over_tff_char < precipitation_threshold + transition_width) {
-        // TRANSITION: Smoothly reduce precipitation_fraction to zero
-        const double x = (tcool_over_tff_char - precipitation_threshold) / transition_width;
-        precipitation_fraction = 0.5 * (1.0 - tanh(x));
-
-    } else {
-        if(tcool_char > 0) {
-        // Cooling rate: dM/dt = M_CGM / t_cool
-        coolingGas = galaxies[gal].CGMgas / tcool_char * dt;
-
-        // Safety check
-        if(coolingGas > galaxies[gal].CGMgas) {
-            coolingGas = galaxies[gal].CGMgas;
-        }
-    } else {
-        coolingGas = 0.0;
-        }
-
-    }
+    // Sigmoid S(x) = (1 + e^-x)^-1, centred on the threshold.
+    // Smoothly captures stable (S→0), transition, and unstable (S→1) regimes.
+    const double x_sig = (precipitation_threshold - tcool_over_tff_char) / delta_width;
+    const double precipitation_fraction = 1.0 / (1.0 + exp(-x_sig));
 
     // ========================================================================
     // STEP 4: CALCULATE PRECIPITATION RATE

@@ -24,8 +24,8 @@ OutputFormat      sage_hdf5 % sets the desired output format. Either 'sage_binar
 %----- Simulation information  ------------
 %------------------------------------------
 
-TreeName              trees_STC   % assumes the trees are named TreeName.n where n is the file number
-TreeType              lhalo_hdf5 % 'genesis_lhalo_hdf5', 'lhalo_binary', 'consistentrees_ascii', 'consistentrees_hdf5', 'lhalo_ascii', 'lhalo_hdf5' 
+TreeName              trees_063   % assumes the trees are named TreeName.n where n is the file number
+TreeType              lhalo_binary % 'genesis_lhalo_hdf5', 'lhalo_binary', 'consistentrees_ascii', 'consistentrees_hdf5', 'lhalo_ascii', 'lhalo_hdf5' 
 NumSimulationTreeFiles 8 % Number of files the trees are split over. This can be different to `FirstFile` -> `LastFile` range.
 
 %SimulationDir      /<absolute>/<root>/<path>/sage-home/sage-model/input/millennium/trees/
@@ -38,7 +38,7 @@ Omega           0.25
 OmegaLambda     0.75
 BaryonFrac      0.17
 Hubble_h        0.73
-PartMass        0.0860657
+PartMass        0.086
 BoxSize         62.5 % Size of the simulation box in Mpc/h.
 
 %------------------------------------------
@@ -85,7 +85,7 @@ BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during
 
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
 ThresholdSatDisruption      1.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption
-FractionDisruptedToICS      0.8     %fraction of disrupted satellite stellar mass to ICS (rest goes to BCG); 1.0 = original behavior
+FractionDisruptedToICS      1.0     %fraction of disrupted satellite stellar mass to ICS (rest goes to BCG); 1.0 = original behavior
 
 DisruptionSplitAlpha        0.25    %Base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
 DisruptionSplitCref         10.0    %Reference concentration for concentration weighting (DynamicDisruptionSplit=2)

@@ -7123,6 +7123,27 @@ def plot_18b_smf_redshift_grid_wide():
             'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
             'volume': VOLUME, 'mass_convert': MASS_CONVERT,
         })
+    if os.path.exists(NOFFB_DIR):
+        models.append({
+            'path': NOFFB_DIR, 'label': 'SAGE26 (no FFBs)',
+            'color': 'darkorange', 'ls': ':', 'lw': 2.5,
+            'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+            'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+        })
+    # if os.path.exists(C16_FEEDBACK_DIR):
+    #     models.append({
+    #         'path': C16_FEEDBACK_DIR, 'label': 'SAGE26 (no FIRE)',
+    #         'color': 'purple', 'ls': '-.', 'lw': 2.5,
+    #         'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+    #         'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+    #     })
+    # if os.path.exists(NOCGM_DIR):
+    #     models.append({
+    #         'path': NOCGM_DIR, 'label': 'SAGE26 (no CGM)',
+    #         'color': 'seagreen', 'ls': ':', 'lw': 2.5,
+    #         'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+    #         'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+    #     })
 
     # Load observational data
     all_obs = _load_smf_grid_observations()
@@ -7316,6 +7337,13 @@ def plot_19_smf_ffb_grid():
             'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
             'volume': VOLUME, 'mass_convert': MASS_CONVERT,
         })
+    if os.path.exists(VANILLA_DIR):
+        models.append({
+            'path': VANILLA_DIR, 'label': 'SAGE16',
+            'color': 'firebrick', 'ls': '--', 'lw': 3.0,
+            'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+            'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+        })
     # Load observational data
     all_obs = _load_smf_grid_observations()
     labels_used = set()
@@ -7482,6 +7510,13 @@ def plot_19c_smf_ffb_grid_mbk25():
         models.append({
             'path': FFB_BK25_FFB100_DIR, 'label': r'$\alpha_{\rm FFB}=1.0$ (MBK25)',
             'color': 'magenta', 'ls': '--', 'lw': 3.0,
+            'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+            'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+        })
+    if os.path.exists(VANILLA_DIR):
+        models.append({
+            'path': VANILLA_DIR, 'label': 'SAGE16',
+            'color': 'firebrick', 'ls': '--', 'lw': 3.0,
             'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
             'volume': VOLUME, 'mass_convert': MASS_CONVERT,
         })
@@ -9212,60 +9247,60 @@ def plot_33_h2_mass_function():
 # Registry of plot functions
 # z=0 plots take (primary, vanilla); evolution plots take (snapdata)
 Z0_PLOTS = {
-    # 31: plot_1_stellar_mass_function_ssfr_s,
-    # 30: plot_1_stellar_mass_function_ssfr_q,
-    # 2: plot_2_baryon_fraction,
-    # 3: plot_3_gas_metallicity_vs_stellar_mass,
-    # 4: plot_4_bh_bulge_mass,
-    # 5: plot_5_stellar_halo_mass,
-    # 6: plot_6_bulge_mass_size,
-    # 15: plot_15_sfr_vs_stellar_mass,
-    # 24: plot_24_mass_loading_vs_velocity,
+    31: plot_1_stellar_mass_function_ssfr_s,
+    30: plot_1_stellar_mass_function_ssfr_q,
+    2: plot_2_baryon_fraction,
+    3: plot_3_gas_metallicity_vs_stellar_mass,
+    4: plot_4_bh_bulge_mass,
+    5: plot_5_stellar_halo_mass,
+    6: plot_6_bulge_mass_size,
+    15: plot_15_sfr_vs_stellar_mass,
+    24: plot_24_mass_loading_vs_velocity,
 }
 
 EVOLUTION_PLOTS = {
-    # 7: plot_7_tcool_tff_distribution,
-    # 8: plot_8_precipitation_fraction,
-    # 9: plot_9_cgm_fractions_depletion,
-    # 91: plot_9b_cgm_fractions_grid,
-    # 92: plot_9c_depletion_grid,
+    7: plot_7_tcool_tff_distribution,
+    8: plot_8_precipitation_fraction,
+    9: plot_9_cgm_fractions_depletion,
+    91: plot_9b_cgm_fractions_grid,
+    92: plot_9c_depletion_grid,
     10: plot_10_sfe_ffb,
-    # 11: plot_11_ffb_properties,
+    11: plot_11_ffb_properties,
     111: plot_11b_ffb_histograms,
     112: plot_11c_ffb_histograms_mbk25,
     113: plot_11d_ffb_histograms_combined,
     12: plot_12_sfh_ffb,
-    # 121: plot_12b_ffb_regime_history,
-    # 122: plot_12c_ffb_regime_heatmap,
+    121: plot_12b_ffb_regime_history,
+    122: plot_12c_ffb_regime_heatmap,
     123: plot_12d_sfh_ffb_transitions,
     124: plot_12e_sfh_ffb_transitions_mbk25,
-    # 13: plot_13_ffb_vs_redshift,
+    13: plot_13_ffb_vs_redshift,
 }
 
 # Standalone plots (load their own data)
 STANDALONE_PLOTS = {
-    # 14: plot_14_density_evolution,
+    14: plot_14_density_evolution,
     142: plot_14c_density_evolution_mbk25,
-    # 141: plot_14b_density_evolution_methods,
-    # 16: plot_16_sfrd_history,
-    # 17: plot_17_smd_history,
+    141: plot_14b_density_evolution_methods,
+    16: plot_16_sfrd_history,
+    17: plot_17_smd_history,
     18: plot_18_smf_redshift_grid,
     181: plot_18b_smf_redshift_grid_wide,
-    # 19: plot_19_smf_ffb_grid,
+    19: plot_19_smf_ffb_grid,
     192: plot_19c_smf_ffb_grid_mbk25,
-    # 191: plot_19b_smf_ffb_methods_grid,
-    # 20: plot_20_smf_lowz_grid,
-    # 21: plot_21_smf_lowz_lowmass_grid,
-    # 22: plot_22_regime_histogram,
-    # 23: plot_23_ffb_histogram,
-    # 231: plot_23b_ffb_histogram_bk25,
-    # 25: plot_25_hi_mass_ratio,
-    # 26: plot_26_h2_mass_ratio,
-    # 27: plot_27_cold_gas_mass_ratio,
-    # 28: plot_28_mdot_vs_mvir,
-    # 29: plot_29_mdot_vs_vvir,
-    # 32: plot_32_hi_mass_function,
-    # 33: plot_33_h2_mass_function,
+    191: plot_19b_smf_ffb_methods_grid,
+    20: plot_20_smf_lowz_grid,
+    21: plot_21_smf_lowz_lowmass_grid,
+    22: plot_22_regime_histogram,
+    23: plot_23_ffb_histogram,
+    231: plot_23b_ffb_histogram_bk25,
+    25: plot_25_hi_mass_ratio,
+    26: plot_26_h2_mass_ratio,
+    27: plot_27_cold_gas_mass_ratio,
+    28: plot_28_mdot_vs_mvir,
+    29: plot_29_mdot_vs_vvir,
+    32: plot_32_hi_mass_function,
+    33: plot_33_h2_mass_function,
 }
 
 ALL_PLOTS = {**Z0_PLOTS, **EVOLUTION_PLOTS, **STANDALONE_PLOTS}
