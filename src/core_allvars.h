@@ -466,7 +466,8 @@ struct params
     int32_t    ReionizationOn;
     int32_t    DiskInstabilityOn;
     int32_t    CGMrecipeOn;
-    int32_t    CGMDensityProfile;  // 0: uniform, 1: NFW, 2: beta-profile
+    int32_t    CGMDensityProfile;    // 0: uniform, 1: NFW, 2: beta-profile
+    int32_t    CGMPrecipRadiusMode;  // 0: r_cool, 1: 0.1*R_vir
     int32_t    FIREmodeOn;
     int32_t    CGMrecipeSAGEOn;
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation

@@ -853,24 +853,15 @@ def cosmic_time_gyr(z):
 
 
 def precipitation_fraction(tcool_over_tff):
-    """Calculate precipitation fraction from the SAGE26 model."""
-    threshold = 10.0
-    width = 2.0
+    """Calculate precipitation fraction from the SAGE26 model.
 
-    x = np.atleast_1d(np.array(tcool_over_tff, dtype=float))
-    f = np.zeros_like(x)
-
-    # Unstable regime
-    mask_unstable = x < threshold
-    inst = np.minimum(threshold / x[mask_unstable], 3.0)
-    f[mask_unstable] = np.tanh(inst / 2.0)
-
-    # Transition regime
-    mask_trans = (x >= threshold) & (x < threshold + width)
-    xi = (x[mask_trans] - threshold) / width
-    f[mask_trans] = 0.5 * (1.0 - np.tanh(xi))
-
-    return f.squeeze()
+    Sigmoid S(x) = (1 + e^-x)^-1 centred on threshold=10, width=2.
+    """
+    threshold   = 10.0
+    delta_width = 2.0
+    ratio = np.atleast_1d(np.array(tcool_over_tff, dtype=float))
+    x_sig = (threshold - ratio) / delta_width
+    return (1.0 / (1.0 + np.exp(-x_sig))).squeeze()
 
 
 def ffb_threshold_mass_msun(z):
