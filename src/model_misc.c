@@ -711,9 +711,10 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
 {
     // Pre-compute g_crit in code units for BK25 modes (constant, doesn't depend on galaxy)
     // g_crit/G = 3100 M_sun/pc^2 (Boylan-Kolchin 2025, Table 1)
+    // Modes 2, 3, 5 use the BK25 surface-gravity threshold; modes 1 and 4 use the Li+24 sigmoid.
     double g_crit = 0.0;
     if(run_params->FeedbackFreeModeOn == 2 || run_params->FeedbackFreeModeOn == 3 ||
-       run_params->FeedbackFreeModeOn == 4 || run_params->FeedbackFreeModeOn == 7) {
+       run_params->FeedbackFreeModeOn == 5) {
         const double Msun_code = SOLAR_MASS / run_params->UnitMass_in_g;
         const double pc_code = 3.08568e18 / run_params->UnitLength_in_cm;
         g_crit = run_params->G * 3100.0 * Msun_code / (pc_code * pc_code) / run_params->Hubble_h;
@@ -777,6 +778,49 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
 
             if(run_params->FFBConcSigma > 0.0) {
                 // FFBPersistentRandom: 1 = fixed halo quantile; 0 = fresh draw each snapshot
+                double u = (run_params->FFBPersistentRandom)
+                    ? (double)galaxies[p].FFBRandom
+                    : (double)rand() / (double)RAND_MAX;
+                if(u < 1.0e-6) u = 1.0e-6;
+                if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
+                const double z_normal = inverse_normal_cdf(u);
+                c = c * exp(run_params->FFBConcSigma * z_normal);
+                if(c < 1.0) c = 1.0;
+            }
+
+            const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
+            const double mu_c = log(1.0 + c) - c / (1.0 + c);
+            const double g_max = (g_vir / mu_c) * (c * c / 2.0);
+
+            galaxies[p].g_max = (float)g_max;
+            galaxies[p].FFBRegime = (g_max > g_crit) ? 1 : 0;
+
+        } else if (run_params->FeedbackFreeModeOn == 4) {
+            // ---- Li+24 sigmoid + H2 star formation ----
+            // Classification identical to mode 1; star formation uses H2 (routed in sf&fb).
+            const double f_ffb = calculate_ffb_fraction(galaxies[p].Mvir, Zcurr, run_params);
+            const double random_uniform = (run_params->FFBPersistentRandom)
+                ? (double)galaxies[p].FFBRandom
+                : (double)rand() / (double)RAND_MAX;
+            galaxies[p].FFBRegime = (random_uniform < f_ffb) ? 1 : 0;
+
+        } else if (run_params->FeedbackFreeModeOn == 5) {
+            // ---- Boylan-Kolchin 2025 + log-normal concentration scatter + H2 star formation ----
+            // Classification identical to mode 3; star formation uses H2 (routed in sf&fb).
+            const double Mvir = galaxies[p].Mvir;
+            const double Rvir = galaxies[p].Rvir;
+
+            if(Mvir <= 0.0 || Rvir <= 0.0) {
+                galaxies[p].FFBRegime = 0;
+                galaxies[p].g_max = 0.0f;
+                continue;
+            }
+
+            const double logM = log10(Mvir * 1.0e10);
+            double c = interpolate_concentration_ishiyama21(logM, Zcurr, run_params);
+            if(c < 1.0) c = 1.0;
+
+            if(run_params->FFBConcSigma > 0.0) {
                 double u = (run_params->FFBPersistentRandom)
                     ? (double)galaxies[p].FFBRandom
                     : (double)rand() / (double)RAND_MAX;

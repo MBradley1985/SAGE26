@@ -16,6 +16,9 @@ extern "C" {
     extern void starformation_ffb(const int p, const int centralgal, const double dt, const int step,
                                   struct GALAXY *galaxies, const struct params *run_params);
 
+    extern void starformation_ffb_h2(const int p, const int centralgal, const double dt, const int step,
+                                     struct GALAXY *galaxies, const struct params *run_params);
+
 #ifdef __cplusplus
 }
 #endif

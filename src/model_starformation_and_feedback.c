@@ -24,10 +24,12 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // CHECK FOR FFB REGIME - EARLY EXIT IF FFB
     // ========================================================================
     if(run_params->FeedbackFreeModeOn >= 1 && galaxies[p].FFBRegime == 1) {
-        // This is a Feedback-Free Burst halo
-        // Use specialized FFB star formation (no feedback)
-        starformation_ffb(p, centralgal, dt, step, galaxies, run_params);
-        return;  // Exit early - FFB path complete
+        if(run_params->FeedbackFreeModeOn == 4 || run_params->FeedbackFreeModeOn == 5) {
+            starformation_ffb_h2(p, centralgal, dt, step, galaxies, run_params);
+        } else {
+            starformation_ffb(p, centralgal, dt, step, galaxies, run_params);
+        }
+        return;
     }
 
     double reff, tdyn, strdot, stars, ejected_mass, metallicity, total_molecular_gas;
@@ -954,67 +956,58 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
     }
 }
 
-void starformation_ffb(const int p, const int centralgal, const double dt, const int step,
-                       struct GALAXY *galaxies, const struct params *run_params)
+// Internal implementation shared by starformation_ffb and starformation_ffb_h2.
+// use_h2 == 0: burst driven by all cold gas (modes 1,2,3).
+// use_h2 == 1: burst driven by molecular gas only (modes 4,7); H2 is computed
+//              via the BR06 radial-integration prescription before forming stars.
+static void starformation_ffb_impl(const int p, const int centralgal, const double dt,
+                                   const int step, struct GALAXY *galaxies,
+                                   const struct params *run_params, const int use_h2)
 {
-    // ========================================================================
-    // FEEDBACK-FREE BURST (FFB) STAR FORMATION
-    // Implementation of Li et al. 2024 - Equation (4) (modified to be Kauffmann-like)
-    // ========================================================================
-    
     double reff, tdyn, strdot, stars, metallicity;
-    
-    // Calculate dynamical time
+
     reff = 3.0 * galaxies[p].DiskScaleRadius;
     tdyn = (reff > 0.0 && galaxies[p].Vvir > 0.0) ? reff / galaxies[p].Vvir : 0.0;
-    
-    // Safety checks for NaN in inputs
+
+    // For H2 mode: compute molecular gas via radial BR06 integration.
+    // For cold-gas mode: just set H2=0, H1=full cold gas (unchanged behaviour).
+    double gas_mass;
+    if(use_h2) {
+        calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
+        if(galaxies[p].H2gas > galaxies[p].ColdGas) galaxies[p].H2gas = galaxies[p].ColdGas;
+        if(galaxies[p].H2gas < 0.0)                 galaxies[p].H2gas = 0.0;
+        galaxies[p].H1gas = (galaxies[p].ColdGas - galaxies[p].H2gas) * HYDROGEN_MASS_FRAC;
+        gas_mass = galaxies[p].H2gas;
+    } else {
+        galaxies[p].H2gas = 0.0;
+        galaxies[p].H1gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+        gas_mass = galaxies[p].ColdGas;
+    }
+
     if(isnan(galaxies[p].ColdGas) || isinf(galaxies[p].ColdGas) ||
-       isnan(galaxies[p].Vvir) || isinf(galaxies[p].Vvir) ||
+       isnan(galaxies[p].Vvir)    || isinf(galaxies[p].Vvir)    ||
        isnan(reff) || isinf(reff) || isnan(tdyn) || isinf(tdyn)) {
         stars = 0.0;
-    } else if(tdyn > 0.0 && galaxies[p].ColdGas > 0.0) {
-        // Equation (4): SFR = ε_FFB × M_gas / t_dyn
-        // Use maximum FFB efficiency (typically 0.2, can be up to 1.0)
+    } else if(tdyn > 0.0 && gas_mass > 0.0) {
         const double epsilon_ffb = run_params->FFBMaxEfficiency;
-        const double cold_crit = 0.19 * galaxies[p].Vvir * reff;
-        
-        // Safety check on cold_crit
+        const double cold_crit   = 0.19 * galaxies[p].Vvir * reff;
+
         if(isnan(cold_crit) || isinf(cold_crit) || cold_crit < 0.0) {
             stars = 0.0;
-        } else if(galaxies[p].ColdGas > 0.0) {
-            // Only form stars if above critical density
-            strdot = epsilon_ffb * (galaxies[p].ColdGas) / tdyn;
-            
-            // Safety check on strdot
+        } else {
+            strdot = epsilon_ffb * gas_mass / tdyn;
+
             if(isnan(strdot) || isinf(strdot) || strdot < 0.0) {
                 stars = 0.0;
             } else {
                 stars = strdot * dt;
-                
-                // Can't form more stars than gas available
-                if(stars > galaxies[p].ColdGas) {
-                    stars = galaxies[p].ColdGas;
-                }
-                
-                // Final safety check
-                if(isnan(stars) || isinf(stars) || stars < 0.0) {
-                    stars = 0.0;
-                }
+                if(stars > galaxies[p].ColdGas) stars = galaxies[p].ColdGas;
+                if(isnan(stars) || isinf(stars) || stars < 0.0) stars = 0.0;
             }
-        } else {
-            // Below critical density - no star formation
-            stars = 0.0;
         }
     } else {
         stars = 0.0;
     }
-
-
-    // FFB SFR uses ColdGas directly — H2 is not consumed here.
-    // H2=0, H1=all hydrogen; merger starburst will use ColdGas for FFB galaxies.
-    galaxies[p].H2gas = 0.0;
-    galaxies[p].H1gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
 
     // Update star formation rate tracking
     galaxies[p].SfrDisk[step] += stars / dt;
@@ -1465,4 +1458,16 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     // NO DISK INSTABILITY CHECK
     // Rapid star formation stabilizes the disk
     // ========================================================================
+}
+
+void starformation_ffb(const int p, const int centralgal, const double dt, const int step,
+                       struct GALAXY *galaxies, const struct params *run_params)
+{
+    starformation_ffb_impl(p, centralgal, dt, step, galaxies, run_params, 0);
+}
+
+void starformation_ffb_h2(const int p, const int centralgal, const double dt, const int step,
+                          struct GALAXY *galaxies, const struct params *run_params)
+{
+    starformation_ffb_impl(p, centralgal, dt, step, galaxies, run_params, 1);
 }
