@@ -95,7 +95,6 @@ struct GALAXY
     int32_t   Type;
     int32_t   Regime;
     int32_t   FFBRegime;
-    float     FFBRandom;  // Persistent random number for sigmoid-based FFB determination
 
     int32_t   GalaxyNr;
     int32_t   CentralGal;
@@ -122,7 +121,6 @@ struct GALAXY
     float Rvir;
     float Vvir;
     float Vmax;
-    float Concentration;
 
     /* baryonic reservoirs */
     float ColdGas;
@@ -158,8 +156,6 @@ struct GALAXY
     float SFHMassBulge[ABSOLUTEMAXSNAPS];  /* stellar mass formed in bulge (starbursts) at each snapshot */
     float ICS_disrupt;                     /* cumulative stellar mass disrupted to ICS (assembly tracking) */
     float ICS_accrete;                     /* cumulative ICS accreted from satellites (assembly tracking) */
-    float ICS_sum_mt;                      /* mass-weighted accumulator: sum of m*t (code time) at ICS deposition.
-                                              Mean ICS-assembly lookback = ICS_sum_mt / (ICS_disrupt + ICS_accrete). */
 
     /* misc */
     float DiskScaleRadius;
@@ -179,7 +175,6 @@ struct GALAXY
     float infallMvir;
     float infallVvir;
     float infallVmax;
-    float infallStellarMass;
     float TimeOfInfall;
 
     float MassLoading;
@@ -198,8 +193,6 @@ struct GALAXY
 
     float mdot_cool;
     float mdot_stream;
-
-    double g_max;
 };
 
 
@@ -466,12 +459,9 @@ struct params
     int32_t    ReionizationOn;
     int32_t    DiskInstabilityOn;
     int32_t    CGMrecipeOn;
-    int32_t    CGMDensityProfile;    // 0: uniform, 1: NFW, 2: beta-profile
-    int32_t    CGMPrecipRadiusMode;  // 0: r_cool, 1: 0.1*R_vir
     int32_t    FIREmodeOn;
     int32_t    CGMrecipeSAGEOn;
-    int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation
-    int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
+    int32_t    FeedbackFreeModeOn;
     int32_t    BulgeSizeOn;
     int32_t    H2DiskAreaOption;  // 0 = π*r_s², 1 = π*(3*r_s)², 2 = 2π*r_s² (central Σ₀)
     int32_t    SaveFullSFH;       // 0 = save averaged SFR (default), 1 = save full SfrDisk[STEPS] and SfrBulge[STEPS] arrays
@@ -485,7 +475,6 @@ struct params
     double BaryonFrac;
     double SfrEfficiency;
     double FFBMaxEfficiency;
-    double FFBConcSigma;      // σ_c for log-normal concentration scatter (ln c); typical ~0.2 (Jing 2000, Bullock+01)
     double FeedbackReheatingEpsilon;
     double FeedbackEjectionEfficiency;
     double RadioModeEfficiency;
@@ -495,9 +484,6 @@ struct params
     double Reionization_zr;
     double ThresholdSatDisruption;
     double FractionDisruptedToICS;  // Fraction of disrupted satellite stellar mass that goes to ICS (rest goes to BCG)
-    int32_t DynamicDisruptionSplit;  // 0: fixed fraction; 1: mass-ratio f_ICL = 1-(Msub/Mhost)^alpha; 2: concentration-weighted
-    double DisruptionSplitAlpha;     // Base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
-    double DisruptionSplitCref;      // Reference concentration for concentration weighting (DynamicDisruptionSplit=2)
     double RedshiftPowerLawExponent;
 
     double UnitLength_in_cm;

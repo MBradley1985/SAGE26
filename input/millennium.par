@@ -53,17 +53,16 @@ ReionizationOn              1   %0: switch off
 DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
 
 CGMrecipeOn                 1   %0: switch off
-CGMDensityProfile           0   %0: uniform; 1: NFW; 2: beta-profile (β=2/3)
-CGMPrecipRadiusMode         1   %0: r_cool; 1: 0.1*R_vir
+% CGMDensityProfile           0   %0: uniform; 1: NFW; 2: beta-profile (β=2/3)
 FIREmodeOn                  1   %0: switch off
 
-ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
+% ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
 FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 conc); 3: BK25 (ConcentrationOn method); 4: BK25 + log-normal c scatter; 5: Li+24 sharp; 6: Li+24 sigmoid + H2 SF; 7: BK25 log-normal c scatter + H2 SF
 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
-DynamicDisruptionSplit      2   %0: fixed fraction; 1: mass-ratio only; 2: concentration-weighted
+% DynamicDisruptionSplit      1   %0: fixed fraction; 1: mass-ratio only; 2: concentration-weighted
 
 %------------------------------------------
 %----- SAGE model parameters --------------
@@ -71,7 +70,7 @@ DynamicDisruptionSplit      2   %0: fixed fraction; 1: mass-ratio only; 2: conce
 
 SfrEfficiency               0.03    %efficiency of SF;
 FFBMaxEfficiency            0.2     %0.2 fits observations best, 1.0 is theoretical maximum
-FFBConcSigma                0.2     %σ_c for log-normal concentration scatter in ln(c) (FeedbackFreeModeOn=4); ~0.2 (Jing 2000, Bullock+01)
+% FFBConcSigma                0.2     %σ_c for log-normal concentration scatter in ln(c) (FeedbackFreeModeOn=4); ~0.2 (Jing 2000, Bullock+01)
 
 RedshiftPowerLawExponent    1.25    %alpha for (1+z)^alpha in mass loading calculation (FIREmodeOn=1)
 
@@ -86,10 +85,10 @@ BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during
 
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
 ThresholdSatDisruption      1.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption
-FractionDisruptedToICS      1.0     %fraction of disrupted satellite stellar mass to ICS (rest goes to BCG); 1.0 = original behavior
+FractionDisruptedToICS      0.8     %fraction of disrupted satellite stellar mass to ICS (rest goes to BCG); 1.0 = original behavior
 
-DisruptionSplitAlpha        0.25    %Base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
-DisruptionSplitCref         10.0    %Reference concentration for concentration weighting (DynamicDisruptionSplit=2)
+% DisruptionSplitAlpha        0.25    %Base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
+% DisruptionSplitCref         10.0    %Reference concentration for concentration weighting (DynamicDisruptionSplit=2)
 
 Yield                       0.025   %fraction of SF mass produced as metals
 RecycleFraction             0.43    %fraction of SF mass instantaneously recycled back to cold

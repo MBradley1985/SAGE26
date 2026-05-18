@@ -275,7 +275,6 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
     o->ICS = g->ICS;
     o->ICS_disrupt = g->ICS_disrupt;
     o->ICS_accrete = g->ICS_accrete;
-    o->ICS_sum_mt = g->ICS_sum_mt;
     o->H2gas = g->H2gas;
     o->H1gas = g->H1gas;
 
@@ -337,13 +336,11 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
         o->infallMvir = g->infallMvir;
         o->infallVvir = g->infallVvir;
         o->infallVmax = g->infallVmax;
-        o->infallStellarMass = g->infallStellarMass;
         o->TimeOfInfall = g->TimeOfInfall * run_params->UnitTime_in_Megayears;
     } else {
         o->infallMvir = 0.0;
         o->infallVvir = 0.0;
         o->infallVmax = 0.0;
-        o->infallStellarMass = 0.0;
         o->TimeOfInfall = 0.0;
     }
 
@@ -358,10 +355,8 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
     o->RcoolToRvir = g->RcoolToRvir;
 
     o->FFBRegime = g->FFBRegime;
-    o->Concentration = g->Concentration;
     o->mdot_cool = g->mdot_cool * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS;
     o->mdot_stream = g->mdot_stream * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS;
-    o->g_max = g->g_max;
 
     return EXIT_SUCCESS;
 }

@@ -52,7 +52,6 @@ extern "C" {
       float ICS;
       float ICS_disrupt;
       float ICS_accrete;
-      float ICS_sum_mt;
       float H2gas;
       float H1gas;
 
@@ -89,7 +88,6 @@ extern "C" {
       float infallMvir;
       float infallVvir;
       float infallVmax;
-      float infallStellarMass;
       float TimeOfInfall;
 
       /* CGM properties */
@@ -103,10 +101,8 @@ extern "C" {
       float RcoolToRvir;
 
       int FFBRegime;
-      float Concentration;
       float mdot_cool;
       float mdot_stream;
-      double g_max;
     };
 
     /* Proto-Types */
