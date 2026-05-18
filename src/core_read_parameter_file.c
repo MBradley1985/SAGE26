@@ -257,6 +257,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->FFBMaxEfficiency);
     ParamID[NParam++] = DOUBLE;
 
+    strncpy(ParamTag[NParam], "FFBConcSigma", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->FFBConcSigma);
+    ParamID[NParam++] = DOUBLE;
+
     strncpy(ParamTag[NParam], "FeedbackFreeModeOn", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->FeedbackFreeModeOn);
     ParamID[NParam++] = INT;

@@ -665,13 +665,55 @@ double calculate_gmax_BK25(const int p, const double z, const struct GALAXY *gal
     return (g_vir / mu_c) * (c * c / 2.0);
 }
 
+// Rational approximation for the inverse normal CDF (Peter Acklam's algorithm).
+// Maximum absolute error < 1.2e-9 for 0 < p < 1.
+static double inverse_normal_cdf(double p)
+{
+    static const double a[] = {
+        -3.969683028665376e+01,  2.209460984245205e+02,
+        -2.759285104469687e+02,  1.383577518672690e+02,
+        -3.066479806614716e+01,  2.506628277459239e+00
+    };
+    static const double b[] = {
+        -5.447609879822406e+01,  1.615858368580409e+02,
+        -1.556989798598866e+02,  6.680131188771972e+01,
+        -1.328068155288572e+01
+    };
+    static const double c[] = {
+        -7.784894002430293e-03, -3.223964580411365e-01,
+        -2.400758277161838e+00, -2.549732539343734e+00,
+         4.374664141464968e+00,  2.938163982698783e+00
+    };
+    static const double d[] = {
+         7.784695709041462e-03,  3.224671290700398e-01,
+         2.445134137142996e+00,  3.754408661907416e+00
+    };
+    const double p_lo = 0.02425, p_hi = 1.0 - 0.02425;
+    double q, r;
+    if(p < p_lo) {
+        q = sqrt(-2.0 * log(p));
+        return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
+               ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1.0);
+    } else if(p <= p_hi) {
+        q = p - 0.5;  r = q * q;
+        return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q /
+               (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1.0);
+    } else {
+        q = sqrt(-2.0 * log(1.0 - p));
+        return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
+                ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1.0);
+    }
+}
+
+
 void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct GALAXY *galaxies,
                                      const struct params *run_params)
 {
     // Pre-compute g_crit in code units for BK25 modes (constant, doesn't depend on galaxy)
     // g_crit/G = 3100 M_sun/pc^2 (Boylan-Kolchin 2025, Table 1)
     double g_crit = 0.0;
-    if(run_params->FeedbackFreeModeOn == 2) {
+    if(run_params->FeedbackFreeModeOn == 2 || run_params->FeedbackFreeModeOn == 3 ||
+       run_params->FeedbackFreeModeOn == 4 || run_params->FeedbackFreeModeOn == 7) {
         const double Msun_code = SOLAR_MASS / run_params->UnitMass_in_g;
         const double pc_code = 3.08568e18 / run_params->UnitLength_in_cm;
         g_crit = run_params->G * 3100.0 * Msun_code / (pc_code * pc_code) / run_params->Hubble_h;
@@ -691,7 +733,7 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
             continue;
         }
 
-        // Hot-regime galaxies cannot be FFB when regime constraint is active
+        // FFBRequireCGMRegime: hot-accretion galaxies cannot be FFB (all modes)
         if(run_params->FFBRequireCGMRegime && galaxies[p].Regime == 1) {
             galaxies[p].FFBRegime = 0;
             continue;
@@ -699,6 +741,7 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
 
         if (run_params->FeedbackFreeModeOn == 1) {
             // ---- Li+24 sigmoid ----
+            // FFBPersistentRandom: fixed quantile vs fresh draw each snapshot
             const double f_ffb = calculate_ffb_fraction(galaxies[p].Mvir, Zcurr, run_params);
             const double random_uniform = (run_params->FFBPersistentRandom)
                 ? (double)galaxies[p].FFBRandom
@@ -706,8 +749,48 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
             galaxies[p].FFBRegime = (random_uniform < f_ffb) ? 1 : 0;
 
         } else if (run_params->FeedbackFreeModeOn == 2) {
-            // ---- Boylan-Kolchin 2025 acceleration-based method ----
+            // ---- Boylan-Kolchin 2025: median Ishiyama+21 concentration ----
             const double g_max = calculate_gmax_BK25(p, Zcurr, galaxies, run_params);
+            galaxies[p].g_max = (float)g_max;
+            galaxies[p].FFBRegime = (g_max > g_crit) ? 1 : 0;
+
+        } else if (run_params->FeedbackFreeModeOn == 3) {
+            // ---- Boylan-Kolchin 2025 + log-normal concentration scatter ----
+            // The Ishiyama+21 table gives the median concentration; individual halos
+            // scatter around it following p(c)dc ∝ exp(-(ln c - ln c_med)^2 / 2σ_c^2) d(ln c)
+            // with σ_c = FFBConcSigma (Jing 2000; Bullock+01; Dolag+04 suggest ~0.2-0.35).
+            // FFBPersistentRandom controls whether the concentration quantile is fixed
+            // per halo (persistent) or redrawn each snapshot.
+            const double Mvir = galaxies[p].Mvir;
+            const double Rvir = galaxies[p].Rvir;
+
+            if(Mvir <= 0.0 || Rvir <= 0.0) {
+                galaxies[p].FFBRegime = 0;
+                galaxies[p].g_max = 0.0f;
+                continue;
+            }
+
+            const double Mvir_Msun_h = Mvir * 1.0e10;
+            const double logM = log10(Mvir_Msun_h);
+            double c = interpolate_concentration_ishiyama21(logM, Zcurr, run_params);
+            if(c < 1.0) c = 1.0;
+
+            if(run_params->FFBConcSigma > 0.0) {
+                // FFBPersistentRandom: 1 = fixed halo quantile; 0 = fresh draw each snapshot
+                double u = (run_params->FFBPersistentRandom)
+                    ? (double)galaxies[p].FFBRandom
+                    : (double)rand() / (double)RAND_MAX;
+                if(u < 1.0e-6) u = 1.0e-6;
+                if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
+                const double z_normal = inverse_normal_cdf(u);
+                c = c * exp(run_params->FFBConcSigma * z_normal);
+                if(c < 1.0) c = 1.0;
+            }
+
+            const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
+            const double mu_c = log(1.0 + c) - c / (1.0 + c);
+            const double g_max = (g_vir / mu_c) * (c * c / 2.0);
+
             galaxies[p].g_max = (float)g_max;
             galaxies[p].FFBRegime = (g_max > g_crit) ? 1 : 0;
 

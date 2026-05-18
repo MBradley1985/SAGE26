@@ -97,7 +97,7 @@ struct GALAXY
     int32_t   FFBRegime;
     float     FFBRandom;
     float     Concentration;  // NFW halo concentration; 0 when ConcentrationOn == 0
-    float     g_max;          // peak NFW acceleration [code units]; 0 when FeedbackFreeModeOn != 2
+    float     g_max;          // peak NFW acceleration [code units]; non-zero for FeedbackFreeModeOn 2 or 3
 
     int32_t   GalaxyNr;
     int32_t   CentralGal;
@@ -482,6 +482,7 @@ struct params
     double BaryonFrac;
     double SfrEfficiency;
     double FFBMaxEfficiency;
+    double FFBConcSigma;       // log-normal scatter in NFW concentration for mode 3 (sigma_ln_c; 0 = no scatter)
     double FeedbackReheatingEpsilon;
     double FeedbackEjectionEfficiency;
     double RadioModeEfficiency;

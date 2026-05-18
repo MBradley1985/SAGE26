@@ -4,7 +4,7 @@
 
 FileNameGalaxies   model
 %OutputDir         /<absolute>/<root>/<path>/sage-model/output/millennium/
-OutputDir          output/millennium_mbk/
+OutputDir          output/millennium/
 
 FirstFile         0
 LastFile          7
@@ -56,7 +56,7 @@ CGMrecipeOn                 1   %0: switch off
 CGMPrecipSigmoid            1   %0: tanh precipitation (original); 1: logistic sigmoid width=2, blended with radiative cooling
 FIREmodeOn                  1   %0: switch off
 
-FeedbackFreeModeOn          2   %0: off; 1: Li+24 sigmoid; 2: MBK25 hard threshold (uses ConcentrationOn)
+FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: MBK25 hard threshold; 3: MBK25 + log-normal concentration scatter
 FFBPersistentRandom         0   %0: fresh rand() each snapshot; 1: use fixed per-galaxy FFBRandom (no flickering)
 FFBRequireCGMRegime         0   %0: FFB independent of CGM regime; 1: only cold-accretion (Regime=0) galaxies can be FFB
 
@@ -72,6 +72,7 @@ TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_acc
 
 SfrEfficiency               0.03    %efficiency of SF;
 FFBMaxEfficiency            0.2     %0.2 fits observations best, 1.0 is theoretical maximum
+FFBConcSigma                0.2     %log-normal scatter in ln(concentration) for mode 3 (sigma_ln_c; 0 = no scatter)
 
 RedshiftPowerLawExponent    1.25    %alpha for (1+z)^alpha in mass loading calculation (FIREmodeOn=1)
 
