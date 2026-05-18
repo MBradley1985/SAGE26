@@ -634,7 +634,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
 
 
 
-void disrupt_satellite_to_ICS(const int centralgal, const int gal, struct GALAXY *galaxies, const struct params *run_params)
+void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double time, struct GALAXY *galaxies, const struct params *run_params)
 {
     // Transfer satellite's gas to central's hot/CGM reservoir (regime-dependent)
     const double total_gas = galaxies[gal].ColdGas + galaxies[gal].HotGas + galaxies[gal].CGMgas;
@@ -664,25 +664,52 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, struct GALAXY
     galaxies[centralgal].ICS += galaxies[gal].ICS;
     galaxies[centralgal].MetalsICS += galaxies[gal].MetalsICS;
 
-    // Track ICS assembly: pre-existing satellite ICS goes to ICS_accrete
-    // This ICS was formed elsewhere (in the satellite's halo) and is being brought in
+    // Track ICS assembly: pre-existing satellite ICS goes to ICS_accrete.
+    // Inherit the satellite's mass-weighted deposit-time accumulator so the mean
+    // ICS assembly time reflects when the stars were originally stripped.
     if(run_params->TrackICSAssembly && galaxies[gal].ICS > 0.0) {
         galaxies[centralgal].ICS_accrete += galaxies[gal].ICS;
+        galaxies[centralgal].ICS_sum_mt  += galaxies[gal].ICS_sum_mt;
     }
 
-    // Disrupt stellar mass: split between ICS and BCG based on FractionDisruptedToICS
-    // FractionDisruptedToICS = 1.0 means all to ICS (original behavior)
-    // FractionDisruptedToICS = 0.5 means half to ICS, half to BCG
-    const double frac_to_ICS = run_params->FractionDisruptedToICS;
+    // Disrupt stellar mass: split between ICS and BCG.
+    // DynamicDisruptionSplit=0: fixed FractionDisruptedToICS.
+    // DynamicDisruptionSplit=1: f_ICL = 1 - (Msub/Mhost)^alpha_eff (pure mass-ratio).
+    // DynamicDisruptionSplit=2: alpha_eff = alpha * (Cref/c_sat); concentrated satellites resist stripping.
+    double frac_to_ICS;
+    if(run_params->DynamicDisruptionSplit >= 1) {
+        const double Msub  = (double)galaxies[gal].infallMvir;
+        const double Mhost = (double)galaxies[centralgal].Mvir;
+        if(Msub > 0.0 && Mhost > 0.0) {
+            double mass_ratio = Msub / Mhost;
+            if(mass_ratio > 1.0) mass_ratio = 1.0;
+
+            double alpha_eff = run_params->DisruptionSplitAlpha;
+            if(run_params->DynamicDisruptionSplit == 2) {
+                const double c_sat = (double)galaxies[gal].Concentration;
+                if(c_sat > 0.0)
+                    alpha_eff *= run_params->DisruptionSplitCref / c_sat;
+            }
+
+            frac_to_ICS = 1.0 - pow(mass_ratio, alpha_eff);
+            if(frac_to_ICS < 0.0) frac_to_ICS = 0.0;
+            if(frac_to_ICS > 1.0) frac_to_ICS = 1.0;
+        } else {
+            frac_to_ICS = run_params->FractionDisruptedToICS;
+        }
+    } else {
+        frac_to_ICS = run_params->FractionDisruptedToICS;
+    }
     const double frac_to_BCG = 1.0 - frac_to_ICS;
     const double new_ICS_from_stripping = frac_to_ICS * galaxies[gal].StellarMass;
 
     galaxies[centralgal].ICS += new_ICS_from_stripping;
     galaxies[centralgal].MetalsICS += frac_to_ICS * galaxies[gal].MetalsStellarMass;
-    
+
     // Track ICS assembly: newly disrupted stellar mass goes to ICS_disrupt
     if(run_params->TrackICSAssembly) {
         galaxies[centralgal].ICS_disrupt += new_ICS_from_stripping;
+        galaxies[centralgal].ICS_sum_mt  += new_ICS_from_stripping * time;
     }
 
     // Add remainder to BCG bulge (accreted onto outer envelope)

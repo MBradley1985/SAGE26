@@ -445,7 +445,8 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
                     if(isfinite(galaxies[p].MergTime)) {
                         // disruption has occured!
                         if(galaxies[p].MergTime > 0.0) {
-                            disrupt_satellite_to_ICS(merger_centralgal, p, galaxies, run_params);
+                            const double disrupt_time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
+                            disrupt_satellite_to_ICS(merger_centralgal, p, disrupt_time, galaxies, run_params);
                         } else {
                             // a merger has occured!
                             double time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
@@ -479,7 +480,7 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
 
         if(p != centralgal) {
             galaxies[centralgal].TotalSatelliteBaryons +=
-                (galaxies[p].StellarMass + galaxies[p].BlackHoleMass + galaxies[p].ColdGas + galaxies[p].HotGas);
+                (galaxies[p].StellarMass + galaxies[p].BlackHoleMass + galaxies[p].ColdGas + galaxies[p].HotGas + galaxies[p].CGMgas);
         }
     }
 

@@ -4,7 +4,7 @@
 
 FileNameGalaxies   model
 %OutputDir         /<absolute>/<root>/<path>/sage-model/output/millennium/
-OutputDir          output/millennium/
+OutputDir          output/millennium_mbk_smooth/
 
 FirstFile         0
 LastFile          7
@@ -56,15 +56,17 @@ CGMrecipeOn                 1   %0: switch off
 CGMPrecipSigmoid            1   %0: tanh precipitation (original); 1: logistic sigmoid width=2, blended with radiative cooling
 FIREmodeOn                  1   %0: switch off
 
-FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: MBK25 hard threshold; 3: MBK25 + log-normal conc scatter; 4: Li+24 sigmoid + H2 SF; 5: MBK25 + log-normal conc scatter + H2 SF
-FFBPersistentRandom         0   %0: fresh rand() each snapshot; 1: use fixed per-galaxy FFBRandom (no flickering)
+FeedbackFreeModeOn          5   %0: off; 1: Li+24 sigmoid; 2: MBK25 hard threshold; 3: MBK25 + log-normal conc scatter; 4: Li+24 sigmoid + H2 SF; 5: MBK25 + log-normal conc scatter + H2 SF
+FFBPersistentRandom         1   %0: fresh rand() each snapshot; 1: use fixed per-galaxy FFBRandom (no flickering)
 FFBRequireCGMRegime         0   %0: FFB independent of CGM regime; 1: only cold-accretion (Regime=0) galaxies can be FFB
 
-ConcentrationOn             1   %0: off; 1: Ishiyama+21 (COLOSSUS table, auto-selects Millennium/Uchuu cosmology); 2: Vmax/Vvir derived; 3: Vmax/Vvir + sat infall freeze
+ConcentrationOn             3   %0: off; 1: Ishiyama+21 (COLOSSUS table, auto-selects Millennium/Uchuu cosmology); 2: Vmax/Vvir derived; 3: Vmax/Vvir + sat infall freeze
 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
+DynamicDisruptionSplit      2   %0: fixed FractionDisruptedToICS; 1: 1-(Msub/Mhost)^alpha; 2: alpha scaled by Cref/c_sat
+
 
 %------------------------------------------
 %----- SAGE model parameters --------------
@@ -77,7 +79,7 @@ FFBConcSigma                0.2     %log-normal scatter in ln(concentration) for
 RedshiftPowerLawExponent    1.25    %alpha for (1+z)^alpha in mass loading calculation (FIREmodeOn=1)
 
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)
-FeedbackEjectionEfficiency  0.3     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
+FeedbackEjectionEfficiency  0.5     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
 
 ReIncorporationFactor       0.15    %fraction of ejected mass reincorporated per dynamical time to hot
 
@@ -88,6 +90,8 @@ BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
 ThresholdSatDisruption      1.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption
 FractionDisruptedToICS      0.8     %fraction of disrupted satellite stellar mass to ICS (rest goes to BCG); 1.0 = original behavior
+DisruptionSplitAlpha        0.25    %base mass-ratio exponent (mode 1); or alpha_0 for mode 2
+DisruptionSplitCref         10.0    %reference concentration for mode 2 (alpha_eff = alpha * Cref/c_sat)
 
 Yield                       0.025   %fraction of SF mass produced as metals
 RecycleFraction             0.43    %fraction of SF mass instantaneously recycled back to cold
