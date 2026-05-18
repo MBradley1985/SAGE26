@@ -261,6 +261,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->FeedbackFreeModeOn);
     ParamID[NParam++] = INT;
 
+    strncpy(ParamTag[NParam], "FFBPersistentRandom", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->FFBPersistentRandom);
+    ParamID[NParam++] = INT;
+
     strncpy(ParamTag[NParam], "BulgeSizeOn", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->BulgeSizeOn);
     ParamID[NParam++] = INT;

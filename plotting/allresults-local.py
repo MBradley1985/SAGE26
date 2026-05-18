@@ -279,17 +279,17 @@ if __name__ == '__main__':
 
     Concentration = read_hdf(file_list, Snapshot, 'Concentration')
 
-    g_max = read_hdf(file_list, Snapshot, 'g_max')  # in code units of G * Mvir / Rvir^2
-    print('g_max read for', len(g_max), 'galaxies')
-    print('Sample g_max values:', g_max[:10], '\n')
+    # g_max = read_hdf(file_list, Snapshot, 'g_max')  # in code units of G * Mvir / Rvir^2
+    # print('g_max read for', len(g_max), 'galaxies')
+    # print('Sample g_max values:', g_max[:10], '\n')
 
-    g_max_physical = g_max * (1e10 / Hubble_h) / (1.0)**2  # Convert to Msun/pc^2
-    print('Sample g_max physical values:', g_max_physical[:10], 'Msun/pc^2\n')
+    # g_max_physical = g_max * (1e10 / Hubble_h) / (1.0)**2  # Convert to Msun/pc^2
+    # print('Sample g_max physical values:', g_max_physical[:10], 'Msun/pc^2\n')
 
-    G_code = sim_params['G'] if 'G' in sim_params else 4.30071e-9  # in (km/s)^2 Mpc / Msun
+    # G_code = sim_params['G'] if 'G' in sim_params else 4.30071e-9  # in (km/s)^2 Mpc / Msun
 
-    g_max_g_vir = g_max / (G_code * Mvir / Rvir**2)  # Dimensionless ratio to g_vir
-    print('Sample g_max/g_vir values:', g_max_g_vir[:10])
+    # g_max_g_vir = g_max / (G_code * Mvir / Rvir**2)  # Dimensionless ratio to g_vir
+    # print('Sample g_max/g_vir values:', g_max_g_vir[:10])
 
 
 # --------------------------------------------------------

@@ -19,6 +19,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].Type = 0;
     galaxies[p].Regime = -1;
     galaxies[p].FFBRegime = 0;
+    galaxies[p].FFBRandom = (float)rand() / (float)RAND_MAX;
 
     galaxies[p].GalaxyNr = *galaxycounter;
     (*galaxycounter)++;
@@ -437,7 +438,9 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
 
         // Probabilistic assignment based on smooth sigmoid function
         // Galaxies near threshold have intermediate probability of being FFB
-        const double random_uniform = (double)rand() / (double)RAND_MAX;
+        const double random_uniform = (run_params->FFBPersistentRandom)
+            ? (double)galaxies[p].FFBRandom
+            : (double)rand() / (double)RAND_MAX;
 
         if(random_uniform < f_ffb) {
             galaxies[p].FFBRegime = 1;  // FFB halo
