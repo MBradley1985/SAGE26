@@ -432,14 +432,11 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         eburst = 0.56 * pow(mass_ratio, 0.7);
     }
 
-    if (run_params->SFprescription == 1 || run_params->SFprescription == 3 || run_params->SFprescription == 4 ||
-        run_params->SFprescription == 5 || run_params->SFprescription == 6 ||
-        run_params->SFprescription == 7) {
-        // Use H2 gas for starburst if applicable
-        gas_for_starburst = galaxies[merger_centralgal].H2gas;
-    } else {
-        // Otherwise use cold gas
+    if (galaxies[merger_centralgal].FFBRegime == 1 ||
+        run_params->SFprescription == 0 || run_params->SFprescription == 2) {
         gas_for_starburst = galaxies[merger_centralgal].ColdGas;
+    } else {
+        gas_for_starburst = galaxies[merger_centralgal].H2gas;
     }
 
     stars = eburst * gas_for_starburst;
@@ -573,6 +570,17 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
 
     // update from feedback
     update_from_feedback(merger_centralgal, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
+
+    // Reconcile H2/H1 with ColdGas after starburst feedback has reduced cold gas
+    if (run_params->SFprescription != 0 && run_params->SFprescription != 2 &&
+        galaxies[merger_centralgal].FFBRegime != 1) {
+        const float max_h_gas = galaxies[merger_centralgal].ColdGas * 0.74f;
+        if (galaxies[merger_centralgal].H2gas > max_h_gas)
+            galaxies[merger_centralgal].H2gas = max_h_gas;
+        galaxies[merger_centralgal].H1gas = max_h_gas - galaxies[merger_centralgal].H2gas;
+        if (galaxies[merger_centralgal].H1gas < 0.0f)
+            galaxies[merger_centralgal].H1gas = 0.0f;
+    }
 
     // check for disk instability
     if(run_params->DiskInstabilityOn && mode == 0) {

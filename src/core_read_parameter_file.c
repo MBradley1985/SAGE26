@@ -273,6 +273,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->CGMPrecipSigmoid);
     ParamID[NParam++] = INT;
 
+    strncpy(ParamTag[NParam], "ConcentrationOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->ConcentrationOn);
+    ParamID[NParam++] = INT;
+
     strncpy(ParamTag[NParam], "BulgeSizeOn", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->BulgeSizeOn);
     ParamID[NParam++] = INT;

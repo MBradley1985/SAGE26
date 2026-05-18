@@ -96,6 +96,8 @@ struct GALAXY
     int32_t   Regime;
     int32_t   FFBRegime;
     float     FFBRandom;
+    float     Concentration;  // NFW halo concentration; 0 when ConcentrationOn == 0
+    float     g_max;          // peak NFW acceleration [code units]; 0 when FeedbackFreeModeOn != 2
 
     int32_t   GalaxyNr;
     int32_t   CentralGal;
@@ -466,6 +468,7 @@ struct params
     int32_t    FFBPersistentRandom;
     int32_t    FFBRequireCGMRegime;
     int32_t    CGMPrecipSigmoid;
+    int32_t    ConcentrationOn;     // 0: off; 1: Ishiyama+21; 2: Vmax/Vvir; 3: Vmax/Vvir + sat infall freeze
     int32_t    BulgeSizeOn;
     int32_t    H2DiskAreaOption;  // 0 = π*r_s², 1 = π*(3*r_s)², 2 = 2π*r_s² (central Σ₀)
     int32_t    SaveFullSFH;       // 0 = save averaged SFR (default), 1 = save full SfrDisk[STEPS] and SfrBulge[STEPS] arrays

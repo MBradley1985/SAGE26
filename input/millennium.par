@@ -4,7 +4,7 @@
 
 FileNameGalaxies   model
 %OutputDir         /<absolute>/<root>/<path>/sage-model/output/millennium/
-OutputDir          output/millennium/
+OutputDir          output/millennium_mbk/
 
 FirstFile         0
 LastFile          7
@@ -56,9 +56,11 @@ CGMrecipeOn                 1   %0: switch off
 CGMPrecipSigmoid            1   %0: tanh precipitation (original); 1: logistic sigmoid width=2, blended with radiative cooling
 FIREmodeOn                  1   %0: switch off
 
-FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid
+FeedbackFreeModeOn          2   %0: off; 1: Li+24 sigmoid; 2: MBK25 hard threshold (uses ConcentrationOn)
 FFBPersistentRandom         0   %0: fresh rand() each snapshot; 1: use fixed per-galaxy FFBRandom (no flickering)
-FFBRequireCGMRegime         1   %0: FFB independent of CGM regime; 1: only cold-accretion (Regime=0) galaxies can be FFB
+FFBRequireCGMRegime         0   %0: FFB independent of CGM regime; 1: only cold-accretion (Regime=0) galaxies can be FFB
+
+ConcentrationOn             1   %0: off; 1: Ishiyama+21 (COLOSSUS table, auto-selects Millennium/Uchuu cosmology); 2: Vmax/Vvir derived; 3: Vmax/Vvir + sat infall freeze
 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 SaveFullSFH                 1   %0: switch off
