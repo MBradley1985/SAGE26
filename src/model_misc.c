@@ -19,7 +19,9 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].Type = 0;
     galaxies[p].Regime = -1;
     galaxies[p].FFBRegime = 0;
-    galaxies[p].FFBRandom = (float)rand() / (float)RAND_MAX;
+    /* Map rand() output to open interval (0,1) so FFBRandom=0 can never
+       permanently lock a galaxy into FFB (the sigmoid is never exactly 0). */
+    galaxies[p].FFBRandom = ((float)rand() + 0.5f) / ((float)RAND_MAX + 1.0f);
 
     galaxies[p].GalaxyNr = *galaxycounter;
     (*galaxycounter)++;
@@ -430,6 +432,12 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
     // Classify each galaxy as FFB or normal based on equation (2)
     for(int p = 0; p < ngal; p++) {
         if(galaxies[p].mergeType > 0) continue;
+
+        // Hot-regime galaxies are shock-heated and cannot be FFB
+        if(run_params->FFBRequireCGMRegime && galaxies[p].Regime == 1) {
+            galaxies[p].FFBRegime = 0;
+            continue;
+        }
 
         const double Mvir = galaxies[p].Mvir;  // in 10^10 M☉/h
 
