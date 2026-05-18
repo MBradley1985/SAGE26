@@ -256,31 +256,42 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     const double transition_width = 2.0;  // Smooth transition over factor ~2
     
     double precipitation_fraction = 0.0;
-    
-    if(tcool_over_tff < precipitation_threshold) {
-        // UNSTABLE: Precipitation cooling
-        double instability_factor = precipitation_threshold / tcool_over_tff;
-        instability_factor = fmin(instability_factor, 3.0);
-        precipitation_fraction = tanh(instability_factor / 2.0);
-        
-    } else if(tcool_over_tff < precipitation_threshold + transition_width) {
-        // TRANSITION: Smoothly reduce precipitation_fraction to zero
-        const double x = (tcool_over_tff - precipitation_threshold) / transition_width;
-        precipitation_fraction = 0.5 * (1.0 - tanh(x));
-        
-    } else {
+
+    if(run_params->CGMPrecipSigmoid) {
+        // Logistic sigmoid centered at precipitation_threshold, width=2 (in tcool/tff units)
+        // Mirrors the FFB sigmoid: f = 1 / (1 + exp(-x))
+        // x > 0 → unstable (precipitation), x < 0 → stable (standard cooling)
+        const double x = (precipitation_threshold - tcool_over_tff) / 2.0;
+        precipitation_fraction = 1.0 / (1.0 + exp(-x));
+
+        // Blend: stable fraction uses standard radiative cooling
         if(tcool > 0) {
-        // Cooling rate: dM/dt = M_CGM / t_cool
-        coolingGas = galaxies[gal].CGMgas / tcool * dt;
-        
-        // Safety check
-        if(coolingGas > galaxies[gal].CGMgas) {
-            coolingGas = galaxies[gal].CGMgas;
-        }
-    } else {
-        coolingGas = 0.0;
+            coolingGas = (1.0 - precipitation_fraction) * galaxies[gal].CGMgas / tcool * dt;
         }
 
+    } else {
+        if(tcool_over_tff < precipitation_threshold) {
+            // UNSTABLE: Precipitation cooling
+            double instability_factor = precipitation_threshold / tcool_over_tff;
+            instability_factor = fmin(instability_factor, 3.0);
+            precipitation_fraction = tanh(instability_factor / 2.0);
+
+        } else if(tcool_over_tff < precipitation_threshold + transition_width) {
+            // TRANSITION: Smoothly reduce precipitation_fraction to zero
+            const double x = (tcool_over_tff - precipitation_threshold) / transition_width;
+            precipitation_fraction = 0.5 * (1.0 - tanh(x));
+
+        } else {
+            // STABLE: Standard radiative cooling
+            if(tcool > 0) {
+                coolingGas = galaxies[gal].CGMgas / tcool * dt;
+                if(coolingGas > galaxies[gal].CGMgas) {
+                    coolingGas = galaxies[gal].CGMgas;
+                }
+            } else {
+                coolingGas = 0.0;
+            }
+        }
     }
 
     // Adding this diagnostic for output

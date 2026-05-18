@@ -53,6 +53,7 @@ ReionizationOn              1   %0: switch off
 DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
 
 CGMrecipeOn                 1   %0: switch off
+CGMPrecipSigmoid            1   %0: tanh precipitation (original); 1: logistic sigmoid width=2, blended with radiative cooling
 FIREmodeOn                  1   %0: switch off
 
 FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid
