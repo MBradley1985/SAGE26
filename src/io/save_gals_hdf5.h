@@ -84,7 +84,7 @@ struct HDF5_GALAXY_OUTPUT
     /* ICS assembly tracking - cumulative mass through each channel */
     float *ICS_disrupt;      /* cumulative stellar mass disrupted to ICS */
     float *ICS_accrete;      /* cumulative ICS accreted from satellites */
-    float *ICS_sum_mt;       /* mass-weighted sum of ICS deposit times; ICS_sum_mt/ICS_disrupt = mean assembly time */
+    float *ICS_sum_mt;       /* mass-weighted sum m*t at deposition (code time); mean assembly time = ICS_sum_mt / (ICS_disrupt + ICS_accrete) */
     
     /* misc */
     float *DiskScaleRadius;
@@ -104,6 +104,7 @@ struct HDF5_GALAXY_OUTPUT
     float *infallMvir;
     float *infallVvir;
     float *infallVmax;
+    float *infallStellarMass;
     float *TimeOfInfall;
 
     /* CGM properties */
@@ -117,11 +118,10 @@ struct HDF5_GALAXY_OUTPUT
     float *RcoolToRvir;
 
     int32_t *FFBRegime;
-    float *FFBRandom;
     float *Concentration;
-    float *g_max;
     float *mdot_cool;
     float *mdot_stream;
+    double *g_max;
 };
     
     // Proto-Types //

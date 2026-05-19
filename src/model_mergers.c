@@ -206,6 +206,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     } else {
         // CASE 2: MINOR MERGER
         galaxies[p].mergeType = 1;
+        galaxies[merger_centralgal].TimeOfLastMinorMerger = time;
 
         if (is_disk_dominated) {
             // Minor merger on DISC (Section 5.2.1)
@@ -243,9 +244,11 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
             galaxies[merger_centralgal].MetalsColdGas = 0.0;
         }
 
-        galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
+        // galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
 
         quasar_mode_wind(merger_centralgal, BHaccrete, galaxies, run_params);
+
+        galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
     }
 }
 
@@ -432,11 +435,14 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         eburst = 0.56 * pow(mass_ratio, 0.7);
     }
 
-    if (galaxies[merger_centralgal].FFBRegime == 1 ||
-        run_params->SFprescription == 0 || run_params->SFprescription == 2) {
-        gas_for_starburst = galaxies[merger_centralgal].ColdGas;
-    } else {
+    if (run_params->SFprescription == 1 || run_params->SFprescription == 3 || run_params->SFprescription == 4 ||
+        run_params->SFprescription == 5 || run_params->SFprescription == 6 ||
+        run_params->SFprescription == 7) {
+        // Use H2 gas for starburst if applicable
         gas_for_starburst = galaxies[merger_centralgal].H2gas;
+    } else {
+        // Otherwise use cold gas
+        gas_for_starburst = galaxies[merger_centralgal].ColdGas;
     }
 
     stars = eburst * gas_for_starburst;
@@ -457,10 +463,11 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
             } else {
                 double z_term = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
                 double v_term;
-                if (vc < V_CRIT) {
-                    v_term = pow(vc / V_CRIT, -3.2);
+                const double vc_floored = (vc < 1.0) ? 1.0 : vc;  /* Floor at 1 km/s */
+                if (vc_floored < V_CRIT) {
+                    v_term = pow(vc_floored / V_CRIT, -3.2);
                 } else {
-                    v_term = pow(vc / V_CRIT, -1.0);
+                    v_term = pow(vc_floored / V_CRIT, -1.0);
                 }
                 double scaling_factor = z_term * v_term;
                 double eta_reheat = run_params->FeedbackReheatingEpsilon * scaling_factor;
@@ -497,17 +504,18 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                 } else {
                     double z_term = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
                     double v_term;
-                    if (vc < V_CRIT) {
-                        v_term = pow(vc / V_CRIT, -3.2);
+                    const double vc_floored = (vc < 1.0) ? 1.0 : vc;  /* Floor at 1 km/s */
+                    if (vc_floored < V_CRIT) {
+                        v_term = pow(vc_floored / V_CRIT, -3.2);
                     } else {
-                        v_term = pow(vc / V_CRIT, -1.0);
+                        v_term = pow(vc_floored / V_CRIT, -1.0);
                     }
                     double scaling_factor = z_term * v_term;
-                    
-                    double E_FB = run_params->FeedbackEjectionEfficiency * scaling_factor * 
+
+                    double E_FB = run_params->FeedbackEjectionEfficiency * scaling_factor *
                                   0.5 * stars * (run_params->EtaSNcode * run_params->EnergySNcode);
                     double E_lift = 0.5 * reheated_mass * vc * vc;
-                    
+
                     if(E_FB > E_lift) {
                         ejected_mass = (E_FB - E_lift) / (0.5 * vc * vc);
                     } else {
@@ -571,15 +579,16 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     // update from feedback
     update_from_feedback(merger_centralgal, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 
-    // Reconcile H2/H1 with ColdGas after starburst feedback has reduced cold gas
-    if (run_params->SFprescription != 0 && run_params->SFprescription != 2 &&
-        galaxies[merger_centralgal].FFBRegime != 1) {
-        const float max_h_gas = galaxies[merger_centralgal].ColdGas * 0.74f;
-        if (galaxies[merger_centralgal].H2gas > max_h_gas)
-            galaxies[merger_centralgal].H2gas = max_h_gas;
-        galaxies[merger_centralgal].H1gas = max_h_gas - galaxies[merger_centralgal].H2gas;
-        if (galaxies[merger_centralgal].H1gas < 0.0f)
-            galaxies[merger_centralgal].H1gas = 0.0f;
+    // Clamp H2/H1 after gas has been consumed and ejected, so any chained merger
+    // or disk-instability check that reads H2gas gets a physically consistent value.
+    if (run_params->SFprescription == 1 || run_params->SFprescription == 3 ||
+        run_params->SFprescription == 4 || run_params->SFprescription == 5 ||
+        run_params->SFprescription == 6 || run_params->SFprescription == 7) {
+        if(galaxies[merger_centralgal].H2gas > galaxies[merger_centralgal].ColdGas)
+            galaxies[merger_centralgal].H2gas = galaxies[merger_centralgal].ColdGas;
+        galaxies[merger_centralgal].H1gas = (galaxies[merger_centralgal].ColdGas * 0.74)
+                                            - galaxies[merger_centralgal].H2gas;
+        if(galaxies[merger_centralgal].H1gas < 0.0) galaxies[merger_centralgal].H1gas = 0.0;
     }
 
     // check for disk instability
@@ -664,21 +673,23 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     galaxies[centralgal].ICS += galaxies[gal].ICS;
     galaxies[centralgal].MetalsICS += galaxies[gal].MetalsICS;
 
-    // Track ICS assembly: pre-existing satellite ICS goes to ICS_accrete.
-    // Inherit the satellite's mass-weighted deposit-time accumulator so the mean
-    // ICS assembly time reflects when the stars were originally stripped.
+    // Track ICS assembly: pre-existing satellite ICS goes to ICS_accrete
+    // This ICS was formed elsewhere (in the satellite's halo) and is being brought in
     if(run_params->TrackICSAssembly && galaxies[gal].ICS > 0.0) {
         galaxies[centralgal].ICS_accrete += galaxies[gal].ICS;
-        galaxies[centralgal].ICS_sum_mt  += galaxies[gal].ICS_sum_mt;
+        // Inherit satellite's mass-weighted deposit-time accumulator so the
+        // mean ICS-assembly time reflects when the stars were *originally* stripped,
+        // not when this packet transferred into the central's reservoir.
+        galaxies[centralgal].ICS_sum_mt += galaxies[gal].ICS_sum_mt;
     }
 
-    // Disrupt stellar mass: split between ICS and BCG.
-    // DynamicDisruptionSplit=0: fixed FractionDisruptedToICS.
-    // DynamicDisruptionSplit=1: f_ICL = 1 - (Msub/Mhost)^alpha_eff (pure mass-ratio).
-    // DynamicDisruptionSplit=2: alpha_eff = alpha * (Cref/c_sat); concentrated satellites resist stripping.
+    // Disrupt stellar mass: split between ICS and BCG
     double frac_to_ICS;
     if(run_params->DynamicDisruptionSplit >= 1) {
-        const double Msub  = (double)galaxies[gal].infallMvir;
+        // Dynamic split based on halo mass ratio: f_ICL = 1 - (Msub/Mhost)^alpha_eff
+        // Low mass-ratio satellites -> mostly ICL (disrupted on wide orbits)
+        // High mass-ratio satellites -> more to BCG (deposited near centre)
+        const double Msub = (double)galaxies[gal].infallMvir;
         const double Mhost = (double)galaxies[centralgal].Mvir;
         if(Msub > 0.0 && Mhost > 0.0) {
             double mass_ratio = Msub / Mhost;
@@ -686,18 +697,22 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
 
             double alpha_eff = run_params->DisruptionSplitAlpha;
             if(run_params->DynamicDisruptionSplit == 2) {
+                // Concentration-weighted: concentrated satellites resist stripping
+                // alpha_eff = alpha_0 * (c_ref / c_sat)
+                // High c_sat -> small alpha -> f_ICL closer to 0 -> more to BCG
+                // Low c_sat  -> large alpha -> f_ICL closer to 1 -> more to ICL
                 const double c_sat = (double)galaxies[gal].Concentration;
-                if(c_sat > 0.0)
+                if(c_sat > 0.0) {
                     alpha_eff *= run_params->DisruptionSplitCref / c_sat;
+                }
             }
 
             frac_to_ICS = 1.0 - pow(mass_ratio, alpha_eff);
-            if(frac_to_ICS < 0.0) frac_to_ICS = 0.0;
-            if(frac_to_ICS > 1.0) frac_to_ICS = 1.0;
         } else {
-            frac_to_ICS = run_params->FractionDisruptedToICS;
+            frac_to_ICS = run_params->FractionDisruptedToICS;  // fallback
         }
     } else {
+        // Fixed fraction mode (original behavior)
         frac_to_ICS = run_params->FractionDisruptedToICS;
     }
     const double frac_to_BCG = 1.0 - frac_to_ICS;
@@ -705,11 +720,12 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
 
     galaxies[centralgal].ICS += new_ICS_from_stripping;
     galaxies[centralgal].MetalsICS += frac_to_ICS * galaxies[gal].MetalsStellarMass;
-
+    
     // Track ICS assembly: newly disrupted stellar mass goes to ICS_disrupt
     if(run_params->TrackICSAssembly) {
         galaxies[centralgal].ICS_disrupt += new_ICS_from_stripping;
-        galaxies[centralgal].ICS_sum_mt  += new_ICS_from_stripping * time;
+        // Record deposition time for the mass-weighted assembly-time accumulator
+        galaxies[centralgal].ICS_sum_mt += new_ICS_from_stripping * time;
     }
 
     // Add remainder to BCG bulge (accreted onto outer envelope)

@@ -27,13 +27,14 @@ extern "C" {
     extern double calculate_ffb_threshold_mass(const double z, const struct params *run_params);
     extern double calculate_ffb_fraction(const double Mvir, const double z, const struct params *run_params);
 
-    extern double interpolate_concentration_ishiyama21(const double logM, const double z, const struct params *run_params);
-    extern double concentration_from_vmax_vvir(const double Vmax, const double Vvir);
-    extern double get_halo_concentration(const int p, const double z, const struct GALAXY *galaxies, const struct params *run_params);
-    extern double calculate_gmax_BK25(const int p, const double z, const struct GALAXY *galaxies, const struct params *run_params);
-
     extern void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct GALAXY *galaxies,
                                             const struct params *run_params);
+    extern double interpolate_concentration_ishiyama21(const double logM, const double z, const struct params *run_params);
+    extern double concentration_from_vmax_vvir(const double Vmax, const double Vvir);
+    extern double get_halo_concentration(const int p, const double z, const struct GALAXY *galaxies,
+                                          const struct params *run_params);
+    extern double calculate_gmax_BK25(const int p, const double z, const struct GALAXY *galaxies,
+                                       const struct params *run_params);
     extern void update_instability_bulge_radius(const int p, const double delta_mass, 
                                      const double old_disk_radius,
                                      struct GALAXY *galaxies, const struct params *run_params);

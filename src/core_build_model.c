@@ -239,6 +239,7 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                             galaxies[ngal].infallMvir = previousMvir;
                             galaxies[ngal].infallVvir = previousVvir;
                             galaxies[ngal].infallVmax = previousVmax;
+                            galaxies[ngal].infallStellarMass = galaxies[ngal].StellarMass;
                             galaxies[ngal].TimeOfInfall = halos[halonr].SnapNum;  // Track snapshot of infall
 
                         }
@@ -262,6 +263,7 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
                         galaxies[ngal].infallMvir = previousMvir;
                         galaxies[ngal].infallVvir = previousVvir;
                         galaxies[ngal].infallVmax = previousVmax;
+                        galaxies[ngal].infallStellarMass = galaxies[ngal].StellarMass;
                     }
 
                     galaxies[ngal].Type = 2;
@@ -327,6 +329,14 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
 
     const int halo_snapnum = halos[halonr].SnapNum;
     const double Zcurr = run_params->ZZ[halo_snapnum];
+
+    // Compute and store halo concentration if enabled
+    if(run_params->ConcentrationOn > 0) {
+        for(int p = 0; p < ngal; p++) {
+            if(galaxies[p].mergeType > 0) continue;
+            galaxies[p].Concentration = (float)get_halo_concentration(p, Zcurr, galaxies, run_params);
+        }
+    }
     
     if (run_params->CGMrecipeOn == 1) {
         determine_and_store_regime(ngal, galaxies, run_params);
@@ -335,7 +345,13 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
     if (run_params->FeedbackFreeModeOn >= 1) {
         determine_and_store_ffb_regime(ngal, Zcurr, galaxies, run_params);
     }
-    
+
+    // // Compute and store halo concentration (Ishiyama+21) for all galaxies
+    // for(int p = 0; p < ngal; p++) {
+    //     if(galaxies[p].mergeType > 0) continue;
+    //     galaxies[p].Concentration = (float)get_halo_concentration(p, Zcurr, galaxies, run_params);
+    // }
+
     const double halo_age = run_params->Age[halo_snapnum];
     const double infallingGas = infall_recipe(centralgal, ngal, Zcurr, galaxies, run_params);
 
@@ -443,17 +459,17 @@ int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals
                     galaxies[p].mergeIntoID = *numgals + merger_centralgal;  // position in output
 
                     if(isfinite(galaxies[p].MergTime)) {
+                        // Time at which this event occurs (same formula used for mergers)
+                        const double event_time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
                         // disruption has occured!
                         if(galaxies[p].MergTime > 0.0) {
-                            const double disrupt_time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
-                            disrupt_satellite_to_ICS(merger_centralgal, p, disrupt_time, galaxies, run_params);
+                            disrupt_satellite_to_ICS(merger_centralgal, p, event_time, galaxies, run_params);
                         } else {
                             // a merger has occured!
-                            double time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
                             // Map adaptive step to fixed STEPS bins for SFR arrays
                             int step_bin = (step * STEPS) / effective_steps;
                             if(step_bin >= STEPS) step_bin = STEPS - 1;
-                            deal_with_galaxy_merger(p, merger_centralgal, centralgal, time, deltaT / effective_steps, halonr, step_bin, galaxies, run_params);
+                            deal_with_galaxy_merger(p, merger_centralgal, centralgal, event_time, deltaT / effective_steps, halonr, step_bin, galaxies, run_params);
                         }
                     }
                 }

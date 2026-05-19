@@ -19,11 +19,8 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].Type = 0;
     galaxies[p].Regime = -1;
     galaxies[p].FFBRegime = 0;
-    galaxies[p].Concentration = 0.0f;
-    galaxies[p].g_max = 0.0f;
-    /* Map rand() output to open interval (0,1) so FFBRandom=0 can never
-       permanently lock a galaxy into FFB (the sigmoid is never exactly 0). */
-    galaxies[p].FFBRandom = ((float)rand() + 0.5f) / ((float)RAND_MAX + 1.0f);
+    galaxies[p].FFBRandom = (float)rand() / (float)RAND_MAX;
+    galaxies[p].Concentration = 0.0;
 
     galaxies[p].GalaxyNr = *galaxycounter;
     (*galaxycounter)++;
@@ -59,11 +56,6 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].EjectedMass = 0.0;
     galaxies[p].BlackHoleMass = 0.0;
     
-    // AGNrecipeOn==4: Seed black holes in halos with Mvir > 10^10 Msun/h
-    if(run_params->AGNrecipeOn == 4 && galaxies[p].Mvir > 10.0) {
-        galaxies[p].BlackHoleMass = 1.0e-6;  // 10^4 Msun/h in units of 10^10 Msun/h
-    }
-    
     galaxies[p].ICS = 0.0;
     galaxies[p].CGMgas = 0.0;
     galaxies[p].H2gas = 0.0;
@@ -97,7 +89,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     // Initialize ICS assembly tracking (cumulative mass through each channel)
     galaxies[p].ICS_disrupt = 0.0;
     galaxies[p].ICS_accrete = 0.0;
-    galaxies[p].ICS_sum_mt  = 0.0;
+    galaxies[p].ICS_sum_mt = 0.0;
 
     galaxies[p].DiskScaleRadius = get_disk_radius(halonr, p, halos, galaxies);
     galaxies[p].BulgeRadius = get_bulge_radius(p, galaxies, run_params);
@@ -123,10 +115,13 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].infallMvir = -1.0;
     galaxies[p].infallVvir = -1.0;
     galaxies[p].infallVmax = -1.0;
+    galaxies[p].infallStellarMass = -1.0;
     galaxies[p].TimeOfInfall = -1.0;
 
     galaxies[p].mdot_cool = 0.0;
     galaxies[p].mdot_stream = 0.0;
+
+    galaxies[p].g_max = 0.0;
 
 
 }
@@ -416,6 +411,243 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
     }
 }
 
+// Inverse normal CDF (probit function) — Peter Acklam's rational approximation.
+// Converts a uniform variate p ∈ (0,1) to a standard normal variate.
+// Accurate to ~1e-9 across the full range.
+static double inverse_normal_cdf(double p)
+{
+    const double a[] = {-3.969683028665376e+01,  2.209460984245205e+02,
+                        -2.759285104469687e+02,  1.383577518672690e+02,
+                        -3.066479806614716e+01,  2.506628277459239e+00};
+    const double b[] = {-5.447609879822406e+01,  1.615858368580409e+02,
+                        -1.556989798598866e+02,  6.680131188771972e+01,
+                        -1.328068155288572e+01};
+    const double c[] = {-7.784894002430293e-03, -3.223964580411365e-01,
+                        -2.400758277161838e+00, -2.549732539343734e+00,
+                         4.374664141464968e+00,  2.938163982698783e+00};
+    const double d[] = { 7.784695709041462e-03,  3.224671290700398e-01,
+                         2.445134137142996e+00,  3.754408661907416e+00};
+
+    const double p_low  = 0.02425;
+    const double p_high = 1.0 - p_low;
+
+    double q, r;
+
+    if(p < p_low) {
+        q = sqrt(-2.0 * log(p));
+        return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
+                ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1.0);
+    } else if(p <= p_high) {
+        q = p - 0.5;
+        r = q * q;
+        return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q /
+               (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1.0);
+    } else {
+        q = sqrt(-2.0 * log(1.0 - p));
+        return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
+                 ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1.0);
+    }
+}
+
+void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct GALAXY *galaxies,
+                                     const struct params *run_params)
+{
+    // Only apply FFB if the mode is enabled
+    if(run_params->FeedbackFreeModeOn == 0) {
+        // FFB mode disabled - mark all galaxies as normal
+        for(int p = 0; p < ngal; p++) {
+            galaxies[p].FFBRegime = 0;
+        }
+        return;
+    }
+
+    // Pre-compute g_crit in code units for BK25 modes (constant, doesn't depend on galaxy)
+    // g_crit/G = 3100 M_sun/pc^2 (Boylan-Kolchin 2025, Table 1)
+    double g_crit = 0.0;
+    if(run_params->FeedbackFreeModeOn == 2 || run_params->FeedbackFreeModeOn == 3 ||
+       run_params->FeedbackFreeModeOn == 4 || run_params->FeedbackFreeModeOn == 7) {
+        const double Msun_code = SOLAR_MASS / run_params->UnitMass_in_g;
+        const double pc_code = 3.08568e18 / run_params->UnitLength_in_cm;
+        g_crit = run_params->G * 3100.0 * Msun_code / (pc_code * pc_code) / run_params->Hubble_h;
+    }
+
+    // Classify each galaxy as FFB or normal
+    for(int p = 0; p < ngal; p++) {
+        if(galaxies[p].mergeType > 0) continue;
+
+        // By default, only CGM-regime halos are eligible for FFB.
+        // FFBIgnoreRegime=1 removes this restriction, letting the Li+24/BK25
+        // criteria apply regardless of halo regime.
+        if(galaxies[p].Regime == 1 && !run_params->FFBIgnoreRegime) {
+            galaxies[p].FFBRegime = 0;
+            continue;
+        }
+
+        // FFBRandomMode=1: reuse the persistent draw assigned at galaxy creation.
+        // FFBRandomMode=0: fresh draw each snapshot (no memory across timesteps).
+        const double draw = (run_params->FFBRandomMode == 1)
+            ? (double)galaxies[p].FFBRandom
+            : (double)rand() / (double)RAND_MAX;
+
+        if(run_params->FeedbackFreeModeOn == 1) {
+            // Li et al. 2024 mass-based method (original)
+            const double Mvir = galaxies[p].Mvir;
+
+            // Calculate smooth FFB fraction using sigmoid transition (Li et al. 2024, eq. 3)
+            const double f_ffb = calculate_ffb_fraction(Mvir, Zcurr, run_params);
+
+            const double random_uniform = draw;
+
+            if(random_uniform < f_ffb) {
+                galaxies[p].FFBRegime = 1;  // FFB halo
+            } else {
+                galaxies[p].FFBRegime = 0;  // Normal halo
+            }
+        } else if(run_params->FeedbackFreeModeOn == 2) {
+            // Boylan-Kolchin 2025 acceleration-based method (Ishiyama+21 lookup table concentration)
+            // FFB regime when g_max > g_crit (sharp cutoff)
+            const double g_max = calculate_gmax_BK25(p, Zcurr, galaxies, run_params);
+
+            galaxies[p].g_max = g_max;
+
+            if(g_max > g_crit) {
+                galaxies[p].FFBRegime = 1;  // FFB halo - above critical acceleration
+            } else {
+                galaxies[p].FFBRegime = 0;  // Normal halo
+            }
+        } else if(run_params->FeedbackFreeModeOn == 3) {
+            // BK25 acceleration-based method using galaxy's stored concentration
+            // (Vmax/Vvir with infall freeze when ConcentrationOn=3)
+            const double Mvir = galaxies[p].Mvir;
+            const double Rvir = galaxies[p].Rvir;
+
+            if(Mvir <= 0.0 || Rvir <= 0.0) {
+                galaxies[p].FFBRegime = 0;
+                galaxies[p].g_max = 0.0;
+                continue;
+            }
+
+            double c = (double)galaxies[p].Concentration;
+            if(c < 1.0) c = 1.0;
+
+            const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
+            const double mu_c = log(1.0 + c) - c / (1.0 + c);
+            const double g_max = (g_vir / mu_c) * (c * c / 2.0);
+
+            galaxies[p].g_max = g_max;
+
+            if(g_max > g_crit) {
+                galaxies[p].FFBRegime = 1;  // FFB halo - above critical acceleration
+            } else {
+                galaxies[p].FFBRegime = 0;  // Normal halo
+            }
+        } else if(run_params->FeedbackFreeModeOn == 4) {
+            // BK25 acceleration-based with log-normal concentration scatter.
+            // The Ishiyama+21 table gives the mean concentration; individual halos
+            // scatter around it following p(c)dc ∝ exp(-(ln c - ln c0)^2 / 2σ_c^2) d(ln c)
+            // with σ_c ≈ 0.2 (Jing 2000; Bullock+01; Dolag+04).
+            // The persistent FFBRandom draws a fixed quantile for each halo,
+            // giving a deterministic scattered concentration and thus a smooth
+            // FFb transition across the halo population.
+            const double Mvir = galaxies[p].Mvir;
+            const double Rvir = galaxies[p].Rvir;
+
+            if(Mvir <= 0.0 || Rvir <= 0.0) {
+                galaxies[p].FFBRegime = 0;
+                galaxies[p].g_max = 0.0;
+                continue;
+            }
+
+            // Mean concentration from Ishiyama+21 lookup table
+            const double Mvir_Msun_h = Mvir * 1.0e10;
+            const double logM = log10(Mvir_Msun_h);
+            double c = interpolate_concentration_ishiyama21(logM, Zcurr, run_params);
+            if(c < 1.0) c = 1.0;
+
+            // Apply log-normal scatter: ln(c) ~ Normal(ln(c_mean), σ_c)
+            if(run_params->FFBConcSigma > 0.0) {
+                double u = draw;
+                if(u < 1.0e-6) u = 1.0e-6;
+                if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
+                const double z_normal = inverse_normal_cdf(u);
+                c = c * exp(run_params->FFBConcSigma * z_normal);
+                if(c < 1.0) c = 1.0;
+            }
+
+            // g_max with scattered concentration (BK25 Eq. 4)
+            const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
+            const double mu_c = log(1.0 + c) - c / (1.0 + c);
+            const double g_max = (g_vir / mu_c) * (c * c / 2.0);
+
+            galaxies[p].g_max = g_max;
+
+            if(g_max > g_crit) {
+                galaxies[p].FFBRegime = 1;  // FFB halo
+            } else {
+                galaxies[p].FFBRegime = 0;  // Normal halo
+            }
+        } else if(run_params->FeedbackFreeModeOn == 5) {
+            // Li et al. 2024 mass-based method with hard cutoff (no sigmoid)
+            // FFB regime when Mvir > Mvir_ffb (sharp threshold)
+            const double Mvir = galaxies[p].Mvir;
+            const double Mvir_ffb = calculate_ffb_threshold_mass(Zcurr, run_params);
+
+            if(Mvir > Mvir_ffb) {
+                galaxies[p].FFBRegime = 1;  // FFB halo - above threshold mass
+            } else {
+                galaxies[p].FFBRegime = 0;  // Normal halo
+            }
+        } else if(run_params->FeedbackFreeModeOn == 6) {
+            // Li+24 sigmoid + H2-based SF (same regime detection as mode 1)
+            const double Mvir = galaxies[p].Mvir;
+            const double f_ffb = calculate_ffb_fraction(Mvir, Zcurr, run_params);
+            const double random_uniform = draw;
+
+            if(random_uniform < f_ffb) {
+                galaxies[p].FFBRegime = 1;  // FFB halo
+            } else {
+                galaxies[p].FFBRegime = 0;  // Normal halo
+            }
+        } else if(run_params->FeedbackFreeModeOn == 7) {
+            // BK25 log-normal c scatter + H2-based SF (same regime detection as mode 4)
+            const double Mvir = galaxies[p].Mvir;
+            const double Rvir = galaxies[p].Rvir;
+
+            if(Mvir <= 0.0 || Rvir <= 0.0) {
+                galaxies[p].FFBRegime = 0;
+                galaxies[p].g_max = 0.0;
+                continue;
+            }
+
+            const double Mvir_Msun_h = Mvir * 1.0e10;
+            const double logM = log10(Mvir_Msun_h);
+            double c = interpolate_concentration_ishiyama21(logM, Zcurr, run_params);
+            if(c < 1.0) c = 1.0;
+
+            if(run_params->FFBConcSigma > 0.0) {
+                double u = draw;
+                if(u < 1.0e-6) u = 1.0e-6;
+                if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
+                const double z_normal = inverse_normal_cdf(u);
+                c = c * exp(run_params->FFBConcSigma * z_normal);
+                if(c < 1.0) c = 1.0;
+            }
+
+            const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
+            const double mu_c = log(1.0 + c) - c / (1.0 + c);
+            const double g_max = (g_vir / mu_c) * (c * c / 2.0);
+
+            galaxies[p].g_max = g_max;
+
+            if(g_max > g_crit) {
+                galaxies[p].FFBRegime = 1;  // FFB halo
+            } else {
+                galaxies[p].FFBRegime = 0;  // Normal halo
+            }
+        }
+    }
+}
+
 double interpolate_concentration_ishiyama21(const double logM, const double z, const struct params *run_params)
 {
     // Ishiyama+21 concentration-mass lookup table (mdef=200c, halo_sample=all, c_type=fit)
@@ -666,185 +898,6 @@ double calculate_gmax_BK25(const int p, const double z, const struct GALAXY *gal
     return (g_vir / mu_c) * (c * c / 2.0);
 }
 
-// Rational approximation for the inverse normal CDF (Peter Acklam's algorithm).
-// Maximum absolute error < 1.2e-9 for 0 < p < 1.
-static double inverse_normal_cdf(double p)
-{
-    static const double a[] = {
-        -3.969683028665376e+01,  2.209460984245205e+02,
-        -2.759285104469687e+02,  1.383577518672690e+02,
-        -3.066479806614716e+01,  2.506628277459239e+00
-    };
-    static const double b[] = {
-        -5.447609879822406e+01,  1.615858368580409e+02,
-        -1.556989798598866e+02,  6.680131188771972e+01,
-        -1.328068155288572e+01
-    };
-    static const double c[] = {
-        -7.784894002430293e-03, -3.223964580411365e-01,
-        -2.400758277161838e+00, -2.549732539343734e+00,
-         4.374664141464968e+00,  2.938163982698783e+00
-    };
-    static const double d[] = {
-         7.784695709041462e-03,  3.224671290700398e-01,
-         2.445134137142996e+00,  3.754408661907416e+00
-    };
-    const double p_lo = 0.02425, p_hi = 1.0 - 0.02425;
-    double q, r;
-    if(p < p_lo) {
-        q = sqrt(-2.0 * log(p));
-        return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
-               ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1.0);
-    } else if(p <= p_hi) {
-        q = p - 0.5;  r = q * q;
-        return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q /
-               (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1.0);
-    } else {
-        q = sqrt(-2.0 * log(1.0 - p));
-        return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
-                ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1.0);
-    }
-}
-
-
-void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct GALAXY *galaxies,
-                                     const struct params *run_params)
-{
-    // Pre-compute g_crit in code units for BK25 modes (constant, doesn't depend on galaxy)
-    // g_crit/G = 3100 M_sun/pc^2 (Boylan-Kolchin 2025, Table 1)
-    // Modes 2, 3, 5 use the BK25 surface-gravity threshold; modes 1 and 4 use the Li+24 sigmoid.
-    double g_crit = 0.0;
-    if(run_params->FeedbackFreeModeOn == 2 || run_params->FeedbackFreeModeOn == 3 ||
-       run_params->FeedbackFreeModeOn == 5) {
-        const double Msun_code = SOLAR_MASS / run_params->UnitMass_in_g;
-        const double pc_code = 3.08568e18 / run_params->UnitLength_in_cm;
-        g_crit = run_params->G * 3100.0 * Msun_code / (pc_code * pc_code) / run_params->Hubble_h;
-    }
-
-    for(int p = 0; p < ngal; p++) {
-        if(galaxies[p].mergeType > 0) continue;
-
-        // --- Concentration (follows ConcentrationOn parameter) ---
-        galaxies[p].Concentration = (float)get_halo_concentration(p, Zcurr, galaxies, run_params);
-
-        // --- FFB regime ---
-        galaxies[p].g_max = 0.0f;
-
-        if (run_params->FeedbackFreeModeOn == 0) {
-            galaxies[p].FFBRegime = 0;
-            continue;
-        }
-
-        // FFBRequireCGMRegime: hot-accretion galaxies cannot be FFB (all modes)
-        if(run_params->FFBRequireCGMRegime && galaxies[p].Regime == 1) {
-            galaxies[p].FFBRegime = 0;
-            continue;
-        }
-
-        if (run_params->FeedbackFreeModeOn == 1) {
-            // ---- Li+24 sigmoid ----
-            // FFBPersistentRandom: fixed quantile vs fresh draw each snapshot
-            const double f_ffb = calculate_ffb_fraction(galaxies[p].Mvir, Zcurr, run_params);
-            const double random_uniform = (run_params->FFBPersistentRandom)
-                ? (double)galaxies[p].FFBRandom
-                : (double)rand() / (double)RAND_MAX;
-            galaxies[p].FFBRegime = (random_uniform < f_ffb) ? 1 : 0;
-
-        } else if (run_params->FeedbackFreeModeOn == 2) {
-            // ---- Boylan-Kolchin 2025: median Ishiyama+21 concentration ----
-            const double g_max = calculate_gmax_BK25(p, Zcurr, galaxies, run_params);
-            galaxies[p].g_max = (float)g_max;
-            galaxies[p].FFBRegime = (g_max > g_crit) ? 1 : 0;
-
-        } else if (run_params->FeedbackFreeModeOn == 3) {
-            // ---- Boylan-Kolchin 2025 + log-normal concentration scatter ----
-            // The Ishiyama+21 table gives the median concentration; individual halos
-            // scatter around it following p(c)dc ∝ exp(-(ln c - ln c_med)^2 / 2σ_c^2) d(ln c)
-            // with σ_c = FFBConcSigma (Jing 2000; Bullock+01; Dolag+04 suggest ~0.2-0.35).
-            // FFBPersistentRandom controls whether the concentration quantile is fixed
-            // per halo (persistent) or redrawn each snapshot.
-            const double Mvir = galaxies[p].Mvir;
-            const double Rvir = galaxies[p].Rvir;
-
-            if(Mvir <= 0.0 || Rvir <= 0.0) {
-                galaxies[p].FFBRegime = 0;
-                galaxies[p].g_max = 0.0f;
-                continue;
-            }
-
-            const double Mvir_Msun_h = Mvir * 1.0e10;
-            const double logM = log10(Mvir_Msun_h);
-            double c = interpolate_concentration_ishiyama21(logM, Zcurr, run_params);
-            if(c < 1.0) c = 1.0;
-
-            if(run_params->FFBConcSigma > 0.0) {
-                // FFBPersistentRandom: 1 = fixed halo quantile; 0 = fresh draw each snapshot
-                double u = (run_params->FFBPersistentRandom)
-                    ? (double)galaxies[p].FFBRandom
-                    : (double)rand() / (double)RAND_MAX;
-                if(u < 1.0e-6) u = 1.0e-6;
-                if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
-                const double z_normal = inverse_normal_cdf(u);
-                c = c * exp(run_params->FFBConcSigma * z_normal);
-                if(c < 1.0) c = 1.0;
-            }
-
-            const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
-            const double mu_c = log(1.0 + c) - c / (1.0 + c);
-            const double g_max = (g_vir / mu_c) * (c * c / 2.0);
-
-            galaxies[p].g_max = (float)g_max;
-            galaxies[p].FFBRegime = (g_max > g_crit) ? 1 : 0;
-
-        } else if (run_params->FeedbackFreeModeOn == 4) {
-            // ---- Li+24 sigmoid + H2 star formation ----
-            // Classification identical to mode 1; star formation uses H2 (routed in sf&fb).
-            const double f_ffb = calculate_ffb_fraction(galaxies[p].Mvir, Zcurr, run_params);
-            const double random_uniform = (run_params->FFBPersistentRandom)
-                ? (double)galaxies[p].FFBRandom
-                : (double)rand() / (double)RAND_MAX;
-            galaxies[p].FFBRegime = (random_uniform < f_ffb) ? 1 : 0;
-
-        } else if (run_params->FeedbackFreeModeOn == 5) {
-            // ---- Boylan-Kolchin 2025 + log-normal concentration scatter + H2 star formation ----
-            // Classification identical to mode 3; star formation uses H2 (routed in sf&fb).
-            const double Mvir = galaxies[p].Mvir;
-            const double Rvir = galaxies[p].Rvir;
-
-            if(Mvir <= 0.0 || Rvir <= 0.0) {
-                galaxies[p].FFBRegime = 0;
-                galaxies[p].g_max = 0.0f;
-                continue;
-            }
-
-            const double logM = log10(Mvir * 1.0e10);
-            double c = interpolate_concentration_ishiyama21(logM, Zcurr, run_params);
-            if(c < 1.0) c = 1.0;
-
-            if(run_params->FFBConcSigma > 0.0) {
-                double u = (run_params->FFBPersistentRandom)
-                    ? (double)galaxies[p].FFBRandom
-                    : (double)rand() / (double)RAND_MAX;
-                if(u < 1.0e-6) u = 1.0e-6;
-                if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
-                const double z_normal = inverse_normal_cdf(u);
-                c = c * exp(run_params->FFBConcSigma * z_normal);
-                if(c < 1.0) c = 1.0;
-            }
-
-            const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
-            const double mu_c = log(1.0 + c) - c / (1.0 + c);
-            const double g_max = (g_vir / mu_c) * (c * c / 2.0);
-
-            galaxies[p].g_max = (float)g_max;
-            galaxies[p].FFBRegime = (g_max > g_crit) ? 1 : 0;
-
-        } else {
-            galaxies[p].FFBRegime = 0;
-        }
-    }
-}
-
 
 float calculate_stellar_scale_height_BR06(float disk_scale_length_pc)
 {
@@ -868,27 +921,25 @@ float calculate_stellar_scale_height_BR06(float disk_scale_length_pc)
 float calculate_midplane_pressure_BR06(float sigma_gas, float sigma_stars, float disk_scale_length_pc)
 {
     // Early termination for edge cases
-    if (sigma_gas <= 0.5 || disk_scale_length_pc <= 0.0) {
+    if (sigma_gas <= 0.0 || disk_scale_length_pc <= 0.0) {
         return 0.0;
     }
-    
+
     // For very low stellar surface density, use a minimal value to avoid numerical issues
-    // but don't artificially boost it like before
     float effective_sigma_stars = sigma_stars;
     if (sigma_stars < 0.1) {
-        effective_sigma_stars = 0.1;  // Minimal floor just to avoid sqrt(0)
+        effective_sigma_stars = 0.1;
     }
-    
+
     // Calculate stellar scale height using exact BR06 equation (9)
     float h_star_pc = calculate_stellar_scale_height_BR06(disk_scale_length_pc);
-    
-    // BR06 hardcoded parameters EXACTLY as in paper
-    const float v_g = 8.0;          // km/s, gas velocity dispersion (BR06 Table text)
-    
-    // BR06 Equation (5) EXACTLY as written in paper:
-    // P_ext/k = 272 cm⁻³ K × (Σ_gas/M_⊙ pc⁻²) × (Σ_*/M_⊙ pc⁻²)^0.5 × (v_g/km s⁻¹) × (h_*/pc)^-0.5
-    float pressure = 272.0 * sigma_gas * sqrt(effective_sigma_stars) * v_g / sqrt(h_star_pc);
+    if (h_star_pc <= 0.0) return 0.0;
 
+    const float v_g = 8.0;  // km/s, gas velocity dispersion (BR06)
+
+    // BR06 Equation (5) - stellar-dominated approximation:
+    // P_ext/k = 272 × Σ_gas × √Σ_* × v_g × h_*^(-0.5)
+    float pressure = 272.0 * sigma_gas * sqrt(effective_sigma_stars) * v_g / sqrt(h_star_pc);
 
     return pressure; // K cm⁻³
 }
@@ -1000,10 +1051,9 @@ double calculate_ffb_fraction(const double Mvir, const double z, const struct pa
 {
     // Calculate the fraction of galaxies in FFB regime
     // Uses smooth sigmoid transition from Li et al. 2024, equation (3)
-    // Returns 0 for modes that do not use the sigmoid (e.g., MBK25 hard threshold).
-
-    if (run_params->FeedbackFreeModeOn == 0 || run_params->FeedbackFreeModeOn == 2) {
-        return 0.0;
+    
+    if (run_params->FeedbackFreeModeOn == 0) {
+        return 0.0;  // FFB mode disabled
     }
 
     // if (z < 5.0) {
@@ -1031,7 +1081,8 @@ double calculate_ffb_fraction(const double Mvir, const double z, const struct pa
     const double f_ffb = 1.0 / (1.0 + exp(-x));
     // Steeper transition
     // const double f_ffb = 1.0 / (1.0 + exp(-k * x));
-    
+
+
     return f_ffb;
 }
 

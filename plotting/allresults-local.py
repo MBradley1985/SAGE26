@@ -888,6 +888,13 @@ if __name__ == '__main__':
     
     plt.ylabel(r'$\log\ M_{\mathrm{BH}}\ (M_{\odot})$')  # Set the y...
     plt.xlabel(r'$\log\ M_{\mathrm{bulge}}\ (M_{\odot})$')  # and the x-axis labels
+
+    # how many black holes are there in this plot?
+    print(f"Number of model black holes plotted: {len(BlackHoleMass)}")
+
+    # black holes greater than 0 
+    w_bh = np.where(BlackHoleMass > 0)[0]
+    print(f"Number of model black holes with mass > 0: {len(w_bh)}")
         
     # Set the x and y axis minor ticks
     ax.xaxis.set_minor_locator(plt.MultipleLocator(0.05))

@@ -4,7 +4,7 @@
 
 FileNameGalaxies   model
 %OutputDir         /<absolute>/<root>/<path>/sage-model/output/millennium/
-OutputDir          output/millennium_mbk_smooth/
+OutputDir          output/millennium/
 
 FirstFile         0
 LastFile          7
@@ -53,20 +53,20 @@ ReionizationOn              1   %0: switch off
 DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
 
 CGMrecipeOn                 1   %0: switch off
-CGMPrecipSigmoid            1   %0: tanh precipitation (original); 1: logistic sigmoid width=2, blended with radiative cooling
+CGMDensityProfile           0   %0: uniform; 1: NFW; 2: beta-profile (β=2/3)
+CGMPrecipitationMode        1   %0: tanh (McCourt+12 style); 1: logistic sigmoid centred on t_cool/t_ff=10, width=2
+CGMPrecipRadiusMode         0   %0: evaluate t_cool/t_ff at r_cool; 1: evaluate at 0.1*R_vir
 FIREmodeOn                  1   %0: switch off
 
-FeedbackFreeModeOn          5   %0: off; 1: Li+24 sigmoid; 2: MBK25 hard threshold; 3: MBK25 + log-normal conc scatter; 4: Li+24 sigmoid + H2 SF; 5: MBK25 + log-normal conc scatter + H2 SF
-FFBPersistentRandom         1   %0: fresh rand() each snapshot; 1: use fixed per-galaxy FFBRandom (no flickering)
-FFBRequireCGMRegime         0   %0: FFB independent of CGM regime; 1: only cold-accretion (Regime=0) galaxies can be FFB
-
-ConcentrationOn             3   %0: off; 1: Ishiyama+21 (COLOSSUS table, auto-selects Millennium/Uchuu cosmology); 2: Vmax/Vvir derived; 3: Vmax/Vvir + sat infall freeze
+ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
+FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 conc); 3: BK25 (ConcentrationOn method); 4: BK25 + log-normal c scatter; 5: Li+24 sharp; 6: Li+24 sigmoid + H2 SF; 7: BK25 log-normal c scatter + H2 SF
+FFBIgnoreRegime             1   %0: restrict FFB to CGM-regime (Regime=0) halos; 1: apply Li+24/BK25 criteria regardless of halo regime
+FFBRandomMode               0   %0: fresh random draw each snapshot; 1: persistent FFBRandom assigned at galaxy creation
 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
-DynamicDisruptionSplit      2   %0: fixed FractionDisruptedToICS; 1: 1-(Msub/Mhost)^alpha; 2: alpha scaled by Cref/c_sat
-
+DynamicDisruptionSplit      2   %0: fixed fraction; 1: mass-ratio only; 2: concentration-weighted
 
 %------------------------------------------
 %----- SAGE model parameters --------------
@@ -74,7 +74,7 @@ DynamicDisruptionSplit      2   %0: fixed FractionDisruptedToICS; 1: 1-(Msub/Mho
 
 SfrEfficiency               0.03    %efficiency of SF;
 FFBMaxEfficiency            0.2     %0.2 fits observations best, 1.0 is theoretical maximum
-FFBConcSigma                0.2     %log-normal scatter in ln(concentration) for mode 3 (sigma_ln_c; 0 = no scatter)
+FFBConcSigma                0.2     %σ_c for log-normal concentration scatter in ln(c) (FeedbackFreeModeOn=4); ~0.2 (Jing 2000, Bullock+01)
 
 RedshiftPowerLawExponent    1.25    %alpha for (1+z)^alpha in mass loading calculation (FIREmodeOn=1)
 
@@ -90,8 +90,9 @@ BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
 ThresholdSatDisruption      1.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption
 FractionDisruptedToICS      0.8     %fraction of disrupted satellite stellar mass to ICS (rest goes to BCG); 1.0 = original behavior
-DisruptionSplitAlpha        0.25    %base mass-ratio exponent (mode 1); or alpha_0 for mode 2
-DisruptionSplitCref         10.0    %reference concentration for mode 2 (alpha_eff = alpha * Cref/c_sat)
+
+DisruptionSplitAlpha        0.25    %Base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
+DisruptionSplitCref         10.0    %Reference concentration for concentration weighting (DynamicDisruptionSplit=2)
 
 Yield                       0.025   %fraction of SF mass produced as metals
 RecycleFraction             0.43    %fraction of SF mass instantaneously recycled back to cold

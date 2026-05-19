@@ -257,6 +257,18 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->CGMrecipeOn);
     ParamID[NParam++] = INT;
 
+    strncpy(ParamTag[NParam], "CGMDensityProfile", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->CGMDensityProfile);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "CGMPrecipitationMode", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->CGMPrecipitationMode);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "CGMPrecipRadiusMode", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->CGMPrecipRadiusMode);
+    ParamID[NParam++] = INT;
+
     strncpy(ParamTag[NParam], "FIREmodeOn", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->FIREmodeOn);
     ParamID[NParam++] = INT;
@@ -273,24 +285,20 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->FFBConcSigma);
     ParamID[NParam++] = DOUBLE;
 
+    strncpy(ParamTag[NParam], "ConcentrationOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->ConcentrationOn);
+    ParamID[NParam++] = INT;
+
     strncpy(ParamTag[NParam], "FeedbackFreeModeOn", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->FeedbackFreeModeOn);
     ParamID[NParam++] = INT;
 
-    strncpy(ParamTag[NParam], "FFBPersistentRandom", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->FFBPersistentRandom);
+    strncpy(ParamTag[NParam], "FFBIgnoreRegime", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->FFBIgnoreRegime);
     ParamID[NParam++] = INT;
 
-    strncpy(ParamTag[NParam], "FFBRequireCGMRegime", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->FFBRequireCGMRegime);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "CGMPrecipSigmoid", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->CGMPrecipSigmoid);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "ConcentrationOn", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->ConcentrationOn);
+    strncpy(ParamTag[NParam], "FFBRandomMode", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->FFBRandomMode);
     ParamID[NParam++] = INT;
 
     strncpy(ParamTag[NParam], "BulgeSizeOn", MAXTAGLEN);

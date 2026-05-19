@@ -89,6 +89,7 @@ extern "C" {
       float infallMvir;
       float infallVvir;
       float infallVmax;
+      float infallStellarMass;
       float TimeOfInfall;
 
       /* CGM properties */
@@ -102,11 +103,10 @@ extern "C" {
       float RcoolToRvir;
 
       int FFBRegime;
-      float FFBRandom;
       float Concentration;
-      float g_max;
       float mdot_cool;
       float mdot_stream;
+      double g_max;
     };
 
     /* Proto-Types */
