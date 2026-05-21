@@ -267,6 +267,9 @@ double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, const dou
     return r_cool;
 }
 
+// ============================================================================
+// Cooling recipe selector
+// ============================================================================
 
 double cooling_recipe(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -278,6 +281,9 @@ double cooling_recipe(const int gal, const double dt, struct GALAXY *galaxies, c
     }
 }
 
+// ============================================================================
+// Hot-regime cooling recipe (SAGE C16 style)
+// ============================================================================
 
 double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -422,6 +428,9 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
     return coolingGas;
 }
 
+// ============================================================================
+// CGM-regime cooling recipe (new, consistent with hot regime approach)
+// ============================================================================
 
 double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxies,
                          const struct params *run_params)
@@ -636,6 +645,8 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         }
     }
 
+    // Uncomment to apply AGN heating to the precipitating gas
+    
     // double x = PROTONMASS * BOLTZMANN * temp / lambda;        // now this has units sec g/cm^3
     // x /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);         // now in internal units
 
@@ -681,6 +692,9 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     return coolingGas;
 }
 
+// ============================================================================
+// Cooling recipe for both regimes (calls the appropriate recipe based on Regime flag)
+// ============================================================================
 
 double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -738,7 +752,9 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
     return total_cooling;
 }
 
-
+// ============================================================================
+// AGN HEATING: reduces coolingGas based on past AGN heating, then calculates new AGN heating
+// ============================================================================
 
 double do_AGN_heating(double coolingGas, const int centralgal, const double dt, const double x, const double rcool, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -835,6 +851,11 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
     return coolingGas;
 }
 
+// ============================================================================
+// AGN HEATING FOR CGM-REGIME HALOES: reduces coolingGas based on past AGN heating
+// Curently not used, but implemented for future exploration of AGN feedback in the CGM regime
+// ============================================================================
+
 double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool, 
                          struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -929,6 +950,10 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
     }
     return coolingGas;
 }
+
+// ============================================================================
+// The actual cooling function
+// ============================================================================
 
 void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct GALAXY *galaxies)
 {

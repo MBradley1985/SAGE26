@@ -11,6 +11,10 @@
 #include "model_starformation_and_feedback.h"
 #include "model_disk_instability.h"
 
+// ============================================================================
+// Merger time between satellite and central
+// ============================================================================
+
 double estimate_merging_time(const int sat_halo, const int mother_halo, const int ngal, struct halo_data *halos, struct GALAXY *galaxies, const struct params *run_params)
 {
     double mergtime;
@@ -44,6 +48,10 @@ double estimate_merging_time(const int sat_halo, const int mother_halo, const in
     return mergtime;
 
 }
+
+// ============================================================================
+// Determine the radius of merger remnant
+// ============================================================================
 
 double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GALAXY *g2)
 {
@@ -124,6 +132,11 @@ double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GAL
 
     return R_final;
 }
+
+// ============================================================================
+// Actually merge the galaxies and apply the starburst recipe
+// This is called from both mergers and disk instabilities, but the merger case is more complex
+// ============================================================================
 
 void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int centralgal,
                              const double time, const double dt, const int halonr, const int step,
@@ -220,7 +233,9 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     }
 }
 
-
+// ============================================================================
+// Grow black hole through accretion from cold disk during mergers
+// ============================================================================
 
 void grow_black_hole(const int merger_centralgal, const double mass_ratio, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -252,7 +267,9 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
     }
 }
 
-
+// ============================================================================
+// QUASARS: Eject gas from galaxy based on energy of quasar-mode wind
+// ============================================================================
 
 void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -308,7 +325,9 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
     }
 }
 
-
+// ============================================================================
+// Actually merge the galaxies together by adding their properties, and apply the starburst recipe
+// ============================================================================
 
 void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -387,7 +406,9 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     }
 }
 
-
+// ============================================================================
+// Bulges
+// ============================================================================
 
 void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
 {
@@ -410,7 +431,9 @@ void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
     }
 }
 
-
+// ============================================================================
+// Starbursts
+// ============================================================================
 
 void collisional_starburst_recipe(const double mass_ratio, const int merger_centralgal, const int centralgal,
                                   const double time, const double dt, const int halonr, const int mode, const int step,
@@ -641,7 +664,9 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     }
 }
 
-
+// ============================================================================
+// Intracluster Stars (ICS) and Disruption
+// ============================================================================
 
 void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double time, struct GALAXY *galaxies, const struct params *run_params)
 {

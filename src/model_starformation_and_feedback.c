@@ -12,6 +12,9 @@
 
 #define HYDROGEN_MASS_FRAC 0.74
 
+// ============================================================================
+// Stars are born and go boom: star formation and feedback
+// ============================================================================
 
 void starformation_and_feedback(const int p, const int centralgal, const double time, const double dt, const int halonr, const int step,
                                 struct GALAXY *galaxies, const struct params *run_params)
@@ -836,7 +839,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     }
 }
 
-
+// ============================================================================
+// Actual star formation and metals
+// ============================================================================
 
 void update_from_star_formation(const int p, const double stars, const double metallicity, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -848,7 +853,9 @@ void update_from_star_formation(const int p, const double stars, const double me
     galaxies[p].MetalsStellarMass += metallicity * (1 - RecycleFraction) * stars;
 }
 
-
+// ============================================================================
+// Supernova feedback
+// ============================================================================
 
 void update_from_feedback(const int p, const int centralgal, double reheated_mass, double ejected_mass, const double metallicity,
                           struct GALAXY *galaxies, const struct params *run_params)
@@ -953,6 +960,10 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
         galaxies[p].OutflowRate += reheated_mass;
     }
 }
+
+// ============================================================================
+// FFB star formation
+// ============================================================================
 
 void starformation_ffb(const int p, const int centralgal, const double dt, const int step,
                        struct GALAXY *galaxies, const struct params *run_params)

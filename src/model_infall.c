@@ -9,6 +9,9 @@
 #include "model_infall.h"
 #include "model_misc.h"
 
+// ============================================================================
+// Infall recipe
+// ============================================================================
 
 double infall_recipe(const int centralgal, const int ngal, const double Zcurr, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -139,7 +142,9 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
     return infallingMass;
 }
 
-
+// ============================================================================
+// Satellite stripping
+// ============================================================================
 
 void strip_from_satellite(const int centralgal, const int gal, const double Zcurr, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -221,7 +226,9 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
 
 }
 
-
+// ============================================================================
+// Reionization
+// ============================================================================
 
 double do_reionization(const int gal, const double Zcurr, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -275,7 +282,9 @@ double do_reionization(const int gal, const double Zcurr, struct GALAXY *galaxie
 
 }
 
-
+// ============================================================================
+// Actually adding the infalling gas to the halo
+// ============================================================================
 
 void add_infall_to_hot(const int gal, double infallingGas, struct GALAXY *galaxies, 
                        const struct params *run_params)

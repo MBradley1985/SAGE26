@@ -8,6 +8,10 @@
 
 #include "model_misc.h"
 
+// ============================================================================
+// Initialse galaxy properties
+// ============================================================================
+
 void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct halo_data *halos,
                  struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -126,7 +130,9 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
 
 }
 
-
+// ============================================================================
+// Morphology
+// ============================================================================
 
 double get_disk_radius(const int halonr, const int p, const struct halo_data *halos, const struct GALAXY *galaxies)
 {
@@ -370,6 +376,10 @@ double get_virial_radius(const int halonr, const struct halo_data *halos, const 
   return cbrt(get_virial_mass(halonr, halos, run_params) * fac);
 }
 
+// ============================================================================
+// CGM vs. Hot Halo Regime Determination
+// ============================================================================
+
 void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
                                 const struct params *run_params)
 {
@@ -448,6 +458,10 @@ static double inverse_normal_cdf(double p)
                  ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1.0);
     }
 }
+
+// ============================================================================
+// FFB Regime Determination
+// ============================================================================
 
 void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct GALAXY *galaxies,
                                      const struct params *run_params)
@@ -647,6 +661,10 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
         }
     }
 }
+
+// ============================================================================
+// Concentrations
+// ============================================================================
 
 double interpolate_concentration_ishiyama21(const double logM, const double z, const struct params *run_params)
 {
@@ -859,6 +877,71 @@ double get_halo_concentration(const int p, const double z, const struct GALAXY *
     return c;
 }
 
+// ============================================================================
+// Li+24 FFB threshold: fraction of galaxies that are FFBs
+// ============================================================================
+
+double calculate_ffb_threshold_mass(const double z, const struct params *run_params)
+{
+    // Equation (2) from Li et al. 2024
+    // M_v,ffb / 10^10.8 M_sun ~ ((1+z)/10)^-6.2
+    //
+    // In code units (10^10 M_sun/h):
+    // log(M_code) = log(M_sun) - 10 + log(h)
+    //             = 10.8 - 6.2*log((1+z)/10) - 10 + log(h)
+    //             = 0.8 + log(h) - 6.2*log((1+z)/10)
+
+    const double h = run_params->Hubble_h;
+    const double z_norm = (1.0 + z) / 10.0;
+    const double log_Mvir_ffb_code = 0.8 + log10(h) - 6.2 * log10(z_norm);
+
+    return pow(10.0, log_Mvir_ffb_code);
+}
+
+
+double calculate_ffb_fraction(const double Mvir, const double z, const struct params *run_params)
+{
+    // Calculate the fraction of galaxies in FFB regime
+    // Uses smooth sigmoid transition from Li et al. 2024, equation (3)
+    
+    if (run_params->FeedbackFreeModeOn == 0) {
+        return 0.0;  // FFB mode disabled
+    }
+
+    // if (z < 5.0) {
+    //     return 0.0;  // FFB only active at z >= 6.2
+    // }
+    
+    // Calculate FFB threshold mass
+    const double Mvir_ffb = calculate_ffb_threshold_mass(z, run_params);
+
+    // BUG FIX: Protect against log10(0) or log10(negative)
+    if(Mvir <= 0.0 || Mvir_ffb <= 0.0) {
+        return 0.0;  // Return no FFB for invalid masses
+    }
+
+    // Width of transition in dex (Li et al. use 0.15 dex)
+    const double delta_log_M = 0.15;
+
+    // Calculate argument for sigmoid function
+    const double x = log10(Mvir / Mvir_ffb) / delta_log_M;
+    
+    // Sigmoid function: S(x) = 1 / (1 + exp(-x))
+    // const double k = 5.0;  // Steepness parameter (can be adjusted)
+    // Sigmoid function with adjustable steepness
+    // Smoothly varies from 0 (well below threshold) to 1 (well above threshold)
+    const double f_ffb = 1.0 / (1.0 + exp(-x));
+    // Steeper transition
+    // const double f_ffb = 1.0 / (1.0 + exp(-k * x));
+
+
+    return f_ffb;
+}
+
+// ============================================================================
+// MBK25 FFB threshold: maximum NFW gravitational acceleration (g_max)
+// ============================================================================
+
 double calculate_gmax_BK25(const int p, const double z, const struct GALAXY *galaxies,
                             const struct params *run_params)
 {
@@ -898,6 +981,9 @@ double calculate_gmax_BK25(const int p, const double z, const struct GALAXY *gal
     return (g_vir / mu_c) * (c * c / 2.0);
 }
 
+// ============================================================================
+// H2 helper functions
+// ============================================================================
 
 float calculate_stellar_scale_height_BR06(float disk_scale_length_pc)
 {
@@ -1028,66 +1114,6 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
     galaxies[gal].H2gas = H2_code_units;
     return H2_code_units;
 }
-
-double calculate_ffb_threshold_mass(const double z, const struct params *run_params)
-{
-    // Equation (2) from Li et al. 2024
-    // M_v,ffb / 10^10.8 M_sun ~ ((1+z)/10)^-6.2
-    //
-    // In code units (10^10 M_sun/h):
-    // log(M_code) = log(M_sun) - 10 + log(h)
-    //             = 10.8 - 6.2*log((1+z)/10) - 10 + log(h)
-    //             = 0.8 + log(h) - 6.2*log((1+z)/10)
-
-    const double h = run_params->Hubble_h;
-    const double z_norm = (1.0 + z) / 10.0;
-    const double log_Mvir_ffb_code = 0.8 + log10(h) - 6.2 * log10(z_norm);
-
-    return pow(10.0, log_Mvir_ffb_code);
-}
-
-
-double calculate_ffb_fraction(const double Mvir, const double z, const struct params *run_params)
-{
-    // Calculate the fraction of galaxies in FFB regime
-    // Uses smooth sigmoid transition from Li et al. 2024, equation (3)
-    
-    if (run_params->FeedbackFreeModeOn == 0) {
-        return 0.0;  // FFB mode disabled
-    }
-
-    // if (z < 5.0) {
-    //     return 0.0;  // FFB only active at z >= 6.2
-    // }
-    
-    // Calculate FFB threshold mass
-    const double Mvir_ffb = calculate_ffb_threshold_mass(z, run_params);
-
-    // BUG FIX: Protect against log10(0) or log10(negative)
-    if(Mvir <= 0.0 || Mvir_ffb <= 0.0) {
-        return 0.0;  // Return no FFB for invalid masses
-    }
-
-    // Width of transition in dex (Li et al. use 0.15 dex)
-    const double delta_log_M = 0.15;
-
-    // Calculate argument for sigmoid function
-    const double x = log10(Mvir / Mvir_ffb) / delta_log_M;
-    
-    // Sigmoid function: S(x) = 1 / (1 + exp(-x))
-    // const double k = 5.0;  // Steepness parameter (can be adjusted)
-    // Sigmoid function with adjustable steepness
-    // Smoothly varies from 0 (well below threshold) to 1 (well above threshold)
-    const double f_ffb = 1.0 / (1.0 + exp(-x));
-    // Steeper transition
-    // const double f_ffb = 1.0 / (1.0 + exp(-k * x));
-
-
-    return f_ffb;
-}
-
-// Calculate molecular fraction using Krumholz & Dekel (2012) model
-// Based on equations 18-21 from Krumholz & Dekel 2012, ApJ 753:16
 
 float calculate_H2_fraction_KD12(const float surface_density, const float metallicity, const float clumping_factor) 
 {

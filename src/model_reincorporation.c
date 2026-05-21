@@ -9,6 +9,10 @@
 #include "model_reincorporation.h"
 #include "model_misc.h"
 
+// ============================================================================
+// Reincorporation of ejected gas back into the halo
+// ============================================================================
+
 void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     // SN velocity is 630km/s, and the condition for reincorporation is that the

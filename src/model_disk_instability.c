@@ -10,6 +10,10 @@
 #include "model_misc.h"
 #include "model_mergers.h"
 
+// ============================================================================
+// Disk instability
+// ============================================================================
+
 void check_disk_instability(const int p, const int centralgal, const int halonr, const double time, const double dt, const int step,
                             struct GALAXY *galaxies, struct params *run_params)
 {
