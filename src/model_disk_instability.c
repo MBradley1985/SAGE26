@@ -66,32 +66,8 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
 
         }
 
-        // CRITICAL: Recalculate disc radius after mass transfer
-        // The disc is now less massive, so its scale radius should shrink
-        // Use conservation of angular momentum: smaller mass → smaller radius
-        if(unstable_stars > 0.0 || unstable_gas > 0.0) {
-            // Disc mass after instability
-            const double new_diskmass = galaxies[p].ColdGas + (galaxies[p].StellarMass - galaxies[p].BulgeMass);
-            
-            if(new_diskmass > 0.0 && diskmass > 0.0) {
-                // Simple scaling: R_new = R_old × (M_new / M_old)
-                // This conserves specific angular momentum per unit mass
-                const double mass_ratio = new_diskmass / diskmass;
-                galaxies[p].DiskScaleRadius *= mass_ratio;
-                
-                // Safety check: don't let disc radius go to zero or become huge
-                if(galaxies[p].DiskScaleRadius < 0.01 * galaxies[p].Rvir) {
-                    galaxies[p].DiskScaleRadius = 0.01 * galaxies[p].Rvir;
-                }
-                if(galaxies[p].DiskScaleRadius > galaxies[p].Rvir) {
-                    galaxies[p].DiskScaleRadius = galaxies[p].Rvir;
-                }
-            } else {
-                // Disc has been completely consumed by bulge
-                galaxies[p].DiskScaleRadius = 0.0;
-            }
-        
-        }
+        // Disc scale radius is unchanged by instability: the remaining disk retains the
+        // same specific angular momentum per unit mass as before, so r_d stays constant.
 
         // burst excess gas and feed black hole (really need a dedicated model for bursts and BH growth here)
         // BUG FIX: Also check ColdGas > 0 to avoid division by zero

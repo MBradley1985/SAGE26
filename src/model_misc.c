@@ -1059,60 +1059,150 @@ float calculate_molecular_fraction_BR06(float gas_surface_density, float stellar
     return f_mol;
 }
 
-float calculate_molecular_fraction_radial_integration(const int gal, struct GALAXY *galaxies, 
+float calculate_molecular_fraction_radial_integration(const int gal, struct GALAXY *galaxies,
                                                       const struct params *run_params)
 {
     const float h = run_params->Hubble_h;
     const float rs_pc = galaxies[gal].DiskScaleRadius * 1.0e6 / h;  // Scale radius in pc
-    
+
     if (rs_pc <= 0.0 || galaxies[gal].ColdGas <= 0.0) {
         return 0.0;
     }
-    
-    // Total masses in physical units (M☉)
-    const float M_gas_total = galaxies[gal].ColdGas * 1.0e10 / h;
-    const float M_star_total = galaxies[gal].StellarMass * 1.0e10 / h;
-    
+
+    // Total masses in physical units (M☉); stellar uses disk-only (no bulge)
+    const float M_gas_total  = galaxies[gal].ColdGas * 1.0e10 / h;
+    const float M_disk_star  = (galaxies[gal].StellarMass - galaxies[gal].BulgeMass) * 1.0e10 / h;
+
     // Central surface densities for exponential profiles: Σ₀ = M_total / (2π r_s²)
-    const float sigma_gas_0 = M_gas_total / (2.0 * M_PI * rs_pc * rs_pc);
-    const float sigma_star_0 = M_star_total / (2.0 * M_PI * rs_pc * rs_pc);
-    
-    // Radial integration parameters
-    const int N_BINS = 10;  // Number of radial bins
-    const float R_MAX = 3.0 * rs_pc;  // Integrate out to 3 scale radii (~95% of mass)
-    const float dr = R_MAX / N_BINS;
-    
+    const float sigma_gas_0  = M_gas_total / (2.0 * M_PI * rs_pc * rs_pc);
+    const float sigma_star_0 = (M_disk_star > 0.0) ? M_disk_star / (2.0 * M_PI * rs_pc * rs_pc) : 0.0;
+
+    // Radial integration parameters from run_params (defaults: 25 bins, 5*r_s)
+    const int   N_BINS = run_params->H2RadialNBins;
+    const float R_MAX  = (float)(run_params->H2RadialRMaxFactor) * rs_pc;
+    const float dr     = R_MAX / N_BINS;
+
+    // Prescription-specific quantities that don't depend on radius (compute before loop)
+    const int sfpres = run_params->SFprescription;
+
+    // GD14 (prescription 7): precompute radially-invariant GD14 parameters
+    float met7 = 0.0f, D_MW7 = 1e-4f, S7 = 0.0f, s_param7 = 0.0f;
+    float D_star7 = 0.0f, g7 = 0.0f, Sigma_R1_7 = 1e10f, alpha7 = 1.0f;
+    if(sfpres == 7) {
+        met7 = (galaxies[gal].ColdGas > 0.0f) ? (float)(galaxies[gal].MetalsColdGas / galaxies[gal].ColdGas) : 0.0f;
+        D_MW7 = met7 / 0.02f; if(D_MW7 < 1e-4f) D_MW7 = 1e-4f;
+        S7 = 3.0f * rs_pc / 100.0f;
+        s_param7 = powf(0.001f + 0.1f, 0.7f);  // U_MW=1.0
+        D_star7 = 0.17f * (2.0f + powf(S7, 5.0f)) / (1.0f + powf(S7, 5.0f));
+        g7 = sqrtf(D_MW7 * D_MW7 + D_star7 * D_star7);
+        Sigma_R1_7 = (g7 > 0.0f) ? (40.0f / g7) * s_param7 / (1.0f + s_param7) : 1e10f;
+        alpha7 = 1.0f + 0.7f * sqrtf(s_param7) / (1.0f + s_param7);
+    }
+
     // Integrate molecular gas mass
     float M_H2_total = 0.0;
-    
+
     for (int i = 0; i < N_BINS; i++) {
         // Bin center radius
-        const float r = (i + 0.5) * dr;
-        
+        const float r = (i + 0.5f) * dr;
+
         // Exponential surface density profiles: Σ(r) = Σ₀ exp(-r/r_s)
-        const float exp_factor = exp(-r / rs_pc);
+        const float exp_factor = expf(-r / rs_pc);
         const float sigma_gas_r = sigma_gas_0 * exp_factor;
         const float sigma_star_r = sigma_star_0 * exp_factor;
-        
+
         // Skip bins with negligible gas
-        if (sigma_gas_r < 1e-3) continue;
-        
-        // Calculate molecular fraction at this radius using BR06
-        const float f_mol_r = calculate_molecular_fraction_BR06(sigma_gas_r, sigma_star_r, 
-                                                                rs_pc);
-        
+        if (sigma_gas_r < 1e-3f) continue;
+
+        // Calculate molecular fraction at this radius using the appropriate prescription
+        float f_mol_r = 0.0f;
+
+        if(sfpres == 1 || sfpres == 3) {
+            // BR06
+            f_mol_r = calculate_molecular_fraction_BR06(sigma_gas_r, sigma_star_r, rs_pc);
+
+        } else if(sfpres == 4) {
+            // KD12
+            float met4 = (galaxies[gal].ColdGas > 0.0f) ? (float)(galaxies[gal].MetalsColdGas / galaxies[gal].ColdGas) : 0.0f;
+            f_mol_r = calculate_H2_fraction_KD12(sigma_gas_r, met4, 5.0f);
+
+        } else if(sfpres == 5) {
+            // KMT09
+            float met5 = (galaxies[gal].ColdGas > 0.0f) ? (float)(galaxies[gal].MetalsColdGas / galaxies[gal].ColdGas) : 0.0f;
+            float Zp5 = met5 / 0.02f; if(Zp5 < 0.05f) Zp5 = 0.05f;
+            float fc5 = 3.0f;
+            float tau_c5 = 0.066f * fc5 * Zp5 * sigma_gas_r;
+            float chi5 = 0.77f * (1.0f + 3.1f * powf(Zp5, 0.365f));
+            float s5 = (sigma_gas_r > 0.0f && tau_c5 > 1e-10f)
+                       ? logf(1.0f + 0.6f * chi5 + 0.01f * chi5 * chi5) / (0.6f * tau_c5) : 100.0f;
+            f_mol_r = (s5 < 2.0f) ? 1.0f - (3.0f * s5) / (4.0f + s5) : 0.0f;
+            if(f_mol_r < 0.0f) f_mol_r = 0.0f;
+
+        } else if(sfpres == 6) {
+            // K13
+            float met6 = (galaxies[gal].ColdGas > 0.0f) ? (float)(galaxies[gal].MetalsColdGas / galaxies[gal].ColdGas) : 0.0f;
+            float Zp6 = met6 / 0.014f; if(Zp6 < 0.01f) Zp6 = 0.01f;
+            float fc6 = 5.0f;
+            float chi6 = 3.1f * (1.0f + 3.1f * powf(Zp6, 0.365f)) / 4.1f;
+            float tau_c6 = 0.066f * fc6 * Zp6 * sigma_gas_r;
+            float s6 = (tau_c6 > 0.0f) ? logf(1.0f + 0.6f * chi6 + 0.01f * chi6 * chi6) / (0.6f * tau_c6) : 100.0f;
+            f_mol_r = (s6 < 2.0f) ? 1.0f - (0.75f * s6) / (1.0f + 0.25f * s6) : 0.0f;
+            if(f_mol_r < 0.0f) f_mol_r = 0.0f;
+
+        } else if(sfpres == 7) {
+            // GD14 — galaxy-wide quantities precomputed above
+            float q7 = (Sigma_R1_7 > 0.0f && sigma_gas_r > 0.0f)
+                       ? powf(sigma_gas_r / Sigma_R1_7, alpha7) : 0.0f;
+            f_mol_r = q7 / (1.0f + q7);
+            if(f_mol_r > 1.0f) f_mol_r = 1.0f;
+
+        } else {
+            f_mol_r = 0.0f;
+        }
+
         // Mass of molecular gas in this annulus: dM = 2π r Σ_gas f_mol dr
-        const float dM_H2 = 2.0 * M_PI * r * sigma_gas_r * f_mol_r * dr;
-        
+        const float dM_H2 = 2.0f * (float)M_PI * r * sigma_gas_r * f_mol_r * dr;
+
         M_H2_total += dM_H2;
     }
-    
+
     // Convert back to code units (10^10 M☉/h)
     const float H2_code_units = M_H2_total * h / 1.0e10;
-    
+
     // Store and return
     galaxies[gal].H2gas = H2_code_units;
     return H2_code_units;
+}
+
+// Krumholz (2013) depletion time in Gyr.
+// f_H2: molecular fraction (pass f_mol_BR06 for the BR06+K13 hybrid, or K13's own f_H2 for pure K13).
+// Returns τ_dep = min(τ_2p, τ_hydro_star, τ_hydro_gas) from K13 Eq 28.
+double calculate_tdep_K13_Gyr(float Sigma_gas, float Sigma_star, float rs_pc, float Z_prime, float f_H2)
+{
+    const double fc = 5.0;  // clumping factor for ~kpc scales (K13 Section 3.1)
+
+    // Molecule-rich depletion time: t_dep_2p = 3.1 Gyr / (f_H2 × Σ^0.25)
+    double t_dep_2p = (f_H2 > 1e-6 && Sigma_gas > 1e-10)
+                      ? 3.1 / (f_H2 * pow(Sigma_gas, 0.25)) : 1.0e5;
+
+    // Hydrostatic limits (K13 Eqs 21–22)
+    double t_hydro_star = 1.0e10, t_hydro_gas = 1.0e10;
+    if(Sigma_gas > 1e-10) {
+        double h_z       = 0.1 * rs_pc;
+        double rho_sd_2  = (h_z > 0.0 && Sigma_star > 0.0)
+                           ? (Sigma_star / (2.0 * h_z)) / 0.01 : 1e-4;
+        if(rho_sd_2 < 1e-4) rho_sd_2 = 1e-4;
+        if(Z_prime  < 0.01) Z_prime   = 0.01;
+        t_hydro_star = 3.1 / pow(Sigma_gas, 0.25)
+                       + 100.0 / ((fc/5.0) * Z_prime * sqrt(rho_sd_2) * Sigma_gas);
+        t_hydro_gas  = 3.1 / pow(Sigma_gas, 0.25)
+                       + 360.0 / ((fc/5.0) * Z_prime * pow(Sigma_gas, 2.0));
+    }
+
+    double t_dep = t_dep_2p;
+    if(t_hydro_star < t_dep) t_dep = t_hydro_star;
+    if(t_hydro_gas  < t_dep) t_dep = t_hydro_gas;
+    return t_dep;
 }
 
 float calculate_H2_fraction_KD12(const float surface_density, const float metallicity, const float clumping_factor) 

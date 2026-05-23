@@ -111,7 +111,7 @@ Examples:
     )
 
     parser.add_argument('input_pattern', nargs='?',
-                        default='./output/millennium/model_*.hdf5',
+                        default='./output/microuchuu_h2/model_*.hdf5',
                         help='Path pattern to model HDF5 files (default: ./output/millennium/model_*.hdf5)')
 
     parser.add_argument('--first-snap', type=int, default=None,

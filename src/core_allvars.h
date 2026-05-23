@@ -476,9 +476,16 @@ struct params
     int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too
     int32_t    FFBRandomMode;       // 0: draw a fresh random each snapshot; 1: use persistent FFBRandom assigned at galaxy creation
     int32_t    BulgeSizeOn;
-    int32_t    H2DiskAreaOption;  // 0 = π*r_s², 1 = π*(3*r_s)², 2 = 2π*r_s² (central Σ₀)
-    int32_t    SaveFullSFH;       // 0 = save averaged SFR (default), 1 = save full SfrDisk[STEPS] and SfrBulge[STEPS] arrays
-    int32_t    TrackICSAssembly;  // 0 = off, 1 = track ICS_disrupt and ICS_accrete
+    int32_t    H2DiskAreaOption;          // 0 = π*r_s², 1 = π*(3*r_s)², 2 = 2π*r_s² (central Σ₀)
+    int32_t    H2RadialIntegrationOn;     // 0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk
+    int32_t    H2RadialNBins;             // radial bins for integration (default 25)
+    double     H2RadialRMaxFactor;        // R_max = factor × r_s (default 5.0)
+    int32_t    H2SFRMode;                 // 0: SFR = ε×H2/t_dyn (default); 1: SFR = H2/τ_dep (fixed Gyr); 2: SFR = H2/τ_dep(K13) (local depletion time)
+    int32_t    SaveFullSFH;               // 0 = save averaged SFR (default), 1 = save full SfrDisk[STEPS] and SfrBulge[STEPS] arrays
+    int32_t    TrackICSAssembly;          // 0 = off, 1 = track ICS_disrupt and ICS_accrete
+    int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
+
+    double H2DepletionTime_Gyr;   // τ_dep for H2SFRMode=1 [Gyr] (default 2.0)
 
     double RecycleFraction;
     double Yield;

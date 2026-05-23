@@ -1,5 +1,7 @@
 #pragma once
 
+#define HYDROGEN_MASS_FRAC 0.74  // primordial hydrogen mass fraction
+
 #ifdef __cplusplus
 extern "C" {
 #endif

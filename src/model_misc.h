@@ -21,8 +21,9 @@ extern "C" {
     extern float calculate_stellar_scale_height_BR06(float disk_scale_length_pc);
     extern float calculate_midplane_pressure_BR06(float sigma_gas, float sigma_stars, float disk_scale_length_pc);
 
-    extern float calculate_molecular_fraction_radial_integration(const int gal, struct GALAXY *galaxies, 
+    extern float calculate_molecular_fraction_radial_integration(const int gal, struct GALAXY *galaxies,
                                                       const struct params *run_params);
+    extern double calculate_tdep_K13_Gyr(float Sigma_gas, float Sigma_star, float rs_pc, float Z_prime, float f_H2);
 
     extern double calculate_ffb_threshold_mass(const double z, const struct params *run_params);
     extern double calculate_ffb_fraction(const double Mvir, const double z, const struct params *run_params);

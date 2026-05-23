@@ -149,6 +149,26 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->H2DiskAreaOption);
     ParamID[NParam++] = INT;
 
+    strncpy(ParamTag[NParam], "H2RadialIntegrationOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->H2RadialIntegrationOn);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "H2RadialNBins", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->H2RadialNBins);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "H2RadialRMaxFactor", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->H2RadialRMaxFactor);
+    ParamID[NParam++] = DOUBLE;
+
+    strncpy(ParamTag[NParam], "H2SFRMode", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->H2SFRMode);
+    ParamID[NParam++] = INT;
+
+    strncpy(ParamTag[NParam], "H2DepletionTime_Gyr", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->H2DepletionTime_Gyr);
+    ParamID[NParam++] = DOUBLE;
+
     strncpy(ParamTag[NParam], "BaryonFrac", MAXTAGLEN);
     ParamAddr[NParam] = &(run_params->BaryonFrac);
     ParamID[NParam++] = DOUBLE;
@@ -313,7 +333,11 @@ int read_parameter_file(const char *fname, struct params *run_params)
     ParamAddr[NParam] = &(run_params->TrackICSAssembly);
     ParamID[NParam++] = INT;
 
-    
+    strncpy(ParamTag[NParam], "StarburstColdGasOn", MAXTAGLEN);
+    ParamAddr[NParam] = &(run_params->StarburstColdGasOn);
+    ParamID[NParam++] = INT;
+
+
     used_tag = mymalloc(sizeof(int) * NParam);
     for(int i=0; i<NParam; i++) {
         used_tag[i]=1;

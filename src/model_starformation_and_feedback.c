@@ -10,7 +10,6 @@
 #include "model_misc.h"
 #include "model_disk_instability.h"
 
-#define HYDROGEN_MASS_FRAC 0.74
 
 // ============================================================================
 // Stars are born and go boom: star formation and feedback
@@ -37,6 +36,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
     // Initialise variables
     strdot = 0.0;
+    tdyn = 0.0;
     metallicity = 0.0;
 
     // star formation recipes
@@ -80,33 +80,30 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 galaxies[p].H2gas = 0.0;
                 strdot = 0.0;
             } else {
-                // Choose disk area based on H2DiskAreaOption
-                float disk_area_pc2;
-                if (run_params->H2DiskAreaOption == 0) {
-                    disk_area_pc2 = M_PI * pow(rs_pc, 2);  // π*r_s²
-                } else if (run_params->H2DiskAreaOption == 1) {
-                    disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+                // H2 mass via BR06: radial integration or single-slab
+                if(run_params->H2RadialIntegrationOn) {
+                    calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
+                    // result already stored in galaxies[p].H2gas by the function
                 } else {
-                    disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+                    float disk_area_pc2;
+                    if (run_params->H2DiskAreaOption == 0) {
+                        disk_area_pc2 = M_PI * pow(rs_pc, 2);
+                    } else if (run_params->H2DiskAreaOption == 1) {
+                        disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+                    } else {
+                        disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
+                    }
+                    const float gas_surface_density  = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
+                    const float star_surface_density = (galaxies[p].StellarMass - galaxies[p].BulgeMass)
+                                                       * 1.0e10 / h / disk_area_pc2;
+                    galaxies[p].H2gas = calculate_molecular_fraction_BR06(gas_surface_density, star_surface_density,
+                                                                           rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
                 }
-                float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // M☉/pc²
-                float stellar_surface_density = (galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h / disk_area_pc2; // M☉/pc²
 
-                total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
-                                                                       rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-
-                galaxies[p].H2gas = total_molecular_gas;
-
-                // Can't create more H2 than total cold gas
-                if(galaxies[p].H2gas > galaxies[p].ColdGas) {
+                if(galaxies[p].H2gas > galaxies[p].ColdGas)
                     galaxies[p].H2gas = galaxies[p].ColdGas;
-                }
 
-                // double nu_sf = 0.4 * (1.0 + pow(gas_surface_density / 200.0, 0.4)); // Gyr^-1
-                // double nu_sf_per_year = nu_sf * SEC_PER_MEGAYEAR/ 1000;
-
-                if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
-                    // strdot = nu_sf_per_year * galaxies[p].H2gas;
+                if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
                     strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
                 } else {
                     strdot = 0.0;
@@ -177,23 +174,32 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 galaxies[p].H2gas = 0.0;
                 strdot = 0.0;
             } else {
-                // Choose disk area based on H2DiskAreaOption
-                float disk_area_pc2;
-                if (run_params->H2DiskAreaOption == 0) {
-                    disk_area_pc2 = M_PI * pow(rs_pc, 2);  // π*r_s²
-                } else if (run_params->H2DiskAreaOption == 1) {
-                    disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+                // H2 mass via BR06: radial integration or single-slab
+                float gas_surface_density = 0.0f;
+                if(run_params->H2RadialIntegrationOn) {
+                    calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
+                    // result already stored in galaxies[p].H2gas by the function
+                    // compute gas_surface_density for epsilon_cl below using π*(3*r_s)² as reference
+                    const float ref_area = (float)(M_PI * pow(3.0 * rs_pc, 2));
+                    gas_surface_density = (ref_area > 0.0f) ? (galaxies[p].ColdGas * 1.0e10f / h) / ref_area : 0.0f;
                 } else {
-                    disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+                    float disk_area_pc2;
+                    if (run_params->H2DiskAreaOption == 0) {
+                        disk_area_pc2 = M_PI * pow(rs_pc, 2);
+                    } else if (run_params->H2DiskAreaOption == 1) {
+                        disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+                    } else {
+                        disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
+                    }
+                    gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
+                    const float stellar_surface_density = ((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h) / disk_area_pc2;
+                    total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
+                                                                            rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                    galaxies[p].H2gas = total_molecular_gas;
                 }
-                float gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2; // Msun/pc^2
-                float stellar_surface_density = ((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h) / disk_area_pc2; // Msun/pc^2 (disk only)
 
-                // Calculate molecular fraction using Blitz & Rosolowsky 2006
-                total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
-                                                                       rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-
-                galaxies[p].H2gas = total_molecular_gas;
+                if(galaxies[p].H2gas > galaxies[p].ColdGas)
+                    galaxies[p].H2gas = galaxies[p].ColdGas;
 
                 // Critical surface density from Equation 2
                 const double Sigma_crit = 30.0 / (M_PI * 4.302e-3); // ~2176 Msun/pc^2
@@ -225,45 +231,46 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             strdot = 0.0;
         } else {
             reff = 3.0 * galaxies[p].DiskScaleRadius;
-            tdyn = 3.0 * galaxies[p].DiskScaleRadius / galaxies[p].Vvir;
+            tdyn = reff / galaxies[p].Vvir;
             const float h = run_params->Hubble_h;
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
             if (rs_pc <= 0.0) {
-                galaxies[p].H2gas = 0.0; 
+                galaxies[p].H2gas = 0.0;
                 strdot = 0.0;
             } else {
-                // Choose disk area based on H2DiskAreaOption
-                float disk_area;
-                if (run_params->H2DiskAreaOption == 0) {
-                    disk_area = M_PI * pow(rs_pc, 2);  // π*r_s²
-                } else if (run_params->H2DiskAreaOption == 1) {
-                    disk_area = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+                if(run_params->H2RadialIntegrationOn) {
+                    calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
                 } else {
-                    disk_area = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
-                }
-                if(disk_area <= 0.0) {
-                    galaxies[p].H2gas = 0.0;
-                    strdot = 0.0;
-                } else {
-                    float surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area;
-                    if(galaxies[p].ColdGas > 0.0) {
-                        metallicity = galaxies[p].MetalsColdGas / galaxies[p].ColdGas; // absolute fraction
-                    }
-                    float clumping_factor = 5.0;
-                    
-                    total_molecular_gas = calculate_H2_fraction_KD12(surface_density, metallicity, clumping_factor) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-
-                    galaxies[p].H2gas = total_molecular_gas;
-                    // Safety check: H2 fraction cannot exceed 1.0
-                    if(galaxies[p].H2gas > galaxies[p].ColdGas) {
-                        galaxies[p].H2gas = galaxies[p].ColdGas;
-                    }
-
-                    if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
-                        strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
+                    // Choose disk area based on H2DiskAreaOption
+                    float disk_area;
+                    if (run_params->H2DiskAreaOption == 0) {
+                        disk_area = M_PI * pow(rs_pc, 2);
+                    } else if (run_params->H2DiskAreaOption == 1) {
+                        disk_area = M_PI * pow(3.0 * rs_pc, 2);
                     } else {
-                        strdot = 0.0;
+                        disk_area = 2.0 * M_PI * pow(rs_pc, 2);
                     }
+                    if(disk_area <= 0.0) {
+                        galaxies[p].H2gas = 0.0;
+                    } else {
+                        float surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area;
+                        if(galaxies[p].ColdGas > 0.0) {
+                            metallicity = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
+                        }
+                        float clumping_factor = 5.0;
+                        total_molecular_gas = calculate_H2_fraction_KD12(surface_density, metallicity, clumping_factor) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                        galaxies[p].H2gas = total_molecular_gas;
+                    }
+                }
+                // Safety check: H2 fraction cannot exceed 1.0
+                if(galaxies[p].H2gas > galaxies[p].ColdGas) {
+                    galaxies[p].H2gas = galaxies[p].ColdGas;
+                }
+
+                if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
+                    strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
+                } else {
+                    strdot = 0.0;
                 }
             }
         }
@@ -286,95 +293,58 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             const float h = run_params->Hubble_h;
             // Scale radius in pc
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-            
-            // Choose disk area based on H2DiskAreaOption
-            float disk_area_pc2;
-            if (run_params->H2DiskAreaOption == 0) {
-                disk_area_pc2 = M_PI * pow(rs_pc, 2);  // π*r_s²
-            } else if (run_params->H2DiskAreaOption == 1) {
-                disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+
+            if(run_params->H2RadialIntegrationOn) {
+                calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
             } else {
-                disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+                // Choose disk area based on H2DiskAreaOption
+                float disk_area_pc2;
+                if (run_params->H2DiskAreaOption == 0) {
+                    disk_area_pc2 = M_PI * pow(rs_pc, 2);
+                } else if (run_params->H2DiskAreaOption == 1) {
+                    disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+                } else {
+                    disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
+                }
+
+                // Gas Surface Density (Msun/pc^2) - Sigma_g
+                float gas_surface_density = (disk_area_pc2 > 0.0) ?
+                    (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2 : 0.0;
+
+                float metallicity_abs = 0.0;
+                if(galaxies[p].ColdGas > 0.0) {
+                    metallicity_abs = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
+                }
+                float Z_prime = metallicity_abs / 0.02;
+                if (Z_prime < 0.05) Z_prime = 0.05;
+
+                const float clumping_factor = 3.0;
+                float Sigma_comp = clumping_factor * gas_surface_density;
+                double tau_c = 0.066 * clumping_factor * Z_prime * gas_surface_density;
+                float chi = 0.77 * (1.0 + 3.1 * pow(Z_prime, 0.365));
+                float s = 0.0;
+                if (Sigma_comp > 0.0 && tau_c > 1e-10) {
+                    s = log(1.0 + 0.6 * chi + 0.01 * chi * chi) / (0.6 * tau_c);
+                } else {
+                    s = 100.0;
+                }
+
+                float f_H2 = 0.0;
+                if (s < 2.0) {
+                    f_H2 = 1.0 - (3.0 * s) / (4.0 + s);
+                }
+                if (f_H2 < 0.0) f_H2 = 0.0;
+                if (f_H2 > 1.0) f_H2 = 1.0;
+
+                galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
             }
-
-            // Gas Surface Density (Msun/pc^2) - Sigma_g
-            // ColdGas is in 10^10 Msun/h
-            float gas_surface_density = (disk_area_pc2 > 0.0) ? 
-                (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2 : 0.0;
-                
-            // 2. Metallicity (Normalized to Solar) [cite: 81]
-            // Calculate absolute metallicity Z, then normalize to Solar (approx 0.02)
-            float metallicity_abs = 0.0;
-            if(galaxies[p].ColdGas > 0.0) {
-                metallicity_abs = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
-            }
-            // Z' = Z / Z_solar. Clamp to a minimum to avoid division by zero in log terms.
-            float Z_prime = metallicity_abs / 0.02; 
-            if (Z_prime < 0.05) Z_prime = 0.05; // Minimum metallicity floor
-
-            // 3. Molecular Fraction f_H2 (Equation 2 from KMT09) [cite: 80-81]
-            // Clumping factor c: Paper suggests c ~ 5 for kpc-scale observations/models 
-            const float clumping_factor = 3.0; 
-            float Sigma_comp = clumping_factor * gas_surface_density; // Surface density of complexes
-
-            // --- Equation 21: Dust Optical Depth (tau_c) ---
-            // tau_c = 0.066 * f_c * D_MW * Sigma_gas
-            // Note: surface_density must be in M_sun/pc^2
-            double tau_c = 0.066 * clumping_factor * Z_prime * gas_surface_density;
-
-            // Chi factor: chi = 0.77 * (1 + 3.1 * Z'^0.365)
-            float chi = 0.77 * (1.0 + 3.1 * pow(Z_prime, 0.365));
-
-            // s = ln(1 + 0.6*chi) / (0.04 * Sigma_comp * Z')
-            // Note: 0.04 constant includes units for Sigma in Msun/pc^2
-            float s = 0.0;
-            /* BUG FIX: Check both Sigma_comp > 0 AND tau_c > 0 to avoid division by zero */
-            if (Sigma_comp > 0.0 && tau_c > 1e-10) {
-                s = log(1.0 + 0.6 * chi + 0.01 * chi * chi) / (0.6 * tau_c);
-            } else {
-                s = 100.0; // Large s implies f_H2 -> 0
-            }
-
-            float f_H2 = 0.0; 
-            
-            if (s < 2.0) {
-                // Eq 23: Approximation for molecular-dominated regime
-                f_H2 = 1.0 - (3.0 * s) / (4.0 + s);
-            } else {
-                // For s >= 2, gas is atomic dominated. 
-                // The exact solution approaches 0 very fast.
-                f_H2 = 0.0; 
-            }
-
-            // Safety clamps
-            if (f_H2 < 0.0) f_H2 = 0.0;
-            if (f_H2 > 1.0) f_H2 = 1.0;
-
-            // Store H2 mass
-            galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
             // Can't create more H2 than total cold gas
             if(galaxies[p].H2gas > galaxies[p].ColdGas) {
                 galaxies[p].H2gas = galaxies[p].ColdGas;
             }
 
-            // 4. Star Formation Timescale (Xie et al. 2017 Simplification)
-            // The paper Section 2.4.2 explicitly states:
-            // "We assume a constant depletion time t_dep = 2.6 Gyr."
-            
-            // This 2.6 Gyr already accounts for the efficiency (epsilon_ff),
-            // so we do not need to multiply by extra factors unless tuning.
-            // double t_depletion_gyr = 2.6; 
-
-            // Convert Gyr to code time units
-            // (e.g., if UnitTime is ~978 Myr, this converts 2.6 Gyr to code units)
-            // double t_depletion_code = t_depletion_gyr * 1000.0 / run_params->UnitTime_in_Megayears;
-
-            // 5. Calculate SFR
             if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
-                // SFR = M_H2 / t_depletion
-                // Using  the dynamical time as a proxy for depletion time, scaled by efficiency, as per Xie et al. 2017
-                // STRICT XIE 2017:
                 strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
             } else {
                 strdot = 0.0;
@@ -400,127 +370,64 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
             const float h = run_params->Hubble_h;
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-            
-            // Choose disk area based on H2DiskAreaOption
-            float area_pc2;
-            if (run_params->H2DiskAreaOption == 0) {
-                area_pc2 = M_PI * pow(rs_pc, 2);  // π*r_s²
-            } else if (run_params->H2DiskAreaOption == 1) {
-                area_pc2 = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+
+            // Variables needed for K13 depletion time (slab path)
+            double Sigma_gas_k13 = 0.0, Sigma_star_k13 = 0.0, Z_prime_k13 = 0.01, f_H2_2p_k13 = 0.0;
+
+            if(run_params->H2RadialIntegrationOn) {
+                calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
+                // For K13 depletion time, use π*r_s² representative surface density
+                const float area_k13 = (float)(M_PI * rs_pc * rs_pc);
+                Sigma_gas_k13  = (area_k13 > 0.0f) ? (galaxies[p].ColdGas * 1.0e10 / h) / area_k13 : 0.0;
+                Sigma_star_k13 = (area_k13 > 0.0f) ? (galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h / area_k13 : 0.0;
+                double Z_gas_k13 = (galaxies[p].ColdGas > 0.0) ? (galaxies[p].MetalsColdGas / galaxies[p].ColdGas) : 0.0;
+                Z_prime_k13 = Z_gas_k13 / 0.014; if(Z_prime_k13 < 0.01) Z_prime_k13 = 0.01;
+                f_H2_2p_k13 = (galaxies[p].ColdGas > 0.0)
+                              ? (double)(galaxies[p].H2gas / (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)) : 0.0;
             } else {
-                area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
+                // Choose disk area based on H2DiskAreaOption
+                float area_pc2;
+                if (run_params->H2DiskAreaOption == 0) {
+                    area_pc2 = M_PI * pow(rs_pc, 2);
+                } else if (run_params->H2DiskAreaOption == 1) {
+                    area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+                } else {
+                    area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
+                }
+
+                if(area_pc2 > 0.0) {
+                    Sigma_gas_k13  = (galaxies[p].ColdGas * 1.0e10 / h) / area_pc2;
+                    Sigma_star_k13 = ((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h) / area_pc2;
+                    double Z_gas = (galaxies[p].ColdGas > 0.0) ? (galaxies[p].MetalsColdGas / galaxies[p].ColdGas) : 0.0;
+                    Z_prime_k13 = Z_gas / 0.014; if(Z_prime_k13 < 0.01) Z_prime_k13 = 0.01;
+                    const double fc = 5.0;
+                    const double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime_k13, 0.365)) / 4.1;
+                    const double tau_c = 0.066 * fc * Z_prime_k13 * Sigma_gas_k13;
+                    const double s = (tau_c > 0.0) ? log(1.0 + 0.6 * chi_2p + 0.01 * chi_2p * chi_2p) / (0.6 * tau_c) : 100.0;
+                    f_H2_2p_k13 = (s < 2.0) ? 1.0 - (0.75 * s) / (1.0 + 0.25 * s) : 0.0;
+                    if(f_H2_2p_k13 < 0.0) f_H2_2p_k13 = 0.0;
+                    if(f_H2_2p_k13 > 1.0) f_H2_2p_k13 = 1.0;
+                    galaxies[p].H2gas = f_H2_2p_k13 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                } else {
+                    galaxies[p].H2gas = 0.0;
+                }
             }
-            
-            if(area_pc2 > 0.0) {
-                // Surface densities in Msun/pc^2
-                double Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / area_pc2;
-                double Sigma_star = ((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h) / area_pc2; // Disk stellar mass only
 
-                // Metallicity Z' (normalized to solar).
-                // Using Z_sun ~ 0.014. Floor at 0.01 to avoid numerical singularities.
-                double Z_gas = (galaxies[p].ColdGas > 0.0) ? (galaxies[p].MetalsColdGas / galaxies[p].ColdGas) : 0.0;
-                double Z_prime = Z_gas / 0.014;
-                if(Z_prime < 0.01) Z_prime = 0.01;
+            // Can't create more H2 than total cold gas
+            if(galaxies[p].H2gas > galaxies[p].ColdGas) {
+                galaxies[p].H2gas = galaxies[p].ColdGas;
+            }
 
-                // Clumping factor fc = 5 is recommended for ~kpc scales (Section 3.1) [cite: 377]
-                double fc = 5.0;
+            // K13 depletion time (Eq 28): min(τ_2p, τ_hydro_star, τ_hydro_gas)
+            const double t_dep_Gyr  = calculate_tdep_K13_Gyr((float)Sigma_gas_k13, (float)Sigma_star_k13,
+                                                               rs_pc, (float)Z_prime_k13, (float)f_H2_2p_k13);
+            const double t_dep_code = t_dep_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
 
-                // ----------------------------------------------------------------
-                // 1. Calculate Standard KMT Depletion Time (Molecule-Rich Regime)
-                // ----------------------------------------------------------------
-
-                // Normalized Radiation Field chi_2p (Eq 13) [cite: 116]
-                double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime, 0.365)) / 4.1;
-
-                // Optical Depth tau_c (Eq 12) [cite: 123]
-                double tau_c = 0.066 * fc * Z_prime * Sigma_gas;
-
-                // Parameter s (Eq 11) [cite: 122]
-                // Protected against tau_c=0
-                double s = (tau_c > 0.0) ? log(1.0 + 0.6 * chi_2p + 0.01 * chi_2p * chi_2p) / (0.6 * tau_c) : 100.0;
-
-                // H2 Fraction f_H2 (Eq 10) [cite: 120]
-                double f_H2_2p = 0.0;
-                if(s < 2.0) {
-                    f_H2_2p = 1.0 - (0.75 * s) / (1.0 + 0.25 * s);
-                }
-                if(f_H2_2p < 0.0) f_H2_2p = 0.0;
-                if(f_H2_2p > 1.0) f_H2_2p = 1.0;
-
-                // Store H2 mass
-                galaxies[p].H2gas = f_H2_2p * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-                // Can't create more H2 than total cold gas
-                if(galaxies[p].H2gas > galaxies[p].ColdGas) {
-                    galaxies[p].H2gas = galaxies[p].ColdGas;
-                }
-
-                // t_dep_2p (Eq 27)
-                // t_dep = 3.1 Gyr / (f_H2 * Sigma^0.25)
-                double t_dep_2p_Gyr;
-                if(f_H2_2p > 1e-6) {
-                    t_dep_2p_Gyr = 3.1 / (f_H2_2p * pow(Sigma_gas, 0.25));
-                } else {
-                    t_dep_2p_Gyr = 1.0e5; // Cap at very large timescale if no H2
-                }
-
-                // ----------------------------------------------------------------
-                // 2. Calculate Hydrostatic Limits (Molecule-Poor Regimes)
-                // ----------------------------------------------------------------
-
-                // Estimate stellar density rho_sd for Eq 21.
-                // We approximate h_z ~ 0.1 * R_d.
-                // rho_sd_2 is rho_sd in units of 0.01 Msun/pc^3 (e.g., rho_sd,-2 in paper)
-                double h_z = 0.1 * rs_pc;
-                double rho_sd_2 = 0.0;
-                if(h_z > 0.0) {
-                     double rho_star = Sigma_star / (2.0 * h_z); // Msun/pc^3
-                     rho_sd_2 = rho_star / 0.01;
-                }
-                if(rho_sd_2 < 1e-4) rho_sd_2 = 1e-4; // Avoid div by zero
-
-                // t_dep_hydro_star (Eq 21)
-                // 3.1/Sigma^0.25 + 100 / ( (fc/5) * Z' * sqrt(rho_sd_2) * Sigma )
-                /* BUG FIX: Protect against division by zero when Sigma_gas is zero */
-                double t_hydro_star_Gyr, t_hydro_gas_Gyr;
-                if(Sigma_gas > 1e-10) {
-                    t_hydro_star_Gyr = 3.1 / pow(Sigma_gas, 0.25) +
-                                       100.0 / ((fc/5.0) * Z_prime * sqrt(rho_sd_2) * Sigma_gas);
-                    // t_dep_hydro_gas (Eq 22)
-                    // 3.1/Sigma^0.25 + 360 / ( (fc/5) * Z' * Sigma^2 )
-                    t_hydro_gas_Gyr = 3.1 / pow(Sigma_gas, 0.25) +
-                                      360.0 / ((fc/5.0) * Z_prime * pow(Sigma_gas, 2.0));
-                } else {
-                    t_hydro_star_Gyr = 1.0e10;  // Very large timescale for zero gas
-                    t_hydro_gas_Gyr = 1.0e10;
-                }
-
-                // ----------------------------------------------------------------
-                // 3. Analytic Approximation for Depletion Time (K13 Eq. 28)
-                // ----------------------------------------------------------------
-
-                // Eq 28: t_dep ~ min(t_2p, t_hydro_star, t_hydro_gas)
-                double t_dep_Gyr = t_dep_2p_Gyr;
-                if(t_hydro_star_Gyr < t_dep_Gyr) t_dep_Gyr = t_hydro_star_Gyr;
-                if(t_hydro_gas_Gyr < t_dep_Gyr) t_dep_Gyr = t_hydro_gas_Gyr;
-
-                // ----------------------------------------------------------------
-                // 4. Calculate SFR using K13 depletion time
-                // ----------------------------------------------------------------
-
-                // Convert t_dep (Gyr) to Code Units
-                // Code time unit: 1 Mpc/h / (km/s) ≈ 978/h Gyr
-                double t_dep_code = t_dep_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
-
-                // K13 gives depletion time for total gas: SFR = M_gas / t_dep
-                if(galaxies[p].ColdGas > 0.0 && t_dep_code > 0.0) {
-                    strdot = run_params->SfrEfficiency * galaxies[p].ColdGas / tdyn;
-                } else {
-                    strdot = 0.0;
-                }
-
+            // K13 SFR: total cold gas consumed at the K13 depletion rate
+            if(galaxies[p].ColdGas > 0.0 && t_dep_code > 0.0) {
+                strdot = galaxies[p].ColdGas / t_dep_code;
             } else {
                 strdot = 0.0;
-                galaxies[p].H2gas = 0.0;
             }
         }
     } else if(run_params->SFprescription == 7) {
@@ -545,93 +452,55 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             // Scale radius in pc
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
             
-            // Choose disk area based on H2DiskAreaOption
-            float disk_area_pc2;
-            if (run_params->H2DiskAreaOption == 0) {
-                disk_area_pc2 = M_PI * pow(rs_pc, 2);  // π*r_s²
-            } else if (run_params->H2DiskAreaOption == 1) {
-                disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);  // π*(3*r_s)² = 9π*r_s²
+            if(run_params->H2RadialIntegrationOn) {
+                calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
             } else {
-                disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);  // 2π*r_s² (central Σ₀)
-            }
-            
-            double Sigma_gas = 0.0;
-            if(disk_area_pc2 > 0.0) {
-                // Surface density in Msun/pc^2 (ColdGas is 10^10 Msun/h)
-                Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
-            }
+                // Choose disk area based on H2DiskAreaOption
+                float disk_area_pc2;
+                if (run_params->H2DiskAreaOption == 0) {
+                    disk_area_pc2 = M_PI * pow(rs_pc, 2);
+                } else if (run_params->H2DiskAreaOption == 1) {
+                    disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+                } else {
+                    disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
+                }
 
-            // 2. Dust-to-Gas Ratio (D_MW)
-            // Normalized to Milky Way. We assume dust tracks metallicity.
-            // Z_solar approx 0.02 (consistent with KMT09 usage in this file)
-            double metallicity_abs = 0.0;
-            if(galaxies[p].ColdGas > 0.0) {
-                metallicity_abs = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
-            }
-            double D_MW = metallicity_abs / 0.02; 
-            // Floor small value to avoid sqrt(0) issues
-            if(D_MW < 1e-4) D_MW = 1e-4;
+                double Sigma_gas = 0.0;
+                if(disk_area_pc2 > 0.0) {
+                    Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
+                }
 
-            // 3. UV Radiation Field (U_MW)
-            // Normalized to Milky Way. 
-            // Ideally this should scale with SFR surface density (e.g., prev step).
-            // Lacking an explicit input, we default to MW-like (U=1) or allow 
-            // for user-defined scaling.
-            double U_MW = 1.0; 
-            
-            // 4. Characteristic Scale Parameter (S) 
-            // S = L / 100 pc. 
-            // For a galactic disk, the characteristic size L is roughly the diameter (3*Rs, following SAGE C16)
-            double L_pc = 3.0 * rs_pc;
-            double S = L_pc / 100.0;
+                double metallicity_abs = 0.0;
+                if(galaxies[p].ColdGas > 0.0) {
+                    metallicity_abs = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
+                }
+                double D_MW = metallicity_abs / 0.02;
+                if(D_MW < 1e-4) D_MW = 1e-4;
 
-            // 5. Calculate Fitting Parameters (Erratum 2016)
-            
-            // s parameter [cite: 404]
-            // s = (0.001 + 0.1 * U_MW)^0.7
-            double s_param = pow(0.001 + 0.1 * U_MW, 0.7);
+                const double U_MW    = 1.0;
+                const double S       = 3.0 * rs_pc / 100.0;
+                const double s_param = pow(0.001 + 0.1 * U_MW, 0.7);
+                const double D_star  = 0.17 * (2.0 + pow(S, 5.0)) / (1.0 + pow(S, 5.0));
+                const double g       = sqrt(D_MW * D_MW + D_star * D_star);
+                const double Sigma_R1 = (40.0 / g) * (s_param / (1.0 + s_param));
+                const double alpha   = 1.0 + 0.7 * sqrt(s_param) / (1.0 + s_param);
 
-            // D_star parameter [cite: 218]
-            // Accounts for line overlap saturation on large scales
-            double D_star = 0.17 * (2.0 + pow(S, 5.0)) / (1.0 + pow(S, 5.0));
+                double q = 0.0;
+                if(Sigma_R1 > 0.0 && Sigma_gas > 0.0) {
+                    q = pow(Sigma_gas / Sigma_R1, alpha);
+                }
+                double f_H2 = q / (1.0 + q);
+                if(f_H2 > 1.0) f_H2 = 1.0;
+                if(f_H2 < 0.0) f_H2 = 0.0;
 
-            // g factor [cite: 215]
-            double g = sqrt(D_MW * D_MW + D_star * D_star);
-
-            // Sigma_R=1 (Surface density where f_H2 ~ 0.5) [cite: 402]
-            double Sigma_R1 = (40.0 / g) * (s_param / (1.0 + s_param));
-
-            // Power law slope alpha [cite: 399]
-            double alpha = 1.0 + 0.7 * sqrt(s_param) / (1.0 + s_param);
-
-            // 6. Calculate Molecular Ratio R
-            // q parameter [cite: 396]
-            double q = 0.0;
-            if(Sigma_R1 > 0.0 && Sigma_gas > 0.0) {
-                q = pow(Sigma_gas / Sigma_R1, alpha);
+                galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
             }
 
-            // R = Sigma_H2 / Sigma_HI [cite: 395]
-            // eta approx 0 on kpc scales [cite: 398]
-            double eta = 0.0; 
-            double R = q * (1.0 + eta * q) / (1.0 + eta);
-
-            // 7. H2 Fraction and Mass
-            // f_H2 = R / (1 + R)
-            double f_H2 = R / (1.0 + R);
-            
-            // Clamp to physical range
-            if(f_H2 > 1.0) f_H2 = 1.0;
-            if(f_H2 < 0.0) f_H2 = 0.0;
-
-            galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
             // Can't create more H2 than total cold gas
             if(galaxies[p].H2gas > galaxies[p].ColdGas) {
                 galaxies[p].H2gas = galaxies[p].ColdGas;
             }
 
-            // 8. Calculate Star Formation Rate
-            // Standard relation: SFR = Efficiency * H2 / t_dyn
             if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
                 strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
             } else {
@@ -641,6 +510,27 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     } else {
         fprintf(stderr, "No star formation prescription selected!\n");
         ABORT(0);
+    }
+
+    // H2SFRMode override: applies to all H2-computing prescriptions (not 0 or 2)
+    if(run_params->H2SFRMode > 0 && galaxies[p].H2gas > 0.0 && tdyn > 0.0
+       && run_params->SFprescription != 0 && run_params->SFprescription != 2) {
+        double tdep_code;
+        if(run_params->H2SFRMode == 1) {
+            tdep_code = run_params->H2DepletionTime_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
+        } else {
+            // H2SFRMode == 2: K13 local depletion time
+            const float h_pp   = run_params->Hubble_h;
+            const float rs_pp  = (float)(galaxies[p].DiskScaleRadius * 1.0e6 / h_pp);
+            const float area_pp = (float)M_PI * rs_pp * rs_pp;
+            const float Sg_pp  = (area_pp > 0.0f) ? (float)(galaxies[p].ColdGas * 1.0e10 / h_pp) / area_pp : 0.0f;
+            const float Ss_pp  = (area_pp > 0.0f) ? (float)((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h_pp) / area_pp : 0.0f;
+            const float Zp_pp  = (galaxies[p].ColdGas > 0.0) ? (float)(galaxies[p].MetalsColdGas / galaxies[p].ColdGas / 0.014) : 0.02f;
+            const float fm_pp  = (galaxies[p].ColdGas > 0.0) ? (float)(galaxies[p].H2gas / (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)) : 0.0f;
+            const double tdep_Gyr = calculate_tdep_K13_Gyr(Sg_pp, Ss_pp, rs_pp, Zp_pp, fm_pp);
+            tdep_code = tdep_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
+        }
+        if(tdep_code > 0.0) strdot = galaxies[p].H2gas / tdep_code;
     }
 
     // Calculate HI (atomic hydrogen) as the remainder of hydrogen after H2
@@ -987,111 +877,93 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     galaxies[p].H2gas = 0.0;
 
     if(galaxies[p].ColdGas > 0.0 && galaxies[p].DiskScaleRadius > 0.0) {
-        const float h    = run_params->Hubble_h;
+        const float h     = run_params->Hubble_h;
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+        const int sfpres  = run_params->SFprescription;
+        const int has_h2  = (sfpres == 1 || sfpres == 3 || sfpres == 4 ||
+                              sfpres == 5 || sfpres == 6 || sfpres == 7);
 
-        if(rs_pc > 0.0) {
-            float disk_area_pc2;
-            if(run_params->H2DiskAreaOption == 0) {
-                disk_area_pc2 = M_PI * pow(rs_pc, 2);
-            } else if(run_params->H2DiskAreaOption == 1) {
-                disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+        if(rs_pc > 0.0 && has_h2) {
+            if(run_params->H2RadialIntegrationOn) {
+                // Unified radial integration path — handles all H2 prescriptions internally
+                calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
             } else {
-                disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
-            }
+                // Single-slab path
+                float disk_area_pc2;
+                if(run_params->H2DiskAreaOption == 0)
+                    disk_area_pc2 = M_PI * pow(rs_pc, 2);
+                else if(run_params->H2DiskAreaOption == 1)
+                    disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+                else
+                    disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
 
-            if(disk_area_pc2 > 0.0) {
-                const float Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
+                if(disk_area_pc2 > 0.0) {
+                    const float Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
 
-                if(run_params->SFprescription == 1 || run_params->SFprescription == 3) {
-                    // BR06: both straight BR06 (1) and Somerville+H2 (3) use the same H2 fraction
-                    const float Sigma_star = (galaxies[p].StellarMass - galaxies[p].BulgeMass)
-                                             * 1.0e10 / h / disk_area_pc2;
-                    const float f_mol = calculate_molecular_fraction_BR06(Sigma_gas, Sigma_star, rs_pc);
-                    galaxies[p].H2gas = f_mol * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                    if(sfpres == 1 || sfpres == 3) {
+                        // BR06
+                        const float Sigma_star = (galaxies[p].StellarMass - galaxies[p].BulgeMass)
+                                                 * 1.0e10 / h / disk_area_pc2;
+                        galaxies[p].H2gas = calculate_molecular_fraction_BR06(Sigma_gas, Sigma_star, rs_pc)
+                                            * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
-                } else if(run_params->SFprescription == 4) {
-                    // KD12
-                    const double met = (galaxies[p].ColdGas > 0.0) ?
-                        galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
-                    const float f_mol = calculate_H2_fraction_KD12(Sigma_gas, met, 5.0f);
-                    galaxies[p].H2gas = f_mol * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                    } else if(sfpres == 4) {
+                        // KD12
+                        const double met = (galaxies[p].ColdGas > 0.0) ?
+                            galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
+                        galaxies[p].H2gas = calculate_H2_fraction_KD12(Sigma_gas, met, 5.0f)
+                                            * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
-                } else if(run_params->SFprescription == 5) {
-                    // KMT09
-                    float met_abs = (galaxies[p].ColdGas > 0.0) ?
-                        galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
-                    float Z_prime = met_abs / 0.02;
-                    if(Z_prime < 0.05) Z_prime = 0.05;
-                    const float fc = 3.0;
-                    const double tau_c = 0.066 * fc * Z_prime * Sigma_gas;
-                    const float chi = 0.77 * (1.0 + 3.1 * pow(Z_prime, 0.365));
-                    const float s = (Sigma_gas > 0.0 && tau_c > 1e-10) ?
-                        (float)(log(1.0 + 0.6 * chi + 0.01 * chi * chi) / (0.6 * tau_c)) : 100.0f;
-                    float f_H2 = (s < 2.0f) ? 1.0f - (3.0f * s) / (4.0f + s) : 0.0f;
-                    if(f_H2 < 0.0f) f_H2 = 0.0f;
-                    if(f_H2 > 1.0f) f_H2 = 1.0f;
-                    galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                    } else if(sfpres == 5) {
+                        // KMT09
+                        float met_abs = (galaxies[p].ColdGas > 0.0) ?
+                            galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
+                        float Z_prime = met_abs / 0.02f;
+                        if(Z_prime < 0.05f) Z_prime = 0.05f;
+                        const float tau_c = 0.066f * 3.0f * Z_prime * Sigma_gas;
+                        const float chi = 0.77f * (1.0f + 3.1f * powf(Z_prime, 0.365f));
+                        const float s = (tau_c > 1e-10f) ?
+                            logf(1.0f + 0.6f*chi + 0.01f*chi*chi) / (0.6f*tau_c) : 100.0f;
+                        float f_H2 = (s < 2.0f) ? 1.0f - (3.0f*s)/(4.0f+s) : 0.0f;
+                        if(f_H2 < 0.0f) f_H2 = 0.0f;
+                        if(f_H2 > 1.0f) f_H2 = 1.0f;
+                        galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
-                } else if(run_params->SFprescription == 6) {
-                    // K13
-                    double Z_gas = (galaxies[p].ColdGas > 0.0) ?
-                        galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
-                    double Z_prime = Z_gas / 0.014;
-                    if(Z_prime < 0.01) Z_prime = 0.01;
-                    const double fc = 5.0;
-                    const double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime, 0.365)) / 4.1;
-                    const double tau_c = 0.066 * fc * Z_prime * Sigma_gas;
-                    const double s = (tau_c > 0.0) ?
-                        log(1.0 + 0.6 * chi_2p + 0.01 * chi_2p * chi_2p) / (0.6 * tau_c) : 100.0;
-                    double f_H2_2p = (s < 2.0) ? 1.0 - (0.75 * s) / (1.0 + 0.25 * s) : 0.0;
-                    if(f_H2_2p < 0.0) f_H2_2p = 0.0;
-                    if(f_H2_2p > 1.0) f_H2_2p = 1.0;
-                    const double t_dep_2p = (f_H2_2p > 1e-6) ?
-                        3.1 / (f_H2_2p * pow(Sigma_gas, 0.25)) : 1.0e5;
-                    // Use disk stellar mass only (StellarMass - BulgeMass), matching non-FFB K13
-                    const double Sigma_star = (galaxies[p].StellarMass - galaxies[p].BulgeMass)
-                                              * 1.0e10 / h / disk_area_pc2;
-                    const double h_z = 0.1 * rs_pc;
-                    double rho_sd_2 = (h_z > 0.0) ? (Sigma_star / (2.0 * h_z)) / 0.01 : 1e-4;
-                    if(rho_sd_2 < 1e-4) rho_sd_2 = 1e-4;
-                    double t_h_star = (Sigma_gas > 1e-10) ?
-                        3.1 / pow(Sigma_gas, 0.25)
-                        + 100.0 / ((fc/5.0) * Z_prime * sqrt(rho_sd_2) * Sigma_gas) : 1.0e10;
-                    double t_h_gas = (Sigma_gas > 1e-10) ?
-                        3.1 / pow(Sigma_gas, 0.25)
-                        + 360.0 / ((fc/5.0) * Z_prime * pow(Sigma_gas, 2.0)) : 1.0e10;
-                    double t_dep = t_dep_2p;
-                    if(t_h_star < t_dep) t_dep = t_h_star;
-                    if(t_h_gas  < t_dep) t_dep = t_h_gas;
-                    double f_H2_eff = (Sigma_gas > 1e-10) ?
-                        3.1 / (t_dep * pow(Sigma_gas, 0.25)) : 0.0;
-                    if(f_H2_eff > 1.0) f_H2_eff = 1.0;
-                    if(f_H2_eff < 0.0) f_H2_eff = 0.0;
-                    galaxies[p].H2gas = f_H2_eff * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                    } else if(sfpres == 6) {
+                        // K13: store two-phase molecular fraction (f_H2_2p), matching non-FFB path
+                        double Z_gas = (galaxies[p].ColdGas > 0.0) ?
+                            galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
+                        double Z_prime = Z_gas / 0.014;
+                        if(Z_prime < 0.01) Z_prime = 0.01;
+                        const double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime, 0.365)) / 4.1;
+                        const double tau_c = 0.066 * 5.0 * Z_prime * Sigma_gas;
+                        const double s = (tau_c > 0.0) ?
+                            log(1.0 + 0.6*chi_2p + 0.01*chi_2p*chi_2p) / (0.6*tau_c) : 100.0;
+                        double f_H2_2p = (s < 2.0) ? 1.0 - (0.75*s)/(1.0+0.25*s) : 0.0;
+                        if(f_H2_2p < 0.0) f_H2_2p = 0.0;
+                        if(f_H2_2p > 1.0) f_H2_2p = 1.0;
+                        galaxies[p].H2gas = f_H2_2p * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
-                } else if(run_params->SFprescription == 7) {
-                    // GD14
-                    double met_abs = (galaxies[p].ColdGas > 0.0) ?
-                        galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
-                    double D_MW = met_abs / 0.02;
-                    if(D_MW < 1e-4) D_MW = 1e-4;
-                    const double U_MW    = 1.0;
-                    const double S       = 3.0 * rs_pc / 100.0;
-                    const double s_param = pow(0.001 + 0.1 * U_MW, 0.7);
-                    const double D_star  = 0.17 * (2.0 + pow(S, 5.0)) / (1.0 + pow(S, 5.0));
-                    const double g       = sqrt(D_MW * D_MW + D_star * D_star);
-                    const double Sigma_R1 = (40.0 / g) * (s_param / (1.0 + s_param));
-                    const double alpha   = 1.0 + 0.7 * sqrt(s_param) / (1.0 + s_param);
-                    const double q       = (Sigma_R1 > 0.0 && Sigma_gas > 0.0) ?
-                        pow(Sigma_gas / Sigma_R1, alpha) : 0.0;
-                    // R = Sigma_H2/Sigma_HI = q (eta=0); f_H2 = R/(1+R)
-                    double f_H2 = q / (1.0 + q);
-                    if(f_H2 > 1.0) f_H2 = 1.0;
-                    if(f_H2 < 0.0) f_H2 = 0.0;
-                    galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                    } else if(sfpres == 7) {
+                        // GD14
+                        double met_abs = (galaxies[p].ColdGas > 0.0) ?
+                            galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
+                        double D_MW = met_abs / 0.02;
+                        if(D_MW < 1e-4) D_MW = 1e-4;
+                        const double S       = 3.0 * rs_pc / 100.0;
+                        const double s_param = pow(0.101, 0.7);  // U_MW = 1.0
+                        const double D_star  = 0.17 * (2.0 + pow(S, 5.0)) / (1.0 + pow(S, 5.0));
+                        const double g       = sqrt(D_MW*D_MW + D_star*D_star);
+                        const double Sigma_R1 = (g > 0.0) ? (40.0/g) * (s_param/(1.0+s_param)) : 1e10;
+                        const double alpha   = 1.0 + 0.7*sqrt(s_param)/(1.0+s_param);
+                        const double q       = (Sigma_R1 > 0.0 && Sigma_gas > 0.0) ?
+                            pow(Sigma_gas / Sigma_R1, alpha) : 0.0;
+                        double f_H2 = q / (1.0 + q);
+                        if(f_H2 > 1.0) f_H2 = 1.0;
+                        if(f_H2 < 0.0) f_H2 = 0.0;
+                        galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                    }
                 }
-                // Prescriptions 0 and 2 do not track H2; H2gas stays 0.
             }
         }
     }

@@ -458,15 +458,108 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         eburst = 0.56 * pow(mass_ratio, 0.7);
     }
 
-    if (run_params->SFprescription == 1 || run_params->SFprescription == 3 || run_params->SFprescription == 4 ||
-        run_params->SFprescription == 5 || run_params->SFprescription == 6 ||
-        run_params->SFprescription == 7) {
-        // Use H2 gas for starburst if applicable
-        gas_for_starburst = galaxies[merger_centralgal].H2gas;
+    if (run_params->StarburstColdGasOn == 0 &&
+        (run_params->SFprescription == 1 || run_params->SFprescription == 3 || run_params->SFprescription == 4 ||
+         run_params->SFprescription == 5 || run_params->SFprescription == 6 ||
+         run_params->SFprescription == 7)) {
+        // Recompute H2gas from the current ColdGas rather than using the stored value.
+        // The stored H2gas was set during disk SF earlier in this timestep, but ColdGas has
+        // since been depleted by SF, feedback, and satellite stripping, making the stored
+        // value stale (often H2gas >> 0.74*ColdGas, and even > ColdGas at high-z).
+        // Using the stale value + clamp would silently fall back to ColdGas for most events.
+        const int cgal = merger_centralgal;
+        double h2gas_fresh = 0.0;
+        if(galaxies[cgal].ColdGas > 0.0 && galaxies[cgal].DiskScaleRadius > 0.0) {
+            const float h     = run_params->Hubble_h;
+            const float rs_pc = (float)(galaxies[cgal].DiskScaleRadius * 1.0e6 / h);
+            if(rs_pc > 0.0f) {
+                if(run_params->H2RadialIntegrationOn) {
+                    // Radial integration stores result in galaxies[cgal].H2gas
+                    calculate_molecular_fraction_radial_integration(cgal, galaxies, run_params);
+                    h2gas_fresh = galaxies[cgal].H2gas;
+                } else {
+                    float disk_area_pc2;
+                    if(run_params->H2DiskAreaOption == 0)
+                        disk_area_pc2 = (float)M_PI * rs_pc * rs_pc;
+                    else if(run_params->H2DiskAreaOption == 1)
+                        disk_area_pc2 = (float)M_PI * 9.0f * rs_pc * rs_pc;
+                    else
+                        disk_area_pc2 = 2.0f * (float)M_PI * rs_pc * rs_pc;
+
+                    const float Sigma_gas = (float)(galaxies[cgal].ColdGas * 1.0e10 / h) / disk_area_pc2;
+
+                    if(run_params->SFprescription == 1 || run_params->SFprescription == 3) {
+                        // BR06 / Somerville+H2
+                        const float Sigma_star = (float)((galaxies[cgal].StellarMass - galaxies[cgal].BulgeMass)
+                                                 * 1.0e10 / h) / disk_area_pc2;
+                        h2gas_fresh = calculate_molecular_fraction_BR06(Sigma_gas, Sigma_star, rs_pc)
+                                      * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
+                    } else if(run_params->SFprescription == 4) {
+                        // KD12
+                        const float met = (float)((galaxies[cgal].ColdGas > 0.0) ?
+                            galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0);
+                        h2gas_fresh = calculate_H2_fraction_KD12(Sigma_gas, met, 5.0f)
+                                      * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
+                    } else if(run_params->SFprescription == 5) {
+                        // KMT09
+                        float met_abs = (float)((galaxies[cgal].ColdGas > 0.0) ?
+                            galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0);
+                        float Z_prime = met_abs / 0.02f;
+                        if(Z_prime < 0.05f) Z_prime = 0.05f;
+                        const float tau_c = 0.066f * 3.0f * Z_prime * Sigma_gas;
+                        const float chi = 0.77f * (1.0f + 3.1f * powf(Z_prime, 0.365f));
+                        const float s_kmt = (tau_c > 1e-10f) ?
+                            logf(1.0f + 0.6f*chi + 0.01f*chi*chi) / (0.6f*tau_c) : 100.0f;
+                        float f_H2 = (s_kmt < 2.0f) ? 1.0f - (3.0f*s_kmt)/(4.0f+s_kmt) : 0.0f;
+                        if(f_H2 < 0.0f) f_H2 = 0.0f;
+                        if(f_H2 > 1.0f) f_H2 = 1.0f;
+                        h2gas_fresh = f_H2 * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
+                    } else if(run_params->SFprescription == 6) {
+                        // K13: two-phase molecular fraction
+                        double Z_gas = (galaxies[cgal].ColdGas > 0.0) ?
+                            galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0;
+                        double Z_prime = Z_gas / 0.014;
+                        if(Z_prime < 0.01) Z_prime = 0.01;
+                        const double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime, 0.365)) / 4.1;
+                        const double tau_c = 0.066 * 5.0 * Z_prime * (double)Sigma_gas;
+                        const double s_k13 = (tau_c > 0.0) ?
+                            log(1.0 + 0.6*chi_2p + 0.01*chi_2p*chi_2p) / (0.6*tau_c) : 100.0;
+                        double f_H2_2p = (s_k13 < 2.0) ? 1.0 - (0.75*s_k13)/(1.0+0.25*s_k13) : 0.0;
+                        if(f_H2_2p < 0.0) f_H2_2p = 0.0;
+                        if(f_H2_2p > 1.0) f_H2_2p = 1.0;
+                        h2gas_fresh = f_H2_2p * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
+                    } else if(run_params->SFprescription == 7) {
+                        // GD14
+                        double met_abs = (galaxies[cgal].ColdGas > 0.0) ?
+                            galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0;
+                        double D_MW = met_abs / 0.02;
+                        if(D_MW < 1e-4) D_MW = 1e-4;
+                        const double S       = 3.0 * rs_pc / 100.0;
+                        const double s_param = pow(0.101, 0.7);  // U_MW = 1.0
+                        const double D_star  = 0.17 * (2.0 + pow(S, 5.0)) / (1.0 + pow(S, 5.0));
+                        const double g       = sqrt(D_MW*D_MW + D_star*D_star);
+                        const double Sigma_R1 = (g > 0.0) ? (40.0/g) * (s_param/(1.0+s_param)) : 1e10;
+                        const double alpha_gd = 1.0 + 0.7 * sqrt(s_param) / (1.0 + s_param);
+                        const double q = (Sigma_R1 > 0.0 && Sigma_gas > 0.0) ?
+                            pow((double)Sigma_gas / Sigma_R1, alpha_gd) : 0.0;
+                        double f_H2 = q / (1.0 + q);
+                        if(f_H2 > 1.0) f_H2 = 1.0;
+                        if(f_H2 < 0.0) f_H2 = 0.0;
+                        h2gas_fresh = f_H2 * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
+                    }
+                }
+            }
+        }
+        if(h2gas_fresh > galaxies[merger_centralgal].ColdGas)
+            h2gas_fresh = galaxies[merger_centralgal].ColdGas;
+        if(h2gas_fresh < 0.0)
+            h2gas_fresh = 0.0;
+        galaxies[merger_centralgal].H2gas = h2gas_fresh;
+        gas_for_starburst = h2gas_fresh;
     } else {
-        // Otherwise use cold gas
         gas_for_starburst = galaxies[merger_centralgal].ColdGas;
     }
+    if(gas_for_starburst < 0.0) gas_for_starburst = 0.0;
 
     stars = eburst * gas_for_starburst;
     if(stars < 0.0) {
@@ -505,9 +598,9 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
 
     XASSERT(reheated_mass >= 0.0, -1, "Error: Reheated mass = %g should be >= 0.0", reheated_mass);
 
-    // can't use more cold gas than is available!
-    if((stars + reheated_mass) > galaxies[merger_centralgal].ColdGas) {
-        fac = galaxies[merger_centralgal].ColdGas / (stars + reheated_mass);
+    // can't use more gas than is available for the burst
+    if((stars + reheated_mass) > gas_for_starburst) {
+        fac = gas_for_starburst / (stars + reheated_mass);
         stars *= fac;
         reheated_mass *= fac;
     }
@@ -609,7 +702,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         run_params->SFprescription == 6 || run_params->SFprescription == 7) {
         if(galaxies[merger_centralgal].H2gas > galaxies[merger_centralgal].ColdGas)
             galaxies[merger_centralgal].H2gas = galaxies[merger_centralgal].ColdGas;
-        galaxies[merger_centralgal].H1gas = (galaxies[merger_centralgal].ColdGas * 0.74)
+        galaxies[merger_centralgal].H1gas = (galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC)
                                             - galaxies[merger_centralgal].H2gas;
         if(galaxies[merger_centralgal].H1gas < 0.0) galaxies[merger_centralgal].H1gas = 0.0;
     }
