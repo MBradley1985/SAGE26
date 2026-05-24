@@ -38,10 +38,10 @@ except Exception:
 # ========================== CONFIGURATION ==========================
 
 # File paths
-PRIMARY_DIR    = './output/microuchuu_noffb/'
-SECONDARY_DIR  = './output/microuchuu_noh2/'
-TERTIARY_DIR   = './output/microuchuu_h2/'
-QUATERNARY_DIR = './output/microuchuu_h2_cold/'
+PRIMARY_DIR    = './output/microuchuu/'
+SECONDARY_DIR  = './output/microuchuu_h2/'
+TERTIARY_DIR   = './output/microuchuu_mbk/'
+QUATERNARY_DIR = './output/microuchuu_mbk_h2/'
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
 
@@ -160,6 +160,10 @@ if _primary_hdr is not None:
     SNAP_Z5  = _snap_for_z(REDSHIFTS, 5.0)
     SNAP_Z7  = _snap_for_z(REDSHIFTS, 7.0)
     SNAP_Z10 = _snap_for_z(REDSHIFTS, 10.0)
+    SNAP_Z11 = _snap_for_z(REDSHIFTS, 11.0)
+    SNAP_Z12 = _snap_for_z(REDSHIFTS, 12.0)
+    SNAP_Z13 = _snap_for_z(REDSHIFTS, 13.0)
+    SNAP_Z14 = _snap_for_z(REDSHIFTS, 14.0)
 else:
     # Fallback if primary HDF5 files are not available
     print("Warning: could not read primary model header — using hardcoded defaults")
@@ -193,6 +197,13 @@ else:
     SNAP_Z5  = 20
     SNAP_Z7  = 16
     SNAP_Z10 = 12
+    SNAP_Z11 = 11
+    SNAP_Z12 = 10
+    SNAP_Z13 = 9
+    SNAP_Z14 = 8
+    SNAP_Z15 = 7
+
+
 
 
 # --------------- Secondary model parameters (from HDF5) ---------------
@@ -815,13 +826,13 @@ def plot_1_number_counts(primary, secondary, tertiary=None, quaternary=None):
     axes = axes.flatten()
 
     models = [
-        ('FFB cold gas + H2 starbursts', primary, 'steelblue'),
-        ('FFB cold gas + Cold gas starbursts', secondary, 'coral'),
+        ('Millennium FFB Li+24', primary, 'steelblue'),
+        ('Millennium FFB Li+24 (H2)', secondary, 'coral'),
     ]
     if tertiary:
-        models.append(('FFB H2 + H2 starbursts', tertiary, 'mediumseagreen'))
+        models.append(('Millennium FFB MBK25', tertiary, 'mediumseagreen'))
     if quaternary:
-        models.append(('FFB H2 + Cold gas starbursts', quaternary, 'mediumpurple'))
+        models.append(('Millennium FFB MBK25 (H2)', quaternary, 'mediumpurple'))
 
     # Resolution mass limits in physical Msun (for optional reference lines).
     mmin_primary = MIN_MVIR_PARTICLES * PART_MASS * MASS_CONVERT
@@ -1003,13 +1014,13 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
     axes = axes.flatten()
 
     models = [
-        ('FFB cold gas + H2 starbursts', primary, 'steelblue', VOLUME),
-        ('FFB cold gas + Cold gas starbursts', secondary, 'coral', SECONDARY_VOLUME),
+        ('Millennium FFB Li+24', primary, 'steelblue', VOLUME),
+        ('Millennium FFB Li+24 (H2)', secondary, 'coral', SECONDARY_VOLUME),
     ]
     if tertiary:
-        models.append(('FFB H2 + H2 starbursts', tertiary, 'mediumseagreen', TERTIARY_VOLUME))
+        models.append(('Millennium FFB MBK25', tertiary, 'mediumseagreen', TERTIARY_VOLUME))
     if quaternary:
-        models.append(('FFB H2 + Cold gas starbursts', quaternary, 'mediumpurple', QUATERNARY_VOLUME))
+        models.append(('Millennium FFB MBK25 (H2)', quaternary, 'mediumpurple', QUATERNARY_VOLUME))
 
     def _finite(x):
         x = np.asarray(x, dtype=float)
@@ -1467,13 +1478,13 @@ def plot_3_evolution(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdat
 
     def _runs(ya, yb, ytert=None, yquat=None):
         runs = [
-            ((lbt_h2,   ya), C_H2,   'FFB cold gas + H2 starbursts',       '-'),
-            ((lbt_cold, yb), C_COLD, 'FFB cold gas + Cold gas starbursts', '--'),
+            ((lbt_h2,   ya), C_H2,   'Millennium FFB Li+24',       '-'),
+            ((lbt_cold, yb), C_COLD, 'Millennium FFB Li+24 (H2)', '--'),
         ]
         if has_tertiary and ytert is not None:
-            runs.append(((lbt_tert, ytert), C_TERT, 'FFB H2 + H2 starbursts', ':'))
+            runs.append(((lbt_tert, ytert), C_TERT, 'Millennium FFB MBK25', ':'))
         if has_quaternary and yquat is not None:
-            runs.append(((lbt_quat, yquat), C_QUAT, 'FFB H2 + Cold gas starbursts', '-.'))
+            runs.append(((lbt_quat, yquat), C_QUAT, 'Millennium FFB MBK25 (H2)', '-.'))
         return {'runs': runs}
 
     obs_sfrd = (_obs_sfrd[:, 0], _obs_sfrd[:, 1], _obs_sfrd[:, 2], _obs_sfrd[:, 3])
@@ -1562,8 +1573,8 @@ def plot_4_smf_z10(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_
     d_quat = snapdata_quaternary.get(snap_z10, {}) if snapdata_quaternary else {}
 
     # Row snapshots: z=10, z=5, z=1, z=0
-    z_snaps = [SNAP_Z10, SNAP_Z5, SNAP_Z1, SNAP_Z0]
-    z_labels = [10, 5, 1, 0]
+    z_snaps = [SNAP_Z13, SNAP_Z12, SNAP_Z11, SNAP_Z10]
+    z_labels = [13, 12, 11, 10]
 
     binwidth = 0.2
 
@@ -1578,13 +1589,13 @@ def plot_4_smf_z10(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_
         d_quat = snapdata_quaternary.get(snap, {}) if snapdata_quaternary else {}
 
         models = [
-            ('FFB cold gas + H2 starbursts', d_h2, 'steelblue', VOLUME),
-            ('FFB cold gas + Cold gas starbursts', d_cold, 'coral', SECONDARY_VOLUME),
+            ('Millennium FFB Li+24', d_h2, 'steelblue', VOLUME),
+            ('Millennium FFB Li+24 (H2)', d_cold, 'coral', SECONDARY_VOLUME),
         ]
         if d_tert:
-            models.append(('FFB H2 + H2 starbursts', d_tert, 'mediumseagreen', TERTIARY_VOLUME))
+            models.append(('Millennium FFB MBK25', d_tert, 'mediumseagreen', TERTIARY_VOLUME))
         if d_quat:
-            models.append(('FFB H2 + Cold gas starbursts', d_quat, 'mediumpurple', QUATERNARY_VOLUME))
+            models.append(('Millennium FFB MBK25 (H2)', d_quat, 'mediumpurple', QUATERNARY_VOLUME))
 
         def _log10_pos(x):
             x = np.asarray(x, dtype=float)
@@ -1789,13 +1800,13 @@ def main():
 
     # Load z=0 data only if needed
     if need_z0:
-        print('Loading primary model (H2 starbursts) from', PRIMARY_DIR)
+        print('Loading primary model from', PRIMARY_DIR)
         primary = load_model(PRIMARY_DIR,
                              particle_mass=PART_MASS,
                              mvir_particles_min=MIN_MVIR_PARTICLES)
         print(f'  {len(primary["StellarMass"]):,} galaxies loaded')
 
-        print('Loading secondary model (cold gas starbursts) from', SECONDARY_DIR)
+        print('Loading secondary model from', SECONDARY_DIR)
         secondary = load_model(SECONDARY_DIR,
                                snapshot=f'Snap_{SECONDARY_LAST_SNAP}',
                                properties=_z0_props,
@@ -1805,7 +1816,7 @@ def main():
         print(f'  {len(secondary["StellarMass"]):,} galaxies loaded')
 
         if model_files_exist(TERTIARY_DIR):
-            print('Loading tertiary model (FFB + H2) from', TERTIARY_DIR)
+            print('Loading tertiary model from', TERTIARY_DIR)
             tertiary = load_model(TERTIARY_DIR,
                                   snapshot=f'Snap_{TERTIARY_LAST_SNAP}',
                                   properties=_z0_props,
@@ -1834,14 +1845,14 @@ def main():
         sfh_snaps = list(_primary_hdr['output_snaps']) if _primary_hdr else list(range(last_snap + 1))
         all_snaps = sorted(set(key_snaps + sfh_snaps))
 
-        print(f'Loading {len(all_snaps)} snapshots (H2 starbursts) from', PRIMARY_DIR)
+        print(f'Loading {len(all_snaps)} snapshots from', PRIMARY_DIR)
         snapdata_h2 = load_snapshots(PRIMARY_DIR,
                                      all_snaps,
                                      particle_mass=PART_MASS,
                                      mvir_particles_min=MIN_MVIR_PARTICLES)
         print(f'  {len(snapdata_h2)} snapshots loaded')
 
-        print(f'Loading {len(all_snaps)} snapshots (cold gas starbursts) from', SECONDARY_DIR)
+        print(f'Loading {len(all_snaps)} snapshots from', SECONDARY_DIR)
         snapdata_cold = load_snapshots(SECONDARY_DIR,
                                        all_snaps,
                                        mass_convert=SECONDARY_MASS_CONVERT,
@@ -1850,7 +1861,7 @@ def main():
         print(f'  {len(snapdata_cold)} snapshots loaded')
 
         if model_files_exist(TERTIARY_DIR):
-            print(f'Loading {len(all_snaps)} snapshots (FFB + H2) from', TERTIARY_DIR)
+            print(f'Loading {len(all_snaps)} snapshots from', TERTIARY_DIR)
             snapdata_tertiary = load_snapshots(TERTIARY_DIR,
                                                all_snaps,
                                                mass_convert=TERTIARY_MASS_CONVERT,
@@ -1861,7 +1872,7 @@ def main():
             print(f'  Tertiary model not found at {TERTIARY_DIR}, skipping.')
 
         if QUATERNARY_DIR and model_files_exist(QUATERNARY_DIR):
-            print(f'Loading {len(all_snaps)} snapshots (quaternary) from', QUATERNARY_DIR)
+            print(f'Loading {len(all_snaps)} snapshots from', QUATERNARY_DIR)
             snapdata_quaternary = load_snapshots(QUATERNARY_DIR,
                                                  all_snaps,
                                                  mass_convert=QUATERNARY_MASS_CONVERT,

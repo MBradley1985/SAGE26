@@ -599,7 +599,7 @@ if both.sum():
     print(f"  N with both: {both.sum():,}  H2>HI: {above:,} ({100*above/both.sum():.0f}%)  "
           f"HI>H2: {below:,} ({100*below/both.sum():.0f}%)")
 ax = ax_h2hi
-sc = scatter(ax, lH1, lH2, c=lMstar)
+sc = scatter(ax, lH1, lH2, c=lMstar, vmin=8, vmax=12)
 if sc is not None:
     cb = plt.colorbar(sc, ax=ax, pad=0.02, fraction=0.04)
     cb.set_label(r'$\log M_\star$', fontsize=7)
@@ -614,33 +614,53 @@ ax.legend(fontsize=7);  ax.set_title('H$_2$ vs HI')
 
 # ── 12. f_mol distribution (histogram) ───────────────────────────────────────
 _panel("12. f_mol histogram by Mstar bin")
-valid_fmol = f_mol[(f_mol > 0) & np.isfinite(f_mol)]
-print(f"  f_mol > 0: {len(valid_fmol):,}  "
-      f"median={np.median(valid_fmol):.3f}  "
-      f"fraction with f_mol>0.5: {np.mean(valid_fmol>0.5)*100:.1f}%")
+sf_mask = SFR > 0
+valid_all = f_mol[(f_mol > 0) & np.isfinite(f_mol)]
+valid_sf  = f_mol[sf_mask & (f_mol > 0) & np.isfinite(f_mol)]
+print(f"  All    f_mol>0: {len(valid_all):,}  "
+      f"median={np.median(valid_all):.3f}  "
+      f"f_mol>0.5: {np.mean(valid_all>0.5)*100:.1f}%")
+print(f"  SF     f_mol>0: {len(valid_sf):,}  "
+      f"median={np.median(valid_sf):.3f}  "
+      f"f_mol>0.5: {np.mean(valid_sf>0.5)*100:.1f}%")
 
 ax = ax_fmol_hist
 
-# Split by stellar mass
 m_bins = [(8.0, 9.5, '#abd9e9', r'$10^{8}$–$10^{9.5}$'),
           (9.5, 10.5, '#2c7bb6', r'$10^{9.5}$–$10^{10.5}$'),
           (10.5, 12.5, '#d73027', r'$>10^{10.5}$')]
 fbins = np.linspace(0, 1, 40)
 
+base_mask = (f_mol > 0) & np.isfinite(f_mol)
 for mlo, mhi, col, lbl in m_bins:
-    mask = (lMstar >= mlo) & (lMstar < mhi) & (f_mol > 0) & np.isfinite(f_mol)
-    if mask.sum() > 10:
-        fm = f_mol[mask]
-        print(f"  {lbl:<22s}  N={mask.sum():>7,}  median f_mol={np.median(fm):.3f}  "
-              f">0.5: {np.mean(fm>0.5)*100:.0f}%")
-        ax.hist(fm, bins=fbins, density=True, histtype='step',
-                color=col, lw=1.5, label=lbl)
+    m_all = (lMstar >= mlo) & (lMstar < mhi) & base_mask
+    m_sf  = m_all & sf_mask
+    if m_all.sum() > 10:
+        fm_all = f_mol[m_all]
+        print(f"  {lbl:<22s}  all N={m_all.sum():>7,}  med={np.median(fm_all):.3f}  "
+              f">0.5: {np.mean(fm_all>0.5)*100:.0f}%", end='')
+        ax.hist(fm_all, bins=fbins, density=True, histtype='step',
+                color=col, lw=1.5, ls='--', alpha=0.6)
+    if m_sf.sum() > 10:
+        fm_sf = f_mol[m_sf]
+        print(f"    SF N={m_sf.sum():>7,}  med={np.median(fm_sf):.3f}  "
+              f">0.5: {np.mean(fm_sf>0.5)*100:.0f}%")
+        ax.hist(fm_sf, bins=fbins, density=True, histtype='step',
+                color=col, lw=1.5, ls='-', label=lbl)
+    elif m_all.sum() > 10:
+        print()  # newline if no SF bin
 
-ax.axvline(0.5, color='grey', lw=0.8, ls='--')
+# Legend proxy lines for line-style meaning
+from matplotlib.lines import Line2D
+handles, labels = ax.get_legend_handles_labels()
+handles += [Line2D([0],[0], color='grey', lw=1.5, ls='-'),
+            Line2D([0],[0], color='grey', lw=1.5, ls='--', alpha=0.6)]
+labels  += ['SF only', 'All']
+ax.axvline(0.5, color='grey', lw=0.8, ls=':')
 ax.set_xlabel(r'$f_\mathrm{mol} = M_\mathrm{H_2}/(M_\mathrm{H_2}+M_\mathrm{HI})$')
 ax.set_ylabel('PDF')
 ax.set_xlim(0, 1)
-ax.legend(fontsize=7, title=r'$\log M_\star$', title_fontsize=7)
+ax.legend(handles, labels, fontsize=7, title=r'$\log M_\star$', title_fontsize=7)
 ax.set_title('Molecular fraction distribution')
 
 # ─────────────────────────────────────────────────────────────────────────────

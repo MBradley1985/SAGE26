@@ -47,12 +47,6 @@ BoxSize         62.5 % Size of the simulation box in Mpc/h.
 
 SFprescription              1   %0: original Croton et al. 2006; 1: BR06 H2 Stars; 2: Somerville et al. 2025 SFR; 3: Somerville et al. 2025 SFR + H2; 4: KD12 H2 Stars; 5: KMT09; 6: K13; 7: GD14
 AGNrecipeOn                 2   %0: switch off; 1: empirical model; 2: Bondi-Hoyle model; 3: cold cloud accretion model
-H2DiskAreaOption            1   %0: π*r_s²(default); 1: π*(3*r_s)² (thrice); 2: 2π*r_s² (central Σ₀); ignored when H2RadialIntegrationOn=1
-H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk (H2DiskAreaOption unused)
-H2RadialNBins               25  %number of radial bins for H2RadialIntegrationOn
-H2RadialRMaxFactor          5.0 %R_max = factor × r_s for H2RadialIntegrationOn
-H2SFRMode                   2   %0: SFR = ε×H2/t_dyn (default); 1: SFR = H2/τ_dep (fixed Gyr); 2: SFR = H2/τ_dep(K13) (local depletion time)
-H2DepletionTime_Gyr         2.0 %τ_dep for H2SFRMode=1 [Gyr]
 SupernovaRecipeOn           1   %0: switch off; 1: original Croton et al. 2016
 ReionizationOn              1   %0: switch off
 DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
@@ -64,15 +58,19 @@ CGMPrecipRadiusMode         0   %0: evaluate t_cool/t_ff at r_cool; 1: evaluate 
 FIREmodeOn                  1   %0: switch off
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
-FeedbackFreeModeOn          6   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 conc); 3: BK25 (ConcentrationOn method); 4: BK25 + log-normal c scatter; 5: Li+24 sharp; 6: Li+24 sigmoid + H2 SF; 7: BK25 log-normal c scatter + H2 SF
+FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 conc); 3: BK25 (ConcentrationOn method); 4: BK25 + log-normal c scatter; 5: Li+24 sharp; 6: Li+24 sigmoid + H2 SF; 7: BK25 log-normal c scatter + H2 SF
 FFBIgnoreRegime             1   %0: restrict FFB to CGM-regime (Regime=0) halos; 1: apply Li+24/BK25 criteria regardless of halo regime
 FFBRandomMode               0   %0: fresh random draw each snapshot; 1: persistent FFBRandom assigned at galaxy creation
 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
-StarburstColdGasOn          0   %0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
+StarburstColdGasOn          1   %0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 DynamicDisruptionSplit      2   %0: fixed fraction; 1: mass-ratio only; 2: concentration-weighted
+
+H2DiskAreaOption            1   %0: π*r_s²(default); 1: π*(3*r_s)² (thrice); 2: 2π*r_s² (central Σ₀); ignored when H2RadialIntegrationOn=1
+H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk (H2DiskAreaOption unused)
+H2SFRMode                   2   %0: SFR = ε×H2/t_dyn (default); 1: SFR = H2/τ_dep (fixed Gyr); 2: SFR = H2/τ_dep(K13) (local depletion time)
 
 %------------------------------------------
 %----- SAGE model parameters --------------
@@ -109,6 +107,10 @@ Reionization_zr             7.0     %using the analytic fit of Kravtsov et al. 2
 
 EnergySN                    1.0e51  %energy per supernova
 EtaSN                       5.0e-3  %supernova efficiency
+
+H2RadialNBins               50      %number of radial bins for H2RadialIntegrationOn
+H2RadialRMaxFactor          5.0     %R_max = factor × r_s for H2RadialIntegrationOn
+H2DepletionTime_Gyr         2.0     %τ_dep for H2SFRMode=1 [Gyr]
 
 %------------------------------------------
 %----- Other code-related information -----

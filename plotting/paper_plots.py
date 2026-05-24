@@ -2462,9 +2462,9 @@ def plot_8_precipitation_fraction(snapdata):
     """
     print('Plot 8: Precipitation fraction model')
 
-    snap_list = [(SNAP_Z0, 'z=0'), (SNAP_Z2, 'z=2')]
-    markers   = ['x', '+']
-    zcolors   = ['steelblue', 'firebrick']
+    snap_list = [(SNAP_Z0, 'z=0'), (SNAP_Z2, 'z=2'), (SNAP_Z3, 'z=3'), (SNAP_Z4, 'z=4')]
+    markers   = ['x', 'o', '^', 's']
+    zcolors   = ['steelblue', 'firebrick', 'darkorange', 'purple']
     mass_bins = np.arange(10.0, 15.5, 0.25)   # log10(Mvir/Msun) bin edges
 
     # ------------------------------------------------------------------ #
@@ -2480,7 +2480,7 @@ def plot_8_precipitation_fraction(snapdata):
     ax.axvline(x=10, color='goldenrod', ls='--', lw=1.5, alpha=0.8,
                label=r'$t_{\rm cool}/t_{\rm ff} = 10$')
     ax.axvspan(0.5, 10,  alpha=0.06, color='red')
-    ax.axvspan(10,  12,  alpha=0.06, color='goldenrod')
+    ax.axvspan(10,  15,  alpha=0.06, color='goldenrod')
     ax.axvspan(12,  1e4, alpha=0.06, color='steelblue')
     ax.text(2.5,  0.55, 'Thermally\nUnstable', fontsize=12, ha='center',
             va='center', color='firebrick', fontweight='bold')
@@ -2556,7 +2556,7 @@ def plot_8_precipitation_fraction(snapdata):
         meds, p16, p84, xc = [], [], [], []
         for mlo, mhi in zip(mass_bins[:-1], mass_bins[1:]):
             inbin = base[(logm[base] > mlo) & (logm[base] <= mhi)]
-            if len(inbin) < 10:
+            if len(inbin) < 2:
                 continue
             lr = np.log10(ratio[inbin])
             lr = lr[np.isfinite(lr)]
@@ -2565,7 +2565,7 @@ def plot_8_precipitation_fraction(snapdata):
             meds.append(np.median(lr))
             p16.append(np.percentile(lr, 16))
             p84.append(np.percentile(lr, 84))
-            xc.append(0.5 * (mlo + mhi) + 10)   # convert to log10(M/Msun)
+            xc.append(0.5 * (mlo + mhi))   # convert to log10(M/Msun)
 
         if not meds:
             continue
@@ -2577,6 +2577,8 @@ def plot_8_precipitation_fraction(snapdata):
         ax2.fill_between(xc, p16, p84, alpha=0.25, color=zcol)
         ax2.plot(xc, meds, color=zcol, lw=2, marker=mark,
                  ms=10, label=label)
+    
+    ax2.set_xlim(10.0, 12.5)
 
     ax2.set_xlabel(r'$\log_{10}(M_{\rm vir}/M_{\odot})$')
     ax2.set_ylabel(r'$\log_{10}(t_{\rm cool}/t_{\rm ff})$')

@@ -1160,8 +1160,9 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
             f_mol_r = 0.0f;
         }
 
-        // Mass of molecular gas in this annulus: dM = 2π r Σ_gas f_mol dr
-        const float dM_H2 = 2.0f * (float)M_PI * r * sigma_gas_r * f_mol_r * dr;
+        // dM_H2 = 2π r × Σ_gas × 0.74 × f_mol × dr: f_mol is fraction of H that is H2,
+        // so multiply by HYDROGEN_MASS_FRAC to convert total gas surface density to hydrogen.
+        const float dM_H2 = 2.0f * (float)M_PI * r * sigma_gas_r * 0.74f * f_mol_r * dr;
 
         M_H2_total += dM_H2;
     }

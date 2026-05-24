@@ -100,8 +100,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                                                                            rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
                 }
 
-                if(galaxies[p].H2gas > galaxies[p].ColdGas)
-                    galaxies[p].H2gas = galaxies[p].ColdGas;
+                if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
+                    galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
 
                 if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
                     strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
@@ -198,8 +198,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                     galaxies[p].H2gas = total_molecular_gas;
                 }
 
-                if(galaxies[p].H2gas > galaxies[p].ColdGas)
-                    galaxies[p].H2gas = galaxies[p].ColdGas;
+                if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
+                    galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
 
                 // Critical surface density from Equation 2
                 const double Sigma_crit = 30.0 / (M_PI * 4.302e-3); // ~2176 Msun/pc^2
@@ -263,8 +263,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                     }
                 }
                 // Safety check: H2 fraction cannot exceed 1.0
-                if(galaxies[p].H2gas > galaxies[p].ColdGas) {
-                    galaxies[p].H2gas = galaxies[p].ColdGas;
+                if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
+                    galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
                 }
 
                 if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
@@ -340,8 +340,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             }
 
             // Can't create more H2 than total cold gas
-            if(galaxies[p].H2gas > galaxies[p].ColdGas) {
-                galaxies[p].H2gas = galaxies[p].ColdGas;
+            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
+                galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
             }
 
             if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
@@ -414,8 +414,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             }
 
             // Can't create more H2 than total cold gas
-            if(galaxies[p].H2gas > galaxies[p].ColdGas) {
-                galaxies[p].H2gas = galaxies[p].ColdGas;
+            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
+                galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
             }
 
             // K13 depletion time (Eq 28): min(τ_2p, τ_hydro_star, τ_hydro_gas)
@@ -497,8 +497,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             }
 
             // Can't create more H2 than total cold gas
-            if(galaxies[p].H2gas > galaxies[p].ColdGas) {
-                galaxies[p].H2gas = galaxies[p].ColdGas;
+            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
+                galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
             }
 
             if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
@@ -526,8 +526,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             const float Sg_pp  = (area_pp > 0.0f) ? (float)(galaxies[p].ColdGas * 1.0e10 / h_pp) / area_pp : 0.0f;
             const float Ss_pp  = (area_pp > 0.0f) ? (float)((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h_pp) / area_pp : 0.0f;
             const float Zp_pp  = (galaxies[p].ColdGas > 0.0) ? (float)(galaxies[p].MetalsColdGas / galaxies[p].ColdGas / 0.014) : 0.02f;
-            const float fm_pp  = (galaxies[p].ColdGas > 0.0) ? (float)(galaxies[p].H2gas / (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)) : 0.0f;
-            const double tdep_Gyr = calculate_tdep_K13_Gyr(Sg_pp, Ss_pp, rs_pp, Zp_pp, fm_pp);
+            // Pass f_H2=1 so t_dep_2p = 3.1/Σ^0.25 (H2 depletion time, not total-gas).
+            // SFR = H2/τ_dep,H2 then scales linearly with f_H2, matching K13's intent.
+            const double tdep_Gyr = calculate_tdep_K13_Gyr(Sg_pp, Ss_pp, rs_pp, Zp_pp, 1.0f);
             tdep_code = tdep_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
         }
         if(tdep_code > 0.0) strdot = galaxies[p].H2gas / tdep_code;
@@ -968,7 +969,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         }
     }
 
-    if(galaxies[p].H2gas > galaxies[p].ColdGas) galaxies[p].H2gas = galaxies[p].ColdGas;
+    if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
 
     // HI = total hydrogen - H2, matching non-FFB path
     galaxies[p].H1gas = (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) - galaxies[p].H2gas;

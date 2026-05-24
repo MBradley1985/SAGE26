@@ -550,8 +550,8 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                 }
             }
         }
-        if(h2gas_fresh > galaxies[merger_centralgal].ColdGas)
-            h2gas_fresh = galaxies[merger_centralgal].ColdGas;
+        if(h2gas_fresh > galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC)
+            h2gas_fresh = galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC;
         if(h2gas_fresh < 0.0)
             h2gas_fresh = 0.0;
         galaxies[merger_centralgal].H2gas = h2gas_fresh;
@@ -700,8 +700,8 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     if (run_params->SFprescription == 1 || run_params->SFprescription == 3 ||
         run_params->SFprescription == 4 || run_params->SFprescription == 5 ||
         run_params->SFprescription == 6 || run_params->SFprescription == 7) {
-        if(galaxies[merger_centralgal].H2gas > galaxies[merger_centralgal].ColdGas)
-            galaxies[merger_centralgal].H2gas = galaxies[merger_centralgal].ColdGas;
+        if(galaxies[merger_centralgal].H2gas > galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC)
+            galaxies[merger_centralgal].H2gas = galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC;
         galaxies[merger_centralgal].H1gas = (galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC)
                                             - galaxies[merger_centralgal].H2gas;
         if(galaxies[merger_centralgal].H1gas < 0.0) galaxies[merger_centralgal].H1gas = 0.0;
