@@ -65,12 +65,12 @@ FFBRandomMode               0   %0: fresh random draw each snapshot; 1: persiste
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
-StarburstColdGasOn          1   %0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
+StarburstColdGasOn          0   %0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 DynamicDisruptionSplit      2   %0: fixed fraction; 1: mass-ratio only; 2: concentration-weighted
 
 H2DiskAreaOption            1   %0: π*r_s²(default); 1: π*(3*r_s)² (thrice); 2: 2π*r_s² (central Σ₀); ignored when H2RadialIntegrationOn=1
 H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk (H2DiskAreaOption unused)
-H2SFRMode                   2   %0: SFR = ε×H2/t_dyn (default); 1: SFR = H2/τ_dep (fixed Gyr); 2: SFR = H2/τ_dep(K13) (local depletion time)
+H2SFRMode                   0   %0: SFR = ε×H2/t_dyn (default); 1: SFR = H2/τ_dep (fixed Gyr); 2: SFR = H2/τ_dep(K13) (local depletion time)
 
 %------------------------------------------
 %----- SAGE model parameters --------------

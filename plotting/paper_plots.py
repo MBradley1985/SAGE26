@@ -38,7 +38,7 @@ except ImportError:
 # ========================== CONFIGURATION ==========================
 
 # File paths
-PRIMARY_DIR = './output/millennium/'
+PRIMARY_DIR = './output/millennium_h2/'
 VANILLA_DIR = './output/millennium_vanilla/'
 NOFFB_DIR = './output/millennium_noffb/'
 NOCGM_DIR = './output/millennium_nocgm/'

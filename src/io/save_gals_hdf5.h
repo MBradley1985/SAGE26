@@ -115,6 +115,7 @@ struct HDF5_GALAXY_OUTPUT
     float *tff;
     float *tcool_over_tff;
     float *tdeplete;
+    float *H2DepletionTime_Gyr;
     float *RcoolToRvir;
 
     int32_t *FFBRegime;

@@ -100,6 +100,7 @@ extern "C" {
       float tff;
       float tcool_over_tff;
       float tdeplete;
+      float H2DepletionTime_Gyr;
       float RcoolToRvir;
 
       int FFBRegime;

@@ -114,6 +114,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].tff = -1.0;
     galaxies[p].tcool_over_tff = -1.0;
     galaxies[p].tdeplete = -1.0;
+    galaxies[p].H2DepletionTime_Gyr = -1.0f;
 
 	// infall properties
     galaxies[p].infallMvir = -1.0;
@@ -1060,7 +1061,8 @@ float calculate_molecular_fraction_BR06(float gas_surface_density, float stellar
 }
 
 float calculate_molecular_fraction_radial_integration(const int gal, struct GALAXY *galaxies,
-                                                      const struct params *run_params)
+                                                      const struct params *run_params,
+                                                      double *strdot_code_out)
 {
     const float h = run_params->Hubble_h;
     const float rs_pc = galaxies[gal].DiskScaleRadius * 1.0e6 / h;  // Scale radius in pc
@@ -1097,6 +1099,15 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
         g7 = sqrtf(D_MW7 * D_MW7 + D_star7 * D_star7);
         Sigma_R1_7 = (g7 > 0.0f) ? (40.0f / g7) * s_param7 / (1.0f + s_param7) : 1e10f;
         alpha7 = 1.0f + 0.7f * sqrtf(s_param7) / (1.0f + s_param7);
+    }
+
+    // K13 radially-integrated SFR (only computed when caller requests it via strdot_code_out)
+    double SFR_K13_total = 0.0;
+    float Z_prime_k13 = 0.01f;
+    if(strdot_code_out != NULL && galaxies[gal].ColdGas > 0.0f) {
+        float Z_gas_k13 = (float)(galaxies[gal].MetalsColdGas / galaxies[gal].ColdGas);
+        Z_prime_k13 = Z_gas_k13 / 0.014f;
+        if(Z_prime_k13 < 0.01f) Z_prime_k13 = 0.01f;
     }
 
     // Integrate molecular gas mass
@@ -1165,10 +1176,26 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
         const float dM_H2 = 2.0f * (float)M_PI * r * sigma_gas_r * 0.74f * f_mol_r * dr;
 
         M_H2_total += dM_H2;
+
+        // K13 SFR: Σ_gas(r) / t_dep(r) × 2π r dr [Msun/Gyr], using local f_H2 from base prescription
+        if(strdot_code_out != NULL) {
+            double t_dep_r = calculate_tdep_K13_Gyr(sigma_gas_r, sigma_star_r, rs_pc, Z_prime_k13, f_mol_r);
+            if(t_dep_r > 0.0)
+                SFR_K13_total += (double)sigma_gas_r / t_dep_r * 2.0 * M_PI * r * dr;
+        }
     }
 
     // Convert back to code units (10^10 M☉/h)
     const float H2_code_units = M_H2_total * h / 1.0e10;
+
+    // Write K13 SFR and effective depletion time when requested
+    if(strdot_code_out != NULL) {
+        // SFR_K13_total [Msun/Gyr] → code units [(10^10 Msun/h) / (UnitTime_in_Megayears Myr)]
+        *strdot_code_out = SFR_K13_total * h / 1.0e10 * run_params->UnitTime_in_Megayears / 1000.0;
+        // Effective global depletion time [Gyr] = M_gas / SFR_K13
+        galaxies[gal].H2DepletionTime_Gyr = (SFR_K13_total > 0.0)
+                                            ? (float)(M_gas_total / SFR_K13_total) : -1.0f;
+    }
 
     // Store and return
     galaxies[gal].H2gas = H2_code_units;
@@ -1189,7 +1216,7 @@ double calculate_tdep_K13_Gyr(float Sigma_gas, float Sigma_star, float rs_pc, fl
     // Hydrostatic limits (K13 Eqs 21–22)
     double t_hydro_star = 1.0e10, t_hydro_gas = 1.0e10;
     if(Sigma_gas > 1e-10) {
-        double h_z       = 0.1 * rs_pc;
+        double h_z       = calculate_stellar_scale_height_BR06(rs_pc);
         double rho_sd_2  = (h_z > 0.0 && Sigma_star > 0.0)
                            ? (Sigma_star / (2.0 * h_z)) / 0.01 : 1e-4;
         if(rho_sd_2 < 1e-4) rho_sd_2 = 1e-4;

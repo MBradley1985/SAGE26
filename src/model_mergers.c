@@ -475,7 +475,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
             if(rs_pc > 0.0f) {
                 if(run_params->H2RadialIntegrationOn) {
                     // Radial integration stores result in galaxies[cgal].H2gas
-                    calculate_molecular_fraction_radial_integration(cgal, galaxies, run_params);
+                    calculate_molecular_fraction_radial_integration(cgal, galaxies, run_params, NULL);
                     h2gas_fresh = galaxies[cgal].H2gas;
                 } else {
                     float disk_area_pc2;

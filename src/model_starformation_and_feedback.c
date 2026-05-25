@@ -82,7 +82,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             } else {
                 // H2 mass via BR06: radial integration or single-slab
                 if(run_params->H2RadialIntegrationOn) {
-                    calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
+                    calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
                     // result already stored in galaxies[p].H2gas by the function
                 } else {
                     float disk_area_pc2;
@@ -177,7 +177,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 // H2 mass via BR06: radial integration or single-slab
                 float gas_surface_density = 0.0f;
                 if(run_params->H2RadialIntegrationOn) {
-                    calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
+                    calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
                     // result already stored in galaxies[p].H2gas by the function
                     // compute gas_surface_density for epsilon_cl below using π*(3*r_s)² as reference
                     const float ref_area = (float)(M_PI * pow(3.0 * rs_pc, 2));
@@ -239,7 +239,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 strdot = 0.0;
             } else {
                 if(run_params->H2RadialIntegrationOn) {
-                    calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
+                    calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
                 } else {
                     // Choose disk area based on H2DiskAreaOption
                     float disk_area;
@@ -295,7 +295,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
 
             if(run_params->H2RadialIntegrationOn) {
-                calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
+                calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
             } else {
                 // Choose disk area based on H2DiskAreaOption
                 float disk_area_pc2;
@@ -371,21 +371,19 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             const float h = run_params->Hubble_h;
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
 
-            // Variables needed for K13 depletion time (slab path)
-            double Sigma_gas_k13 = 0.0, Sigma_star_k13 = 0.0, Z_prime_k13 = 0.01, f_H2_2p_k13 = 0.0;
-
             if(run_params->H2RadialIntegrationOn) {
-                calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
-                // For K13 depletion time, use π*r_s² representative surface density
-                const float area_k13 = (float)(M_PI * rs_pc * rs_pc);
-                Sigma_gas_k13  = (area_k13 > 0.0f) ? (galaxies[p].ColdGas * 1.0e10 / h) / area_k13 : 0.0;
-                Sigma_star_k13 = (area_k13 > 0.0f) ? (galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h / area_k13 : 0.0;
-                double Z_gas_k13 = (galaxies[p].ColdGas > 0.0) ? (galaxies[p].MetalsColdGas / galaxies[p].ColdGas) : 0.0;
-                Z_prime_k13 = Z_gas_k13 / 0.014; if(Z_prime_k13 < 0.01) Z_prime_k13 = 0.01;
-                f_H2_2p_k13 = (galaxies[p].ColdGas > 0.0)
-                              ? (double)(galaxies[p].H2gas / (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)) : 0.0;
+                // Radially integrate both H2 mass and K13 SFR consistently.
+                // Σ(r)/t_dep(r) is summed over the disk using the local f_H2(r) at each annulus,
+                // avoiding the single-slab Σ = M/(π r_s²) = 2Σ₀ overestimate.
+                double strdot_k13 = 0.0;
+                calculate_molecular_fraction_radial_integration(p, galaxies, run_params, &strdot_k13);
+                if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
+                    galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+                // H2DepletionTime_Gyr = M_gas / SFR_K13_integrated, set inside function
+                strdot = strdot_k13;
             } else {
-                // Choose disk area based on H2DiskAreaOption
+                // Slab path: single representative surface density from H2DiskAreaOption
+                double Sigma_gas_k13 = 0.0, Sigma_star_k13 = 0.0, Z_prime_k13 = 0.01, f_H2_2p_k13 = 0.0;
                 float area_pc2;
                 if (run_params->H2DiskAreaOption == 0) {
                     area_pc2 = M_PI * pow(rs_pc, 2);
@@ -411,23 +409,16 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 } else {
                     galaxies[p].H2gas = 0.0;
                 }
-            }
 
-            // Can't create more H2 than total cold gas
-            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
-                galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-            }
+                if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
+                    galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
 
-            // K13 depletion time (Eq 28): min(τ_2p, τ_hydro_star, τ_hydro_gas)
-            const double t_dep_Gyr  = calculate_tdep_K13_Gyr((float)Sigma_gas_k13, (float)Sigma_star_k13,
-                                                               rs_pc, (float)Z_prime_k13, (float)f_H2_2p_k13);
-            const double t_dep_code = t_dep_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
-
-            // K13 SFR: total cold gas consumed at the K13 depletion rate
-            if(galaxies[p].ColdGas > 0.0 && t_dep_code > 0.0) {
-                strdot = galaxies[p].ColdGas / t_dep_code;
-            } else {
-                strdot = 0.0;
+                const double t_dep_Gyr = calculate_tdep_K13_Gyr((float)Sigma_gas_k13, (float)Sigma_star_k13,
+                                                                   rs_pc, (float)Z_prime_k13, (float)f_H2_2p_k13);
+                const double t_dep_code = t_dep_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
+                galaxies[p].H2DepletionTime_Gyr = (t_dep_Gyr > 0.0) ? (float)t_dep_Gyr : -1.0f;
+                strdot = (galaxies[p].ColdGas > 0.0 && t_dep_code > 0.0)
+                         ? galaxies[p].ColdGas / t_dep_code : 0.0;
             }
         }
     } else if(run_params->SFprescription == 7) {
@@ -451,9 +442,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             const float h = run_params->Hubble_h;
             // Scale radius in pc
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-            
+
             if(run_params->H2RadialIntegrationOn) {
-                calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
+                calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
             } else {
                 // Choose disk area based on H2DiskAreaOption
                 float disk_area_pc2;
@@ -512,26 +503,41 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         ABORT(0);
     }
 
-    // H2SFRMode override: applies to all H2-computing prescriptions (not 0 or 2)
+    // H2SFRMode override: applies to all H2-computing prescriptions except 0, 2, and 6.
+    // SFprescription==6 (K13) is excluded because it already uses K13 t_dep natively.
     if(run_params->H2SFRMode > 0 && galaxies[p].H2gas > 0.0 && tdyn > 0.0
-       && run_params->SFprescription != 0 && run_params->SFprescription != 2) {
-        double tdep_code;
+       && run_params->SFprescription != 0 && run_params->SFprescription != 2
+       && run_params->SFprescription != 6) {
         if(run_params->H2SFRMode == 1) {
-            tdep_code = run_params->H2DepletionTime_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
+            double tdep_code = run_params->H2DepletionTime_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
+            galaxies[p].H2DepletionTime_Gyr = (float)run_params->H2DepletionTime_Gyr;
+            if(tdep_code > 0.0) strdot = galaxies[p].H2gas / tdep_code;
         } else {
-            // H2SFRMode == 2: K13 local depletion time
-            const float h_pp   = run_params->Hubble_h;
-            const float rs_pp  = (float)(galaxies[p].DiskScaleRadius * 1.0e6 / h_pp);
-            const float area_pp = (float)M_PI * rs_pp * rs_pp;
-            const float Sg_pp  = (area_pp > 0.0f) ? (float)(galaxies[p].ColdGas * 1.0e10 / h_pp) / area_pp : 0.0f;
-            const float Ss_pp  = (area_pp > 0.0f) ? (float)((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h_pp) / area_pp : 0.0f;
-            const float Zp_pp  = (galaxies[p].ColdGas > 0.0) ? (float)(galaxies[p].MetalsColdGas / galaxies[p].ColdGas / 0.014) : 0.02f;
-            // Pass f_H2=1 so t_dep_2p = 3.1/Σ^0.25 (H2 depletion time, not total-gas).
-            // SFR = H2/τ_dep,H2 then scales linearly with f_H2, matching K13's intent.
-            const double tdep_Gyr = calculate_tdep_K13_Gyr(Sg_pp, Ss_pp, rs_pp, Zp_pp, 1.0f);
-            tdep_code = tdep_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
+            // H2SFRMode == 2: K13 depletion time using local f_H2 from base prescription
+            if(run_params->H2RadialIntegrationOn) {
+                // Re-run radial integration to get K13 SFR with local f_H2(r) from base prescription.
+                // H2gas result is identical to the first call; strdot_ri is the new output.
+                double strdot_ri = 0.0;
+                calculate_molecular_fraction_radial_integration(p, galaxies, run_params, &strdot_ri);
+                // H2DepletionTime_Gyr = M_gas / SFR_K13_integrated, set inside function
+                if(strdot_ri > 0.0) strdot = strdot_ri;
+            } else {
+                // Slab path: use H2DiskAreaOption for Σ; pass f_H2=1 so SFR = H2/τ_dep,H2
+                const float h_pp  = run_params->Hubble_h;
+                const float rs_pp = (float)(galaxies[p].DiskScaleRadius * 1.0e6 / h_pp);
+                float area_pp;
+                if(run_params->H2DiskAreaOption == 0)      area_pp = (float)M_PI * rs_pp * rs_pp;
+                else if(run_params->H2DiskAreaOption == 1) area_pp = (float)M_PI * 9.0f * rs_pp * rs_pp;
+                else                                        area_pp = 2.0f * (float)M_PI * rs_pp * rs_pp;
+                const float Sg_pp = (area_pp > 0.0f) ? (float)(galaxies[p].ColdGas * 1.0e10 / h_pp) / area_pp : 0.0f;
+                const float Ss_pp = (area_pp > 0.0f) ? (float)((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h_pp) / area_pp : 0.0f;
+                const float Zp_pp = (galaxies[p].ColdGas > 0.0) ? (float)(galaxies[p].MetalsColdGas / galaxies[p].ColdGas / 0.014) : 0.02f;
+                const double tdep_Gyr = calculate_tdep_K13_Gyr(Sg_pp, Ss_pp, rs_pp, Zp_pp, 1.0f);
+                double tdep_code = tdep_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
+                galaxies[p].H2DepletionTime_Gyr = (tdep_Gyr > 0.0) ? (float)tdep_Gyr : -1.0f;
+                if(tdep_code > 0.0) strdot = galaxies[p].H2gas / tdep_code;
+            }
         }
-        if(tdep_code > 0.0) strdot = galaxies[p].H2gas / tdep_code;
     }
 
     // Calculate HI (atomic hydrogen) as the remainder of hydrogen after H2
@@ -887,7 +893,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         if(rs_pc > 0.0 && has_h2) {
             if(run_params->H2RadialIntegrationOn) {
                 // Unified radial integration path — handles all H2 prescriptions internally
-                calculate_molecular_fraction_radial_integration(p, galaxies, run_params);
+                calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
             } else {
                 // Single-slab path
                 float disk_area_pc2;
