@@ -36,15 +36,17 @@ int read_parameter_file(const char *fname, struct params *run_params)
     int errorFlag = 0;
     int *used_tag = 0;
     char my_treetype[MAX_STRING_LEN], my_outputformat[MAX_STRING_LEN], my_forest_dist_scheme[MAX_STRING_LEN];
-    /*  recipe parameters  */
     int NParam = 0;
     char ParamTag[MAXTAGS][MAXTAGLEN + 1];
+    char OrigParamTag[MAXTAGS][MAXTAGLEN + 1];
     int  ParamID[MAXTAGS];
+    int  ParamRequired[MAXTAGS];
     void *ParamAddr[MAXTAGS];
 
     /* Ensure that all strings will be NULL terminated */
     for(int i=0;i<MAXTAGS;i++) {
         ParamTag[i][MAXTAGLEN] = '\0';
+        OrigParamTag[i][MAXTAGLEN] = '\0';
     }
 
     NParam = 0;
@@ -57,286 +59,157 @@ int read_parameter_file(const char *fname, struct params *run_params)
     }
 #endif
 
-    strncpy(ParamTag[NParam], "FileNameGalaxies", MAXTAGLEN);
-    ParamAddr[NParam] = run_params->FileNameGalaxies;
-    ParamID[NParam++] = STRING;
-
-    strncpy(ParamTag[NParam], "OutputDir", MAXTAGLEN);
-    ParamAddr[NParam] = run_params->OutputDir;
-    ParamID[NParam++] = STRING;
-
-    strncpy(ParamTag[NParam], "TreeType", MAXTAGLEN);
-    ParamAddr[NParam] = my_treetype;
-    ParamID[NParam++] = STRING;
-
-    strncpy(ParamTag[NParam], "TreeName", MAXTAGLEN);
-    ParamAddr[NParam] = run_params->TreeName;
-    ParamID[NParam++] = STRING;
-
-    strncpy(ParamTag[NParam], "SimulationDir", MAXTAGLEN);
-    ParamAddr[NParam] = run_params->SimulationDir;
-    ParamID[NParam++] = STRING;
-
-    strncpy(ParamTag[NParam], "FileWithSnapList", MAXTAGLEN);
-    ParamAddr[NParam] = run_params->FileWithSnapList;
-    ParamID[NParam++] = STRING;
-
-    strncpy(ParamTag[NParam], "LastSnapshotNr", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->LastSnapshotNr);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "FirstFile", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->FirstFile);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "LastFile", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->LastFile);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "NumSimulationTreeFiles", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->NumSimulationTreeFiles);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "ThreshMajorMerger", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->ThreshMajorMerger);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "RecycleFraction", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->RecycleFraction);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "ReIncorporationFactor", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->ReIncorporationFactor);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "UnitVelocity_in_cm_per_s", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->UnitVelocity_in_cm_per_s);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "UnitLength_in_cm", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->UnitLength_in_cm);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "UnitMass_in_g", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->UnitMass_in_g);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "Hubble_h", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->Hubble_h);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "ReionizationOn", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->ReionizationOn);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "SupernovaRecipeOn", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->SupernovaRecipeOn);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "DiskInstabilityOn", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->DiskInstabilityOn);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "SFprescription", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->SFprescription);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "AGNrecipeOn", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->AGNrecipeOn);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "H2DiskAreaOption", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->H2DiskAreaOption);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "H2RadialIntegrationOn", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->H2RadialIntegrationOn);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "H2RadialNBins", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->H2RadialNBins);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "H2RadialRMaxFactor", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->H2RadialRMaxFactor);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "H2SFRMode", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->H2SFRMode);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "H2DepletionTime_Gyr", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->H2DepletionTime_Gyr);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "BaryonFrac", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->BaryonFrac);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "Omega", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->Omega);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "OmegaLambda", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->OmegaLambda);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "PartMass", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->PartMass);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "BoxSize", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->BoxSize);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "EnergySN", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->EnergySN);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "EtaSN", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->EtaSN);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "Yield", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->Yield);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "FracZleaveDisk", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->FracZleaveDisk);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "SfrEfficiency", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->SfrEfficiency);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "FeedbackReheatingEpsilon", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->FeedbackReheatingEpsilon);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "FeedbackEjectionEfficiency", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->FeedbackEjectionEfficiency);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "BlackHoleGrowthRate", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->BlackHoleGrowthRate);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "RadioModeEfficiency", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->RadioModeEfficiency);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "QuasarModeEfficiency", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->QuasarModeEfficiency);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "Reionization_z0", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->Reionization_z0);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "Reionization_zr", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->Reionization_zr);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "ThresholdSatDisruption", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->ThresholdSatDisruption);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "FractionDisruptedToICS", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->FractionDisruptedToICS);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "DynamicDisruptionSplit", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->DynamicDisruptionSplit);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "DisruptionSplitAlpha", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->DisruptionSplitAlpha);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "DisruptionSplitCref", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->DisruptionSplitCref);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "NumOutputs", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->NumSnapOutputs);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "OutputFormat", MAXTAGLEN);
-    ParamAddr[NParam] = my_outputformat;
-    ParamID[NParam++] = STRING;
-
-    strncpy(ParamTag[NParam], "ForestDistributionScheme", MAXTAGLEN);
-    ParamAddr[NParam] = my_forest_dist_scheme;
-    ParamID[NParam++] = STRING;
-
-    strncpy(ParamTag[NParam], "ExponentForestDistributionScheme", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->Exponent_Forest_Dist_Scheme);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "CGMrecipeOn", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->CGMrecipeOn);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "CGMDensityProfile", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->CGMDensityProfile);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "CGMPrecipitationMode", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->CGMPrecipitationMode);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "CGMPrecipRadiusMode", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->CGMPrecipRadiusMode);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "FIREmodeOn", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->FIREmodeOn);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "RedshiftPowerLawExponent", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->RedshiftPowerLawExponent);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "FFBMaxEfficiency", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->FFBMaxEfficiency);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "FFBConcSigma", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->FFBConcSigma);
-    ParamID[NParam++] = DOUBLE;
-
-    strncpy(ParamTag[NParam], "ConcentrationOn", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->ConcentrationOn);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "FeedbackFreeModeOn", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->FeedbackFreeModeOn);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "FFBIgnoreRegime", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->FFBIgnoreRegime);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "FFBRandomMode", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->FFBRandomMode);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "BulgeSizeOn", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->BulgeSizeOn);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "SaveFullSFH", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->SaveFullSFH);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "TrackICSAssembly", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->TrackICSAssembly);
-    ParamID[NParam++] = INT;
-
-    strncpy(ParamTag[NParam], "StarburstColdGasOn", MAXTAGLEN);
-    ParamAddr[NParam] = &(run_params->StarburstColdGasOn);
-    ParamID[NParam++] = INT;
-
+    /* Pre-initialize optional string parameters with defaults */
+    strncpy(my_outputformat,      "sage_hdf5",              MAXTAGLEN);
+    strncpy(my_forest_dist_scheme,"generic_power_in_nhalos",MAXTAGLEN);
+
+    /* Pre-initialize optional numeric parameters with defaults.
+       Required parameters are left uninitialised — they must appear in the file. */
+    run_params->NumSnapOutputs             = -1;
+    run_params->ReionizationOn             = 1;
+    run_params->SupernovaRecipeOn          = 1;
+    run_params->DiskInstabilityOn          = 1;
+    run_params->SFprescription             = 1;
+    run_params->AGNrecipeOn                = 2;
+    run_params->H2DiskAreaOption           = 1;
+    run_params->H2RadialIntegrationOn      = 1;
+    run_params->H2RadialNBins              = 25;
+    run_params->H2RadialRMaxFactor         = 5.0;
+    run_params->H2SFRMode                  = 0;
+    run_params->H2DepletionTime_Gyr        = 2.0;
+    run_params->CGMrecipeOn                = 1;
+    run_params->CGMDensityProfile          = 0;
+    run_params->CGMPrecipitationMode       = 1;
+    run_params->CGMPrecipRadiusMode        = 0;
+    run_params->FIREmodeOn                 = 1;
+    run_params->RedshiftPowerLawExponent   = 1.25;
+    run_params->FFBMaxEfficiency           = 0.2;
+    run_params->FFBConcSigma               = 0.2;
+    run_params->ConcentrationOn            = 3;
+    run_params->FeedbackFreeModeOn         = 1;
+    run_params->FFBIgnoreRegime            = 1;
+    run_params->FFBRandomMode              = 0;
+    run_params->BulgeSizeOn                = 3;
+    run_params->SaveFullSFH                = 1;
+    run_params->TrackICSAssembly           = 1;
+    run_params->StarburstColdGasOn         = 0;
+    run_params->DynamicDisruptionSplit     = 2;
+    run_params->ThreshMajorMerger          = 0.3;
+    run_params->RecycleFraction            = 0.43;
+    run_params->ReIncorporationFactor      = 0.15;
+    run_params->EnergySN                   = 1.0e51;
+    run_params->EtaSN                      = 5.0e-3;
+    run_params->Yield                      = 0.025;
+    run_params->FracZleaveDisk             = 0.0;
+    run_params->SfrEfficiency              = 0.05;
+    run_params->FeedbackReheatingEpsilon   = 2.9;
+    run_params->FeedbackEjectionEfficiency = 0.5;
+    run_params->BlackHoleGrowthRate        = 0.015;
+    run_params->RadioModeEfficiency        = 0.08;
+    run_params->QuasarModeEfficiency       = 0.005;
+    run_params->Reionization_z0            = 8.0;
+    run_params->Reionization_zr            = 7.0;
+    run_params->ThresholdSatDisruption     = 1.0;
+    run_params->FractionDisruptedToICS     = 0.8;
+    run_params->DisruptionSplitAlpha       = 0.25;
+    run_params->DisruptionSplitCref        = 10.0;
+    run_params->Exponent_Forest_Dist_Scheme = 0.7;
+
+/* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
+#define REG(tag, addr, type, req) do {         \
+    strncpy(ParamTag[NParam], tag, MAXTAGLEN); \
+    ParamAddr[NParam]    = (addr);             \
+    ParamID[NParam]      = (type);             \
+    ParamRequired[NParam]= (req);              \
+    NParam++;                                  \
+} while(0)
+
+    /* ---- Required: I/O paths ---- */
+    REG("FileNameGalaxies",       run_params->FileNameGalaxies,          STRING, 1);
+    REG("OutputDir",              run_params->OutputDir,                  STRING, 1);
+    REG("TreeType",               my_treetype,                            STRING, 1);
+    REG("TreeName",               run_params->TreeName,                   STRING, 1);
+    REG("SimulationDir",          run_params->SimulationDir,              STRING, 1);
+    REG("FileWithSnapList",       run_params->FileWithSnapList,           STRING, 1);
+    REG("LastSnapshotNr",         &(run_params->LastSnapshotNr),          INT,    1);
+    REG("FirstFile",              &(run_params->FirstFile),               INT,    1);
+    REG("LastFile",               &(run_params->LastFile),                INT,    1);
+    REG("NumSimulationTreeFiles", &(run_params->NumSimulationTreeFiles),  INT,    1);
+
+    /* ---- Required: cosmology and simulation units ---- */
+    REG("UnitVelocity_in_cm_per_s", &(run_params->UnitVelocity_in_cm_per_s), DOUBLE, 1);
+    REG("UnitLength_in_cm",         &(run_params->UnitLength_in_cm),          DOUBLE, 1);
+    REG("UnitMass_in_g",            &(run_params->UnitMass_in_g),             DOUBLE, 1);
+    REG("Hubble_h",                 &(run_params->Hubble_h),                  DOUBLE, 1);
+    REG("Omega",                    &(run_params->Omega),                     DOUBLE, 1);
+    REG("OmegaLambda",              &(run_params->OmegaLambda),               DOUBLE, 1);
+    REG("BaryonFrac",               &(run_params->BaryonFrac),                DOUBLE, 1);
+    REG("PartMass",                 &(run_params->PartMass),                  DOUBLE, 1);
+    REG("BoxSize",                  &(run_params->BoxSize),                   DOUBLE, 1);
+
+    /* ---- Optional: output and code settings ---- */
+    REG("NumOutputs",                       &(run_params->NumSnapOutputs),             INT,    0);
+    REG("OutputFormat",                     my_outputformat,                           STRING, 0);
+    REG("ForestDistributionScheme",         my_forest_dist_scheme,                     STRING, 0);
+    REG("ExponentForestDistributionScheme", &(run_params->Exponent_Forest_Dist_Scheme),DOUBLE, 0);
+
+    /* ---- Optional: recipe on/off flags ---- */
+    REG("ReionizationOn",        &(run_params->ReionizationOn),       INT, 0);
+    REG("SupernovaRecipeOn",     &(run_params->SupernovaRecipeOn),    INT, 0);
+    REG("DiskInstabilityOn",     &(run_params->DiskInstabilityOn),    INT, 0);
+    REG("SFprescription",        &(run_params->SFprescription),       INT, 0);
+    REG("AGNrecipeOn",           &(run_params->AGNrecipeOn),          INT, 0);
+    REG("CGMrecipeOn",           &(run_params->CGMrecipeOn),          INT, 0);
+    REG("CGMDensityProfile",     &(run_params->CGMDensityProfile),    INT, 0);
+    REG("CGMPrecipitationMode",  &(run_params->CGMPrecipitationMode), INT, 0);
+    REG("CGMPrecipRadiusMode",   &(run_params->CGMPrecipRadiusMode),  INT, 0);
+    REG("FIREmodeOn",            &(run_params->FIREmodeOn),           INT, 0);
+    REG("ConcentrationOn",       &(run_params->ConcentrationOn),      INT, 0);
+    REG("FeedbackFreeModeOn",    &(run_params->FeedbackFreeModeOn),   INT, 0);
+    REG("FFBIgnoreRegime",       &(run_params->FFBIgnoreRegime),      INT, 0);
+    REG("FFBRandomMode",         &(run_params->FFBRandomMode),        INT, 0);
+    REG("BulgeSizeOn",           &(run_params->BulgeSizeOn),          INT, 0);
+    REG("SaveFullSFH",           &(run_params->SaveFullSFH),          INT, 0);
+    REG("TrackICSAssembly",      &(run_params->TrackICSAssembly),     INT, 0);
+    REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
+    REG("DynamicDisruptionSplit",&(run_params->DynamicDisruptionSplit),INT, 0);
+    REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
+    REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
+    REG("H2RadialNBins",         &(run_params->H2RadialNBins),        INT, 0);
+    REG("H2SFRMode",             &(run_params->H2SFRMode),            INT, 0);
+
+    /* ---- Optional: model parameters ---- */
+    REG("ThreshMajorMerger",          &(run_params->ThreshMajorMerger),          DOUBLE, 0);
+    REG("RecycleFraction",            &(run_params->RecycleFraction),            DOUBLE, 0);
+    REG("ReIncorporationFactor",      &(run_params->ReIncorporationFactor),      DOUBLE, 0);
+    REG("EnergySN",                   &(run_params->EnergySN),                   DOUBLE, 0);
+    REG("EtaSN",                      &(run_params->EtaSN),                      DOUBLE, 0);
+    REG("Yield",                      &(run_params->Yield),                      DOUBLE, 0);
+    REG("FracZleaveDisk",             &(run_params->FracZleaveDisk),             DOUBLE, 0);
+    REG("SfrEfficiency",              &(run_params->SfrEfficiency),              DOUBLE, 0);
+    REG("FeedbackReheatingEpsilon",   &(run_params->FeedbackReheatingEpsilon),   DOUBLE, 0);
+    REG("FeedbackEjectionEfficiency", &(run_params->FeedbackEjectionEfficiency), DOUBLE, 0);
+    REG("BlackHoleGrowthRate",        &(run_params->BlackHoleGrowthRate),        DOUBLE, 0);
+    REG("RadioModeEfficiency",        &(run_params->RadioModeEfficiency),        DOUBLE, 0);
+    REG("QuasarModeEfficiency",       &(run_params->QuasarModeEfficiency),       DOUBLE, 0);
+    REG("Reionization_z0",            &(run_params->Reionization_z0),            DOUBLE, 0);
+    REG("Reionization_zr",            &(run_params->Reionization_zr),            DOUBLE, 0);
+    REG("ThresholdSatDisruption",     &(run_params->ThresholdSatDisruption),     DOUBLE, 0);
+    REG("FractionDisruptedToICS",     &(run_params->FractionDisruptedToICS),     DOUBLE, 0);
+    REG("DisruptionSplitAlpha",       &(run_params->DisruptionSplitAlpha),       DOUBLE, 0);
+    REG("DisruptionSplitCref",        &(run_params->DisruptionSplitCref),        DOUBLE, 0);
+    REG("H2RadialRMaxFactor",         &(run_params->H2RadialRMaxFactor),         DOUBLE, 0);
+    REG("H2DepletionTime_Gyr",        &(run_params->H2DepletionTime_Gyr),        DOUBLE, 0);
+    REG("FFBMaxEfficiency",           &(run_params->FFBMaxEfficiency),           DOUBLE, 0);
+    REG("FFBConcSigma",               &(run_params->FFBConcSigma),               DOUBLE, 0);
+    REG("RedshiftPowerLawExponent",   &(run_params->RedshiftPowerLawExponent),   DOUBLE, 0);
+
+#undef REG
+
+    /* Save original tag names before the parse loop zeroes them out for duplicate detection */
+    for(int i = 0; i < NParam; i++) {
+        strncpy(OrigParamTag[i], ParamTag[i], MAXTAGLEN);
+    }
 
     used_tag = mymalloc(sizeof(int) * NParam);
     for(int i=0; i<NParam; i++) {
@@ -392,12 +265,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
         }
 
         if(j >= 0) {
-#ifdef VERBOSE
-            if(ThisTask == 0) {
-                fprintf(stdout, "%35s\t%10s\n", buf1, buf2);
-            }
-#endif
-
             switch (ParamID[j])
                 {
                 case DOUBLE:
@@ -423,10 +290,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
             strncat(run_params->OutputDir, "/", MAX_STRING_LEN - outlen - 1);  /* BUG FIX: Use strncat */
     }
 
-
     for(int i = 0; i < NParam; i++) {
-        if(used_tag[i]) {
-            fprintf(stderr, "Error. I miss a value for tag '%s' in parameter file '%s'.\n", ParamTag[i], fname);
+        if(used_tag[i] && ParamRequired[i]) {
+            fprintf(stderr, "Error. Missing required parameter '%s' in parameter file '%s'.\n",
+                    OrigParamTag[i], fname);
             errorFlag = 1;
         }
     }
@@ -434,8 +301,21 @@ int read_parameter_file(const char *fname, struct params *run_params)
     if(errorFlag) {
         ABORT(1);
     }
+
 #ifdef VERBOSE
-    fprintf(stdout, "\n");
+    if(ThisTask == 0) {
+        for(int i = 0; i < NParam; i++) {
+            char valstr[MAX_STRING_LEN];
+            switch(ParamID[i]) {
+                case DOUBLE: snprintf(valstr, sizeof(valstr), "%g",  *((double *)ParamAddr[i])); break;
+                case INT:    snprintf(valstr, sizeof(valstr), "%d",  *((int    *)ParamAddr[i])); break;
+                case STRING: snprintf(valstr, sizeof(valstr), "%s",   (char    *)ParamAddr[i]);  break;
+                default:     snprintf(valstr, sizeof(valstr), "?");                               break;
+            }
+            fprintf(stdout, "%35s\t%10s\n", OrigParamTag[i], valstr);
+        }
+        fprintf(stdout, "\n");
+    }
 #endif
 
     if( ! (run_params->LastSnapshotNr+1 > 0 && run_params->LastSnapshotNr+1 < ABSOLUTEMAXSNAPS) ) {

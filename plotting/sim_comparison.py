@@ -39,9 +39,9 @@ except Exception:
 
 # File paths
 PRIMARY_DIR    = './output/microuchuu/'
-SECONDARY_DIR  = './output/microuchuu_h2/'
-TERTIARY_DIR   = './output/microuchuu_mbk/'
-QUATERNARY_DIR = './output/microuchuu_mbk_h2/'
+SECONDARY_DIR  = './output/microuchuu_pir2/'
+TERTIARY_DIR   = './output/microuchuu_pi3r2/'
+QUATERNARY_DIR = './output/microuchuu_h2/' 
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
 
@@ -826,13 +826,13 @@ def plot_1_number_counts(primary, secondary, tertiary=None, quaternary=None):
     axes = axes.flatten()
 
     models = [
-        ('Millennium FFB Li+24', primary, 'steelblue'),
-        ('Millennium FFB Li+24 (H2)', secondary, 'coral'),
+        ('microUchuu radial integration', primary, 'steelblue'),
+        (r'microUchuu $\pi r^2$', secondary, 'coral'),
     ]
     if tertiary:
-        models.append(('Millennium FFB MBK25', tertiary, 'mediumseagreen'))
+        models.append((r'microUchuu $\pi 3r^2$', tertiary, 'mediumseagreen'))
     if quaternary:
-        models.append(('Millennium FFB MBK25 (H2)', quaternary, 'mediumpurple'))
+        models.append((r'microUchuu H2 FFBs', quaternary, 'mediumpurple'))
 
     # Resolution mass limits in physical Msun (for optional reference lines).
     mmin_primary = MIN_MVIR_PARTICLES * PART_MASS * MASS_CONVERT
@@ -1014,13 +1014,13 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
     axes = axes.flatten()
 
     models = [
-        ('Millennium FFB Li+24', primary, 'steelblue', VOLUME),
-        ('Millennium FFB Li+24 (H2)', secondary, 'coral', SECONDARY_VOLUME),
+        ('microUchuu radial integration', primary, 'steelblue', VOLUME),
+        (r'microUchuu $\pi r^2$', secondary, 'coral', SECONDARY_VOLUME),
     ]
     if tertiary:
-        models.append(('Millennium FFB MBK25', tertiary, 'mediumseagreen', TERTIARY_VOLUME))
+        models.append((r'microUchuu $\pi 3r^2$', tertiary, 'mediumseagreen', TERTIARY_VOLUME))
     if quaternary:
-        models.append(('Millennium FFB MBK25 (H2)', quaternary, 'mediumpurple', QUATERNARY_VOLUME))
+        models.append((r'microUchuu H2 FFBs', quaternary, 'mediumpurple', QUATERNARY_VOLUME))
 
     def _finite(x):
         x = np.asarray(x, dtype=float)
@@ -1478,13 +1478,13 @@ def plot_3_evolution(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdat
 
     def _runs(ya, yb, ytert=None, yquat=None):
         runs = [
-            ((lbt_h2,   ya), C_H2,   'Millennium FFB Li+24',       '-'),
-            ((lbt_cold, yb), C_COLD, 'Millennium FFB Li+24 (H2)', '--'),
+            ((lbt_h2,   ya), C_H2,   'microUchuu radial integration',       '-'),
+            ((lbt_cold, yb), C_COLD, r'microUchuu $\pi r^2$', '--'),
         ]
         if has_tertiary and ytert is not None:
-            runs.append(((lbt_tert, ytert), C_TERT, 'Millennium FFB MBK25', ':'))
+            runs.append(((lbt_tert, ytert), C_TERT, r'microUchuu $\pi 3r^2$', ':'))
         if has_quaternary and yquat is not None:
-            runs.append(((lbt_quat, yquat), C_QUAT, 'Millennium FFB MBK25 (H2)', '-.'))
+            runs.append(((lbt_quat, yquat), C_QUAT, r'microUchuu H2 FFBs', '-.'))
         return {'runs': runs}
 
     obs_sfrd = (_obs_sfrd[:, 0], _obs_sfrd[:, 1], _obs_sfrd[:, 2], _obs_sfrd[:, 3])
@@ -1589,13 +1589,13 @@ def plot_4_smf_z10(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_
         d_quat = snapdata_quaternary.get(snap, {}) if snapdata_quaternary else {}
 
         models = [
-            ('Millennium FFB Li+24', d_h2, 'steelblue', VOLUME),
-            ('Millennium FFB Li+24 (H2)', d_cold, 'coral', SECONDARY_VOLUME),
+            ('microUchuu radial integration', d_h2, 'steelblue', VOLUME),
+            (r'microUchuu $\pi\ r^2$', d_cold, 'coral', SECONDARY_VOLUME),
         ]
         if d_tert:
-            models.append(('Millennium FFB MBK25', d_tert, 'mediumseagreen', TERTIARY_VOLUME))
+            models.append((r'microUchuu $\pi\ 3r^2$', d_tert, 'mediumseagreen', TERTIARY_VOLUME))
         if d_quat:
-            models.append(('Millennium FFB MBK25 (H2)', d_quat, 'mediumpurple', QUATERNARY_VOLUME))
+            models.append((r'microUchuu H2 FFBs', d_quat, 'mediumpurple', QUATERNARY_VOLUME))
 
         def _log10_pos(x):
             x = np.asarray(x, dtype=float)
@@ -1756,6 +1756,95 @@ def plot_4_smf_z10(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_
     print(f'  Saved {outfile}')
     plt.close(fig)
 
+def plot_5_fH2_redshift(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_quaternary=None):
+    """Molecular hydrogen fraction (H2gas/ColdGas) vs stellar mass at z=0,1,2,3,4,5.
+
+    Six panels arranged in a 3x2 grid, one per redshift.
+    """
+
+    print('Plot 5: Molecular hydrogen fraction vs stellar mass at increasing redshift')
+
+    z_snaps  = [SNAP_Z0, SNAP_Z2, SNAP_Z3, SNAP_Z5, SNAP_Z7, SNAP_Z10]
+    z_labels = [0, 2, 3, 5, 7, 10]
+
+    nrows, ncols = 3, 2
+    fig, axes = plt.subplots(nrows, ncols, figsize=(10, 12), sharey=True)
+    axes_flat = axes.flatten()
+
+    binwidth = 0.3
+    mass_range = (7.0, 12.5)
+    mass_bins = np.arange(mass_range[0], mass_range[1] + binwidth, binwidth)
+
+    for idx, (snap, z_label) in enumerate(zip(z_snaps, z_labels)):
+        ax = axes_flat[idx]
+
+        d_h2   = snapdata_h2.get(snap, {})        if snapdata_h2        else {}
+        d_cold = snapdata_cold.get(snap, {})       if snapdata_cold       else {}
+        d_tert = snapdata_tertiary.get(snap, {})   if snapdata_tertiary   else {}
+        d_quat = snapdata_quaternary.get(snap, {}) if snapdata_quaternary else {}
+
+        models = [
+            ('microUchuu radial integration', d_h2,   'steelblue',      VOLUME),
+            (r'microUchuu $\pi\ r^2$',        d_cold, 'coral',          SECONDARY_VOLUME),
+        ]
+        if d_tert:
+            models.append((r'microUchuu $\pi\ 3r^2$', d_tert, 'mediumseagreen', TERTIARY_VOLUME))
+        if d_quat:
+            models.append((r'microUchuu H2 FFBs', d_quat, 'mediumpurple',   QUATERNARY_VOLUME))
+
+        for name, d, color, _vol in models:
+            if not d:
+                continue
+            mstar  = np.asarray(d.get('StellarMass', np.array([])), dtype=float)
+            h2gas  = np.asarray(d.get('H2gas',        np.array([])), dtype=float)
+            coldgas = np.asarray(d.get('ColdGas',     np.array([])), dtype=float)
+            n = min(len(mstar), len(h2gas), len(coldgas))
+            if n == 0:
+                continue
+            mstar   = mstar[:n]
+            h2gas   = h2gas[:n]
+            coldgas = coldgas[:n]
+
+            mask = (mstar > 0) & (coldgas > 0) & np.isfinite(mstar) & np.isfinite(h2gas) & np.isfinite(coldgas)
+            if not np.any(mask):
+                continue
+
+            x = np.log10(mstar[mask])
+            y = np.clip(h2gas[mask] / coldgas[mask], 0.0, 1.0)
+
+            plot_binned_median_1sigma(
+                ax, x, y, mass_bins,
+                color=color,
+                label=name if idx == 0 else None,
+                alpha=0.15,
+                lw=2.6,
+                ls='-',
+                min_count=5,
+            )
+
+        z_val = REDSHIFTS[snap] if isinstance(REDSHIFTS, (list, np.ndarray)) and snap < len(REDSHIFTS) else z_label
+        ax.text(0.97, 0.95, f'z = {z_val:.2f}', transform=ax.transAxes,
+                fontsize=10, va='top', ha='right')
+
+        is_bottom = (idx >= (nrows - 1) * ncols)
+        is_left   = (idx % ncols == 0)
+
+        ax.set_xlim(*mass_range)
+        ax.set_ylim(0.0, 1.05)
+        ax.set_xlabel(r'$\log_{10}\, m_{\ast}\,[M_\odot]$' if is_bottom else '')
+        ax.set_ylabel(r'$f_{\rm H_2} = M_{\rm H_2} / M_{\rm cold}$' if is_left else '')
+        ax.grid(True, alpha=0.25)
+
+        if idx == 0:
+            ax.legend(loc='upper left', frameon=False, fontsize=8)
+
+    fig.tight_layout()
+    outfile = os.path.join(OUTPUT_DIR, f'fH2_redshift_panels{OUTPUT_FORMAT}')
+    fig.savefig(outfile, bbox_inches='tight')
+    print(f'  Saved {outfile}')
+    plt.close(fig)
+
+
 Z0_PLOTS = {
     1: plot_1_number_counts,
     2: plot_2_diagnostics,
@@ -1764,6 +1853,7 @@ Z0_PLOTS = {
 EVOLUTION_PLOTS = {
     3: plot_3_evolution,
     4: plot_4_smf_z10,
+    5: plot_5_fH2_redshift,
 }
 
 # Standalone plots (load their own data)

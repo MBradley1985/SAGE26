@@ -193,8 +193,8 @@ void test_zero_mass_bulges() {
     }
 }
 
-void test_disk_shrinking_after_instability() {
-    BEGIN_TEST("Disk Radius Shrinks After Instability");
+void test_disk_radius_after_instability() {
+    BEGIN_TEST("Disk Radius Conserved After Instability");
 
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
@@ -239,9 +239,10 @@ void test_disk_shrinking_after_instability() {
     // Call the REAL check_disk_instability function
     check_disk_instability(0, 0, 0, 0.0, 0.001, 0, gal, &run_params);
 
-    // Verify disk radius shrunk
-    ASSERT_LESS_THAN(gal[0].DiskScaleRadius, initial_disk_radius,
-                    "Disk radius shrinks after instability");
+    // Disk scale radius is unchanged: remaining disk retains same specific angular
+    // momentum per unit mass, so r_d stays constant (Mo, Mao & White 1998 framework).
+    ASSERT_EQUAL_FLOAT(gal[0].DiskScaleRadius, initial_disk_radius,
+                    "Disk radius unchanged after instability (constant j/m)");
 
     // Verify bulge mass increased
     ASSERT_GREATER_THAN(gal[0].BulgeMass, initial_bulge_mass,
@@ -276,7 +277,7 @@ int main() {
     test_tonini_separate_bulges();
     test_instability_bulge_growth();
     test_zero_mass_bulges();
-    test_disk_shrinking_after_instability();
+    test_disk_radius_after_instability();
     
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();
