@@ -1810,7 +1810,7 @@ def plot_5_fH2_redshift(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snap
                 continue
 
             x = np.log10(mstar[mask])
-            y = np.clip(h2gas[mask] / coldgas[mask], 0.0, 1.0)
+            y = np.clip(h2gas[mask] / coldgas[mask] * 0.74, 0.0, 1.0)
 
             plot_binned_median_1sigma(
                 ax, x, y, mass_bins,

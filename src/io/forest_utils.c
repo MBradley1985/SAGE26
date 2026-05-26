@@ -28,6 +28,8 @@ int distribute_forests_over_ntasks(const int64_t totnforests, const int NTasks, 
     }
 
 
+    // Assign each task an equal number of forests. If we can't equally assign each task
+    // the EXACT same number of forests, give each task an extra forest (if required).
     const int64_t nforests_per_cpu = (int64_t) (totnforests/(int64_t) NTasks);
     const int64_t rem_nforests = totnforests % NTasks;
     int64_t nforests_this_task = nforests_per_cpu;
@@ -42,6 +44,7 @@ int distribute_forests_over_ntasks(const int64_t totnforests, const int NTasks, 
         start_forestnum += rem_nforests;  // All tasks that weren't given an extra forest will be offset by a constant amount.
     }
 
+    /* Now fill up the destination */
     *nforests_thistask = nforests_this_task;
     *start_forestnum_thistask = start_forestnum;
 
@@ -52,6 +55,7 @@ int distribute_forests_over_ntasks(const int64_t totnforests, const int NTasks, 
 
 static inline double compute_forest_cost_from_nhalos(const enum Valid_Forest_Distribution_Schemes forest_weighting, const int64_t nhalos, const double exponent)
 {
+    /* Strategy for load-balancing across MPI tasks*/
     double cost;
     switch(forest_weighting) {
     case uniform_in_forests:
@@ -74,7 +78,7 @@ static inline double compute_forest_cost_from_nhalos(const enum Valid_Forest_Dis
             return -1;
         }
         const int index = (int) exponent;
-        cost = 1.0;
+        cost = 1.0;/* Or should I replace with a pow? MS 15/01/2020 */
         const double dbl_nhalos = (double) nhalos;
         for(int i=0;i<index;i++) {
             cost *= dbl_nhalos;
@@ -121,6 +125,7 @@ int distribute_weighted_forests_over_ntasks(const int64_t totnforests, const int
     }
 
     if(forest_weighting == uniform_in_forests || nhalos_per_forest == NULL) {
+        // fprintf(stderr,"Warning: Based on the inputs, switching to the assigning forests *without* weights (might indicate bug in code, only affects load-balancing and the actual results)\n");
         return distribute_forests_over_ntasks(totnforests, NTasks, ThisTask, nforests_thistask, start_forestnum_thistask);
     }
 
@@ -150,21 +155,37 @@ int distribute_weighted_forests_over_ntasks(const int64_t totnforests, const int
         nhalos_curr_task += nhalos_per_forest[i];
         if (cost_so_far < curr_cost_target) continue;
 
-        /* cost exceeded target: this forest is the last one for currtask */
+        /* If we have reached here that means processing this forest
+           will exceed the target cost. Therefore, we need to mark
+           this forest as the end point for whichever task is getting
+           assigned, and then repeat until we reach 'ThisTask'
+         */
+
         if(ThisTask == currtask) {
-            /* +1: range is inclusive of i */
+            /* If we reach here, then we have the identified the final
+             forest to process on ThisTask. `start_forestnum` is
+             already set correctly
+
+             The +1 is because the ThisTask needs to process this i'th
+             forest (i.e., inclusive range of [start_forestnum, i])
+            */
             fprintf(stderr,"[LOG]: Assigning forest-range = [%"PRId64", %"PRId64"] (containing %"PRId64" halos) to ThisTask = %d\n",
                     start_forestnum, i, nhalos_curr_task, ThisTask);
             nforests_this_task = i - start_forestnum + 1;
             break;
         }
 
+        /* If we have reached here, that means we have to compute what
+           range of forests the next task would process */
         currtask++;
         nhalos_curr_task = 0;
         start_forestnum = i + 1;
 
+        /* If we are assinging the last task, then we can simply assign all the
+         remaining forests and be done */
         if(currtask == (NTasks - 1)) {
-            /* last task gets all remaining forests */
+            /* There is no '+1' here because the last forest index is (totnforests - 1)
+               MS: 15/01/2020 */
             nhalos_curr_task = totnhalos - nhalos_so_far;
             fprintf(stderr,"[LOG]: Assigning all remaining forests to last task. Remaining cost = %g (ideal target cost = %g)\n",
                     total_cost_across_all_forests - cost_so_far, target_cost_per_task);
@@ -181,6 +202,7 @@ int distribute_weighted_forests_over_ntasks(const int64_t totnforests, const int
     }
 
 
+    /* Now fill up the destination */
     *nforests_thistask = nforests_this_task;
     *start_forestnum_thistask = start_forestnum;
 
@@ -216,6 +238,7 @@ int find_start_and_end_filenum(const int64_t start_forestnum, const int64_t end_
         if(nforests_this_file == 0) continue;
 
         const int64_t end_forestnum_this_file = nforests_so_far + nforests_this_file;
+        // fprintf(stderr,"filenr = %d end_forestnum_this_file = %"PRId64"\n", filenr, end_forestnum_this_file);
         start_forestnum_to_process_per_file[filenr] = 0;
         num_forests_to_process_per_file[filenr] = nforests_this_file;
 

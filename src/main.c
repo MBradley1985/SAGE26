@@ -28,6 +28,7 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
+    /* initialize sage (read parameter file, setup units, read cooling tables etc) */
     void *run_params;
     int status = run_sage(ThisTask, NTasks, argv[1], &run_params);
     if(status != EXIT_SUCCESS) {
@@ -35,9 +36,11 @@ int main(int argc, char **argv)
     }
 
 #ifdef MPI
+    // Wait until all tasks are done before we do final tasks/checks.
     MPI_Barrier(MPI_COMM_WORLD);
 #endif
 
+    // Perform some final checks.
     status = finalize_sage(run_params);
     if(status != EXIT_SUCCESS) {
         goto err;
@@ -54,7 +57,7 @@ err:
     MPI_Finalize();
 #endif
     fprintf(stderr, "If the fix to this isn't obvious, please feel free to open an issue on our GitHub page.\n"
-                    "https://github.com/sage-home/SAGE26/issues/new\n");
+                    "https://github.com/sage-home/sage-model/issues/new\n");
     return status;
 
 }

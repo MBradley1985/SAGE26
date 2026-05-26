@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
+#include <math.h>
+#include <ctype.h> /* for isblank()*/
 
 #include "core_allvars.h"
 #include "core_mymalloc.h"
@@ -15,7 +16,9 @@ enum datatypes {
 #define MAXTAGS          300  /* Max number of parameters */
 #define MAXTAGLEN         50  /* Max number of characters in the string param tags */
 
-static int compare_ints_descending(const void* p1, const void* p2)
+int compare_ints_descending (const void* p1, const void* p2);
+
+int compare_ints_descending (const void* p1, const void* p2)
 {
     int i1 = *(int*) p1;
     int i2 = *(int*) p2;
@@ -26,12 +29,12 @@ static int compare_ints_descending(const void* p1, const void* p2)
     } else {
         return -1;
     }
-}
+ }
 
 int read_parameter_file(const char *fname, struct params *run_params)
 {
     int errorFlag = 0;
-    int *used_tag = NULL;
+    int *used_tag = 0;
     char my_treetype[MAX_STRING_LEN], my_outputformat[MAX_STRING_LEN], my_forest_dist_scheme[MAX_STRING_LEN];
     int NParam = 0;
     char ParamTag[MAXTAGS][MAXTAGLEN + 1];
@@ -45,6 +48,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
         ParamTag[i][MAXTAGLEN] = '\0';
         OrigParamTag[i][MAXTAGLEN] = '\0';
     }
+
+    NParam = 0;
 
 #ifdef VERBOSE
     const int ThisTask = run_params->ThisTask;
@@ -232,10 +237,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
         /* Allowing for spaces in the filenames (but requires comments to ALWAYS start with '%' or ';') */
         int buf2len = strnlen(buf2, MAX_STRING_LEN-1);
-        for(int i=0;i<buf2len;i++) {
+        for(int i=0;i<buf2len;i++) {  /* BUG FIX: Changed <= to < to avoid buffer over-read */
             if(buf2[i] == '%' || buf2[i] == ';' || buf2[i] == '#') {
                 int null_pos = i;
-                /* skip preceding whitespace */
+                //Ignore all preceeding whitespace
                 for(int j=i-1;j>=0;j--) {
                     null_pos = isblank(buf2[j]) ? j:null_pos;
                 }
@@ -280,9 +285,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     fclose(fd);
 
     const size_t outlen = strlen(run_params->OutputDir);
-    if(outlen > 0 && outlen < MAX_STRING_LEN - 1) {
+    if(outlen > 0 && outlen < MAX_STRING_LEN - 1) {  /* BUG FIX: Added bounds check */
         if(run_params->OutputDir[outlen - 1] != '/')
-            strncat(run_params->OutputDir, "/", MAX_STRING_LEN - outlen - 1);
+            strncat(run_params->OutputDir, "/", MAX_STRING_LEN - outlen - 1);  /* BUG FIX: Use strncat */
     }
 
     for(int i = 0; i < NParam; i++) {
@@ -324,6 +329,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
         ABORT(1);
     }
 
+    // read in the output snapshot list
     if(run_params->NumSnapOutputs == -1) {
         run_params->NumSnapOutputs = run_params->SimMaxSnaps;
         for (int i=run_params->NumSnapOutputs-1; i>=0; i--) {
@@ -341,6 +347,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
         }
 #endif
 
+        // reopen the parameter file
         fd = fopen(fname, "r");
 
         int done = 0;
@@ -350,6 +357,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             /* scan down to find the line with the snapshots */
             if(fscanf(fd, "%s", buf) == 0) continue;
             if(strcmp(buf, "->") == 0) {
+                // read the snapshots into ListOutputSnaps
                 for(int i=0; i<run_params->NumSnapOutputs; i++) {
                     if(fscanf(fd, "%d", &(run_params->ListOutputSnaps[i])) == 1) {
 #ifdef VERBOSE
@@ -383,7 +391,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
         ABORT(EXIT_FAILURE);
     }
 
-    /* sort in descending order in case the user didn't */
+    /* sort the output snapshot numbers in descending order (in case the user didn't do that already) MS: 24th Oct, 2023 */
     qsort(run_params->ListOutputSnaps, run_params->NumSnapOutputs, sizeof(run_params->ListOutputSnaps[0]), compare_ints_descending);
 
     /* Check for duplicate snapshot outputs */
@@ -407,6 +415,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
        null terminate tree-extension first  */
     run_params->TreeExtension[0] = '\0';
 
+    // Check tree type is valid.
     if (strncmp(my_treetype, "lhalo_hdf5", 511)   == 0 ||
         strncmp(my_treetype, "genesis_hdf5", 511) == 0 ||
         strncmp(my_treetype, "gadget4_hdf5", 511) == 0
@@ -416,6 +425,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
         fprintf(stderr, "Please check your file type and compiler options.\n");
         ABORT(EXIT_FAILURE);
 #endif
+        // strncmp returns 0 if the two strings are equal.
+        // only relevant options are HDF5 or binary files. Consistent-trees is *always* ascii (with different filename extensions)
         snprintf(run_params->TreeExtension, 511, ".hdf5");
     }
 
@@ -448,6 +459,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     BUILD_BUG_OR_ZERO((nvalid_tree_types == (int) num_tree_types), number_of_tree_types_is_incorrect);
     CHECK_VALID_ENUM_IN_PARAM_FILE(TreeType, nvalid_tree_types, tree_names, tree_enums, my_treetype);
 
+    /* Check output data type is valid. */
 #ifndef HDF5
     if(strncmp(my_outputformat, "sage_hdf5", MAX_STRING_LEN-1) == 0) {
         fprintf(stderr, "You have specified to use HDF5 output format but have not compiled with the HDF5 option enabled.\n");

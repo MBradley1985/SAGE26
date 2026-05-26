@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 
 #include "core_allvars.h"
 #include "core_cool_func.h"
@@ -11,28 +12,30 @@
 
 
 static char *name[] = {
-    "stripped_mzero.cie",
-    "stripped_m-30.cie",
-    "stripped_m-20.cie",
-    "stripped_m-15.cie",
-    "stripped_m-10.cie",
-    "stripped_m-05.cie",
-    "stripped_m-00.cie",
-    "stripped_m+05.cie"
+	"stripped_mzero.cie",
+	"stripped_m-30.cie",
+	"stripped_m-20.cie",
+	"stripped_m-15.cie",
+	"stripped_m-10.cie",
+	"stripped_m-05.cie",
+	"stripped_m-00.cie",
+	"stripped_m+05.cie"
 };
 
 
-/* metallicities relative to solar; converted to absolute by adding log10(Z_sun=0.02) in read_cooling_functions */
+// Metallicies with repect to solar. Will be converted to absolut metallicities by adding log10(Z_sun), Zsun=0.02
 static double metallicities[8] = {
-    -5.0,   /* effectively primordial (-infinity) */
-    -3.0,
-    -2.0,
-    -1.5,
-    -1.0,
-    -0.5,
-    +0.0,
-    +0.5
+	-5.0,   // actually primordial -> -infinity
+	-3.0,
+	-2.0,
+	-1.5,
+	-1.0,
+	-0.5,
+	+0.0,
+	+0.5
 };
+
+double get_rate(int tab, double logTemp);
 
 #define NUM_METALS_TABLE        sizeof(metallicities)/sizeof(metallicities[0])
 
@@ -44,11 +47,14 @@ void read_cooling_functions(void)
 
     const double log10_zerop02 = log10(0.02);
     for(size_t i = 0; i < NUM_METALS_TABLE; i++) {
-        metallicities[i] += log10_zerop02;
+        metallicities[i] += log10_zerop02;     // add solar metallicity
     }
 
     for(size_t i = 0; i < NUM_METALS_TABLE; i++) {
-        /* ROOT_DIR is defined in the Makefile; adjacent string literals are concatenated by the preprocessor */
+        /* Concatenates the actual path to the root directory
+           The variable ROOT_DIR is defined in the Makefile. C token pasting
+           automatically concats the ROOT_DIR string and the "extra/..." string
+        */
         snprintf(buf, MAX_STRING_LEN - 1, ROOT_DIR "/src/auxdata/CoolFunctions/%s", name[i]);
         FILE *fd = fopen(buf, "r");
         if(fd == NULL) {
@@ -72,7 +78,7 @@ void read_cooling_functions(void)
 }
 
 
-static double get_rate(int tab, double logTemp)
+double get_rate(int tab, double logTemp)
 {
     const double dlogT = 0.05;
     const double inv_dlogT = 1.0/dlogT;
@@ -83,7 +89,7 @@ static double get_rate(int tab, double logTemp)
 
     int index = (int) ((logTemp - 4.0) * inv_dlogT);
     if(index >= LAST_TAB_INDEX) {
-        /* index+1 is also accessed, so index can be at most LAST_TAB_INDEX - 1 */
+        /*MS: because index+1 is also accessed, therefore index can be at most LAST_TAB_INDEX */
         index = LAST_TAB_INDEX - 1;
     }
 
@@ -97,7 +103,7 @@ static double get_rate(int tab, double logTemp)
     return rate;
 }
 
-double get_metaldependent_cooling_rate(const double logTemp, double logZ)
+double get_metaldependent_cooling_rate(const double logTemp, double logZ)  // pass: log10(temperatue/Kelvin), log10(metallicity)
 {
     if(logZ < metallicities[0])
         logZ = metallicities[0];
@@ -110,9 +116,13 @@ double get_metaldependent_cooling_rate(const double logTemp, double logZ)
         i++;
     }
 
+    // look up at i and i+1
     const double rate1 = get_rate(i, logTemp);
     const double rate2 = get_rate(i + 1, logTemp);
     const double rate = rate1 + (rate2 - rate1) / (metallicities[i + 1] - metallicities[i]) * (logZ - metallicities[i]);
 
     return pow(10.0, rate);
 }
+
+
+

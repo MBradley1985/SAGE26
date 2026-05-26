@@ -17,8 +17,12 @@ static struct buffered_io *all_buffers = NULL;
 #endif
 
 
+// Local Proto-Types //
+
 static int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, struct halo_data *halos,
                                          const int32_t original_treenr, const struct params *run_params);
+
+// Externally Visible Functions //
 
 int32_t initialize_binary_galaxy_files(const int filenr, const struct forest_info *forest_info, struct save_info *save_info,
                                        const struct params *run_params)
@@ -27,6 +31,7 @@ int32_t initialize_binary_galaxy_files(const int filenr, const struct forest_inf
     const int32_t ntrees = forest_info->nforests_this_task;
     const off_t halo_data_start_offset = (ntrees + 2) * sizeof(int32_t);
 
+    // We open up files for each output. We'll store the file IDs of each of these file.
     save_info->save_fd = mymalloc(run_params->NumSnapOutputs * sizeof(int32_t));
 
     char buffer[4*MAX_STRING_LEN + 1];
@@ -49,7 +54,7 @@ int32_t initialize_binary_galaxy_files(const int filenr, const struct forest_inf
     }
 
 #ifdef USE_BUFFERED_WRITE
-    const size_t buffer_size = 8 * 1024 * 1024; /* 8 MB */
+    const size_t buffer_size = 8 * 1024 * 1024; //8 MB
     all_buffers = malloc(sizeof(*all_buffers)*run_params->NumSnapOutputs);
     XRETURN(all_buffers != NULL, -1, "Error: Could not allocate %d elements of size %zu bytes for buffered io\n", 
                                                       run_params->NumSnapOutputs, sizeof(*all_buffers));
@@ -74,6 +79,7 @@ int32_t save_binary_galaxies(const int32_t task_treenr, const int32_t num_gals, 
 
     int32_t status = EXIT_FAILURE;
 
+    // Determine the offset to the block of galaxies for each snapshot.
     int32_t num_output_gals = 0;
     int32_t *num_gals_processed = mycalloc(run_params->SimMaxSnaps, sizeof(*(num_gals_processed)));
     if(num_gals_processed == NULL) {
@@ -92,12 +98,16 @@ int32_t save_binary_galaxies(const int32_t task_treenr, const int32_t num_gals, 
         num_output_gals += OutputGalCount[snap_idx];
     }
 
-    struct GALAXY_OUTPUT *all_outputgals  = mycalloc(num_output_gals, sizeof(all_outputgals[0]));
+    // We store all the galaxies to be written for this tree in a single memory block.  Later we
+    // will then perform a single write for each snapshot, pointing to the correct position in
+    // the block.
+    struct GALAXY_OUTPUT *all_outputgals  = mymalloc(num_output_gals * sizeof(all_outputgals[0]));
     if(all_outputgals == NULL) {
         fprintf(stderr,"Error: Could not allocate enough memory to hold all %d output galaxies\n",num_output_gals);
         return MALLOC_FAILURE;
     }
 
+    // Prepare all the galaxies for output.
     for(int32_t gal_idx = 0; gal_idx < num_gals; gal_idx++) {
         if(haloaux[gal_idx].output_snap_n < 0) {
             continue;
@@ -112,13 +122,19 @@ int32_t save_binary_galaxies(const int32_t task_treenr, const int32_t num_gals, 
           return status;
         }
 
+        // Update the running totals.
         save_info->tot_ngals[snap_idx]++;
         save_info->forest_ngals[snap_idx][task_treenr]++;
         num_gals_processed[snap_idx]++;
     }
 
+    // Now perform one write action for each redshift output.
     for(int32_t snap_idx = 0; snap_idx < run_params->NumSnapOutputs; snap_idx++) {
+
+        // Shift the offset pointer depending upon how many galaxies have been written out.
         struct GALAXY_OUTPUT *galaxy_output = all_outputgals + cumul_output_ngal[snap_idx];
+
+        // Then write out the chunk of galaxies for this redshift output.
         const size_t numbytes = sizeof(struct GALAXY_OUTPUT)*OutputGalCount[snap_idx];
 
 #ifdef USE_BUFFERED_WRITE
@@ -151,6 +167,7 @@ int32_t finalize_binary_galaxy_files(const struct forest_info *forest_info, stru
 
     int32_t ntrees = forest_info->nforests_this_task;
     for(int32_t snap_idx = 0; snap_idx < run_params->NumSnapOutputs; snap_idx++) {
+        // File must already be open.
         CHECK_STATUS_AND_RETURN_ON_FAIL(save_info->save_fd[snap_idx], EXIT_FAILURE,
                                         "Error trying to write to output number %d.\nThe file handle is %d.\n",
                                         snap_idx, save_info->save_fd[snap_idx]);
@@ -162,6 +179,7 @@ int32_t finalize_binary_galaxy_files(const struct forest_info *forest_info, stru
         }
 #endif
 
+        // Write the header data.
         int32_t nwritten = mypwrite(save_info->save_fd[snap_idx], &ntrees, sizeof(ntrees), 0);
         if(nwritten != sizeof(int32_t)) {
             fprintf(stderr, "Error: Failed to write out 1 element for the number of trees for the header of file %d.\n"
@@ -190,6 +208,7 @@ int32_t finalize_binary_galaxy_files(const struct forest_info *forest_info, stru
             return FILE_WRITE_ERROR;
         }
 
+        // Close the file and clear handle after everything has been written.
         close(save_info->save_fd[snap_idx]);
         save_info->save_fd[snap_idx] = -1;
     }
@@ -202,6 +221,8 @@ int32_t finalize_binary_galaxy_files(const struct forest_info *forest_info, stru
 
     return EXIT_SUCCESS;
 }
+
+// Local Functions //
 
 int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, struct halo_data *halos,
                                   const int32_t original_treenr, const struct params *run_params)
@@ -222,7 +243,7 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
     o->GalaxyIndex = g->GalaxyIndex;
     o->CentralGalaxyIndex = g->CentralGalaxyIndex;
 
-    o->SAGEHaloIndex = g->HaloNr; /* for original input halonr, use haloaux[halonr].orig_index */
+    o->SAGEHaloIndex = g->HaloNr;/* if the original input halonr is required, then use haloaux[halonr].orig_index: MS 29/6/2018 */
     o->SAGETreeIndex = original_treenr;
     o->SimulationHaloIndex = llabs(halos[g->HaloNr].MostBoundID);
 
@@ -271,7 +292,7 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
     o->SfrDiskZ = 0.0;
     o->SfrBulgeZ = 0.0;
 
-    /* SFR in Msun/yr */
+    // NOTE: in Msun/yr
     for(int step = 0; step < STEPS; step++) {
         o->SfrDisk += g->SfrDisk[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / STEPS;
         o->SfrBulge += g->SfrBulge[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / STEPS;
@@ -311,7 +332,7 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
 
     o->OutflowRate = g->OutflowRate * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS;
 
-    /* infall properties (zero for centrals) */
+    //infall properties
     if(g->Type != 0) {
         o->infallMvir = g->infallMvir;
         o->infallVvir = g->infallVvir;
@@ -326,7 +347,7 @@ int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, str
         o->TimeOfInfall = 0.0;
     }
 
-    /* CGM properties */
+    // CGM properties
     o->Regime = g->Regime;
     o->CGMgas = g->CGMgas;
     o->MetalsCGMgas = g->MetalsCGMgas;

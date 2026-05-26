@@ -5,8 +5,8 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 
-#include <fcntl.h>
-#include <unistd.h>
+#include <fcntl.h> //open/close
+#include <unistd.h> //pwrite
 
 #ifdef MPI
 #include <mpi.h>
@@ -28,9 +28,11 @@
 #include "io/save_gals_hdf5.h"
 #endif
 
-static int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_info,
-                               struct forest_info *forest_info, struct params *run_params);
-static int convert_trees_to_lhalo(const int ThisTask, const int NTasks, struct params *run_params, struct forest_info *forest_info);
+/* main sage -> not exposed externally */
+int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_info,
+                        struct forest_info *forest_info, struct params *run_params);
+/* additional functionality to convert *any* support mergertree format into the lhalo-binary format */
+int convert_trees_to_lhalo(const int ThisTask, const int NTasks, struct params *run_params, struct forest_info *forest_info);
 
 
 int run_sage(const int ThisTask, const int NTasks, const char *param_file, void **params)
@@ -51,6 +53,7 @@ int run_sage(const int ThisTask, const int NTasks, const char *param_file, void 
         return status;
     }
 
+    /* Now start the model */
     struct timeval tstart;
     gettimeofday(&tstart, NULL);
 
@@ -61,6 +64,7 @@ int run_sage(const int ThisTask, const int NTasks, const char *param_file, void 
     forest_info.nforests_this_task = 0;
     forest_info.nhalos_this_task = 0;
 
+    /* setup the forests reading, and then distribute the forests over the Ntasks */
     status = setup_forests_io(run_params, &forest_info, ThisTask, NTasks);
     if(status != EXIT_SUCCESS) {
         return status;
@@ -73,7 +77,9 @@ int run_sage(const int ThisTask, const int NTasks, const char *param_file, void 
     }
 
 
-    /* binary header stores nforests as int32 */
+    // If we're creating a binary output, we need to be careful.
+    // The binary output contains an 32 bit header that contains the number of trees processed.
+    // Hence let's make sure that the number of trees assigned to this task doesn't exceed an 32 bit number.
     if((run_params->OutputFormat == sage_binary) && (forest_info.nforests_this_task > INT_MAX)) {
         fprintf(stderr, "When creating the binary output, we must write a 32 bit header describing the number of trees processed.\n"
                         "However, task %d is processing %"PRId64" forests which is above the 32 bit limit.\n"
@@ -82,13 +88,19 @@ int run_sage(const int ThisTask, const int NTasks, const char *param_file, void 
         return EXIT_FAILURE;
     }
 
+    /* If we are converting the input mergertree into the lhalo-binary format,
+       then we just run the relevant converter: MS 12/10/2022 */
     if(run_params->OutputFormat == lhalo_binary_output) {
         return convert_trees_to_lhalo(ThisTask, NTasks, run_params, &forest_info);
     }
 
+    /* If we are here, then we need to run the SAM */
     init(run_params);
 
-    /* init must run before jumping to 'cleanup' — Age is allocated there and freed there */
+    /* init needs to run before (potentially) jumping to 'cleanup' ->
+       otherwise unallocated run_params->Age will get freed and result
+       in an error. MS 12/10/2022
+    */
     if(forest_info.nforests_this_task == 0) {
         fprintf(stderr,"ThisTask=%d no forests to process...skipping\n",ThisTask);
         goto cleanup;
@@ -97,17 +109,21 @@ int run_sage(const int ThisTask, const int NTasks, const char *param_file, void 
     const int64_t Nforests = forest_info.nforests_this_task;
 
     struct save_info save_info;
+    // Allocate memory for the total number of galaxies for each output snapshot (across all forests).
+    // Calloc because we start with no galaxies.
     save_info.tot_ngals = mycalloc(run_params->NumSnapOutputs, sizeof(*(save_info.tot_ngals)));
     CHECK_POINTER_AND_RETURN_ON_NULL(save_info.tot_ngals,
                                      "Failed to allocate %d elements of size %zu for save_info.tot_ngals", run_params->NumSnapOutputs,
                                      sizeof(*(save_info.tot_ngals)));
 
+    // Allocate memory for the number of galaxies at each output snapshot for each forest.
     save_info.forest_ngals = mycalloc(run_params->NumSnapOutputs, sizeof(*(save_info.forest_ngals)));
     CHECK_POINTER_AND_RETURN_ON_NULL(save_info.forest_ngals,
                                      "Failed to allocate %d elements of size %zu for save_info.tot_ngals", run_params->NumSnapOutputs,
                                      sizeof(*(save_info.forest_ngals)));
 
     for(int32_t snap_idx = 0; snap_idx < run_params->NumSnapOutputs; snap_idx++) {
+        // Using calloc removes the need to zero out the memory explicitly.
         save_info.forest_ngals[snap_idx] = mycalloc(Nforests, sizeof(*(save_info.forest_ngals[snap_idx])));
         CHECK_POINTER_AND_RETURN_ON_NULL(save_info.forest_ngals[snap_idx],
                                          "Failed to allocate %"PRId64" elements of size %zu for save_info.tot_ngals[%d]", Nforests,
@@ -120,6 +136,7 @@ int run_sage(const int ThisTask, const int NTasks, const char *param_file, void 
     fflush(stdout);
 #endif
 
+    /* open all the output files corresponding to this tree file (specified by rank) */
     status = initialize_galaxy_files(ThisTask, &forest_info, &save_info, run_params);
     if(status != EXIT_SUCCESS) {
         return status;
@@ -132,6 +149,12 @@ int run_sage(const int ThisTask, const int NTasks, const char *param_file, void 
     }
 #endif
 
+#if defined(MPI) && defined(VERBOSE)
+    if(NTasks > 1) {
+        // fprintf(stderr, "Please Note: The progress bar is not precisely reliable in MPI. "
+        //         "It should be used as a general indicator only.\n");
+    }
+#endif
 
 
     for(int64_t forestnr = 0; forestnr < Nforests; forestnr++) {
@@ -142,6 +165,7 @@ int run_sage(const int ThisTask, const int NTasks, const char *param_file, void 
         }
 #endif
 
+        /* the millennium tree is really a collection of trees, viz., a forest */
         status = sage_per_forest(forestnr, &save_info, &forest_info, run_params);
         if(status != EXIT_SUCCESS) {
             return status;
@@ -174,9 +198,12 @@ int run_sage(const int ThisTask, const int NTasks, const char *param_file, void 
 #endif
 
 cleanup:
+    /* sage is done running -> do the cleanup */
     cleanup_forests_io(run_params->TreeType, &forest_info);
     if(status == EXIT_SUCCESS) {
-        run_params->Age--; /* undo the +1 offset applied in init() */
+        //free Ages. But first
+        //reset Age to the actual allocated address
+        run_params->Age--;
         myfree(run_params->Age);
     }
 
@@ -245,16 +272,23 @@ int32_t finalize_sage(void *params)
     return status;
 }
 
-static int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_info,
+// Local Functions //
+
+int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_info,
                         struct forest_info *forest_info, struct params *run_params)
 {
     int32_t status = EXIT_FAILURE;
 
+    /*  galaxy data  */
     struct GALAXY  *Gal = NULL, *HaloGal = NULL;
+
+    /* simulation merger-tree data */
     struct halo_data *Halo = NULL;
+
+    /*  auxiliary halo data  */
     struct halo_aux_data  *HaloAux = NULL;
 
-    /* for consistent-trees, nhalos is only known after load_forest */
+    /* nhalos is meaning-less for consistent-trees until *AFTER* the forest has been loaded */
     const int64_t nhalos = load_forest(run_params, forestnr, &Halo, forest_info);
     if(nhalos < 0) {
         fprintf(stderr,"Error during loading forestnum =  %"PRId64"...exiting\n", forestnr);
@@ -277,7 +311,7 @@ static int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_in
 
     HaloAux = mymalloc(nhalos * sizeof(HaloAux[0]));
     HaloGal = mymalloc(maxgals * sizeof(HaloGal[0]));
-    Gal = mymalloc(maxgals * sizeof(Gal[0]));
+    Gal = mymalloc(maxgals * sizeof(Gal[0]));/* used to be fof_maxgals instead of maxgals*/
 
     for(int i = 0; i < nhalos; i++) {
         HaloAux[i].HaloFlag = 0;
@@ -288,6 +322,7 @@ static int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_in
 #endif
     }
 
+    /* MS: numgals is shared by both LHVT and the standard processing */
     int numgals = 0;
 
 #ifdef PROCESS_LHVT_STYLE
@@ -319,15 +354,18 @@ static int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_in
 
 #else /* PROCESS_LHVT_STYLE */
 
+    /*MS: This is the normal SAGE processing on a tree-by-tree (vertical) basis */
+
+    /* Now start the processing */
     int32_t galaxycounter = 0;
 
-    /* halo 0 is always the root; unreachable sub-trees are caught by the loop below */
+    /* First run construct_galaxies outside for loop -> takes care of the main tree */
     status = construct_galaxies(0, &numgals, &galaxycounter, &maxgals, Halo, HaloAux, &Gal, &HaloGal, run_params);
     if(status != EXIT_SUCCESS) {
         return status;
     }
 
-    /* any halos not yet visited (disconnected sub-trees in the forest) */
+    /* But there are sub-trees within one forest file that are not reachable via the recursive routine -> do those as well */
     for(int halonr = 0; halonr < nhalos; halonr++) {
         if(HaloAux[halonr].DoneFlag == 0) {
             status = construct_galaxies(halonr, &numgals, &galaxycounter, &maxgals, Halo, HaloAux, &Gal, &HaloGal, run_params);
@@ -344,6 +382,7 @@ static int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_in
         return status;
     }
 
+    /* free galaxies and the forest */
     myfree(Gal);
     myfree(HaloGal);
     myfree(HaloAux);
@@ -352,11 +391,16 @@ static int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_in
     return EXIT_SUCCESS;
 }
 
+/*
+For creating the lhalo tree binary output i.e., converting from the input
+mergertree format into the lhalotree binary format.
+*/
+
 #ifdef USE_BUFFERED_WRITE
 #include "io/buffered_io.h"
 #endif
 
-static int convert_trees_to_lhalo(const int ThisTask, const int NTasks, struct params *run_params, struct forest_info *forest_info)
+int convert_trees_to_lhalo(const int ThisTask, const int NTasks, struct params *run_params, struct forest_info *forest_info)
 {
     if(forest_info->nforests_this_task > INT_MAX ||  forest_info->nhalos_this_task > INT_MAX) {
         fprintf(stderr,"Error: Can not correctly cast totnforests (on this task) = %"PRId64" or totnhalos = %"PRId64" "
@@ -372,6 +416,7 @@ static int convert_trees_to_lhalo(const int ThisTask, const int NTasks, struct p
         return EXIT_SUCCESS;
     }
 
+    /* Now start the conversion */
     struct timeval tstart;
     gettimeofday(&tstart, NULL);
 
@@ -422,11 +467,13 @@ static int convert_trees_to_lhalo(const int ThisTask, const int NTasks, struct p
     int fd = open(buffer, O_CREAT|O_TRUNC|O_WRONLY, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     XRETURN(fd > 0, EXIT_FAILURE, "Error: Could not open filename = %s\n", buffer);
 
-    /* pwrite does not advance the file offset; lseek below sets it to the halo data start */
+    //PWRITE does not update the file offset -> will need to be adjusted manually
     PWRITE_64BIT_TO_32BIT(fd, nforests_this_task, 0, "total number of forests");
     PWRITE_64BIT_TO_32BIT(fd, totnhalos, 4, "total number of halos (initial, set to 0)");
 
     const off_t nhalos_per_forest_bytes = sizeof(int32_t)*nforests_this_task;
+    //since the previous writes for totnforests and totnhalos were with pwrite
+    //we need to adjust the file offset for those two 32-bit integers
     const off_t halo_data_start_offset = 4 + 4 + nhalos_per_forest_bytes;
 
     XRETURN(lseek(fd, halo_data_start_offset, SEEK_SET) == halo_data_start_offset,
@@ -470,10 +517,10 @@ static int convert_trees_to_lhalo(const int ThisTask, const int NTasks, struct p
             return status;
         }
 #else
-        mywrite(fd, Halo, numbytes);
+        mywrite(fd, Halo, numbytes);//write updates the file offset
 #endif
         const off_t nh_per_tree_offset = sizeof(int32_t) + sizeof(int32_t) + forestnr * sizeof(int32_t);
-        PWRITE_64BIT_TO_32BIT(fd, nhalos, nh_per_tree_offset, "nhalos per tree");
+        PWRITE_64BIT_TO_32BIT(fd, nhalos, nh_per_tree_offset, "nhalos per tree");//pwrite does not update file offset
 
         myfree(Halo);
         totnhalos += nhalos;
@@ -486,6 +533,7 @@ static int convert_trees_to_lhalo(const int ThisTask, const int NTasks, struct p
     }
 #endif
 
+    /* Check that totnhalos fits within a 4 byte integer and write to the file */
     PWRITE_64BIT_TO_32BIT(fd, totnhalos, 4, "total number of halos in file");
 
     if(forest_info->nhalos_this_task > 0) {
@@ -497,6 +545,7 @@ static int convert_trees_to_lhalo(const int ThisTask, const int NTasks, struct p
 
     XRETURN(close(fd) == 0, EXIT_FAILURE, "Error while closing the output binary file");
 
+    /* sage is done running -> do the cleanup */
     cleanup_forests_io(run_params->TreeType, forest_info);
 
 #ifdef VERBOSE

@@ -3,6 +3,8 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <unistd.h>
 
 #ifdef GSL_FOUND
@@ -15,10 +17,11 @@
 #include "core_cool_func.h"
 
 
-static double integrand_time_to_present(const double a, void *param);
-static void set_units(struct params *run_params);
-static void read_snap_list(struct params *run_params);
-static double time_to_present(const double z, struct params *run_params);
+/* These functions do not need to be exposed externally */
+double integrand_time_to_present(const double a, void *param);
+void set_units(struct params *run_params);
+void read_snap_list(struct params *run_params);
+double time_to_present(const double z, struct params *run_params);
 
 void init(struct params *run_params)
 {
@@ -32,8 +35,9 @@ void init(struct params *run_params)
 
     read_snap_list(run_params);
 
-    /* sentinel at Age[-1] so snap 0 deltaT doesn't segfault; lookback time from z=1000 */
-    run_params->Age[0] = time_to_present(1000.0, run_params);
+    //Hack to fix deltaT for snapshot 0
+    //This way, galsnapnum = -1 will not segfault.
+    run_params->Age[0] = time_to_present(1000.0, run_params);//lookback time from z=1000
     run_params->Age++;
 
     for(int i = 0; i < run_params->Snaplistlen; i++) {
@@ -54,7 +58,7 @@ void init(struct params *run_params)
 
 
 
-static void set_units(struct params *run_params)
+void set_units(struct params *run_params)
 {
 
     run_params->UnitTime_in_s = run_params->UnitLength_in_cm / run_params->UnitVelocity_in_cm_per_s;
@@ -68,13 +72,16 @@ static void set_units(struct params *run_params)
     run_params->EnergySNcode = run_params->EnergySN / run_params->UnitEnergy_in_cgs * run_params->Hubble_h;
     run_params->EtaSNcode = run_params->EtaSN * (run_params->UnitMass_in_g / SOLAR_MASS) / run_params->Hubble_h;
 
+    // convert some physical input parameters to internal units
     run_params->Hubble = HUBBLE * run_params->UnitTime_in_s;
+
+    // compute a few quantitites
     run_params->RhoCrit = 3.0 * run_params->Hubble * run_params->Hubble / (8 * M_PI * run_params->G);
 }
 
 
 
-static void read_snap_list(struct params *run_params)
+void read_snap_list(struct params *run_params)
 {
 #ifdef VERBOSE
     const int ThisTask = run_params->ThisTask;
@@ -106,7 +113,7 @@ static void read_snap_list(struct params *run_params)
 #endif
 }
 
-static double time_to_present(const double z, struct params *run_params)
+double time_to_present(const double z, struct params *run_params)
 {
     const double end_limit = 1.0;
     const double start_limit = 1.0/(1 + z);
@@ -141,11 +148,14 @@ static double time_to_present(const double z, struct params *run_params)
     result = (step*0.5)*(y0 + yn + 2.0*result);
 #endif
 
+    /* convert into Myrs/h (I think -> MS 23/6/2018) */
     const double time = 1.0 / run_params->Hubble * result;
+
+    // return time to present as a function of redshift
     return time;
 }
 
-static double integrand_time_to_present(const double a, void *param)
+double integrand_time_to_present(const double a, void *param)
 {
     const struct params *run_params = (struct params *) param;
     return 1.0 / sqrt(run_params->Omega / a + (1.0 - run_params->Omega - run_params->OmegaLambda) + run_params->OmegaLambda * a * a);

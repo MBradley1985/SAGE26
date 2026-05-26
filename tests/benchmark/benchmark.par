@@ -1,0 +1,71 @@
+%------------------------------------------
+%  SAGE26 REGRESSION BENCHMARK PARAMETER FILE
+%
+%  Physics is identical to millennium_release.par.
+%  I/O is forced to sage_binary + single tree file
+%  so that output can be compared byte-for-byte
+%  across refactoring changes.
+%
+%  DO NOT change parameters here without also
+%  regenerating tests/benchmark/reference.sha256.
+%------------------------------------------
+
+FileNameGalaxies   benchmark
+OutputDir          tests/benchmark/output/
+OutputFormat       sage_binary
+
+FirstFile          0
+LastFile           0
+NumOutputs         -1
+
+TreeName              trees_063
+TreeType              lhalo_binary
+NumSimulationTreeFiles 8
+
+SimulationDir      input/millennium/trees/
+FileWithSnapList   input/millennium/trees/millennium.a_list
+LastSnapShotNr     63
+
+Omega              0.25
+OmegaLambda        0.75
+BaryonFrac         0.17
+Hubble_h           0.73
+PartMass           0.086
+BoxSize            62.5
+
+SFprescription              1
+AGNrecipeOn                 2
+SupernovaRecipeOn           1
+ReionizationOn              1
+DiskInstabilityOn           1
+CGMrecipeOn                 1
+FIREmodeOn                  1
+ConcentrationOn             3
+FeedbackFreeModeOn          1
+SaveFullSFH                 1
+TrackICSAssembly            1
+
+SfrEfficiency               0.05
+FFBMaxEfficiency            0.2
+FeedbackReheatingEpsilon    2.9
+FeedbackEjectionEfficiency  0.5
+ReIncorporationFactor       0.15
+RadioModeEfficiency         0.08
+QuasarModeEfficiency        0.005
+BlackHoleGrowthRate         0.015
+ThreshMajorMerger           0.3
+ThresholdSatDisruption      1.0
+Yield                       0.025
+RecycleFraction             0.43
+FracZleaveDisk              0.0
+Reionization_z0             8.0
+Reionization_zr             7.0
+EnergySN                    1.0e51
+EtaSN                       5.0e-3
+
+ForestDistributionScheme            generic_power_in_nhalos
+ExponentForestDistributionScheme    0.7
+
+UnitLength_in_cm          3.08568e+24
+UnitMass_in_g             1.989e+43
+UnitVelocity_in_cm_per_s  100000

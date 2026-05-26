@@ -242,6 +242,8 @@ if __name__ == '__main__':
     RvirFull = [0] * (LastSnap + 1)
     FFBRegimeFull = [0] * (LastSnap + 1)
     ConcentrationFull = [0] * (LastSnap + 1)
+    MetallicityFull = [0] * (LastSnap + 1)
+    H2GasFull = [0] * (LastSnap + 1)
 
     for snap in range(FirstSnap, LastSnap + 1):
         Snapshot = f'Snap_{snap}'
@@ -254,7 +256,8 @@ if __name__ == '__main__':
         HaloMassFull[snap] = read_hdf(file_list, Snapshot, 'Mvir') * 1.0e10 / Hubble_h
         cgmFull[snap] = read_hdf(file_list, Snapshot, 'CGMgas') * 1.0e10 / Hubble_h
         hotgasFull[snap] = read_hdf(file_list, Snapshot, 'HotGas') * 1.0e10 / Hubble_h
-        
+        H2GasFull[snap] = read_hdf(file_list, Snapshot, 'H2gas') * 1.0e10 / Hubble_h
+
         # Calculate full CGM
         cgm_temp = read_hdf(file_list, Snapshot, 'CGMgas')
         hot_temp = read_hdf(file_list, Snapshot, 'HotGas')
@@ -273,7 +276,7 @@ if __name__ == '__main__':
         BulgeRadiusFull[snap] = read_hdf(file_list, Snapshot, 'BulgeRadius') / Hubble_h
         RvirFull[snap] = read_hdf(file_list, Snapshot, 'Rvir') / Hubble_h
         ConcentrationFull[snap] = read_hdf(file_list, Snapshot, 'Concentration')
-
+        MetallicityFull[snap] = read_hdf(file_list, Snapshot, 'MetalsStellarMass')
 
 # --------------------------------------------------------
 
@@ -1278,6 +1281,200 @@ if __name__ == '__main__':
 
     plt.tight_layout()
     outputFile = OutputDir + 'ConcentrationEvolution' + OutputFormat
+    plt.savefig(outputFile, dpi=300, bbox_inches='tight')
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+    # --------------------------------------------------------
+
+    print('Plotting metallicity vs stellar mass at different redshifts')
+
+    plt.figure(figsize=(10, 7))
+    ax = plt.subplot(111)
+
+    z_bins = [
+        (0.2, 0.5), (0.5, 0.8), (0.8, 1.1), (1.1, 1.5), (1.5, 2.0),
+        (2.0, 2.5), (2.5, 3.0), (3.0, 3.5), (3.5, 4.5), (4.5, 5.5),
+        (5.5, 6.5), (6.5, 7.5), (7.5, 8.5), (8.5, 10.0), (10.0, 12.0)
+    ]
+    colors_z = plt.cm.viridis(np.linspace(0.1, 0.9, len(z_bins)))
+
+    for i, (z_min, z_max) in enumerate(z_bins):
+        snap_indices = find_snapshots_in_z_range(z_min, z_max, redshifts)
+        if len(snap_indices) == 0:
+            continue
+
+        mass_bins = np.arange(7.2, 12.5, 0.1)
+        mass_centers = mass_bins[:-1] + 0.05
+        bin_width = mass_bins[1] - mass_bins[0]
+
+        metallicity_snapshots = []
+        for snap_idx in snap_indices:
+            if snap_idx < len(StellarMassFull):
+                w = np.where((StellarMassFull[snap_idx] > 0.0) & (MetallicityFull[snap_idx] > 0.0))[0]
+                if len(w) > 0:
+                    masses = np.log10(StellarMassFull[snap_idx][w])
+                    metallicities = np.log10(MetallicityFull[snap_idx][w])
+                    metallicity_bin_means = np.zeros(len(mass_centers))
+                    metallicity_bin_means.fill(np.nan)
+                    metallicity_bin_stds = np.zeros(len(mass_centers))
+                    metallicity_bin_stds.fill(np.nan)
+                    for j in range(len(mass_centers)):
+                        mask = (masses >= mass_bins[j]) & (masses < mass_bins[j+1])
+                        if np.sum(mask) > 0:
+                            metallicity_bin_means[j] = np.mean(metallicities[mask])
+                            metallicity_bin_stds[j] = np.std(metallicities[mask])
+                    metallicity_snapshots.append((metallicity_bin_means, metallicity_bin_stds))
+
+        if len(metallicity_snapshots) == 0:
+            continue
+
+        metallicity_means_stack = np.array([x[0] for x in metallicity_snapshots])
+        metallicity_stds_stack = np.array([x[1] for x in metallicity_snapshots])
+        metallicity_mean = np.nanmean(metallicity_means_stack, axis=0)
+        metallicity_err = np.nanstd(metallicity_means_stack, axis=0) / np.sqrt(len(metallicity_means_stack))
+        valid = ~np.isnan(metallicity_mean) & ~np.isnan(metallicity_err)
+        if not np.any(valid):
+            continue
+
+        label = f'{z_min:.1f} < z < {z_max:.1f}'
+        ax.plot(mass_centers[valid], metallicity_mean[valid], color=colors_z[i], linewidth=2, label=label)
+        ax.fill_between(mass_centers[valid], 
+                       metallicity_mean[valid] - metallicity_err[valid],
+                       metallicity_mean[valid] + metallicity_err[valid],
+                       color=colors_z[i], alpha=0.3)
+
+    # ax.set_xlim(7.2, 12.0)
+    # ax.set_ylim(8.0, 10.0)
+    ax.set_xlabel(r'$\log_{10} M_* [M_\odot]$', fontsize=14)
+    ax.set_ylabel(r'$\log_{10} Z$', fontsize=14)
+    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
+    leg = ax.legend(loc='upper left', fontsize=10, frameon=False)
+    for text in leg.get_texts():
+        text.set_fontsize(10)
+
+    plt.tight_layout()
+    outputFile = OutputDir + 'MetallicityEvolution' + OutputFormat
+    plt.savefig(outputFile, dpi=300, bbox_inches='tight')
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+    # --------------------------------------------------------
+
+    print('Plotting H2 fraction vs stellar mass at different redshifts')
+
+    plt.figure(figsize=(10, 7))
+    ax = plt.subplot(111)
+
+    HYDROGEN_MASS_FRAC = 0.74
+    mass_bins = np.arange(7.2, 12.5, 0.1)
+    mass_centers = mass_bins[:-1] + 0.05
+
+    # --- diagnostic: check a few snapshots before the loop ---
+    print(f'  z_bins: {len(z_bins)} bins, snap range 0..{len(StellarMassFull)-1}')
+    for _si in find_snapshots_in_z_range(z_bins[0][0], z_bins[0][1], redshifts)[:2]:
+        _h2  = H2GasFull[_si]  if _si < len(H2GasFull)  else None
+        _cld = coldgasFull[_si] if _si < len(coldgasFull) else None
+        print(f'  snap {_si}: h2 type={type(_h2).__name__} ndim={np.ndim(_h2)} '
+              f'len={len(_h2) if np.ndim(_h2)>0 else "scalar"} | '
+              f'cold ndim={np.ndim(_cld)} len={len(_cld) if np.ndim(_cld)>0 else "scalar"}')
+        if np.ndim(_h2) > 0 and len(_h2) > 0:
+            print(f'    H2gas  : min={_h2.min():.3e}  max={_h2.max():.3e}  '
+                  f'nonzero={np.sum(_h2 > 0)}')
+        if np.ndim(_cld) > 0 and len(_cld) > 0:
+            print(f'    ColdGas: min={_cld.min():.3e}  max={_cld.max():.3e}  '
+                  f'nonzero={np.sum(_cld > 0)}')
+
+    for i, (z_min, z_max) in enumerate(z_bins):
+        snap_indices = find_snapshots_in_z_range(z_min, z_max, redshifts)
+        if len(snap_indices) == 0:
+            print(f'  z=[{z_min},{z_max}]: no snapshots found')
+            continue
+
+        h2_fraction_snapshots = []
+        for snap_idx in snap_indices:
+            if snap_idx >= len(StellarMassFull):
+                continue
+            mstar = StellarMassFull[snap_idx]
+            h2    = H2GasFull[snap_idx]
+            cold  = coldgasFull[snap_idx]
+            if np.ndim(cold) == 0 or np.ndim(h2) == 0:
+                continue
+            if not (len(mstar) == len(cold) == len(h2) > 0):
+                print(f'    snap {snap_idx}: length mismatch '
+                      f'mstar={len(mstar)} cold={len(cold)} h2={len(h2)} — skipping')
+                continue
+            w = np.where((mstar > 0.0) & (cold > 0.0))[0]
+            if len(w) == 0:
+                continue
+            # f_H2 = H2 / (ColdGas * 0.74): fraction of hydrogen that is molecular.
+            # Clip to [0,1]: H2gas can exceed ColdGas in the output because it is
+            # computed before SF depletes ColdGas and is not updated afterwards.
+            h2_frac_vals = np.clip(h2[w] / (cold[w] * HYDROGEN_MASS_FRAC), 0.0, 1.0)
+            masses = np.log10(mstar[w])
+            h2_frac_bin_means = np.full(len(mass_centers), np.nan)
+            h2_frac_bin_stds  = np.full(len(mass_centers), np.nan)
+            for j in range(len(mass_centers)):
+                mask = (masses >= mass_bins[j]) & (masses < mass_bins[j+1])
+                if np.sum(mask) > 0:
+                    h2_frac_bin_means[j] = np.mean(h2_frac_vals[mask])
+                    h2_frac_bin_stds[j]  = np.std(h2_frac_vals[mask])
+            h2_fraction_snapshots.append((h2_frac_bin_means, h2_frac_bin_stds))
+
+        n_gals_total = sum(
+            len(np.where((StellarMassFull[si] > 0) & (coldgasFull[si] > 0))[0])
+            for si in snap_indices
+            if si < len(StellarMassFull) and np.ndim(H2GasFull[si]) > 0
+               and len(H2GasFull[si]) == len(coldgasFull[si])
+        )
+        print(f'  z=[{z_min:.1f},{z_max:.1f}]: {len(snap_indices)} snaps, '
+              f'{n_gals_total} galaxies, {len(h2_fraction_snapshots)} usable snaps')
+        if h2_fraction_snapshots:
+            all_h2 = np.concatenate([
+                H2GasFull[si][np.where((StellarMassFull[si] > 0) & (coldgasFull[si] > 0))[0]]
+                for si in snap_indices
+                if si < len(StellarMassFull) and np.ndim(H2GasFull[si]) > 0
+                   and len(H2GasFull[si]) == len(coldgasFull[si])
+            ])
+            all_cold = np.concatenate([
+                coldgasFull[si][np.where((StellarMassFull[si] > 0) & (coldgasFull[si] > 0))[0]]
+                for si in snap_indices
+                if si < len(StellarMassFull) and np.ndim(H2GasFull[si]) > 0
+                   and len(H2GasFull[si]) == len(coldgasFull[si])
+            ])
+            frac = all_h2 / (all_cold * HYDROGEN_MASS_FRAC)
+            print(f'    f_H2: min={frac.min():.3f}  median={np.median(frac):.3f}  '
+                  f'max={frac.max():.3f}  frac>=0.99: {np.mean(frac>=0.99)*100:.1f}%')
+
+        if len(h2_fraction_snapshots) == 0:
+            continue
+
+        h2_frac_means_stack = np.array([x[0] for x in h2_fraction_snapshots])
+        h2_frac_mean = np.nanmean(h2_frac_means_stack, axis=0)
+        h2_frac_err  = np.nanstd(h2_frac_means_stack, axis=0) / np.sqrt(len(h2_frac_means_stack))
+        valid = ~np.isnan(h2_frac_mean) & ~np.isnan(h2_frac_err)
+        if not np.any(valid):
+            continue
+
+        label = f'{z_min:.1f} < z < {z_max:.1f}'
+        ax.plot(mass_centers[valid], h2_frac_mean[valid], color=colors_z[i], linewidth=2, label=label)
+        ax.fill_between(mass_centers[valid],
+                        h2_frac_mean[valid] - h2_frac_err[valid],
+                        h2_frac_mean[valid] + h2_frac_err[valid],
+                        color=colors_z[i], alpha=0.3)
+
+    ax.axhline(1.0, color='k', linestyle='--', linewidth=1, alpha=0.5)
+    ax.set_xlim(7.2, 12.0)
+    ax.set_ylim(0.0, 1.05)
+    ax.set_xlabel(r'$\log_{10} M_* [M_\odot]$', fontsize=14)
+    ax.set_ylabel(r'$f_{\rm H_2} = M_{\rm H_2}\,/\,(M_{\rm cold} \times 0.74)$', fontsize=14)
+    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
+    leg = ax.legend(loc='upper left', fontsize=10, frameon=False)
+    for text in leg.get_texts():
+        text.set_fontsize(10)
+
+    plt.tight_layout()
+    outputFile = OutputDir + 'H2FractionEvolution' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()

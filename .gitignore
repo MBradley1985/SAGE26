@@ -2,7 +2,7 @@ sage
 tests/test_data/
 input/millennium/
 output/
-input/
+input/microuchuu/
 tests/test_build/
 tests/test_output/
 plotting/random_plotting_scripts
@@ -16,14 +16,12 @@ libsage.so
 perf.data*
 *.pdf
 tmp*
-*.par
 *vscode*
 _sage_cffi.*
 codecov
 *.tar*
 *.png
 *.jpg
-*.par
 *.ipynb_checkpoints
 *.dSYM
 *.txt

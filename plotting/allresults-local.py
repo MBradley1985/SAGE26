@@ -279,20 +279,6 @@ if __name__ == '__main__':
 
     Concentration = read_hdf(file_list, Snapshot, 'Concentration')
 
-    H2_depletion_time_Gyr = read_hdf(file_list, Snapshot, 'H2DepletionTime_Gyr')
-
-    # g_max = read_hdf(file_list, Snapshot, 'g_max')  # in code units of G * Mvir / Rvir^2
-    # print('g_max read for', len(g_max), 'galaxies')
-    # print('Sample g_max values:', g_max[:10], '\n')
-
-    # g_max_physical = g_max * (1e10 / Hubble_h) / (1.0)**2  # Convert to Msun/pc^2
-    # print('Sample g_max physical values:', g_max_physical[:10], 'Msun/pc^2\n')
-
-    # G_code = sim_params['G'] if 'G' in sim_params else 4.30071e-9  # in (km/s)^2 Mpc / Msun
-
-    # g_max_g_vir = g_max / (G_code * Mvir / Rvir**2)  # Dimensionless ratio to g_vir
-    # print('Sample g_max/g_vir values:', g_max_g_vir[:10])
-
 
 # --------------------------------------------------------
 
@@ -1693,77 +1679,6 @@ if __name__ == '__main__':
 
     plt.tight_layout()
     outputFile = OutputDir + 'concentration_vs_mvir' + OutputFormat
-    plt.savefig(outputFile, dpi=150)
-    print('Saved file to', outputFile, '\n')
-    plt.close()
-
-# --------------------------------------------------------
-
-    print('Plotting H2 depletion time vs. stellar surface density')
-
-    plt.figure(figsize=(10, 8))
-    ax = plt.subplot(111)
-
-    w = np.where((StellarMass > 1.0e8) & (SfrDisk > 0) & (H2gas > 0))[0]
-    if len(w) > dilute:
-        w = sample(list(w), dilute)
-
-    # Stellar surface density in M_sun/pc^2, convert from M_sun/kpc^2
-    disk_radius_pc = DiskRadius[w] * 1.0e6
-    stellar_surface_density = StellarMass[w] / (4.0 * np.pi * disk_radius_pc**2)
-    
-    plot = ax.scatter(np.log10(stellar_surface_density), np.log10(H2_depletion_time_Gyr[w]),
-                      c=np.log10(StellarMass[w]), s=3, alpha=0.4, cmap='viridis', rasterized=True)
-
-    plt.xlabel(r'$\log_{10} \rho_{\mathrm{star}}\ (M_{\odot}\ \mathrm{kpc^{-2}})$', fontsize=14)
-    plt.ylabel(r'$\log_{10} \tau_{\mathrm{H2}}\ (\mathrm{Gyr})$', fontsize=14)
-
-    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
-    ax.yaxis.set_minor_locator(plt.MultipleLocator(0.25))
-
-    # plt.xlim(6, 10)
-    # plt.ylim(-1, 2)
-
-    cbar = plt.colorbar(plot)
-    cbar.set_label(r'$\log_{10} M_{\star}\ (M_{\odot})$', fontsize=14)
-    cbar.solids.set_alpha(1.0)
-
-    plt.tight_layout()
-    outputFile = OutputDir + 'h2_depletion_time_vs_stellar_surface_density' + OutputFormat
-    plt.savefig(outputFile, dpi=150)
-    print('Saved file to', outputFile, '\n')
-    plt.close()
-
-# --------------------------------------------------------
-
-    print('Plotting SF efficiency vs halo mass')
-
-    plt.figure(figsize=(10, 8))
-    ax = plt.subplot(111)
-
-    w = np.where((Mvir > 0) & (StellarMass > 0) & (SfrDisk > 0) & (Type == 0))[0]
-    if len(w) > dilute:
-        w = sample(list(w), dilute)
-
-    sf_efficiency = SfrDisk[w] / Mvir[w]
-    sf_efficiency2 = (SfrDisk[w] + SfrBulge[w]) / Mvir[w]
-    sf_efficiency3 = StellarMass[w] / (0.17 * Mvir[w])  # Stellar mass divided by expected baryonic mass
-
-    # plt.scatter(np.log10(Mvir[w]), np.log10(sf_efficiency), c='blue', s=3, alpha=0.4, label='SFR_disk / M_vir', rasterized=True)
-    # plt.scatter(np.log10(Mvir[w]), np.log10(sf_efficiency2), c='red', s=3, alpha=0.4, label='(SFR_disk + SFR_bulge) / M_vir', rasterized=True)
-    plt.scatter(np.log10(Mvir[w]), np.log10(sf_efficiency3), c='green', s=3, alpha=0.4, label='M_star / (0.17 * M_vir)', rasterized=True)
-
-    plt.xlabel(r'$\log_{10} M_{\mathrm{vir}}\ (M_{\odot})$', fontsize=14)
-    plt.ylabel(r'$\log_{10} \mathrm{SF\ efficiency}$', fontsize=14)
-
-    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
-    ax.yaxis.set_minor_locator(plt.MultipleLocator(0.25))
-
-    # ax.set_xlim(11, 15)
-    # ax.set_ylim(-4, 0)
-
-    plt.tight_layout()
-    outputFile = OutputDir + 'star_formation_efficiency_vs_halo_mass' + OutputFormat
     plt.savefig(outputFile, dpi=150)
     print('Saved file to', outputFile, '\n')
     plt.close()
