@@ -92,33 +92,30 @@ enum sage_error_types {
 struct GALAXY
 {
     int32_t   SnapNum;
-    int32_t   Type;
-    int32_t   Regime;
-    int32_t   FFBRegime;
-    float     FFBRandom;  // Persistent random number for sigmoid-based FFB determination
+    int32_t   Type;      /* 0=central, 1=satellite with subhalo, 2=orphan (lost subhalo) */
+    int32_t   Regime;    /* CGM accretion regime: 0=precipitation (cold), 1=hot halo */
+    int32_t   FFBRegime; /* 0=normal (suppressed) halo, 1=feedback-free burst halo */
+    float     FFBRandom; /* persistent random number for sigmoid-based FFB determination */
 
     int32_t   GalaxyNr;
     int32_t   CentralGal;
     int32_t   HaloNr;
     long long MostBoundID;
-    uint64_t GalaxyIndex; // This is a unique value based on the tree local galaxy number,
-    // file local tree number and the file number itself.
-                       // See ``generate_galaxy_index()`` in ``core_save.c``.
-    uint64_t CentralGalaxyIndex; // Same as above, except the ``GalaxyIndex`` value for the CentralGalaxy
-    // of this galaxy's FoF group.
+    uint64_t GalaxyIndex;        /* unique ID from file nr, tree nr, and local galaxy nr; see generate_galaxy_index() in core_save.c */
+    uint64_t CentralGalaxyIndex; /* GalaxyIndex of the FoF group's central (Type 0) galaxy */
 
     int32_t   mergeType;  /* 0=none; 1=minor merger; 2=major merger; 3=disk instability; 4=disrupt to ICS */
     int32_t   mergeIntoID;
     int32_t   mergeIntoSnapNum;
-    float dT;
+    float dT;   /* time elapsed since the previous snapshot (code time units) */
 
     /* (sub)halo properties */
     float Pos[3];
     float Vel[3];
     int   Len;
     float Mvir;
-    float deltaMvir;
-    float CentralMvir;
+    float deltaMvir;   /* Mvir change since the previous snapshot; used to spread infall across sub-steps */
+    float CentralMvir; /* Mvir of the FoF group's central halo */
     float Rvir;
     float Vvir;
     float Vmax;
@@ -129,9 +126,9 @@ struct GALAXY
     float StellarMass;
     float BulgeMass;
     float HotGas;
-    float EjectedMass;
+    float EjectedMass;   /* mass ejected beyond the virial radius; available for re-incorporation */
     float BlackHoleMass;
-    float ICS;
+    float ICS;  /* intracluster stars: stellar mass stripped/disrupted into the ICM */
     float CGMgas;
     float H2gas;
     float H1gas;
@@ -164,16 +161,16 @@ struct GALAXY
     /* misc */
     float DiskScaleRadius;
     float BulgeRadius;
-    float MergTime;
+    float MergTime;  /* dynamical-friction merger timescale remaining (code time units) */
     double Cooling;
     double Heating;
-    float r_heat;
+    float r_heat;    /* AGN radio-mode heating radius (code length); cooling suppressed at r < r_heat */
     float QuasarModeBHaccretionMass;
     float TimeOfLastMajorMerger;
     float TimeOfLastMinorMerger;
     float OutflowRate;
     float TotalSatelliteBaryons;
-    float RcoolToRvir;
+    float RcoolToRvir; /* r_cool / r_vir */
 
     /* infall properties */
     float infallMvir;
@@ -182,7 +179,7 @@ struct GALAXY
     float infallStellarMass;
     float TimeOfInfall;
 
-    float MassLoading;
+    float MassLoading; /* SN wind mass loading factor: M_ejected / M_star_formed */
 
     /* CGM properties */
     float tcool;
@@ -192,15 +189,15 @@ struct GALAXY
     float H2DepletionTime_Gyr;
 
     /* bulge properties */
-    float MergerBulgeMass;     
-    float InstabilityBulgeMass; 
-    float MergerBulgeRadius;      
+    float MergerBulgeMass;
+    float InstabilityBulgeMass;
+    float MergerBulgeRadius;
     float InstabilityBulgeRadius;
 
-    float mdot_cool;
-    float mdot_stream;
+    float mdot_cool;    /* hot halo cooling accretion rate (code mass / code time) */
+    float mdot_stream;  /* cold stream accretion rate (code mass / code time) */
 
-    double g_max;
+    double g_max; /* BK25 max NFW gravitational acceleration at r_s; used as FFB halo threshold */
 };
 
 
@@ -387,12 +384,9 @@ struct forest_info {
     /* Run-level quantities */
     int64_t totnforests;  // Total number of forests across **all** input tree files.
     int64_t totnhalos; //Total number of halos across **all** input tree files (if it can be calculated ahead of time, otherwise set to 0 e.g., in case of Consistent-Trees ascii)
-    double frac_volume_processed; // Fraction of the simulation volume processed by **this** task.
-    // We assume that each of the input tree files span the same volume. Hence by summing the
-    // number of trees processed by each task from each file, we can determine the
-    // fraction of the simulation volume that this task processes.  We weight this summation by the
-    // number of trees in each file because some files may have more/less trees whilst still spanning the
-    // same volume (e.g., a void would contain few trees whilst a dense knot would contain many).
+    double frac_volume_processed; /* fraction of simulation volume on this task; weighted by
+                                     trees-per-file because voids/knots yield unequal tree counts
+                                     for the same volume */
     int32_t firstfile;//The first file processed in this run (i.e., over all tasks)
     int32_t lastfile;//The last file processed in this run (i.e., over all tasks)
 
@@ -457,7 +451,6 @@ struct params
     double EtaSNcode;
     double EtaSN;
 
-    /* moving for alignment */
     int32_t NumSimulationTreeFiles;
 
     /* recipe flags */
@@ -469,14 +462,14 @@ struct params
     int32_t    CGMrecipeOn;
     int32_t    CGMDensityProfile;  // 0: uniform, 1: NFW, 2: beta-profile
     int32_t    FIREmodeOn;
-    int32_t    CGMrecipeSAGEOn;
+    int32_t    CGMrecipeSAGEOn;      /* unused/legacy — not registered in the parameter file */
     int32_t    CGMPrecipitationMode;  // 0: tanh (McCourt+12 style); 1: logistic sigmoid centred on t_cool/t_ff=10, width=2
     int32_t    CGMPrecipRadiusMode;   // 0: evaluate t_cool/t_ff at r_cool; 1: evaluate at 0.1*R_vir
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation
     int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
     int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too
     int32_t    FFBRandomMode;       // 0: draw a fresh random each snapshot; 1: use persistent FFBRandom assigned at galaxy creation
-    int32_t    BulgeSizeOn;
+    int32_t    BulgeSizeOn;          // 0: off, 1: Shen+03 eq.33 (power-law), 2: Shen+03 eq.32 (two-regime), 3: Tonini (separate merger/instability)
     int32_t    H2DiskAreaOption;          // 0 = π*r_s², 1 = π*(3*r_s)², 2 = 2π*r_s² (central Σ₀)
     int32_t    H2RadialIntegrationOn;     // 0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk
     int32_t    H2RadialNBins;             // radial bins for integration (default 25)
@@ -523,8 +516,8 @@ struct params
     double UnitTime_in_Megayears;
     double G;
     double Hubble;
-    double a0;
-    double ar;
+    double a0; /* scale factor at reionization onset:      1 / (1 + Reionization_z0) */
+    double ar; /* scale factor at reionization completion: 1 / (1 + Reionization_zr) */
 
     int32_t nsnapshots;
     int32_t LastSnapshotNr;
@@ -534,14 +527,11 @@ struct params
     enum Valid_TreeTypes TreeType;
     enum Valid_OutputFormats OutputFormat;
 
-    /* The combination of  ForestDistributionScheme = generic_power_in_nhalos and
-       exponent_for_forest_dist_scheme = 0.7 seems to produce good work-load
-       balance across MPI on the 512 Genesis test dataset - MS 16/01/2020 */
     enum Valid_Forest_Distribution_Schemes ForestDistributionScheme;
     double Exponent_Forest_Dist_Scheme;
 
-    int64_t FileNr_Mulfac;
-    int64_t ForestNr_Mulfac;
+    int64_t FileNr_Mulfac;   /* stride per input file for unique GalaxyIndex generation; set by tree reader */
+    int64_t ForestNr_Mulfac; /* stride per forest for unique GalaxyIndex generation; set by tree reader */
 
     int32_t ListOutputSnaps[ABSOLUTEMAXSNAPS];
     //Essentially creating an alias so that the indecipherable 'ZZ'

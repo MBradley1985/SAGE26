@@ -101,7 +101,7 @@ int32_t save_binary_galaxies(const int32_t task_treenr, const int32_t num_gals, 
     // We store all the galaxies to be written for this tree in a single memory block.  Later we
     // will then perform a single write for each snapshot, pointing to the correct position in
     // the block.
-    struct GALAXY_OUTPUT *all_outputgals  = mymalloc(num_output_gals * sizeof(all_outputgals[0]));
+    struct GALAXY_OUTPUT *all_outputgals  = mycalloc(num_output_gals, sizeof(all_outputgals[0]));
     if(all_outputgals == NULL) {
         fprintf(stderr,"Error: Could not allocate enough memory to hold all %d output galaxies\n",num_output_gals);
         return MALLOC_FAILURE;

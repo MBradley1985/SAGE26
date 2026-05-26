@@ -40,7 +40,6 @@ int main(int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
 #endif
 
-    // Perform some final checks.
     status = finalize_sage(run_params);
     if(status != EXIT_SUCCESS) {
         goto err;
@@ -57,7 +56,7 @@ err:
     MPI_Finalize();
 #endif
     fprintf(stderr, "If the fix to this isn't obvious, please feel free to open an issue on our GitHub page.\n"
-                    "https://github.com/sage-home/sage-model/issues/new\n");
+                    "https://github.com/sage-home/SAGE26/issues/new\n");
     return status;
 
 }
