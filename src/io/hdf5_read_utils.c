@@ -94,20 +94,18 @@ herr_t read_dataset_shape(hid_t fd, const char *dataset_name, int *ndims, hsize_
 
     status = H5Dclose(dataset_id);
     if(status < 0) {
-        fprintf(stderr,"Error encountered while trying to close dataspace associated with dataset_name = '%s'\n", dataset_name);
+        fprintf(stderr,"Error encountered while trying to close dataset '%s'\n", dataset_name);
         H5Eprint(H5E_DEFAULT, stderr);
         return status;
     }
-
 
     return (herr_t) EXIT_SUCCESS;
 }
 
 
-
 herr_t read_dataset(hid_t fd, const char *dataset_name, hid_t dataset_id, void *buffer, const size_t dst_size, const int check_size)
 {
-    int already_open_dataset = dataset_id > 0 ? 1:0;
+    const int already_open_dataset = (dataset_id > 0);
 
     if(already_open_dataset == 0) {
         dataset_id = H5Dopen2(fd, dataset_name, H5P_DEFAULT);
@@ -136,7 +134,7 @@ herr_t read_dataset(hid_t fd, const char *dataset_name, hid_t dataset_id, void *
 
     herr_t status = H5Dread(dataset_id, h5_dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, buffer);
     if(status < 0) {
-        fprintf(stderr, "Error encountered when trying to reading dataset '%s'.\n", dataset_name);
+        fprintf(stderr, "Error encountered when trying to read dataset '%s'.\n", dataset_name);
         H5Eprint(H5E_DEFAULT, stderr);
         return -1;
     }
@@ -169,7 +167,7 @@ int32_t fill_hdf5_metadata_names(struct HDF5_METADATA_NAMES *metadata_names, enu
         snprintf(metadata_names->name_totNHalos, MAX_STRING_LEN - 1, "NhalosPerFile"); // Total number of halos within the file.
         snprintf(metadata_names->name_TreeNHalos, MAX_STRING_LEN - 1, "/Header/TreeNHalos"); // Number of halos per forest within the file.
         snprintf(metadata_names->name_ParticleMass, MAX_STRING_LEN - 1, "ParticleMass");//Particle mass for Dark matter in the sim
-        snprintf(metadata_names->name_NumSimulationTreeFiles, MAX_STRING_LEN - 1, "NumberOfOutputFiles");//Particle mass for Dark matter in the sim
+        snprintf(metadata_names->name_NumSimulationTreeFiles, MAX_STRING_LEN - 1, "NumberOfOutputFiles"); /* number of simulation tree files */
         return EXIT_SUCCESS;
 
     case gadget4_hdf5:

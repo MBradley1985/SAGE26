@@ -3,7 +3,6 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <limits.h>
 
 #include "read_tree_lhalo_binary.h"
 #include "../core_mymalloc.h"
@@ -11,17 +10,15 @@
 #include "forest_utils.h"
 
 
-static void get_forests_filename_lht_binary(char *filename, const size_t len, const int filenr, const struct params *run_params);
 static int load_tree_table_lht_binary(const int firstfile, const int lastfile, const int64_t *totnforests_per_file,
                                       const struct params *run_params, const int ThisTask,
                                       int64_t *nhalos_per_forest);
 
-void get_forests_filename_lht_binary(char *filename, const size_t len, const int filenr, const struct params *run_params)
+static void get_forests_filename_lht_binary(char *filename, const size_t len, const int filenr, const struct params *run_params)
 {
     snprintf(filename, len - 1, "%s/%s.%d%s", run_params->SimulationDir, run_params->TreeName, filenr, run_params->TreeExtension);
 }
 
-/* Externally visible Functions */
 int setup_forests_io_lht_binary(struct forest_info *forests_info,
                                 const int ThisTask, const int NTasks, struct params *run_params)
 {
@@ -41,7 +38,6 @@ int setup_forests_io_lht_binary(struct forest_info *forests_info,
         return MALLOC_FAILURE;
     }
 
-    // First go through each file and determine the total number of forests across all files.
     int64_t totnforests = 0, totnhalos = 0;
     for(int filenr=firstfile;filenr<=lastfile;filenr++) {
         char filename[4*MAX_STRING_LEN];
@@ -87,7 +83,6 @@ int setup_forests_io_lht_binary(struct forest_info *forests_info,
 
     const int64_t end_forestnum = start_forestnum + nforests_this_task; /* not inclusive, i.e., do not process forestnr == end_forestnum */
 
-    // Now that we know the number of trees being processed by each task, let's set up and malloc the structs.
     struct lhalotree_info *lht = &(forests_info->lht);
     forests_info->nforests_this_task = nforests_this_task;
 
@@ -114,8 +109,6 @@ int setup_forests_io_lht_binary(struct forest_info *forests_info,
         return MALLOC_FAILURE;
     }
 
-    // Now for each task, we know the starting forest number it needs to start reading from.
-    // So let's determine what file and forest number within the file each task needs to start/end reading from.
     int start_filenum = -1, end_filenum = -1;
     status = find_start_and_end_filenum(start_forestnum, end_forestnum,
                                         totnforests_per_file, totnforests,
@@ -169,8 +162,7 @@ int setup_forests_io_lht_binary(struct forest_info *forests_info,
         }
         buffer -= start_forestnum_to_process_per_file[filenr];
 
-        /* first compute the byte offset to the halos in start_forestnum */
-        size_t byte_offset_to_halos = sizeof(int32_t) + sizeof(int32_t) + nbytes;/* start at the beginning of halo #0 in tree #0 */
+        size_t byte_offset_to_halos = sizeof(int32_t) + sizeof(int32_t) + nbytes; /* skip NTrees + NHalos + tree-size table */
         for(int64_t i=0;i<start_forestnum_to_process_per_file[filenr];i++) {
             byte_offset_to_halos += buffer[i]*sizeof(struct halo_data);
         }
@@ -190,27 +182,17 @@ int setup_forests_io_lht_binary(struct forest_info *forests_info,
             lht->fd[i + nforests_so_far] = fd;
             byte_offset_to_halos += forestnhalos[i]*sizeof(struct halo_data);
 
-            // Can't guarantee that the `FileNr` variable in the tree file is correct.
-            // Hence let's track it explicitly here.
-            forests_info->FileNr[i + nforests_so_far] = filenr;
-
-            // We want to track the original tree number from these files.  Since we split multiple
-            // files across tasks, we can't guarantee that tree N processed by a certain task is
-            // actually the Nth tree in any arbitrary file.
+            forests_info->FileNr[i + nforests_so_far] = filenr; /* FileNr in the file itself may be wrong */
+            /* original_treenr: position in file, not position among this task's forests;
+               offset by start_forestnum because this task may start mid-file */
             forests_info->original_treenr[i + nforests_so_far] = i + start_forestnum_to_process_per_file[filenr];
-            // We add `start_forestnum...`` because we could start reading from the middle of a
-            // forest file.  Hence we would want "Forest 0" processed by that task to be
-            // appropriately shifted.
         }
 
         forestnhalos += nforests_to_process_this_file;
     }
 
-    // We assume that each of the input tree files span the same volume. Hence by summing the
-    // number of trees processed by each task from each file, we can determine the
-    // fraction of the simulation volume that this task processes.  We weight this summation by the
-    // number of trees in each file because some files may have more/less trees whilst still spanning the
-    // same volume (e.g., a void would contain few trees whilst a dense knot would contain many).
+    /* frac_volume_processed: each file covers equal volume, so sum(processed/total) per file,
+       weighted by file tree count, gives the fraction this task handles */
     forests_info->frac_volume_processed = 0.0;
     for(int32_t filenr = start_filenum; filenr <= end_filenum; filenr++) {
         forests_info->frac_volume_processed += (double) num_forests_to_process_per_file[filenr] / (double) totnforests_per_file[filenr];
@@ -245,7 +227,6 @@ int64_t load_forest_lht_binary(const int64_t forestnr, struct halo_data **halos,
 
     int fd = forests_info->lht.fd[forestnr];
 
-    /* must have a valid file pointer  */
     if(fd <= 0 ) {
         fprintf(stderr,"Error: File pointer is NULL (i.e., you need to open the file before reading) \n");
         return -INVALID_FILE_POINTER;
@@ -279,7 +260,7 @@ void cleanup_forests_io_lht_binary(struct forest_info *forests_info)
     myfree(lht->open_fds);
 }
 
-int load_tree_table_lht_binary(const int firstfile, const int lastfile, const int64_t *totnforests_per_file,
+static int load_tree_table_lht_binary(const int firstfile, const int lastfile, const int64_t *totnforests_per_file,
                                  const struct params *run_params, const int ThisTask,
                                  int64_t *nhalos_per_forest)
 {
@@ -319,9 +300,7 @@ int load_tree_table_lht_binary(const int firstfile, const int lastfile, const in
         int fd = open(filename, O_RDONLY);
         XRETURN( fd > 0, FILE_NOT_FOUND,"Error: can't open file `%s'\n", filename);
 
-        //the last argument is the offset for nhalos_per_forest -> the first 4 bytes
-        //are for totnforests, and the next 4 bytes are for totnhalos, after that
-        //the nhalos_per_forest[totnforests] starts.
+        /* offset 8 = skip NTrees (4 bytes) + NHalos (4 bytes); nhalos_per_forest[] starts at byte 8 */
         mypread(fd, buffer, sizeof(*buffer)*nforests_this_file, 8);
         for(int64_t i=0;i<nforests_this_file;i++) {
             nhalos_per_forest[i] = (int64_t) buffer[i];

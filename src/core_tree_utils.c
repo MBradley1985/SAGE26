@@ -21,7 +21,6 @@ int reorder_lhalo_to_lhvt(const int32_t nhalos, struct halo_data *forest, int32_
     }
 
 
-    /* Sort LHalotree into snapshot, FOF group, */
     int32_t *index = malloc(nhalos * sizeof(*index));
     if(index == NULL) {
         perror(NULL);
@@ -30,9 +29,8 @@ int reorder_lhalo_to_lhvt(const int32_t nhalos, struct halo_data *forest, int32_
         return MALLOC_FAILURE;
     }
 
-    /* Care must be taken for the indices */
     for(int32_t i=0;i<nhalos;i++) {
-        index[i] = i;//Keep track of the original indices
+        index[i] = i;
         if(test > 0) {
             len[i] = forest[i].Len;
             if(forest[i].FirstHaloInFOFgroup < 0 || forest[i].FirstHaloInFOFgroup >= nhalos){
@@ -52,7 +50,7 @@ int reorder_lhalo_to_lhvt(const int32_t nhalos, struct halo_data *forest, int32_
         }
     }
 
-    /* Sort on snapshots, then sort on FOF groups, then ensure FOF halo comes first within group, then sort by subhalo mass  */
+    /* sort key: snapshot, then FOF group, then FOF halo first, then descending subhalo mass */
 #define SNAPNUM_FOFHALO_MVIR_COMPARATOR(x, i, j)    ((x[i].SnapNum != x[j].SnapNum) ? (x[i].SnapNum - x[j].SnapNum):FOFHALO_COMPARATOR(x, i, j))
 #define FOFHALO_COMPARATOR(x, i, j) ((x[i].FirstHaloInFOFgroup != x[j].FirstHaloInFOFgroup) ? (x[i].FirstHaloInFOFgroup - x[j].FirstHaloInFOFgroup):FOFHALO_SUBLEN_COMPARATOR(x,i, j))
 
@@ -66,25 +64,11 @@ int reorder_lhalo_to_lhvt(const int32_t nhalos, struct halo_data *forest, int32_
     SGLIB_ARRAY_HEAP_SORT_MULTICOMP(struct halo_data, forest, nhalos, SNAPNUM_FOFHALO_MVIR_COMPARATOR, MULTIPLE_ARRAY_EXCHANGER);
 
 #undef SNAPNUM_FOFHALO_MVIR_COMPARATOR
-#undef FOFHALO_MVIR_COMPARATOR
-#undef FOF_MVIR_COMPARATOR
+#undef FOFHALO_COMPARATOR
+#undef FOFHALO_SUBLEN_COMPARATOR
 #undef MULTIPLE_ARRAY_EXCHANGER
 
 
-    /* But I have to first create another array that tracks the current position of the original index
-       The original linear index was like so: [0 1 2 3 4 ....]
-       Now, the index might look like [4 1 3 2 0 ...]
-       What I need is the location of "0" -> which would 4 (the "0" index from original array is in the
-       4'th index within this new array order)
-
-       This requires another array, identical in size to index.
-
-       This array will have to be sorted based on index -> this new sorted array can be directly
-       used with the mergertree indices, e.g., FirstProgenitor, to provide correct links.
-
-    */
-
-    /* fixed mergertree indices from sorting into snapshot, FOF group, mvir order */
     int status = fix_mergertree_index(forest, nhalos, index);
     if(status != EXIT_SUCCESS) {
         return status;
@@ -92,7 +76,6 @@ int reorder_lhalo_to_lhvt(const int32_t nhalos, struct halo_data *forest, int32_
 
     if(test > 0) {
         status = EXIT_FAILURE;
-        /* Run tests. First generate the array for the mapping between old and new values */
         int32_t *index_for_old_order = calloc(nhalos, sizeof(*index_for_old_order));
         if(index_for_old_order == NULL) {
             return EXIT_FAILURE;
@@ -102,7 +85,6 @@ int reorder_lhalo_to_lhvt(const int32_t nhalos, struct halo_data *forest, int32_
             index_for_old_order[index[i]] = i;
         }
 
-        /* Now run the tests. Progenitor/Descendant masses must agree. */
         for(int32_t i=0;i<nhalos;i++) {
             const int32_t old_index = index[i];
             if(len[old_index] != forest[i].Len) {
@@ -161,14 +143,12 @@ int reorder_lhalo_to_lhvt(const int32_t nhalos, struct halo_data *forest, int32_
             }
         }
 
-        /* Check that the first halo is a fof */
         if(forest[0].FirstHaloInFOFgroup != 0) {
             fprintf(stderr,"Error: The first halo should be an FOF halo and point to itself but it points to %d\n", forest[0].FirstHaloInFOFgroup);
             return EXIT_FAILURE;
         }
 
 
-        /* Now check that all halos associated with a FOF come as a bunch (and are never referred to elsewhere via the FirstHaloInFOFgroup*/
         int32_t start_fofindex = 0;
         while(start_fofindex < nhalos) {
             int32_t end_fofindex;
@@ -176,7 +156,6 @@ int reorder_lhalo_to_lhvt(const int32_t nhalos, struct halo_data *forest, int32_
                 if(forest[end_fofindex].FirstHaloInFOFgroup == end_fofindex) break;
             }
 
-            /* Now loop over all halos and make sure the only indices that refer to FirstHaloInFOFgroup are within [start_fofindex, end_fofindex )*/
             for(int32_t i=0;i<nhalos;i++) {
                 if(forest[i].FirstHaloInFOFgroup == start_fofindex) {
                     if(i >= start_fofindex && i < end_fofindex) {
@@ -198,18 +177,13 @@ int reorder_lhalo_to_lhvt(const int32_t nhalos, struct halo_data *forest, int32_
         free(len);free(foflen);
     }
 
-    /* because the halos have been re-ordered, the current
-       halo-index does not correspond to that in the input forest.
-       For any matching purposes, we return the original index for
-       each halo
-    */
+    /* halos were re-ordered; return orig_index so callers can map new positions back to input indices */
     *orig_index = index;
 
     return EXIT_SUCCESS;
 }
 
 
-/* This is a more generic function (accepts forests sorted into an arbitary order + original indices as shuffled along with the forest */
 int fix_mergertree_index(struct halo_data *forest, const int64_t nhalos, const int32_t *index)
 {
     if(nhalos > INT_MAX) {
@@ -223,26 +197,13 @@ int fix_mergertree_index(struct halo_data *forest, const int64_t nhalos, const i
     }
 
 
-    /* The individual mergertree indices contain references to the old order -> as to where they were and need to
-       be updated to where the halo is now. So, we need an array that can tells us, for any index in the old order,
-       the location for that halo in the new order.
-
-       index[i] contains where the halo was in the old order and I need the opposite information. The following
-       lines contain this inverting proces -- only applicable because *ALL* values in index[i] are unique (i.e.,
-       this loop can be vectorized with a #pragma simd style). The value on the RHS, i, is the *CURRENT* index
-       while the key, on the LHS, is the *OLD* index. Thus, current_index_for_old_order is an array that tells
-       us where *ANY* halo index from the *OLD* order can be found in the *NEW* order.
-
-       Looks deceptively simple, it isn't. Took 3-days of my time + 2 hours of YQin's to nail this down and have
-       validations pass. - MS 19/11/2016
-
-    */
+    /* Build the inverse of index[]: index[i] = old position of halo now at i.
+       current_index_for_old_order[old] = new position of halo that was at old.
+       All index[] values are unique, so this scatter is safe to vectorise. */
     for(int32_t i=0;i<nhalos;i++) {
         current_index_for_old_order[index[i]] = i;
     }
 
-
-    /* the array current_index_for_old_order now contains the current positions for the older index pointers */
 #define UPDATE_LHALOTREE_INDEX(FIELD) {                                 \
         const int32_t ii = this_halo->FIELD;                            \
         if(ii >=0 && ii < nhalos) {                                     \
@@ -251,7 +212,6 @@ int fix_mergertree_index(struct halo_data *forest, const int64_t nhalos, const i
         }                                                               \
     }
 
-    /* Now fix *all* the mergertree indices */
     for(int64_t i=0;i<nhalos;i++) {
         struct halo_data *this_halo = &(forest[i]);
         UPDATE_LHALOTREE_INDEX(FirstProgenitor);

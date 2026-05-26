@@ -1,12 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <unistd.h>
-#include <fcntl.h>
 
 #include "core_allvars.h"
 #include "core_mymalloc.h"
@@ -25,14 +19,12 @@
 int setup_forests_io(struct params *run_params, struct forest_info *forests_info,
                      const int ThisTask, const int NTasks)
 {
-    int status = EXIT_FAILURE;/* initialize to FAIL  */
+    int status = EXIT_FAILURE;
     forests_info->firstfile = run_params->FirstFile;
     forests_info->lastfile = run_params->LastFile;
     const enum Valid_TreeTypes TreeType = run_params->TreeType;
 
-    /* MS: 21/9/2019 initialise the mulfac's so we can check later
-              that these vital factors (required to generate unique galaxy ID's)
-              have been setup appropriately  */
+    /* init to -1 so setup_forests_io_* functions must set them; checked below */
     run_params->FileNr_Mulfac = -1;
     run_params->ForestNr_Mulfac = -1;
     forests_info->frac_volume_processed = -1.0;
@@ -41,8 +33,6 @@ int setup_forests_io(struct params *run_params, struct forest_info *forests_info
         {
 #ifdef HDF5
         case lhalo_hdf5:
-            //MS: 22/07/2021 - Why is firstfile, lastfile still passed even though those could be constructef
-            //from run_params (like done within this __FUNCTION__)
             status = setup_forests_io_lht_hdf5(forests_info, ThisTask, NTasks, run_params);
             break;
 
@@ -77,8 +67,6 @@ int setup_forests_io(struct params *run_params, struct forest_info *forests_info
         return status;
     }
 
-    /*MS: Check that the mechanism to generate unique GalaxyID's was
-      initialised correctly in the setup */
     if(run_params->FileNr_Mulfac < 0 || run_params->ForestNr_Mulfac < 0) {
         fprintf(stderr,"Error: Looks like the multiplicative factors to generate unique "
                        "galaxyID's were not setup correctly.\n"
@@ -87,7 +75,6 @@ int setup_forests_io(struct params *run_params, struct forest_info *forests_info
         return -1;
     }
 
-    /* BUG FIX: Changed <= 0.0 to < 0.0 to allow zero volume (no processing) as valid */
     if(forests_info->frac_volume_processed < 0.0 || forests_info->frac_volume_processed > 1.0) {
         fprintf(stderr,"Error: The fraction of the entire simulation volume processed should be in [0.0, 1.0]. Instead, found %g\n",
                 forests_info->frac_volume_processed);
@@ -99,10 +86,8 @@ int setup_forests_io(struct params *run_params, struct forest_info *forests_info
 }
 
 
-/* This routine is to be called after *ALL* forests have been processed */
 void cleanup_forests_io(enum Valid_TreeTypes TreeType, struct forest_info *forests_info)
 {
-    /* Don't forget to free the open file handle */
     switch (TreeType) {
 #ifdef HDF5
     case lhalo_hdf5:
@@ -142,7 +127,6 @@ void cleanup_forests_io(enum Valid_TreeTypes TreeType, struct forest_info *fores
 
     }
 
-    // Finally, things that are common across forest types.
     free(forests_info->FileNr);
     free(forests_info->original_treenr);
 

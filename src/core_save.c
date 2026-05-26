@@ -1,16 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
-#include <time.h>
-#include <limits.h>
-#include <fcntl.h>
 #include <unistd.h>
 
 #include "core_allvars.h"
 #include "core_save.h"
-#include "core_utils.h"
-#include "model_misc.h"
 #include "core_mymalloc.h"
 
 #include "io/save_gals_binary.h"
@@ -19,16 +13,11 @@
 #include "io/save_gals_hdf5.h"
 #endif
 
-// Local Proto-Types //
-int32_t generate_galaxy_indices(const struct halo_data *halos, const struct halo_aux_data *haloaux,
+static int32_t generate_galaxy_indices(const struct halo_data *halos, const struct halo_aux_data *haloaux,
                                 struct GALAXY *halogal, const int64_t numgals,
                                 const int64_t treenr, const int32_t filenr,
                                 const int64_t filenr_mulfac, const int64_t forestnr_mulfac,const struct params *run_params);
 
-// Externally Visible Functions //
-
-// Open up all the required output files and remember their file handles.  These are placed into
-// `save_info` for access later.
 int32_t initialize_galaxy_files(const int rank, const struct forest_info *forest_info, struct save_info *save_info, const struct params *run_params)
 {
     int32_t status;
@@ -63,7 +52,6 @@ int32_t initialize_galaxy_files(const int rank, const struct forest_info *forest
 }
 
 
-// Write all the galaxy properties to file.
 int32_t save_galaxies(const int64_t task_forestnr, const int numgals, struct halo_data *halos,
                       struct forest_info *forest_info,
                       struct halo_aux_data *haloaux, struct GALAXY *halogal,
@@ -71,13 +59,11 @@ int32_t save_galaxies(const int64_t task_forestnr, const int numgals, struct hal
 {
     int32_t status = EXIT_FAILURE;
 
-    // Reset the output galaxy count.
     int32_t OutputGalCount[run_params->SimMaxSnaps];
     for(int32_t snap_idx = 0; snap_idx < run_params->SimMaxSnaps; snap_idx++) {
         OutputGalCount[snap_idx] = 0;
     }
 
-    // Track the order in which galaxies are written.
     int32_t *OutputGalOrder = mymalloc(numgals * sizeof(*(OutputGalOrder)));
     if(OutputGalOrder == NULL) {
         fprintf(stderr,"Error: Could not allocate memory for %d int elements in array `OutputGalOrder`\n", numgals);
@@ -89,7 +75,7 @@ int32_t save_galaxies(const int64_t task_forestnr, const int numgals, struct hal
         haloaux[gal_idx].output_snap_n = -1;
     }
 
-    // First update mergeIntoID to point to the correct galaxy in the output.
+    /* remap mergeIntoID from galaxy-array indices to output-order indices */
     for(int32_t snap_idx = 0; snap_idx < run_params->NumSnapOutputs; snap_idx++) {
         for(int32_t gal_idx  = 0; gal_idx < numgals; gal_idx++) {
             if(halogal[gal_idx].SnapNum == run_params->ListOutputSnaps[snap_idx]) {
@@ -115,17 +101,7 @@ int32_t save_galaxies(const int64_t task_forestnr, const int numgals, struct hal
         }
     }
 
-    // Generate a unique GalaxyIndex for each galaxy.  To do this, we need to know a) the tree
-    // number **from the original file** and b) the file number the tree is from.  Note: The tree
-    // number we need is different from the ``forestnr`` parameter being used to process the forest
-    // within SAGE; that ``forestnr`` is **task local** and potentially does **NOT** correspond to
-    // the tree number in the original simulation file.
-
-    // When we allocated the trees to each task, we stored the correct tree and file numbers in
-    // arrays indexed by the ``forestnr`` parameter.  Furthermore, since all galaxies being
-    // processed belong to a single tree (by definition) and because trees cannot be split over
-    // multiple files, we can access the tree + file number once and use it for all galaxies being
-    // saved.
+    /* GalaxyIndex needs the original file-tree number, not task-local forestnr */
     int64_t original_treenr = forest_info->original_treenr[task_forestnr];
     int32_t original_filenr = forest_info->FileNr[task_forestnr];
 
@@ -137,7 +113,6 @@ int32_t save_galaxies(const int64_t task_forestnr, const int numgals, struct hal
         return EXIT_FAILURE;
     }
 
-    // All of the tracking arrays set up, time to perform the actual writing.
     switch(run_params->OutputFormat) {
 
     case(sage_binary):
@@ -163,8 +138,6 @@ int32_t save_galaxies(const int64_t task_forestnr, const int numgals, struct hal
 }
 
 
-// Write any remaining attributes or header information, close all the open files and free all the
-// relevant dataspaces.
 int32_t finalize_galaxy_files(const struct forest_info *forest_info, struct save_info *save_info, const struct params *run_params)
 {
 
@@ -191,21 +164,13 @@ int32_t finalize_galaxy_files(const struct forest_info *forest_info, struct save
     return status;
 }
 
-// Local Functions //
-
-// Generate a unique GalaxyIndex for each galaxy based on the file number, the file-local
-// tree number and the tree-local galaxy number.  NOTE: Both the file number and the tree number are
-// based on the **original simulation files**.  These may be different from the ``forestnr``
-// parameter being used to process the forest within SAGE; that ``forestnr`` is **task local** and
-// potentially does **NOT** correspond to the tree number in the original simulation file.
-int32_t generate_galaxy_indices(const struct halo_data *halos, const struct halo_aux_data *haloaux,
+static int32_t generate_galaxy_indices(const struct halo_data *halos, const struct halo_aux_data *haloaux,
                                 struct GALAXY *halogal, const int64_t numgals,
                                 const int64_t forestnr, const int32_t filenr,
                                 const int64_t filenr_mulfac, const int64_t forestnr_mulfac,
                                 const struct params *run_params)
 {
 
-    // Now generate the unique index for each galaxy.
     const enum Valid_TreeTypes TreeType = run_params->TreeType;
     for(int64_t gal_idx = 0; gal_idx < numgals; ++gal_idx) {
         struct GALAXY *this_gal = &halogal[gal_idx];
@@ -213,7 +178,6 @@ int32_t generate_galaxy_indices(const struct halo_data *halos, const struct halo
         uint32_t GalaxyNr = this_gal->GalaxyNr;
         uint32_t CentralGalaxyNr = halogal[haloaux[halos[this_gal->HaloNr].FirstHaloInFOFgroup].FirstGalaxy].GalaxyNr;
 
-        /*MS: check that the mechanism would produce unique galaxyindex within this run (across all tasks and all forests)*/
         if(GalaxyNr > forestnr_mulfac || (filenr_mulfac > 0 && forestnr*forestnr_mulfac > filenr_mulfac)) {
             fprintf(stderr, "When determining a unique Galaxy Number, we assume two things\n"
                     "1. Current galaxy numnber = %u is less than multiplication factor for trees (=%"PRId64")\n"
@@ -228,8 +192,6 @@ int32_t generate_galaxy_indices(const struct halo_data *halos, const struct halo
         {
 #ifdef HDF5
         case lhalo_hdf5:
-            //MS: 22/07/2021 - Why is firstfile, lastfile still passed even though those could be constructef
-            //from run_params (like done within this __FUNCTION__)
             fprintf(stderr,"It is likely that your tree file contains too many trees or a tree contains too many galaxies, you can increase the maximum number "\
                     "of trees per file with the parameter run_params->FileNr_Mulfac at l. 264 in src/io/read_tree_lhalo_hdf5.c. "\
                     "If a tree contains too many galaxies, you can increase run_params->ForestNr_Mulfac in the same location. "\
@@ -281,7 +243,6 @@ int32_t generate_galaxy_indices(const struct halo_data *halos, const struct halo
           return EXIT_FAILURE;
         }
 
-        /*MS: 23/9/2019 Check if the multiplication will overflow 64-bit integer */
         if((forestnr > 0 && ((uint64_t) forestnr > (0xFFFFFFFFFFFFFFFFULL/(uint64_t) forestnr_mulfac))) ||
            (filenr > 0 && ((uint64_t) filenr > (0xFFFFFFFFFFFFFFFFULL/(uint64_t) filenr_mulfac)))) {
             fprintf(stderr,"Error: While generating an unique Galaxy Index. The multiplication required to "
@@ -309,7 +270,6 @@ int32_t generate_galaxy_indices(const struct halo_data *halos, const struct halo
             return EXIT_FAILURE;
         }
 
-        // Everything is good, generate the index.
         this_gal->GalaxyIndex = GalaxyNr + id_from_forest_and_file;
         this_gal->CentralGalaxyIndex= CentralGalaxyNr + id_from_forest_and_file;
     }

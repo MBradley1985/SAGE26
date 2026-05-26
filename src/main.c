@@ -28,7 +28,6 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    /* initialize sage (read parameter file, setup units, read cooling tables etc) */
     void *run_params;
     int status = run_sage(ThisTask, NTasks, argv[1], &run_params);
     if(status != EXIT_SUCCESS) {
@@ -36,7 +35,6 @@ int main(int argc, char **argv)
     }
 
 #ifdef MPI
-    // Wait until all tasks are done before we do final tasks/checks.
     MPI_Barrier(MPI_COMM_WORLD);
 #endif
 
