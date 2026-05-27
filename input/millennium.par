@@ -60,6 +60,9 @@ FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
 
+H2DiskAreaOption            1   %0: π*r_s²(default); 1: π*(3*r_s)² (thrice); 2: 2π*r_s² (central Σ₀); ignored when H2RadialIntegrationOn=1
+H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk (H2DiskAreaOption unused)
+
 %------------------------------------------
 %----- SAGE model parameters --------------
 %------------------------------------------

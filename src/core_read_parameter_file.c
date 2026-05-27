@@ -92,7 +92,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->BulgeSizeOn                = 3;
     run_params->SaveFullSFH                = 1;
     run_params->TrackICSAssembly           = 1;
-    run_params->StarburstColdGasOn         = 0;
+    run_params->StarburstColdGasOn         = 1;
     run_params->DynamicDisruptionSplit     = 2;
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;

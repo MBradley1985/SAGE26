@@ -258,6 +258,13 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
         if(galaxies[merger_centralgal].MetalsColdGas < 0.0) {
             galaxies[merger_centralgal].MetalsColdGas = 0.0;
         }
+        const int sf_bh = run_params->SFprescription;
+        if(sf_bh != 0 && sf_bh != 2) {
+            const float max_h_bh = (galaxies[merger_centralgal].ColdGas > 0.0f)
+                                    ? galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC : 0.0f;
+            if(galaxies[merger_centralgal].H2gas > max_h_bh) galaxies[merger_centralgal].H2gas = max_h_bh;
+            if(galaxies[merger_centralgal].H1gas > max_h_bh) galaxies[merger_centralgal].H1gas = max_h_bh;
+        }
 
         // galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
 
@@ -504,8 +511,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                         // KMT09
                         float met_abs = (float)((galaxies[cgal].ColdGas > 0.0) ?
                             galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0);
-                        float Z_prime = met_abs / 0.02f;
-                        if(Z_prime < 0.05f) Z_prime = 0.05f;
+                        float Z_prime = (met_abs > 0.0f) ? met_abs / 0.02f : 0.0f;
                         const float tau_c = 0.066f * 3.0f * Z_prime * Sigma_gas;
                         const float chi = 0.77f * (1.0f + 3.1f * powf(Z_prime, 0.365f));
                         const float s_kmt = (tau_c > 1e-10f) ?

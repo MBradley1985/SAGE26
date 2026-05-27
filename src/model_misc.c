@@ -1140,7 +1140,7 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
         } else if(sfpres == 5) {
             // KMT09
             float met5 = (galaxies[gal].ColdGas > 0.0f) ? (float)(galaxies[gal].MetalsColdGas / galaxies[gal].ColdGas) : 0.0f;
-            float Zp5 = met5 / 0.02f; if(Zp5 < 0.05f) Zp5 = 0.05f;
+            float Zp5 = (met5 > 0.0f) ? met5 / 0.02f : 0.0f;
             float fc5 = 3.0f;
             float tau_c5 = 0.066f * fc5 * Zp5 * sigma_gas_r;
             float chi5 = 0.77f * (1.0f + 3.1f * powf(Zp5, 0.365f));
@@ -1241,12 +1241,9 @@ float calculate_H2_fraction_KD12(const float surface_density, const float metall
     
     // Metallicity normalized to solar (Z_sun = 0.02)
     // Z0 = (M_Z/M_g)/Z_sun as defined in KD12 equation after (17)
-    // Apply floor to prevent numerical issues and unphysical zero H2 at very low Z
-    float metallicity_floored = metallicity;
-    if (metallicity_floored < 0.0002) {  // Z = 0.01 Z_sun minimum
-        metallicity_floored = 0.0002;
-    }
-    float Z0 = metallicity_floored / 0.02;
+    // No floor: at Z=0, tau_c=0 → s=100 → f_H2=0 is handled by the guard below.
+    // A floor here would give f_H2→1 for primordial gas at high Σ, which is wrong.
+    float Z0 = (metallicity > 0.0f) ? metallicity / 0.02f : 0.0f;
     
     // Convert surface density from M_sun/pc^2 to g/cm^2
     // Conversion: 1 M_sun/pc^2 = 2.088 × 10^-4 g/cm^2

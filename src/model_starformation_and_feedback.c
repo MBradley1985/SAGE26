@@ -315,8 +315,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 if(galaxies[p].ColdGas > 0.0) {
                     metallicity_abs = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
                 }
-                float Z_prime = metallicity_abs / 0.02;
-                if (Z_prime < 0.05) Z_prime = 0.05;
+                float Z_prime = (metallicity_abs > 0.0) ? metallicity_abs / 0.02 : 0.0;
 
                 const float clumping_factor = 3.0;
                 float Sigma_comp = clumping_factor * gas_surface_density;
@@ -417,8 +416,13 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                                                                    rs_pc, (float)Z_prime_k13, (float)f_H2_2p_k13);
                 const double t_dep_code = t_dep_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
                 galaxies[p].H2DepletionTime_Gyr = (t_dep_Gyr > 0.0) ? (float)t_dep_Gyr : -1.0f;
-                strdot = (galaxies[p].ColdGas > 0.0 && t_dep_code > 0.0)
-                         ? galaxies[p].ColdGas / t_dep_code : 0.0;
+
+                strdot = (galaxies[p].H2gas > 0.0 && tdyn > 0.0)
+                         ? run_params->SfrEfficiency * galaxies[p].H2gas / tdyn : 0.0;
+
+                // Alternative: use K13 depletion time directly for SFR, bypassing tdyn. This is more faithful to K13 but less consistent with other prescriptions that use tdyn.
+                // strdot = (galaxies[p].ColdGas > 0.0 && t_dep_code > 0.0)
+                //          ? galaxies[p].ColdGas / t_dep_code : 0.0;
             }
         }
     } else if(run_params->SFprescription == 7) {
@@ -748,6 +752,16 @@ void update_from_star_formation(const int p, const double stars, const double me
     galaxies[p].MetalsColdGas -= metallicity * (1 - RecycleFraction) * stars;
     galaxies[p].StellarMass += (1 - RecycleFraction) * stars;
     galaxies[p].MetalsStellarMass += metallicity * (1 - RecycleFraction) * stars;
+
+    // H2gas and H1gas were computed before SF depleted ColdGas; clamp so they
+    // remain consistent with the remaining cold gas. Only applies to H2-tracking
+    // prescriptions (0=Croton and 2=Somerville-noH2 never set H2gas/H1gas).
+    const int sf = run_params->SFprescription;
+    if(sf != 0 && sf != 2) {
+        const float max_h = (galaxies[p].ColdGas > 0.0f) ? galaxies[p].ColdGas * HYDROGEN_MASS_FRAC : 0.0f;
+        if(galaxies[p].H2gas > max_h) galaxies[p].H2gas = max_h;
+        if(galaxies[p].H1gas > max_h) galaxies[p].H1gas = max_h;
+    }
 }
 
 // ============================================================================
@@ -776,6 +790,12 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
         // Remove reheated mass from cold gas (same for all regimes)
         galaxies[p].ColdGas -= reheated_mass;
         galaxies[p].MetalsColdGas -= metallicity * reheated_mass;
+        const int sf_fb = run_params->SFprescription;
+        if(sf_fb != 0 && sf_fb != 2) {
+            const float max_h_fb = (galaxies[p].ColdGas > 0.0f) ? galaxies[p].ColdGas * HYDROGEN_MASS_FRAC : 0.0f;
+            if(galaxies[p].H2gas > max_h_fb) galaxies[p].H2gas = max_h_fb;
+            if(galaxies[p].H1gas > max_h_fb) galaxies[p].H1gas = max_h_fb;
+        }
 
         if(run_params->CGMrecipeOn == 1) {
             if(galaxies[centralgal].Regime == 0) {
@@ -877,13 +897,14 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     tdyn = (reff > 0.0 && galaxies[p].Vvir > 0.0) ? reff / galaxies[p].Vvir : 0.0;
 
     // ========================================================================
-    // H2 CALCULATION — single pass on pre-SF ColdGas, matches non-FFB path.
-    // All prescriptions that track H2 compute it here; prescriptions 0 and 2
-    // leave H2gas = 0.  H1 is derived immediately after.
+    // H2 CALCULATION — only for FeedbackFreeModeOn=6/7 (H2-based FFB SF modes).
+    // All other FFB modes use ColdGas for SF and leave H2gas = 0.
+    // H1 is derived immediately after.
     // ========================================================================
+    const int uses_h2 = (run_params->FeedbackFreeModeOn == 6 || run_params->FeedbackFreeModeOn == 7);
     galaxies[p].H2gas = 0.0;
 
-    if(galaxies[p].ColdGas > 0.0 && galaxies[p].DiskScaleRadius > 0.0) {
+    if(uses_h2 && galaxies[p].ColdGas > 0.0 && galaxies[p].DiskScaleRadius > 0.0) {
         const float h     = run_params->Hubble_h;
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         const int sfpres  = run_params->SFprescription;
@@ -925,8 +946,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
                         // KMT09
                         float met_abs = (galaxies[p].ColdGas > 0.0) ?
                             galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
-                        float Z_prime = met_abs / 0.02f;
-                        if(Z_prime < 0.05f) Z_prime = 0.05f;
+                        float Z_prime = (met_abs > 0.0f) ? met_abs / 0.02f : 0.0f;
                         const float tau_c = 0.066f * 3.0f * Z_prime * Sigma_gas;
                         const float chi = 0.77f * (1.0f + 3.1f * powf(Z_prime, 0.365f));
                         const float s = (tau_c > 1e-10f) ?
@@ -983,10 +1003,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
 
     // ========================================================================
     // SELECT GAS RESERVOIR FOR FFB STAR FORMATION
-    // Modes 6 and 7 are explicitly H2 SF modes; all others use ColdGas.
-    // This mirrors the old code where only H2-specific FFB modes used H2gas.
     // ========================================================================
-    const int uses_h2 = (run_params->FeedbackFreeModeOn == 6 || run_params->FeedbackFreeModeOn == 7);
     const double gas_for_sf = uses_h2 ? galaxies[p].H2gas : galaxies[p].ColdGas;
 
     // ========================================================================
