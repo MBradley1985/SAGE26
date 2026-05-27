@@ -1764,14 +1764,14 @@ def plot_5_fH2_redshift(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snap
 
     print('Plot 5: Molecular hydrogen fraction vs stellar mass at increasing redshift')
 
-    z_snaps  = [SNAP_Z0, SNAP_Z2, SNAP_Z3, SNAP_Z5, SNAP_Z7, SNAP_Z10]
-    z_labels = [0, 2, 3, 5, 7, 10]
+    z_snaps  = [SNAP_Z0, SNAP_Z2, SNAP_Z3, SNAP_Z5, SNAP_Z7, SNAP_Z10, SNAP_Z12, SNAP_Z13]
+    z_labels = [0, 2, 3, 5, 7, 10, 12, 13]
 
-    nrows, ncols = 3, 2
+    nrows, ncols = 4, 2
     fig, axes = plt.subplots(nrows, ncols, figsize=(10, 12), sharey=True)
     axes_flat = axes.flatten()
 
-    binwidth = 0.3
+    binwidth = 0.1
     mass_range = (7.0, 12.5)
     mass_bins = np.arange(mass_range[0], mass_range[1] + binwidth, binwidth)
 
@@ -1810,7 +1810,7 @@ def plot_5_fH2_redshift(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snap
                 continue
 
             x = np.log10(mstar[mask])
-            y = np.clip(h2gas[mask] / coldgas[mask] * 0.74, 0.0, 1.0)
+            y = np.clip(h2gas[mask] / coldgas[mask], 0.0, 1.0)
 
             plot_binned_median_1sigma(
                 ax, x, y, mass_bins,
@@ -1819,7 +1819,7 @@ def plot_5_fH2_redshift(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snap
                 alpha=0.15,
                 lw=2.6,
                 ls='-',
-                min_count=5,
+                min_count=1,
             )
 
         z_val = REDSHIFTS[snap] if isinstance(REDSHIFTS, (list, np.ndarray)) and snap < len(REDSHIFTS) else z_label
