@@ -21,10 +21,8 @@ import h5py
 SNAP_KEY = 'Snap_49'   # z=0 for MicroUchuu
 
 MODELS = [
-    {'dir': './output/microuchuu/',               'label': 'FFB radial integration',   'color': 'steelblue'},
-    {'dir': './output/microuchuu_pir2/',          'label': 'FFB $\pi r^2$',  'color': 'tomato'},
-    {'dir': './output/microuchuu_pi3r2/',         'label': 'FFB $\pi 3r^2$',     'color': 'forestgreen'},
-    {'dir': './output/microuchuu_h2/',            'label': 'FFBs H2',   'color': 'mediumpurple'},
+    {'dir': './output/microuchuu_originaltrees/',               'label': 'FFB radial integration',   'color': 'steelblue'},
+    {'dir': './output/microuchuu_lhalobinarymergertrees/',          'label': 'FFB $\pi r^2$',  'color': 'tomato'},
 ]
 
 # ---------------------------------------------------------------------------

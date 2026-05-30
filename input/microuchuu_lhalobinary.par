@@ -4,10 +4,10 @@
 
 FileNameGalaxies   model
 %OutputDir         /<absolute>/<root>/<path>/sage-model/output/millennium/
-OutputDir          output/microuchuu_originaltrees/
+OutputDir          output/microuchuu_lhalobinarymergertrees/
 
 FirstFile         0
-LastFile          0
+LastFile          3
 
 %------------------------------------------
 %----- Snapshot output list ---------------
@@ -24,12 +24,12 @@ OutputFormat      sage_hdf5 % sets the desired output format. Either 'sage_binar
 %----- Simulation information  ------------
 %------------------------------------------
 
-TreeName              tree_0_0_0.dat  % assumes the trees are named TreeName.n where n is the file number
-TreeType              consistent_trees_ascii % either 'genesis_lhalo_hdf5' or 'lhalo_binary'
-NumSimulationTreeFiles 1 % Number of files the trees are split over. This can be different to `FirstFile` -> `LastFile` range.
+TreeName              tree_49  % assumes the trees are named TreeName.n where n is the file number
+TreeType              lhalo_binary % either 'genesis_lhalo_hdf5' or 'lhalo_binary'
+NumSimulationTreeFiles 4 % Number of files the trees are split over. This can be different to `FirstFile` -> `LastFile` range.
 
 
-SimulationDir       input/microuchuu/trees
+SimulationDir       input/microuchuu/trees/lhalo-binary-mergertree
 FileWithSnapList    input/microuchuu/trees/Uchuu100_scalefactor.txt
 LastSnapShotNr        49
 

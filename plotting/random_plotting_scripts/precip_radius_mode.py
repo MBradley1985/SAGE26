@@ -185,4 +185,4 @@ out = os.path.join(os.path.dirname(__file__), '../../plotting/precip_radius_mode
 plt.savefig(out, bbox_inches='tight')
 plt.savefig(out.replace('.pdf', '.png'), dpi=150, bbox_inches='tight')
 print(f'Saved {out}')
-plt.show()
+plt.close()

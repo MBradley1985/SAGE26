@@ -269,6 +269,8 @@ if __name__ == '__main__':
     MassLoading = read_hdf(file_list, Snapshot, 'MassLoading')
     Cooling = read_hdf(file_list, Snapshot, 'Cooling')
     Regime = read_hdf(file_list, Snapshot, 'Regime')
+    MdotCool = read_hdf(file_list, Snapshot, 'mdot_cool')
+    MdotStream = read_hdf(file_list, Snapshot, 'mdot_stream')
 
     w = np.where(StellarMass > 1.0e10)[0]
     print('Number of galaxies read:', len(StellarMass))
@@ -1679,6 +1681,61 @@ if __name__ == '__main__':
 
     plt.tight_layout()
     outputFile = OutputDir + 'concentration_vs_mvir' + OutputFormat
+    plt.savefig(outputFile, dpi=150)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# --------------------------------------------------------
+
+    print('Plotting SFR vs halo accretion rate')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    SFR = SfrDisk + SfrBulge
+    HaloAccretionRate = MdotCool + MdotStream
+
+    w = np.where(
+        # (Type == 0) &
+        (SFR > 0.0) &
+        (HaloAccretionRate > 0.0)
+    )[0]
+    if len(w) > dilute:
+        w = sample(list(w), dilute)
+
+    log_acc = np.log10(HaloAccretionRate[w])
+    log_sfr = np.log10(SFR[w])
+
+    # Colour points by stellar mass for context
+    log_mstar = np.log10(np.maximum(StellarMass[w], 1.0))
+    sc = ax.scatter(log_acc, log_sfr, c=log_mstar, s=2, alpha=0.5,
+                    cmap='viridis', rasterized=True)
+
+    cbar = plt.colorbar(sc, ax=ax, pad=0.02)
+    cbar.set_label(r'$\log_{10} M_{\star}\ [M_{\odot}]$')
+    cbar.solids.set_alpha(1.0)
+
+    # 1:1 reference line
+    x_ref = np.array([-4.0, 4.0])
+    ax.plot(x_ref, x_ref, 'k--', lw=1.2, alpha=0.5, label='SFR = accretion rate')
+
+    ax.set_xlabel(r'$\log_{10}\ \dot{M}_{\rm acc}\ (M_{\odot}\ \mathrm{yr}^{-1})$')
+    ax.set_ylabel(r'$\log_{10}\ \mathrm{SFR}\ (M_{\odot}\ \mathrm{yr}^{-1})$')
+    ax.set_title(f'Centrals — z = {redshift:.2f}')
+
+    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.25))
+    ax.yaxis.set_minor_locator(plt.MultipleLocator(0.25))
+
+    ax.set_xlim(0.0, 4.0)
+    ax.set_ylim(-6.0, 4.0)
+
+    leg = ax.legend(loc='upper left')
+    leg.draw_frame(False)
+    for t in leg.get_texts():
+        t.set_fontsize('medium')
+
+    plt.tight_layout()
+    outputFile = OutputDir + 'sfr_vs_halo_accretion_rate' + OutputFormat
     plt.savefig(outputFile, dpi=150)
     print('Saved file to', outputFile, '\n')
     plt.close()

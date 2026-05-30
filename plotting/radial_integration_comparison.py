@@ -27,6 +27,11 @@ MODELS = [
     {'dir': './output/microuchuu_pir2/',  'label': r'Fixed $\pi r_s^2$', 'color': 'tomato',      'ls': '--'},
     {'dir': './output/microuchuu_pi3r2/', 'label': r'Fixed $\pi(3r_s)^2$','color': 'forestgreen','ls': '-.'},
         {'dir': './output/microuchuu_h2/',    'label': 'FFBs H2',            'color': 'mediumpurple','ls': ':'},
+
+    {'dir': './output/millennium_gd14/',         'label': 'GD14',     'color': 'darkorange', 'ls': '-'},
+    {'dir': './output/millennium_kmt09/',         'label': 'KMT09',      'color': 'darkcyan', 'ls': '-'},
+    {'dir': './output/millennium_k13/',           'label': 'K13',      'color': 'darkviolet', 'ls': '-'},
+    {'dir': './output/millennium_kd12/',        'label': 'KD12', 'color': 'goldenrod', 'ls': '-'},
 ]
 
 MSTAR_MIN = 1e8  # Msun

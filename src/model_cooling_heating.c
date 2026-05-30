@@ -645,14 +645,39 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         }
     }
 
-    // Uncomment to apply AGN heating to the precipitating gas
-    
-    // double x = PROTONMASS * BOLTZMANN * temp / lambda;        // now this has units sec g/cm^3
-    // x /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);         // now in internal units
+    // ------------------------------------------------------------------
+    // Option B: snapshot-integrated AGN energy balance.
+    // Heating and Cooling are snapshot-scoped accumulators (reset in
+    // join_galaxies_of_progenitors). If past substeps in this snapshot
+    // injected more AGN heating energy than has been spent on cooling,
+    // use the surplus to suppress this substep's coolingGas. Debit the
+    // Heating budget so the surplus isn't spent twice.
+    // ------------------------------------------------------------------
+    const double Vvir2_b = galaxies[gal].Vvir * galaxies[gal].Vvir;
+    if(Vvir2_b > 0.0 && coolingGas > 0.0) {
+        const double surplus = galaxies[gal].Heating - galaxies[gal].Cooling;
+        if(surplus > 0.0) {
+            const double cool_energy = 0.5 * coolingGas * Vvir2_b;
+            if(surplus >= cool_energy) {
+                galaxies[gal].Heating -= cool_energy;
+                coolingGas = 0.0;
+            } else {
+                coolingGas *= 1.0 - surplus / cool_energy;
+                galaxies[gal].Heating -= surplus;
+            }
+        }
+    }
 
-    // if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
-	// 		coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x, r_cool, galaxies, run_params);
-    // }
+    // Apply AGN heating to the precipitating cooling. do_AGN_heating_cgm uses
+    // per-substep energy balance (no r_heat carry-over); see note on that fn.
+    {
+        double x_agn = PROTONMASS * BOLTZMANN * temp / lambda;       // sec g/cm^3
+        x_agn /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);  // internal units
+
+        if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
+            coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
+        }
+    }
 
     // ========================================================================
     // STEP 5: TRACK COOLING ENERGY
@@ -852,26 +877,23 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
 }
 
 // ============================================================================
-// AGN HEATING FOR CGM-REGIME HALOES: reduces coolingGas based on past AGN heating
-// Curently not used, but implemented for future exploration of AGN feedback in the CGM regime
+// AGN HEATING FOR CGM-REGIME HALOES
+// Per-substep energy balance: AGN heating reduces this substep's precipitating
+// cooling directly (coolingGas -= AGNheating), with no r_heat carry-over.
+// The C16 r_heat machinery is unsafe here because precipitation can dump
+// O(CGMgas) of cooling per substep, which would saturate r_heat to rcool on
+// the first hit and switch off all subsequent cooling for the galaxy's life.
 // ============================================================================
 
-double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool, 
+double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
                          struct GALAXY *galaxies, const struct params *run_params)
 {
     double AGNrate, EDDrate, AGNaccreted, AGNcoeff, AGNheating, metallicity;
 
-	// first update the cooling rate based on the past AGN heating
-	if(galaxies[centralgal].r_heat < rcool) {
-		coolingGas = (1.0 - galaxies[centralgal].r_heat / rcool) * coolingGas;
-    } else {
-		coolingGas = 0.0;
-    }
-
 	XASSERT(coolingGas >= 0.0, -1,
             "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
 
-	// now calculate the new heating rate
+	// calculate the heating rate for this substep
     if(galaxies[centralgal].CGMgas > 0.0) {
         if(run_params->AGNrecipeOn == 2) {
             // Bondi-Hoyle accretion recipe
@@ -936,15 +958,12 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
         galaxies[centralgal].CGMgas -= AGNaccreted;
         galaxies[centralgal].MetalsCGMgas -= metallicity * AGNaccreted;
 
-        // update the heating radius as needed
-        if(galaxies[centralgal].r_heat < rcool && coolingGas > 0.0) {
-            double r_heat_new = (AGNheating / coolingGas) * rcool;
-            if(r_heat_new > galaxies[centralgal].r_heat) {
-                galaxies[centralgal].r_heat = r_heat_new;
-            }
-        }
-
-        if (AGNheating > 0.0) {
+        // Per-substep cooling suppression: AGN heating directly cancels an
+        // equal mass of cooling. AGNheating is already bounded by coolingGas
+        // above, so this is non-negative.
+        if(AGNheating > 0.0) {
+            coolingGas -= AGNheating;
+            if(coolingGas < 0.0) coolingGas = 0.0;
             galaxies[centralgal].Heating += 0.5 * AGNheating * galaxies[centralgal].Vvir * galaxies[centralgal].Vvir;
         }
     }

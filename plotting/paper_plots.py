@@ -52,7 +52,7 @@ FFB_BK25_SMOOTH_DIR = './output/millennium_mbk_smooth/'
 FFB100_DIR          = './output/millennium_ffb100/'
 FFB_BK25_FFB100_DIR = './output/millennium_ffb100_mbk/'
 FFB_NOSIGMOID_DIR = './output/millennium_nosigmoid/'
-MINIUCHUU_DIR = './output/microuchuu/'
+MINIUCHUU_DIR = './output/microuchuu_STCbinary/'
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
 
@@ -4238,7 +4238,9 @@ def plot_12d_sfh_ffb_transitions(snapdata):
                     alpha=1.0, lw=2.2, label=lbl, zorder=2)
 
     ax.set_xlabel('Cosmic time [Gyr]')
-    ax.set_ylabel(r'SFR [$M_{\odot}\,\mathrm{yr}^{-1}$]')
+    ax.set_ylabel(r'$\log_{10}\,\mathrm{SFR}\;[M_{\odot}\,\mathrm{yr}^{-1}]$')
+    ax.set_yscale('log')
+    ax.set_ylim(1e-3, 1e5)
 
     # x-axis fixed to requested range: min snapshot time to 1.0 Gyr
     t_min = min(cosmic_times[s] for s in fig_g_snaps)
@@ -4434,7 +4436,9 @@ def plot_12e_sfh_ffb_transitions_mbk25(snapdata):
                     alpha=1.0, lw=2.2, label=lbl, zorder=2)
 
     ax.set_xlabel('Cosmic time [Gyr]')
-    ax.set_ylabel(r'SFR [$M_{\odot}\,\mathrm{yr}^{-1}$]')
+    ax.set_ylabel(r'$\log_{10}\,\mathrm{SFR}\;[M_{\odot}\,\mathrm{yr}^{-1}]$')
+    ax.set_yscale('log')
+    ax.set_ylim(1e-3, 1e5)
 
     t_min = min(cosmic_times[s] for s in fig_g_snaps)
     t_max = 1.0
@@ -9235,6 +9239,251 @@ def plot_33_h2_mass_function():
     save_figure(fig, os.path.join(OUTPUT_DIR, 'H2_Mass_Function' + OUTPUT_FORMAT))
 
 
+# ========================== PLOT 34: HI MASS FUNCTION (PRIMARY vs UCHUU) ==========================
+
+def plot_34_hi_mass_function_primary_uchuu():
+    """
+    HI mass function at z=0 for the Primary (Millennium) and Uchuu models with
+    Poisson 1-sigma shading, and all available observational data.
+    """
+    print('Plot 34: HI Mass Function (Primary vs Uchuu)')
+
+    binwidth = 0.2
+    MASS_CUT = 1e8
+
+    models = [
+        {
+            'dir':          PRIMARY_DIR,
+            'label':        'SAGE26 (Millennium)',
+            'color':        'black',
+            'volume':       VOLUME,
+            'mass_correct': 1.0,
+            'snapshot':     SNAPSHOT,
+            'lw':           3.5,
+        },
+    ]
+
+    if model_files_exist(MINIUCHUU_DIR):
+        models.append({
+            'dir':          MINIUCHUU_DIR,
+            'label':        'SAGE26 (Uchuu)',
+            'color':        'steelblue',
+            'volume':       MINIUCHUU_VOLUME,
+            'mass_correct': MINIUCHUU_MASS_CONVERT / MASS_CONVERT,
+            'snapshot':     f'Snap_{MINIUCHUU_LAST_SNAP}',
+            'lw':           2.5,
+        })
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    for i, model in enumerate(models):
+        dirpath = model['dir']
+        if not model_files_exist(dirpath):
+            print(f"  Skipping {model['label']}: directory not found")
+            continue
+
+        data = load_model(dirpath, properties=['H1gas'], snapshot=model['snapshot'])
+        if not data:
+            print(f"  Skipping {model['label']}: no data at {model['snapshot']}")
+            continue
+
+        h1gas = data['H1gas'] * model['mass_correct']
+        valid = h1gas > MASS_CUT
+        log_mhi = np.log10(h1gas[valid])
+
+        print(f"  {model['label']}: {np.sum(valid):,} galaxies with H1gas > {MASS_CUT:.0e}")
+
+        centers, phi, mrange = mass_function(log_mhi, model['volume'], binwidth=binwidth)
+        mi, ma = mrange
+        nbins = int(round((ma - mi) / binwidth))
+        counts, _ = np.histogram(log_mhi, range=(mi, ma), bins=nbins)
+
+        with np.errstate(divide='ignore', invalid='ignore'):
+            n_lo = counts - np.sqrt(counts)
+            phi_lo = np.where(n_lo > 0, np.log10(n_lo / model['volume'] / binwidth), np.nan)
+            phi_hi = np.log10((counts + np.sqrt(counts)) / model['volume'] / binwidth)
+        phi_hi = np.where(np.isfinite(phi_hi), phi_hi, np.nan)
+
+        good     = np.isfinite(phi)
+        shade_lo = np.isfinite(phi_lo)
+        shade_hi = np.isfinite(phi_hi)
+        ax.plot(centers[good], phi[good], color=model['color'], lw=model['lw'],
+                label=model['label'], zorder=10 - i)
+        shade_mask = shade_lo & shade_hi
+        ax.fill_between(centers[shade_mask], phi_lo[shade_mask], phi_hi[shade_mask],
+                        color=model['color'], alpha=0.2, edgecolor='none', zorder=9 - i)
+
+    obs_list = load_himf_observations()
+    for obs in obs_list:
+        mass    = obs['mass']
+        phi_obs = obs['phi']
+        obs_mask = mass >= 8.0
+
+        if 'phi_err_lo' in obs:
+            yerr_lo = obs['phi_err_lo'][obs_mask]
+            yerr_hi = obs['phi_err_hi'][obs_mask]
+            ax.errorbar(mass[obs_mask], phi_obs[obs_mask], yerr=[yerr_lo, yerr_hi],
+                        fmt=obs['marker'], color=obs['color'],
+                        markerfacecolor='gray' if obs['color'] == 'gray' else 'white',
+                        markeredgecolor=obs['color'] if obs['color'] != 'gray' else 'k',
+                        markeredgewidth=1.0, ms=7, lw=1.0, capsize=2, alpha=0.8,
+                        label=obs['label'], zorder=8)
+        else:
+            phi_lo_obs = obs['phi_lo'][obs_mask]
+            phi_hi_obs = obs['phi_hi'][obs_mask]
+            yerr_lo = phi_obs[obs_mask] - phi_lo_obs
+            yerr_hi = phi_hi_obs - phi_obs[obs_mask]
+            ax.errorbar(mass[obs_mask], phi_obs[obs_mask], yerr=[yerr_lo, yerr_hi],
+                        fmt=obs['marker'], color=obs['color'],
+                        markerfacecolor='gray', markeredgecolor='k',
+                        markeredgewidth=1.0, ms=7, lw=1.0, capsize=2, alpha=0.8,
+                        label=obs['label'], zorder=8)
+
+    ax.set_xlim(8.0, 11.0)
+    ax.set_ylim(-5.5, -0.5)
+    ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
+    ax.yaxis.set_major_locator(plt.MultipleLocator(1.0))
+    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
+    ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
+
+    ax.set_xlabel(r'$\log_{10}\ M_{\mathrm{HI}}\ [M_{\odot}]$')
+    ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
+
+    handles, labels = ax.get_legend_handles_labels()
+    model_labels = [m['label'] for m in models]
+    model_h = [h for h, l in zip(handles, labels) if l in model_labels]
+    model_l = [l for l in labels if l in model_labels]
+    obs_h   = [h for h, l in zip(handles, labels) if l not in model_labels]
+    obs_l   = [l for l in labels if l not in model_labels]
+
+    if model_h:
+        model_leg = ax.legend(model_h, model_l, loc='lower left', frameon=False)
+        ax.add_artist(model_leg)
+    if obs_h:
+        ax.legend(obs_h, obs_l, loc='upper right', frameon=False)
+
+    save_figure(fig, os.path.join(OUTPUT_DIR, 'HI_Mass_Function_Primary_Uchuu' + OUTPUT_FORMAT))
+
+
+# ========================== PLOT 35: H2 MASS FUNCTION (PRIMARY vs UCHUU) ==========================
+
+def plot_35_h2_mass_function_primary_uchuu():
+    """
+    H2 mass function at z=0 for the Primary (Millennium) and Uchuu models with
+    Poisson 1-sigma shading, and all available observational data.
+    """
+    print('Plot 35: H2 Mass Function (Primary vs Uchuu)')
+
+    binwidth = 0.2
+    MASS_CUT = 1e8
+
+    models = [
+        {
+            'dir':          PRIMARY_DIR,
+            'label':        'SAGE26 (Millennium)',
+            'color':        'black',
+            'volume':       VOLUME,
+            'mass_correct': 1.0,
+            'snapshot':     SNAPSHOT,
+            'lw':           3.5,
+        },
+    ]
+
+    if model_files_exist(MINIUCHUU_DIR):
+        models.append({
+            'dir':          MINIUCHUU_DIR,
+            'label':        'SAGE26 (Uchuu)',
+            'color':        'steelblue',
+            'volume':       MINIUCHUU_VOLUME,
+            'mass_correct': MINIUCHUU_MASS_CONVERT / MASS_CONVERT,
+            'snapshot':     f'Snap_{MINIUCHUU_LAST_SNAP}',
+            'lw':           2.5,
+        })
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    for i, model in enumerate(models):
+        dirpath = model['dir']
+        if not model_files_exist(dirpath):
+            print(f"  Skipping {model['label']}: directory not found")
+            continue
+
+        data = load_model(dirpath, properties=['H2gas'], snapshot=model['snapshot'])
+        if not data:
+            print(f"  Skipping {model['label']}: no data at {model['snapshot']}")
+            continue
+
+        h2gas = data['H2gas'] * model['mass_correct']
+        valid = h2gas > MASS_CUT
+        log_mh2 = np.log10(h2gas[valid])
+
+        print(f"  {model['label']}: {np.sum(valid):,} galaxies with H2gas > {MASS_CUT:.0e}")
+
+        centers, phi, mrange = mass_function(log_mh2, model['volume'], binwidth=binwidth)
+        mi, ma = mrange
+        nbins = int(round((ma - mi) / binwidth))
+        counts, _ = np.histogram(log_mh2, range=(mi, ma), bins=nbins)
+
+        with np.errstate(divide='ignore', invalid='ignore'):
+            n_lo = counts - np.sqrt(counts)
+            phi_lo = np.where(n_lo > 0, np.log10(n_lo / model['volume'] / binwidth), np.nan)
+            phi_hi = np.log10((counts + np.sqrt(counts)) / model['volume'] / binwidth)
+        phi_hi = np.where(np.isfinite(phi_hi), phi_hi, np.nan)
+
+        good     = np.isfinite(phi)
+        shade_lo = np.isfinite(phi_lo)
+        shade_hi = np.isfinite(phi_hi)
+        ax.plot(centers[good], phi[good], color=model['color'], lw=model['lw'],
+                label=model['label'], zorder=10 - i)
+        shade_mask = shade_lo & shade_hi
+        ax.fill_between(centers[shade_mask], phi_lo[shade_mask], phi_hi[shade_mask],
+                        color=model['color'], alpha=0.2, edgecolor='none', zorder=9 - i)
+
+    obs_list = load_h2mf_observations()
+    for obs in obs_list:
+        mass    = obs['mass']
+        phi_obs = obs['phi']
+        obs_mask = mass >= 8.0
+
+        phi_lo_obs = obs['phi_lo'][obs_mask]
+        phi_hi_obs = obs['phi_hi'][obs_mask]
+        yerr_lo = phi_obs[obs_mask] - phi_lo_obs
+        yerr_hi = phi_hi_obs - phi_obs[obs_mask]
+        ax.errorbar(mass[obs_mask], phi_obs[obs_mask], yerr=[yerr_lo, yerr_hi],
+                    fmt=obs['marker'], color=obs['color'],
+                    markerfacecolor='gray',
+                    markeredgecolor=obs.get('edgecolor', 'k'),
+                    markeredgewidth=1.0, ms=7, lw=1.0, capsize=2, alpha=0.8,
+                    label=obs['label'], zorder=8)
+
+    ax.set_xlim(8.0, 11.0)
+    ax.set_ylim(-5.5, -0.5)
+    ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
+    ax.yaxis.set_major_locator(plt.MultipleLocator(1.0))
+    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
+    ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
+
+    ax.set_xlabel(r'$\log_{10}\ M_{\mathrm{H_2}}\ [M_{\odot}]$')
+    ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
+
+    handles, labels = ax.get_legend_handles_labels()
+    model_labels = [m['label'] for m in models]
+    model_h = [h for h, l in zip(handles, labels) if l in model_labels]
+    model_l = [l for l in labels if l in model_labels]
+    obs_h   = [h for h, l in zip(handles, labels) if l not in model_labels]
+    obs_l   = [l for l in labels if l not in model_labels]
+
+    if model_h:
+        model_leg = ax.legend(model_h, model_l, loc='lower left', frameon=False)
+        ax.add_artist(model_leg)
+    if obs_h:
+        ax.legend(obs_h, obs_l, loc='upper right', frameon=False)
+
+    save_figure(fig, os.path.join(OUTPUT_DIR, 'H2_Mass_Function_Primary_Uchuu' + OUTPUT_FORMAT))
+
+
 # ========================== MAIN ==========================
 
 # Registry of plot functions
@@ -9252,11 +9501,11 @@ Z0_PLOTS = {
 }
 
 EVOLUTION_PLOTS = {
-    # 7: plot_7_tcool_tff_distribution,
-    # 8: plot_8_precipitation_fraction,
-    # 9: plot_9_cgm_fractions_depletion,
-    # 91: plot_9b_cgm_fractions_grid,
-    # 92: plot_9c_depletion_grid,
+    7: plot_7_tcool_tff_distribution,
+    8: plot_8_precipitation_fraction,
+    9: plot_9_cgm_fractions_depletion,
+    91: plot_9b_cgm_fractions_grid,
+    92: plot_9c_depletion_grid,
     # 10: plot_10_sfe_ffb,
     # 11: plot_11_ffb_properties,
     # 111: plot_11b_ffb_histograms,
@@ -9275,9 +9524,9 @@ STANDALONE_PLOTS = {
     # 14: plot_14_density_evolution,
     # 142: plot_14c_density_evolution_mbk25,
     # 141: plot_14b_density_evolution_methods,
-    # 16: plot_16_sfrd_history,
-    # 17: plot_17_smd_history,
-    # 18: plot_18_smf_redshift_grid,
+    16: plot_16_sfrd_history,
+    17: plot_17_smd_history,
+    18: plot_18_smf_redshift_grid,
     # 181: plot_18b_smf_redshift_grid_wide,
     # 19: plot_19_smf_ffb_grid,
     # 192: plot_19c_smf_ffb_grid_mbk25,
@@ -9290,10 +9539,12 @@ STANDALONE_PLOTS = {
     # 25: plot_25_hi_mass_ratio,
     # 26: plot_26_h2_mass_ratio,
     # 27: plot_27_cold_gas_mass_ratio,
-    # 28: plot_28_mdot_vs_mvir,
-    # 29: plot_29_mdot_vs_vvir,
-    32: plot_32_hi_mass_function,
-    33: plot_33_h2_mass_function,
+    28: plot_28_mdot_vs_mvir,
+    29: plot_29_mdot_vs_vvir,
+    # 32: plot_32_hi_mass_function,
+    # 33: plot_33_h2_mass_function,
+    34: plot_34_hi_mass_function_primary_uchuu,
+    35: plot_35_h2_mass_function_primary_uchuu,
 }
 
 ALL_PLOTS = {**Z0_PLOTS, **EVOLUTION_PLOTS, **STANDALONE_PLOTS}

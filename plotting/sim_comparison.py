@@ -38,10 +38,10 @@ except Exception:
 # ========================== CONFIGURATION ==========================
 
 # File paths
-PRIMARY_DIR    = './output/microuchuu/'
-SECONDARY_DIR  = './output/microuchuu_pir2/'
-TERTIARY_DIR   = './output/microuchuu_pi3r2/'
-QUATERNARY_DIR = './output/microuchuu_h2/' 
+PRIMARY_DIR    = './output/microuchuu_originaltrees/'
+SECONDARY_DIR  = './output/microuchuu_lhalobinarymergertrees/'
+TERTIARY_DIR   = './output/microuchuu_STCbinary/'
+QUATERNARY_DIR = './output/microuchuu_STChdf5/'  # optional; set to None to disable 
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
 
@@ -57,6 +57,26 @@ SSFR_CUT = -11.0       # log10(sSFR/yr^-1) dividing quiescent from star-forming
 
 # Solar metallicity (Asplund et al. 2009)
 Z_SUN = 0.0134
+
+# ------------------------------------------------------------------
+# Model display names, colours, and line styles — edit here to change
+# labels globally across all plots.
+# ------------------------------------------------------------------
+PRIMARY_LABEL    = 'Rockstar consistent trees'
+PRIMARY_COLOR    = 'steelblue'
+PRIMARY_LS       = ':'
+
+SECONDARY_LABEL  = r'MS converted lhalo-binary'
+SECONDARY_COLOR  = 'coral'
+SECONDARY_LS     = '--'
+
+TERTIARY_LABEL   = r'STC binary'
+TERTIARY_COLOR   = 'mediumseagreen'
+TERTIARY_LS      = '-'
+
+QUATERNARY_LABEL = r'STC hdf5'
+QUATERNARY_COLOR = 'mediumpurple'
+QUATERNARY_LS    = '-.'
 
 # Solar mass in grams (for MASS_CONVERT derivation)
 _MSUN_CGS = 1.989e33
@@ -158,12 +178,15 @@ if _primary_hdr is not None:
     SNAP_Z3  = _snap_for_z(REDSHIFTS, 3.0)
     SNAP_Z4  = _snap_for_z(REDSHIFTS, 4.0)
     SNAP_Z5  = _snap_for_z(REDSHIFTS, 5.0)
+    SNAP_Z6  = _snap_for_z(REDSHIFTS, 6.0)
     SNAP_Z7  = _snap_for_z(REDSHIFTS, 7.0)
+    SNAP_Z8  = _snap_for_z(REDSHIFTS, 8.0)
     SNAP_Z10 = _snap_for_z(REDSHIFTS, 10.0)
     SNAP_Z11 = _snap_for_z(REDSHIFTS, 11.0)
     SNAP_Z12 = _snap_for_z(REDSHIFTS, 12.0)
     SNAP_Z13 = _snap_for_z(REDSHIFTS, 13.0)
     SNAP_Z14 = _snap_for_z(REDSHIFTS, 14.0)
+    SNAP_Z20 = _snap_for_z(REDSHIFTS, 20.0)
 else:
     # Fallback if primary HDF5 files are not available
     print("Warning: could not read primary model header — using hardcoded defaults")
@@ -195,13 +218,16 @@ else:
     SNAP_Z3  = 27
     SNAP_Z4  = 23
     SNAP_Z5  = 20
+    SNAP_Z6  = 18
     SNAP_Z7  = 16
+    SNAP_Z8  = 14
     SNAP_Z10 = 12
     SNAP_Z11 = 11
     SNAP_Z12 = 10
     SNAP_Z13 = 9
     SNAP_Z14 = 8
     SNAP_Z15 = 7
+    SNAP_Z20 = 4
 
 
 
@@ -826,13 +852,13 @@ def plot_1_number_counts(primary, secondary, tertiary=None, quaternary=None):
     axes = axes.flatten()
 
     models = [
-        ('microUchuu radial integration', primary, 'steelblue'),
-        (r'microUchuu $\pi r^2$', secondary, 'coral'),
+        (PRIMARY_LABEL,    primary,    PRIMARY_COLOR,    PRIMARY_LS),
+        (SECONDARY_LABEL,  secondary,  SECONDARY_COLOR,  SECONDARY_LS),
     ]
     if tertiary:
-        models.append((r'microUchuu $\pi 3r^2$', tertiary, 'mediumseagreen'))
+        models.append((TERTIARY_LABEL,   tertiary,   TERTIARY_COLOR,   TERTIARY_LS))
     if quaternary:
-        models.append((r'microUchuu H2 FFBs', quaternary, 'mediumpurple'))
+        models.append((QUATERNARY_LABEL, quaternary, QUATERNARY_COLOR, QUATERNARY_LS))
 
     # Resolution mass limits in physical Msun (for optional reference lines).
     mmin_primary = MIN_MVIR_PARTICLES * PART_MASS * MASS_CONVERT
@@ -895,8 +921,8 @@ def plot_1_number_counts(primary, secondary, tertiary=None, quaternary=None):
             ax.legend(loc='upper right', frameon=False, fontsize=9)
 
     vlines_mvir = [
-        (np.log10(mmin_primary), 'steelblue', ':'),
-        (np.log10(mmin_mini), 'coral', ':'),
+        (np.log10(mmin_primary), PRIMARY_COLOR,   ':'),
+        (np.log10(mmin_mini),    SECONDARY_COLOR, ':'),
     ]
 
     # 1) Mvir centrals
@@ -904,7 +930,7 @@ def plot_1_number_counts(primary, secondary, tertiary=None, quaternary=None):
         axes[0],
         'Mvir (centrals)',
         r'$\log_{10}\, M_{\rm vir}\,[M_\odot]$',
-        [(name, color, '-', _log10_positive(d['Mvir'][d['Type'] == 0])) for name, d, color in models],
+        [(name, color, ls, _log10_positive(d['Mvir'][d['Type'] == 0])) for name, d, color, ls in models],
         legend=True,
         vlines=vlines_mvir,
     )
@@ -914,7 +940,7 @@ def plot_1_number_counts(primary, secondary, tertiary=None, quaternary=None):
         axes[1],
         'Mvir (satellites)',
         r'$\log_{10}\, M_{\rm vir}\,[M_\odot]$',
-        [(name, color, '-', _log10_positive(d['Mvir'][d['Type'] != 0])) for name, d, color in models],
+        [(name, color, ls, _log10_positive(d['Mvir'][d['Type'] != 0])) for name, d, color, ls in models],
         vlines=vlines_mvir,
     )
 
@@ -923,7 +949,7 @@ def plot_1_number_counts(primary, secondary, tertiary=None, quaternary=None):
         axes[2],
         'Stellar mass (centrals)',
         r'$\log_{10}\, m_{\ast}\,[M_\odot]$',
-        [(name, color, '-', _log10_positive(d['StellarMass'][d['Type'] == 0])) for name, d, color in models],
+        [(name, color, ls, _log10_positive(d['StellarMass'][d['Type'] == 0])) for name, d, color, ls in models],
     )
 
     # 4) Stellar mass satellites
@@ -931,7 +957,7 @@ def plot_1_number_counts(primary, secondary, tertiary=None, quaternary=None):
         axes[3],
         'Stellar mass (satellites)',
         r'$\log_{10}\, m_{\ast}\,[M_\odot]$',
-        [(name, color, '-', _log10_positive(d['StellarMass'][d['Type'] != 0])) for name, d, color in models],
+        [(name, color, ls, _log10_positive(d['StellarMass'][d['Type'] != 0])) for name, d, color, ls in models],
     )
 
     # 5) Cold gas
@@ -939,7 +965,7 @@ def plot_1_number_counts(primary, secondary, tertiary=None, quaternary=None):
         axes[4],
         'Cold gas',
         r'$\log_{10}\, m_{\rm cold}\,[M_\odot]$',
-        [(name, color, '-', _log10_positive(d['ColdGas'])) for name, d, color in models],
+        [(name, color, ls, _log10_positive(d['ColdGas'])) for name, d, color, ls in models],
     )
 
     # 6) H1
@@ -947,7 +973,7 @@ def plot_1_number_counts(primary, secondary, tertiary=None, quaternary=None):
         axes[5],
         'H1',
         r'$\log_{10}\, m_{\rm H1}\,[M_\odot]$',
-        [(name, color, '-', _log10_positive(d['H1gas'])) for name, d, color in models],
+        [(name, color, ls, _log10_positive(d['H1gas'])) for name, d, color, ls in models],
     )
 
     # 7) H2
@@ -955,7 +981,7 @@ def plot_1_number_counts(primary, secondary, tertiary=None, quaternary=None):
         axes[6],
         'H2',
         r'$\log_{10}\, m_{\rm H2}\,[M_\odot]$',
-        [(name, color, '-', _log10_positive(d['H2gas'])) for name, d, color in models],
+        [(name, color, ls, _log10_positive(d['H2gas'])) for name, d, color, ls in models],
     )
 
     # 8) Metallicity
@@ -963,7 +989,7 @@ def plot_1_number_counts(primary, secondary, tertiary=None, quaternary=None):
         axes[7],
         r'Gas metallicity',
         r'$12 + \log_{10}(\mathrm{O/H})$',
-        [(name, color, '-', _finite(metallicity_12logOH(d['MetalsColdGas'], d['ColdGas']))) for name, d, color in models],
+        [(name, color, ls, _finite(metallicity_12logOH(d['MetalsColdGas'], d['ColdGas']))) for name, d, color, ls in models],
         binwidth=0.05,
     )
 
@@ -972,7 +998,7 @@ def plot_1_number_counts(primary, secondary, tertiary=None, quaternary=None):
         axes[8],
         'Black hole mass',
         r'$\log_{10}\, m_{\rm BH}\,[M_\odot]$',
-        [(name, color, '-', _log10_positive(d['BlackHoleMass'])) for name, d, color in models],
+        [(name, color, ls, _log10_positive(d['BlackHoleMass'])) for name, d, color, ls in models],
     )
 
     # 10) ICS
@@ -980,7 +1006,7 @@ def plot_1_number_counts(primary, secondary, tertiary=None, quaternary=None):
         axes[9],
         'ICS mass',
         r'$\log_{10}\, m_{\rm ICS}\,[M_\odot]$',
-        [(name, color, '-', _log10_positive(d['IntraClusterStars'])) for name, d, color in models],
+        [(name, color, ls, _log10_positive(d['IntraClusterStars'])) for name, d, color, ls in models],
     )
 
     # fig.suptitle(
@@ -1014,13 +1040,13 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
     axes = axes.flatten()
 
     models = [
-        ('microUchuu radial integration', primary, 'steelblue', VOLUME),
-        (r'microUchuu $\pi r^2$', secondary, 'coral', SECONDARY_VOLUME),
+        (PRIMARY_LABEL,    primary,    PRIMARY_COLOR,    VOLUME,            PRIMARY_LS),
+        (SECONDARY_LABEL,  secondary,  SECONDARY_COLOR,  SECONDARY_VOLUME,  SECONDARY_LS),
     ]
     if tertiary:
-        models.append((r'microUchuu $\pi 3r^2$', tertiary, 'mediumseagreen', TERTIARY_VOLUME))
+        models.append((TERTIARY_LABEL,   tertiary,   TERTIARY_COLOR,   TERTIARY_VOLUME,   TERTIARY_LS))
     if quaternary:
-        models.append((r'microUchuu H2 FFBs', quaternary, 'mediumpurple', QUATERNARY_VOLUME))
+        models.append((QUATERNARY_LABEL, quaternary, QUATERNARY_COLOR, QUATERNARY_VOLUME, QUATERNARY_LS))
 
     def _finite(x):
         x = np.asarray(x, dtype=float)
@@ -1047,11 +1073,11 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
 
     def _mass_function_panel(ax, prop, title, xlabel, *, binwidth=0.2, legend=False):
         series = []
-        for name, d, color, vol in models:
+        for name, d, color, vol, ls in models:
             vals = _log10_pos(d[prop]) if prop in d else np.array([])
-            series.append((name, vals, color, vol))
+            series.append((name, vals, color, vol, ls))
 
-        all_vals = [v for (_, v, _, _) in series if v.size > 0]
+        all_vals = [v for (_, v, _, _, _) in series if v.size > 0]
         if not all_vals:
             ax.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax.transAxes)
             ax.set_title(title)
@@ -1062,27 +1088,28 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
         ma = np.ceil(np.max(combined)) + 1
         mass_range = (mi, ma)
 
-        for name, vals, color, vol in series:
+        for name, vals, color, vol, ls in series:
             if vals.size == 0:
                 continue
             centers, phi, _ = mass_function(vals, vol, binwidth=binwidth, mass_range=mass_range)
-            ax.plot(centers, phi, color=color, lw=2.6, alpha=0.9, label=name)
+            ax.plot(centers, phi, color=color, ls=ls, lw=2.6, alpha=0.9, label=name)
 
         ax.set_title(title)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(r'$\log_{10}\,\Phi\ [{\rm Mpc}^{-3}\,{\rm dex}^{-1}]$')
         ax.grid(True, alpha=0.25)
+        ax.set_xlim(5, 12)
         if legend:
             ax.legend(loc='lower left', frameon=False, fontsize=9)
 
     def _relation_panel(ax, title, xlabel, ylabel, xys, *, xstep=0.2, legend=False, vlines=None):
-        bins = _auto_bins([x for (_, _, x, _) in xys], xstep, pad=1)
+        bins = _auto_bins([x for (_, _, _, x, _) in xys], xstep, pad=1)
         if bins is None:
             ax.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax.transAxes)
             ax.set_title(title)
             return
 
-        for name, color, x, y in xys:
+        for name, color, ls, x, y in xys:
             if x.size == 0 or y.size == 0:
                 continue
             plot_binned_median_1sigma(
@@ -1092,6 +1119,7 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
                 bins,
                 color=color,
                 label=name,
+                ls=ls,
                 alpha=0.20,
                 lw=2.8,
                 min_count=30,
@@ -1112,8 +1140,8 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
     mmin_primary = MIN_MVIR_PARTICLES * PART_MASS * MASS_CONVERT
     mmin_mini = MIN_MVIR_PARTICLES * SECONDARY_PART_MASS * SECONDARY_MASS_CONVERT
     vlines_mvir = [
-        (np.log10(mmin_primary), 'steelblue', ':'),
-        (np.log10(mmin_mini), 'coral', ':'),
+        (np.log10(mmin_primary), PRIMARY_COLOR,   ':'),
+        (np.log10(mmin_mini),    SECONDARY_COLOR, ':'),
     ]
 
     # 1) Stellar Mass Function
@@ -1128,13 +1156,13 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
 
     # 2) Stellar mass vs SFR
     xys = []
-    for name, d, color, _vol in models:
+    for name, d, color, _vol, ls in models:
         mstar = np.asarray(d['StellarMass'], dtype=float)
         sfr = np.asarray(d['SfrDisk'], dtype=float) + np.asarray(d['SfrBulge'], dtype=float)
         ok = np.isfinite(mstar) & (mstar > 0.0) & np.isfinite(sfr) & (sfr > 0.0)
         x = np.log10(mstar[ok])
         y = np.log10(sfr[ok])
-        xys.append((name, color, x, y))
+        xys.append((name, color, ls, x, y))
     _relation_panel(
         axes[1],
         r'$M_{\ast}$ vs SFR',
@@ -1147,9 +1175,9 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
 
     # 3) Baryonic Tully-Fisher Relation (Sb/c selection; median lines)
     xys = []
-    for name, d, color, _vol in models:
+    for name, d, color, _vol, ls in models:
         if 'Vmax' not in d:
-            xys.append((name, color, np.array([]), np.array([])))
+            xys.append((name, color, ls, np.array([]), np.array([])))
             continue
 
         # Sb/c selection (as in your example):
@@ -1172,7 +1200,7 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
         )
         x = np.log10(v[ok])
         y = np.log10(mbar[ok])
-        xys.append((name, color, x, y))
+        xys.append((name, color, ls, x, y))
 
     # Overplot Stark, McGaugh & Swatters 2009 band in (logV, logMbar) space.
     ax = axes[2]
@@ -1198,7 +1226,7 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
 
     # 4) Stellar-to-halo mass ratio (centrals)
     xys = []
-    for name, d, color, _vol in models:
+    for name, d, color, _vol, ls in models:
         c = (d['Type'] == 0)
         mvir = np.asarray(d['Mvir'], dtype=float)[c]
         mstar = np.asarray(d['StellarMass'], dtype=float)[c]
@@ -1206,7 +1234,7 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
         x = np.log10(mvir[ok])
         with np.errstate(divide='ignore', invalid='ignore'):
             y = np.log10(mstar[ok] / mvir[ok])
-        xys.append((name, color, x, y))
+        xys.append((name, color, ls, x, y))
     _relation_panel(
         axes[3],
         r'Stellar-to-halo ratio',
@@ -1220,14 +1248,14 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
 
     # 5) Stellar-to-halo mass relation (centrals)
     xys = []
-    for name, d, color, _vol in models:
+    for name, d, color, _vol, ls in models:
         c = (d['Type'] == 0)
         mvir = np.asarray(d['Mvir'], dtype=float)[c]
         mstar = np.asarray(d['StellarMass'], dtype=float)[c]
         ok = np.isfinite(mvir) & (mvir > 0.0) & np.isfinite(mstar) & (mstar > 0.0)
         x = np.log10(mvir[ok])
         y = np.log10(mstar[ok])
-        xys.append((name, color, x, y))
+        xys.append((name, color, ls, x, y))
     _relation_panel(
         axes[4],
         r'Stellar-to-halo relation',
@@ -1241,13 +1269,13 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
 
     # 6) Stellar mass vs metallicity
     xys = []
-    for name, d, color, _vol in models:
+    for name, d, color, _vol, ls in models:
         mstar = np.asarray(d['StellarMass'], dtype=float)
         z = metallicity_12logOH(d['MetalsColdGas'], d['ColdGas'])
         ok = np.isfinite(mstar) & (mstar > 0.0) & np.isfinite(z)
         x = np.log10(mstar[ok])
         y = np.asarray(z, dtype=float)[ok]
-        xys.append((name, color, x, y))
+        xys.append((name, color, ls, x, y))
     _relation_panel(
         axes[5],
         r'$M_{\ast}$ vs metallicity',
@@ -1260,13 +1288,13 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
 
     # 7) Black hole mass vs bulge mass
     xys = []
-    for name, d, color, _vol in models:
+    for name, d, color, _vol, ls in models:
         mbulge = np.asarray(d['BulgeMass'], dtype=float)
         mbh = np.asarray(d['BlackHoleMass'], dtype=float)
         ok = np.isfinite(mbulge) & (mbulge > 0.0) & np.isfinite(mbh) & (mbh > 0.0)
         x = np.log10(mbulge[ok])
         y = np.log10(mbh[ok])
-        xys.append((name, color, x, y))
+        xys.append((name, color, ls, x, y))
 
     # Haring & Rix (2004) reference band (log10 Mbh vs log10 Mbulge)
     # Common parameterization:
@@ -1321,14 +1349,14 @@ def plot_2_diagnostics(primary, secondary, tertiary=None, quaternary=None):
 
     # 10) Stellar mass vs virial velocity (Vvir)
     xys = []
-    for name, d, color, _vol in models:
+    for name, d, color, _vol, ls in models:
         t = np.asarray(d['Type'])
         vvir = np.asarray(d['Vvir'], dtype=float)
         mstar = np.asarray(d['StellarMass'], dtype=float)
         ok = (t == 0) & np.isfinite(vvir) & (vvir > 0.0) & np.isfinite(mstar) & (mstar > 0.0)
         x = np.log10(vvir[ok])
         y = np.log10(mstar[ok])
-        xys.append((name, color, x, y))
+        xys.append((name, color, ls, x, y))
     _relation_panel(
         axes[9],
         r'$M_{\ast}$ vs $V_{\rm vir}$',
@@ -1446,10 +1474,10 @@ def plot_3_evolution(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdat
 
     fig, axes = plt.subplots(2, 4, figsize=(20, 9))
 
-    C_H2   = 'steelblue'
-    C_COLD = 'coral'
-    C_TERT = 'mediumseagreen'
-    C_QUAT = 'mediumpurple'
+    C_H2   = PRIMARY_COLOR
+    C_COLD = SECONDARY_COLOR
+    C_TERT = TERTIARY_COLOR
+    C_QUAT = QUATERNARY_COLOR
     LW = 2.2
 
     xlim = (0, age_universe * 0.85)
@@ -1478,13 +1506,13 @@ def plot_3_evolution(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdat
 
     def _runs(ya, yb, ytert=None, yquat=None):
         runs = [
-            ((lbt_h2,   ya), C_H2,   'microUchuu radial integration',       '-'),
-            ((lbt_cold, yb), C_COLD, r'microUchuu $\pi r^2$', '--'),
+            ((lbt_h2,   ya), C_H2,   PRIMARY_LABEL,    PRIMARY_LS),
+            ((lbt_cold, yb), C_COLD, SECONDARY_LABEL,  SECONDARY_LS),
         ]
         if has_tertiary and ytert is not None:
-            runs.append(((lbt_tert, ytert), C_TERT, r'microUchuu $\pi 3r^2$', ':'))
+            runs.append(((lbt_tert, ytert), C_TERT, TERTIARY_LABEL,   TERTIARY_LS))
         if has_quaternary and yquat is not None:
-            runs.append(((lbt_quat, yquat), C_QUAT, r'microUchuu H2 FFBs', '-.'))
+            runs.append(((lbt_quat, yquat), C_QUAT, QUATERNARY_LABEL, QUATERNARY_LS))
         return {'runs': runs}
 
     obs_sfrd = (_obs_sfrd[:, 0], _obs_sfrd[:, 1], _obs_sfrd[:, 2], _obs_sfrd[:, 3])
@@ -1589,13 +1617,13 @@ def plot_4_smf_z10(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_
         d_quat = snapdata_quaternary.get(snap, {}) if snapdata_quaternary else {}
 
         models = [
-            ('microUchuu radial integration', d_h2, 'steelblue', VOLUME),
-            (r'microUchuu $\pi\ r^2$', d_cold, 'coral', SECONDARY_VOLUME),
+            (PRIMARY_LABEL,    d_h2,   PRIMARY_COLOR,    VOLUME,            PRIMARY_LS),
+            (SECONDARY_LABEL,  d_cold, SECONDARY_COLOR,  SECONDARY_VOLUME,  SECONDARY_LS),
         ]
         if d_tert:
-            models.append((r'microUchuu $\pi\ 3r^2$', d_tert, 'mediumseagreen', TERTIARY_VOLUME))
+            models.append((TERTIARY_LABEL,   d_tert, TERTIARY_COLOR,   TERTIARY_VOLUME,   TERTIARY_LS))
         if d_quat:
-            models.append((r'microUchuu H2 FFBs', d_quat, 'mediumpurple', QUATERNARY_VOLUME))
+            models.append((QUATERNARY_LABEL, d_quat, QUATERNARY_COLOR, QUATERNARY_VOLUME, QUATERNARY_LS))
 
         def _log10_pos(x):
             x = np.asarray(x, dtype=float)
@@ -1604,11 +1632,11 @@ def plot_4_smf_z10(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_
 
         # Collect series of log10(stellar mass)
         series = []
-        for name, d, color, vol in models:
+        for name, d, color, vol, ls in models:
             vals = _log10_pos(d.get('StellarMass', np.array([]))) if d else np.array([])
-            series.append((name, vals, color, vol))
+            series.append((name, vals, color, vol, ls))
 
-        all_vals = [v for (_n, v, _c, _v) in series if v.size > 0]
+        all_vals = [v for (_n, v, _c, _v, _ls) in series if v.size > 0]
         if not all_vals:
             print(f'  No stellar mass data at snap {snap}, skipping row.')
             continue
@@ -1623,11 +1651,11 @@ def plot_4_smf_z10(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_
         ax_sfr = axes[row, 2]
 
         # SMF
-        for name, vals, color, vol in series:
+        for name, vals, color, vol, ls in series:
             if vals.size == 0:
                 continue
             centers, phi, _ = mass_function(vals, vol, binwidth=binwidth, mass_range=(mi, ma))
-            ax_smf.plot(centers, phi, color=color, lw=2.6, alpha=0.95, label=name if row == 0 else None)
+            ax_smf.plot(centers, phi, color=color, ls=ls, lw=2.6, alpha=0.95, label=name if row == 0 else None)
 
         # annotate row with redshift label on top-right of first panel
         z_val = REDSHIFTS[snap] if isinstance(REDSHIFTS, (list, np.ndarray)) and snap < len(REDSHIFTS) else z_labels[row]
@@ -1641,7 +1669,7 @@ def plot_4_smf_z10(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_
             ax_smf.legend(loc='lower right', frameon=False, fontsize=9)
 
         # Metallicity median vs stellar mass
-        for name, d, color, vol in models:
+        for name, d, color, vol, ls in models:
             if not d:
                 continue
             mstar = np.asarray(d.get('StellarMass', np.array([])), dtype=float)
@@ -1672,7 +1700,7 @@ def plot_4_smf_z10(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_
                             label=name if row == 0 else None,
                             alpha=0.0,
                             lw=2.6,
-                            ls='-',
+                            ls=ls,
                             min_count=1,
                         )
                         plotted = True
@@ -1713,7 +1741,7 @@ def plot_4_smf_z10(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_
         ax_met.grid(True, alpha=0.25)
 
         # Median SFR vs stellar mass
-        for name, d, color, vol in models:
+        for name, d, color, vol, ls in models:
             if not d:
                 continue
             mstar = np.asarray(d.get('StellarMass', np.array([])), dtype=float)
@@ -1739,7 +1767,7 @@ def plot_4_smf_z10(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_
                 label=name if row == 0 else None,
                 alpha=0.0,
                 lw=2.6,
-                ls='-',
+                ls=ls,
                 min_count=1,
             )
 
@@ -1784,15 +1812,15 @@ def plot_5_fH2_redshift(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snap
         d_quat = snapdata_quaternary.get(snap, {}) if snapdata_quaternary else {}
 
         models = [
-            ('microUchuu radial integration', d_h2,   'steelblue',      VOLUME),
-            (r'microUchuu $\pi\ r^2$',        d_cold, 'coral',          SECONDARY_VOLUME),
+            (PRIMARY_LABEL,    d_h2,   PRIMARY_COLOR,    VOLUME,            PRIMARY_LS),
+            (SECONDARY_LABEL,  d_cold, SECONDARY_COLOR,  SECONDARY_VOLUME,  SECONDARY_LS),
         ]
         if d_tert:
-            models.append((r'microUchuu $\pi\ 3r^2$', d_tert, 'mediumseagreen', TERTIARY_VOLUME))
+            models.append((TERTIARY_LABEL,   d_tert, TERTIARY_COLOR,   TERTIARY_VOLUME,   TERTIARY_LS))
         if d_quat:
-            models.append((r'microUchuu H2 FFBs', d_quat, 'mediumpurple',   QUATERNARY_VOLUME))
+            models.append((QUATERNARY_LABEL, d_quat, QUATERNARY_COLOR, QUATERNARY_VOLUME, QUATERNARY_LS))
 
-        for name, d, color, _vol in models:
+        for name, d, color, _vol, ls in models:
             if not d:
                 continue
             mstar  = np.asarray(d.get('StellarMass', np.array([])), dtype=float)
@@ -1818,7 +1846,7 @@ def plot_5_fH2_redshift(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snap
                 label=name if idx == 0 else None,
                 alpha=0.15,
                 lw=2.6,
-                ls='-',
+                ls=ls,
                 min_count=1,
             )
 
@@ -1845,6 +1873,197 @@ def plot_5_fH2_redshift(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snap
     plt.close(fig)
 
 
+def plot_6_satellite_smf_redshift(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_quaternary=None):
+    """Satellite stellar mass function (Type>0 only) at 10 redshifts from z=0 to z~20.
+
+    2×5 grid; each panel shows all available models. The SMF is
+    log10(number density per dex per Mpc^3).
+    """
+    print('Plot 6: Satellite SMF at z=0–10 (2×5)')
+
+    z_snaps  = [SNAP_Z0, SNAP_Z1, SNAP_Z2, SNAP_Z3, SNAP_Z4,
+                SNAP_Z5, SNAP_Z6, SNAP_Z7, SNAP_Z8, SNAP_Z10]
+    z_labels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10]
+
+    binwidth = 0.2
+    nrows, ncols = 2, 5
+    fig, axes = plt.subplots(nrows, ncols, figsize=(22, 9))
+    axes_flat = axes.flatten()
+
+    for idx, (snap, z_label) in enumerate(zip(z_snaps, z_labels)):
+        ax = axes_flat[idx]
+
+        d_h2   = snapdata_h2.get(snap, {})        if snapdata_h2        else {}
+        d_cold = snapdata_cold.get(snap, {})       if snapdata_cold       else {}
+        d_tert = snapdata_tertiary.get(snap, {})   if snapdata_tertiary   else {}
+        d_quat = snapdata_quaternary.get(snap, {}) if snapdata_quaternary else {}
+
+        models = [
+            (PRIMARY_LABEL,    d_h2,   PRIMARY_COLOR,    VOLUME,            PRIMARY_LS),
+            (SECONDARY_LABEL,  d_cold, SECONDARY_COLOR,  SECONDARY_VOLUME,  SECONDARY_LS),
+        ]
+        if d_tert:
+            models.append((TERTIARY_LABEL,   d_tert, TERTIARY_COLOR,   TERTIARY_VOLUME,   TERTIARY_LS))
+        if d_quat:
+            models.append((QUATERNARY_LABEL, d_quat, QUATERNARY_COLOR, QUATERNARY_VOLUME, QUATERNARY_LS))
+
+        z_val = REDSHIFTS[snap] if isinstance(REDSHIFTS, (list, np.ndarray)) and snap < len(REDSHIFTS) else z_label
+        is_bottom = idx >= (nrows - 1) * ncols
+        is_left   = idx % ncols == 0
+
+        series = []
+        for name, d, color, vol, ls in models:
+            if not d or 'StellarMass' not in d or 'Type' not in d:
+                continue
+            mstar = np.asarray(d['StellarMass'], dtype=float)
+            gtype = np.asarray(d['Type'])
+            sat   = mstar[gtype > 0]
+            ok    = np.isfinite(sat) & (sat > 0.0)
+            vals  = np.log10(sat[ok]) if ok.any() else np.array([])
+            series.append((name, vals, color, vol, ls))
+
+        all_vals = [v for (_, v, _, _, _) in series if v.size > 0]
+
+        ax.text(0.97, 0.95, f'z = {z_val:.2f}', transform=ax.transAxes,
+                fontsize=10, va='top', ha='right')
+        ax.set_xlabel(r'$\log_{10}\, m_{\ast}\,[M_\odot]$' if is_bottom else '')
+        ax.set_ylabel(r'$\log_{10}\,\Phi_{\rm sat}\ [\mathrm{Mpc}^{-3}\,\mathrm{dex}^{-1}]$' if is_left else '')
+        ax.grid(True, alpha=0.25)
+
+        if not all_vals:
+            ax.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax.transAxes)
+            continue
+
+        combined = np.concatenate(all_vals)
+        mi = max(np.floor(np.min(combined)) - 1, 4.0)
+        ma = min(np.ceil(np.max(combined)) + 1, 13.0)
+
+        for name, vals, color, vol, ls in series:
+            if vals.size == 0:
+                continue
+            centers, phi, _ = mass_function(vals, vol, binwidth=binwidth, mass_range=(mi, ma))
+            ax.plot(centers, phi, color=color, ls=ls, lw=2.4, alpha=0.9,
+                    label=name if idx == 0 else None)
+
+        ax.set_xlim(mi, ma)
+
+        if idx == 0:
+            ax.legend(loc='lower left', frameon=False, fontsize=9)
+
+    fig.tight_layout()
+    outfile = os.path.join(OUTPUT_DIR, f'Satellite_SMF_redshift{OUTPUT_FORMAT}')
+    fig.savefig(outfile, bbox_inches='tight')
+    print(f'  Saved {outfile}')
+    plt.close(fig)
+
+
+def plot_7_smf_centrals_satellites(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_quaternary=None):
+    """Stellar mass function split into centrals and satellites at z=0–10.
+
+    2×5 grid of redshift panels. Each panel plots all models twice: once for
+    centrals (solid) and once for satellites (dashed). No total line is drawn.
+    Legend in the z=0 panel shows model colours and type line styles separately.
+    """
+    print('Plot 7: SMF centrals vs satellites at z=0–10 (2×5)')
+
+    z_snaps  = [SNAP_Z0, SNAP_Z1, SNAP_Z2, SNAP_Z3, SNAP_Z4,
+                SNAP_Z5, SNAP_Z6, SNAP_Z7, SNAP_Z8, SNAP_Z10]
+    z_labels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10]
+
+    LS_CEN = '-'
+    LS_SAT = '--'
+    binwidth = 0.2
+    nrows, ncols = 2, 5
+    fig, axes = plt.subplots(nrows, ncols, figsize=(22, 9))
+    axes_flat = axes.flatten()
+
+    for idx, (snap, z_label) in enumerate(zip(z_snaps, z_labels)):
+        ax = axes_flat[idx]
+
+        d_h2   = snapdata_h2.get(snap, {})        if snapdata_h2        else {}
+        d_cold = snapdata_cold.get(snap, {})       if snapdata_cold       else {}
+        d_tert = snapdata_tertiary.get(snap, {})   if snapdata_tertiary   else {}
+        d_quat = snapdata_quaternary.get(snap, {}) if snapdata_quaternary else {}
+
+        models = [
+            (PRIMARY_LABEL,    d_h2,   PRIMARY_COLOR,    VOLUME),
+            (SECONDARY_LABEL,  d_cold, SECONDARY_COLOR,  SECONDARY_VOLUME),
+        ]
+        if d_tert:
+            models.append((TERTIARY_LABEL,   d_tert, TERTIARY_COLOR,   TERTIARY_VOLUME))
+        if d_quat:
+            models.append((QUATERNARY_LABEL, d_quat, QUATERNARY_COLOR, QUATERNARY_VOLUME))
+
+        z_val     = REDSHIFTS[snap] if isinstance(REDSHIFTS, (list, np.ndarray)) and snap < len(REDSHIFTS) else z_label
+        is_bottom = idx >= (nrows - 1) * ncols
+        is_left   = idx % ncols == 0
+
+        ax.text(0.97, 0.95, f'z = {z_val:.2f}', transform=ax.transAxes,
+                fontsize=10, va='top', ha='right')
+        ax.set_xlabel(r'$\log_{10}\, m_{\ast}\,[M_\odot]$' if is_bottom else '')
+        ax.set_ylabel(r'$\log_{10}\,\Phi\ [\mathrm{Mpc}^{-3}\,\mathrm{dex}^{-1}]$' if is_left else '')
+        ax.grid(True, alpha=0.25)
+
+        has_data = False
+        all_vals = []
+
+        for name, d, color, vol in models:
+            if not d or 'StellarMass' not in d or 'Type' not in d:
+                continue
+            mstar = np.asarray(d['StellarMass'], dtype=float)
+            gtype = np.asarray(d['Type'])
+
+            for mask, ls in [(gtype == 0, LS_CEN), (gtype > 0, LS_SAT)]:
+                sub = mstar[mask]
+                ok  = np.isfinite(sub) & (sub > 0.0)
+                if not ok.any():
+                    continue
+                vals = np.log10(sub[ok])
+                all_vals.append(vals)
+
+        if not all_vals:
+            ax.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax.transAxes)
+            continue
+
+        combined = np.concatenate(all_vals)
+        mi = max(np.floor(np.min(combined)) - 1, 4.0)
+        ma = min(np.ceil(np.max(combined)) + 1, 13.0)
+
+        for name, d, color, vol in models:
+            if not d or 'StellarMass' not in d or 'Type' not in d:
+                continue
+            mstar = np.asarray(d['StellarMass'], dtype=float)
+            gtype = np.asarray(d['Type'])
+
+            for mask, ls in [(gtype == 0, LS_CEN), (gtype > 0, LS_SAT)]:
+                sub = mstar[mask]
+                ok  = np.isfinite(sub) & (sub > 0.0)
+                if not ok.any():
+                    continue
+                vals = np.log10(sub[ok])
+                centers, phi, _ = mass_function(vals, vol, binwidth=binwidth, mass_range=(mi, ma))
+                ax.plot(centers, phi, color=color, ls=ls, lw=2.4, alpha=0.9)
+
+        ax.set_xlim(mi, ma)
+
+        if idx == 0:
+            from matplotlib.lines import Line2D
+            model_handles = [Line2D([0], [0], color=color, lw=2.4, ls='-', label=name)
+                             for name, _, color, _ in models]
+            type_handles = [
+                Line2D([0], [0], color='0.3', lw=2.4, ls=LS_CEN, label='Centrals'),
+                Line2D([0], [0], color='0.3', lw=2.4, ls=LS_SAT, label='Satellites'),
+            ]
+            ax.legend(handles=model_handles + type_handles,
+                      loc='lower left', frameon=False, fontsize=9)
+
+    fig.tight_layout()
+    outfile = os.path.join(OUTPUT_DIR, f'SMF_centrals_satellites{OUTPUT_FORMAT}')
+    fig.savefig(outfile, bbox_inches='tight')
+    print(f'  Saved {outfile}')
+    plt.close(fig)
+
+
 Z0_PLOTS = {
     1: plot_1_number_counts,
     2: plot_2_diagnostics,
@@ -1854,6 +2073,8 @@ EVOLUTION_PLOTS = {
     3: plot_3_evolution,
     4: plot_4_smf_z10,
     5: plot_5_fH2_redshift,
+    6: plot_6_satellite_smf_redshift,
+    7: plot_7_smf_centrals_satellites,
 }
 
 # Standalone plots (load their own data)
@@ -1930,7 +2151,8 @@ def main():
 
     # Load multi-snapshot data only if needed
     if need_evo:
-        key_snaps = [SNAP_Z0, SNAP_Z1, SNAP_Z2, SNAP_Z3, SNAP_Z4, SNAP_Z5, SNAP_Z10]
+        key_snaps = [SNAP_Z0, SNAP_Z1, SNAP_Z2, SNAP_Z3, SNAP_Z4, SNAP_Z5,
+                     SNAP_Z6, SNAP_Z7, SNAP_Z8, SNAP_Z10, SNAP_Z20]
         last_snap = _primary_hdr['last_snap_nr'] if _primary_hdr else SNAP_Z0
         sfh_snaps = list(_primary_hdr['output_snaps']) if _primary_hdr else list(range(last_snap + 1))
         all_snaps = sorted(set(key_snaps + sfh_snaps))

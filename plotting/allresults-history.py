@@ -899,6 +899,75 @@ if __name__ == '__main__':
     
    # --------------------------------------------------------
 
+    print('Plotting star formation rate function evolution with redshift bins')
+
+    plt.figure(figsize=(10, 8))
+    ax = plt.subplot(111)
+
+    z_bins = [
+        (0.2, 0.5), (0.5, 0.8), (0.8, 1.1), (1.1, 1.5), (1.5, 2.0),
+        (2.0, 2.5), (2.5, 3.0), (3.0, 3.5), (3.5, 4.5), (4.5, 5.5),
+        (5.5, 6.5), (6.5, 7.5), (7.5, 8.5), (8.5, 10.0), (10.0, 12.0)
+    ]
+    colors = plt.cm.plasma(np.linspace(0.1, 0.9, len(z_bins)))
+
+    sfr_bins = np.arange(-3.0, 3.5, 0.2)
+    sfr_centers = sfr_bins[:-1] + 0.1
+    bin_width = sfr_bins[1] - sfr_bins[0]
+
+    for i, (z_min, z_max) in enumerate(z_bins):
+        snap_indices = find_snapshots_in_z_range(z_min, z_max, redshifts)
+        if len(snap_indices) == 0:
+            continue
+
+        phi_snapshots = []
+        for snap_idx in snap_indices:
+            if snap_idx < len(SfrDiskFull):
+                sfr_total = SfrDiskFull[snap_idx] + SfrBulgeFull[snap_idx]
+                w = np.where(sfr_total > 0.0)[0]
+                if len(w) > 0:
+                    log_sfr = np.log10(sfr_total[w])
+                    counts, _ = np.histogram(log_sfr, bins=sfr_bins)
+                    phi_snap = counts / (volume * bin_width)
+                    phi_snapshots.append(phi_snap)
+
+        if len(phi_snapshots) == 0:
+            continue
+
+        phi_snapshots = np.array(phi_snapshots)
+        phi = np.mean(phi_snapshots, axis=0)
+        phi_err = np.std(phi_snapshots, axis=0) / np.sqrt(len(phi_snapshots))
+
+        valid = (phi > 0) & (phi_err > 0)
+        if not np.any(valid):
+            continue
+
+        label = f'{z_min:.1f} < z < {z_max:.1f}'
+        ax.plot(sfr_centers[valid], np.log10(phi[valid]),
+                color=colors[i], linewidth=2, label=label)
+        ax.fill_between(sfr_centers[valid],
+                        np.log10(phi[valid] - phi_err[valid]),
+                        np.log10(phi[valid] + phi_err[valid]),
+                        color=colors[i], alpha=0.3)
+
+    ax.set_xlim(-3.0, 3.2)
+    ax.set_ylim(-6, -1)
+    ax.set_xlabel(r'$\log_{10}\,\mathrm{SFR}\ [M_\odot\,\mathrm{yr}^{-1}]$', fontsize=14)
+    ax.set_ylabel(r'$\log_{10}\phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$', fontsize=14)
+    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
+
+    leg = ax.legend(loc='upper right', fontsize=10, frameon=False)
+    for text in leg.get_texts():
+        text.set_fontsize(10)
+
+    plt.tight_layout()
+    outputFile = OutputDir + 'SFRFunctionEvolution' + OutputFormat
+    plt.savefig(outputFile, dpi=300, bbox_inches='tight')
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+   # --------------------------------------------------------
+
     # Black Hole Mass Function at specific redshifts
     print('Plotting black hole mass function at specific redshifts')
 
@@ -1475,6 +1544,79 @@ if __name__ == '__main__':
 
     plt.tight_layout()
     outputFile = OutputDir + 'H2FractionEvolution' + OutputFormat
+    plt.savefig(outputFile, dpi=300, bbox_inches='tight')
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+    # --------------------------------------------------------
+
+    print('Plotting star formation efficiency across cosmic time')
+
+    plt.figure(figsize=(10, 7))
+    ax = plt.subplot(111)
+
+    f_baryon = 0.17  # Cosmological baryon fraction Omega_b / Omega_m
+
+    OmegaM = sim_params['Omega']
+    OmegaL = sim_params['OmegaLambda']
+
+    def z_to_age_gyr(z):
+        # Numerical integration of dt/dz for flat LCDM; 1/H0 in Gyr = 9.778/h
+        z_int = np.linspace(z, 1000.0, 10000)
+        E_z = np.sqrt(OmegaM * (1 + z_int)**3 + OmegaL)
+        return (9.778 / Hubble_h) * np.trapz(1.0 / ((1 + z_int) * E_z), z_int)
+
+    t_arr_sfe = []
+    med_sfe   = []
+    p16_sfe   = []
+    p84_sfe   = []
+
+    for snap in range(FirstSnap, LastSnap + 1):
+        mstar = StellarMassFull[snap]
+        mvir  = HaloMassFull[snap]
+        gtype = TypeFull[snap]
+
+        if not isinstance(mstar, np.ndarray) or len(mstar) == 0:
+            continue
+        if not isinstance(mvir, np.ndarray) or len(mvir) == 0:
+            continue
+
+        w = np.where((gtype == 0) & (mstar > 0) & (mvir > 0))[0]
+        if len(w) < 5:
+            continue
+
+        sfe = mstar[w] / (mvir[w] * f_baryon)
+        t_arr_sfe.append(z_to_age_gyr(redshifts[snap]))
+        med_sfe.append(np.median(sfe))
+        p16_sfe.append(np.percentile(sfe, 16))
+        p84_sfe.append(np.percentile(sfe, 84))
+
+    t_arr_sfe = np.array(t_arr_sfe)
+    med_sfe   = np.array(med_sfe)
+    p16_sfe   = np.array(p16_sfe)
+    p84_sfe   = np.array(p84_sfe)
+
+    # Sort by ascending cosmic time so the line and fill render correctly
+    sort_idx  = np.argsort(t_arr_sfe)
+    t_arr_sfe = t_arr_sfe[sort_idx]
+    med_sfe   = med_sfe[sort_idx]
+    p16_sfe   = p16_sfe[sort_idx]
+    p84_sfe   = p84_sfe[sort_idx]
+
+    t_today = z_to_age_gyr(0.0)
+
+    ax.plot(t_arr_sfe, med_sfe, color='steelblue', lw=2.5)
+    ax.fill_between(t_arr_sfe, p16_sfe, p84_sfe, color='steelblue', alpha=0.3)
+
+    ax.set_yscale('log')
+    ax.set_xlim(t_today, 0.3)
+    ax.set_ylim(1e-6, 1.0)
+    ax.set_xlabel(r'Cosmic time [Gyr]', fontsize=14)
+    ax.set_ylabel(r'$\varepsilon_* = M_* \,/\, (f_b \cdot M_{\rm vir})$', fontsize=14)
+    ax.xaxis.set_minor_locator(plt.MultipleLocator(1))
+
+    plt.tight_layout()
+    outputFile = OutputDir + 'StarFormationEfficiency' + OutputFormat
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()
