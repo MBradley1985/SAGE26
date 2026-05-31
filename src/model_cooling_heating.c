@@ -646,37 +646,56 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     }
 
     // ------------------------------------------------------------------
-    // Option B: snapshot-integrated AGN energy balance.
-    // Heating and Cooling are snapshot-scoped accumulators (reset in
-    // join_galaxies_of_progenitors). If past substeps in this snapshot
-    // injected more AGN heating energy than has been spent on cooling,
-    // use the surplus to suppress this substep's coolingGas. Debit the
-    // Heating budget so the surplus isn't spent twice.
+    // Option 3: persistent HeatingReservoir model.
+    // The reservoir holds AGN heat energy that survives across snapshots,
+    // decaying on the halo dynamical timescale (t_dyn = Rvir / Vvir).
+    // Sequence each substep:
+    //   1. Decay the reservoir.
+    //   2. Spend reservoir energy to suppress this substep's coolingGas.
+    //   3. Run AGN (grows BH, adds heat energy to .Heating accumulator).
+    //   4. Feed the newly-added heat into the reservoir.
+    // This decouples heat memory from precipitation bursts: a single big
+    // cooling event can't saturate the reservoir's effectiveness (decay),
+    // and small per-step heating contributions accumulate across many
+    // substeps and snapshots to eventually compete with the cooling rate.
     // ------------------------------------------------------------------
     const double Vvir2_b = galaxies[gal].Vvir * galaxies[gal].Vvir;
-    if(Vvir2_b > 0.0 && coolingGas > 0.0) {
-        const double surplus = galaxies[gal].Heating - galaxies[gal].Cooling;
-        if(surplus > 0.0) {
-            const double cool_energy = 0.5 * coolingGas * Vvir2_b;
-            if(surplus >= cool_energy) {
-                galaxies[gal].Heating -= cool_energy;
-                coolingGas = 0.0;
-            } else {
-                coolingGas *= 1.0 - surplus / cool_energy;
-                galaxies[gal].Heating -= surplus;
-            }
+
+    // 1. Decay
+    if(Vvir2_b > 0.0 && galaxies[gal].Rvir > 0.0 && galaxies[gal].HeatingReservoir > 0.0) {
+        const double t_dyn = galaxies[gal].Rvir / galaxies[gal].Vvir;  // code units
+        if(t_dyn > 0.0) {
+            galaxies[gal].HeatingReservoir *= exp(-dt / t_dyn);
         }
     }
 
-    // Apply AGN heating to the precipitating cooling. do_AGN_heating_cgm uses
-    // per-substep energy balance (no r_heat carry-over); see note on that fn.
+    // 2. Use reservoir to suppress this substep's cooling
+    if(Vvir2_b > 0.0 && coolingGas > 0.0 && galaxies[gal].HeatingReservoir > 0.0) {
+        const double cool_energy = 0.5 * coolingGas * Vvir2_b;
+        if(galaxies[gal].HeatingReservoir >= cool_energy) {
+            galaxies[gal].HeatingReservoir -= cool_energy;
+            coolingGas = 0.0;
+        } else {
+            coolingGas *= 1.0 - galaxies[gal].HeatingReservoir / cool_energy;
+            galaxies[gal].HeatingReservoir = 0.0;
+        }
+    }
+
+    // 3. AGN call (grows BH, adds to .Heating; does not modify coolingGas)
+    const double heating_before = galaxies[gal].Heating;
     {
         double x_agn = PROTONMASS * BOLTZMANN * temp / lambda;       // sec g/cm^3
         x_agn /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);  // internal units
 
-        if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
+        if(run_params->AGNrecipeOn > 0) {
             coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
         }
+    }
+
+    // 4. Feed this substep's new heat into the reservoir
+    const double heating_added = galaxies[gal].Heating - heating_before;
+    if(heating_added > 0.0) {
+        galaxies[gal].HeatingReservoir += heating_added;
     }
 
     // ========================================================================
@@ -878,11 +897,13 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
 
 // ============================================================================
 // AGN HEATING FOR CGM-REGIME HALOES
-// Per-substep energy balance: AGN heating reduces this substep's precipitating
-// cooling directly (coolingGas -= AGNheating), with no r_heat carry-over.
-// The C16 r_heat machinery is unsafe here because precipitation can dump
-// O(CGMgas) of cooling per substep, which would saturate r_heat to rcool on
-// the first hit and switch off all subsequent cooling for the galaxy's life.
+// Combined per-substep + reservoir model:
+//   (1) AGN heat reduces this substep's coolingGas immediately (Option A),
+//       capped at coolingGas to bound BH growth per step.
+//   (2) Heat energy is also added to galaxies[].Heating, which the caller
+//       (cooling_recipe_cgm) feeds into HeatingReservoir for cross-snapshot
+//       memory with t_dyn decay.
+// No C16 r_heat machinery (saturates catastrophically on precipitation bursts).
 // ============================================================================
 
 double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
@@ -935,17 +956,16 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
 
         // coefficient to heat the cooling gas back to the virial temperature of the halo
         // 1.34e5 = sqrt(2*eta*c^2), eta=0.1 (standard efficiency) and c in km/s
-        // BUG FIX: Check Vvir > 0 to avoid division by zero
         if(galaxies[centralgal].Vvir <= 0.0) {
             AGNcoeff = 0.0;
             AGNheating = 0.0;
         } else {
             AGNcoeff = (1.34e5 / galaxies[centralgal].Vvir) * (1.34e5 / galaxies[centralgal].Vvir);
-
-            // cooling mass that can be suppresed from AGN heating
             AGNheating = AGNcoeff * AGNaccreted;
 
-            /// the above is the maximal heating rate. we now limit it to the current cooling rate
+            // Cap AGN heating at this substep's coolingGas — bounds the per-step
+            // BH growth to what's needed to cancel current cooling. The reservoir
+            // (in the caller) handles cross-snapshot integration.
             if(AGNheating > coolingGas && AGNcoeff > 0.0) {
                 AGNaccreted = coolingGas / AGNcoeff;
                 AGNheating = coolingGas;
@@ -958,9 +978,8 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
         galaxies[centralgal].CGMgas -= AGNaccreted;
         galaxies[centralgal].MetalsCGMgas -= metallicity * AGNaccreted;
 
-        // Per-substep cooling suppression: AGN heating directly cancels an
-        // equal mass of cooling. AGNheating is already bounded by coolingGas
-        // above, so this is non-negative.
+        // Per-substep cooling suppression (Option A) — immediate, bounded.
+        // Also add the heat energy to .Heating; caller feeds it into HeatingReservoir.
         if(AGNheating > 0.0) {
             coolingGas -= AGNheating;
             if(coolingGas < 0.0) coolingGas = 0.0;
@@ -971,7 +990,7 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
 }
 
 // ============================================================================
-// The actual cooling function
+// The actual cooling function for C16 recipe
 // ============================================================================
 
 void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct GALAXY *galaxies)

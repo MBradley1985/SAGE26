@@ -90,22 +90,32 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
     }
 
     // ========================================================================
-    // Transfer satellite CGMgas to appropriate reservoir based on regime
+    // Transfer satellite CGMgas to appropriate reservoir based on regime.
+    //
+    // tot_CGMgas already includes the central's own CGMgas (the loop above
+    // sums over all i including centralgal). The assignment / += below
+    // therefore consumes that contribution and we must zero the central's
+    // CGMgas first to avoid double-counting it. In particular, the Regime==1
+    // path used to `HotGas += tot_CGMgas` without zeroing CGMgas, which left
+    // the central's own CGM in both reservoirs — visible as a ~5% baryon-
+    // fraction excess in 10^12 Msun halos that had transitioned across Mshock.
     // ========================================================================
     if(run_params->CGMrecipeOn == 1) {
+        // Clear the central's pre-loop CGM accounting (it's already in tot_CGMgas)
+        galaxies[centralgal].CGMgas = 0.0;
+        galaxies[centralgal].MetalsCGMgas = 0.0;
+
         if(galaxies[centralgal].Regime == 0) {
-            // Central is CGM-regime: keep in CGMgas
+            // Central is CGM-regime: park combined CGM back in CGMgas
             galaxies[centralgal].CGMgas = tot_CGMgas;
             galaxies[centralgal].MetalsCGMgas = tot_MetalsCGMgas;
         } else {
-            // Central is Hot-ICM-regime: transfer to HotGas
+            // Central is Hot-ICM-regime: combined CGM goes to HotGas
             galaxies[centralgal].HotGas += tot_CGMgas;
             galaxies[centralgal].MetalsHotGas += tot_MetalsCGMgas;
-            // Don't add to CGMgas!
-            // galaxies[centralgal].CGMgas stays as is (probably zero or very small)
         }
     } else {
-        // Original SAGE: transfer to HotGas
+        // Original SAGE: transfer to HotGas (CGMgas is unused in this mode)
         galaxies[centralgal].HotGas += tot_CGMgas;
         galaxies[centralgal].MetalsHotGas += tot_MetalsCGMgas;
     }
@@ -286,7 +296,7 @@ double do_reionization(const int gal, const double Zcurr, struct GALAXY *galaxie
 // Actually adding the infalling gas to the halo
 // ============================================================================
 
-void add_infall_to_hot(const int gal, double infallingGas, struct GALAXY *galaxies, 
+void add_infall_to_hot(const int gal, double infallingGas, struct GALAXY *galaxies,
                        const struct params *run_params)
 {
     float metallicity;
@@ -309,7 +319,7 @@ void add_infall_to_hot(const int gal, double infallingGas, struct GALAXY *galaxi
     if(run_params->CGMrecipeOn == 1) {
         if(galaxies[gal].Regime == 0) {
             // CGM-regime: use CGMgas reservoir
-            
+
             // if the halo has lost mass, subtract from CGM metals first
             if(infallingGas < 0.0 && galaxies[gal].MetalsCGMgas > 0.0) {
                 metallicity = get_metallicity(galaxies[gal].CGMgas, galaxies[gal].MetalsCGMgas);
@@ -320,10 +330,10 @@ void add_infall_to_hot(const int gal, double infallingGas, struct GALAXY *galaxi
             // add (subtract) the ambient (enriched) infalling gas to the CGM
             galaxies[gal].CGMgas += infallingGas;
             if(galaxies[gal].CGMgas < 0.0) galaxies[gal].CGMgas = galaxies[gal].MetalsCGMgas = 0.0;
-            
+
         } else {
             // Hot-ICM-regime: use HotGas reservoir
-            
+
             // if the halo has lost mass, subtract from hot metals first
             if(infallingGas < 0.0 && galaxies[gal].MetalsHotGas > 0.0) {
                 metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);

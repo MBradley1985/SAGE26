@@ -15,6 +15,7 @@ import h5py as h5
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import argparse
 import glob
 import os
@@ -27,6 +28,61 @@ def truncated_cmap(cmap, minval=0.0, maxval=1.0, n=256):
         f'trunc({cmap.name},{minval:.2f},{maxval:.2f})',
         cmap(np.linspace(minval, maxval, n))
     )
+
+
+# Quiescence definitions used throughout the script.
+#   'strict'        -> SFR == 0 exactly (no current star formation at all);
+#                      can be tightened with quench_snaps > 1 to require zero SFH
+#                      in the preceding (quench_snaps-1) bins.
+#   'loose'         -> sSFR < 1e-11 /yr (instantaneous; standard SAGE/observational
+#                      passive cut). quench_snaps does not apply.
+#   'loose_massive' -> 'loose' AND M* > 1e10 Msun. Useful for isolating the
+#                      observationally-comparable high-z quenched-massive population.
+#   'massive_bt'    -> SFR == 0 AND M* >= 1e11 Msun AND 0.75 <= B/T <= 0.90.
+QUIESCENT_MODES = {
+    'strict':        'SFR == 0',
+    'loose':         'sSFR < 1e-11 /yr',
+    'loose_massive': 'sSFR < 1e-11 /yr AND M* > 1e10 Msun',
+    'massive_bt':    'M* >= 1e11 Msun, SFR == 0, 0.75 <= B/T <= 0.90',
+}
+
+MASSIVE_FLOOR_MSUN = 1.0e10   # used by 'loose_massive'
+MASSIVE_BT_FLOOR_MSUN = 1.0e11  # used by 'massive_bt'
+MASSIVE_BT_MIN = 0.75            # B/T lower bound for 'massive_bt'
+MASSIVE_BT_MAX = 0.90            # B/T upper bound for 'massive_bt'
+
+
+def compute_quiescent_mask(sfr, sm, hubble_h, mode, sfh=None, snap_num=None, quench_snaps=1,
+                           bulge_mass=None):
+    """Return a boolean array marking quiescent galaxies under the given mode.
+
+    sfr        : (N,)        total SFR in Msun/yr
+    sm         : (N,)        StellarMass in 10^10 Msun/h
+    sfh        : (N, nbins)  optional total SFH mass in 10^10 Msun/h (only used by 'strict' with quench_snaps>1)
+    bulge_mass : (N,)        BulgeMass in 10^10 Msun/h (required for 'massive_bt' mode)
+    """
+    if mode == 'strict':
+        q = sfr == 0.0
+        if quench_snaps > 1 and sfh is not None and snap_num is not None:
+            bin_lo = max(0, snap_num - quench_snaps + 1)
+            q &= sfh[:, bin_lo:snap_num].sum(axis=1) == 0.0
+        return q
+    if mode in ('loose', 'loose_massive'):
+        sm_msun = sm * 1e10 / hubble_h
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ssfr = np.where(sm_msun > 0, sfr / sm_msun, 0.0)
+        q = ssfr < 1e-11
+        if mode == 'loose_massive':
+            q &= sm_msun > MASSIVE_FLOOR_MSUN
+        return q
+    if mode == 'massive_bt':
+        sm_msun = sm * 1e10 / hubble_h
+        q = (sfr == 0.0) & (sm_msun >= MASSIVE_BT_FLOOR_MSUN)
+        if bulge_mass is not None:
+            bt = np.where(sm > 0, bulge_mass / sm, 0.0)
+            q &= (bt >= MASSIVE_BT_MIN) & (bt <= MASSIVE_BT_MAX)
+        return q
+    raise ValueError(f"Unknown quiescent mode: {mode!r}")
 
 
 def read_header(filepath):
@@ -74,12 +130,13 @@ def find_snapshot(params, target_z=3.0, snap_override=None):
     return snap, float(zs[snap])
 
 
-def load_galaxies(filepaths, snap_num, particle_mass, min_len, quench_snaps, snap_times):
+def load_galaxies(filepaths, snap_num, particle_mass, min_len, quench_snaps, snap_times,
+                  hubble_h, qmode='strict'):
     """
     Read Posx/y/z, StellarMass, quiescence flag, and mass-weighted stellar age.
 
-    Quiescence: SFR=0 at snap_num, plus zero SFH mass over the preceding
-    (quench_snaps-1) bins (requires SaveFullSFH=1).
+    Quiescence flag is computed using `compute_quiescent_mask` with the given
+    qmode ('strict' or 'loose'). See QUIESCENT_MODES for definitions.
 
     Stellar age: mass-weighted mean age from SFHMassDisk+SFHMassBulge using
     snap_times (Gyr) for the formation time of each bin. NaN when SFH unavailable.
@@ -107,16 +164,12 @@ def load_galaxies(filepaths, snap_num, particle_mass, min_len, quench_snaps, sna
             n_masked = int(mask.sum())
             sfr = (np.array(g['SfrDisk'],  dtype=np.float64)[mask] +
                    np.array(g['SfrBulge'], dtype=np.float64)[mask])
-            is_quiescent = sfr == 0.0
+            sm_m = stellar[mask]
 
             if 'SFHMassDisk' in g:
                 sfhd = np.array(g['SFHMassDisk'], dtype=np.float64)[mask]   # (N, n_bins)
                 sfhb = np.array(g['SFHMassBulge'], dtype=np.float64)[mask]
                 sfh  = sfhd + sfhb  # (N, n_bins)
-
-                if quench_snaps > 1:
-                    bin_lo = max(0, snap_num - quench_snaps + 1)
-                    is_quiescent &= sfh[:, bin_lo:snap_num].sum(axis=1) == 0.0
 
                 # Mass-weighted stellar age: bins 0..snap_num-1 are populated
                 # bin i = mass formed in interval ending at snap i
@@ -129,7 +182,16 @@ def load_galaxies(filepaths, snap_num, particle_mass, min_len, quench_snaps, sna
                     np.nan
                 )
             else:
+                sfh = None
                 mw_age = np.full(n_masked, np.nan)
+
+            bm_raw = (np.array(g['BulgeMass'], dtype=np.float64)[mask]
+                      if 'BulgeMass' in g else np.zeros(n_masked))
+            is_quiescent = compute_quiescent_mask(
+                sfr, sm_m, hubble_h, qmode,
+                sfh=sfh, snap_num=snap_num, quench_snaps=quench_snaps,
+                bulge_mass=bm_raw,
+            )
 
             def _load_field(field, dtype=np.float64, fill=0.0):
                 if field in g:
@@ -148,7 +210,7 @@ def load_galaxies(filepaths, snap_num, particle_mass, min_len, quench_snaps, sna
             galaxy_ids.append(_load_field('GalaxyIndex', dtype=np.int64, fill=-1))
             sfrs.append(sfr)
             cold_gas_list.append(_load_field('ColdGas'))
-            bulge_mass_list.append(_load_field('BulgeMass'))
+            bulge_mass_list.append(bm_raw)
             bh_mass_list.append(_load_field('BlackHoleMass'))
             vvir_list.append(_load_field('Vvir'))
             vmax_list.append(_load_field('Vmax'))
@@ -172,10 +234,11 @@ def load_galaxies(filepaths, snap_num, particle_mass, min_len, quench_snaps, sna
 
 
 def save_quiescent_csv(filepaths, snap_num, particle_mass, min_len, quench_snaps,
-                       snap_times, hubble_h, out_path):
+                       snap_times, hubble_h, out_path, qmode='strict'):
     """
     Write all scalar galaxy fields for quiescent galaxies at snap_num to a CSV.
-    Applies the same selection and quiescence logic as load_galaxies.
+    Applies the same selection and quiescence logic as load_galaxies under the
+    given qmode ('strict' or 'loose'; see QUIESCENT_MODES).
     Adds derived columns: Posx_Mpc, Posy_Mpc, Posz_Mpc, log_StellarMass_Msun,
     log_Mvir_Msun, mw_stellar_age_Gyr, quiescent_class, log_ColdGas_Msun,
     log_BulgeMass_Msun, log_BlackHoleMass_Msun, SFR_total_Msun_yr, bulge_to_total.
@@ -218,15 +281,12 @@ def save_quiescent_csv(filepaths, snap_num, particle_mass, min_len, quench_snaps
 
             sfr = (np.array(g['SfrDisk'],  dtype=np.float64)[mask] +
                    np.array(g['SfrBulge'], dtype=np.float64)[mask])
-            is_q = sfr == 0.0
+            sm_m = stellar[mask]
 
             if 'SFHMassDisk' in g:
                 sfhd = np.array(g['SFHMassDisk'], dtype=np.float64)[mask]
                 sfhb = np.array(g['SFHMassBulge'], dtype=np.float64)[mask]
                 sfh  = sfhd + sfhb
-                if quench_snaps > 1:
-                    bin_lo = max(0, snap_num - quench_snaps + 1)
-                    is_q &= sfh[:, bin_lo:snap_num].sum(axis=1) == 0.0
                 bin_ages = t_now - snap_times[:snap_num]
                 sfh_pop  = sfh[:, :snap_num]
                 total    = sfh_pop.sum(axis=1)
@@ -234,7 +294,16 @@ def save_quiescent_csv(filepaths, snap_num, particle_mass, min_len, quench_snaps
                                     (sfh_pop * bin_ages).sum(axis=1) / total,
                                     np.nan)
             else:
+                sfh = None
                 mw_age = np.full(mask.sum(), np.nan)
+
+            bm_csv = (np.array(g['BulgeMass'], dtype=np.float64)[mask]
+                      if 'BulgeMass' in g else np.zeros(mask.sum()))
+            is_q = compute_quiescent_mask(
+                sfr, sm_m, hubble_h, qmode,
+                sfh=sfh, snap_num=snap_num, quench_snaps=quench_snaps,
+                bulge_mass=bm_csv,
+            )
 
             q_idx = np.where(mask)[0][is_q]
             if len(q_idx) == 0:
@@ -367,12 +436,14 @@ def print_quiescent_extended_table(sm, mvir, quiescent, extras, hubble_h):
 
 
 def plot_quiescent_sfh(filepaths, snap_num, particle_mass, min_len, quench_snaps,
-                       snap_times, hubble_h, out_path, z_snap, run_label):
+                       snap_times, hubble_h, out_path, z_snap, run_label, qmode='strict'):
     """
     Plot the star formation history of quiescent galaxies vs lookback time.
 
     SFH bin j spans [snap_times[j-1], snap_times[j]] (or [0, snap_times[0]] for j=0).
     SFR [M☉/yr] = sfh[j] × 1e10/h / (bin_width[j] × 1e9).
+
+    Quiescence selection follows `compute_quiescent_mask(qmode)`.
     """
     snap_key = f'Snap_{snap_num}'
     t_now    = snap_times[snap_num]
@@ -397,15 +468,18 @@ def plot_quiescent_sfh(filepaths, snap_num, particle_mass, min_len, quench_snaps
 
             sfr = (np.array(g['SfrDisk'],  dtype=np.float64)[mask] +
                    np.array(g['SfrBulge'], dtype=np.float64)[mask])
-            is_q = sfr == 0.0
 
             sfhd = np.array(g['SFHMassDisk'],  dtype=np.float64)[mask]
             sfhb = np.array(g['SFHMassBulge'], dtype=np.float64)[mask]
             sfh  = sfhd + sfhb
 
-            if quench_snaps > 1:
-                bin_lo = max(0, snap_num - quench_snaps + 1)
-                is_q &= sfh[:, bin_lo:snap_num].sum(axis=1) == 0.0
+            bm_sfh = (np.array(g['BulgeMass'], dtype=np.float64)[mask]
+                      if 'BulgeMass' in g else np.zeros(mask.sum()))
+            is_q = compute_quiescent_mask(
+                sfr, stellar[mask], hubble_h, qmode,
+                sfh=sfh, snap_num=snap_num, quench_snaps=quench_snaps,
+                bulge_mass=bm_sfh,
+            )
 
             if is_q.sum() == 0:
                 continue
@@ -525,8 +599,29 @@ def load_halos_from_trees(tree_files, snap_num, hubble_h, min_len=0):
     return px, py, pz, log_mv
 
 
+def _annotate_mass(ax, x, y, logm, color, zorder=10):
+    """Bold log10(M*) text just above (x, y), coloured to match the circle."""
+    ax.annotate(f'$\mathrm{{log}}_{{10}}\ {logm:.2f}\ \mathrm{{m}}_\odot$', xy=(x, y), xytext=(0, 12),
+                textcoords='offset points', ha='center', va='bottom',
+                fontsize=14, fontweight='bold', color=color, zorder=zorder)
+
+
+def _draw_population_overlays(ax, mmc_pos=None, mmc_logm=None, mms_pos=None, mms_logm=None):
+    """Draw circle + bold mass label for the most-massive selected central (gold) and satellite (white)."""
+    if mmc_pos is not None:
+        ax.plot(mmc_pos[0], mmc_pos[1], 'o', mfc='none', mec='gold',
+                mew=2.0, markersize=18, zorder=9)
+    if mms_pos is not None:
+        ax.plot(mms_pos[0], mms_pos[1], 'o', mfc='none', mec='white',
+                mew=2.0, markersize=18, zorder=9)
+    if mmc_pos is not None and mmc_logm is not None:
+        _annotate_mass(ax, mmc_pos[0], mmc_pos[1], mmc_logm, 'gold', zorder=11)
+    if mms_pos is not None and mms_logm is not None:
+        _annotate_mass(ax, mms_pos[0], mms_pos[1], mms_logm, 'white', zorder=11)
+
+
 def make_projection(ax, x, y, color_val, quiescent, ages, xlabel, ylabel, box_mpc, cmap, norm, dot_size,
-                    mmq_pos=None):
+                    mmc_pos=None, mmc_logm=None, mms_pos=None, mms_logm=None):
     sf = ~quiescent
     sc = ax.scatter(x[sf], y[sf], c=color_val[sf], cmap=cmap, norm=norm,
                     s=dot_size, alpha=0.8, linewidths=0, rasterized=True)
@@ -541,9 +636,8 @@ def make_projection(ax, x, y, color_val, quiescent, ages, xlabel, ylabel, box_mp
             ax.scatter(x[old], y[old], c='gold', marker='*',
                        s=dot_size * 30, alpha=0.9, linewidths=0,
                        zorder=6, rasterized=True, label='Quiescent (>1 Gyr)')
-    if mmq_pos is not None:
-        ax.plot(mmq_pos[0], mmq_pos[1], 'o', mfc='none', mec='red',
-                mew=1.5, markersize=14, zorder=8)
+    _draw_population_overlays(ax, mmc_pos=mmc_pos, mmc_logm=mmc_logm,
+                              mms_pos=mms_pos, mms_logm=mms_logm)
     ax.set_xlim(0, box_mpc)
     ax.set_ylim(0, box_mpc)
     ax.set_xlabel(xlabel, fontsize=13)
@@ -553,7 +647,8 @@ def make_projection(ax, x, y, color_val, quiescent, ages, xlabel, ylabel, box_mp
 
 
 def make_halo_projection(ax, x, y, color_val, xlabel, ylabel, box_mpc, cmap, norm, dot_size,
-                         gal_x=None, gal_y=None, quiescent=None, ages=None, mmq_pos=None):
+                         gal_x=None, gal_y=None, quiescent=None, ages=None,
+                         mmc_pos=None, mmc_logm=None, mms_pos=None, mms_logm=None):
     sc = ax.scatter(x, y, c=color_val, cmap=cmap, norm=norm,
                     s=dot_size, alpha=0.8, linewidths=0, rasterized=True)
     if gal_x is not None and quiescent is not None and quiescent.sum() > 0:
@@ -567,9 +662,8 @@ def make_halo_projection(ax, x, y, color_val, xlabel, ylabel, box_mpc, cmap, nor
             ax.scatter(gal_x[old], gal_y[old], c='gold', marker='*',
                        s=dot_size * 30, alpha=0.9, linewidths=0,
                        zorder=6, rasterized=True, label='Quiescent (>1 Gyr)')
-    if mmq_pos is not None:
-        ax.plot(mmq_pos[0], mmq_pos[1], 'o', mfc='none', mec='red',
-                mew=1.5, markersize=14, zorder=8)
+    _draw_population_overlays(ax, mmc_pos=mmc_pos, mmc_logm=mmc_logm,
+                              mms_pos=mms_pos, mms_logm=mms_logm)
     ax.set_xlim(0, box_mpc)
     ax.set_ylim(0, box_mpc)
     ax.set_xlabel(xlabel, fontsize=13)
@@ -591,13 +685,185 @@ def parse_args():
     p.add_argument('--min-len', type=int, default=0,
                    help='Minimum halo particle count (default: 20)')
     p.add_argument('--quench-snaps', type=int, default=1,
-                   help='Number of consecutive snapshots with SFR=0 to classify as quiescent (default: 1)')
+                   help='Number of consecutive snapshots with SFR=0 to classify as quiescent '
+                        '(default: 1; applies only to the strict mode)')
+    p.add_argument('--modes', nargs='+', default=['strict', 'loose', 'loose_massive'],
+                   choices=list(QUIESCENT_MODES.keys()),
+                   help='Quiescence definitions to produce outputs for. '
+                        'strict = SFR==0; loose = sSFR<1e-11/yr; '
+                        'loose_massive = sSFR<1e-11/yr AND M* > 1e10 Msun; '
+                        'massive_bt = M*>=1e11 Msun AND SFR==0 AND 0.75<=B/T<=0.90. '
+                        'Default: strict, loose, loose_massive. '
+                        'Each mode produces its own plots/tables/CSV with a _<mode> suffix.')
     p.add_argument('--output-dir', type=str, default=None,
                    help='Where to save figures (default: <output_folder>/plots/)')
     p.add_argument('--tree-file', type=str, nargs='+', default=None,
                    help='STC HDF5 tree file(s) for halo plots (e.g. input/millennium/trees/trees_STC.hdf5); '
                         'accepts multiple files; skips halo plots if none found')
     return p.parse_args()
+
+
+def run_workflow_for_mode(filepaths, snap, z_snap, params, particle_mass, snap_times,
+                          h, args, out_dir, run_label, halos, qmode):
+    """Produce projections + tables + CSV + SFH plot for a single quiescence mode.
+
+    Output files are tagged with `_<qmode>` so the two modes don't overwrite each
+    other. Tables are also labelled in stdout.
+    """
+    mode_desc = QUIESCENT_MODES[qmode]
+    suffix = f'_{qmode}'
+    box_mpc = params['box_size'] / h
+
+    print()
+    print('=' * 70)
+    print(f'  Quiescence mode: {qmode}  ({mode_desc})')
+    print('=' * 70)
+
+    # --- load galaxies for this mode ---
+    px, py, pz, sm, mvir, gtype, quiescent, ages, extras = load_galaxies(
+        filepaths, snap, particle_mass, args.min_len, args.quench_snaps,
+        snap_times, h, qmode=qmode)
+    if px is None:
+        print(f'No galaxies with StellarMass > 0 found in Snap_{snap}; skipping mode {qmode}.')
+        return
+
+    px = px / h;  py = py / h;  pz = pz / h
+    log_sm = np.log10(sm * 1e10 / h)
+
+    n_sf   = (~quiescent).sum()
+    n_q    = int(quiescent.sum())
+    n_gold = int((quiescent & (ages > 1.0)).sum())
+    n_red  = n_q - n_gold
+    print(f'Loaded {len(px):,} galaxies  '
+          f'(log M* range: {log_sm.min():.2f} – {log_sm.max():.2f})')
+    print(f'  Star-forming: {n_sf:,}   Quiescent: {n_q:,}'
+          f'  (red <1Gyr: {n_red:,}, gold >1Gyr: {n_gold:,})')
+
+    # --- colormap & normalisation (mode-specific because SF/quiescent split changes) ---
+    sf_mask = ~quiescent
+    base_arr = log_sm[sf_mask] if sf_mask.any() else log_sm
+    vmin, vmax = np.percentile(base_arr, [2, 98])
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+    cmap = plt.cm.viridis
+
+    q_cen_sm = np.where((gtype == 0) & quiescent, sm, 0.0)
+    q_sat_sm = np.where((gtype == 1) & quiescent, sm, 0.0)
+    mmc_idx = int(np.argmax(q_cen_sm)) if q_cen_sm.max() > 0 else None
+    mms_idx = int(np.argmax(q_sat_sm)) if q_sat_sm.max() > 0 else None
+    if n_q > 0:
+        print(f'  Most-massive selected central / satellite circled (gold / white).')
+
+    projections = [
+        ('Posx', 'Posy', px, py, 'X [Mpc]', 'Y [Mpc]', 'XY'),
+        ('Posx', 'Posz', px, pz, 'X [Mpc]', 'Z [Mpc]', 'XZ'),
+        ('Posy', 'Posz', py, pz, 'Y [Mpc]', 'Z [Mpc]', 'YZ'),
+    ]
+
+    for _, _, xa, ya, xlabel, ylabel, tag in projections:
+        mmc_pos = (xa[mmc_idx], ya[mmc_idx]) if mmc_idx is not None else None
+        mms_pos = (xa[mms_idx], ya[mms_idx]) if mms_idx is not None else None
+        mmc_logm = float(log_sm[mmc_idx]) if mmc_idx is not None else None
+        mms_logm = float(log_sm[mms_idx]) if mms_idx is not None else None
+
+        fig, ax = plt.subplots(figsize=(7, 6.5))
+        fig.patch.set_facecolor('black')
+        ax.set_facecolor('black')
+        sc = make_projection(ax, xa, ya, log_sm, quiescent, ages, xlabel, ylabel,
+                             box_mpc, cmap, norm, args.dot_size,
+                             mmc_pos=mmc_pos, mms_pos=mms_pos,
+                             mmc_logm=mmc_logm, mms_logm=mms_logm)
+
+        ax.set_title(f'{run_label}  |  {tag} projection  |  z = {z_snap:.2f}  |  {qmode}: {mode_desc}',
+                     fontsize=11, color='white')
+        ax.tick_params(colors='white')
+        ax.xaxis.label.set_color('white')
+        ax.yaxis.label.set_color('white')
+        for spine in ax.spines.values():
+            spine.set_edgecolor('white')
+
+        # Colorbar sized to the plot axis height (so it doesn't bleed into the title)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes('right', size='4%', pad=0.08)
+        cax.set_facecolor('black')
+        cbar = fig.colorbar(sc, cax=cax)
+        cbar.set_label(r'$\log_{10}(M_*\,/\,M_\odot)$', fontsize=12, color='white')
+        cbar.ax.yaxis.set_tick_params(color='white')
+        cbar.outline.set_edgecolor('white')
+        plt.setp(cbar.ax.yaxis.get_ticklabels(), color='white')
+
+        fig.tight_layout()
+        fname = os.path.join(out_dir, f'spatial_{tag}_z{z_snap:.2f}_{run_label}{suffix}.pdf')
+        fig.savefig(fname, dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        print(f'Saved: {fname}')
+
+    # --- quiescent galaxy table + CSV + SFH plot ---
+    if n_q > 0:
+        print(f'\n[{qmode}: {mode_desc}]')
+        print_quiescent_table(px, py, pz, sm, mvir, gtype, quiescent, ages, h)
+        print_quiescent_extended_table(sm, mvir, quiescent, extras, h)
+
+        csv_path = os.path.join(out_dir, f'quiescent_galaxies_z{z_snap:.2f}_{run_label}{suffix}.csv')
+        save_quiescent_csv(filepaths, snap, particle_mass, args.min_len, args.quench_snaps,
+                           snap_times, h, csv_path, qmode=qmode)
+
+        sfh_path = os.path.join(out_dir, f'quiescent_sfh_z{z_snap:.2f}_{run_label}{suffix}.pdf')
+        plot_quiescent_sfh(filepaths, snap, particle_mass, args.min_len, args.quench_snaps,
+                           snap_times, h, sfh_path, z_snap, run_label, qmode=qmode)
+
+    # --- halo projections (re-use the pre-loaded halo data; overlay this mode's quiescent) ---
+    if halos is not None:
+        hpx, hpy, hpz, hlog_mv = halos
+        valid = np.isfinite(hlog_mv)
+        hv_min, hv_max = np.percentile(hlog_mv[valid], [2, 98])
+        hnorm = mcolors.Normalize(vmin=hv_min, vmax=hv_max)
+        hcmap = plt.cm.viridis
+
+        halo_projections = [
+            (hpx, hpy, px, py, 'X [Mpc]', 'Y [Mpc]', 'XY'),
+            (hpx, hpz, px, pz, 'X [Mpc]', 'Z [Mpc]', 'XZ'),
+            (hpy, hpz, py, pz, 'Y [Mpc]', 'Z [Mpc]', 'YZ'),
+        ]
+
+        for hxa, hya, gxa, gya, xlabel, ylabel, tag in halo_projections:
+            mmc_pos = (gxa[mmc_idx], gya[mmc_idx]) if mmc_idx is not None else None
+            mms_pos = (gxa[mms_idx], gya[mms_idx]) if mms_idx is not None else None
+            mmc_logm = float(log_sm[mmc_idx]) if mmc_idx is not None else None
+            mms_logm = float(log_sm[mms_idx]) if mms_idx is not None else None
+
+            fig, ax = plt.subplots(figsize=(7, 6.5))
+            fig.patch.set_facecolor('black')
+            ax.set_facecolor('black')
+            sc = make_halo_projection(ax, hxa, hya, hlog_mv, xlabel, ylabel,
+                                      box_mpc, hcmap, hnorm, args.dot_size,
+                                      gal_x=gxa, gal_y=gya,
+                                      quiescent=quiescent, ages=ages,
+                                      mmc_pos=mmc_pos, mms_pos=mms_pos,
+                                      mmc_logm=mmc_logm, mms_logm=mms_logm)
+
+            ax.set_title(f'{run_label}  |  Halos {tag}  |  z = {z_snap:.2f}  |  {qmode}: {mode_desc}',
+                         fontsize=11, color='white')
+            ax.tick_params(colors='white')
+            ax.xaxis.label.set_color('white')
+            ax.yaxis.label.set_color('white')
+            for spine in ax.spines.values():
+                spine.set_edgecolor('white')
+
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes('right', size='4%', pad=0.08)
+            cax.set_facecolor('black')
+            cbar = fig.colorbar(sc, cax=cax)
+            cbar.set_label(r'$\log_{10}(M_\mathrm{Crit200}\,/\,M_\odot)$',
+                           fontsize=12, color='white')
+            cbar.ax.yaxis.set_tick_params(color='white')
+            cbar.outline.set_edgecolor('white')
+            plt.setp(cbar.ax.yaxis.get_ticklabels(), color='white')
+
+            fig.tight_layout()
+            fname = os.path.join(out_dir, f'spatial_halos_{tag}_z{z_snap:.2f}_{run_label}{suffix}.pdf')
+            fig.savefig(fname, dpi=150, bbox_inches='tight')
+            plt.close(fig)
+            print(f'Saved: {fname}')
 
 
 def main():
@@ -614,8 +880,6 @@ def main():
     # --- read header from first file ---
     params = read_header(filepaths[0])
     h = params['hubble_h']
-    box_mpc_h = params['box_size']        # Mpc/h
-    box_mpc   = box_mpc_h / h             # physical Mpc
 
     # --- choose snapshot ---
     snap, z_snap = find_snapshot(params, target_z=args.redshift,
@@ -630,9 +894,11 @@ def main():
     has_sfh = bool(params['save_full_sfh'])
     effective_quench = args.quench_snaps
     if args.quench_snaps > 1 and not has_sfh:
-        print(f'  Warning: SaveFullSFH=0 — SFH arrays unavailable, falling back to quench_snaps=1')
+        print('  Warning: SaveFullSFH=0 — SFH arrays unavailable, falling back to quench_snaps=1')
         effective_quench = 1
-    print(f'Cuts: Len >= {args.min_len},  quiescence over {effective_quench} snapshot(s)')
+    print(f'Cuts: Len >= {args.min_len},  '
+          f'strict-mode quench window = {effective_quench} snapshot(s)')
+    print(f'Quiescence modes to run: {", ".join(args.modes)}')
 
     # --- precompute cosmic time at every snapshot ---
     snap_times = snapshot_times_gyr(
@@ -641,34 +907,6 @@ def main():
     )
     print(f'Cosmic time at selected snapshot: {snap_times[snap]:.3f} Gyr')
 
-    # --- load galaxies ---
-    px, py, pz, sm, mvir, gtype, quiescent, ages, extras = load_galaxies(
-        filepaths, snap, particle_mass, args.min_len, args.quench_snaps, snap_times)
-    if px is None:
-        sys.exit(f'No galaxies with StellarMass > 0 found in Snap_{snap}.')
-
-    # Convert positions: Mpc/h → Mpc
-    px /= h;  py /= h;  pz /= h
-
-    # Stellar mass: 10^10 M_sun/h → log10(M_sun)
-    log_sm = np.log10(sm * 1e10 / h)
-
-    n_sf   = (~quiescent).sum()
-    n_q    = quiescent.sum()
-    n_gold = (quiescent & (ages > 1.0)).sum()
-    n_red  = n_q - n_gold
-    print(f'Loaded {len(px):,} galaxies  '
-          f'(log M* range: {log_sm.min():.2f} – {log_sm.max():.2f})')
-    print(f'  Star-forming: {n_sf:,}   Quiescent: {n_q:,}'
-          f'  (red <1Gyr: {n_red:,}, gold >1Gyr: {n_gold:,})')
-
-    # --- colormap & normalisation ---
-    sf_mask = ~quiescent
-    base_arr = log_sm[sf_mask] if sf_mask.any() else log_sm
-    vmin, vmax = np.percentile(base_arr, [2, 98])
-    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
-    cmap = plt.cm.viridis
-
     # --- output directory ---
     out_dir = args.output_dir or os.path.join(args.output_folder, 'plots')
     os.makedirs(out_dir, exist_ok=True)
@@ -676,64 +914,9 @@ def main():
     # --- derive a run label from the folder name ---
     run_label = os.path.basename(os.path.normpath(args.output_folder))
 
-    # Index of the most massive quiescent galaxy (by stellar mass)
-    mmq_idx = int(np.argmax(np.where(quiescent, sm, 0.0))) if quiescent.sum() > 0 else None
-
-    projections = [
-        ('Posx', 'Posy', px, py, 'X [Mpc]',   'Y [Mpc]',   'XY'),
-        ('Posx', 'Posz', px, pz, 'X [Mpc]',   'Z [Mpc]',   'XZ'),
-        ('Posy', 'Posz', py, pz, 'Y [Mpc]',   'Z [Mpc]',   'YZ'),
-    ]
-
-    for _, _, xa, ya, xlabel, ylabel, tag in projections:
-        mmq_pos = (xa[mmq_idx], ya[mmq_idx]) if mmq_idx is not None else None
-        fig, ax = plt.subplots(figsize=(7, 6.5))
-        fig.patch.set_facecolor('black')
-        ax.set_facecolor('black')
-        sc = make_projection(ax, xa, ya, log_sm, quiescent, ages, xlabel, ylabel,
-                             box_mpc, cmap, norm, args.dot_size, mmq_pos=mmq_pos)
-
-        ax.set_title(f'{run_label}  |  {tag} projection  |  z = {z_snap:.2f}',
-                     fontsize=12, color='white')
-        ax.tick_params(colors='white')
-        ax.xaxis.label.set_color('white')
-        ax.yaxis.label.set_color('white')
-        for spine in ax.spines.values():
-            spine.set_edgecolor('white')
-
-        cbar = fig.colorbar(sc, ax=ax, pad=0.02)
-        cbar.set_label(r'$\log_{10}(M_*\,/\,M_\odot)$', fontsize=12, color='white')
-        cbar.ax.yaxis.set_tick_params(color='white')
-        plt.setp(cbar.ax.yaxis.get_ticklabels(), color='white')
-
-        if quiescent.sum() > 0:
-            ax.legend(loc='upper right', fontsize=9, framealpha=0.3,
-                            facecolor='black', edgecolor='white', labelcolor='white')
-
-
-        fig.tight_layout()
-        fname = os.path.join(out_dir, f'spatial_{tag}_z{z_snap:.2f}_{run_label}.pdf')
-        fig.savefig(fname, dpi=150, bbox_inches='tight')
-        plt.close(fig)
-        print(f'Saved: {fname}')
-
-    # --- quiescent galaxy table + CSV + SFH plot ---
-    if quiescent.sum() > 0:
-        print_quiescent_table(px, py, pz, sm, mvir, gtype, quiescent, ages, h)
-        print_quiescent_extended_table(sm, mvir, quiescent, extras, h)
-
-        csv_path = os.path.join(out_dir, f'quiescent_galaxies_z{z_snap:.2f}_{run_label}.csv')
-        save_quiescent_csv(filepaths, snap, particle_mass, args.min_len, args.quench_snaps,
-                           snap_times, h, csv_path)
-
-        sfh_path = os.path.join(out_dir, f'quiescent_sfh_z{z_snap:.2f}_{run_label}.pdf')
-        plot_quiescent_sfh(filepaths, snap, particle_mass, args.min_len, args.quench_snaps,
-                           snap_times, h, sfh_path, z_snap, run_label)
-
-    # --- halo projections from merger trees ---
-    tree_files = args.tree_file  # list or None
+    # --- resolve tree files and load halos once (mode-independent) ---
+    tree_files = args.tree_file
     if tree_files is None:
-        # try to guess: same structure as output but under input/
         folder_name = os.path.basename(os.path.normpath(args.output_folder))
         pattern = os.path.join('input', folder_name, 'trees', 'trees_STC*.hdf5')
         found = sorted(glob.glob(pattern))
@@ -741,7 +924,6 @@ def main():
             tree_files = found
 
     if tree_files:
-        # expand any directories to the HDF5 files they contain
         expanded = []
         for tf in tree_files:
             if os.path.isdir(tf):
@@ -759,72 +941,31 @@ def main():
             print(f'\nWarning: tree file not found: {tf}')
         tree_files = [tf for tf in tree_files if os.path.isfile(tf)]
 
+    halos = None
     if tree_files:
         print(f'\nLoading halos from {len(tree_files)} tree file(s)...')
         hpx, hpy, hpz, hlog_mv = load_halos_from_trees(
             tree_files, snap, h, min_len=args.min_len)
-
         if hpx is None:
             print(f'No FoF central halos found at Snap_{snap} in tree file.')
         else:
-            # convert Mpc/h → Mpc
             hpx /= h;  hpy /= h;  hpz /= h
-
             valid = np.isfinite(hlog_mv)
             print(f'Loaded {len(hpx):,} FoF central halos  '
                   f'(log M_Crit200 range: {hlog_mv[valid].min():.2f} – {hlog_mv[valid].max():.2f})')
-
-            hv_min, hv_max = np.percentile(hlog_mv[valid], [2, 98])
-            hnorm = mcolors.Normalize(vmin=hv_min, vmax=hv_max)
-            hcmap = plt.cm.viridis
-
-            halo_projections = [
-                (hpx, hpy, px, py, 'X [Mpc]', 'Y [Mpc]', 'XY'),
-                (hpx, hpz, px, pz, 'X [Mpc]', 'Z [Mpc]', 'XZ'),
-                (hpy, hpz, py, pz, 'Y [Mpc]', 'Z [Mpc]', 'YZ'),
-            ]
-
-            for hxa, hya, gxa, gya, xlabel, ylabel, tag in halo_projections:
-                mmq_pos = (gxa[mmq_idx], gya[mmq_idx]) if mmq_idx is not None else None
-                fig, ax = plt.subplots(figsize=(7, 6.5))
-                fig.patch.set_facecolor('black')
-                ax.set_facecolor('black')
-                sc = make_halo_projection(ax, hxa, hya, hlog_mv, xlabel, ylabel,
-                                          box_mpc, hcmap, hnorm, args.dot_size,
-                                          gal_x=gxa, gal_y=gya,
-                                          quiescent=quiescent, ages=ages,
-                                          mmq_pos=mmq_pos)
-
-                ax.set_title(f'{run_label}  |  Halos {tag}  |  z = {z_snap:.2f}',
-                             fontsize=12, color='white')
-                ax.tick_params(colors='white')
-                ax.xaxis.label.set_color('white')
-                ax.yaxis.label.set_color('white')
-                for spine in ax.spines.values():
-                    spine.set_edgecolor('white')
-
-                cbar = fig.colorbar(sc, ax=ax, pad=0.02)
-                cbar.set_label(r'$\log_{10}(M_\mathrm{Crit200}\,/\,M_\odot)$',
-                               fontsize=12, color='white')
-                cbar.ax.yaxis.set_tick_params(color='white')
-                plt.setp(cbar.ax.yaxis.get_ticklabels(), color='white')
-
-                if quiescent.sum() > 0:
-                    ax.legend(loc='upper right', fontsize=9, framealpha=0.3,
-                                    facecolor='black', edgecolor='white', labelcolor='white')
-
-                fig.tight_layout()
-                fname = os.path.join(out_dir, f'spatial_halos_{tag}_z{z_snap:.2f}_{run_label}.pdf')
-                fig.savefig(fname, dpi=150, bbox_inches='tight')
-                plt.close(fig)
-                print(f'Saved: {fname}')
+            halos = (hpx, hpy, hpz, hlog_mv)
     else:
         if args.tree_file:
             print('\nWarning: no valid tree files found — skipping halo plots.')
         else:
             print('\nNo tree file found — skipping halo plots. Use --tree-file to specify one.')
 
-    print('Done.')
+    # --- run per-mode workflow ---
+    for qmode in args.modes:
+        run_workflow_for_mode(filepaths, snap, z_snap, params, particle_mass,
+                              snap_times, h, args, out_dir, run_label, halos, qmode)
+
+    print('\nDone.')
 
 
 if __name__ == '__main__':

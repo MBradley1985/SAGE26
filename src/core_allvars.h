@@ -167,6 +167,7 @@ struct GALAXY
     float MergTime;
     double Cooling;
     double Heating;
+    double HeatingReservoir;  /* CGM-regime persistent AGN heat reservoir, decays on t_dyn; carries memory across snapshots */
     float r_heat;
     float QuasarModeBHaccretionMass;
     float TimeOfLastMajorMerger;
