@@ -1,3 +1,18 @@
+/*
+ * core_save.c -- output format dispatch layer for galaxy catalogues.
+ *
+ * Provides the three lifecycle entry points used by sage.c for galaxy output:
+ * initialize_galaxy_files() (opens output files), save_galaxies() (writes one
+ * tree's galaxies), and finalize_galaxy_files() (writes headers/metadata and
+ * closes files).  Each function dispatches to the binary or HDF5 writer based
+ * on run_params->OutputFormat.
+ * The file-private generate_galaxy_indices() assigns each galaxy a unique
+ * 64-bit GalaxyIndex encoded as filenr * FileNr_Mulfac + forestnr * ForestNr_Mulfac
+ * + GalaxyNr, with overflow guards.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,15 +35,20 @@
 #endif
 
 // Local Proto-Types //
-int32_t generate_galaxy_indices(const struct halo_data *halos, const struct halo_aux_data *haloaux,
+static int32_t generate_galaxy_indices(const struct halo_data *halos, const struct halo_aux_data *haloaux,
                                 struct GALAXY *halogal, const int64_t numgals,
                                 const int64_t treenr, const int32_t filenr,
                                 const int64_t filenr_mulfac, const int64_t forestnr_mulfac,const struct params *run_params);
 
 // Externally Visible Functions //
 
-// Open up all the required output files and remember their file handles.  These are placed into
-// `save_info` for access later.
+/*
+ * initialize_galaxy_files -- open output files and allocate write buffers.
+ *
+ * Dispatches to the binary or HDF5 initialiser based on OutputFormat.  Checks
+ * that NumSnapOutputs <= ABSOLUTEMAXSNAPS before delegating.  Returns
+ * EXIT_SUCCESS or a negative SAGE error code on failure.
+ */
 int32_t initialize_galaxy_files(const int rank, const struct forest_info *forest_info, struct save_info *save_info, const struct params *run_params)
 {
     int32_t status;
@@ -63,7 +83,14 @@ int32_t initialize_galaxy_files(const int rank, const struct forest_info *forest
 }
 
 
-// Write all the galaxy properties to file.
+/*
+ * save_galaxies -- write one tree's galaxies to the output files.
+ *
+ * Assigns each galaxy an output snapshot index, updates mergeIntoID to point
+ * within the output ordering, generates unique GalaxyIndex values via
+ * generate_galaxy_indices(), then dispatches to the binary or HDF5 writer.
+ * Returns EXIT_SUCCESS or a negative SAGE error code on failure.
+ */
 int32_t save_galaxies(const int64_t task_forestnr, const int numgals, struct halo_data *halos,
                       struct forest_info *forest_info,
                       struct halo_aux_data *haloaux, struct GALAXY *halogal,
@@ -163,8 +190,10 @@ int32_t save_galaxies(const int64_t task_forestnr, const int numgals, struct hal
 }
 
 
-// Write any remaining attributes or header information, close all the open files and free all the
-// relevant dataspaces.
+/*
+ * finalize_galaxy_files -- flush remaining data, write headers, and close all
+ * output files.  Dispatches to the binary or HDF5 finaliser.
+ */
 int32_t finalize_galaxy_files(const struct forest_info *forest_info, struct save_info *save_info, const struct params *run_params)
 {
 
@@ -193,12 +222,16 @@ int32_t finalize_galaxy_files(const struct forest_info *forest_info, struct save
 
 // Local Functions //
 
-// Generate a unique GalaxyIndex for each galaxy based on the file number, the file-local
-// tree number and the tree-local galaxy number.  NOTE: Both the file number and the tree number are
-// based on the **original simulation files**.  These may be different from the ``forestnr``
-// parameter being used to process the forest within SAGE; that ``forestnr`` is **task local** and
-// potentially does **NOT** correspond to the tree number in the original simulation file.
-int32_t generate_galaxy_indices(const struct halo_data *halos, const struct halo_aux_data *haloaux,
+/*
+ * generate_galaxy_indices -- assign each galaxy a unique 64-bit GalaxyIndex.
+ *
+ * GalaxyIndex = GalaxyNr + forestnr * forestnr_mulfac + filenr * filenr_mulfac.
+ * Both filenr and forestnr are from the original simulation files, not the
+ * task-local forest numbering.  Checks for integer overflow at each step and
+ * prints format-specific guidance if the multiplier constants are too small.
+ * Returns EXIT_SUCCESS or EXIT_FAILURE.
+ */
+static int32_t generate_galaxy_indices(const struct halo_data *halos, const struct halo_aux_data *haloaux,
                                 struct GALAXY *halogal, const int64_t numgals,
                                 const int64_t forestnr, const int32_t filenr,
                                 const int64_t filenr_mulfac, const int64_t forestnr_mulfac,
