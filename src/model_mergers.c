@@ -1,3 +1,18 @@
+/*
+ * model_mergers.c -- galaxy merger physics.
+ *
+ * Implements the full merger pipeline: dynamical friction timescale
+ * (estimate_merging_time), remnant bulge-radius calculation
+ * (calculate_merger_remnant_radius, file-private), merger classification
+ * and mass redistribution (deal_with_galaxy_merger), AGN accretion modes
+ * (grow_black_hole, quasar_mode_wind), galaxy addition (add_galaxies_together,
+ * make_bulge_from_burst), the collisional starburst recipe for both mergers
+ * and disk instabilities (collisional_starburst_recipe), and satellite
+ * disruption into the ICS (disrupt_satellite_to_ICS).
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,10 +26,16 @@
 #include "model_starformation_and_feedback.h"
 #include "model_disk_instability.h"
 
-// ============================================================================
-// Merger time between satellite and central
-// ============================================================================
+/* File-private forward declaration */
+static double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GALAXY *g2);
 
+/*
+ * estimate_merging_time -- compute the dynamical friction merger timescale
+ * for a satellite entering mother_halo.
+ *
+ * Uses the Binney & Tremaine (1987) dynamical friction formula scaled by
+ * MergerTimeFactor.  Returns the merger time in code units (Myr/h).
+ */
 double estimate_merging_time(const int sat_halo, const int mother_halo, const int ngal, struct halo_data *halos, struct GALAXY *galaxies, const struct params *run_params)
 {
     double mergtime;
@@ -53,7 +74,15 @@ double estimate_merging_time(const int sat_halo, const int mother_halo, const in
 // Determine the radius of merger remnant
 // ============================================================================
 
-double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GALAXY *g2)
+/*
+ * calculate_merger_remnant_radius -- compute the virial radius of the merger
+ * remnant bulge using energy conservation.
+ *
+ * Applies the binding energy formula: R_rem = (M1+M2)^2 / (M1/R1 + M2/R2 +
+ * 0.5*(M1+M2)^2/(M1*R1+M2*R2)) where M, R are baryonic mass and half-mass
+ * radius for each progenitor.
+ */
+static double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GALAXY *g2)
 {
     // 1. Calculate Total Baryonic Mass (Stars + Gas) for both progenitors
     double M1 = g1->StellarMass + g1->ColdGas;
@@ -138,6 +167,15 @@ double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GAL
 // This is called from both mergers and disk instabilities, but the merger case is more complex
 // ============================================================================
 
+/*
+ * deal_with_galaxy_merger -- process one galaxy merger event.
+ *
+ * Classifies the event as major (mass_ratio > MajorMergerFraction) or minor,
+ * calls collisional_starburst_recipe(), updates bulge mass and merger-origin
+ * bulge radius, merges stellar/gas reservoirs via add_galaxies_together(), and
+ * disrupts the satellite.  AGN growth is triggered on both major and minor
+ * mergers via grow_black_hole().
+ */
 void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int centralgal,
                              const double time, const double dt, const int halonr, const int step,
                              struct GALAXY *galaxies, const struct params *run_params)
@@ -245,6 +283,13 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
 // Grow black hole through accretion from cold disk during mergers
 // ============================================================================
 
+/*
+ * grow_black_hole -- accrete cold gas onto the central black hole.
+ *
+ * Scales the accreted mass by (mass_ratio / (mass_ratio + BlackHoleCouplingFactor))
+ * and removes it from the cold gas reservoir.  Computes quasar-mode energy
+ * output for AGNrecipeOn == 1 via quasar_mode_wind().
+ */
 void grow_black_hole(const int merger_centralgal, const double mass_ratio, struct GALAXY *galaxies, const struct params *run_params)
 {
     double BHaccrete, metallicity;
@@ -286,6 +331,12 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
 // QUASARS: Eject gas from galaxy based on energy of quasar-mode wind
 // ============================================================================
 
+/*
+ * quasar_mode_wind -- eject cold gas via quasar-mode feedback.
+ *
+ * Computes the quasar wind energy from BH accretion and ejects cold gas
+ * proportionally.  Ejected mass goes to the EjectedMass reservoir.
+ */
 void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *galaxies, const struct params *run_params)
 {
     // work out total energy in quasar wind (eta*m*c^2)
@@ -344,6 +395,14 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
 // Actually merge the galaxies together by adding their properties, and apply the starburst recipe
 // ============================================================================
 
+/*
+ * add_galaxies_together -- merge all baryonic reservoirs of satellite p into
+ * central t.
+ *
+ * Adds stellar mass, cold/hot/ejected gas, metals, ICS, H2, and CGM gas from p
+ * to t, transferring satellite-owned data (SFH arrays, infall properties, ICS
+ * assembly history) to the central.
+ */
 void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
     galaxies[t].ColdGas += galaxies[p].ColdGas;
@@ -425,6 +484,10 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
 // Bulges
 // ============================================================================
 
+/*
+ * make_bulge_from_burst -- transfer all stellar disk mass to the bulge after a
+ * major merger starburst.
+ */
 void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
 {
     // generate bulge
@@ -450,6 +513,14 @@ void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
 // Starbursts
 // ============================================================================
 
+/*
+ * collisional_starburst_recipe -- trigger an interaction-driven starburst.
+ *
+ * Called both during mergers (mode=1) and disk instabilities (mode=0).
+ * Computes the burst SFR from the Somerville (2001) mass_ratio scaling, forms
+ * stars into BulgeMass/MergerBulgeMass (mergers) or disk stars (instabilities),
+ * applies SN feedback routing (FIRE or standard), and updates SFH arrays.
+ */
 void collisional_starburst_recipe(const double mass_ratio, const int merger_centralgal, const int centralgal,
                                   const double time, const double dt, const int halonr, const int mode, const int step,
                                   const int burst_to_merger_bulge, const double old_disk_radius,
@@ -775,6 +846,14 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
 // Intracluster Stars (ICS) and Disruption
 // ============================================================================
 
+/*
+ * disrupt_satellite_to_ICS -- disrupt satellite gal into the central's ICS
+ * (intra-cluster stars) reservoir.
+ *
+ * Transfers all stellar mass, metals, and gas from the satellite to the
+ * central's ICS and hot/CGM reservoirs.  Optionally tracks disruption time
+ * and mass if TrackICSAssembly is set.
+ */
 void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double time, struct GALAXY *galaxies, const struct params *run_params)
 {
     // Transfer satellite's gas to central's hot/CGM reservoir (regime-dependent)
