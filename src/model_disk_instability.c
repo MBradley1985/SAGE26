@@ -1,3 +1,17 @@
+/*
+ * model_disk_instability.c -- Toomre disk-instability channel for bulge growth.
+ *
+ * Implements check_disk_instability(), which evaluates the Mo, Mao & White
+ * (1998) instability criterion each timestep.  When the disk (cold gas + disk
+ * stars) exceeds the Toomre critical mass M_crit = Vmax^2 * 3*R_d / G, the
+ * excess stellar mass is transferred to the bulge (tracking instability-origin
+ * bulge mass and radius via update_instability_bulge_radius()) and the excess
+ * gas is consumed via a collisional starburst, with a fraction feeding the
+ * central black hole if AGNrecipeOn > 0.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,10 +24,16 @@
 #include "model_misc.h"
 #include "model_mergers.h"
 
-// ============================================================================
-// Disk instability
-// ============================================================================
-
+/*
+ * check_disk_instability -- apply the Toomre instability criterion and
+ * redistribute unstable mass for galaxy p at the current timestep.
+ *
+ * Computes M_crit from Vmax and DiskScaleRadius; any excess disk stars are
+ * moved to InstabilityBulgeMass (with an incremental bulge radius update per
+ * Tonini+ 2016 eq. 15), and any excess gas is burst via
+ * collisional_starburst_recipe().  Saves DiskScaleRadius before any mass
+ * transfer so the Tonini formula uses the pre-instability disc scale.
+ */
 void check_disk_instability(const int p, const int centralgal, const int halonr, const double time, const double dt, const int step,
                             struct GALAXY *galaxies, struct params *run_params)
 {
