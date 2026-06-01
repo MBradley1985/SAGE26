@@ -1,10 +1,17 @@
-/* File: progressbar.c */
 /*
-  This file is a part of the Corrfunc package
-  Copyright (C) 2015-- Manodeep Sinha (manodeep@gmail.com)
-  License: MIT LICENSE. See LICENSE file under the top-level
-  directory at https://github.com/manodeep/Corrfunc/
-*/
+ * progressbar.c -- ANSI terminal progress bar with SAGE26 ASCII art.
+ *
+ * Derived from the Corrfunc package by Manodeep Sinha
+ * (https://github.com/manodeep/Corrfunc/), MIT License.
+ * Heavily modified for SAGE26: replaced the original bar with a rainbow
+ * progress bar and a progressive-reveal SAGE26 ASCII art display.
+ *
+ * Public API: init_my_progressbar() / my_progressbar() / finish_myprogressbar().
+ * The static helper print_sage26_progress() renders the ASCII art at a given
+ * completion percentage.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
 
 #include "progressbar.h"
 #include <inttypes.h>
@@ -69,6 +76,12 @@ static void print_sage26_progress(FILE *stream, double percent)
     }
 }
 
+/*
+ * init_my_progressbar -- reset progress state and print the opening banner.
+ *
+ * Sets total_steps, resets prev_percent and *interrupted, records tstart for
+ * ETA calculations, and prints the introductory message to stream.
+ */
 void init_my_progressbar(FILE *stream, const int64_t N, int *interrupted)
 {
     if (N <= 0) {
@@ -90,6 +103,13 @@ void init_my_progressbar(FILE *stream, const int64_t N, int *interrupted)
     fprintf(stream, "\033[0;37m%s\033[0m", message3);
 }
 
+/*
+ * my_progressbar -- update the progress display for the current index.
+ *
+ * Redraws the SAGE26 ASCII art and rainbow progress bar whenever the integer
+ * percentage changes.  Uses ANSI cursor-up escapes to overwrite the previous
+ * frame in-place.  No-op if total_steps <= 0.
+ */
 void my_progressbar(FILE *stream, const int64_t curr_index, int *interrupted)
 {
     if (total_steps <= 0) return;
@@ -167,6 +187,12 @@ void my_progressbar(FILE *stream, const int64_t curr_index, int *interrupted)
     }
 }
 
+/*
+ * finish_myprogressbar -- render the 100% state and print the elapsed time.
+ *
+ * Draws the final fully-revealed ASCII art and a full progress bar, then
+ * prints total elapsed time from init_my_progressbar().  Resets *interrupted.
+ */
 void finish_myprogressbar(FILE *stream, int *interrupted)
 {
     if (total_steps > 0) {
