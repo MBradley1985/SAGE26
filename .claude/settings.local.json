@@ -27,7 +27,9 @@
       "Bash(xargs -I {} sh -c 'echo \"=== {} ===\"; head -3 \"{}\"')",
       "Bash(xargs -I {} sh -c 'echo \"=== {} ===\"; head -8 \"{}\"')",
       "Bash(xargs -I {} sh -c 'echo \"=== {} ===\"; head -15 \"{}\"')",
-      "Bash(flake8 plotting/allresults-local.py)"
+      "Bash(flake8 plotting/allresults-local.py)",
+      "Bash(grep -c — /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/__TRACKED_VAR__)",
+      "Bash(git commit *)"
     ]
   }
 }
