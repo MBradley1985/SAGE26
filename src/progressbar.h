@@ -15,10 +15,6 @@
 extern "C" {
 #endif
 
-#if 0
-}
-#endif
-
 void init_my_progressbar(FILE *stream, const int64_t N, int *interrupted);
 void my_progressbar(FILE *stream, const int64_t curr_index, int *interrupted);
 void finish_myprogressbar(FILE *stream, int *interrupted);

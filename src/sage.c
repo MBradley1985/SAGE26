@@ -373,13 +373,6 @@ static int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_in
         return status;
     }
 
-#if 0
-    for(int halonr = 0; halonr < nhalos; halonr++) {
-        fprintf(stderr,"halonr = %d snap = %03d mvir = %14.6e firstfofhalo = %8d nexthalo = %8d\n",
-                halonr, Halo[halonr].SnapNum, Halo[halonr].Mvir, Halo[halonr].FirstHaloInFOFgroup, Halo[halonr].NextHaloInFOFgroup);
-    }
-#endif
-
     /* this will be the new processing style --> one snapshot at a time */
     uint32_t ngal = 0;
     for(int snapshot=min_snapshot;snapshot <= max_snapshot; snapshot++) {
