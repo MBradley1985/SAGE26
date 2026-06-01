@@ -1,3 +1,22 @@
+/*
+ * core_build_model.c -- merger tree traversal and the per-timestep physics loop.
+ *
+ * Implements three functions that together constitute the inner loop of SAGE:
+ *   construct_galaxies -- recursive depth-first traversal of one merger tree;
+ *                         calls itself on all progenitors, then delegates FOF
+ *                         group assembly to join_galaxies_of_progenitors and
+ *                         per-snapshot evolution to evolve_galaxies.
+ *   join_galaxies_of_progenitors -- links progenitor galaxies to their
+ *                         descendants, identifies the central, handles mergers
+ *                         for halos that no longer exist, and grows the galaxy
+ *                         array as needed.
+ *   evolve_galaxies     -- drives the physics sub-steps for one snapshot
+ *                         interval: infall, cooling, star formation, feedback,
+ *                         disk instability, reincorporation, mergers, output.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,7 +47,15 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
 
 
 
-/* the only externally visible function */
+/*
+ * construct_galaxies -- recursively traverse the merger tree rooted at halonr
+ * and build/evolve the galaxy population within it.
+ *
+ * Visits all progenitors depth-first (setting DoneFlag), then assembles the
+ * FOF group at the current snapshot via join_galaxies_of_progenitors() and
+ * advances galaxies through the physics loop via evolve_galaxies().
+ * Returns EXIT_SUCCESS or a negative SAGE error code.
+ */
 int construct_galaxies(const int halonr, int *numgals, int *galaxycounter, int *maxgals, struct halo_data *halos,
                        struct halo_aux_data *haloaux, struct GALAXY **ptr_to_galaxies, struct GALAXY **ptr_to_halogal,
                        struct params *run_params)
@@ -112,7 +139,17 @@ int construct_galaxies(const int halonr, int *numgals, int *galaxycounter, int *
 /* end of construct_galaxies*/
 
 
-int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *galaxycounter, int *maxgals, struct halo_data *halos,
+/*
+ * join_galaxies_of_progenitors -- link progenitor galaxies to the current halo
+ * and process any immediate mergers.
+ *
+ * For each progenitor FOF halo, identifies the most massive central (lenmax
+ * criterion), reassigns galaxy hosting, and calls deal_with_galaxy_merger()
+ * for galaxies whose host halo no longer exists.  Grows the galaxy array
+ * (reallocating via myrealloc) if the active count approaches maxgals.
+ * Returns EXIT_SUCCESS or a negative SAGE error code.
+ */
+static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *galaxycounter, int *maxgals, struct halo_data *halos,
                                  struct halo_aux_data *haloaux, struct GALAXY **ptr_to_galaxies, struct GALAXY **ptr_to_halogal, struct params *run_params)
 {
     int ngal, prog,  first_occupied, lenmax, lenoccmax;
@@ -304,7 +341,16 @@ int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *gal
 }
 /* end of join_galaxies_of_progenitors */
 
-int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals, struct halo_data *halos,
+/*
+ * evolve_galaxies -- advance ngal galaxies through one snapshot interval.
+ *
+ * Drives STEPS (or up to MAX_STEPS adaptively) sub-steps.  Each sub-step
+ * calls: infall_recipe, cooling_recipe, starformation_and_feedback,
+ * check_disk_instability, and reincorporate_gas.  After the sub-steps,
+ * handles any remaining mergers and calls save_galaxies() for this forest.
+ * Returns EXIT_SUCCESS or a negative SAGE error code.
+ */
+static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals, struct halo_data *halos,
                     struct halo_aux_data *haloaux, struct GALAXY **ptr_to_galaxies, struct GALAXY **ptr_to_halogal,
                     struct params *run_params)
 {
