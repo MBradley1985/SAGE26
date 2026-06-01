@@ -1,3 +1,15 @@
+/*
+ * core_read_parameter_file.c -- parameter file parser.
+ *
+ * Provides read_parameter_file(), which opens and parses a SAGE parameter file
+ * in the key=value format, validating that all required keys are present and
+ * that no unrecognised keys appear.  After parsing, converts string-valued
+ * parameters (TreeType, OutputFormat, ForestDistributionScheme) to their
+ * canonical enum values and applies post-read defaults and validation.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,9 +28,10 @@ enum datatypes {
 #define MAXTAGS          300  /* Max number of parameters */
 #define MAXTAGLEN         50  /* Max number of characters in the string param tags */
 
-int compare_ints_descending (const void* p1, const void* p2);
+/* compare_ints_descending -- qsort comparator, descending order. */
+static int compare_ints_descending (const void* p1, const void* p2);
 
-int compare_ints_descending (const void* p1, const void* p2)
+static int compare_ints_descending (const void* p1, const void* p2)
 {
     int i1 = *(int*) p1;
     int i2 = *(int*) p2;
@@ -31,6 +44,16 @@ int compare_ints_descending (const void* p1, const void* p2)
     }
  }
 
+/*
+ * read_parameter_file -- parse a SAGE parameter file into *run_params.
+ *
+ * Reads key=value pairs from fname, matching each key against a hard-coded
+ * table of MAXTAGS registered parameters.  After the full file is read,
+ * verifies that all required parameters were set and that no unknown keys were
+ * present.  Then converts TreeType/OutputFormat/ForestDistribution string
+ * values to their enum equivalents and sorts ListOutputSnaps in descending
+ * order.  Returns EXIT_SUCCESS or a positive error count on failure.
+ */
 int read_parameter_file(const char *fname, struct params *run_params)
 {
     int errorFlag = 0;
