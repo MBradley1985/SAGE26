@@ -32,7 +32,9 @@
       "Bash(git commit *)",
       "Bash(echo \"Exit: $?\")",
       "Bash(make)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(make -j4)",
+      "Bash(grep -E \"error:|warning:|Nothing|sage$\")"
     ]
   }
 }

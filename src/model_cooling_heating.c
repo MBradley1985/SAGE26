@@ -1024,11 +1024,15 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
         galaxies[centralgal].CGMgas -= AGNaccreted;
         galaxies[centralgal].MetalsCGMgas -= metallicity * AGNaccreted;
 
-        // Per-substep cooling suppression (Option A) -- immediate, bounded.
-        // Also add the heat energy to .Heating; caller feeds it into HeatingReservoir.
         if(AGNheating > 0.0) {
-            coolingGas -= AGNheating;
-            if(coolingGas < 0.0) coolingGas = 0.0;
+            // When the HeatingReservoir is active the caller handles cross-snapshot
+            // suppression; skip the immediate subtraction here to avoid double-counting
+            // (the same energy would be spent now AND fed into the reservoir for later).
+            // When the reservoir is off, apply immediate per-substep suppression.
+            if(run_params->CGMHeatingReservoirOn == 0) {
+                coolingGas -= AGNheating;
+                if(coolingGas < 0.0) coolingGas = 0.0;
+            }
             galaxies[centralgal].Heating += 0.5 * AGNheating * galaxies[centralgal].Vvir * galaxies[centralgal].Vvir;
         }
     }
