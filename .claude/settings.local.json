@@ -23,7 +23,10 @@
       "Bash(bash /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/tests/regression_baseline.sh --help)",
       "Bash(bash *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\"; head -3 \"{}\"')",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\"; head -8 \"{}\"')",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\"; head -15 \"{}\"')"
     ]
   }
 }
