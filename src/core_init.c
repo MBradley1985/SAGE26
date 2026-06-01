@@ -1,3 +1,16 @@
+/*
+ * core_init.c -- per-run initialisation (units, snapshot list, cooling tables).
+ *
+ * Exports init(), which must be called once per SAGE run after the parameter
+ * file has been parsed.  Internally delegates to set_units() (derives all
+ * secondary unit-conversion factors), read_snap_list() (populates the AA[]
+ * scale-factor array), time_to_present() (computes lookback times via GSL or
+ * a fallback trapezoidal integrator), and read_cooling_functions() from
+ * core_cool_func.c.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,11 +31,20 @@
 
 
 /* These functions do not need to be exposed externally */
-double integrand_time_to_present(const double a, void *param);
-void set_units(struct params *run_params);
-void read_snap_list(struct params *run_params);
-double time_to_present(const double z, struct params *run_params);
+static double integrand_time_to_present(const double a, void *param);
+static void set_units(struct params *run_params);
+static void read_snap_list(struct params *run_params);
+static double time_to_present(const double z, struct params *run_params);
 
+/*
+ * init -- initialise per-run physics constants, snapshot tables, and cooling
+ * functions.
+ *
+ * Allocates and fills run_params->Age[] (lookback times per snapshot),
+ * computes derived unit conversions via set_units(), reads the snapshot
+ * scale-factor list via read_snap_list(), sets reionisation redshift parameters,
+ * and loads the CIE cooling tables via read_cooling_functions().
+ */
 void init(struct params *run_params)
 {
 #ifdef VERBOSE
@@ -58,7 +80,15 @@ void init(struct params *run_params)
 
 
 
-void set_units(struct params *run_params)
+/*
+ * set_units -- derive all secondary unit-conversion constants from the three
+ * primary ones (UnitLength_in_cm, UnitMass_in_g, UnitVelocity_in_cm_per_s).
+ *
+ * Populates UnitTime_in_s, UnitTime_in_Megayears, G, UnitDensity_in_cgs,
+ * UnitPressure_in_cgs, UnitCoolingRate_in_cgs, UnitEnergy_in_cgs,
+ * EnergySNcode, EtaSNcode, Hubble, and RhoCrit in run_params.
+ */
+static void set_units(struct params *run_params)
 {
 
     run_params->UnitTime_in_s = run_params->UnitLength_in_cm / run_params->UnitVelocity_in_cm_per_s;
@@ -81,7 +111,13 @@ void set_units(struct params *run_params)
 
 
 
-void read_snap_list(struct params *run_params)
+/*
+ * read_snap_list -- load snapshot scale factors from FileWithSnapList.
+ *
+ * Fills run_params->AA[] and sets run_params->Snaplistlen.  Aborts if the
+ * file cannot be opened.
+ */
+static void read_snap_list(struct params *run_params)
 {
 #ifdef VERBOSE
     const int ThisTask = run_params->ThisTask;
@@ -113,7 +149,14 @@ void read_snap_list(struct params *run_params)
 #endif
 }
 
-double time_to_present(const double z, struct params *run_params)
+/*
+ * time_to_present -- compute lookback time to redshift z in code units.
+ *
+ * Integrates 1/[a * H(a)] from a=1/(1+z) to a=1 using GSL adaptive
+ * quadrature when available, or a fixed-step trapezoidal rule otherwise.
+ * Returns time in Myr/h (internal code units).
+ */
+static double time_to_present(const double z, struct params *run_params)
 {
     const double end_limit = 1.0;
     const double start_limit = 1.0/(1 + z);
@@ -155,7 +198,8 @@ double time_to_present(const double z, struct params *run_params)
     return time;
 }
 
-double integrand_time_to_present(const double a, void *param)
+/* integrand_time_to_present -- da/dt integrand: 1/sqrt(Omega/a + k + Lambda*a^2). */
+static double integrand_time_to_present(const double a, void *param)
 {
     const struct params *run_params = (struct params *) param;
     return 1.0 / sqrt(run_params->Omega / a + (1.0 - run_params->Omega - run_params->OmegaLambda) + run_params->OmegaLambda * a * a);
