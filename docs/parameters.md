@@ -81,6 +81,7 @@ optional parameters take the listed default if omitted.
 | `CGMDensityProfile` | int | no | `0` | CGM gas density profile for precipitation: 0=uniform; 1=NFW; 2=beta (β=2/3). |
 | `CGMPrecipitationMode` | int | no | `1` | Internal precipitation solver mode (leave at default). |
 | `CGMPrecipRadiusMode` | int | no | `0` | Radius at which cooling time is evaluated: 0=iterative r_cool; 1=0.1 R_vir. |
+| `CGMHeatingReservoirOn` | 0/1 | no | `1` | Toggle the persistent AGN heating memory used in the CGM cooling recipe (`HeatingReservoir`, decays on $t_\mathrm{dyn}$). Set 0 for purely instantaneous per-substep AGN suppression. |
 
 ---
 

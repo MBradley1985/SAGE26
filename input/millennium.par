@@ -59,6 +59,7 @@ FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 
 
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
+CGMHeatingReservoirOn       1    %0: disable persistent HeatingReservoir model; 1: enable (default)
 
 %------------------------------------------
 %----- SAGE model parameters --------------

@@ -1620,3 +1620,110 @@ if __name__ == '__main__':
     plt.savefig(outputFile, dpi=300, bbox_inches='tight')
     print('Saved file to', outputFile, '\n')
     plt.close()
+
+
+# --------------------------------------------------------
+
+    print('Plotting histogram of Centrals with satellites overlaid as a function of redshift')
+
+    plt.figure(figsize=(10, 7))
+    ax = plt.subplot(111)
+
+    z_bins = [
+        (0.2, 0.5), (0.5, 0.8), (0.8, 1.1), (1.1, 1.5), (1.5, 2.0),
+        (2.0, 2.5), (2.5, 3.0), (3.0, 3.5), (3.5, 4.5), (4.5, 5.5),
+        (5.5, 6.5), (6.5, 7.5), (7.5, 8.5), (8.5, 10.0), (10.0, 12.0)
+    ]
+    colors = plt.cm.cividis(np.linspace(0.1, 0.9, len(z_bins)))
+
+    for i, (z_min, z_max) in enumerate(z_bins):
+        snap_indices = find_snapshots_in_z_range(z_min, z_max, redshifts)
+        if len(snap_indices) == 0:
+            continue
+
+        central_counts = []
+        satellite_counts = []
+        for snap_idx in snap_indices:
+            if snap_idx < len(TypeFull):
+                types = TypeFull[snap_idx]
+                central_counts.append(np.sum(types == 0))
+                satellite_counts.append(np.sum(types == 1))
+
+        if len(central_counts) == 0 or len(satellite_counts) == 0:
+            continue
+
+        central_mean = np.mean(central_counts)
+        satellite_mean = np.mean(satellite_counts)
+        label = f'{z_min:.1f} < z < {z_max:.1f}'
+        ax.bar(i - 0.15, central_mean, width=0.3, color=colors[i], label=label + ' (Centrals)')
+        ax.bar(i + 0.15, satellite_mean, width=0.3, color=colors[i], alpha=0.5, label=label + ' (Satellites)')
+
+    ax.set_xlim(-0.5, len(z_bins) - 0.5)
+    ax.set_ylim(0, 1.1 * max(ax.get_ylim()))
+    ax.set_xticks(range(len(z_bins)))
+    ax.set_xticklabels([f'{z_min:.1f}-{z_max:.1f}' for z_min, z_max in z_bins], rotation=45, ha='right')
+    ax.set_ylabel('Average Count', fontsize=14)
+    # leg = ax.legend(loc='upper left', fontsize=8, frameon=False, ncol=2)
+    # for text in leg.get_texts():
+    #     text.set_fontsize(8)
+
+    plt.tight_layout()
+    outputFile = OutputDir + 'CentralSatelliteCounts' + OutputFormat
+    plt.savefig(outputFile, dpi=300, bbox_inches='tight')
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+    # --------------------------------------------------------
+
+    print('Plotting histogram of quiecent centrals with satellites overlaid as a function of redshift')
+
+    plt.figure(figsize=(10, 7))
+    ax = plt.subplot(111)
+
+    z_bins = [
+        (0.2, 0.5), (0.5, 0.8), (0.8, 1.1), (1.1, 1.5), (1.5, 2.0),
+        (2.0, 2.5), (2.5, 3.0), (3.0, 3.5), (3.5, 4.5), (4.5, 5.5),
+        (5.5, 6.5), (6.5, 7.5), (7.5, 8.5), (8.5, 10.0), (10.0, 12.0)
+    ]
+    colors = plt.cm.cividis(np.linspace(0.1, 0.9, len(z_bins)))
+
+    for i, (z_min, z_max) in enumerate(z_bins):
+        snap_indices = find_snapshots_in_z_range(z_min, z_max, redshifts)
+        if len(snap_indices) == 0:
+            continue
+
+        quenched_central_counts = []
+        quenched_satellite_counts = []
+        for snap_idx in snap_indices:
+            if snap_idx < len(TypeFull):
+                types = TypeFull[snap_idx]
+                sfr_total = SfrDiskFull[snap_idx] + SfrBulgeFull[snap_idx]
+                stellar_mass = StellarMassFull[snap_idx]
+                sSFR_linear = sfr_total / stellar_mass
+                quenched = sSFR_linear < 10.0**sSFRcut
+                quenched_central_counts.append(np.sum((types == 0) & quenched))
+                quenched_satellite_counts.append(np.sum((types == 1) & quenched))
+
+        if len(quenched_central_counts) == 0 or len(quenched_satellite_counts) == 0:
+            continue
+
+        central_mean = np.mean(quenched_central_counts)
+        satellite_mean = np.mean(quenched_satellite_counts)
+        label = f'{z_min:.1f} < z < {z_max:.1f}'
+        ax.bar(i - 0.15, central_mean, width=0.3, color=colors[i], label=label + ' (Quenched Centrals)')
+        ax.bar(i + 0.15, satellite_mean, width=0.3, color=colors[i], alpha=0.5, label=label + ' (Quenched Satellites)')
+
+    ax.set_xlim(-0.5, len(z_bins) - 0.5)
+    ax.set_ylim(0, 1.1 * max(ax.get_ylim()))
+    ax.set_xticks(range(len(z_bins)))
+    ax.set_xticklabels([f'{z_min:.1f}-{z_max:.1f}' for z_min, z_max in z_bins], rotation=45, ha='right')
+    ax.set_ylabel('Average Count', fontsize=14)
+    # leg = ax.legend(loc='upper left', fontsize=8, frameon=False, ncol=2)
+    # for text in leg.get_texts():
+    #     text.set_fontsize(8)
+
+    plt.tight_layout()
+    outputFile = OutputDir + 'QuenchedCentralSatelliteCounts' + OutputFormat
+    plt.savefig(outputFile, dpi=300, bbox_inches='tight')
+    print('Saved file to', outputFile, '\n')
+    plt.close()

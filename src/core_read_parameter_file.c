@@ -104,6 +104,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->CGMDensityProfile          = 0;
     run_params->CGMPrecipitationMode       = 1;
     run_params->CGMPrecipRadiusMode        = 0;
+    run_params->CGMHeatingReservoirOn      = 1;
     run_params->FIREmodeOn                 = 1;
     run_params->RedshiftPowerLawExponent   = 1.25;
     run_params->FFBMaxEfficiency           = 0.2;
@@ -186,6 +187,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("CGMDensityProfile",     &(run_params->CGMDensityProfile),    INT, 0);
     REG("CGMPrecipitationMode",  &(run_params->CGMPrecipitationMode), INT, 0);
     REG("CGMPrecipRadiusMode",   &(run_params->CGMPrecipRadiusMode),  INT, 0);
+    REG("CGMHeatingReservoirOn", &(run_params->CGMHeatingReservoirOn),INT, 0);
     REG("FIREmodeOn",            &(run_params->FIREmodeOn),           INT, 0);
     REG("ConcentrationOn",       &(run_params->ConcentrationOn),      INT, 0);
     REG("FeedbackFreeModeOn",    &(run_params->FeedbackFreeModeOn),   INT, 0);

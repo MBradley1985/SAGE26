@@ -696,10 +696,11 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // and small per-step heating contributions accumulate across many
     // substeps and snapshots to eventually compete with the cooling rate.
     // ------------------------------------------------------------------
+    const int use_heating_reservoir = (run_params->CGMHeatingReservoirOn > 0);
     const double Vvir2_b = galaxies[gal].Vvir * galaxies[gal].Vvir;
 
     // 1. Decay
-    if(Vvir2_b > 0.0 && galaxies[gal].Rvir > 0.0 && galaxies[gal].HeatingReservoir > 0.0) {
+    if(use_heating_reservoir && Vvir2_b > 0.0 && galaxies[gal].Rvir > 0.0 && galaxies[gal].HeatingReservoir > 0.0) {
         const double t_dyn = galaxies[gal].Rvir / galaxies[gal].Vvir;  // code units
         if(t_dyn > 0.0) {
             galaxies[gal].HeatingReservoir *= exp(-dt / t_dyn);
@@ -707,7 +708,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     }
 
     // 2. Use reservoir to suppress this substep's cooling
-    if(Vvir2_b > 0.0 && coolingGas > 0.0 && galaxies[gal].HeatingReservoir > 0.0) {
+    if(use_heating_reservoir && Vvir2_b > 0.0 && coolingGas > 0.0 && galaxies[gal].HeatingReservoir > 0.0) {
         const double cool_energy = 0.5 * coolingGas * Vvir2_b;
         if(galaxies[gal].HeatingReservoir >= cool_energy) {
             galaxies[gal].HeatingReservoir -= cool_energy;
@@ -718,7 +719,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         }
     }
 
-    // 3. AGN call (grows BH, adds to .Heating; does not modify coolingGas)
+    // 3. AGN call (grows BH, adds to .Heating; may suppress this substep's coolingGas)
     const double heating_before = galaxies[gal].Heating;
     {
         double x_agn = PROTONMASS * BOLTZMANN * temp / lambda;       // sec g/cm^3
@@ -730,9 +731,11 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     }
 
     // 4. Feed this substep's new heat into the reservoir
-    const double heating_added = galaxies[gal].Heating - heating_before;
-    if(heating_added > 0.0) {
-        galaxies[gal].HeatingReservoir += heating_added;
+    if(use_heating_reservoir) {
+        const double heating_added = galaxies[gal].Heating - heating_before;
+        if(heating_added > 0.0) {
+            galaxies[gal].HeatingReservoir += heating_added;
+        }
     }
 
     // ========================================================================
