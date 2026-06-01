@@ -1,3 +1,14 @@
+/*
+ * model_cooling_heating.c -- Cooling and AGN heating prescriptions.
+ *
+ * Implements the two-regime cooling model: classical hot-halo (C16-style) and
+ * CGM precipitation-driven cooling. File-private helpers compute NFW and
+ * beta-profile CGM density structures and iteratively solve for the cooling
+ * radius. AGN feedback reduces cooling in both regimes via radio-mode heating.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,58 +24,65 @@
 
 
 // ============================================================================
-// CGM Density Profile Helper Functions
+// CGM Density Profile Helper Functions (file-private)
 // ============================================================================
 
-// NFW profile: ρ(r) = ρ_s / [(r/r_s)(1 + r/r_s)²]
-// Returns the normalization ρ_s given total mass M_CGM within R_vir
-double nfw_rho_s(const double M_CGM, const double Rvir, const double c_NFW)
+/*
+ * NFW profile normalisation rho_s for total mass M_CGM within R_vir.
+ *
+ * Solves M_CGM = 4*pi * rho_s * r_s^3 * [ln(1+c) - c/(1+c)] for rho_s,
+ * where r_s = Rvir / c_NFW is the scale radius.
+ */
+static double nfw_rho_s(const double M_CGM, const double Rvir, const double c_NFW)
 {
     const double r_s = Rvir / c_NFW;
-    // M_CGM = 4π ρ_s r_s³ × [ln(1+c) - c/(1+c)]
+    // M_CGM = 4pi rho_s r_s^3 * [ln(1+c) - c/(1+c)]
     const double f_c = log(1.0 + c_NFW) - c_NFW / (1.0 + c_NFW);
     return M_CGM / (4.0 * M_PI * r_s * r_s * r_s * f_c);
 }
 
-// NFW density at radius r
-double nfw_density(const double r, const double rho_s, const double r_s)
+/* NFW density rho(r) = rho_s / [x*(1+x)^2] where x = r/r_s. */
+static double nfw_density(const double r, const double rho_s, const double r_s)
 {
     const double x = r / r_s;
     if(x < 1e-10) return rho_s / (1e-10 * 1.0 * 1.0);  // Avoid singularity at r=0
     return rho_s / (x * (1.0 + x) * (1.0 + x));
 }
 
-// NFW concentration parameter (Duffy et al. 2008 relation)
-double nfw_concentration(const double Mvir_Msun, const double z)
+/* NFW concentration c(M, z) from Duffy et al. (2008): c = 7.85*(M/2e12)^-0.081*(1+z)^-0.71. */
+static double nfw_concentration(const double Mvir_Msun, const double z)
 {
     // c = 7.85 * (M/2e12)^(-0.081) * (1+z)^(-0.71)
     return 7.85 * pow(Mvir_Msun / 2.0e12, -0.081) * pow(1.0 + z, -0.71);
 }
 
-// Beta profile: ρ(r) = ρ_0 / [1 + (r/r_c)²]^(3β/2)
-// For β = 2/3: ρ(r) = ρ_0 / [1 + (r/r_c)²]
-// Returns the normalization ρ_0 given total mass M_CGM within R_vir
-double beta_rho_0(const double M_CGM, const double Rvir, const double r_c, const double beta)
+/*
+ * Beta-profile normalisation rho_0 for total mass M_CGM within R_vir.
+ *
+ * Profile: rho(r) = rho_0 / [1 + (r/r_c)^2]^(3*beta/2).
+ * Uses an analytic form for beta ~ 2/3 and Simpson quadrature otherwise.
+ */
+static double beta_rho_0(const double M_CGM, const double Rvir, const double r_c, const double beta)
 {
-    // For general β, the enclosed mass integral is:
-    // M(<R) = 4π ρ_0 ∫_0^R r² / [1 + (r/r_c)²]^(3β/2) dr
+    // For general beta, the enclosed mass integral is:
+    // M(<R) = 4pi rho_0 integral_0^R r^2 / [1 + (r/r_c)^2]^(3beta/2) dr
     //
-    // For β = 2/3 (common value), this simplifies to:
-    // M(<R) = 4π ρ_0 r_c³ × [arctan(R/r_c) - (R/r_c)/(1 + (R/r_c)²)]
+    // For beta = 2/3 (common value), this simplifies to:
+    // M(<R) = 4pi rho_0 r_c^3 * [arctan(R/r_c) - (R/r_c)/(1 + (R/r_c)^2)]
     // But we need the more general form...
     //
-    // Use numerical approximation for general β:
-    // For large R/r_c, M ≈ 4π ρ_0 r_c³ × (some function of β)
+    // Use numerical approximation for general beta:
+    // For large R/r_c, M ~ 4pi rho_0 r_c^3 * (some function of beta)
 
     const double x = Rvir / r_c;
     double mass_integral;
 
     if(fabs(beta - 2.0/3.0) < 0.01) {
-        // β ≈ 2/3: use analytic form
-        // M = 4π ρ_0 r_c³ × [arctan(x) - x/(1+x²)]
+        // beta ~ 2/3: use analytic form
+        // M = 4pi rho_0 r_c^3 * [arctan(x) - x/(1+x^2)]
         mass_integral = atan(x) - x / (1.0 + x * x);
     } else {
-        // General β: numerical integration using Simpson's rule
+        // General beta: numerical integration using Simpson's rule
         const int n_steps = 100;
         const double dr = Rvir / n_steps;
         double integral = 0.0;
@@ -76,7 +94,7 @@ double beta_rho_0(const double M_CGM, const double Rvir, const double r_c, const
             integral += weight * r * r * rho_factor;
         }
         integral *= dr / 3.0;
-        // M = 4π ρ_0 × integral, so mass_integral = integral / r_c³
+        // M = 4pi rho_0 * integral, so mass_integral = integral / r_c^3
         mass_integral = integral / (r_c * r_c * r_c);
     }
 
@@ -84,8 +102,8 @@ double beta_rho_0(const double M_CGM, const double Rvir, const double r_c, const
     return M_CGM / (4.0 * M_PI * r_c * r_c * r_c * mass_integral);
 }
 
-// Beta-profile density at radius r
-double beta_density(const double r, const double rho_0, const double r_c, const double beta)
+/* Beta-profile density rho(r) = rho_0 / [1 + (r/r_c)^2]^(3*beta/2). */
+static double beta_density(const double r, const double rho_0, const double r_c, const double beta)
 {
     const double y = r / r_c;
     return rho_0 / pow(1.0 + y * y, 1.5 * beta);
@@ -95,8 +113,8 @@ double beta_density(const double r, const double rho_0, const double r_c, const 
 // Enclosed Mass Functions for each profile
 // ============================================================================
 
-// NFW enclosed mass: M(<r) = M_total × [ln(1+x) - x/(1+x)] / [ln(1+c) - c/(1+c)]
-double nfw_enclosed_mass(const double r, const double M_total, const double Rvir, const double c_NFW)
+/* NFW enclosed mass M(<r) = M_total * f(x)/f(c), where f(u) = ln(1+u) - u/(1+u). */
+static double nfw_enclosed_mass(const double r, const double M_total, const double Rvir, const double c_NFW)
 {
     const double r_s = Rvir / c_NFW;
     const double x = r / r_s;
@@ -109,9 +127,8 @@ double nfw_enclosed_mass(const double r, const double M_total, const double Rvir
     return M_total * f_x / f_c;
 }
 
-// Beta-profile enclosed mass for β = 2/3
-// M(<r) = M_total × [arctan(x) - x/(1+x²)] / [arctan(X) - X/(1+X²)]
-double beta_enclosed_mass(const double r, const double M_total, const double Rvir, const double r_c)
+/* Beta-profile (beta=2/3) enclosed mass using the analytic arctan form. */
+static double beta_enclosed_mass(const double r, const double M_total, const double Rvir, const double r_c)
 {
     const double x = r / r_c;
     const double X = Rvir / r_c;
@@ -123,15 +140,15 @@ double beta_enclosed_mass(const double r, const double M_total, const double Rvi
     return M_total * f_x / f_X;
 }
 
-// Unified enclosed mass function
-double cgm_enclosed_mass(const double r, const double M_total, const double Rvir,
+/* Dispatch enclosed-mass calculation to the appropriate profile model (0=uniform, 1=NFW, 2=beta). */
+static double cgm_enclosed_mass(const double r, const double M_total, const double Rvir,
                                  const double Mvir_Msun, const double z, const int profile_type)
 {
     if(r >= Rvir) return M_total;
     if(r <= 0.0) return 0.0;
 
     if(profile_type == 0) {
-        // Uniform density: M(<r) = M_total × (r/Rvir)³
+        // Uniform density: M(<r) = M_total * (r/Rvir)^3
         const double ratio = r / Rvir;
         return M_total * ratio * ratio * ratio;
     } else if(profile_type == 1) {
@@ -139,7 +156,7 @@ double cgm_enclosed_mass(const double r, const double M_total, const double Rvir
         const double c_NFW = nfw_concentration(Mvir_Msun, z);
         return nfw_enclosed_mass(r, M_total, Rvir, c_NFW);
     } else if(profile_type == 2) {
-        // Beta profile (β = 2/3, r_c = 0.1 Rvir)
+        // Beta profile (beta = 2/3, r_c = 0.1 Rvir)
         const double r_c = 0.1 * Rvir;
         return beta_enclosed_mass(r, M_total, Rvir, r_c);
     } else {
@@ -149,9 +166,13 @@ double cgm_enclosed_mass(const double r, const double M_total, const double Rvir
     }
 }
 
-// Calculate CGM gas density at radius r given the profile choice
-// Returns density in CGS units (g/cm³)
-double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const double Rvir_cgs,
+/*
+ * CGM gas density at radius r in CGS units (g/cm^3).
+ *
+ * Dispatches to the selected profile model (profile_type: 0=uniform, 1=NFW, 2=beta).
+ * Falls back to uniform for unrecognised profile_type values.
+ */
+static double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const double Rvir_cgs,
                                     const double Mvir_Msun, const double z, const int profile_type)
 {
     if(profile_type == 0) {
@@ -167,7 +188,7 @@ double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const 
         return nfw_density(r_cgs, rho_s, r_s_cgs);
 
     } else if(profile_type == 2) {
-        // Beta profile with β = 2/3 and r_c = 0.1 R_vir
+        // Beta profile with beta = 2/3 and r_c = 0.1 R_vir
         const double beta = 2.0 / 3.0;
         const double r_c_cgs = 0.1 * Rvir_cgs;
         const double rho_0 = beta_rho_0(CGMgas_cgs, Rvir_cgs, r_c_cgs, beta);
@@ -180,15 +201,20 @@ double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const 
     }
 }
 
-// Iteratively solve for cooling radius r_cool where t_cool(r) = t_ff(r)
-// Returns r_cool in CGS units
-// Uses the correct enclosed mass for each density profile
-double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, const double Mvir_cgs,
+/*
+ * Solve iteratively for the cooling radius r_cool where t_cool(r) = t_ff(r).
+ *
+ * Returns r_cool in CGS units. For uniform and beta profiles the isothermal
+ * analytic approximation is used (the profile is too flat for iteration to
+ * converge). For NFW, a Newton-like iteration over t_cool/t_ff converges in
+ * typically < 10 steps.  Result is bounded to [0.001, 1.0] * Rvir.
+ */
+static double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, const double Mvir_cgs,
                               const double Mvir_Msun, const double temp, const double lambda,
                               const double z, const int profile_type,
                               __attribute__((unused)) const struct params *run_params)
 {
-    const double G_cgs = 6.674e-8;  // cm³ g⁻¹ s⁻²
+    const double G_cgs = 6.674e-8;  // cm^3 g-1 s-^2
     const double mu = 0.59;
 
     // ========================================================================
@@ -196,21 +222,21 @@ double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, const dou
     // ========================================================================
     // For uniform density, t_cool and t_ff are both roughly constant with radius,
     // so the iterative solver doesn't converge meaningfully.
-    // For beta profile (β=2/3), the profile is too flat and has similar issues.
-    // Instead, use the isothermal approach: assume ρ(r) ∝ 1/r² for r_cool,
-    // which gives r_cool = sqrt(ρ0 / ρ_cool) where ρ_cool is the critical density.
+    // For beta profile (beta=2/3), the profile is too flat and has similar issues.
+    // Instead, use the isothermal approach: assume rho(r) ~ 1/r^2 for r_cool,
+    // which gives r_cool = sqrt(rho0 / rho_cool) where rho_cool is the critical density.
     if(profile_type == 0 || profile_type == 2) {
-        // t_ff at R_vir: t_ff = sqrt(2 R³ / (G M))
+        // t_ff at R_vir: t_ff = sqrt(2 R^3 / (G M))
         const double t_ff_Rvir = sqrt(2.0 * Rvir_cgs * Rvir_cgs * Rvir_cgs / (G_cgs * Mvir_cgs));
 
         // Critical density where t_cool = t_ff
-        // ρ_cool = (3/2) μ m_p k T / (Λ t_ff)
+        // rho_cool = (3/2) mu m_p k T / (Lambda t_ff)
         const double rho_cool = (1.5 * mu * PROTONMASS * BOLTZMANN * temp) / (lambda * t_ff_Rvir);
 
-        // Isothermal profile normalization: ρ0 = M / (4π R)
+        // Isothermal profile normalization: rho0 = M / (4pi R)
         const double rho0 = CGMgas_cgs / (4.0 * M_PI * Rvir_cgs);
 
-        // r_cool from isothermal: ρ(r_cool) = ρ0/r_cool² = ρ_cool
+        // r_cool from isothermal: rho(r_cool) = rho0/r_cool^2 = rho_cool
         double r_cool = sqrt(rho0 / rho_cool);
 
         // Apply bounds
@@ -267,10 +293,13 @@ double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, const dou
     return r_cool;
 }
 
-// ============================================================================
-// Cooling recipe selector
-// ============================================================================
-
+/*
+ * Top-level cooling dispatcher: routes to regime-aware or classic hot-halo recipe.
+ *
+ * When CGMrecipeOn > 0 the two-regime model is active and this delegates to
+ * cooling_recipe_regime_aware(); otherwise falls through to the C16-style
+ * cooling_recipe_hot(). Returns the mass of gas cooled this substep.
+ */
 double cooling_recipe(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     // Check if CGM recipe is enabled for backwards compatibility
@@ -281,10 +310,14 @@ double cooling_recipe(const int gal, const double dt, struct GALAXY *galaxies, c
     }
 }
 
-// ============================================================================
-// Hot-regime cooling recipe (SAGE C16 style)
-// ============================================================================
-
+/*
+ * Classical hot-halo cooling recipe following Croton et al. (2006).
+ *
+ * Computes the cooling radius from the isothermal beta-model and returns
+ * the mass cooled over timestep dt. When CGMrecipeOn == 1 an additional
+ * cold-stream component (De Lucia & Blaizot 2006) is blended in for
+ * hot-regime halos. AGN heating is applied before the return.
+ */
 double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     double coolingGas;
@@ -428,10 +461,14 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
     return coolingGas;
 }
 
-// ============================================================================
-// CGM-regime cooling recipe (new, consistent with hot regime approach)
-// ============================================================================
-
+/*
+ * CGM precipitation-driven cooling recipe (SAGE26 two-regime model).
+ *
+ * Computes cooling from the CGMgas reservoir using the Voit (2015) t_cool/t_ff
+ * criterion. Solves for the cooling radius via solve_for_rcool(), evaluates the
+ * mean density within that radius, and returns the cooled mass for this substep.
+ * AGN heating via do_AGN_heating_cgm() is applied before the return.
+ */
 double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxies,
                          const struct params *run_params)
 {
@@ -507,7 +544,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // Convert r_cool to code units
     const double r_cool = r_cool_cgs / (CM_PER_MPC / run_params->Hubble_h);
 
-    // Cooling time at r_cool: tcool = (3/2) * μ * m_p * k * T / (ρ * Λ)
+    // Cooling time at r_cool: tcool = (3/2) * mu * m_p * k * T / (rho * Lambda)
     const double mu = 0.59;
     const double tcool_cgs = (1.5 * mu * PROTONMASS * BOLTZMANN * temp) / (mass_density_cgs * lambda);
     const double tcool = tcool_cgs / run_params->UnitTime_in_s; // code units
@@ -542,10 +579,10 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // STEP 2b: CHARACTERISTIC RADIUS FOR PRECIPITATION CRITERION
     // ========================================================================
     // CGMPrecipRadiusMode == 0: evaluate t_cool/t_ff at r_cool (traditional).
-    // CGMPrecipRadiusMode == 1: evaluate at 0.1 R_vir — avoids the circularity
+    // CGMPrecipRadiusMode == 1: evaluate at 0.1 R_vir -- avoids the circularity
     //   of the NFW solver (which converges to t_cool = t_ff at r_cool, making
     //   all haloes appear unstable). At 0.1 R_vir the ratio correctly reflects
-    //   halo mass: massive → lower density → higher t_cool/t_ff → stable.
+    //   halo mass: massive -> lower density -> higher t_cool/t_ff -> stable.
     double tcool_char = tcool;
     double tff_char = tff;
     double tcool_over_tff_char = tcool / tff;
@@ -736,10 +773,14 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     return coolingGas;
 }
 
-// ============================================================================
-// Cooling recipe for both regimes (calls the appropriate recipe based on Regime flag)
-// ============================================================================
-
+/*
+ * Regime-aware cooling: dispatches CGM and hot-halo recipes by galaxy Regime flag.
+ *
+ * Regime == 0 (CGM): draws only from CGMgas via cooling_recipe_cgm().
+ * Regime == 1 (hot): draws from HotGas via cooling_recipe_hot() plus any
+ * residual CGMgas.  Both contributions are applied to ColdGas in-place and
+ * the total cooled mass is returned.
+ */
 double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     double cgm_cooling = 0.0;
@@ -796,10 +837,14 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
     return total_cooling;
 }
 
-// ============================================================================
-// AGN HEATING: reduces coolingGas based on past AGN heating, then calculates new AGN heating
-// ============================================================================
-
+/*
+ * AGN radio-mode heating for the hot-halo regime (HotGas reservoir).
+ *
+ * First reduces coolingGas based on the stored r_heat from past AGN activity,
+ * then computes new BH accretion (empirical, Bondi-Hoyle, or cold-cloud) and
+ * the resulting heating. Updates BlackHoleMass, HotGas, and r_heat in-place.
+ * Returns the post-heating coolingGas value.
+ */
 double do_AGN_heating(double coolingGas, const int centralgal, const double dt, const double x, const double rcool, struct GALAXY *galaxies, const struct params *run_params)
 {
     double AGNrate, EDDrate, AGNaccreted, AGNcoeff, AGNheating, metallicity;
@@ -895,17 +940,15 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
     return coolingGas;
 }
 
-// ============================================================================
-// AGN HEATING FOR CGM-REGIME HALOES
-// Combined per-substep + reservoir model:
-//   (1) AGN heat reduces this substep's coolingGas immediately (Option A),
-//       capped at coolingGas to bound BH growth per step.
-//   (2) Heat energy is also added to galaxies[].Heating, which the caller
-//       (cooling_recipe_cgm) feeds into HeatingReservoir for cross-snapshot
-//       memory with t_dyn decay.
-// No C16 r_heat machinery (saturates catastrophically on precipitation bursts).
-// ============================================================================
-
+/*
+ * AGN radio-mode heating for CGM-regime halos (CGMgas reservoir).
+ *
+ * Applies a combined per-substep suppression model: AGN heat immediately
+ * reduces this substep's coolingGas (capped at coolingGas to bound BH growth),
+ * and is accumulated in Heating for the caller to store in HeatingReservoir
+ * with a dynamical-time decay across snapshots. The C16 r_heat mechanism is
+ * intentionally not used here as it saturates on precipitation bursts.
+ */
 double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
                          struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -963,7 +1006,7 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
             AGNcoeff = (1.34e5 / galaxies[centralgal].Vvir) * (1.34e5 / galaxies[centralgal].Vvir);
             AGNheating = AGNcoeff * AGNaccreted;
 
-            // Cap AGN heating at this substep's coolingGas — bounds the per-step
+            // Cap AGN heating at this substep's coolingGas -- bounds the per-step
             // BH growth to what's needed to cancel current cooling. The reservoir
             // (in the caller) handles cross-snapshot integration.
             if(AGNheating > coolingGas && AGNcoeff > 0.0) {
@@ -978,7 +1021,7 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
         galaxies[centralgal].CGMgas -= AGNaccreted;
         galaxies[centralgal].MetalsCGMgas -= metallicity * AGNaccreted;
 
-        // Per-substep cooling suppression (Option A) — immediate, bounded.
+        // Per-substep cooling suppression (Option A) -- immediate, bounded.
         // Also add the heat energy to .Heating; caller feeds it into HeatingReservoir.
         if(AGNheating > 0.0) {
             coolingGas -= AGNheating;
@@ -989,10 +1032,13 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
     return coolingGas;
 }
 
-// ============================================================================
-// The actual cooling function for C16 recipe
-// ============================================================================
-
+/*
+ * Transfer cooled gas from the HotGas reservoir into the cold disk.
+ *
+ * Moves up to coolingGas mass (clamped to available HotGas) from HotGas to
+ * ColdGas, tracking metallicity consistently. Called by cooling_recipe_hot()
+ * after AGN heating has been applied.
+ */
 void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct GALAXY *galaxies)
 {
     // add the fraction 1/STEPS of the total cooling gas to the cold disk
