@@ -1,3 +1,32 @@
+/*
+ * read_tree_lhalo_binary.c -- reader for the lhalo-binary merger-tree format.
+ *
+ * The lhalo-binary format stores one or more forests per file, written
+ * sequentially in a packed on-disk layout. Each file begins with a small
+ * header (totnforests, totnhalos, then an array of nhalos per forest),
+ * followed by the halo records -- one fixed-size `struct halo_data` per
+ * halo, written tree-major. Within each tree, halos are ordered such that
+ * Descendant / FirstProgenitor / NextProgenitor / FirstHaloInFOFgroup
+ * indices into the record array form a self-consistent merger tree.
+ *
+ * This file implements the three-call lifecycle that core_io_tree.c uses:
+ *   1. setup_forests_io_lht_binary()  -- at startup, read every file's
+ *      header, compute the total forest count, and assign forests to
+ *      this MPI task using the parameter file's ForestDistributionScheme.
+ *      Open each file once and keep it open for the duration of the run.
+ *   2. load_forest_lht_binary()       -- during the main loop, called once
+ *      per forest assigned to this task. Allocates a halo buffer and
+ *      reads the forest's halos at the precomputed byte offset.
+ *   3. cleanup_forests_io_lht_binary() -- at shutdown, free per-forest
+ *      bookkeeping arrays and close the open file descriptors.
+ *
+ * The on-disk widths matter: nhalos-per-forest is stored as 32-bit ints
+ * in the file but we promote to int64_t in memory (load_tree_table_lht_binary
+ * does the per-file read-and-promote dance).
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,12 +45,72 @@ static int load_tree_table_lht_binary(const int firstfile, const int lastfile, c
                                       const struct params *run_params, const int ThisTask,
                                       int64_t *nhalos_per_forest);
 
-void get_forests_filename_lht_binary(char *filename, const size_t len, const int filenr, const struct params *run_params)
+/*
+ * get_forests_filename_lht_binary -- build a tree-file path from a file number.
+ *
+ * Composes "<SimulationDir>/<TreeName>.<filenr><TreeExtension>" into the
+ * caller-supplied buffer. Used by both the setup pass (to read headers from
+ * every file) and the per-forest load (the open file descriptor is cached in
+ * lht->fd, so this is mainly a setup-time helper).
+ *
+ * Inputs:
+ *   filename     -- destination buffer; must be large enough for the full path.
+ *   len          -- buffer length; snprintf truncates safely at len-1.
+ *   filenr       -- file index in [FirstFile, LastFile].
+ *   run_params   -- provides SimulationDir, TreeName, TreeExtension.
+ */
+static void get_forests_filename_lht_binary(char *filename, const size_t len, const int filenr, const struct params *run_params)
 {
     snprintf(filename, len - 1, "%s/%s.%d%s", run_params->SimulationDir, run_params->TreeName, filenr, run_params->TreeExtension);
 }
 
-/* Externally visible Functions */
+/*
+ * setup_forests_io_lht_binary -- per-process startup for the lhalo-binary reader.
+ *
+ * Called once per MPI task at startup. Walks every tree file in
+ * [FirstFile, LastFile], reads its header to learn how many forests and halos
+ * it contains, then assigns forests to this task using the parameter file's
+ * ForestDistributionScheme. Opens each file containing this task's forests
+ * once and stores the file descriptor for use by load_forest_lht_binary().
+ *
+ * Algorithm:
+ *   1. Read each file's two-int header (totnforests, totnhalos) to learn the
+ *      total forest count across all files.
+ *   2. If the distribution scheme is anything other than uniform_in_forests,
+ *      read every file's nhalos-per-forest array so the forest-to-task
+ *      assignment can weight by forest size (some forests are 10x larger
+ *      than others -- purely uniform assignment leaves tasks load-imbalanced).
+ *   3. Call distribute_weighted_forests_over_ntasks() to compute this task's
+ *      [start_forestnum, end_forestnum) range.
+ *   4. Convert the global forest range into per-file information: which files
+ *      this task touches, and where in each file the task's forests live.
+ *   5. For each touched file: open it (keep it open for the run), read its
+ *      nhalos-per-forest array, and compute the byte offset into the halo
+ *      record stream for each of this task's forests.
+ *   6. Compute frac_volume_processed -- the fraction of total simulation
+ *      volume this task is responsible for. Each file is assumed to span
+ *      the same volume; task-volume = sum over files of (this task's
+ *      forests in file / total forests in file) / (number of files).
+ *
+ * On-disk header layout:
+ *     bytes  0..3   int32  totnforests
+ *     bytes  4..7   int32  totnhalos
+ *     bytes  8..   int32  nhalos_per_forest[totnforests]
+ *     after that:   packed halo records, struct halo_data, tree-major.
+ *
+ * Side effects:
+ *   Mutates forests_info: fills in totnforests, totnhalos, nforests_this_task,
+ *   FileNr (per forest), original_treenr (per forest), frac_volume_processed,
+ *   and the lht sub-struct (fd-per-forest, byte offset per forest, open file
+ *   descriptors, nhalos per forest). Also sets run_params->FileNr_Mulfac and
+ *   run_params->ForestNr_Mulfac, used downstream to compose unique GalaxyIndex
+ *   values across all files, trees, and tasks.
+ *
+ * Returns:
+ *   EXIT_SUCCESS, or a negative error code (MALLOC_FAILURE, FILE_NOT_FOUND,
+ *   or whatever distribute_weighted_forests_over_ntasks / find_start_and_end_filenum
+ *   returned).
+ */
 int setup_forests_io_lht_binary(struct forest_info *forests_info,
                                 const int ThisTask, const int NTasks, struct params *run_params)
 {
@@ -41,7 +130,9 @@ int setup_forests_io_lht_binary(struct forest_info *forests_info,
         return MALLOC_FAILURE;
     }
 
-    // First go through each file and determine the total number of forests across all files.
+    /* Step 1: read every file's two-int header to learn the total forest and
+     * halo counts across all files. We open, read 8 bytes, close -- nothing
+     * is kept open here (Step 5 reopens the files this task actually needs). */
     int64_t totnforests = 0, totnhalos = 0;
     for(int filenr=firstfile;filenr<=lastfile;filenr++) {
         char filename[4*MAX_STRING_LEN];
@@ -64,6 +155,10 @@ int setup_forests_io_lht_binary(struct forest_info *forests_info,
     forests_info->totnforests = totnforests;
     forests_info->totnhalos = totnhalos;
 
+    /* Step 2: if the distribution scheme weights by forest size, read the
+     * per-file nhalos-per-forest array so distribute_weighted_forests can
+     * balance load. uniform_in_forests skips this -- every forest costs the
+     * same, so we don't need the sizes at all. */
     const int need_nhalos_per_forest = run_params->ForestDistributionScheme == uniform_in_forests ? 0:1;
     int64_t *nhalos_per_forest = NULL;
     if(need_nhalos_per_forest) {
@@ -74,6 +169,9 @@ int setup_forests_io_lht_binary(struct forest_info *forests_info,
         }
     }
 
+    /* Step 3: assign a [start_forestnum, end_forestnum) global range of
+     * forests to this task. The weighted-distribution helper handles all
+     * the scheme variants (uniform, linear-in-nhalos, power-in-nhalos, ...). */
     int64_t nforests_this_task, start_forestnum;
     int status = distribute_weighted_forests_over_ntasks(totnforests, nhalos_per_forest,
                                                          run_params->ForestDistributionScheme, run_params->Exponent_Forest_Dist_Scheme,
@@ -114,8 +212,10 @@ int setup_forests_io_lht_binary(struct forest_info *forests_info,
         return MALLOC_FAILURE;
     }
 
-    // Now for each task, we know the starting forest number it needs to start reading from.
-    // So let's determine what file and forest number within the file each task needs to start/end reading from.
+    /* Step 4: convert the global forest range into per-file information.
+     * find_start_and_end_filenum() fills num_forests_to_process_per_file[]
+     * and start_forestnum_to_process_per_file[] so we know which files
+     * this task touches and where in each file its forests live. */
     int start_filenum = -1, end_filenum = -1;
     status = find_start_and_end_filenum(start_forestnum, end_forestnum,
                                         totnforests_per_file, totnforests,
@@ -131,6 +231,11 @@ int setup_forests_io_lht_binary(struct forest_info *forests_info,
     lht->numfiles = end_filenum - start_filenum + 1;
     lht->open_fds = mymalloc(lht->numfiles * sizeof(lht->open_fds[0]));
 
+    /* Step 5: for each file this task touches, open it (keep it open for
+     * the run), read its full nhalos-per-forest array into a temp buffer,
+     * and compute the byte offset to each of this task's forests in the
+     * packed halo record stream. The offsets cached here are what
+     * load_forest_lht_binary() will use later to pread the halos. */
     int64_t *forestnhalos = lht->nhalos_per_forest;
     int64_t nforests_so_far = 0;
     for(int filenr=start_filenum;filenr<=end_filenum;filenr++) {
@@ -206,11 +311,12 @@ int setup_forests_io_lht_binary(struct forest_info *forests_info,
         forestnhalos += nforests_to_process_this_file;
     }
 
-    // We assume that each of the input tree files span the same volume. Hence by summing the
-    // number of trees processed by each task from each file, we can determine the
-    // fraction of the simulation volume that this task processes.  We weight this summation by the
-    // number of trees in each file because some files may have more/less trees whilst still spanning the
-    // same volume (e.g., a void would contain few trees whilst a dense knot would contain many).
+    /* Step 6: compute the fraction of total simulation volume this task is
+     * responsible for. We assume each input tree file spans the same volume,
+     * so the per-file contribution is (this task's forests in file / total
+     * forests in file). We weight by total-forests-per-file because some
+     * files may contain more or fewer forests while spanning the same volume
+     * (e.g., a void has few large forests; a dense knot has many small ones). */
     forests_info->frac_volume_processed = 0.0;
     for(int32_t filenr = start_filenum; filenr <= end_filenum; filenr++) {
         forests_info->frac_volume_processed += (double) num_forests_to_process_per_file[filenr] / (double) totnforests_per_file[filenr];
@@ -229,6 +335,32 @@ int setup_forests_io_lht_binary(struct forest_info *forests_info,
     return EXIT_SUCCESS;
 }
 
+/*
+ * load_forest_lht_binary -- read one forest's halos from its tree file.
+ *
+ * Called once per forest assigned to this task (typically inside the main
+ * forest loop in core_io_tree.c). Allocates the halo buffer, validates the
+ * cached file descriptor and byte offset that setup() recorded, and reads
+ * the contiguous block of struct halo_data records for this forest.
+ *
+ * The on-disk halos are written tree-major, packed; no per-halo headers
+ * separate them. The byte offset for this forest was computed during setup,
+ * so we can seek directly with pread() -- no file pointer state to manage
+ * (pread does not advance the descriptor's current position).
+ *
+ * Inputs:
+ *   forestnr      -- local forest index in [0, nforests_this_task).
+ *   halos         -- output: set to point at the newly allocated halo buffer.
+ *                   Caller owns the buffer and must myfree() it.
+ *   forests_info  -- populated by setup_forests_io_lht_binary(); reads
+ *                   lht.nhalos_per_forest[], lht.fd[], lht.bytes_offset_for_forest[].
+ *
+ * Returns:
+ *   Number of halos in the forest (positive int64_t) on success, or a
+ *   negative error code: -MALLOC_FAILURE, -INVALID_MEMORY_ACCESS_REQUESTED
+ *   (forestnr out of range), -INVALID_FILE_POINTER (fd was never opened),
+ *   or -FILE_READ_ERROR (corrupted offset).
+ */
 int64_t load_forest_lht_binary(const int64_t forestnr, struct halo_data **halos, struct forest_info *forests_info)
 {
     const int64_t nhalos = (int64_t) forests_info->lht.nhalos_per_forest[forestnr];/* the array itself contains int32_t, since the LHT format*/
@@ -266,6 +398,17 @@ int64_t load_forest_lht_binary(const int64_t forestnr, struct halo_data **halos,
 }
 
 
+/*
+ * cleanup_forests_io_lht_binary -- release per-process state for the reader.
+ *
+ * Called once at shutdown. Frees the per-forest bookkeeping arrays
+ * (nhalos_per_forest, bytes_offset_for_forest, fd) and closes the file
+ * descriptors that setup() opened and kept open for the duration of the run.
+ *
+ * Note: the per-forest fd[] array stores duplicate fd values (multiple
+ * forests share the same open file). We close once per unique file via the
+ * open_fds[] array, which has one entry per touched file -- not per forest.
+ */
 void cleanup_forests_io_lht_binary(struct forest_info *forests_info)
 {
     struct lhalotree_info *lht = &(forests_info->lht);
@@ -279,14 +422,40 @@ void cleanup_forests_io_lht_binary(struct forest_info *forests_info)
     myfree(lht->open_fds);
 }
 
-int load_tree_table_lht_binary(const int firstfile, const int lastfile, const int64_t *totnforests_per_file,
+/*
+ * load_tree_table_lht_binary -- read the nhalos-per-forest array from every file.
+ *
+ * Used by Step 2 of setup_forests_io_lht_binary() when the
+ * ForestDistributionScheme weights by forest size. Reads each file's
+ * nhalos-per-forest array (located at byte offset 8, after the two 4-byte
+ * header ints) and writes the values into the caller's output buffer.
+ *
+ * Width-conversion note:
+ *   On disk these are 32-bit integers (the LHT format predates the need
+ *   for >2^31 halos per forest). In memory we use int64_t for consistency
+ *   with the rest of the pipeline. We read each file's 32-bit values into
+ *   a temporary buffer, then widen-and-copy into the int64_t output array.
+ *   The temp buffer is sized once to the largest file's forest count to
+ *   avoid per-file malloc/free.
+ *
+ * Inputs:
+ *   firstfile, lastfile   -- inclusive file-number range to read.
+ *   totnforests_per_file  -- number of forests in each file (already read
+ *                           by Step 1 of setup_forests_io_lht_binary()).
+ *   run_params            -- used by get_forests_filename_lht_binary().
+ *   ThisTask              -- MPI rank, used only for the warning on empty
+ *                           first files (printed by rank 0 only).
+ *   nhalos_per_forest     -- output buffer; must be sized to totnforests.
+ *                           Filled in file-order, contiguously.
+ *
+ * Returns:
+ *   EXIT_SUCCESS on success, FILE_NOT_FOUND if a tree file is missing,
+ *   or -1 on inconsistent counts.
+ */
+static int load_tree_table_lht_binary(const int firstfile, const int lastfile, const int64_t *totnforests_per_file,
                                  const struct params *run_params, const int ThisTask,
                                  int64_t *nhalos_per_forest)
 {
-    /* The nhalos_per_forest array is written as 32-bit integers;
-        however, we really use 64-bit integers. So, we have to split up the work and read
-        in the 32-bit integers into a temporary buffer and then assign
-        to the parameter *nhalos_per_forest.  */
     int64_t max_nforests_per_file = 0;
     int32_t *buffer = NULL;
     for(int32_t ifile=firstfile;ifile<=lastfile;ifile++) {

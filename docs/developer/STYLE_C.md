@@ -109,9 +109,15 @@ Three blocks separated by single blank lines: system, third-party, project. With
 
 ### 5. Unicode in source comments
 
-**Don't use Unicode characters (Greek letters, math symbols, superscripts) in `.c` / `.h` / `.par` comments.** Use ASCII transliterations.
+**Don't use Unicode characters in `.c` / `.h` / `.par` comments.** Use ASCII transliterations. Specific characters to avoid (this is a non-exhaustive list — when in doubt, use ASCII):
 
-**Reason:** IDEs and text editors don't all preserve UTF-8 consistently. We have a documented incident (2026-06-01) where opening `input/millennium.par` in an IDE silently stripped two parameter lines because the comments contained `π Σ ²`. The regression baseline caught it, but the underlying risk is real.
+- Greek letters (`α β γ π ρ σ Σ Ω`).
+- Math symbols (`× ÷ ≤ ≥ ≠ ≈ ∞ ∫ ∂`).
+- Superscripts and subscripts (`² ³ ⁻ ₀ ₁`).
+- Em-dash and en-dash (`—` and `–`). Use `--` instead. AI-generated comments commonly contain these.
+- Curly quotes (`" " ' '`). Use straight `"` and `'`.
+
+**Reason:** IDEs and text editors don't all preserve UTF-8 consistently. We have a documented incident (2026-06-01) where opening `input/millennium.par` in an IDE silently stripped two parameter lines because the comments contained `π Σ ²`. The regression baseline caught it, but the underlying risk is real, and the AI agents we use for cleanup default to em-dashes — the rule needs to be loud enough that both editors and AI tools stay in ASCII land.
 
 **Before:**
 ```c

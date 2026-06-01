@@ -1,19 +1,40 @@
 #!/usr/bin/env python
+"""
+allresults-local.py -- z=0 diagnostic plots for a local SAGE26 output.
 
-import h5py as h5 # type: ignore
-import numpy as np
-import matplotlib.pyplot as plt
+Reads model*.hdf5 from a SAGE26 output directory and emits one figure per
+diagnostic (stellar mass function, BHMF, sSFR distribution, cold-gas
+fraction, gas-phase metallicity, ...) into that same directory. Simulation
+parameters (Hubble_h, BoxSize, etc.) are read from the HDF5 header so the
+script does not have to be re-parameterised per simulation.
+
+Usage:
+    python plotting/allresults-local.py                       # uses ./output/millennium/
+    python plotting/allresults-local.py path/to/output/       # specify dir
+
+Reads:  <OutputDir>/model*.hdf5
+Writes: <OutputDir>/*.pdf  (one file per diagnostic figure)
+"""
+
+import argparse
+import glob
 import os
 import sys
-import argparse
+import warnings
 from collections import defaultdict
-from scipy.stats import gaussian_kde, stats
 from random import sample, seed
+
+import h5py as h5
+import matplotlib.pyplot as plt
+import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
-import glob
+from scipy.stats import gaussian_kde, stats
 
-import warnings
+# Suppress matplotlib/h5py/scipy deprecation chatter so the plot output is
+# legible. These warnings come from upstream library version skew, not from
+# SAGE26 code. If a real bug fires a warning here we want to see it; if that
+# happens, narrow this filter to a specific category rather than dropping it.
 warnings.filterwarnings("ignore")
 
 # ========================== USER OPTIONS ==========================

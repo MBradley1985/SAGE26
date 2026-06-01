@@ -1,3 +1,14 @@
+/*
+ * read_tree_lhalo_binary.h -- public interface for the lhalo-binary tree reader.
+ *
+ * Declares the three entry points used by core_io_tree.c to load merger trees
+ * in the lhalo-binary on-disk format: setup (per process, at startup), load
+ * (per forest, during the main loop), cleanup (at shutdown). Implementation
+ * lives in read_tree_lhalo_binary.c.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #include <stdint.h>
