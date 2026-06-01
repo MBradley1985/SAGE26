@@ -425,10 +425,14 @@ double get_virial_radius(const int halonr, const struct halo_data *halos, const 
   return cbrt(get_virial_mass(halonr, halos, run_params) * fac);
 }
 
-// ============================================================================
-// CGM vs. Hot Halo Regime Determination
-// ============================================================================
-
+/*
+ * Classify each central galaxy as CGM-regime or hot-halo regime (Voit 2015).
+ *
+ * Uses the Dekel & Birnboim (2006) criterion: halos below ~6e11 M_sun are in
+ * the CGM regime (Regime == 0); more massive halos are in the hot regime
+ * (Regime == 1). Regime is stored on the galaxy struct and used by
+ * cooling_recipe_regime_aware() and model_infall.c.
+ */
 void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
                                 const struct params *run_params)
 {
@@ -470,9 +474,12 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
     }
 }
 
-// Inverse normal CDF (probit function) -- Peter Acklam's rational approximation.
-// Converts a uniform variate p in (0,1) to a standard normal variate.
-// Accurate to ~1e-9 across the full range.
+/*
+ * Inverse normal CDF (probit function) via Peter Acklam's rational approximation.
+ *
+ * Converts a uniform variate p in (0, 1) to a standard normal variate.
+ * Accurate to ~1e-9 across the full range.
+ */
 static double inverse_normal_cdf(double p)
 {
     const double a[] = {-3.969683028665376e+01,  2.209460984245205e+02,
@@ -508,10 +515,14 @@ static double inverse_normal_cdf(double p)
     }
 }
 
-// ============================================================================
-// FFB Regime Determination
-// ============================================================================
-
+/*
+ * Classify galaxies as feedback-free burst (FFB) or normal mode.
+ *
+ * When FeedbackFreeModeOn > 0, evaluates each central galaxy against the FFB
+ * mass and redshift criteria (Li+2024) and sets galaxies[p].FFBmode.
+ * Uses a lognormal scatter (via inverse_normal_cdf) around the threshold when
+ * the scatter mode is enabled. Skips all galaxies when FFBmodeOn == 0.
+ */
 void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct GALAXY *galaxies,
                                      const struct params *run_params)
 {
@@ -711,10 +722,13 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
     }
 }
 
-// ============================================================================
-// Concentrations
-// ============================================================================
-
+/*
+ * Interpolate halo concentration c(M, z) from the Ishiyama+2021 lookup table.
+ *
+ * Uses bilinear interpolation over a (logM, z) grid; two cosmology-specific
+ * tables are available (Millennium / Uchuu), auto-selected by run_params->Omega.
+ * Returns a clamped value when M or z is outside the table range.
+ */
 double interpolate_concentration_ishiyama21(const double logM, const double z, const struct params *run_params)
 {
     // Ishiyama+21 concentration-mass lookup table (mdef=200c, halo_sample=all, c_type=fit)
@@ -856,6 +870,12 @@ double interpolate_concentration_ishiyama21(const double logM, const double z, c
          + c11 * fm * fz;
 }
 
+/*
+ * Infer NFW concentration from V_max / V_vir via bisection.
+ *
+ * Inverts (Vmax/Vvir)^2 = 0.2162 * c / mu(c) where mu(c) = ln(1+c) - c/(1+c).
+ * Returns 0 when either velocity is non-positive.
+ */
 double concentration_from_vmax_vvir(const double Vmax, const double Vvir)
 {
     // Invert the NFW relation: (Vmax/Vvir)^2 = 0.2162 * c / mu(c)
@@ -889,6 +909,12 @@ double concentration_from_vmax_vvir(const double Vmax, const double Vvir)
     return 0.5 * (c_lo + c_hi);
 }
 
+/*
+ * Return the halo concentration for galaxy p using the selected method.
+ *
+ * ConcentrationOn 0: disabled (returns 0); 1: Ishiyama+21 table interpolation;
+ * 2: derived from Vmax/Vvir; 3: Duffy+2008 power law.
+ */
 double get_halo_concentration(const int p, const double z, const struct GALAXY *galaxies,
                                const struct params *run_params)
 {
@@ -926,10 +952,12 @@ double get_halo_concentration(const int p, const double z, const struct GALAXY *
     return c;
 }
 
-// ============================================================================
-// Li+24 FFB threshold: fraction of galaxies that are FFBs
-// ============================================================================
-
+/*
+ * FFB virial mass threshold at redshift z (Li+2024 eq. 2).
+ *
+ * M_v,ffb / 10^10.8 Msun ~ ((1+z)/10)^-6.2.  Returns the threshold in
+ * code units (10^10 Msun/h).
+ */
 double calculate_ffb_threshold_mass(const double z, const struct params *run_params)
 {
     // Equation (2) from Li et al. 2024
@@ -948,6 +976,12 @@ double calculate_ffb_threshold_mass(const double z, const struct params *run_par
 }
 
 
+/*
+ * Fraction of galaxies in the FFB regime at (Mvir, z) via Li+2024 eq. (3).
+ *
+ * Returns a sigmoid value in [0, 1] that rises sharply as Mvir approaches
+ * the FFB threshold; returns 0 when FeedbackFreeModeOn == 0.
+ */
 double calculate_ffb_fraction(const double Mvir, const double z, const struct params *run_params)
 {
     // Calculate the fraction of galaxies in FFB regime
@@ -987,10 +1021,13 @@ double calculate_ffb_fraction(const double Mvir, const double z, const struct pa
     return f_ffb;
 }
 
-// ============================================================================
-// MBK25 FFB threshold: maximum NFW gravitational acceleration (g_max)
-// ============================================================================
-
+/*
+ * Maximum NFW gravitational acceleration g_max (Boylan-Kolchin 2025).
+ *
+ * Computes g_vir = G*M_vir/R_vir^2 and then the NFW peak factor from the
+ * halo concentration, returning g_max in CGS units (cm/s^2).  Used as the
+ * FFB feedback threshold in the FeedbackFreeModeOn == 4 prescription.
+ */
 double calculate_gmax_BK25(const int p, const double z, const struct GALAXY *galaxies,
                             const struct params *run_params)
 {
@@ -1030,10 +1067,7 @@ double calculate_gmax_BK25(const int p, const double z, const struct GALAXY *gal
     return (g_vir / mu_c) * (c * c / 2.0);
 }
 
-// ============================================================================
-// H2 helper functions
-// ============================================================================
-
+/* Stellar disk scale height from disk scale length (Blitz & Rosolowsky 2006 eq. 9). */
 float calculate_stellar_scale_height_BR06(float disk_scale_length_pc)
 {
     // BR06 equation (9): log h* = -0.23 - 0.8 log R*
@@ -1053,6 +1087,7 @@ float calculate_stellar_scale_height_BR06(float disk_scale_length_pc)
 }
 
 
+/* Disk midplane pressure P_ext/k in K/cm^3 (Blitz & Rosolowsky 2006). */
 float calculate_midplane_pressure_BR06(float sigma_gas, float sigma_stars, float disk_scale_length_pc)
 {
     // Early termination for edge cases
@@ -1080,7 +1115,12 @@ float calculate_midplane_pressure_BR06(float sigma_gas, float sigma_stars, float
 }
 
 
-float calculate_molecular_fraction_BR06(float gas_surface_density, float stellar_surface_density, 
+/*
+ * H2 molecular fraction from the Blitz & Rosolowsky (2006) midplane pressure relation.
+ *
+ * Computes the ratio R_mol = (P_ext/P_0)^alpha and returns f_H2 = R_mol/(1+R_mol).
+ */
+float calculate_molecular_fraction_BR06(float gas_surface_density, float stellar_surface_density,
                                          float disk_scale_length_pc)
 {
 
@@ -1108,6 +1148,13 @@ float calculate_molecular_fraction_BR06(float gas_surface_density, float stellar
     return f_mol;
 }
 
+/*
+ * Radially integrated molecular fraction and SFR (used by SF prescriptions 2-6).
+ *
+ * Integrates f_H2(r) * Sigma_gas(r) over the exponential disk, using the
+ * selected molecular fraction prescription per annulus. Optionally returns the
+ * integrated SFR in code units via strdot_code_out (may be NULL).
+ */
 float calculate_molecular_fraction_radial_integration(const int gal, struct GALAXY *galaxies,
                                                       const struct params *run_params,
                                                       double *strdot_code_out)
@@ -1250,9 +1297,12 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
     return H2_code_units;
 }
 
-// Krumholz (2013) depletion time in Gyr.
-// f_H2: molecular fraction (pass f_mol_BR06 for the BR06+K13 hybrid, or K13's own f_H2 for pure K13).
-// Returns tau_dep = min(tau_2p, tau_hydro_star, tau_hydro_gas) from K13 Eq 28.
+/*
+ * Gas depletion time in Gyr from Krumholz (2013).
+ *
+ * Returns tau_dep = min(tau_2phase, tau_hydro_star, tau_hydro_gas) from K13 eq. 28.
+ * Pass f_H2 from BR06 for the BR06+K13 hybrid, or K13's own f_H2 for pure K13.
+ */
 double calculate_tdep_K13_Gyr(float Sigma_gas, float Sigma_star, float rs_pc, float Z_prime, float f_H2)
 {
     const double fc = 5.0;  // clumping factor for ~kpc scales (K13 Section 3.1)
@@ -1281,7 +1331,13 @@ double calculate_tdep_K13_Gyr(float Sigma_gas, float Sigma_star, float rs_pc, fl
     return t_dep;
 }
 
-float calculate_H2_fraction_KD12(const float surface_density, const float metallicity, const float clumping_factor) 
+/*
+ * H2 molecular fraction from the Krumholz & Dekel (2012) CNM-shielding model.
+ *
+ * Solves the non-linear s-function from KD12 eqs. 14-17 given the gas surface
+ * density, metallicity (in Z/Z_sun), and a clumping factor. Returns f_H2 in [0, 1].
+ */
+float calculate_H2_fraction_KD12(const float surface_density, const float metallicity, const float clumping_factor)
 {
     if (surface_density <= 0.0) {
         return 0.0;
