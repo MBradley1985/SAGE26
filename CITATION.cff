@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "SAGE26: Semi-Analytic Galaxy Evolution"
+abstract: >
+  SAGE26 is a C99 semi-analytic code for modelling galaxy formation in a
+  cosmological context. It extends Croton et al. (2016) with a two-regime CGM
+  model, FIRE stellar feedback, feedback-free burst (FFB) galaxies, and
+  extended bulge and ICS tracking.
+authors:
+  - family-names: Bradley
+    given-names: Michael
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+    affiliation: "Swinburne University of Technology"
+  - family-names: Croton
+    given-names: Darren J.
+    affiliation: "Swinburne University of Technology"
+repository-code: "https://github.com/MBradley1985/SAGE26"
+license: MIT
+version: "26.0"
+date-released: "2026-01-01"
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Bradley
+      given-names: Michael
+    - family-names: Croton
+      given-names: Darren J.
+  title: "SAGE26: A Two-Regime CGM Model for Semi-Analytic Galaxy Evolution"
+  journal: "in preparation"
+  year: 2026
