@@ -1,3 +1,15 @@
+/*
+ * model_reincorporation.c -- return of SN-ejected gas to the hot reservoir.
+ *
+ * Implements reincorporate_gas(), which moves gas from the EjectedMass
+ * reservoir back into the hot gas reservoir once the halo's circular velocity
+ * exceeds the supernova re-entry threshold (Vcrit = 445 km/s scaled by
+ * ReIncorporationFactor).  With CGMrecipeOn, the destination reservoir is
+ * regime-dependent: CGMgas for CGM-regime haloes, HotGas otherwise.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,10 +21,14 @@
 #include "model_reincorporation.h"
 #include "model_misc.h"
 
-// ============================================================================
-// Reincorporation of ejected gas back into the halo
-// ============================================================================
-
+/*
+ * reincorporate_gas -- move ejected gas back into the hot reservoir for one
+ * central galaxy over timestep dt.
+ *
+ * Reincorporation rate: (Vvir/Vcrit - 1) * EjectedMass / t_dyn, where
+ * t_dyn = Rvir/Vvir.  Only runs when Vvir > Vcrit.  With CGMrecipeOn, routes
+ * to CGMgas (Regime 0) or HotGas (Regime 1); without it, always to HotGas.
+ */
 void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     // SN velocity is 630km/s, and the condition for reincorporation is that the
