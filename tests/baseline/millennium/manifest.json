@@ -1,14 +1,14 @@
 {
   "build_env": {
     "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.3)",
-    "git_commit": "755f22bf5a33ca1760fa441332117549fea91d4d",
-    "git_tag": "baseline/pre-cleanup",
+    "git_commit": "146bc2c805f61dc03346c43076f704da5de9ec16",
+    "git_tag": "",
     "gsl": "2.8",
     "hdf5_runtime": "2.0.0 (h5py 3.16.0)",
     "platform": "Darwin 25.5.0 arm64",
     "python": "3.12.7"
   },
-  "captured_at": "2026-06-01T02:31:01Z",
+  "captured_at": "2026-06-01T06:52:48Z",
   "files": {
     "model.hdf5": {
       "datasets": {
@@ -29,7 +29,7 @@
           ]
         }
       },
-      "sha256": "6ef6295fe52081beec372c3bac9c1e6a19c67184e0f506df3e9eb82ebbd0d1ef",
+      "sha256": "2ddc479232416dd422aab9864c34ad83cf7e516e8483452cfbb177f75feaa20e",
       "size_bytes": 11486,
       "smoke": {}
     },
@@ -2734,7 +2734,7 @@
         "Snap_12/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 1220,
-          "sha256": "f4f9bdd2a22a3f9771d02920964c94bc98c725419708760b3286a8c945b790a8",
+          "sha256": "c9a2dca8506e21c0e96b2b92f34617ebcd06c30b640ff9f51ca838d3300081bd",
           "shape": [
             305
           ]
@@ -2894,7 +2894,7 @@
         "Snap_12/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 1220,
-          "sha256": "b9ab89a2cd254b6640ffbd95be55057f2c8202ef4b2fca80badbaed1ebf5e2f8",
+          "sha256": "ed02fbc4945a7c11695a1032784eeca95bf27befa941dae961bde29780d9d1ec",
           "shape": [
             305
           ]
@@ -2934,7 +2934,7 @@
         "Snap_12/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 1220,
-          "sha256": "77e1ccc2e26419d6b1e9114aa90f9e58bcb497d102f030a55c5de2cbf77bd075",
+          "sha256": "fc3e490237b1b8e574eafaa03dc43a328a72d5cf27872e0c2f629935e4ed6e0f",
           "shape": [
             305
           ]
@@ -3400,7 +3400,7 @@
         "Snap_13/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 2696,
-          "sha256": "0ea2b638838defd8a429c15022c674da1ade78ae69ace93d2d59aeb50be0ac7d",
+          "sha256": "c4e9fa1343886f14d6df9eb186bd284a2bff5aaf8f1958278c5509f423c516fe",
           "shape": [
             674
           ]
@@ -3560,7 +3560,7 @@
         "Snap_13/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 2696,
-          "sha256": "260866cc66630c565d5d2cbdf1f769ff1e0faddfcf83b4a1d611acace6556e7d",
+          "sha256": "d71432dc3aa9cefce38d498b467ae71c92a2cbd748e37489c93b667dc532fa70",
           "shape": [
             674
           ]
@@ -3600,7 +3600,7 @@
         "Snap_13/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 2696,
-          "sha256": "0ea2b638838defd8a429c15022c674da1ade78ae69ace93d2d59aeb50be0ac7d",
+          "sha256": "13ad5aa8232427455c9dcefcb9a76cfb88777ea7460e67c46e5626b23f13f8ce",
           "shape": [
             674
           ]
@@ -4066,7 +4066,7 @@
         "Snap_14/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 5436,
-          "sha256": "7dc35d7291c831c936dd668ab558e6ee3227287a6c9e7d6a05378516733680f0",
+          "sha256": "e251b86197b99005ff0ff86b9e21ac6d97d9a4eef0fb0dd4a3bdcf472fae4d1d",
           "shape": [
             1359
           ]
@@ -4226,7 +4226,7 @@
         "Snap_14/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 5436,
-          "sha256": "33b508a2859351eb76ef155bd4bd617f4381fe70b989b324ac3b485706506116",
+          "sha256": "a00e5756245d1afdbf16572b45c2794c4f89687b8e475e1a3c6e63ec18ea6ca2",
           "shape": [
             1359
           ]
@@ -4266,7 +4266,7 @@
         "Snap_14/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 5436,
-          "sha256": "7dc35d7291c831c936dd668ab558e6ee3227287a6c9e7d6a05378516733680f0",
+          "sha256": "dd1611f275d64d27d9c8c23a044f653e840802ec9cd21ab144e7c0e87aaa7986",
           "shape": [
             1359
           ]
@@ -4732,7 +4732,7 @@
         "Snap_15/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 9464,
-          "sha256": "d5a71ae1de72b6de95228ce63aeac5c280882b8aa6b7df603d4b6e412ecceb27",
+          "sha256": "d005cd0b998ddc846b43d30e77278e3404a6ea76946d93d3ea09cd55b14187f5",
           "shape": [
             2366
           ]
@@ -4892,7 +4892,7 @@
         "Snap_15/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 9464,
-          "sha256": "4d9d78c4904c958754df784234c461f010a861edf028b70dfe06c12dd3e4c6f4",
+          "sha256": "cd36704de34dfbbc7f15c9fba8d823864f614deffd874cc92d627804ed3a8582",
           "shape": [
             2366
           ]
@@ -4932,7 +4932,7 @@
         "Snap_15/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 9464,
-          "sha256": "21c20100afc30421757eb5e940d5b4b98e78935f11b455eba263b0d875205825",
+          "sha256": "c2d07ebb93b9d05a6433a037f3f8b7e4473d33b70e4996a770e6b74223b9594e",
           "shape": [
             2366
           ]
@@ -5398,7 +5398,7 @@
         "Snap_16/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 15632,
-          "sha256": "1f9a2fa15b3636cca277be83dc6d6582d564e880a440c9a892f3258f6b062aae",
+          "sha256": "fb79f6a8e213a13d22d5feadae6878613e2a636a96a9b3f484b67aa48af210b3",
           "shape": [
             3908
           ]
@@ -5558,7 +5558,7 @@
         "Snap_16/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 15632,
-          "sha256": "4d0901d0eb1e3d24a01056fdfa2c3bdfa18aaae4ced183abdc59dd4e4e9e28cf",
+          "sha256": "8688588a8a73c895514d442554b355326b96d20e110f1cd0e6d36f53bcafd33a",
           "shape": [
             3908
           ]
@@ -5598,7 +5598,7 @@
         "Snap_16/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 15632,
-          "sha256": "123cf4752ae53c29ec5ff73c8e2260267b576a6531140a53c4a588178dce21d7",
+          "sha256": "fffcd15ac1f10415f173a742c97aa746f2894dc1cfde8a58dea5b263778604d1",
           "shape": [
             3908
           ]
@@ -6064,7 +6064,7 @@
         "Snap_17/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 23284,
-          "sha256": "41ce3fcdfcfb31b44c63bd0426ea1d52e77a9b290b72d8587ab5837eaec9d1b0",
+          "sha256": "2a5b6eb6b4f2d1e53972eaa68f30065af60df90d3d9aa7fb9c147d77ee895d2d",
           "shape": [
             5821
           ]
@@ -6224,7 +6224,7 @@
         "Snap_17/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 23284,
-          "sha256": "6824bad6bc8e18547ca8162ad27a3c6261f234ef572e1c769368934f5dbcdad0",
+          "sha256": "4f6b64f0aaccb93f4f38cef49bfdc21cf48ae27e8a67164b4b31a075dfc4a30b",
           "shape": [
             5821
           ]
@@ -6264,7 +6264,7 @@
         "Snap_17/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 23284,
-          "sha256": "23278158879376e038aec25b750773492a04756439ca4bf2a770268a7223cc6e",
+          "sha256": "e9e85b28214ab46059b66c6ccb58e26931fe72ad2b1dac6f4c683e31848489ff",
           "shape": [
             5821
           ]
@@ -6730,7 +6730,7 @@
         "Snap_18/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 32780,
-          "sha256": "96f666a60e90f31a80554afe52f93505dc772c185eea39ca6eeeed25315c3be0",
+          "sha256": "2eb30390e7ddae3c4a1e1d09722704d5fe0393a5c2d9bcbb7d02ad35b173d739",
           "shape": [
             8195
           ]
@@ -6890,7 +6890,7 @@
         "Snap_18/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 32780,
-          "sha256": "7e867671511a62ff678168bb8c47830495bcf667e797fd34ed2020a8492a1087",
+          "sha256": "21abe97608a0324e1905ac06b92598cd9405fdc88ff75be49f0c4793bb775ddf",
           "shape": [
             8195
           ]
@@ -6930,7 +6930,7 @@
         "Snap_18/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 32780,
-          "sha256": "e8c0dc3ffc36a9fbc882b5f762ac35cd5a0fec802a865ab14bae2deb1f59af40",
+          "sha256": "ee3eca6a01bca970e56ebd753ce831da8ee6b62ca20571da50a28318b5728a43",
           "shape": [
             8195
           ]
@@ -7396,7 +7396,7 @@
         "Snap_19/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 43232,
-          "sha256": "24626cf7e452fd7c4bfe608a6892cc438476a3ee3ff7f085eef4944fca5cfd4d",
+          "sha256": "01412409cb3ad42c840ea17f170a5e0a96a3c4588eaee251cb132992d503ccd6",
           "shape": [
             10808
           ]
@@ -7556,7 +7556,7 @@
         "Snap_19/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 43232,
-          "sha256": "f31b5479eb9173b9ea65556208889421171959f3cc13f5055875edec5a9d9e5e",
+          "sha256": "152675ca259b78ecf64fb34f591fbb4603fe470fad4256cb9b871f1bb65b8d69",
           "shape": [
             10808
           ]
@@ -7596,7 +7596,7 @@
         "Snap_19/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 43232,
-          "sha256": "01a7a1f2c33c8a2056c93a6c8186fea6c14dadeb5a586f4546b39fc14d121b2b",
+          "sha256": "c06d4774d714b56464609f078d515ba150c464b45e51a8e537e568fe26602038",
           "shape": [
             10808
           ]
@@ -8728,7 +8728,7 @@
         "Snap_20/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 54172,
-          "sha256": "2d0d8803fc11cb8da7b4eac0afb78b68ff74d3ff3885fb2c1c0a788bda6d7e8a",
+          "sha256": "f49f0ff4357eb1a24c23b96ee2d214fc14a9338a9d77614028267c385f985ab8",
           "shape": [
             13543
           ]
@@ -8888,7 +8888,7 @@
         "Snap_20/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 54172,
-          "sha256": "b581f603f78d3f30436e711d177a3162262ff13723bb33d0f6f06d307d3a60aa",
+          "sha256": "8dc689edf63593f570ec05392551e7cc955136f925939a9d53ca3e36995a015a",
           "shape": [
             13543
           ]
@@ -8928,7 +8928,7 @@
         "Snap_20/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 54172,
-          "sha256": "8662e558734e6cfd76c54a3d9fa2563711d76ef3df3efb2b27f4fb3e368780f6",
+          "sha256": "31f0895cf6021edeea0502b8124fab99fcf25647b5364a42a4616aa5c748cf73",
           "shape": [
             13543
           ]
@@ -9394,7 +9394,7 @@
         "Snap_21/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 65844,
-          "sha256": "7fc1d318222abf1b77eeffd818a941baae01cea18e7100d06ec3194580f5d51a",
+          "sha256": "454bf4413d01320b5e47615832f68b98241ea7af90191cdaeba18d49c9b3a90f",
           "shape": [
             16461
           ]
@@ -9554,7 +9554,7 @@
         "Snap_21/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 65844,
-          "sha256": "df8c8a3dc4301d2579c267d9d915f7dd006b080c61feacb05365cd1357a2014a",
+          "sha256": "33054395edac93d1b0450780b6318bc5284653394f173903196183579fe89028",
           "shape": [
             16461
           ]
@@ -9594,7 +9594,7 @@
         "Snap_21/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 65844,
-          "sha256": "23a3e351e02e1b45ec6262c8b13b7a6e8e72cafd4c7798b4891a904b3770add1",
+          "sha256": "3d64a6df8c4214b37b4f38912ed69c79c760f6431c4c7eb60061a276ccb36bd8",
           "shape": [
             16461
           ]
@@ -10060,7 +10060,7 @@
         "Snap_22/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 77112,
-          "sha256": "502ac60b82d4d26e93c20ab2a22fd4597bb5bf521a0b373357f1966cd5f246eb",
+          "sha256": "febd1a971089c25ab6ae0eb383be5568c572cff33b2efd24f703cff39f2bceec",
           "shape": [
             19278
           ]
@@ -10220,7 +10220,7 @@
         "Snap_22/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 77112,
-          "sha256": "01249eb6b9a8f4ecb133777712a01f0219f99f8b36e4859b4d3fd0040bdce655",
+          "sha256": "e8fd0cf87b06f050d1a0e01e243652f3ad95c42c5844cffa6afc2c9c5efe7cee",
           "shape": [
             19278
           ]
@@ -10260,7 +10260,7 @@
         "Snap_22/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 77112,
-          "sha256": "4a3b74af3641d581e65e641e0d53d51973ff73025213d98b5bd17f87db6e1dab",
+          "sha256": "c73aad80ee7001097befef88b808af85815e9c07db29b2c88ca523dc99a0a4e2",
           "shape": [
             19278
           ]
@@ -10726,7 +10726,7 @@
         "Snap_23/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 88088,
-          "sha256": "2546ecb6c2226194187cfd54d8fb4a6ee68b3582e40caad4391947e8b8751c92",
+          "sha256": "ca74b070b5050c566f7dd1e6db201959f43cce90e525f8cf7b25993b8ac0e066",
           "shape": [
             22022
           ]
@@ -10886,7 +10886,7 @@
         "Snap_23/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 88088,
-          "sha256": "e9a94f8bd4e2c83ca31fa5c2387ee476da9284513f3184d6d3aab19703848b68",
+          "sha256": "358e77d434e52c8763ed559c72970a39f031550978a2d47df30aa6feb744dceb",
           "shape": [
             22022
           ]
@@ -10926,7 +10926,7 @@
         "Snap_23/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 88088,
-          "sha256": "aa29326a55e32927dbce6b81f5c1c729df9cd6593c2670c23d1c1dd9d134b515",
+          "sha256": "1d0dc5ef861bae9336eb21c9adc1b8f1fcda1b470c7a3c4737bd1209cba7bd5a",
           "shape": [
             22022
           ]
@@ -11392,7 +11392,7 @@
         "Snap_24/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 98228,
-          "sha256": "5aa9aba03a5a8f1680fe1a399d8660bc463e213d980606de11cf67af0d37ffe2",
+          "sha256": "0ea7a5bec6058af05ecd9bcf1a31b4862b8e999ea64c0a377d056a83705a29d1",
           "shape": [
             24557
           ]
@@ -11552,7 +11552,7 @@
         "Snap_24/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 98228,
-          "sha256": "c569d55706725baa02c1de1c96adbfd782e912fcbcb3d9b2e95afa07feac3897",
+          "sha256": "572a627f84efa36765da581822d80cdc95d2b20133b62fcfbd24ce0e1e91347b",
           "shape": [
             24557
           ]
@@ -11592,7 +11592,7 @@
         "Snap_24/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 98228,
-          "sha256": "5c003001808ff6af7425a7adf24d39f59d2171cf77c8cad0dd63d2f916f44590",
+          "sha256": "19fbebd9f459bcae1906df0665789da8b9a20ff636803e8d74c552725122f09e",
           "shape": [
             24557
           ]
@@ -12058,7 +12058,7 @@
         "Snap_25/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 107240,
-          "sha256": "158aafb9cb9fb2bee1defecf66485578b24204501203513f132361a606c57b08",
+          "sha256": "74aaa2883b0e11b84ee1e8a1e6f9521b6f3cf28cd9e2028182a0e4b3cdc855d9",
           "shape": [
             26810
           ]
@@ -12218,7 +12218,7 @@
         "Snap_25/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 107240,
-          "sha256": "7b51fb260ae9ac4918372f89e7de74230a15df2fa3975d92c79eb15a2369a1de",
+          "sha256": "17bdbb1e73c70ce96041671dae61b61a61c875d7ef5e0dddc84c64b107b90ed6",
           "shape": [
             26810
           ]
@@ -12258,7 +12258,7 @@
         "Snap_25/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 107240,
-          "sha256": "3afe58d179b36811ee587cf700970f023c7982506d925da88fb4de11adf896a9",
+          "sha256": "cecee46becc8ee69c0c6cd35b2a8f0c72e5c18b7c655768e9537ffec96088397",
           "shape": [
             26810
           ]
@@ -12724,7 +12724,7 @@
         "Snap_26/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 115516,
-          "sha256": "56f917c146285a8bc96bce49d94221b7a080e7a56d9e425601cb79febc085564",
+          "sha256": "3309fda1c6ba908fce3616ca5457c07002a6a62aa6f08ea8eb9d831a702af59f",
           "shape": [
             28879
           ]
@@ -12884,7 +12884,7 @@
         "Snap_26/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 115516,
-          "sha256": "c84f107ed671708b2b240106b4ed5de9fa7635afe682c88b759dc8fdb27ede6b",
+          "sha256": "bbd310c369c4e1c31a92273768ef15fdd62a5f77e00da1e71676f65f2881d832",
           "shape": [
             28879
           ]
@@ -12924,7 +12924,7 @@
         "Snap_26/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 115516,
-          "sha256": "da784e3bed2677d535fc2be019822fa14986c9ee1df70eabe73145d53a48cf18",
+          "sha256": "bb13c0ed637628822cb43a0c8bc090659adf1862dd32581010812aa0270e9b5a",
           "shape": [
             28879
           ]
@@ -13390,7 +13390,7 @@
         "Snap_27/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 122208,
-          "sha256": "452b54178597f51ea159c9ed4952e0fdcfdb091be93dc13a521b9568743c4183",
+          "sha256": "7bc75cc5c80f2a0a1441477d074e1d910418fad07cf56e57ebdd0effc37cd6f9",
           "shape": [
             30552
           ]
@@ -13550,7 +13550,7 @@
         "Snap_27/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 122208,
-          "sha256": "243b3824e7044120fe1c3431ca6a8d2515989d48fc4d486c76d7148d168e01dd",
+          "sha256": "da45e126c8e1683c895ca05909fb3258cac3121513f0a475b47ef330ac7602e7",
           "shape": [
             30552
           ]
@@ -13590,7 +13590,7 @@
         "Snap_27/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 122208,
-          "sha256": "29461025b773f0f78d0563429089b716235586360106978e2e35e3ffa67374e9",
+          "sha256": "5eb4b76819b7d003c86959d5c596316110de9c8fc919bc91a931e2cf589421b1",
           "shape": [
             30552
           ]
@@ -14056,7 +14056,7 @@
         "Snap_28/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 128368,
-          "sha256": "cb824fc5ee1094c2f34aeda3a75e5f575bd2189ca8b654adb316079d6a8dc72d",
+          "sha256": "04b6075650423ab32e2fa05a57e5692ea6f20604a198363da36d81cb6786c79f",
           "shape": [
             32092
           ]
@@ -14216,7 +14216,7 @@
         "Snap_28/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 128368,
-          "sha256": "e0595db73ea3f5c758d52030e73f3d8c13d1e3bb4a2c51b704244703ae6d4418",
+          "sha256": "7bcca62c6243980d3248ae4fef164d2e56d83ec541155bd7a338901fe28cdd18",
           "shape": [
             32092
           ]
@@ -14256,7 +14256,7 @@
         "Snap_28/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 128368,
-          "sha256": "f01b5fcc59dba4a6f72474add82e8f2401be53d1e034cc98cb83ffafb9616a57",
+          "sha256": "7b6cbf9139f1bbe07b3becefaa0630670af050a73ccaae5d3a93b4955df29689",
           "shape": [
             32092
           ]
@@ -14722,7 +14722,7 @@
         "Snap_29/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 134024,
-          "sha256": "ff72051ce16d9dde371a44f9e50586729c96ac418cc20b23f975822c7fea13a3",
+          "sha256": "4982212fb10a3a637589bdae746fb9b2cde93f4d90970c0254bbb651346b8423",
           "shape": [
             33506
           ]
@@ -14882,7 +14882,7 @@
         "Snap_29/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 134024,
-          "sha256": "e8f5e6b64e167642b0dc57d83871384a970dc022260d1ca062b0e7fd17fa58f4",
+          "sha256": "d381fbec143645960b2926fa8a5dc84c902e221a1e4fcb12b8da75cc90c07576",
           "shape": [
             33506
           ]
@@ -14922,7 +14922,7 @@
         "Snap_29/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 134024,
-          "sha256": "f19f86335283bb8eb7a1891a595f3d7705b7107dc8a412ed5ef9900c5bd6cab4",
+          "sha256": "aabd0d7bf93d92747c4f312c2fb4d92a0b60ee49cd5d140fa91a4bf85e28db67",
           "shape": [
             33506
           ]
@@ -16054,7 +16054,7 @@
         "Snap_30/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 137812,
-          "sha256": "5960172da47990fdb241370463367de072eb071bf9bfd57e623eead639ed19b7",
+          "sha256": "efb2107975fa0f3aa1ca4557a0d12eb2d4cdc14699abc3ed1d283b5b2cad1e4f",
           "shape": [
             34453
           ]
@@ -16214,7 +16214,7 @@
         "Snap_30/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 137812,
-          "sha256": "d10b535cd5bd5fc464d0b398148f8d3a48188ac1d4f2f28ad14e432ae92a4ae4",
+          "sha256": "60177105beb0ee3980414574ebf238ea8de193659bdbc0d1d1c55cc6a19dd949",
           "shape": [
             34453
           ]
@@ -16254,7 +16254,7 @@
         "Snap_30/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 137812,
-          "sha256": "5ae2bcb1dcfeda188bc3afd21b1477f120e2e3693d1eeba15330215338b00e01",
+          "sha256": "9c9069a92c3d7b049b70c10ff843aabfaa6dc157f486609abcc695db035b2da2",
           "shape": [
             34453
           ]
@@ -16720,7 +16720,7 @@
         "Snap_31/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 140988,
-          "sha256": "1c2e74e4a940c929d22ae3da187803d71bfb6e42e66543c4429c469c092ab6bd",
+          "sha256": "1fe1e28dfad717fe2ec6733dedede786f10a60bce685fddafd397e6f87fbca43",
           "shape": [
             35247
           ]
@@ -16880,7 +16880,7 @@
         "Snap_31/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 140988,
-          "sha256": "7e2ba8032a86289ab52613a14fbbc8786f33830337b0fbf7cd6d25611008f923",
+          "sha256": "149db2bb7911b7082bb0c126032ccaafb62d4d9fc3189a1bf021291ef91f3ad7",
           "shape": [
             35247
           ]
@@ -16920,7 +16920,7 @@
         "Snap_31/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 140988,
-          "sha256": "afb203fcee68f02eadd601fd1c5ee9017f59304ab6a656274cec8a485bca2938",
+          "sha256": "b94ece081061039c228ce9ae710188fca75e1eba38153eea741a74df878a82fc",
           "shape": [
             35247
           ]
@@ -17386,7 +17386,7 @@
         "Snap_32/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 143528,
-          "sha256": "0e096e42149b62ca9cf36a138f1533d60d0dcf163faffe0bc6420482a91586e7",
+          "sha256": "6cf7aecb8a8eb1cdadbed6886f4d6f0d3b5d95934a37f1b078c64e8a8d6d495a",
           "shape": [
             35882
           ]
@@ -17546,7 +17546,7 @@
         "Snap_32/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143528,
-          "sha256": "06558cdb7fa3f5bee4dcee52c9738003f5e9b1619f31787343f8d7181087173b",
+          "sha256": "43d41a6a9bacce7a0ac3ed5a1c5d096e5eb4ac60bb8a717bfcca8222a26d43b7",
           "shape": [
             35882
           ]
@@ -17586,7 +17586,7 @@
         "Snap_32/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143528,
-          "sha256": "e429fc70f52dfa76d8a0465e4db8360a910aa2b60058f19cfe7aa0ba28b0fe5c",
+          "sha256": "104caae60d97fe35052d1a6d0d5132a2ba5ce80a8189c8a7b9c53a7cb8532638",
           "shape": [
             35882
           ]
@@ -18052,7 +18052,7 @@
         "Snap_33/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 145572,
-          "sha256": "76c89a3846bbad917eae68ee961780acd554620e7f8006dc1f1f783cd6319877",
+          "sha256": "260ed595db603392cda25df4042382f60340f08a03731adbe5f5ae0ddc428b07",
           "shape": [
             36393
           ]
@@ -18212,7 +18212,7 @@
         "Snap_33/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 145572,
-          "sha256": "5e029ce911f6a8a3d346c298b01cd5b9589da178a9feccfa0308ca29226616d6",
+          "sha256": "a3b0d49ac660e89fa845a184b5c575b6cd8ab6ba1dd5835554ef561d242c0686",
           "shape": [
             36393
           ]
@@ -18252,7 +18252,7 @@
         "Snap_33/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 145572,
-          "sha256": "e0ab46faba7351c5fafa7bdfa7fe61f9d9ba3b40328ccf70f2158f175b202330",
+          "sha256": "c1b7ff8c489a1dba30ce70ac584ddb7f0fa7494f0681eedd43a6364fed0ba917",
           "shape": [
             36393
           ]
@@ -18718,7 +18718,7 @@
         "Snap_34/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 147336,
-          "sha256": "b64b5073f9284bf5caa162afc8ad5d3c432779d2b986b5a5085d88cdf64df6cf",
+          "sha256": "31e8c06d9ab0f1a07de371cdd14e9188ac35e0e3c7804215cb9792f22dcd7ccb",
           "shape": [
             36834
           ]
@@ -18878,7 +18878,7 @@
         "Snap_34/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 147336,
-          "sha256": "e0dd87b6c686688f953f94e883d08b6b882e41fe9782ced3b08a0641a0dd684f",
+          "sha256": "ae2e0722b6b6eae7de5d776671789470d855360b888c40b2217eb098b954ce9c",
           "shape": [
             36834
           ]
@@ -18918,7 +18918,7 @@
         "Snap_34/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 147336,
-          "sha256": "1edea0ae2f091b3b3908568106811f2e2fb714e236847f375d54ad7da4617bea",
+          "sha256": "3a4a5c08a066d1f503fb38cae0b7a71f395da354b2b0eb040f4780621b1748e9",
           "shape": [
             36834
           ]
@@ -19384,7 +19384,7 @@
         "Snap_35/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 147944,
-          "sha256": "d017bc1c167822749be05c65b451fda47c9dea855f21c3ffa58015688b721a0a",
+          "sha256": "d139fd63383369a67eb3741860ac96ef07f0b3bd166ac060c14b1e0f2115a52d",
           "shape": [
             36986
           ]
@@ -19544,7 +19544,7 @@
         "Snap_35/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 147944,
-          "sha256": "2c5a862e418bf0f4916055886946c0d7bd623aa0e2b9818494ac9060483f9a02",
+          "sha256": "f860ef1841a2356d1f8da41d3cfddc1cf9bd243e39cea56afadf9257264d1158",
           "shape": [
             36986
           ]
@@ -19584,7 +19584,7 @@
         "Snap_35/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 147944,
-          "sha256": "bc7c8b8396dd183384dd5b78385b830fae025e55640fed5faf33dfc8a3dd4fdc",
+          "sha256": "dcc169c723eccc4e41d576c5034c77db0bc1cba12e4cdd3625969c74ae419da6",
           "shape": [
             36986
           ]
@@ -20050,7 +20050,7 @@
         "Snap_36/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 148412,
-          "sha256": "53bcc1099e4ba3f8fcb2294ad57f0955176cc1dd6275edb27d8c44c0b2b6f62d",
+          "sha256": "caca58a10692f8a0e578994ebf66c95b025b6c24884b8001420eda915aa5cd33",
           "shape": [
             37103
           ]
@@ -20210,7 +20210,7 @@
         "Snap_36/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 148412,
-          "sha256": "0acc1c2bdad36f98d6a7aa96c55fb0c7c506d65e7926ed81b4057bff26aa4a2e",
+          "sha256": "344a609a7ab25a84195442f18afbf5662a375f91a167909960e1f5f2c4aac51e",
           "shape": [
             37103
           ]
@@ -20250,7 +20250,7 @@
         "Snap_36/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 148412,
-          "sha256": "b11f90c6f1466161a43b3f8018c5f120f6b9b977b16b31c96b9721a3bb1d34cb",
+          "sha256": "4fcccbd2fe9c00364eac004eb2cc7cd0e0b977f08155a723b942f2c677caf092",
           "shape": [
             37103
           ]
@@ -20716,7 +20716,7 @@
         "Snap_37/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 148812,
-          "sha256": "55e3f835daec87d9b0c3910291c4a3cac5b65d9bd6e1de52c1b79fb6694d6ec7",
+          "sha256": "5b1a0146f5046ed9a0b79fc8cf68faf60591602799e377d12dd30dc7cbbbc7d2",
           "shape": [
             37203
           ]
@@ -20876,7 +20876,7 @@
         "Snap_37/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 148812,
-          "sha256": "75b15b6f5f07748b686c1a76676a49153964c0ab079a0c1fe14c82e9fb88d893",
+          "sha256": "61bd29bd2182da025a7438760b75cec0a770df149694edfa9c317791e1436d8b",
           "shape": [
             37203
           ]
@@ -20916,7 +20916,7 @@
         "Snap_37/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 148812,
-          "sha256": "01186a2bf14cd36be9d82f7f8c7ab14e6ccf6c0a4f994b2714a2a0ad37ca4be2",
+          "sha256": "4e5ca2647d63a3bff582020c2b13de55280f4fd9237211e5801b883605422641",
           "shape": [
             37203
           ]
@@ -21382,7 +21382,7 @@
         "Snap_38/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 149396,
-          "sha256": "adbb429d7fadf9ad297cfea5a950d5823985a152c6946ae8a0a2da115415de8e",
+          "sha256": "ae946782e3348cbe13fed23a1d99e1486015f2156f18791ff65d2fa87a2c36a8",
           "shape": [
             37349
           ]
@@ -21542,7 +21542,7 @@
         "Snap_38/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 149396,
-          "sha256": "25b0f56ff39d9fe313af636f9e5cbaa2f4f9eaa879f7503f5df5daf2f1f93525",
+          "sha256": "b1c060b42e665e14536561048b1a13c305b3d9b45a21f92834495ca81e0ae0da",
           "shape": [
             37349
           ]
@@ -21582,7 +21582,7 @@
         "Snap_38/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 149396,
-          "sha256": "21d5651114494d9921df1789d50295d763711fce23bb469e12dd9dea393c1a01",
+          "sha256": "5a816e56535bbd7df95fef28f607811954c1814da451662710e68634208d0150",
           "shape": [
             37349
           ]
@@ -22048,7 +22048,7 @@
         "Snap_39/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 149712,
-          "sha256": "3654a95326f9dc92c5533e8fb08cb7379853b37ea1ed11e22f6a162ed8c04c95",
+          "sha256": "b123ebf0446f4f03bd4bafbb289d91cbb42b26de9cc2fcf2d386f2858d3f8056",
           "shape": [
             37428
           ]
@@ -22208,7 +22208,7 @@
         "Snap_39/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 149712,
-          "sha256": "a046a59b28eab8367613513121acdc7f5d2b0b96fe80c54caca5e7a2daac0120",
+          "sha256": "7208115ddb73fde664add2832cb496c44cc55bfcc50fb9a1d1e5b6d2ce88ebd5",
           "shape": [
             37428
           ]
@@ -22248,7 +22248,7 @@
         "Snap_39/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 149712,
-          "sha256": "f22f10535afa7a81e0b846b98e8fd570783687e5a6005ddb5a9da6366b79d44c",
+          "sha256": "207d36cc3bdcdd93a6f818e20fe7a880eddd26354d39232d12ec8b8956a22f3f",
           "shape": [
             37428
           ]
@@ -23380,7 +23380,7 @@
         "Snap_40/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 149528,
-          "sha256": "c3e1bfa5bdd7f9fc92f9571612870f16b4d8ee17674650b93efae10cb491c576",
+          "sha256": "febeb1af639ef65d07feaa434cbd45df16a95c8afafda05ed1a4158c0283850b",
           "shape": [
             37382
           ]
@@ -23540,7 +23540,7 @@
         "Snap_40/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 149528,
-          "sha256": "1ff9180335f11cb736276372aa25337c90c1fb0bc1c144c7be98ec543a7224a0",
+          "sha256": "f554f435f67527555422fdbf1d9fdfb79dd4dfcaf8763e32b19a86bbef0f754c",
           "shape": [
             37382
           ]
@@ -23580,7 +23580,7 @@
         "Snap_40/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 149528,
-          "sha256": "73bc40ecb71e9d17a913e2932a0ef11cf352c5caea55abf34c563e4254ff7fc6",
+          "sha256": "818da9c5f79e5debbf21869283ccd25a44a56b8a5de1d1e71cef45e96197dbbe",
           "shape": [
             37382
           ]
@@ -24046,7 +24046,7 @@
         "Snap_41/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 149060,
-          "sha256": "c6b274b8e0180154ec4ed33ea8dca46f723f9c7de59c480d6b7768e8b94518ee",
+          "sha256": "7c6633d8282a24576972ae9919197a3494ad1e827587bed0db0636d6723c3c2c",
           "shape": [
             37265
           ]
@@ -24206,7 +24206,7 @@
         "Snap_41/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 149060,
-          "sha256": "1ea7af5786760d7d1c5dd71eda205555828597883c2739f6209968cf3d8de964",
+          "sha256": "f4c306d60e5ed97f99dc1ee81d8c3703e964d4d2a4805054f748cd51f957953b",
           "shape": [
             37265
           ]
@@ -24246,7 +24246,7 @@
         "Snap_41/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 149060,
-          "sha256": "cca9218a9d6dd38ced3a81742be745475ac28a2fc8642c4741147836c97535d5",
+          "sha256": "542be83caaadc64747137111d51b68d565906e79fc08cfa2ddb021bbec05e14e",
           "shape": [
             37265
           ]
@@ -24712,7 +24712,7 @@
         "Snap_42/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 148616,
-          "sha256": "2ebd1a9fd98ae3c87f514b387bb8c661965333461d5d412e584d31430e1475f1",
+          "sha256": "f7f50094b811145f14b0a5c9d81cd1a8ff8b64b8a09ed3a200dca890d6cabd5c",
           "shape": [
             37154
           ]
@@ -24872,7 +24872,7 @@
         "Snap_42/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 148616,
-          "sha256": "32324ef08c83e9becde774d41ee26b9c84cb6deb7b0e90c9f5af613ab304c616",
+          "sha256": "fb6bb6861a4e3dd06ddddf086d24d6a768dc5ab180efd8fe53d5f9f6d8b5def0",
           "shape": [
             37154
           ]
@@ -24912,7 +24912,7 @@
         "Snap_42/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 148616,
-          "sha256": "0f84b0aa406848f398449b522ddea0f961387b58b81f596685401bbe96fb58b9",
+          "sha256": "0173e5c31698add39804830c689b108b01ab6ee325e66baa238f266be27e8fb8",
           "shape": [
             37154
           ]
@@ -25378,7 +25378,7 @@
         "Snap_43/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 147852,
-          "sha256": "e5348d9e91976cccf971f18128550257954322857ea709f6ee76701df3388be7",
+          "sha256": "3396c5ee9dd7a6bffd5fea4571624aa1f841b119c6fe7e19b68552ea091c1013",
           "shape": [
             36963
           ]
@@ -25538,7 +25538,7 @@
         "Snap_43/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 147852,
-          "sha256": "13b1962c761063140988e04048b06e33c49ad2f1b118e11d2233083539a74707",
+          "sha256": "17ee2f3319e7937652d74978a205f542699c971068fa0e113a8fe0e3e84a61c0",
           "shape": [
             36963
           ]
@@ -25578,7 +25578,7 @@
         "Snap_43/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 147852,
-          "sha256": "1f223df4f9903047929ba6cdd4d5d5055e24c81f5246a84a7a99190e970c8985",
+          "sha256": "9ac8d716dc7f9cf7697ef70257c36ab3128c959ea785b7e9ca2c8f138fad842e",
           "shape": [
             36963
           ]
@@ -26044,7 +26044,7 @@
         "Snap_44/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 147636,
-          "sha256": "894c07267f115493e84c6d3799aa99e0920305b161a93094efeec44a93f36487",
+          "sha256": "bb5bb57053711791a991b5e6c6e5e905a569b9d33c0155bd75e698cb6f648cdc",
           "shape": [
             36909
           ]
@@ -26204,7 +26204,7 @@
         "Snap_44/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 147636,
-          "sha256": "2650eff708de009d44d8834958550437f4dd50f8d619927a6a07dc9b6d823a1e",
+          "sha256": "d3838cbd9c977b02289a2ce871c2c8cc806cc5818ca37359949a290bc21c11ce",
           "shape": [
             36909
           ]
@@ -26244,7 +26244,7 @@
         "Snap_44/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 147636,
-          "sha256": "ef146971c097a477f34bb42e55ab5a482dbd503c69a6b21afef9e438f35e41a6",
+          "sha256": "90eaa33da2b086586c41f5d5e16364affd0e0220e8d928833d75aaf0212307e1",
           "shape": [
             36909
           ]
@@ -26710,7 +26710,7 @@
         "Snap_45/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 146912,
-          "sha256": "1ca115af93d0c112613d8caa1e4045398dfe14980e7ac04bb80774a76c4ee9d6",
+          "sha256": "937a8db5ca2eda1ce3d2b89a095efae002e889892159c49a7da88d9475b04b3c",
           "shape": [
             36728
           ]
@@ -26870,7 +26870,7 @@
         "Snap_45/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 146912,
-          "sha256": "2b0fbbc725a8e3dd3f8a7e3cb9b63016c0dff625bd88dfc808e2172ebc14ab7a",
+          "sha256": "2a0449846f522fbd84fc37287a393dfb61c2429d49a28e614a6522904e31069e",
           "shape": [
             36728
           ]
@@ -26910,7 +26910,7 @@
         "Snap_45/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 146912,
-          "sha256": "691b9361971739b6a8641bb45c531fc0220f0ab429b5a7c8f207916a7ccb146c",
+          "sha256": "b33b27335825e8d2a3c6c7b1366d7904044bc892223b96cf8f5aa81910475e89",
           "shape": [
             36728
           ]
@@ -27376,7 +27376,7 @@
         "Snap_46/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 146220,
-          "sha256": "f2a7fc17a0305ccc989021d19318a5e29e2644bfb3c1b680b18408c3d1235c63",
+          "sha256": "53e170a2b9e376f06515f445c4fef2a69fd8c548c1fef2eb4ec0de6665f1c9ec",
           "shape": [
             36555
           ]
@@ -27536,7 +27536,7 @@
         "Snap_46/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 146220,
-          "sha256": "ccf09e9929cc6b007740a350cb09c6e8940da8b4e7f5f0f3f03b6120843a3160",
+          "sha256": "af9d0d651e95b78cc699f37c71e5c21d2ddf84baec06ae741d0bf1db20664829",
           "shape": [
             36555
           ]
@@ -27576,7 +27576,7 @@
         "Snap_46/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 146220,
-          "sha256": "6ab8325642515e6d6476da676f1a30ea28df53ddd5909c105730a9b96d4677f1",
+          "sha256": "779aeef623700f432ec8ba1614f693c788cd213eada9ea8e0078086ddf32fcba",
           "shape": [
             36555
           ]
@@ -28042,7 +28042,7 @@
         "Snap_47/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 145924,
-          "sha256": "75da4d824b8d7857ac937e22e9f5fa2387f6462d4ff9166b7c70a098cd27503d",
+          "sha256": "356a98b5a0c2889502e498cfa6c08a399c223d2e691574d9488f90360ca22547",
           "shape": [
             36481
           ]
@@ -28202,7 +28202,7 @@
         "Snap_47/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 145924,
-          "sha256": "5ed56bb7ef8a2960197a02a8b78cd49d7ff52e64d17f684cb73494108e6cec8e",
+          "sha256": "3693b9be6256bde24ae4e253bc79aba914c317e58648a28f4a4335fbf4d92ba9",
           "shape": [
             36481
           ]
@@ -28242,7 +28242,7 @@
         "Snap_47/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 145924,
-          "sha256": "af1f34f5162d66bf42654e874839cfdcf0ceefff2a814018e2ed30ac365db113",
+          "sha256": "6cc70c13ab9b2818d374ac430819bf7cb6f65f43d3da55e8334b5f5155c26474",
           "shape": [
             36481
           ]
@@ -28708,7 +28708,7 @@
         "Snap_48/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 145536,
-          "sha256": "4c7054649ff24e3b4c4256741e73ec2930b8c9a04b914f4fc291fbe6e0ac2df3",
+          "sha256": "9cbb70a28856dd87d90d960bb923901197f2e228670c125e21d31326b5543d0d",
           "shape": [
             36384
           ]
@@ -28868,7 +28868,7 @@
         "Snap_48/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 145536,
-          "sha256": "dfb8818808b65fac0bc24bb0bf657eb43c24917371895812ea68844702e00dff",
+          "sha256": "450ea20e40196357316b8180ff47e4b8d0d96641416617cf79c411925e47e39b",
           "shape": [
             36384
           ]
@@ -28908,7 +28908,7 @@
         "Snap_48/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 145536,
-          "sha256": "9b2a00d06e93c06c6be0733574caff4914678de6337cd86f99ba86c64e129a0d",
+          "sha256": "cbb277c8d44090f832207f3b9b4edff2e1808e0f654ca32d99a0774572726d54",
           "shape": [
             36384
           ]
@@ -29374,7 +29374,7 @@
         "Snap_49/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 145272,
-          "sha256": "7156c07356781ccb17ab086fcaf88080dd0541fd2cf0986bb76ecf6248c2feb4",
+          "sha256": "eb5f150b95ee299579470110df820e2132f711b6693d6871b8b1e341808c1855",
           "shape": [
             36318
           ]
@@ -29534,7 +29534,7 @@
         "Snap_49/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 145272,
-          "sha256": "b3690ed85567efc85697b9cc78dffab9b7f516ec85f17f87923c2193a9dc709d",
+          "sha256": "d1baeab4719fbe48328c579edee5784f0a866079351ba90bdd766d8136850e87",
           "shape": [
             36318
           ]
@@ -29574,7 +29574,7 @@
         "Snap_49/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 145272,
-          "sha256": "2c0c573ad08535c104e3e3d14936b3159306fe81fcc23f8e05a94947b7a7e731",
+          "sha256": "6d990cf92911b3e73cc45708fa7649ae25daf586d93da92bd89616080f69d808",
           "shape": [
             36318
           ]
@@ -30706,7 +30706,7 @@
         "Snap_50/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 144960,
-          "sha256": "d240cf8f00248127e2bf4d972b9af7caf73e3de773c8b764ad685a624076ef1b",
+          "sha256": "328fbce0e17e8d628b8f43ad078e903a6c0259cf5c1628ff753beb01cecbc9aa",
           "shape": [
             36240
           ]
@@ -30866,7 +30866,7 @@
         "Snap_50/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 144960,
-          "sha256": "2e9c9e3ecbfb8f4861c0928e50703db6a6a00a4977954d7b7b16a28a744c5ff3",
+          "sha256": "eec0df7c787392ec50a8e54572caec16b6c473117cccc2dee95d15fc629115d2",
           "shape": [
             36240
           ]
@@ -30906,7 +30906,7 @@
         "Snap_50/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 144960,
-          "sha256": "8ef9393101bc5f7f4dfb433883a7d1a072818268669d0267933f7721743169cc",
+          "sha256": "fbd786d811f27c27699b62e5d706ab8bfb415690f7950ad21ebac097786a8ce4",
           "shape": [
             36240
           ]
@@ -31372,7 +31372,7 @@
         "Snap_51/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 144564,
-          "sha256": "f8a7c17fc3efb8a49c7d016860adfa928ac8916b10605c457022c25d3c71e8b3",
+          "sha256": "f899bd1680c360d2b923fee9c13316185ca892f43a27a6d6e0139c7227c5aab1",
           "shape": [
             36141
           ]
@@ -31532,7 +31532,7 @@
         "Snap_51/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 144564,
-          "sha256": "ea43d9a6188f8dc9f8641141d82e18684fc85c4cdb4ea2d81c193126cee601ee",
+          "sha256": "598633ac1daf16c509858214270472a3b6b294754e4a0871203f3db5876dc368",
           "shape": [
             36141
           ]
@@ -31572,7 +31572,7 @@
         "Snap_51/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 144564,
-          "sha256": "3f7f46f56c3c241943c5345d1790bc7fb24aa2037624c50e72d30021218f8f8e",
+          "sha256": "73bb2c00d86f0509161a8ae62a7ee1856d5218071bc757f5c845d3364ee68b80",
           "shape": [
             36141
           ]
@@ -32038,7 +32038,7 @@
         "Snap_52/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 144208,
-          "sha256": "e64c7802765d5a46275a9fce5d6e2c15ab76a48fdf40797ecda7355bf0b548ea",
+          "sha256": "3de9a61c0014237fad0e8b0be8479a466b2f1d923b900a2b0b3eaba1ec452db2",
           "shape": [
             36052
           ]
@@ -32198,7 +32198,7 @@
         "Snap_52/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 144208,
-          "sha256": "c8c49b21f4829a8035d1dea9d2f9e9d9444bb581b43b4fa4834a94231b96a0ad",
+          "sha256": "0694a41ebe9779abccb83c1aa6d8e6f0891143edfa6488d42d482a85a339c8a1",
           "shape": [
             36052
           ]
@@ -32238,7 +32238,7 @@
         "Snap_52/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 144208,
-          "sha256": "d427994904b7a178ddf4a74218888fdd5c10b9c312398f69fbbc10090e1de4e4",
+          "sha256": "164e82958a7ee1aca0e42b7f9eec3f7760197a35d29e7b8dae09de86ec9484e7",
           "shape": [
             36052
           ]
@@ -32704,7 +32704,7 @@
         "Snap_53/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 144088,
-          "sha256": "b5e17a7f4d0a62f9ab94ad2f779509fde98af82b556f6768a63bd3001619176e",
+          "sha256": "a452443797209df6bfc19999a063e5b7e56e977f71c72adca037bf8c7a734496",
           "shape": [
             36022
           ]
@@ -32864,7 +32864,7 @@
         "Snap_53/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 144088,
-          "sha256": "eeeddbcd8a9d2e2788d2247c61e4d0205a974e003493737ef4bec87b8a342a75",
+          "sha256": "8fb795b75b3d33273f774cbd5efd0fe93a768118bd06dffc35b0c363b3461081",
           "shape": [
             36022
           ]
@@ -32904,7 +32904,7 @@
         "Snap_53/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 144088,
-          "sha256": "c8951d502ed764a4e2a3950e368aafda445a94c2db25f4e3864174570e2dbcc3",
+          "sha256": "aa8c986797f62feff5fb3958d5cc11f0939a97bb230da4bdb11351c0b7dc8770",
           "shape": [
             36022
           ]
@@ -33370,7 +33370,7 @@
         "Snap_54/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 143768,
-          "sha256": "8d6c0803a36e48d28ac0b758aea3e5cd0cd653cc842dc619901f64ea65ff43ea",
+          "sha256": "db491588d70e57b3ece8a95c18bc83c112d5a7a33a4487e81b73398f96fa4364",
           "shape": [
             35942
           ]
@@ -33530,7 +33530,7 @@
         "Snap_54/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143768,
-          "sha256": "a4215f8e2ef22c1858f44d3f85f4301318585094cbb929f261e1cd055e8de7db",
+          "sha256": "bf4b96920f7254348c0e56bffc1f04a4a74e3c9e942f580dd198278ed98fe80d",
           "shape": [
             35942
           ]
@@ -33570,7 +33570,7 @@
         "Snap_54/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143768,
-          "sha256": "f8e213e8344ffaa6e56cd684d4225058748b58e9d426db438f13fee56200d350",
+          "sha256": "b8ff1ddff9c401f5e362c7f115d06d92c04a74f0f07bf9b15a95435d307c20af",
           "shape": [
             35942
           ]
@@ -34036,7 +34036,7 @@
         "Snap_55/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 143776,
-          "sha256": "5d377aec876e67832d393f7aa24c485739c48157c311fb5ccb4eefb29d81f418",
+          "sha256": "816ef78fb60186833fd5008ea3a80bfb3f7ad515e314415d6e7d5b6d8b799845",
           "shape": [
             35944
           ]
@@ -34196,7 +34196,7 @@
         "Snap_55/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143776,
-          "sha256": "e79fa1685f1b334d4fadb2a0e3a14cc75b8224ec63927d022e79b3d561535d62",
+          "sha256": "4e6773ba9b8f067227ceee8ecec0702db86fb510659f0eb061789eaaa165aace",
           "shape": [
             35944
           ]
@@ -34236,7 +34236,7 @@
         "Snap_55/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143776,
-          "sha256": "a6bdfc1cc9a58c5e6522ed3aec392959fe67783dd7aaa139131dd39ed55eb5d5",
+          "sha256": "f6384c8ee064fd1edbbdf91d40e0406d304c84e16b07c754eda2de80bbe03d81",
           "shape": [
             35944
           ]
@@ -34702,7 +34702,7 @@
         "Snap_56/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 143644,
-          "sha256": "9cbf8bdb540365335d44f732b26930f6c20e3bc248162c275dd3cd2535645144",
+          "sha256": "1e0e640ad27ccfd9ae9ac7e717709accc056f714b614abc5e62b7e350b4b303d",
           "shape": [
             35911
           ]
@@ -34862,7 +34862,7 @@
         "Snap_56/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143644,
-          "sha256": "d682acb5ba198765f1ce1e6fcd80d4b22446850e2f073c9d67b67b8d24ca50f3",
+          "sha256": "b5fcfcebd0fc4ecf981a15c22b3ed24392b819892ef719947162ca1c8093e64d",
           "shape": [
             35911
           ]
@@ -34902,7 +34902,7 @@
         "Snap_56/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143644,
-          "sha256": "ba1b38647105429b5ac79e55d7e639b1cd391fb8bd599f2e22e579dc3d2eed37",
+          "sha256": "dca920284e2158600f804133bacc5e46025a550cf9f1f6e614c6c9ec98b309e1",
           "shape": [
             35911
           ]
@@ -35368,7 +35368,7 @@
         "Snap_57/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 143604,
-          "sha256": "982686ddcd82e387bff0b3e94bdbdc68438eeae346bd3e9e178394b9cf9c46d1",
+          "sha256": "07b07982def7a1b3560e4230f02a9a6ffa816ad08f00e1f7272fea7dfa004360",
           "shape": [
             35901
           ]
@@ -35528,7 +35528,7 @@
         "Snap_57/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143604,
-          "sha256": "a028d515b971afbb6c65163ac15d521098b0e9e14c89b045349639c31b0bdd82",
+          "sha256": "d7bc56764456834ae97ad0355659a7494e97c61cf47241086813049f13b7a8bd",
           "shape": [
             35901
           ]
@@ -35568,7 +35568,7 @@
         "Snap_57/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143604,
-          "sha256": "72c1e73492653f8c33953459398fc2869e589db2c4fa1a20a5d138d0e7db048a",
+          "sha256": "a3645798765447c2843ffc546c122531b7d07d9c9e445083c5160d2872d3c5a5",
           "shape": [
             35901
           ]
@@ -36034,7 +36034,7 @@
         "Snap_58/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 143540,
-          "sha256": "5fd2bca3a145725542e98afc516f6370cecf4e60a491fb770bd00c43b56e5828",
+          "sha256": "16e69131ba44af5228217103a28b68392daf81195cfc2abe4b594ffa4a7869cc",
           "shape": [
             35885
           ]
@@ -36194,7 +36194,7 @@
         "Snap_58/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143540,
-          "sha256": "50e3e89ea1943d7739809336add0442b9ee73dc6c1b0b223d3f106e12cef906c",
+          "sha256": "62aa77ea40896ba22a9c9020b1a6f7712fbe537a2ee987fc1fcefc742615f6a8",
           "shape": [
             35885
           ]
@@ -36234,7 +36234,7 @@
         "Snap_58/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143540,
-          "sha256": "0242edb08e5ee11954484588c353987697b2521a74858c9f6496caa432af74a9",
+          "sha256": "13f219085548b8447904969055410e56b4f63435faff742c8d201be03012a386",
           "shape": [
             35885
           ]
@@ -36700,7 +36700,7 @@
         "Snap_59/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 143916,
-          "sha256": "1b563fc5216331873f26187bc3d99113b818ddbab98e289bd081c15c6e1c0731",
+          "sha256": "7d7f8fbdb3c5394af7c2386393cbce63a46a096a8978d80a4a2593f585a57d4e",
           "shape": [
             35979
           ]
@@ -36860,7 +36860,7 @@
         "Snap_59/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143916,
-          "sha256": "90a004832ea68d76da16e4d54b1744ad3233de05f7b028a641150cebf617ea8e",
+          "sha256": "c7f1ac14908e2fe851f2c51e80134d963b3ff66bec683d13cce315d35413cf98",
           "shape": [
             35979
           ]
@@ -36900,7 +36900,7 @@
         "Snap_59/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143916,
-          "sha256": "6d55a6f99c6be6a067098a1d4ec03e7ea1748c86a5116f68c9d0fab938b9ef65",
+          "sha256": "2031e719aa778a913d38597ce4be4dcdc731f7a333fc8d314c419ba2b8db1252",
           "shape": [
             35979
           ]
@@ -38032,7 +38032,7 @@
         "Snap_60/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 143872,
-          "sha256": "1dbaf0efffc5637a0da404ead6587640e97d1916b1259d852203d48922e40f26",
+          "sha256": "4306de9e9505ab33e9d4e8ea24bd8b5350bf18aac82760c042b91c70d34cca04",
           "shape": [
             35968
           ]
@@ -38192,7 +38192,7 @@
         "Snap_60/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143872,
-          "sha256": "69aa2ec20695b8e5abf511dc9c362130249bd40ade5ed6037299df12e77b99ae",
+          "sha256": "3bebeabf0a0cee847dce722b37a677763fdcadc626515d22a11e2562c7360ba0",
           "shape": [
             35968
           ]
@@ -38232,7 +38232,7 @@
         "Snap_60/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 143872,
-          "sha256": "cdb6bf913de49a98b6698e5f22e25f087630176833199fcb2d81b99140da1a30",
+          "sha256": "8cc924aefad633abbb285b9798aca7a9bc3baa8342b72b619a5e04724335e42a",
           "shape": [
             35968
           ]
@@ -38698,7 +38698,7 @@
         "Snap_61/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 144268,
-          "sha256": "6902441b4f23796fd76aac30fc61c089814dbb8c19242e5156a0e15ac3099891",
+          "sha256": "63b85e31882c01f039cf688efe5e98f2eced2e7a7ba11927a1d417037567ccf8",
           "shape": [
             36067
           ]
@@ -38858,7 +38858,7 @@
         "Snap_61/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 144268,
-          "sha256": "985e0c5f4113fdbb85bb4b145fdfffdf6c89d0ec762b941c2f6264bfb3b3fd61",
+          "sha256": "b081d538f2f17b54d1c9560657b817f947431afb8ed7fd08e2dcc8999ed92142",
           "shape": [
             36067
           ]
@@ -38898,7 +38898,7 @@
         "Snap_61/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 144268,
-          "sha256": "dada1a0a051fa498625f083a8b0b1268f906fe7584915fcabf8282acd5005637",
+          "sha256": "642ef6e3c97792edc268893120f23e60b70d314fbd1ded7ce88cc2b887c1f7bc",
           "shape": [
             36067
           ]
@@ -39364,7 +39364,7 @@
         "Snap_62/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 144656,
-          "sha256": "2c3db2a1cfd13fb623fe20c4c22519f7f8e3cfd4683bb1a13be99c5000d558e4",
+          "sha256": "8f782affaa34e484c697b37627458adc11953f0baef43afa8ce856123f86423a",
           "shape": [
             36164
           ]
@@ -39524,7 +39524,7 @@
         "Snap_62/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 144656,
-          "sha256": "3890b250965ffeca1e9f610f84b282afcd1ad9d307d4e6ca29a1d9f1774950e2",
+          "sha256": "f5b8f078495b7309c39cbc5811f9dea6206aa15a1bc297c0c1822a8e10f7c25a",
           "shape": [
             36164
           ]
@@ -39564,7 +39564,7 @@
         "Snap_62/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 144656,
-          "sha256": "0749bb257a517f4073ae1124c962c606745cc7ec4f982c8e3f3e8660b34e220a",
+          "sha256": "081754548a25c698fbb355b168be266552943b8e8368873aaa8857be506ab31b",
           "shape": [
             36164
           ]
@@ -40030,7 +40030,7 @@
         "Snap_63/BulgeRadius": {
           "dtype": "float32",
           "nbytes": 146124,
-          "sha256": "ce859eabf317de645f1bdbcb9d6fe9770e8adc6afc3f2c839a47aa0d168de096",
+          "sha256": "b15572b7f93d0a9b980a80fa3e33eb4b9b914c6e3bda664e00eae194ef25376c",
           "shape": [
             36531
           ]
@@ -40190,7 +40190,7 @@
         "Snap_63/InstabilityBulgeRadius": {
           "dtype": "float32",
           "nbytes": 146124,
-          "sha256": "2603d029d2b2e03f6acf82074458cd0c0d2c6d768cd56658b74813832da3f6b2",
+          "sha256": "8ea1495d6f98208c9e1342036fe514b5bfccd46565c3ee8e19f905d472138f14",
           "shape": [
             36531
           ]
@@ -40230,7 +40230,7 @@
         "Snap_63/MergerBulgeRadius": {
           "dtype": "float32",
           "nbytes": 146124,
-          "sha256": "74ee83d48271e17677625bedacc325d2e09b855c8dc0dfe24fbe8770464f098e",
+          "sha256": "7726a9cb046bcceb77b7e7151fb7373b12f2c87a40395be173e1fa44d9ea1f2b",
           "shape": [
             36531
           ]
@@ -43188,7 +43188,7 @@
           ]
         }
       },
-      "sha256": "e50de3540fa38d136fcb11fda8d9c7999480f7c7b6983c440bd0b0227adc486a",
+      "sha256": "12c836fee559d9071387de8f7d0f902aac19e7543e05396a4c1f282efb1f2144",
       "size_bytes": 1558190092,
       "smoke": {
         "Snap_0": {
@@ -44606,6 +44606,6 @@
   },
   "output_dir": "output/millennium",
   "par_file": "input/millennium.par",
-  "runtime_seconds": 10.61,
+  "runtime_seconds": 11.78,
   "schema_version": 1
 }
