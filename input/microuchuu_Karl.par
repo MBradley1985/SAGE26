@@ -7,7 +7,7 @@ FileNameGalaxies   model
 OutputDir          output/microuchuu_Karl/
 
 FirstFile         0
-LastFile          4
+LastFile          0
 
 %------------------------------------------
 %----- Snapshot output list ---------------
@@ -24,12 +24,12 @@ OutputFormat      sage_hdf5 % sets the desired output format. Either 'sage_binar
 %----- Simulation information  ------------
 %------------------------------------------
 
-TreeName              microUchuu_STC  % assumes the trees are named TreeName.n where n is the file number
-TreeType              lhalo_binary % either 'genesis_lhalo_hdf5' or 'lhalo_binary'
-NumSimulationTreeFiles 5 % Number of files the trees are split over. This can be different to `FirstFile` -> `LastFile` range.
+TreeName              tree_0_0_0.dat  % assumes the trees are named TreeName.n where n is the file number
+TreeType              consistent_trees_ascii % either 'genesis_lhalo_hdf5' or 'lhalo_binary'
+NumSimulationTreeFiles 1 % Number of files the trees are split over. This can be different to `FirstFile` -> `LastFile` range.
 
 
-SimulationDir       ../sage_tree_converter/output
+SimulationDir       input/microuchuu/trees
 FileWithSnapList    input/microuchuu/trees/Uchuu100_scalefactor.txt
 LastSnapShotNr        49
 

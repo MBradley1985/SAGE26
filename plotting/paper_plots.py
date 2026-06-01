@@ -4698,19 +4698,19 @@ def plot_14_density_evolution():
         props = ['StellarMass', 'SfrDisk', 'SfrBulge']
 
         # Load Primary (FFB default, sfe=0.2)
-        data_FFB = load_model(PRIMARY_DIR, filename=MODEL_FILE,
+        data_FFB = load_model(PRIMARY_DIR,
                               snapshot=Snapshot, properties=props)
 
         # Load No FFB
-        data_noFFB = load_model(NOFFB_DIR, filename=MODEL_FILE,
+        data_noFFB = load_model(NOFFB_DIR,
                                 snapshot=Snapshot, properties=props)
 
         # Load FFB 100% (sfe=1.0)
-        data_FFB100 = load_model(FFB100_DIR, filename=MODEL_FILE,
+        data_FFB100 = load_model(FFB100_DIR,
                                  snapshot=Snapshot, properties=props)
 
         # Load FFB BK25
-        data_FFB_BK25 = load_model(FFB_BK25_SMOOTH_DIR, filename=MODEL_FILE,
+        data_FFB_BK25 = load_model(FFB_BK25_SMOOTH_DIR,
                                    snapshot=Snapshot, properties=props)
 
         if not data_FFB and not data_noFFB and not data_FFB100 and not data_FFB_BK25:
@@ -4895,9 +4895,8 @@ def plot_14_density_evolution():
     print("="*60 + "\n")
 
     # --- miniUchuu (if available) ---
-    mu_filepath = os.path.join(MINIUCHUU_DIR, MODEL_FILE)
     mu_z_list, mu_sfrd_list, mu_smd_list = [], [], []
-    if os.path.exists(mu_filepath):
+    if model_files_exist(MINIUCHUU_DIR):
         mu_redshifts = np.array(MINIUCHUU_REDSHIFTS)
         mu_volume = MINIUCHUU_VOLUME
         for snap_idx in range(MINIUCHUU_FIRST_SNAP, MINIUCHUU_LAST_SNAP + 1):
@@ -4906,7 +4905,7 @@ def plot_14_density_evolution():
                 continue
             snap_key = f'Snap_{snap_idx}'
             try:
-                d = load_model(MINIUCHUU_DIR, filename=MODEL_FILE,
+                d = load_model(MINIUCHUU_DIR,
                                snapshot=snap_key,
                                properties=['StellarMass', 'SfrDisk', 'SfrBulge'])
                 if not d:
@@ -5173,15 +5172,15 @@ def plot_14c_density_evolution_mbk25():
 
         props = ['StellarMass', 'SfrDisk', 'SfrBulge']
 
-        data_FFB = load_model(PRIMARY_DIR, filename=MODEL_FILE,
+        data_FFB = load_model(PRIMARY_DIR,
                               snapshot=Snapshot, properties=props)
-        data_noFFB = load_model(NOFFB_DIR, filename=MODEL_FILE,
+        data_noFFB = load_model(NOFFB_DIR,
                                 snapshot=Snapshot, properties=props)
-        data_FFB100 = load_model(FFB100_DIR, filename=MODEL_FILE,
+        data_FFB100 = load_model(FFB100_DIR,
                                  snapshot=Snapshot, properties=props)
-        data_FFB_BK25 = load_model(FFB_BK25_SMOOTH_DIR, filename=MODEL_FILE,
+        data_FFB_BK25 = load_model(FFB_BK25_SMOOTH_DIR,
                                    snapshot=Snapshot, properties=props)
-        data_FFB_BK25_FFB100 = load_model(FFB_BK25_FFB100_DIR, filename=MODEL_FILE,
+        data_FFB_BK25_FFB100 = load_model(FFB_BK25_FFB100_DIR,
                                           snapshot=Snapshot, properties=props)
 
         if not data_FFB and not data_noFFB and not data_FFB100 and not data_FFB_BK25:
@@ -5631,7 +5630,7 @@ def plot_14b_density_evolution_methods():
         any_loaded = False
 
         for key in model_keys:
-            data = load_model(model_dirs[key], filename=MODEL_FILE,
+            data = load_model(model_dirs[key],
                               snapshot=Snapshot, properties=props)
             if data:
                 any_loaded = True

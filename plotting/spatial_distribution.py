@@ -15,7 +15,6 @@ import h5py as h5
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 import argparse
 import glob
 import os
@@ -38,28 +37,41 @@ def truncated_cmap(cmap, minval=0.0, maxval=1.0, n=256):
 #                      passive cut). quench_snaps does not apply.
 #   'loose_massive' -> 'loose' AND M* > 1e10 Msun. Useful for isolating the
 #                      observationally-comparable high-z quenched-massive population.
-#   'massive_bt'    -> SFR == 0 AND M* >= 1e11 Msun AND 0.75 <= B/T <= 0.90.
+#   'massive_bt'         -> SFR == 0 AND M* >= 1e11 Msun AND 0.75 <= B/T <= 0.90.
+#   'loose_massive_bt'   -> sSFR < 1e-11 /yr AND M* >= 1e11 Msun AND 0.75 <= B/T <= 0.90.
+#   'karls_galaxy'       -> sSFR < 1e-11 /yr AND M* >= 1e11 Msun AND 0.79 <= B/T <= 0.81 AND central only.
 QUIESCENT_MODES = {
-    'strict':        'SFR == 0',
-    'loose':         'sSFR < 1e-11 /yr',
-    'loose_massive': 'sSFR < 1e-11 /yr AND M* > 1e10 Msun',
-    'massive_bt':    'M* >= 1e11 Msun, SFR == 0, 0.75 <= B/T <= 0.90',
+    'strict':           'SFR == 0',
+    'loose':            'sSFR < 1e-11 /yr',
+    'loose_massive':    'sSFR < 1e-11 /yr AND M* > 1e10 Msun',
+    'massive_bt':       'M* >= 1e11 Msun, SFR == 0, 0.75 <= B/T <= 0.90',
+    'loose_massive_bt': 'sSFR < 1e-11 /yr AND M* >= 1e11 Msun AND 0.75 <= B/T <= 0.90',
+    'karls_galaxy':     'sSFR < 1e-11 /yr AND M* >= 1e11 Msun AND 0.79 <= B/T <= 0.81 AND central',
 }
 
-MASSIVE_FLOOR_MSUN = 1.0e10   # used by 'loose_massive'
-MASSIVE_BT_FLOOR_MSUN = 1.0e11  # used by 'massive_bt'
-MASSIVE_BT_MIN = 0.75            # B/T lower bound for 'massive_bt'
-MASSIVE_BT_MAX = 0.90            # B/T upper bound for 'massive_bt'
+MASSIVE_FLOOR_MSUN = 1.0e10       # used by 'loose_massive'
+MASSIVE_BT_FLOOR_MSUN = 1.0e10    # used by 'massive_bt'
+LOOSE_MASSIVE_BT_FLOOR_MSUN = 1.0e10  # used by 'loose_massive_bt'
+MASSIVE_BT_MIN = 0.750            # B/T lower bound for 'massive_bt'
+MASSIVE_BT_MAX = 0.900            # B/T upper bound for 'massive_bt'
+KARLS_GALAXY_SM_FLOOR  = 1.0e10   # M* > 1e11 Msun
+KARLS_GALAXY_BT_MIN    = 0.750
+KARLS_GALAXY_BT_MAX    = 0.900
+
+# Galaxy count above which per-point alpha is scaled with log10(M*) rather than
+# using a flat alpha.  microUchuu (local test run) sits well below this.
+LARGE_SIM_GALAXY_THRESHOLD = 500_000
 
 
 def compute_quiescent_mask(sfr, sm, hubble_h, mode, sfh=None, snap_num=None, quench_snaps=1,
-                           bulge_mass=None):
+                           bulge_mass=None, gtype=None):
     """Return a boolean array marking quiescent galaxies under the given mode.
 
     sfr        : (N,)        total SFR in Msun/yr
     sm         : (N,)        StellarMass in 10^10 Msun/h
     sfh        : (N, nbins)  optional total SFH mass in 10^10 Msun/h (only used by 'strict' with quench_snaps>1)
-    bulge_mass : (N,)        BulgeMass in 10^10 Msun/h (required for 'massive_bt' mode)
+    bulge_mass : (N,)        BulgeMass in 10^10 Msun/h (required for 'massive_bt'/'karls_galaxy' modes)
+    gtype      : (N,)        Type int array (0=Central; required for 'karls_galaxy' mode)
     """
     if mode == 'strict':
         q = sfr == 0.0
@@ -81,6 +93,26 @@ def compute_quiescent_mask(sfr, sm, hubble_h, mode, sfh=None, snap_num=None, que
         if bulge_mass is not None:
             bt = np.where(sm > 0, bulge_mass / sm, 0.0)
             q &= (bt >= MASSIVE_BT_MIN) & (bt <= MASSIVE_BT_MAX)
+        return q
+    if mode == 'loose_massive_bt':
+        sm_msun = sm * 1e10 / hubble_h
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ssfr = np.where(sm_msun > 0, sfr / sm_msun, 0.0)
+        q = (ssfr < 1e-11) & (sm_msun >= LOOSE_MASSIVE_BT_FLOOR_MSUN)
+        if bulge_mass is not None:
+            bt = np.where(sm > 0, bulge_mass / sm, 0.0)
+            q &= (bt >= MASSIVE_BT_MIN) & (bt <= MASSIVE_BT_MAX)
+        return q
+    if mode == 'karls_galaxy':
+        sm_msun = sm * 1e10 / hubble_h
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ssfr = np.where(sm_msun > 0, sfr / sm_msun, 0.0)
+        q = (ssfr < 1e-11) & (sm_msun >= KARLS_GALAXY_SM_FLOOR)
+        if bulge_mass is not None:
+            bt = np.where(sm > 0, bulge_mass / sm, 0.0)
+            q &= (bt >= KARLS_GALAXY_BT_MIN) & (bt <= KARLS_GALAXY_BT_MAX)
+        if gtype is not None:
+            q &= (gtype == 0)
         return q
     raise ValueError(f"Unknown quiescent mode: {mode!r}")
 
@@ -187,10 +219,12 @@ def load_galaxies(filepaths, snap_num, particle_mass, min_len, quench_snaps, sna
 
             bm_raw = (np.array(g['BulgeMass'], dtype=np.float64)[mask]
                       if 'BulgeMass' in g else np.zeros(n_masked))
+            gtype_arr = (np.array(g['Type'], dtype=np.int32)[mask]
+                         if 'Type' in g else None)
             is_quiescent = compute_quiescent_mask(
                 sfr, sm_m, hubble_h, qmode,
                 sfh=sfh, snap_num=snap_num, quench_snaps=quench_snaps,
-                bulge_mass=bm_raw,
+                bulge_mass=bm_raw, gtype=gtype_arr,
             )
 
             def _load_field(field, dtype=np.float64, fill=0.0):
@@ -299,10 +333,12 @@ def save_quiescent_csv(filepaths, snap_num, particle_mass, min_len, quench_snaps
 
             bm_csv = (np.array(g['BulgeMass'], dtype=np.float64)[mask]
                       if 'BulgeMass' in g else np.zeros(mask.sum()))
+            gtype_csv = (np.array(g['Type'], dtype=np.int32)[mask]
+                         if 'Type' in g else None)
             is_q = compute_quiescent_mask(
                 sfr, sm_m, hubble_h, qmode,
                 sfh=sfh, snap_num=snap_num, quench_snaps=quench_snaps,
-                bulge_mass=bm_csv,
+                bulge_mass=bm_csv, gtype=gtype_csv,
             )
 
             q_idx = np.where(mask)[0][is_q]
@@ -475,10 +511,12 @@ def plot_quiescent_sfh(filepaths, snap_num, particle_mass, min_len, quench_snaps
 
             bm_sfh = (np.array(g['BulgeMass'], dtype=np.float64)[mask]
                       if 'BulgeMass' in g else np.zeros(mask.sum()))
+            gtype_sfh = (np.array(g['Type'], dtype=np.int32)[mask]
+                         if 'Type' in g else None)
             is_q = compute_quiescent_mask(
                 sfr, stellar[mask], hubble_h, qmode,
                 sfh=sfh, snap_num=snap_num, quench_snaps=quench_snaps,
-                bulge_mass=bm_sfh,
+                bulge_mass=bm_sfh, gtype=gtype_sfh,
             )
 
             if is_q.sum() == 0:
@@ -514,7 +552,7 @@ def plot_quiescent_sfh(filepaths, snap_num, particle_mass, min_len, quench_snaps
 
     log_sm_arr = np.log10(all_sm * 1e10 / hubble_h)
     sm_norm    = mcolors.Normalize(vmin=log_sm_arr.min(), vmax=log_sm_arr.max())
-    cmap       = plt.cm.viridis
+    cmap       = plt.cm.bwr
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
@@ -533,13 +571,8 @@ def plot_quiescent_sfh(filepaths, snap_num, particle_mass, min_len, quench_snaps
     ax.set_xlim(lookback.max(), 0)   # past on the left
     ax.set_ylim(bottom=0)
 
-    sm_sm = plt.cm.ScalarMappable(cmap=cmap, norm=sm_norm)
-    sm_sm.set_array([])
-    cbar = fig.colorbar(sm_sm, ax=ax, pad=0.02)
-    cbar.set_label(r'$\log_{10}(M_*\,/\,M_\odot)$', fontsize=12)
-
     fig.tight_layout()
-    fig.savefig(out_path, dpi=150, bbox_inches='tight')
+    fig.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close(fig)
     print(f'Saved: {out_path}')
 
@@ -623,8 +656,20 @@ def _draw_population_overlays(ax, mmc_pos=None, mmc_logm=None, mms_pos=None, mms
 def make_projection(ax, x, y, color_val, quiescent, ages, xlabel, ylabel, box_mpc, cmap, norm, dot_size,
                     mmc_pos=None, mmc_logm=None, mms_pos=None, mms_logm=None):
     sf = ~quiescent
-    sc = ax.scatter(x[sf], y[sf], c=color_val[sf], cmap=cmap, norm=norm,
-                    s=dot_size, alpha=0.8, linewidths=0, rasterized=True)
+    if sf.sum() > LARGE_SIM_GALAXY_THRESHOLD:
+        # Per-point alpha scaled with log10(M*): low-mass galaxies fade out,
+        # high-mass galaxies remain visible in dense large-volume simulations.
+        cv       = color_val[sf]
+        cv_range = cv.max() - cv.min()
+        alpha_norm = (cv - cv.min()) / (cv_range if cv_range > 0 else 1.0)
+        rgba        = cmap(norm(cv)).copy()           # (N, 4)
+        rgba[:, 3]  = 0.01 + alpha_norm ** 2.5 * 0.80  # power-law: [0.01, 0.81]
+        ax.scatter(x[sf], y[sf], c=rgba, s=dot_size, linewidths=0, rasterized=True)
+        sc = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sc.set_array(cv)
+    else:
+        sc = ax.scatter(x[sf], y[sf], c=color_val[sf], cmap=cmap, norm=norm,
+                        s=dot_size, alpha=0.8, linewidths=0, rasterized=True)
     if quiescent.sum() > 0:
         old  = quiescent & (ages > 1.0)   # gold: mean stellar age > 1 Gyr
         young = quiescent & ~old           # red:  younger or no age info
@@ -649,8 +694,18 @@ def make_projection(ax, x, y, color_val, quiescent, ages, xlabel, ylabel, box_mp
 def make_halo_projection(ax, x, y, color_val, xlabel, ylabel, box_mpc, cmap, norm, dot_size,
                          gal_x=None, gal_y=None, quiescent=None, ages=None,
                          mmc_pos=None, mmc_logm=None, mms_pos=None, mms_logm=None):
-    sc = ax.scatter(x, y, c=color_val, cmap=cmap, norm=norm,
-                    s=dot_size, alpha=0.8, linewidths=0, rasterized=True)
+    if len(x) > LARGE_SIM_GALAXY_THRESHOLD:
+        cv       = color_val
+        cv_range = cv.max() - cv.min()
+        alpha_norm = (cv - cv.min()) / (cv_range if cv_range > 0 else 1.0)
+        rgba        = cmap(norm(cv)).copy()
+        rgba[:, 3]  = 0.01 + alpha_norm ** 2.5 * 0.80  # power-law: [0.01, 0.81]
+        ax.scatter(x, y, c=rgba, s=dot_size, linewidths=0, rasterized=True)
+        sc = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sc.set_array(cv)
+    else:
+        sc = ax.scatter(x, y, c=color_val, cmap=cmap, norm=norm,
+                        s=dot_size, alpha=0.8, linewidths=0, rasterized=True)
     if gal_x is not None and quiescent is not None and quiescent.sum() > 0:
         old   = quiescent & (ages > 1.0)
         young = quiescent & ~old
@@ -744,7 +799,7 @@ def run_workflow_for_mode(filepaths, snap, z_snap, params, particle_mass, snap_t
     base_arr = log_sm[sf_mask] if sf_mask.any() else log_sm
     vmin, vmax = np.percentile(base_arr, [2, 98])
     norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
-    cmap = plt.cm.viridis
+    cmap = plt.cm.bwr
 
     q_cen_sm = np.where((gtype == 0) & quiescent, sm, 0.0)
     q_sat_sm = np.where((gtype == 1) & quiescent, sm, 0.0)
@@ -781,19 +836,9 @@ def run_workflow_for_mode(filepaths, snap, z_snap, params, particle_mass, snap_t
         for spine in ax.spines.values():
             spine.set_edgecolor('white')
 
-        # Colorbar sized to the plot axis height (so it doesn't bleed into the title)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes('right', size='4%', pad=0.08)
-        cax.set_facecolor('black')
-        cbar = fig.colorbar(sc, cax=cax)
-        cbar.set_label(r'$\log_{10}(M_*\,/\,M_\odot)$', fontsize=12, color='white')
-        cbar.ax.yaxis.set_tick_params(color='white')
-        cbar.outline.set_edgecolor('white')
-        plt.setp(cbar.ax.yaxis.get_ticklabels(), color='white')
-
         fig.tight_layout()
         fname = os.path.join(out_dir, f'spatial_{tag}_z{z_snap:.2f}_{run_label}{suffix}.pdf')
-        fig.savefig(fname, dpi=150, bbox_inches='tight')
+        fig.savefig(fname, dpi=300, bbox_inches='tight')
         plt.close(fig)
         print(f'Saved: {fname}')
 
@@ -817,7 +862,7 @@ def run_workflow_for_mode(filepaths, snap, z_snap, params, particle_mass, snap_t
         valid = np.isfinite(hlog_mv)
         hv_min, hv_max = np.percentile(hlog_mv[valid], [2, 98])
         hnorm = mcolors.Normalize(vmin=hv_min, vmax=hv_max)
-        hcmap = plt.cm.viridis
+        hcmap = plt.cm.bwr
 
         halo_projections = [
             (hpx, hpy, px, py, 'X [Mpc]', 'Y [Mpc]', 'XY'),
@@ -849,19 +894,9 @@ def run_workflow_for_mode(filepaths, snap, z_snap, params, particle_mass, snap_t
             for spine in ax.spines.values():
                 spine.set_edgecolor('white')
 
-            divider = make_axes_locatable(ax)
-            cax = divider.append_axes('right', size='4%', pad=0.08)
-            cax.set_facecolor('black')
-            cbar = fig.colorbar(sc, cax=cax)
-            cbar.set_label(r'$\log_{10}(M_\mathrm{Crit200}\,/\,M_\odot)$',
-                           fontsize=12, color='white')
-            cbar.ax.yaxis.set_tick_params(color='white')
-            cbar.outline.set_edgecolor('white')
-            plt.setp(cbar.ax.yaxis.get_ticklabels(), color='white')
-
             fig.tight_layout()
             fname = os.path.join(out_dir, f'spatial_halos_{tag}_z{z_snap:.2f}_{run_label}{suffix}.pdf')
-            fig.savefig(fname, dpi=150, bbox_inches='tight')
+            fig.savefig(fname, dpi=300, bbox_inches='tight')
             plt.close(fig)
             print(f'Saved: {fname}')
 
