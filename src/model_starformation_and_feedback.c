@@ -1,3 +1,13 @@
+/*
+ * model_starformation_and_feedback.c -- Star formation and supernova feedback.
+ *
+ * Implements multiple star formation prescriptions (SFprescription 0-7),
+ * FIRE stellar feedback, and the feedback-free burst (FFB) mode. Updates cold
+ * gas, stellar mass, metals, and reheated/ejected gas reservoirs each substep.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,10 +21,14 @@
 #include "model_disk_instability.h"
 
 
-// ============================================================================
-// Stars are born and go boom: star formation and feedback
-// ============================================================================
-
+/*
+ * Main star formation and feedback driver for one galaxy per substep.
+ *
+ * Selects the active SF prescription (run_params->SFprescription) and
+ * computes star formation rate, reheated mass, and ejected mass. Applies
+ * disk instability if triggered and records SFR history. Calls
+ * update_from_star_formation() and update_from_feedback() to commit changes.
+ */
 void starformation_and_feedback(const int p, const int centralgal, const double time, const double dt, const int halonr, const int step,
                                 struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -179,7 +193,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 if(run_params->H2RadialIntegrationOn) {
                     calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
                     // result already stored in galaxies[p].H2gas by the function
-                    // compute gas_surface_density for epsilon_cl below using π*(3*r_s)² as reference
+                    // compute gas_surface_density for epsilon_cl below using pi*(3*r_s)^2 as reference
                     const float ref_area = (float)(M_PI * pow(3.0 * rs_pc, 2));
                     gas_surface_density = (ref_area > 0.0f) ? (galaxies[p].ColdGas * 1.0e10f / h) / ref_area : 0.0f;
                 } else {
@@ -372,8 +386,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
             if(run_params->H2RadialIntegrationOn) {
                 // Radially integrate both H2 mass and K13 SFR consistently.
-                // Σ(r)/t_dep(r) is summed over the disk using the local f_H2(r) at each annulus,
-                // avoiding the single-slab Σ = M/(π r_s²) = 2Σ₀ overestimate.
+                // Sigma(r)/t_dep(r) is summed over the disk using the local f_H2(r) at each annulus,
+                // avoiding the single-slab Sigma = M/(pi r_s^2) = 2Sigma0 overestimate.
                 double strdot_k13 = 0.0;
                 calculate_molecular_fraction_radial_integration(p, galaxies, run_params, &strdot_k13);
                 if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
@@ -526,7 +540,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 // H2DepletionTime_Gyr = M_gas / SFR_K13_integrated, set inside function
                 if(strdot_ri > 0.0) strdot = strdot_ri;
             } else {
-                // Slab path: use H2DiskAreaOption for Σ; pass f_H2=1 so SFR = H2/τ_dep,H2
+                // Slab path: use H2DiskAreaOption for Sigma; pass f_H2=1 so SFR = H2/tau_dep,H2
                 const float h_pp  = run_params->Hubble_h;
                 const float rs_pp = (float)(galaxies[p].DiskScaleRadius * 1.0e6 / h_pp);
                 float area_pp;
@@ -582,7 +596,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 }
                 double scaling_factor = z_term * v_term;
 
-                // Reheating with Muratov scaling: η = 2.9 × (1+z)^α × (V/60)^β
+                // Reheating with Muratov scaling: eta = 2.9 * (1+z)^alpha * (V/60)^beta
                 double eta_reheat = run_params->FeedbackReheatingEpsilon * scaling_factor;
                 // Store mass loading for analysis (cast to float)
                 galaxies[p].MassLoading = (float)eta_reheat;
@@ -630,15 +644,15 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                     }
                     double scaling_factor = z_term * v_term;
                     
-                    // Total feedback energy: E_FB = ε_eject × scaling × 0.5 × M_* × (η_SN × E_SN)
+                    // Total feedback energy: E_FB = epsilon_eject * scaling * 0.5 * M_* * (eta_SN * E_SN)
                     double E_FB = run_params->FeedbackEjectionEfficiency * scaling_factor * 
                                   0.5 * stars * (run_params->EtaSNcode * run_params->EnergySNcode);
                     
-                    // Energy needed to lift reheated gas to virial radius: E_lift = 0.5 × M_reheat × V_vir²
+                    // Energy needed to lift reheated gas to virial radius: E_lift = 0.5 * M_reheat * V_vir^2
                     double E_lift = 0.5 * reheated_mass * vc * vc;
                     
                     // Leftover energy ejects additional gas: E_eject = E_FB - E_lift
-                    // Ejected mass: M_eject = E_eject / (0.5 × V_vir²)
+                    // Ejected mass: M_eject = E_eject / (0.5 * V_vir^2)
                     if(E_FB > E_lift) {
                         ejected_mass = (E_FB - E_lift) / (0.5 * vc * vc);
                     } else {
@@ -740,10 +754,13 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     }
 }
 
-// ============================================================================
-// Actual star formation and metals
-// ============================================================================
-
+/*
+ * Apply a star formation event: update cold gas, metals, and stellar mass.
+ *
+ * Removes (1 - RecycleFraction) * stars from ColdGas (the rest is recycled
+ * immediately), increments StellarMass, and tracks metals consistently.
+ * Called for each SF event within starformation_and_feedback().
+ */
 void update_from_star_formation(const int p, const double stars, const double metallicity, struct GALAXY *galaxies, const struct params *run_params)
 {
     const double RecycleFraction = run_params->RecycleFraction;
@@ -765,9 +782,13 @@ void update_from_star_formation(const int p, const double stars, const double me
 }
 
 // ============================================================================
-// Supernova feedback
-// ============================================================================
-
+/*
+ * Apply supernova feedback: reheat cold gas and eject hot gas.
+ *
+ * Transfers reheated_mass from ColdGas to HotGas (tracking metals), and
+ * ejects ejected_mass from HotGas to EjectedMass. Handles routing to CGMgas
+ * when CGMrecipeOn is active. Both quantities may be zero for quiescent steps.
+ */
 void update_from_feedback(const int p, const int centralgal, double reheated_mass, double ejected_mass, const double metallicity,
                           struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -879,9 +900,14 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
 }
 
 // ============================================================================
-// FFB star formation
-// ============================================================================
-
+/*
+ * Feedback-free burst (FFB) star formation (Li et al. 2024).
+ *
+ * Triggered when FeedbackFreeModeOn > 0. Computes a burst SFR from the cold
+ * gas with no supernova feedback, updating StellarMass, BulgeMass, SFR history,
+ * and cold gas in a single substep. Called instead of the main SF loop when
+ * the FFB criterion is met.
+ */
 void starformation_ffb(const int p, const int centralgal, const double dt, const int step,
                        struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -897,7 +923,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     tdyn = (reff > 0.0 && galaxies[p].Vvir > 0.0) ? reff / galaxies[p].Vvir : 0.0;
 
     // ========================================================================
-    // H2 CALCULATION — only for FeedbackFreeModeOn=6/7 (H2-based FFB SF modes).
+    // H2 CALCULATION -- only for FeedbackFreeModeOn=6/7 (H2-based FFB SF modes).
     // All other FFB modes use ColdGas for SF and leave H2gas = 0.
     // H1 is derived immediately after.
     // ========================================================================
@@ -913,7 +939,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
 
         if(rs_pc > 0.0 && has_h2) {
             if(run_params->H2RadialIntegrationOn) {
-                // Unified radial integration path — handles all H2 prescriptions internally
+                // Unified radial integration path -- handles all H2 prescriptions internally
                 calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
             } else {
                 // Single-slab path
@@ -1008,7 +1034,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
 
     // ========================================================================
     // COMPUTE STAR FORMATION RATE
-    // SFR = ε_FFB × M_gas / t_dyn  (no critical density threshold in FFB)
+    // SFR = epsilon_FFB * M_gas / t_dyn  (no critical density threshold in FFB)
     // ========================================================================
     if(isnan(galaxies[p].ColdGas) || isinf(galaxies[p].ColdGas) ||
        isnan(galaxies[p].Vvir)    || isinf(galaxies[p].Vvir)    ||
@@ -1145,6 +1171,6 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     }
 
     // ========================================================================
-    // NO DISK INSTABILITY CHECK — rapid SF stabilizes the disk
+    // NO DISK INSTABILITY CHECK -- rapid SF stabilizes the disk
     // ========================================================================
 }
