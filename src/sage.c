@@ -1,3 +1,16 @@
+/*
+ * sage.c -- top-level SAGE run controller.
+ *
+ * Provides run_sage() (reads parameters, sets up I/O, drives the per-forest
+ * loop, writes output) and finalize_sage() (post-run checks, master HDF5
+ * file, memory/timing reports).  The file-private sage_per_forest() handles
+ * one forest: loads halos, calls construct_galaxies(), and saves galaxies.
+ * The file-private convert_trees_to_lhalo() is a utility path that converts
+ * any supported tree format to LHaloTree binary.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,13 +41,22 @@
 #include "io/save_gals_hdf5.h"
 #endif
 
-/* main sage -> not exposed externally */
-int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_info,
+/* File-private functions */
+static int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_info,
                         struct forest_info *forest_info, struct params *run_params);
-/* additional functionality to convert *any* support mergertree format into the lhalo-binary format */
-int convert_trees_to_lhalo(const int ThisTask, const int NTasks, struct params *run_params, struct forest_info *forest_info);
+/* convert any supported tree format to the lhalo-binary format */
+static int convert_trees_to_lhalo(const int ThisTask, const int NTasks, struct params *run_params, struct forest_info *forest_info);
 
 
+/*
+ * run_sage -- execute a complete SAGE run for one MPI task.
+ *
+ * Reads the parameter file, initialises physics (init()), opens output files,
+ * sets up tree I/O (setup_forests_io()), then iterates over all forests on
+ * this task: for each forest calls sage_per_forest() with a progress bar
+ * update, then finalises output (finalize_galaxy_files()).
+ * Returns EXIT_SUCCESS or a negative SAGE error code.
+ */
 int run_sage(const int ThisTask, const int NTasks, const char *param_file, void **params)
 {
     struct params *run_params = malloc(sizeof(*run_params));
@@ -211,6 +233,13 @@ cleanup:
 }
 
 
+/*
+ * finalize_sage -- run post-simulation checks and write the HDF5 master file.
+ *
+ * Verifies baryon conservation (if enabled), writes the HDF5 master catalogue
+ * (if HDF5 output), prints memory and timing stats, and frees run_params.
+ * Returns EXIT_SUCCESS or a negative SAGE error code.
+ */
 int32_t finalize_sage(void *params)
 {
 
@@ -274,7 +303,15 @@ int32_t finalize_sage(void *params)
 
 // Local Functions //
 
-int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_info,
+/*
+ * sage_per_forest -- load and process one forest.
+ *
+ * Loads the halo array via load_forest(), allocates galaxy arrays, calls
+ * construct_galaxies() for the top-level FOF halo, then saves galaxies via
+ * save_galaxies() and frees temporary arrays.
+ * Returns EXIT_SUCCESS or a negative SAGE error code.
+ */
+static int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_info,
                         struct forest_info *forest_info, struct params *run_params)
 {
     int32_t status = EXIT_FAILURE;
@@ -400,7 +437,16 @@ mergertree format into the lhalotree binary format.
 #include "io/buffered_io.h"
 #endif
 
-int convert_trees_to_lhalo(const int ThisTask, const int NTasks, struct params *run_params, struct forest_info *forest_info)
+/*
+ * convert_trees_to_lhalo -- convert any supported tree format to LHaloTree
+ * binary.
+ *
+ * Iterates over all forests on this task, loads each via load_forest(),
+ * and writes it out in the LHaloTree binary format.  Useful for pre-converting
+ * trees for faster subsequent SAGE runs.
+ * Returns EXIT_SUCCESS or a negative SAGE error code.
+ */
+static int convert_trees_to_lhalo(const int ThisTask, const int NTasks, struct params *run_params, struct forest_info *forest_info)
 {
     if(forest_info->nforests_this_task > INT_MAX ||  forest_info->nhalos_this_task > INT_MAX) {
         fprintf(stderr,"Error: Can not correctly cast totnforests (on this task) = %"PRId64" or totnhalos = %"PRId64" "
