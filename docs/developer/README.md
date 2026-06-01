@@ -28,9 +28,13 @@ Planning and scaffolding only. Implementation of the cleanup pass is **blocked**
 5. Land release-surface docs (top-level README, CITATION.cff, LICENSE check, CONTRIBUTING.md, CHANGELOG.md).
 6. Optional Phase 4: CI.
 
+## The physics-preservation invariant
+
+**Cleanup commits must not change the physics.** Every dataset SAGE26 writes today must continue to be writable, bit-for-bit identical at the per-dataset level, by every commit landed during the cleanup pass. The regression baseline ([REGRESSION_BASELINE.md](REGRESSION_BASELINE.md)) enforces this; every style-guide cleanup checklist ends with "regression baseline passes" for exactly this reason. See [CLEANUP_PLAN.md](CLEANUP_PLAN.md#the-physics-preservation-invariant) for the full statement.
+
 ## Hard rules during cleanup
 
 - No camelCase ↔ snake_case renames or other repo-wide cosmetic mass changes.
 - No "while I'm here" refactors. One batch = one stated goal.
 - Every batch ends with a green regression baseline before commit.
-- Bug fixes are allowed but must be **explicitly labelled** in the commit message — they are the only legitimate source of output drift during cleanup.
+- Bug fixes are allowed but must be **explicitly labelled** `fix:` in the commit message — they are the only legitimate source of output drift during cleanup, and they require a follow-up re-baseline commit (STYLE_COMMITS.md §4).

@@ -10,9 +10,21 @@ SAGE26 has been in a deliberate "move fast, explore ideas" phase. The codebase r
 
 Cleanup work is **blocked** until the user signals that the science version of SAGE26 is frozen. Until that signal, this directory holds plans only — no files outside `docs/developer/` should be touched on hygiene grounds.
 
+## The physics-preservation invariant
+
+**The cleanup pass MUST NOT change the physics.** Every dataset SAGE26 writes today must continue to be writable, byte-for-byte identical at the per-dataset level, by every commit landed during the cleanup. This is the single most important rule of the cleanup pass; it is non-negotiable.
+
+How it is enforced:
+
+1. The **regression baseline** at [REGRESSION_BASELINE.md](REGRESSION_BASELINE.md) hashes every dataset in every output HDF5 file and verifies them against the frozen `baseline/pre-cleanup` reference. Any drift fails the verify.
+2. Every style-guide cleanup checklist ends with "regression baseline passes". A cleanup commit that fails the baseline is not a cleanup commit — it is a behavioural change, and must be reverted (or relabelled as a bug fix per STYLE_COMMITS.md §4).
+3. The only legitimate source of output drift during the cleanup is a commit **explicitly labelled `fix:`** with a body describing what changed numerically and why the previous behaviour was wrong. That commit, and the re-baseline that follows it, are visible in `git log` for any future reader.
+
+What this means in practice: cleanup commits can rename files, lift magic numbers to named constants, rewrite comments, add file headers, swap `#ifndef` guards for `#pragma once`, reorganise include blocks, and apply formatting rules. None of those operations can alter the math. If a cleanup commit triggers a baseline failure, the safe move is always to revert and investigate — never to "fix the baseline" by re-capturing it.
+
 ## Scope decisions
 
-- **Bit-identical regression policy.** Baseline outputs must match the frozen reference bit-for-bit, not within tolerance. The only legitimate sources of drift during cleanup are commits explicitly labelled as bug fixes.
+- **Bit-identical regression policy.** Baseline outputs must match the frozen reference bit-for-bit at the dataset level. (HDF5 container bytes vary between runs; the verifier records that as informational, not a failure — see REGRESSION_BASELINE.md.)
 - **Serial-first.** All baseline runs and verification use the serial (non-MPI) build. MPI parity is a bonus to be addressed after the serial cleanup is complete. Do not let MPI considerations leak into Phase 0–3 decisions.
 - **No invasive renames.** No camelCase ↔ snake_case sweeps, no signature changes, no scope creep. Cleanup means consistent formatting, frontmatter, commenting, and documentation — not architectural change.
 
