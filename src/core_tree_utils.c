@@ -1,9 +1,33 @@
+/*
+ * core_tree_utils.c -- merger tree reordering and index repair utilities.
+ *
+ * Provides three functions used by LHaloTree readers to normalise forests into
+ * the canonical SAGE traversal order: reorder_lhalo_to_lhvt() sorts halos by
+ * (snapshot, FOF group, FOF-first, Mvir), fix_mergertree_index() updates all
+ * progenitor/descendant/FOF index fields after a reorder, and
+ * get_nfofs_all_snaps() counts FOF halos per snapshot.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdlib.h>
 #include <limits.h>
 
 #include "core_tree_utils.h"
 #include "sglib.h"
 
+/*
+ * reorder_lhalo_to_lhvt -- sort a forest into SAGE's canonical traversal order
+ * and update all mergertree index fields.
+ *
+ * Sorts halos by (SnapNum, FirstHaloInFOFgroup, FOF-first flag, Len descending)
+ * using an in-place heap sort that co-sorts the index[] tracking array.  Then
+ * calls fix_mergertree_index() to rewrite all pointer fields (FirstProgenitor,
+ * etc.) to the new positions.  When test > 0, runs additional consistency
+ * checks on progenitor/descendant masses and FOF grouping.
+ * Sets *orig_index to a caller-owned mapping from new position to old position.
+ * Returns EXIT_SUCCESS or a negative SAGE error code.
+ */
 int reorder_lhalo_to_lhvt(const int32_t nhalos, struct halo_data *forest, int32_t test, int32_t **orig_index)
 {
     int32_t *prog_len=NULL, *desc_len=NULL;
@@ -209,7 +233,15 @@ int reorder_lhalo_to_lhvt(const int32_t nhalos, struct halo_data *forest, int32_
 }
 
 
-/* This is a more generic function (accepts forests sorted into an arbitary order + original indices as shuffled along with the forest */
+/*
+ * fix_mergertree_index -- rewrite all merger tree pointer fields after a forest
+ * reorder.
+ *
+ * index[i] holds the old array position of the halo now at position i.  Builds
+ * the inverse mapping (old -> new position) and applies it to FirstProgenitor,
+ * NextProgenitor, Descendant, FirstHaloInFOFgroup, and NextHaloInFOFgroup for
+ * every halo.  Returns EXIT_SUCCESS or MALLOC_FAILURE.
+ */
 int fix_mergertree_index(struct halo_data *forest, const int64_t nhalos, const int32_t *index)
 {
     if(nhalos > INT_MAX) {
@@ -267,6 +299,13 @@ int fix_mergertree_index(struct halo_data *forest, const int64_t nhalos, const i
 }
 
 
+/*
+ * get_nfofs_all_snaps -- count FOF halos per snapshot in a forest.
+ *
+ * Fills nfofs_all_snaps[0..nsnaps-1] with the number of FOF halos at each
+ * snapshot (identified by FirstHaloInFOFgroup == i).  Returns EXIT_SUCCESS
+ * or INVALID_MEMORY_ACCESS_REQUESTED if any SnapNum is out of range.
+ */
 int get_nfofs_all_snaps(const struct halo_data *forest, const int nhalos, int *nfofs_all_snaps, const int nsnaps)
 {
     for(int i=0;i<nsnaps;i++) {
