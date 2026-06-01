@@ -1,3 +1,14 @@
+/*
+ * model_misc.c -- Galaxy initialisation, morphology, and utility functions.
+ *
+ * Provides galaxy initialisation, virial property accessors, disk/bulge radius
+ * calculations, regime classification (CGM vs hot-halo, FFB), halo concentration
+ * models, molecular gas fraction prescriptions, and miscellaneous helpers shared
+ * across physics modules.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,10 +19,13 @@
 
 #include "model_misc.h"
 
-// ============================================================================
-// Initialse galaxy properties
-// ============================================================================
-
+/*
+ * Initialise all fields of a newly created galaxy struct to safe defaults.
+ *
+ * Zeros all baryonic reservoirs, radii, metallicities, SFR histories, and ICS
+ * tracking arrays. Sets the galaxy's halo link (HaloNr) and increments the
+ * galaxy counter. Must be called before the galaxy takes part in any physics.
+ */
 void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct halo_data *halos,
                  struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -130,10 +144,12 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
 
 }
 
-// ============================================================================
-// Morphology
-// ============================================================================
-
+/*
+ * Compute the disk half-mass radius from halo spin (Mo, Shude & White 1998 eq. 12).
+ *
+ * Uses the Bullock-style spin parameter and virial properties. Falls back to
+ * 0.1 * Rvir when Vvir or Rvir are zero.
+ */
 double get_disk_radius(const int halonr, const int p, const struct halo_data *halos, const struct GALAXY *galaxies)
 {
 	if(galaxies[p].Vvir > 0.0 && galaxies[p].Rvir > 0.0) {
@@ -150,6 +166,14 @@ double get_disk_radius(const int halonr, const int p, const struct halo_data *ha
 }
 
 
+/*
+ * Compute and store the half-mass bulge radius from merger and instability components.
+ *
+ * When BulgeSizeOn > 0, uses energy conservation (Croton+2016 §3.6) to derive
+ * radii for merger- and instability-driven bulge components separately, then
+ * combines them into galaxies[p].BulgeRadius. Returns zero and sets all bulge
+ * radii to zero when BulgeSizeOn == 0.
+ */
 double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
     // BulgeSizeOn == 0: No bulge size calculation
@@ -284,12 +308,18 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
 }
 
 
-void update_instability_bulge_radius(const int p, const double delta_mass, 
+/*
+ * Incrementally update the instability-driven bulge radius after a mass transfer.
+ *
+ * Applies Tonini+2016 eq. (15): a mass-weighted average of the existing bulge
+ * radius and the disk radius at which the transferred mass originated.
+ */
+void update_instability_bulge_radius(const int p, const double delta_mass,
                                      const double old_disk_radius,
                                      struct GALAXY *galaxies, const struct params *run_params)
 {
     // Tonini+2016 equation (15): incremental radius evolution
-    // R_i = (R_i,OLD * M_i,OLD + δM * 0.2 * R_D) / (M_i,OLD + δM)
+    // R_i = (R_i,OLD * M_i,OLD + deltaM * 0.2 * R_D) / (M_i,OLD + deltaM)
     //
     // IMPORTANT: old_disk_radius should be the disc radius BEFORE the instability event
     // This ensures we use the correct R_D value as prescribed in the paper
@@ -326,6 +356,7 @@ void update_instability_bulge_radius(const int p, const double delta_mass,
 }
 
 
+/* Return metals/gas ratio clamped to [0, 1]; returns 0 when gas <= 0. */
 double get_metallicity(const double gas, const double metals)
 {
   double metallicity = 0.0;
@@ -340,6 +371,7 @@ double get_metallicity(const double gas, const double metals)
 
 
 
+/* Return the larger of two doubles. */
 double dmax(const double x, const double y)
 {
     return (x > y) ? x:y;
@@ -347,6 +379,7 @@ double dmax(const double x, const double y)
 
 
 
+/* Virial mass: uses Mvir for the FOF central, particle-count estimate for subhalos. */
 double get_virial_mass(const int halonr, const struct halo_data *halos, const struct params *run_params)
 {
   if(halonr == halos[halonr].FirstHaloInFOFgroup && halos[halonr].Mvir >= 0.0)
@@ -357,6 +390,7 @@ double get_virial_mass(const int halonr, const struct halo_data *halos, const st
 
 
 
+/* Circular velocity at the virial radius: V_vir = sqrt(G * M_vir / R_vir). */
 double get_virial_velocity(const int halonr, const struct halo_data *halos, const struct params *run_params)
 {
 	double Rvir;
@@ -370,6 +404,12 @@ double get_virial_velocity(const int halonr, const struct halo_data *halos, cons
 }
 
 
+/*
+ * Virial radius computed from the Bryan & Norman (1998) overdensity criterion.
+ *
+ * R_vir = [G * M_vir / (Delta_c * H(z)^2)]^(1/3), where Delta_c ~ 178 for
+ * flat Lambda-CDM. Returns 0 for halos with non-positive virial mass.
+ */
 double get_virial_radius(const int halonr, const struct halo_data *halos, const struct params *run_params)
 {
   // return halos[halonr].Rvir;  // Used for Bolshoi
@@ -430,8 +470,8 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
     }
 }
 
-// Inverse normal CDF (probit function) — Peter Acklam's rational approximation.
-// Converts a uniform variate p ∈ (0,1) to a standard normal variate.
+// Inverse normal CDF (probit function) -- Peter Acklam's rational approximation.
+// Converts a uniform variate p in (0,1) to a standard normal variate.
 // Accurate to ~1e-9 across the full range.
 static double inverse_normal_cdf(double p)
 {
@@ -567,8 +607,8 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
         } else if(run_params->FeedbackFreeModeOn == 4) {
             // BK25 acceleration-based with log-normal concentration scatter.
             // The Ishiyama+21 table gives the mean concentration; individual halos
-            // scatter around it following p(c)dc ∝ exp(-(ln c - ln c0)^2 / 2σ_c^2) d(ln c)
-            // with σ_c ≈ 0.2 (Jing 2000; Bullock+01; Dolag+04).
+            // scatter around it following p(c)dc ~ exp(-(ln c - ln c0)^2 / 2sigma_c^2) d(ln c)
+            // with sigma_c ~ 0.2 (Jing 2000; Bullock+01; Dolag+04).
             // The persistent FFBRandom draws a fixed quantile for each halo,
             // giving a deterministic scattered concentration and thus a smooth
             // FFb transition across the halo population.
@@ -587,7 +627,7 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
             double c = interpolate_concentration_ishiyama21(logM, Zcurr, run_params);
             if(c < 1.0) c = 1.0;
 
-            // Apply log-normal scatter: ln(c) ~ Normal(ln(c_mean), σ_c)
+            // Apply log-normal scatter: ln(c) ~ Normal(ln(c_mean), sigma_c)
             if(run_params->FFBConcSigma > 0.0) {
                 double u = draw;
                 if(u < 1.0e-6) u = 1.0e-6;
@@ -1033,10 +1073,10 @@ float calculate_midplane_pressure_BR06(float sigma_gas, float sigma_stars, float
     const float v_g = 8.0;  // km/s, gas velocity dispersion (BR06)
 
     // BR06 Equation (5) - stellar-dominated approximation:
-    // P_ext/k = 272 × Σ_gas × √Σ_* × v_g × h_*^(-0.5)
+    // P_ext/k = 272 * Sigma_gas * sqrtSigma_* * v_g * h_*^(-0.5)
     float pressure = 272.0 * sigma_gas * sqrt(effective_sigma_stars) * v_g / sqrt(h_star_pc);
 
-    return pressure; // K cm⁻³
+    return pressure; // K cm-^3
 }
 
 
@@ -1054,10 +1094,10 @@ float calculate_molecular_fraction_BR06(float gas_surface_density, float stellar
     
     // BR06 parameters from equation (13) for non-interacting galaxies
     // These are the exact values from the paper
-    const float P0 = 4.54e4;    // Reference pressure, K cm⁻³ (equation 13)
+    const float P0 = 4.54e4;    // Reference pressure, K cm-^3 (equation 13)
     const float alpha = 0.92;  // Power law index (equation 13)
     
-    // BR06 Equation (11): R_mol = (P_ext/P₀)^α
+    // BR06 Equation (11): R_mol = (P_ext/P0)^alpha
     float pressure_ratio = pressure / P0;
     float R_mol = pow(pressure_ratio, alpha);
     
@@ -1079,11 +1119,11 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
         return 0.0;
     }
 
-    // Total masses in physical units (M☉); stellar uses disk-only (no bulge)
+    // Total masses in physical units (M_sun); stellar uses disk-only (no bulge)
     const float M_gas_total  = galaxies[gal].ColdGas * 1.0e10 / h;
     const float M_disk_star  = (galaxies[gal].StellarMass - galaxies[gal].BulgeMass) * 1.0e10 / h;
 
-    // Central surface densities for exponential profiles: Σ₀ = M_total / (2π r_s²)
+    // Central surface densities for exponential profiles: Sigma0 = M_total / (2pi r_s^2)
     const float sigma_gas_0  = M_gas_total / (2.0 * M_PI * rs_pc * rs_pc);
     const float sigma_star_0 = (M_disk_star > 0.0) ? M_disk_star / (2.0 * M_PI * rs_pc * rs_pc) : 0.0;
 
@@ -1125,7 +1165,7 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
         // Bin center radius
         const float r = (i + 0.5f) * dr;
 
-        // Exponential surface density profiles: Σ(r) = Σ₀ exp(-r/r_s)
+        // Exponential surface density profiles: Sigma(r) = Sigma0 exp(-r/r_s)
         const float exp_factor = expf(-r / rs_pc);
         const float sigma_gas_r = sigma_gas_0 * exp_factor;
         const float sigma_star_r = sigma_star_0 * exp_factor;
@@ -1169,7 +1209,7 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
             if(f_mol_r < 0.0f) f_mol_r = 0.0f;
 
         } else if(sfpres == 7) {
-            // GD14 — galaxy-wide quantities precomputed above
+            // GD14 -- galaxy-wide quantities precomputed above
             float q7 = (Sigma_R1_7 > 0.0f && sigma_gas_r > 0.0f)
                        ? powf(sigma_gas_r / Sigma_R1_7, alpha7) : 0.0f;
             f_mol_r = q7 / (1.0f + q7);
@@ -1179,13 +1219,13 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
             f_mol_r = 0.0f;
         }
 
-        // dM_H2 = 2π r × Σ_gas × 0.74 × f_mol × dr: f_mol is fraction of H that is H2,
+        // dM_H2 = 2pi r * Sigma_gas * 0.74 * f_mol * dr: f_mol is fraction of H that is H2,
         // so multiply by HYDROGEN_MASS_FRAC to convert total gas surface density to hydrogen.
         const float dM_H2 = 2.0f * (float)M_PI * r * sigma_gas_r * 0.74f * f_mol_r * dr;
 
         M_H2_total += dM_H2;
 
-        // K13 SFR: Σ_gas(r) / t_dep(r) × 2π r dr [Msun/Gyr], using local f_H2 from base prescription
+        // K13 SFR: Sigma_gas(r) / t_dep(r) * 2pi r dr [Msun/Gyr], using local f_H2 from base prescription
         if(strdot_code_out != NULL) {
             double t_dep_r = calculate_tdep_K13_Gyr(sigma_gas_r, sigma_star_r, rs_pc, Z_prime_k13, f_mol_r);
             if(t_dep_r > 0.0)
@@ -1193,12 +1233,12 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
         }
     }
 
-    // Convert back to code units (10^10 M☉/h)
+    // Convert back to code units (10^10 M_sun/h)
     const float H2_code_units = M_H2_total * h / 1.0e10;
 
     // Write K13 SFR and effective depletion time when requested
     if(strdot_code_out != NULL) {
-        // SFR_K13_total [Msun/Gyr] → code units [(10^10 Msun/h) / (UnitTime_in_Megayears Myr)]
+        // SFR_K13_total [Msun/Gyr] -> code units [(10^10 Msun/h) / (UnitTime_in_Megayears Myr)]
         *strdot_code_out = SFR_K13_total * h / 1.0e10 * run_params->UnitTime_in_Megayears / 1000.0;
         // Effective global depletion time [Gyr] = M_gas / SFR_K13
         galaxies[gal].H2DepletionTime_Gyr = (SFR_K13_total > 0.0)
@@ -1212,16 +1252,16 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
 
 // Krumholz (2013) depletion time in Gyr.
 // f_H2: molecular fraction (pass f_mol_BR06 for the BR06+K13 hybrid, or K13's own f_H2 for pure K13).
-// Returns τ_dep = min(τ_2p, τ_hydro_star, τ_hydro_gas) from K13 Eq 28.
+// Returns tau_dep = min(tau_2p, tau_hydro_star, tau_hydro_gas) from K13 Eq 28.
 double calculate_tdep_K13_Gyr(float Sigma_gas, float Sigma_star, float rs_pc, float Z_prime, float f_H2)
 {
     const double fc = 5.0;  // clumping factor for ~kpc scales (K13 Section 3.1)
 
-    // Molecule-rich depletion time: t_dep_2p = 3.1 Gyr / (f_H2 × Σ^0.25)
+    // Molecule-rich depletion time: t_dep_2p = 3.1 Gyr / (f_H2 * Sigma^0.25)
     double t_dep_2p = (f_H2 > 1e-6 && Sigma_gas > 1e-10)
                       ? 3.1 / (f_H2 * pow(Sigma_gas, 0.25)) : 1.0e5;
 
-    // Hydrostatic limits (K13 Eqs 21–22)
+    // Hydrostatic limits (K13 Eqs 21-22)
     double t_hydro_star = 1.0e10, t_hydro_gas = 1.0e10;
     if(Sigma_gas > 1e-10) {
         double h_z       = calculate_stellar_scale_height_BR06(rs_pc);
@@ -1249,12 +1289,12 @@ float calculate_H2_fraction_KD12(const float surface_density, const float metall
     
     // Metallicity normalized to solar (Z_sun = 0.02)
     // Z0 = (M_Z/M_g)/Z_sun as defined in KD12 equation after (17)
-    // No floor: at Z=0, tau_c=0 → s=100 → f_H2=0 is handled by the guard below.
-    // A floor here would give f_H2→1 for primordial gas at high Σ, which is wrong.
+    // No floor: at Z=0, tau_c=0 -> s=100 -> f_H2=0 is handled by the guard below.
+    // A floor here would give f_H2->1 for primordial gas at high Sigma, which is wrong.
     float Z0 = (metallicity > 0.0f) ? metallicity / 0.02f : 0.0f;
     
     // Convert surface density from M_sun/pc^2 to g/cm^2
-    // Conversion: 1 M_sun/pc^2 = 2.088 × 10^-4 g/cm^2
+    // Conversion: 1 M_sun/pc^2 = 2.088 * 10^-4 g/cm^2
     float Sigma_gcm2 = surface_density * 2.088e-4;
     
     // Surface density normalized to 1 g/cm^2 (as defined after KD12 Eq. 16)
@@ -1264,8 +1304,8 @@ float calculate_H2_fraction_KD12(const float surface_density, const float metall
     // Calculate dust optical depth parameter (KD12 Eq. 21)
     // tau_c = 320 * c * Z0 * Sigma_0
     // where c is the clumping factor:
-    //   c ≈ 1 for Sigma measured on 100 pc scales
-    //   c ≈ 5 for Sigma measured on ~1 kpc scales (from text after Eq. 21)
+    //   c ~ 1 for Sigma measured on 100 pc scales
+    //   c ~ 5 for Sigma measured on ~1 kpc scales (from text after Eq. 21)
     float tau_c = 320.0 * clumping_factor * Z0 * Sigma_0;
     
     // Self-shielding parameter chi (KD12 Eq. 20)
