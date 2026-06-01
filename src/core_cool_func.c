@@ -1,3 +1,16 @@
+/*
+ * core_cool_func.c -- metal-dependent radiative cooling rate tables.
+ *
+ * Loads 8 pre-tabulated Sutherland & Dopita (1993) cooling function files
+ * (CoolFunctions/stripped_m*.cie) covering metallicities from primordial to
+ * 0.5 dex above solar.  Each table has 91 entries spanning log10(T/K) = 4.0
+ * to 8.5 in steps of 0.05.  Provides read_cooling_functions() to load the
+ * tables at startup, and get_metaldependent_cooling_rate() to interpolate
+ * bilinearly in log-temperature and log-metallicity at runtime.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,12 +48,20 @@ static double metallicities[8] = {
 	+0.5
 };
 
-double get_rate(int tab, double logTemp);
+static double get_rate(int tab, double logTemp);
 
 #define NUM_METALS_TABLE        sizeof(metallicities)/sizeof(metallicities[0])
 
 static double CoolRate[NUM_METALS_TABLE][TABSIZE];
 
+/*
+ * read_cooling_functions -- load the 8 CIE cooling tables from disk.
+ *
+ * Converts the relative metallicity array from solar-relative to absolute
+ * log10(Z) by adding log10(0.02), then reads each of the 8 *.cie files
+ * (TABSIZE=91 rows each) into CoolRate[][].  Must be called once at startup
+ * before any call to get_metaldependent_cooling_rate().
+ */
 void read_cooling_functions(void)
 {
     char buf[MAX_STRING_LEN];
@@ -78,7 +99,13 @@ void read_cooling_functions(void)
 }
 
 
-double get_rate(int tab, double logTemp)
+/*
+ * get_rate -- linearly interpolate the cooling rate for metallicity table tab
+ * at log-temperature logTemp.
+ *
+ * Clamps logTemp to [4.0, 8.5].  Returns log10(cooling rate) in CGS.
+ */
+static double get_rate(int tab, double logTemp)
 {
     const double dlogT = 0.05;
     const double inv_dlogT = 1.0/dlogT;
@@ -103,7 +130,14 @@ double get_rate(int tab, double logTemp)
     return rate;
 }
 
-double get_metaldependent_cooling_rate(const double logTemp, double logZ)  // pass: log10(temperatue/Kelvin), log10(metallicity)
+/*
+ * get_metaldependent_cooling_rate -- bilinear interpolation in (logT, logZ)
+ * returning the radiative cooling rate in CGS (erg cm^3 s^-1).
+ *
+ * Clamps logZ to the table metallicity range, selects the two bracketing
+ * metallicity tables, calls get_rate() for each, and linearly interpolates.
+ */
+double get_metaldependent_cooling_rate(const double logTemp, double logZ)
 {
     if(logZ < metallicities[0])
         logZ = metallicities[0];
