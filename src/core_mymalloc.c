@@ -1,3 +1,16 @@
+/*
+ * core_mymalloc.c -- tracked heap allocator for SAGE26.
+ *
+ * Maintains a fixed table of up to MAXBLOCKS=2048 live allocations so that
+ * total heap usage and the high-water mark can be tracked and reported.
+ * Provides mymalloc() (8-byte-aligned malloc), mycalloc() (zero-filled),
+ * myrealloc() (in-place resize by pointer lookup), myfree() (with bookkeeping
+ * cleanup), and print_allocated() (VERBOSE diagnostic).  All sizes are
+ * rounded up to the next 8-byte boundary.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,11 +26,15 @@ static void *Table[MAXBLOCKS];
 static size_t SizeTable[MAXBLOCKS];
 static size_t TotMem = 0, HighMarkMem = 0, OldPrintedHighMark = 0;
 
-/* file-local function */
-long find_block(const void *p);
-size_t get_aligned_memsize(size_t n);
-void set_and_print_highwater_mark(void);
+/* file-local helpers */
+static long find_block(const void *p);
+static size_t get_aligned_memsize(size_t n);
+static void set_and_print_highwater_mark(void);
 
+/*
+ * mymalloc -- allocate n bytes (rounded to 8-byte boundary) and register the
+ * block in the tracking table.  Aborts on table overflow or malloc failure.
+ */
 void *mymalloc(size_t n)
 {
     n = get_aligned_memsize(n);
@@ -43,6 +60,7 @@ void *mymalloc(size_t n)
     return Table[Nblocks - 1];
 }
 
+/* mycalloc -- mymalloc followed by memset to zero. */
 void *mycalloc(const size_t count, const size_t size)
 {
     void *p = mymalloc(count * size);
@@ -50,7 +68,8 @@ void *mycalloc(const size_t count, const size_t size)
     return p;
 }
 
-long find_block(const void *p)
+/* find_block -- return the Table[] index for pointer p, or -1 if not found. */
+static long find_block(const void *p)
 {
     /* MS: Added on 6th June 2018
        Previously, the code only allowed re-allocation of the last block
@@ -69,6 +88,10 @@ long find_block(const void *p)
 }
 
 
+/*
+ * myrealloc -- resize a tracked allocation.  Looks up p in the table,
+ * calls realloc(), updates bookkeeping, and aborts on failure.
+ */
 void *myrealloc(void *p, size_t n)
 {
     n = get_aligned_memsize(n);
@@ -97,6 +120,13 @@ void *myrealloc(void *p, size_t n)
 }
 
 
+/*
+ * myfree -- free a tracked allocation and compact the tracking table.
+ *
+ * Looks up p in the table, calls free(), and if the freed slot is not the
+ * last entry, moves the last entry into the vacated slot to keep Table[]
+ * contiguous.
+ */
 void myfree(void *p)
 {
     if(p == NULL) return;
@@ -133,7 +163,8 @@ void myfree(void *p)
     Nblocks--;
 }
 
-size_t get_aligned_memsize(size_t n)
+/* get_aligned_memsize -- round n up to the next 8-byte boundary (min 8). */
+static size_t get_aligned_memsize(size_t n)
 {
     if((n % 8) > 0)
         n = (n / 8 + 1) * 8;
@@ -145,6 +176,7 @@ size_t get_aligned_memsize(size_t n)
 }
 
 
+/* print_allocated -- print current heap usage to stdout (VERBOSE builds only). */
 void print_allocated(void)
 {
 #ifdef VERBOSE
@@ -154,7 +186,8 @@ void print_allocated(void)
     return;
 }
 
-void set_and_print_highwater_mark(void)
+/* set_and_print_highwater_mark -- update HighMarkMem; print if new 10 MB band crossed. */
+static void set_and_print_highwater_mark(void)
 {
     if(TotMem > HighMarkMem) {
         HighMarkMem = TotMem;
