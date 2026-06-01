@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gcc --version)",
+      "Bash(pkg-config --modversion gsl)",
+      "Bash(pkg-config --modversion hdf5)",
+      "Bash(git tag *)",
+      "Bash(make clean *)",
+      "Bash(make USE-MPI=no)",
+      "Bash(h5cc -showconfig)",
+      "Bash(gsl-config --version)",
+      "Bash(gsl-config --prefix)",
+      "Bash(make USE-MPI=)",
+      "Bash(otool -L sage)",
+      "Bash(nm sage *)",
+      "Bash(python3 -c \"import h5py; print\\('h5py', h5py.__version__\\); print\\('hdf5 runtime', h5py.version.hdf5_version\\)\")",
+      "Bash(chmod +x /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/tests/regression_baseline.py)",
+      "Bash(python3 -c \"import ast, sys; ast.parse\\(open\\('/Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/tests/regression_baseline.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(python3 /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/tests/regression_baseline.py --help)",
+      "Bash(python3 *)",
+      "Bash(chmod +x /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/tests/regression_baseline.sh)",
+      "Bash(bash -n /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/tests/regression_baseline.sh)",
+      "Bash(bash /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/tests/regression_baseline.sh --help)",
+      "Bash(bash *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}
