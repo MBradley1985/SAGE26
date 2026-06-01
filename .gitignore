@@ -43,3 +43,7 @@ data/
 # Documentation with Sphinx #
 docs/build
 docs/make.bat
+
+# Regression baseline — manifests for slow optional configs are captured locally on demand,
+# not committed. Only the default-sweep configs in tests/regression_baseline.sh are tracked.
+tests/baseline/microuchuu/

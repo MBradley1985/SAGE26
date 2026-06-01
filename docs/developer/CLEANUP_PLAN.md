@@ -21,7 +21,7 @@ Cleanup work is **blocked** until the user signals that the science version of S
 See [REGRESSION_BASELINE.md](REGRESSION_BASELINE.md) for the full spec.
 
 - [ ] Freeze a "final" SAGE26 commit as the reference point. Tag it `baseline/pre-cleanup`.
-- [ ] Pick golden parameter files. Defaults: `input/millennium.par` (Mini-Millennium classical regime) and one `input/microuchuu_*.par` variant that exercises CGM + FFB + FIRE.
+- [ ] Pick golden parameter files. Default sweep: `input/millennium.par` (Mini-Millennium classical regime, ~11 s, 1.5 GB output). `input/microuchuu.par` is verified bit-identical but kept as a manual release-time spot check rather than per-commit, because it takes ~255 s and writes ~17 GB.
 - [ ] Capture baseline outputs from the serial build: all HDF5 datasets per `model_N.hdf5`, exact byte hashes.
 - [ ] Capture key derived statistics (z=0 SMF, BHMF, SFRD history) for fast smoke-testing.
 - [ ] Write `tests/regression_baseline.sh` — runs the golden configs serially, diffs against captured outputs bit-for-bit, returns nonzero on any drift.
