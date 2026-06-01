@@ -1,3 +1,18 @@
+/*
+ * core_io_tree.c -- tree format dispatch layer.
+ *
+ * Provides the three lifecycle entry points used by sage.c to interact with
+ * merger tree data regardless of on-disk format.  setup_forests_io() selects
+ * the appropriate format-specific setup routine based on run_params->TreeType
+ * and validates the GalaxyIndex multiplier fields.  load_forest() dispatches a
+ * single-forest read to the correct reader.  cleanup_forests_io() calls the
+ * format cleanup and frees shared arrays (FileNr, original_treenr).
+ * Supported TreeTypes: lhalo_binary, lhalo_hdf5, consistent_trees_ascii,
+ * consistent_trees_hdf5, genesis_hdf5, gadget4_hdf5.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,6 +37,14 @@
 #include "io/read_tree_gadget4_hdf5.h"
 #endif
 
+/*
+ * setup_forests_io -- initialise the tree I/O layer for the requested format.
+ *
+ * Dispatches to the format-specific setup routine, then validates that
+ * FileNr_Mulfac, ForestNr_Mulfac, and frac_volume_processed were set to
+ * valid values by the reader.  Returns EXIT_SUCCESS or a negative SAGE error
+ * code on failure.
+ */
 int setup_forests_io(struct params *run_params, struct forest_info *forests_info,
                      const int ThisTask, const int NTasks)
 {
@@ -99,7 +122,13 @@ int setup_forests_io(struct params *run_params, struct forest_info *forests_info
 }
 
 
-/* This routine is to be called after *ALL* forests have been processed */
+/*
+ * cleanup_forests_io -- release all tree I/O resources after the main loop.
+ *
+ * Dispatches to the format-specific cleanup, then frees forests_info->FileNr
+ * and forests_info->original_treenr which are shared across all formats.
+ * Must be called only after all forests have been processed.
+ */
 void cleanup_forests_io(enum Valid_TreeTypes TreeType, struct forest_info *forests_info)
 {
     /* Don't forget to free the open file handle */
@@ -149,6 +178,12 @@ void cleanup_forests_io(enum Valid_TreeTypes TreeType, struct forest_info *fores
     return;
 }
 
+/*
+ * load_forest -- load one forest from disk into a freshly allocated halos array.
+ *
+ * Dispatches to the format-specific load routine.  Returns the number of halos
+ * in the forest (>= 0) or a negative SAGE error code on failure.
+ */
 int64_t load_forest(struct params *run_params, const int64_t forestnr, struct halo_data **halos, struct forest_info *forests_info)
 {
 
