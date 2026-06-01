@@ -1,3 +1,21 @@
+/*
+ * model_infall.c -- baryon infall, satellite stripping, and reionisation.
+ *
+ * Implements four routines called from evolve_galaxies() each timestep:
+ *   infall_recipe      -- computes the net infalling mass for a central halo
+ *                         and routes it to the correct reservoir (HotGas or
+ *                         CGMgas) via add_infall_to_hot(); calls
+ *                         strip_from_satellite() for each satellite.
+ *   strip_from_satellite -- removes all remaining gas from a satellite galaxy
+ *                           and adds it to the central's hot/CGM reservoir.
+ *   do_reionization    -- computes the reionisation suppression factor for
+ *                         low-mass haloes using the Gnedin (2000) model.
+ *   add_infall_to_hot  -- adds (or subtracts) infallingGas to the appropriate
+ *                         hot reservoir; regime-aware with CGMrecipeOn.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,10 +27,16 @@
 #include "model_infall.h"
 #include "model_misc.h"
 
-// ============================================================================
-// Infall recipe
-// ============================================================================
-
+/*
+ * infall_recipe -- compute the net baryon infall for this timestep and
+ * distribute it to reservoirs.
+ *
+ * Sums all baryonic mass in the FOF group, then computes infallingMass as
+ * Omega_b/Omega * Mvir - baryons_already_present, modulated by
+ * do_reionization() for low-mass haloes.  Calls strip_from_satellite() for
+ * each satellite, then add_infall_to_hot() for the central.
+ * Returns the infalling mass (may be negative if the halo lost mass).
+ */
 double infall_recipe(const int centralgal, const int ngal, const double Zcurr, struct GALAXY *galaxies, const struct params *run_params)
 {
     double tot_stellarMass, tot_BHMass, tot_coldMass, tot_hotMass, tot_ejected, tot_ICS;
@@ -156,6 +180,13 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
 // Satellite stripping
 // ============================================================================
 
+/*
+ * strip_from_satellite -- remove all remaining gas from a satellite and donate
+ * it to the central galaxy's hot/CGM reservoir.
+ *
+ * Zeroes the satellite's HotGas, CGMgas, and MetalsCGMgas after calling
+ * do_reionization() to compute the allowed infalling gas fraction.
+ */
 void strip_from_satellite(const int centralgal, const int gal, const double Zcurr, struct GALAXY *galaxies, const struct params *run_params)
 {
     double reionization_modifier;
@@ -240,6 +271,13 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
 // Reionization
 // ============================================================================
 
+/*
+ * do_reionization -- compute the reionisation suppression factor for galaxy gal.
+ *
+ * Implements the Gnedin (2000) model: returns f = (1 + 0.26*M_F/Mvir)^-3
+ * where M_F is the filtering mass at redshift Zcurr.  Returns 1.0 (no
+ * suppression) if ReionizationOn == 0.
+ */
 double do_reionization(const int gal, const double Zcurr, struct GALAXY *galaxies, const struct params *run_params)
 {
     double f_of_a;
@@ -296,6 +334,14 @@ double do_reionization(const int gal, const double Zcurr, struct GALAXY *galaxie
 // Actually adding the infalling gas to the halo
 // ============================================================================
 
+/*
+ * add_infall_to_hot -- add infallingGas to the central galaxy's hot reservoir.
+ *
+ * When infallingGas < 0 (halo lost mass), first draws from EjectedMass, then
+ * from the hot/CGM reservoir with a metal-weighted draw.  Routes positive
+ * infall to CGMgas (Regime 0) or HotGas (Regime 1) when CGMrecipeOn is set,
+ * otherwise always to HotGas.
+ */
 void add_infall_to_hot(const int gal, double infallingGas, struct GALAXY *galaxies,
                        const struct params *run_params)
 {
