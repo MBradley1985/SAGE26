@@ -1,4 +1,12 @@
-/* File: macros.h */
+/*
+ * macros.h -- compile-time constants, error-handling macros, and
+ * function-like utility macros used throughout the codebase.
+ *
+ * XASSERT, XRETURN, XPRINT, CHECK_STATUS_AND_RETURN_ON_FAIL, and
+ * CHECK_POINTER_AND_RETURN_ON_NULL all compile out under -DNDEBUG.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
 
 #pragma once
 #include <stdio.h>

@@ -1,3 +1,18 @@
+/*
+ * core_simulation.h -- halo_data struct (on-disk lhalo record).
+ *
+ * Defines the binary layout of a single halo as stored in lhalo-format
+ * merger tree files.  All tree readers cast their on-disk bytes to this
+ * struct.  Field order must match the on-disk layout exactly.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
+#pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct halo_data
 {
@@ -29,3 +44,7 @@ struct halo_data
     int SubhaloIndex;
     float SubHalfMass;
 };
+
+#ifdef __cplusplus
+}
+#endif

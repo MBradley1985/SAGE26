@@ -55,6 +55,28 @@ See [REGRESSION_BASELINE.md](REGRESSION_BASELINE.md) for the full spec.
 - [ ] If the baseline fails, the batch contained a real behavioural change — investigate. Either it's an accidental change (revert), or it's a bug fix (separate commit, explicitly labelled).
 - [ ] Hard rule: one batch = one stated goal. No bundling unrelated cleanup.
 
+## Phase 2B — Header hygiene, dead code, magic numbers
+
+Three targeted batches addressing style-guide items not covered in Phase 2.
+
+### Batch 2B-1: Header file hygiene
+- `core_allvars.h`: `#ifndef`/`#define`/`#endif` guard → `#pragma once`; add `extern "C"` wrap; add §1 file header; fix 31 non-ASCII bytes.
+- `core_simulation.h`: add `#pragma once`; add `extern "C"` wrap; add §1 file header.
+- `macros.h`: already has `#pragma once`; update old `/* File: */` header to §1 format. No `extern "C"` (no function declarations).
+- `core_utils.h`, `progressbar.h`: third-party Corrfunc origin — leave copyright headers unchanged.
+- Run regression baseline; commit if bit-identical.
+
+### Batch 2B-2: Dead code removal
+- `sage.c:376`: investigate and remove `#if 0` block if truly dead.
+- `progressbar.h:18-20`: remove stray `#if 0 } #endif` (dead brace from extern "C" mistake).
+- Run regression baseline; commit if bit-identical.
+
+### Batch 2B-3: Magic numbers → named constants
+- Scan each physics `.c` file for inline literals whose meaning isn't obvious from context.
+- Lift to file-scope `static const` with a comment citing the paper and equation number.
+- Mathematical constants (`0.5`, `2.0`, `4.0/3.0`, etc.) are **not** lifted — only empirical coefficients and fit parameters.
+- Run regression baseline; commit if bit-identical.
+
 ## Phase 3 — Release surface
 
 - [ ] Rewrite top-level `README.md` for end users: install, quickstart, citation, link to paper.
