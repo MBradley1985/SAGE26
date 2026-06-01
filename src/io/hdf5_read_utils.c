@@ -1,8 +1,30 @@
+/*
+ * hdf5_read_utils.c -- shared HDF5 read helpers used by all tree format readers.
+ *
+ * Provides thin wrappers around the HDF5 C API for the three common read
+ * operations needed by tree readers: reading a scalar attribute from a named
+ * group (read_attribute), querying the shape of a dataset (read_dataset_shape),
+ * and reading an entire 1-D or 2-D dataset into a caller-supplied buffer
+ * (read_dataset).  Also provides fill_hdf5_metadata_names(), which maps the
+ * tree-type-specific HDF5 dataset names (NTrees, totNHalos, etc.) to a
+ * canonical HDF5_METADATA_NAMES struct.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "hdf5_read_utils.h"
 
+/*
+ * read_attribute -- read a single scalar HDF5 attribute into a caller buffer.
+ *
+ * Opens attribute attr_name inside group group_name of file fd, validates that
+ * the on-disk type size matches dst_size, reads the value into *attribute, and
+ * closes all handles.  Returns 0 (EXIT_SUCCESS) on success or a negative herr_t
+ * on failure.
+ */
 herr_t read_attribute(hid_t fd, const char *group_name, const char *attr_name, void *attribute, const size_t dst_size)
 {
     hid_t attr_id = H5Aopen_by_name(fd, group_name, attr_name, H5P_DEFAULT, H5P_DEFAULT);
@@ -50,6 +72,13 @@ herr_t read_attribute(hid_t fd, const char *group_name, const char *attr_name, v
 }
 
 
+/*
+ * read_dataset_shape -- query the rank and dimensions of an HDF5 dataset.
+ *
+ * Opens dataset_name in file fd, determines the number of dimensions (*ndims),
+ * allocates *dims (caller must free), and fills it with the extent along each
+ * axis.  Returns 0 on success or a negative herr_t on failure.
+ */
 herr_t read_dataset_shape(hid_t fd, const char *dataset_name, int *ndims, hsize_t **dims)
 {
     hid_t dataset_id = H5Dopen(fd, dataset_name, H5P_DEFAULT);
@@ -105,6 +134,14 @@ herr_t read_dataset_shape(hid_t fd, const char *dataset_name, int *ndims, hsize_
 
 
 
+/*
+ * read_dataset -- read an entire HDF5 dataset into a caller-supplied buffer.
+ *
+ * If dataset_id <= 0 the dataset is opened by name; otherwise the already-open
+ * handle is used (and not closed on return).  When check_size is non-zero,
+ * validates that the on-disk element size matches dst_size before reading.
+ * Returns 0 on success or a negative herr_t on failure.
+ */
 herr_t read_dataset(hid_t fd, const char *dataset_name, hid_t dataset_id, void *buffer, const size_t dst_size, const int check_size)
 {
     int already_open_dataset = dataset_id > 0 ? 1:0;
@@ -161,6 +198,15 @@ herr_t read_dataset(hid_t fd, const char *dataset_name, hid_t dataset_id, void *
 }
 
 
+/*
+ * fill_hdf5_metadata_names -- populate the canonical metadata name struct for
+ * the given HDF5 tree format.
+ *
+ * Sets the HDF5 dataset and attribute name strings in *metadata_names
+ * (NTrees, totNHalos, TreeNHalos, ParticleMass, NumSimulationTreeFiles) to the
+ * format-specific values for lhalo_hdf5 or gadget4_hdf5.  Returns EXIT_SUCCESS
+ * on a recognised tree type, or EXIT_FAILURE for unsupported formats.
+ */
 int32_t fill_hdf5_metadata_names(struct HDF5_METADATA_NAMES *metadata_names, enum Valid_TreeTypes my_TreeType)
 {
     switch (my_TreeType) {

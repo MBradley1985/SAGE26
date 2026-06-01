@@ -1,3 +1,17 @@
+/*
+ * forest_utils.c -- forest distribution utilities for multi-task SAGE runs.
+ *
+ * Provides three routines for partitioning forests across MPI tasks and mapping
+ * the resulting forest range back to input files.  distribute_forests_over_ntasks
+ * does a simple round-robin split; distribute_weighted_forests_over_ntasks does a
+ * cost-weighted split using a configurable weighting scheme (uniform, linear,
+ * quadratic, or power-law in halo count) so that tasks receive roughly equal
+ * computational load.  find_start_and_end_filenum translates a task's forest
+ * range into start/end file numbers and per-file forest offsets.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
@@ -7,6 +21,15 @@
 
 static inline double compute_forest_cost_from_nhalos(const enum Valid_Forest_Distribution_Schemes forest_weighting, const int64_t nhalos, const double exponent);
 
+/*
+ * distribute_forests_over_ntasks -- assign this task a contiguous slice of
+ * forests using simple round-robin partitioning.
+ *
+ * Divides totnforests as evenly as possible across NTasks.  Tasks whose rank
+ * is less than (totnforests % NTasks) each receive one extra forest.  Sets
+ * *nforests_thistask and *start_forestnum_thistask for ThisTask.
+ * Returns EXIT_SUCCESS, or EXIT_FAILURE on invalid inputs.
+ */
 int distribute_forests_over_ntasks(const int64_t totnforests, const int NTasks, const int ThisTask, int64_t *nforests_thistask, int64_t *start_forestnum_thistask)
 {
     if(ThisTask > NTasks || ThisTask < 0 || NTasks < 1) {
@@ -103,6 +126,18 @@ static inline double compute_forest_cost_from_nhalos(const enum Valid_Forest_Dis
 }
 
 
+/*
+ * distribute_weighted_forests_over_ntasks -- assign this task a contiguous slice
+ * of forests weighted by per-forest compute cost.
+ *
+ * Computes a cost for each forest via compute_forest_cost_from_nhalos() using
+ * the requested forest_weighting scheme (uniform, linear, quadratic, or
+ * power-law), then greedily assigns forests to tasks so that each task
+ * accumulates roughly (total_cost / NTasks) units of work.  Falls back to
+ * distribute_forests_over_ntasks() when forest_weighting is uniform or
+ * nhalos_per_forest is NULL.
+ * Returns EXIT_SUCCESS, or EXIT_FAILURE on invalid inputs.
+ */
 int distribute_weighted_forests_over_ntasks(const int64_t totnforests, const int64_t *nhalos_per_forest,
                                             const enum Valid_Forest_Distribution_Schemes forest_weighting, const double power_law_index,
                                             const int NTasks, const int ThisTask, int64_t *nforests_thistask, int64_t *start_forestnum_thistask)
@@ -211,6 +246,17 @@ int distribute_weighted_forests_over_ntasks(const int64_t totnforests, const int
 
 
 
+/*
+ * find_start_and_end_filenum -- map a task's forest range to input file numbers
+ * and per-file forest offsets.
+ *
+ * Given the global forest range [start_forestnum, end_forestnum) for this task,
+ * walks the per-file forest counts in totnforests_per_file[] to find the first
+ * and last file that contain any of those forests (*start_file, *end_file), and
+ * fills num_forests_to_process_per_file[] and start_forestnum_to_process_per_file[]
+ * with the local offset and count within each file.
+ * Returns EXIT_SUCCESS, or -1 if the range cannot be located.
+ */
 int find_start_and_end_filenum(const int64_t start_forestnum, const int64_t end_forestnum,
                                const int64_t *totnforests_per_file, const int64_t totnforests,
                                const int firstfile, const int lastfile,

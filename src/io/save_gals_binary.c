@@ -1,3 +1,19 @@
+/*
+ * save_gals_binary.c -- binary galaxy catalogue output writer.
+ *
+ * Implements the three public entry points for writing galaxy catalogues in
+ * SAGE26's native flat-binary format: initialize (opens one file per snapshot
+ * output and seeks past the header placeholder), save (packs galaxy structs
+ * into GALAXY_OUTPUT and writes them in snapshot order for one tree), and
+ * finalize (back-fills the per-tree count header and closes every file).
+ * On-disk layout per snapshot file:
+ *   [int32 ntrees][int32 tot_ngals][int32 forest_ngals[ntrees]][GALAXY_OUTPUT ...]
+ * When USE_BUFFERED_WRITE is defined, writes go through an 8 MB user-space
+ * buffer to reduce small-write overhead on high-latency file systems.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +40,20 @@ static int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT 
 
 // Externally Visible Functions //
 
+/*
+ * initialize_binary_galaxy_files -- open one output file per snapshot and reserve
+ * space for the header.
+ *
+ * Creates or truncates NumSnapOutputs files named
+ * "<OutputDir>/<FileNameGalaxies>_z<z>_<filenr>" and seeks each file pointer
+ * past the header region ((ntrees+2) * sizeof(int32_t) bytes) so that galaxy
+ * data written by save_binary_galaxies() lands at the correct offset.  The
+ * actual header values (ntrees, tot_ngals, forest_ngals[]) are back-filled by
+ * finalize_binary_galaxy_files() after all trees have been processed.
+ * With USE_BUFFERED_WRITE, also sets up per-file 8 MB I/O buffers.
+ *
+ * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
+ */
 int32_t initialize_binary_galaxy_files(const int filenr, const struct forest_info *forest_info, struct save_info *save_info,
                                        const struct params *run_params)
 {
@@ -72,6 +102,19 @@ int32_t initialize_binary_galaxy_files(const int filenr, const struct forest_inf
 }
 
 
+/*
+ * save_binary_galaxies -- pack one tree's galaxies into GALAXY_OUTPUT structs
+ * and write them to the appropriate snapshot files.
+ *
+ * Iterates over all num_gals galaxies in the current tree.  Each galaxy with a
+ * valid output_snap_n is converted via prepare_galaxy_for_output() and placed
+ * into a contiguous all_outputgals[] block indexed by snapshot.  After all
+ * galaxies are prepared, one write() call per snapshot appends the block to the
+ * corresponding open file descriptor.  Updates save_info->tot_ngals[] and
+ * save_info->forest_ngals[][] running tallies used by finalize_binary_galaxy_files().
+ *
+ * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
+ */
 int32_t save_binary_galaxies(const int32_t task_treenr, const int32_t num_gals, const int32_t *OutputGalCount,
                              struct forest_info *forest_info, struct halo_data *halos, struct halo_aux_data *haloaux,
                              struct GALAXY *halogal, struct save_info *save_info, const struct params *run_params)
@@ -162,6 +205,16 @@ int32_t save_binary_galaxies(const int32_t task_treenr, const int32_t num_gals, 
     return EXIT_SUCCESS;
 }
 
+/*
+ * finalize_binary_galaxy_files -- back-fill headers and close all snapshot files.
+ *
+ * For each snapshot output file: flushes any buffered data (USE_BUFFERED_WRITE),
+ * then uses pwrite() to write the three-part header at byte offset 0:
+ *   [int32 ntrees][int32 tot_ngals][int32 forest_ngals[ntrees]]
+ * Closes each file descriptor and frees save_fd[].
+ *
+ * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
+ */
 int32_t finalize_binary_galaxy_files(const struct forest_info *forest_info, struct save_info *save_info, const struct params *run_params)
 {
 
@@ -224,7 +277,17 @@ int32_t finalize_binary_galaxy_files(const struct forest_info *forest_info, stru
 
 // Local Functions //
 
-int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, struct halo_data *halos,
+/*
+ * prepare_galaxy_for_output -- convert one GALAXY struct to the on-disk
+ * GALAXY_OUTPUT layout.
+ *
+ * Copies all fields from *g to *o, applying unit conversions where needed
+ * (SFR: code units -> Msun/yr; Cooling/Heating: code units -> log10(erg/s);
+ * merger/infall times: code units -> Myr; outflow rate: code units -> Msun/yr).
+ * Infall properties are zeroed for central galaxies (Type == 0).
+ * Returns EXIT_SUCCESS, or -1 if either pointer is NULL.
+ */
+static int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT *o, struct halo_data *halos,
                                   const int32_t original_treenr, const struct params *run_params)
 {
     if(g == NULL || o == NULL) {

@@ -1,3 +1,19 @@
+/*
+ * save_gals_hdf5.c -- HDF5 galaxy catalogue output writer.
+ *
+ * Implements the four public entry points for writing galaxy catalogues in
+ * SAGE26's HDF5 struct-of-arrays format: initialize (creates the file,
+ * snapshot groups, and extensible datasets), save (buffers galaxies for one
+ * tree and flushes in 8192-galaxy chunks), finalize (flushes the final buffer,
+ * writes the TreeInfo group and Header attributes, closes all HDF5 handles),
+ * and create_hdf5_master_file (writes a top-level master file that links
+ * the per-task output files via HDF5 external links, run by Task 0 only).
+ * Output hierarchy: File -> "Snap_<N>" group -> property datasets.
+ * Each dataset is extensible (chunked at NUM_GALS_PER_BUFFER = 8192 rows).
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -164,9 +180,20 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
 
 // Externally Visible Functions //
 
-// Creates the HDF5 file, groups and the datasets.  The heirachy for the HDF5 file is
-// File->Group->Datasets.  For example, File->"Snap_43"->"StellarMass"->**Data**.
-// The handles for all of these are stored in `save_info` so we can write later.
+/*
+ * initialize_hdf5_galaxy_files -- create the HDF5 output file and prepare all
+ * snapshot groups and extensible datasets.
+ *
+ * Creates "<OutputDir>/<FileNameGalaxies>_<filenr>.hdf5" and builds the group
+ * hierarchy File -> "Snap_<N>" for each of the NumSnapOutputs output snapshots.
+ * Inside each snapshot group, all NUM_OUTPUT_FIELDS galaxy property datasets are
+ * created as rank-1 extensible datasets (initial size 0, chunk size
+ * NUM_GALS_PER_BUFFER) so that save_hdf5_galaxies() can extend them on the fly.
+ * Also allocates and zeros the per-snapshot galaxy buffers (buffer_output_gals).
+ * All open HDF5 handles are stored in save_info for later use.
+ *
+ * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
+ */
 int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_info, const struct params *run_params)
 {
     char buffer[3*MAX_STRING_LEN];
@@ -481,8 +508,18 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
 
 #undef MALLOC_GALAXY_OUTPUT_INNER_ARRAY
 
-// Add all the galaxies for this tree to the buffer.  If we hit the buffer limit, write all the
-// galaxies to file.
+/*
+ * save_hdf5_galaxies -- buffer one tree's galaxies and flush to HDF5 when the
+ * buffer is full.
+ *
+ * Iterates over num_gals galaxies in the current tree; each galaxy with a valid
+ * output_snap_n is packed into the per-snapshot GALAXY_OUTPUT_HDF5 buffer via
+ * prepare_galaxy_for_hdf5_output().  Whenever num_gals_in_buffer reaches
+ * NUM_GALS_PER_BUFFER, trigger_buffer_write() extends and writes the datasets.
+ * Updates the cumulative galaxy count in save_info->tot_ngals[].
+ *
+ * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
+ */
 int32_t save_hdf5_galaxies(const int64_t task_forestnr, const int32_t num_gals, struct forest_info *forest_info,
                            struct halo_data *halos, struct halo_aux_data *haloaux, struct GALAXY *halogal,
                            struct save_info *save_info, const struct params *run_params)
@@ -522,8 +559,18 @@ int32_t save_hdf5_galaxies(const int64_t task_forestnr, const int32_t num_gals, 
 }
 
 
-// We may still have galaxies in the buffer.  Here we write them.  Then fill out the final
-// attributes that are required, close all the files and release all the datasets/groups/file.
+/*
+ * finalize_hdf5_galaxy_files -- flush remaining buffered galaxies, write the
+ * Header and TreeInfo groups, and close all HDF5 handles.
+ *
+ * Calls trigger_buffer_write() for any galaxies still in each snapshot buffer,
+ * then writes the TreeInfo group (per-tree forest counts) and the Header group
+ * (simulation metadata, run parameters, git ref) via write_header().  Closes
+ * every open dataset, group, and file handle stored in save_info, then frees
+ * the per-snapshot galaxy buffers.
+ *
+ * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
+ */
 int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct save_info *save_info,
                                    const struct params *run_params)
 {
@@ -786,6 +833,17 @@ int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct
 #undef FREE_GALAXY_OUTPUT_INNER_ARRAY
 
 
+/*
+ * create_hdf5_master_file -- write a top-level HDF5 file linking all per-task
+ * output files (Task 0 only).
+ *
+ * Creates "<OutputDir>/<FileNameGalaxies>.hdf5" and populates it with HDF5
+ * external links to each per-task file ("<FileNameGalaxies>_<N>.hdf5") so
+ * that readers can access the full catalogue through a single entry point.
+ * All tasks other than Task 0 return immediately without doing any work.
+ *
+ * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
+ */
 int32_t create_hdf5_master_file(const struct params *run_params)
 {
     // Only Task 0 needs to do stuff from here.
@@ -876,10 +934,19 @@ int32_t create_hdf5_master_file(const struct params *run_params)
 
 // Local Functions //
 
-// Give more transparent control over the names of the fields, their descriptions and what units we
-// use.  To allow easy comparison with  the binary output format (e.g., for testing purposes), we
-// use identical field names to the script that reads the binary data (e.g., 'tests/sagediff.py').
-int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char (*field_descriptions)[MAX_STRING_LEN],
+/*
+ * generate_field_metadata -- populate the field name, description, and HDF5
+ * datatype arrays for all NUM_OUTPUT_FIELDS galaxy output properties.
+ *
+ * Fills field_names[], field_descriptions[], field_units[], and field_dtypes[]
+ * with one entry per output field.  Field names are kept identical to the
+ * binary output format so that comparison scripts (e.g., tests/sagediff.py)
+ * work against both formats without modification.
+ * In USE_SAGE_IN_MCMC_MODE only SnapNum and StellarMass are registered.
+ *
+ * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
+ */
+static int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char (*field_descriptions)[MAX_STRING_LEN],
                                 char (*field_units)[MAX_STRING_LEN], hsize_t *field_dtypes)
 {
 
@@ -995,9 +1062,18 @@ int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char (*fiel
     return EXIT_SUCCESS;
 }
 
-// Take all the properties of the galaxy `*g` and add them to the buffered galaxies
-// properties `save_info->buffer_output_gals`.
-int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct save_info *save_info,
+/*
+ * prepare_galaxy_for_hdf5_output -- copy one GALAXY's properties into the
+ * HDF5 struct-of-arrays output buffer for the given snapshot.
+ *
+ * Appends all output fields of *g (with unit conversions matching
+ * prepare_galaxy_for_output() in save_gals_binary.c) into the slot at index
+ * num_gals_in_buffer[output_snap_idx] within buffer_output_gals[output_snap_idx].
+ * Does not advance the buffer counter — caller is responsible.
+ *
+ * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
+ */
+static int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct save_info *save_info,
                                        const int32_t output_snap_idx,  const struct halo_data *halos,
                                        const int64_t task_forestnr,
                                        const int64_t original_treenr,
@@ -1257,10 +1333,20 @@ int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct save_info 
 }
 
 
-// Extend the length of each dataset in our file and write the data to it.
-// We have to specify the number of items to write `num_to_write` because this function is called
-// both when we reach the buffer limit and during finalization where we write the remaining galaxies.
-int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to_write, const int64_t num_already_written,
+/*
+ * trigger_buffer_write -- extend each dataset for snap_idx and write
+ * num_to_write buffered galaxies into the new rows.
+ *
+ * For each of the NUM_OUTPUT_FIELDS extensible datasets in the "Snap_<N>"
+ * group: extends the dataset by num_to_write rows (H5Dset_extent), selects the
+ * new hyperslab, and writes from the corresponding buffer array.  Called both
+ * when the buffer reaches NUM_GALS_PER_BUFFER and by finalize_hdf5_galaxy_files()
+ * to flush any remainder.  num_already_written is the offset into the dataset
+ * where new rows start.
+ *
+ * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
+ */
+static int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to_write, const int64_t num_already_written,
                              struct save_info *save_info, const struct params *run_params)
 {
     herr_t status;
@@ -1443,7 +1529,17 @@ int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to_write,
 #undef SIZEOF_STRUCT_FIELD
 #undef EXTEND_AND_WRITE_GALAXY_DATASET
 
-int32_t write_header(hid_t file_id, const struct forest_info *forest_info, const struct params *run_params) {
+/*
+ * write_header -- write run metadata into the "Header" HDF5 group hierarchy.
+ *
+ * Creates Header/Simulation (cosmology, box size, particle mass, snapshot
+ * redshifts, git ref) and Header/Runtime (physics switches, key model
+ * parameters) groups and populates them as scalar HDF5 attributes.  Called
+ * once per output file from finalize_hdf5_galaxy_files().
+ *
+ * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
+ */
+static int32_t write_header(hid_t file_id, const struct forest_info *forest_info, const struct params *run_params) {
 
     // Inside the "Header" group, we split the attributes up inside different groups for usability.
     hid_t sim_group_id = H5Gcreate2(file_id, "Header/Simulation", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);

@@ -1,3 +1,19 @@
+/*
+ * ctrees_utils.c -- Consistent Trees ASCII tree-format utilities.
+ *
+ * Provides the forest and location readers (read_forests, read_locations),
+ * comparator and sort wrappers used to order locations by tree-root ID, file
+ * ID, and file offset, and the three halo-list fixup routines that convert
+ * raw Consistent Trees data to the LHaloTree convention:
+ *   fix_flybys    -- removes flybys from the FOF group list
+ *   fix_upid      -- resolves upid chains to direct parent IDs
+ *   assign_mergertree_indices -- maps halo IDs to array indices
+ * Also provides assign_forest_ids (builds per-tree forest ID arrays) and the
+ * file-private find_fof_halo (recursive FOF-ancestor search).
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -18,9 +34,17 @@
 #include "parse_ctrees.h"
 
 
-int64_t find_fof_halo(const int64_t totnhalos, const struct additional_info *info, const int start_loc, const int64_t upid, int verbose, int64_t calldepth);
+static int64_t find_fof_halo(const int64_t totnhalos, const struct additional_info *info, const int start_loc, const int64_t upid, int verbose, int64_t calldepth);
 
 
+/*
+ * read_forests -- read the forests index file into parallel forest/tree-root arrays.
+ *
+ * Parses the two-column text file at filename (columns: tree_root_id, forest_id)
+ * skipping '#'-prefixed header lines, allocates *f (forest IDs) and *t (tree
+ * root IDs) of length ntrees, and returns ntrees on success or a negative SAGE
+ * error code on failure.
+ */
 int64_t read_forests(const char *filename, int64_t **f, int64_t **t)
 {
     int64_t ntrees;
@@ -66,6 +90,14 @@ int64_t read_forests(const char *filename, int64_t **f, int64_t **t)
 }
 
 
+/*
+ * read_locations -- parse the locations file into the locations_with_forests array.
+ *
+ * Reads ntrees rows from filename; each row contains a tree-root ID, file ID,
+ * and file byte offset.  Opens each unique CTrees data file encountered and
+ * caches its fd in filenames_and_fd.  Returns the maximum file ID found
+ * (>= 0) on success, or a negative SAGE error code on failure.
+ */
 int64_t read_locations(const char *filename, const int64_t ntrees, struct locations_with_forests *l, struct filenames_and_fd *filenames_and_fd)
 {
     char buffer[MAX_STRING_LEN];
@@ -190,6 +222,7 @@ int64_t read_locations(const char *filename, const int64_t ntrees, struct locati
 }
 
 
+/* sort_forests_by_treeid -- sort forests[] and treeids[] together by treeid. */
 void sort_forests_by_treeid(const int64_t ntrees, int64_t *forests, int64_t *treeids)
 {
 
@@ -203,6 +236,7 @@ void sort_forests_by_treeid(const int64_t ntrees, int64_t *forests, int64_t *tre
 
 }
 
+/* Comparators for qsort on struct locations_with_forests. */
 int compare_locations_treeids(const void *l1, const void *l2)
 {
     const struct locations_with_forests *aa = (const struct locations_with_forests *) l1;
@@ -254,6 +288,7 @@ int compare_locations_fid_file_offset(const void *l1, const void *l2)
     return 0;/* un-reachable */
 }
 
+/* Wrappers around qsort using the above comparators. */
 void sort_locations_on_treeroot(const int64_t ntrees, struct locations_with_forests *locations)
 {
     qsort(locations, ntrees, sizeof(*locations), compare_locations_treeids);
@@ -275,6 +310,15 @@ void sort_locations_on_fid_file_offset(const int64_t ntrees, struct locations_wi
 }
 
 
+/*
+ * assign_forest_ids -- cross-reference locations and forests arrays to set
+ * each location's forest_id.
+ *
+ * Both arrays must be sorted by tree-root ID.  Iterates over locations,
+ * binary-searches for the matching treeid in the treeids[] / forests[] pair,
+ * and stores the corresponding forest ID in locations[i].forest_id.
+ * Returns EXIT_SUCCESS, or EXIT_FAILURE if any treeid cannot be matched.
+ */
 int assign_forest_ids(const int64_t ntrees, struct locations_with_forests *locations, int64_t *forests, int64_t *treeids)
 {
     /* Sort forests by tree roots -> necessary for assigning forest ids */
@@ -294,6 +338,15 @@ int assign_forest_ids(const int64_t ntrees, struct locations_with_forests *locat
 }
 
 
+/*
+ * fix_flybys -- remove flyby halos from the FOF host list.
+ *
+ * Sorts the halo array by (descending scale, halo ID) then iterates through
+ * each snapshot's FOF hosts.  A halo is a flyby if its upid matches a
+ * different FOF halo at the same snapshot; such halos are reassigned to the
+ * correct FOF host.  Returns EXIT_SUCCESS, or a negative SAGE error code on
+ * failure.
+ */
 int fix_flybys(const int64_t totnhalos, struct halo_data *forest, struct additional_info *info, int verbose)
 {
 #define ID_COMPARATOR(x, y)         ((x.id > y.id ? 1:(x.id < y.id ? -1:0)))
@@ -381,6 +434,15 @@ int fix_flybys(const int64_t totnhalos, struct halo_data *forest, struct additio
 }
 
 
+/*
+ * fix_upid -- resolve upid chains to direct parent-halo IDs.
+ *
+ * Consistent Trees upids can point to grandparent or higher ancestors; this
+ * routine walks each chain until it finds the immediate parent at the same or
+ * earlier snapshot and sets info[i].upid to that halo's ID, making the
+ * relationship suitable for the LHaloTree convention.  Returns EXIT_SUCCESS,
+ * or EXIT_FAILURE if any chain cannot be resolved.
+ */
 int fix_upid(const int64_t totnhalos, struct halo_data *forest, struct additional_info *info, const int verbose)
 {
 
@@ -464,6 +526,15 @@ int fix_upid(const int64_t totnhalos, struct halo_data *forest, struct additiona
 
 }
 
+/*
+ * assign_mergertree_indices -- map Consistent Trees halo IDs to array indices.
+ *
+ * Builds an index mapping from each halo's Consistent Trees ID to its position
+ * in the forest[] array, then fills halo_data fields (FirstProgenitor,
+ * NextProgenitor, Descendant, FirstHaloInFOFgroup, NextHaloInFOFgroup) by
+ * following the id/desc_id/upid links.  Returns EXIT_SUCCESS, or a negative
+ * SAGE error code on failure.
+ */
 int assign_mergertree_indices(const int64_t totnhalos, struct halo_data *forest, struct additional_info *info, const int max_snapnum)
 {
     const int nsnapshots = max_snapnum + 1;
@@ -676,7 +747,16 @@ int assign_mergertree_indices(const int64_t totnhalos, struct halo_data *forest,
 }
 
 
-int64_t find_fof_halo(const int64_t totnhalos, const struct additional_info *info, const int start_loc, const int64_t upid, int verbose, int64_t calldepth)
+/*
+ * find_fof_halo -- recursively locate the FOF host of a halo by following the
+ * upid chain.
+ *
+ * Starting from info[start_loc], follows pid links upward until reaching a
+ * halo whose pid is -1 (a FOF host).  Guards against infinite recursion with
+ * a depth limit; emits a warning when depth exceeds a threshold.
+ * Returns the array index of the FOF host, or -1 on failure.
+ */
+static int64_t find_fof_halo(const int64_t totnhalos, const struct additional_info *info, const int start_loc, const int64_t upid, int verbose, int64_t calldepth)
 {
     XRETURN(totnhalos < INT_MAX, -EXIT_FAILURE,
             "Totnhalos must be less than %d. Otherwise indexing with int (start_loc) will break\n", INT_MAX);
