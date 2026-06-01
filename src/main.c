@@ -1,3 +1,14 @@
+/*
+ * main.c -- SAGE26 entry point.
+ *
+ * Initialises MPI (when built with USE-MPI=yes), validates the command-line
+ * argument, then delegates to run_sage() for the full model run and
+ * finalize_sage() for post-run checks.  Serial builds skip all MPI calls.
+ * On any failure, aborts MPI cleanly before returning a non-zero exit code.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 
