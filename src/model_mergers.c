@@ -209,10 +209,13 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         // Destroys disc, creates pure merger-driven bulge
         make_bulge_from_burst(merger_centralgal, galaxies);
         
-        // Apply the Energy Conservation Radius
+        // Apply the Energy Conservation Radius; then call get_bulge_radius so
+        // the Shen fallsafe fires immediately if new_merger_radius == 0 (edge
+        // case: both progenitors were orphan satellites with DiskScaleRadius==0).
         galaxies[merger_centralgal].MergerBulgeRadius = new_merger_radius;
         galaxies[merger_centralgal].BulgeRadius = new_merger_radius;
-        
+        get_bulge_radius(merger_centralgal, galaxies, run_params);
+
         galaxies[merger_centralgal].TimeOfLastMajorMerger = time;
         galaxies[p].mergeType = 2; 
 
@@ -223,12 +226,17 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
 
         if (is_disk_dominated) {
             // Minor merger on DISC (Section 5.2.1)
-            // Radius already updated in add_galaxies_together and collisional_starburst_recipe
-            // Do nothing here
+            // InstabilityBulgeRadius is updated inside update_instability_bulge_radius.
+            // We still call get_bulge_radius here to recompute BulgeRadius and to run
+            // the Shen failsafe for MergerBulgeRadius, which can be stale when the
+            // satellite carried MergerBulgeMass but had no disk mass (satellite_disk_mass==0)
+            // and no starburst fired (stars==0), leaving no radius-update path.
+            get_bulge_radius(merger_centralgal, galaxies, run_params);
         } else {
             // Minor merger on SPHEROID (Section 5.2.3)
             // Update merger bulge radius with energy conservation
             galaxies[merger_centralgal].MergerBulgeRadius = new_merger_radius;
+            get_bulge_radius(merger_centralgal, galaxies, run_params);
         }
     }
 }
@@ -858,6 +866,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     galaxies[centralgal].BulgeMass += frac_to_BCG * galaxies[gal].StellarMass;
     galaxies[centralgal].MetalsBulgeMass += frac_to_BCG * galaxies[gal].MetalsStellarMass;
     galaxies[centralgal].MergerBulgeMass += frac_to_BCG * galaxies[gal].StellarMass;  // Track as merger-driven
+    get_bulge_radius(centralgal, galaxies, run_params);
 
     // Transfer star formation history from disrupted satellite to central
     // - Fraction going to BCG bulge: track in SFHMassBulge (stellar ages)

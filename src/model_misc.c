@@ -96,9 +96,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].ICS_sum_mt = 0.0;
 
     galaxies[p].DiskScaleRadius = get_disk_radius(halonr, p, halos, galaxies);
-    galaxies[p].BulgeRadius = get_bulge_radius(p, galaxies, run_params);
-    galaxies[p].MergerBulgeRadius = get_bulge_radius(p, galaxies, run_params);
-    galaxies[p].InstabilityBulgeRadius = get_bulge_radius(p, galaxies, run_params);
+    get_bulge_radius(p, galaxies, run_params);
     galaxies[p].MergTime = 999.9f;
     galaxies[p].Cooling = 0.0;
     galaxies[p].Heating = 0.0;
@@ -236,36 +234,44 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
         const double M_total = M_merger + M_instability;
         
         if(M_total <= 0.0) {
+            galaxies[p].BulgeRadius = 0.0;
+            galaxies[p].MergerBulgeRadius = 0.0;
+            galaxies[p].InstabilityBulgeRadius = 0.0;
             return 0.0;
         }
         
-        // 1. Retrieve the Merger Radius
-        // This is now calculated in model_mergers.c via Energy Conservation
-        // and stored persistently.
+        // Zero component radii when the corresponding mass is gone so stale
+        // values (e.g. InstabilityBulgeRadius surviving a major-merger reset,
+        // or MergerBulgeRadius on a pure-instability bulge) don't persist.
+        if(M_merger == 0.0) {
+            galaxies[p].MergerBulgeRadius = 0.0;
+        }
+        if(M_instability == 0.0) {
+            galaxies[p].InstabilityBulgeRadius = 0.0;
+        }
+
+        // Failsafe: If mass exists but radius is 0 (e.g. initialization or
+        // orphan-satellite merger where energy conservation returned 0),
+        // use Shen as fallback.
         double R_merger = galaxies[p].MergerBulgeRadius;
-        
-        // Failsafe: If mass exists but radius is 0 (e.g. initialization), use Shen as fallback
         if(M_merger > 0.0 && R_merger <= 0.0) {
              const double M_merger_sun = M_merger * 1.0e10 / h;
              const double log_R_kpc = 0.56 * log10(M_merger_sun) - 5.54;
              R_merger = pow(10.0, log_R_kpc) * 1.0e-3 * h;
-             // Store it so we don't recalculate
              galaxies[p].MergerBulgeRadius = R_merger;
         }
 
-        // 2. Retrieve Instability Radius (Already correct in your code)
+        // 2. Retrieve Instability Radius
         double R_instability = galaxies[p].InstabilityBulgeRadius;
-        
-        // Failsafe for instability radius
         if(M_instability > 0.0 && R_instability <= 0.0) {
             const double R_disc = galaxies[p].DiskScaleRadius;
             R_instability = 0.2 * R_disc;
             galaxies[p].InstabilityBulgeRadius = R_instability;
         }
-        
+
         // 3. Weighted Average (Equation 25)
         double R_bulge = (M_merger * R_merger + M_instability * R_instability) / M_total;
-        
+
         galaxies[p].BulgeRadius = R_bulge;
         return R_bulge;
     }
@@ -316,6 +322,7 @@ void update_instability_bulge_radius(const int p, const double delta_mass,
     }
     
     galaxies[p].InstabilityBulgeRadius = R_new;
+    get_bulge_radius(p, galaxies, run_params);
 }
 
 

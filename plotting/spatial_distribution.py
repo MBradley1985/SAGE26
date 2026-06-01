@@ -44,6 +44,8 @@ QUIESCENT_MODES = {
     'strict':           'SFR == 0',
     'loose':            'sSFR < 1e-11 /yr',
     'loose_massive':    'sSFR < 1e-11 /yr AND M* > 1e10 Msun',
+    'hubble':           'sSFR < 0.2 / t_H(z) AND M* > 1e10 Msun AND 0.75 <= B/T <= 0.90  (snapshot Hubble time)',
+    'hubble_central':   'hubble AND central only (Type==0)',
     'massive_bt':       'M* >= 1e11 Msun, SFR == 0, 0.75 <= B/T <= 0.90',
     'loose_massive_bt': 'sSFR < 1e-11 /yr AND M* >= 1e11 Msun AND 0.75 <= B/T <= 0.90',
     'karls_galaxy':     'sSFR < 1e-11 /yr AND M* >= 1e11 Msun AND 0.79 <= B/T <= 0.81 AND central',
@@ -62,9 +64,23 @@ KARLS_GALAXY_BT_MAX    = 0.900
 # using a flat alpha.  microUchuu (local test run) sits well below this.
 LARGE_SIM_GALAXY_THRESHOLD = 500_000
 
+# Quiescence threshold factor for the 'hubble' mode:
+#   quiescent if sSFR < HUBBLE_QUIESCENCE_FACTOR / t_H(z)
+# where t_H(z) = 1/H(z) is the Hubble time at the snapshot redshift.
+HUBBLE_QUIESCENCE_FACTOR = 0.2
+
+
+def hubble_time_gyr(redshift, omega_m, omega_l, hubble_h):
+    """Return the Hubble time t_H(z)=1/H(z) in Gyr for a flat (Omega_m, Omega_L) cosmology."""
+    # E(z) = H(z)/H0
+    ez = np.sqrt(omega_m * (1.0 + redshift) ** 3 + omega_l)
+    # 1/H0 in Gyr
+    t_h0_gyr = 9.778 / hubble_h
+    return t_h0_gyr / ez
+
 
 def compute_quiescent_mask(sfr, sm, hubble_h, mode, sfh=None, snap_num=None, quench_snaps=1,
-                           bulge_mass=None, gtype=None):
+                           bulge_mass=None, gtype=None, ssfr_cut_yr=None):
     """Return a boolean array marking quiescent galaxies under the given mode.
 
     sfr        : (N,)        total SFR in Msun/yr
@@ -86,6 +102,20 @@ def compute_quiescent_mask(sfr, sm, hubble_h, mode, sfh=None, snap_num=None, que
         q = ssfr < 1e-11
         if mode == 'loose_massive':
             q &= sm_msun > MASSIVE_FLOOR_MSUN
+        return q
+    if mode in ('hubble', 'hubble_central'):
+        if ssfr_cut_yr is None:
+            raise ValueError(f"mode={mode!r} requires ssfr_cut_yr")
+        sm_msun = sm * 1e10 / hubble_h
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ssfr = np.where(sm_msun > 0, sfr / sm_msun, 0.0)
+        q = ssfr < ssfr_cut_yr
+        q &= sm_msun > MASSIVE_FLOOR_MSUN
+        if bulge_mass is not None:
+            bt = np.where(sm > 0, bulge_mass / sm, 0.0)
+            q &= (bt >= MASSIVE_BT_MIN) & (bt <= MASSIVE_BT_MAX)
+        if mode == 'hubble_central' and gtype is not None:
+            q &= (gtype == 0)
         return q
     if mode == 'massive_bt':
         sm_msun = sm * 1e10 / hubble_h
@@ -163,7 +193,7 @@ def find_snapshot(params, target_z=3.0, snap_override=None):
 
 
 def load_galaxies(filepaths, snap_num, particle_mass, min_len, quench_snaps, snap_times,
-                  hubble_h, qmode='strict'):
+                  hubble_h, qmode='strict', ssfr_cut_yr=None):
     """
     Read Posx/y/z, StellarMass, quiescence flag, and mass-weighted stellar age.
 
@@ -225,6 +255,7 @@ def load_galaxies(filepaths, snap_num, particle_mass, min_len, quench_snaps, sna
                 sfr, sm_m, hubble_h, qmode,
                 sfh=sfh, snap_num=snap_num, quench_snaps=quench_snaps,
                 bulge_mass=bm_raw, gtype=gtype_arr,
+                ssfr_cut_yr=ssfr_cut_yr,
             )
 
             def _load_field(field, dtype=np.float64, fill=0.0):
@@ -268,7 +299,7 @@ def load_galaxies(filepaths, snap_num, particle_mass, min_len, quench_snaps, sna
 
 
 def save_quiescent_csv(filepaths, snap_num, particle_mass, min_len, quench_snaps,
-                       snap_times, hubble_h, out_path, qmode='strict'):
+                       snap_times, hubble_h, out_path, qmode='strict', ssfr_cut_yr=None):
     """
     Write all scalar galaxy fields for quiescent galaxies at snap_num to a CSV.
     Applies the same selection and quiescence logic as load_galaxies under the
@@ -339,6 +370,7 @@ def save_quiescent_csv(filepaths, snap_num, particle_mass, min_len, quench_snaps
                 sfr, sm_m, hubble_h, qmode,
                 sfh=sfh, snap_num=snap_num, quench_snaps=quench_snaps,
                 bulge_mass=bm_csv, gtype=gtype_csv,
+                ssfr_cut_yr=ssfr_cut_yr,
             )
 
             q_idx = np.where(mask)[0][is_q]
@@ -472,7 +504,8 @@ def print_quiescent_extended_table(sm, mvir, quiescent, extras, hubble_h):
 
 
 def plot_quiescent_sfh(filepaths, snap_num, particle_mass, min_len, quench_snaps,
-                       snap_times, hubble_h, out_path, z_snap, run_label, qmode='strict'):
+                       snap_times, hubble_h, out_path, z_snap, run_label, qmode='strict',
+                       ssfr_cut_yr=None):
     """
     Plot the star formation history of quiescent galaxies vs lookback time.
 
@@ -517,6 +550,7 @@ def plot_quiescent_sfh(filepaths, snap_num, particle_mass, min_len, quench_snaps
                 sfr, stellar[mask], hubble_h, qmode,
                 sfh=sfh, snap_num=snap_num, quench_snaps=quench_snaps,
                 bulge_mass=bm_sfh, gtype=gtype_sfh,
+                ssfr_cut_yr=ssfr_cut_yr,
             )
 
             if is_q.sum() == 0:
@@ -747,6 +781,8 @@ def parse_args():
                    help='Quiescence definitions to produce outputs for. '
                         'strict = SFR==0; loose = sSFR<1e-11/yr; '
                         'loose_massive = sSFR<1e-11/yr AND M* > 1e10 Msun; '
+                        'hubble = sSFR < 0.2/t_H(z) AND M* > 1e10 Msun AND 0.75<=B/T<=0.90 using the snapshot redshift; '
+                        'hubble_central = hubble AND central only (Type==0); '
                         'massive_bt = M*>=1e11 Msun AND SFR==0 AND 0.75<=B/T<=0.90. '
                         'Default: strict, loose, loose_massive. '
                         'Each mode produces its own plots/tables/CSV with a _<mode> suffix.')
@@ -774,10 +810,21 @@ def run_workflow_for_mode(filepaths, snap, z_snap, params, particle_mass, snap_t
     print(f'  Quiescence mode: {qmode}  ({mode_desc})')
     print('=' * 70)
 
+    ssfr_cut_yr = None
+    if qmode in ('hubble', 'hubble_central'):
+        t_h_gyr = hubble_time_gyr(z_snap, params['omega_matter'], params['omega_lambda'], h)
+        ssfr_cut_yr = HUBBLE_QUIESCENCE_FACTOR / (t_h_gyr * 1.0e9)
+        print(f"  Hubble time at z={z_snap:.3f}: t_H = {t_h_gyr:.3f} Gyr")
+        print(f"  Hubble-quiescent cut: sSFR < {HUBBLE_QUIESCENCE_FACTOR}/t_H = {ssfr_cut_yr:.3e} /yr")
+        print(f"  Stellar-mass cut: M* > {MASSIVE_FLOOR_MSUN:.2e} Msun")
+        print(f"  Morphology cut: {MASSIVE_BT_MIN:.3f} <= B/T <= {MASSIVE_BT_MAX:.3f}")
+        if qmode == 'hubble_central':
+            print("  Type cut: central only (Type==0)")
+
     # --- load galaxies for this mode ---
     px, py, pz, sm, mvir, gtype, quiescent, ages, extras = load_galaxies(
         filepaths, snap, particle_mass, args.min_len, args.quench_snaps,
-        snap_times, h, qmode=qmode)
+        snap_times, h, qmode=qmode, ssfr_cut_yr=ssfr_cut_yr)
     if px is None:
         print(f'No galaxies with StellarMass > 0 found in Snap_{snap}; skipping mode {qmode}.')
         return
@@ -850,11 +897,12 @@ def run_workflow_for_mode(filepaths, snap, z_snap, params, particle_mass, snap_t
 
         csv_path = os.path.join(out_dir, f'quiescent_galaxies_z{z_snap:.2f}_{run_label}{suffix}.csv')
         save_quiescent_csv(filepaths, snap, particle_mass, args.min_len, args.quench_snaps,
-                           snap_times, h, csv_path, qmode=qmode)
+                           snap_times, h, csv_path, qmode=qmode, ssfr_cut_yr=ssfr_cut_yr)
 
         sfh_path = os.path.join(out_dir, f'quiescent_sfh_z{z_snap:.2f}_{run_label}{suffix}.pdf')
         plot_quiescent_sfh(filepaths, snap, particle_mass, args.min_len, args.quench_snaps,
-                           snap_times, h, sfh_path, z_snap, run_label, qmode=qmode)
+                   snap_times, h, sfh_path, z_snap, run_label, qmode=qmode,
+                   ssfr_cut_yr=ssfr_cut_yr)
 
     # --- halo projections (re-use the pre-loaded halo data; overlay this mode's quiescent) ---
     if halos is not None:

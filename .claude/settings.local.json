@@ -29,7 +29,13 @@
       "Bash(xargs -I {} sh -c 'echo \"=== {} ===\"; head -15 \"{}\"')",
       "Bash(flake8 plotting/allresults-local.py)",
       "Bash(grep -c — /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/__TRACKED_VAR__)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(grep -rn \"BulgeMass\\\\|BulgeRadius\\\\|MergerBulgeMass\\\\|MergerBulgeRadius\\\\|InstabilityBulgeMass\\\\|InstabilityBulgeRadius\" /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26 --include=\"*.c\" --include=\"*.h\")",
+      "Read(//tmp/**)",
+      "Bash(make -j4)",
+      "Bash(./sage input/millennium.par)",
+      "Bash(grep -E \"error:|warning:|sage$|libsage\")",
+      "Bash(grep -E \"error:|warning: |sage$|libsage\")"
     ]
   }
 }
