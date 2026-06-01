@@ -1,3 +1,23 @@
+/*
+ * read_tree_consistentrees_ascii.c -- load halo merger trees from Consistent Trees ASCII files.
+ *
+ * Consistent Trees (Behroozi+2013) produces one or more ASCII-format data files
+ * (.dat) together with ancillary index files: locations.dat (tree -> file +
+ * byte-offset) and forests.list (forest -> tree mapping). Each tree block is
+ * whitespace-delimited rows preceded by a column-name header line.
+ *
+ * Setup  (setup_forests_io_ctrees):   reads the two index files, builds a
+ *   forest -> {trees, file fds, byte-offsets} mapping, divides forests across
+ *   MPI tasks, and parses the column header from the first data file.
+ * Load   (load_forest_ctrees):        seeks to each tree's byte offset, parses
+ *   halos from ASCII rows, fixes flybys and upids, assigns LHaloTree-compatible
+ *   merger-tree indices.
+ * Cleanup (cleanup_forests_io_ctrees): frees memory and closes all open file
+ *   descriptors.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -15,16 +35,37 @@
 #include "ctrees_utils.h"
 #include "parse_ctrees.h"
 
-void convert_ctrees_conventions_to_lht(struct halo_data *halos, struct additional_info *info, const int64_t nhalos,
-                                       const int32_t snap_offset, const double part_mass, const int64_t forest_offset);
+static void convert_ctrees_conventions_to_lht(struct halo_data *halos, struct additional_info *info, const int64_t nhalos,
+                                              const int32_t snap_offset, const double part_mass, const int64_t forest_offset);
 
+/* Builds the path to the first Consistent Trees data file (tree_0_0_0.dat or equivalent TreeName). */
 void get_forests_filename_ctr_ascii(char *filename, const size_t len, const struct params *run_params)
 {
     /* this prints the first filename (tree_0_0_0.dat) */
     snprintf(filename, len-1, "%s/%s", run_params->SimulationDir, run_params->TreeName);
 }
 
-/* Externally visible Functions */
+/*
+ * setup_forests_io_ctrees -- initialise I/O state for the Consistent Trees ASCII reader.
+ *
+ * Reads the ancillary index files (forests.list and locations.dat) to build a
+ * complete picture of which trees belong to which forest and where each tree lives
+ * on disk. Performs these steps:
+ *
+ *   Step 1  Raises the process file-descriptor limit (RLIMIT_NOFILE) to the
+ *           system maximum so that all tree files can be kept open at once.
+ *   Step 2  Reads forests.list (forest->tree mapping) and locations.dat
+ *           (tree -> file + byte-offset); validates that tree counts match.
+ *   Step 3  Assigns forest IDs into the locations array, sorts by
+ *           (forestid, fileid, offset), and counts unique forests.
+ *   Step 4  Divides forests across NTasks; builds per-tree fd and byte-offset
+ *           arrays for the forests assigned to ThisTask.
+ *   Step 5  Parses the column-name header line from the first data file to map
+ *           column indices to halo struct fields via parse_header_ctrees().
+ *   Step 6  Sets the GalaxyIndex multiplier factors for this tree format.
+ *
+ * Returns EXIT_SUCCESS or a negative error code.
+ */
 int setup_forests_io_ctrees(struct forest_info *forests_info, const int ThisTask, const int NTasks, struct params *run_params)
 {
     struct rlimit rlp;
@@ -322,6 +363,25 @@ int setup_forests_io_ctrees(struct forest_info *forests_info, const int ThisTask
     return EXIT_SUCCESS;
 }
 
+/*
+ * load_forest_ctrees -- read one forest from Consistent Trees ASCII files.
+ *
+ * A Consistent Trees forest may comprise multiple trees spread across one or more
+ * files. This function loads all trees belonging to a forest in order:
+ *
+ *   1. Iterates over each tree using the per-tree fd and byte-offset arrays
+ *      built at setup time, calling read_single_tree_ctrees() to parse halos
+ *      from the ASCII rows into the halo_data and additional_info arrays.
+ *   2. After parsing each tree, calls convert_ctrees_conventions_to_lht() to
+ *      translate Rockstar/CTrees conventions (raw spin, Msun masses, etc.) into
+ *      the LHaloTree layout that SAGE expects.
+ *   3. Once all trees in the forest are loaded, calls fix_flybys() to enforce a
+ *      single z=0 root, fix_upid() to flatten the subhalo hierarchy to one level,
+ *      and assign_mergertree_indices() to fill in Descendant/FirstProgenitor/
+ *      NextProgenitor indices.
+ *
+ * Returns the total number of halos in the forest, or a negative error code.
+ */
 int64_t load_forest_ctrees(const int32_t forestnr, struct halo_data **halos, struct forest_info *forests_info, struct params *run_params)
 {
     struct ctrees_info *ctr = &(forests_info->ctr);
@@ -423,8 +483,23 @@ int64_t load_forest_ctrees(const int32_t forestnr, struct halo_data **halos, str
     return totnhalos;
 }
 
-void convert_ctrees_conventions_to_lht(struct halo_data *halos, struct additional_info *info, const int64_t nhalos,
-                                       const int32_t snap_offset, const double part_mass, const int64_t forest_offset)
+/*
+ * convert_ctrees_conventions_to_lht -- translate one tree's halo fields from
+ * Rockstar/CTrees conventions to the LHaloTree layout expected by SAGE.
+ *
+ * Key per-halo conversions:
+ *   - Spin[k] /= Mvir      CTrees stores specific angular momentum L; LHT
+ *                           stores the dimensionless spin lambda = L/Mvir.
+ *   - Masses  *= 1e-10      converts Msun -> 10^10 Msun/h (SAGE internal unit).
+ *   - Len                   estimated from Mvir / part_mass (particle count).
+ *   - FileNr, SubhaloIndex, SubHalfMass set to sentinel values (-1 / -1.0).
+ *   - MostBoundID carries the Rockstar halo ID through for provenance.
+ *   - All merger-tree index fields (Descendant, FirstProgenitor, etc.)
+ *     initialised to -1; assign_mergertree_indices() fills them after the
+ *     complete forest is loaded.
+ */
+static void convert_ctrees_conventions_to_lht(struct halo_data *halos, struct additional_info *info, const int64_t nhalos,
+                                              const int32_t snap_offset, const double part_mass, const int64_t forest_offset)
 {
     const double inv_part_mass = 1.0/part_mass;
     for(int64_t i=0;i<nhalos;i++) {
@@ -462,6 +537,7 @@ void convert_ctrees_conventions_to_lht(struct halo_data *halos, struct additiona
     }
 }
 
+/* Closes all open file descriptors and frees per-forest I/O bookkeeping arrays. */
 void cleanup_forests_io_ctrees(struct forest_info *forests_info)
 {
     struct ctrees_info *ctr = &(forests_info->ctr);

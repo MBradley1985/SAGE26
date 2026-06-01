@@ -1,3 +1,14 @@
+/*
+ * read_tree_consistentrees_ascii.h -- public interface for the Consistent Trees ASCII tree reader.
+ *
+ * Declares the four entry points used by core_io_tree.c to load merger trees in
+ * the Consistent Trees ASCII on-disk format (Behroozi+2013): a filename helper,
+ * setup (per process at startup), load (per forest during the main loop), and
+ * cleanup (at shutdown). Implementation lives in read_tree_consistentrees_ascii.c.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #include <stdint.h>

@@ -1,3 +1,14 @@
+/*
+ * read_tree_lhalo_hdf5.h -- public interface for the LHaloTree HDF5 tree reader.
+ *
+ * Declares the three entry points used by core_io_tree.c to load merger trees in
+ * the LHaloTree HDF5 on-disk format (as produced for Illustris/TNG): setup (per
+ * process at startup), load (per forest during the main loop), and cleanup (at
+ * shutdown). Implementation lives in read_tree_lhalo_hdf5.c.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #ifdef __cplusplus

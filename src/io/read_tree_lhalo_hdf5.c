@@ -1,3 +1,23 @@
+/*
+ * read_tree_lhalo_hdf5.c -- load halo merger trees from LHaloTree HDF5 files.
+ *
+ * The LHaloTree HDF5 format (as produced for Illustris/TNG) stores one HDF5
+ * group per tree ("Tree0", "Tree1", ...) within numbered files
+ * (<TreeName>.<filenr><TreeExtension>). Each group contains one dataset per halo
+ * property (Descendant, Mvir, Pos, etc.).
+ *
+ * Setup  (setup_forests_io_lht_hdf5):  opens each file to count forests, reads
+ *   per-forest halo counts for load balancing, distributes forests across MPI
+ *   tasks, and caches open HDF5 file handles for the load phase.
+ * Load   (load_forest_lht_hdf5):       reads all halo property datasets for a
+ *   single tree using the READ_TREE_PROPERTY family of macros, then applies
+ *   unit conversions (kpc/h -> Mpc/h, spin units).
+ * Cleanup (cleanup_forests_io_lht_hdf5): closes all open HDF5 handles and
+ *   frees per-forest bookkeeping arrays.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,12 +38,33 @@ static int convert_units_for_forest(struct halo_data *halos, const int64_t nhalo
 static void get_forests_filename_lht_hdf5(char *filename, const size_t len, const int filenr, const struct params *run_params);
 
 
-void get_forests_filename_lht_hdf5(char *filename, const size_t len, const int filenr,  const struct params *run_params)
+/* Builds the path for a given file number: <SimulationDir>/<TreeName>.<filenr><TreeExtension>. */
+static void get_forests_filename_lht_hdf5(char *filename, const size_t len, const int filenr,  const struct params *run_params)
 {
     snprintf(filename, len - 1, "%s/%s.%d%s", run_params->SimulationDir, run_params->TreeName, filenr, run_params->TreeExtension);
 }
 
 
+/*
+ * setup_forests_io_lht_hdf5 -- initialise I/O state for the LHaloTree HDF5 reader.
+ *
+ * LHaloTree HDF5 files store one HDF5 group per tree within numbered files.
+ * This function performs these steps:
+ *
+ *   Step 1  Opens each file in [FirstFile, LastFile] to read the forest count
+ *           (Header/NTrees). For the first file it also validates the particle
+ *           mass and total tree-file count against the parameter file.
+ *   Step 2  Optionally reads per-forest halo counts for load-balanced forest
+ *           distribution (skipped when ForestDistributionScheme == uniform).
+ *   Step 3  Calls distribute_weighted_forests_over_ntasks() to assign a
+ *           contiguous range [start_forestnum, end_forestnum) to this task.
+ *   Step 4  Calls find_start_and_end_filenum() to determine which files this
+ *           task must touch; builds per-forest arrays (h5_fd, FileNr,
+ *           original_treenr) and keeps the HDF5 files open for load().
+ *   Step 5  Computes frac_volume_processed and sets GalaxyIndex multipliers.
+ *
+ * Returns EXIT_SUCCESS or a negative error code.
+ */
 int setup_forests_io_lht_hdf5(struct forest_info *forests_info,
                              const int ThisTask, const int NTasks, struct params *run_params)
 {
@@ -303,6 +344,24 @@ int setup_forests_io_lht_hdf5(struct forest_info *forests_info,
     }
 
 
+/*
+ * load_forest_lht_hdf5 -- read one forest from an LHaloTree HDF5 file.
+ *
+ * Reads all halo properties for the tree identified by
+ * forests_info->original_treenr[forestnr] from the already-open HDF5 file handle
+ * forests_info->lht.h5_fd[forestnr]. The read sequence is:
+ *
+ *   1. Determines nhalos from the shape of the "Descendant" dataset.
+ *   2. Allocates the halo array and a scratch buffer sized for the widest field
+ *      (nhalos * NDIM * sizeof(double)).
+ *   3. Reads each halo property via READ_TREE_PROPERTY (scalar) and
+ *      READ_TREE_PROPERTY_MULTIPLEDIM (vector) macros, which call read_dataset()
+ *      and scatter results into the halo_data struct fields.
+ *   4. Calls convert_units_for_forest() to apply position (kpc/h -> Mpc/h) and
+ *      spin unit conversions in-place.
+ *
+ * Returns the total number of halos in the forest, or -1 on error.
+ */
 int64_t load_forest_lht_hdf5(const int64_t forestnr, struct halo_data **halos, struct forest_info *forests_info)
 {
     char dataset_name[MAX_STRING_LEN];
@@ -399,7 +458,17 @@ int64_t load_forest_lht_hdf5(const int64_t forestnr, struct halo_data **halos, s
 #undef READ_TREE_PROPERTY
 #undef READ_TREE_PROPERTY_MULTIPLEDIM
 
-int convert_units_for_forest(struct halo_data *halos, const int64_t nhalos)
+/*
+ * convert_units_for_forest -- apply in-place unit conversions to a loaded forest.
+ *
+ * The Illustris/TNG LHaloTree HDF5 files store positions in kpc/h and angular
+ * momentum in (kpc/h)*(km/s). This function converts to SAGE internal units:
+ *   - Pos[j]  *= 0.001     kpc/h -> Mpc/h
+ *   - Spin[j] *= 0.001     (kpc/h)*(km/s) -> (Mpc/h)*(km/s)
+ * SubhaloIndex and SubHalfMass are set to sentinel values (-1 / -1.0) because
+ * those fields are not needed by the SAGE physics model.
+ */
+static int convert_units_for_forest(struct halo_data *halos, const int64_t nhalos)
 {
     if (nhalos <= 0) {
         fprintf(stderr,"Strange!: In function %s> Got nhalos = %"PRId64". Expected to get nhalos > 0\n", __FUNCTION__, nhalos);
@@ -421,6 +490,7 @@ int convert_units_for_forest(struct halo_data *halos, const int64_t nhalos)
     return EXIT_SUCCESS;
 }
 
+/* Closes all open HDF5 file handles and frees the per-forest file-descriptor array. */
 void cleanup_forests_io_lht_hdf5(struct forest_info *forests_info)
 {
     struct lhalotree_info *lht = &(forests_info->lht);

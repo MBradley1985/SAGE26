@@ -1,6 +1,31 @@
+/*
+ * read_tree_genesis_hdf5.c -- load halo merger trees from Genesis HDF5 files.
+ *
+ * The Genesis format (ASTRO 3D VELOCIraptor+TreeFrog) stores halos snapshot-by-
+ * snapshot in numbered HDF5 files (<TreeName><TreeExtension>.<filenr>), with
+ * merger-tree links (Head/Tail) encoded as temporally-unique 64-bit IDs of the
+ * form  ID = snapshot * 1e12 + halo_index + 1.  A companion metadata file
+ * (<TreeName>.foreststats.hdf5) holds forest-level statistics (sizes, offsets).
+ *
+ * Setup  (setup_forests_io_genesis_hdf5):  reads the metadata file to learn
+ *   forest counts and snapshot layout, distributes forests across MPI tasks,
+ *   validates cosmological parameters against the parameter file, and populates
+ *   the halo_offset_per_snap array for the first forest on this task.
+ * Load   (load_forest_genesis_hdf5):       reads each active snapshot group in
+ *   reverse time order, decodes Head/Tail/hostHaloID into LHaloTree-compatible
+ *   Descendant/FirstProgenitor/FirstHaloInFOFgroup indices, assembles
+ *   NextProgenitor and NextHaloInFOFgroup chains, and calls fix_flybys_genesis()
+ *   to enforce a single z=0 root per forest.
+ * Cleanup (cleanup_forests_io_genesis_hdf5): closes all open HDF5 handles and
+ *   frees per-forest bookkeeping arrays.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <hdf5.h>
 
 #include "read_tree_genesis_hdf5.h"
 #include "hdf5_read_utils.h"
@@ -8,9 +33,6 @@
 
 #include "../core_mymalloc.h"
 #include "../core_utils.h"
-
-
-#include <hdf5.h>
 
 /* Local enum for individual properties that are read in
    from the Genesis hdf5 file*/
@@ -47,13 +69,16 @@ static void get_forest_metadata_filename(const char *forestfilename, const size_
 #define CONVERT_SNAPSHOT_AND_INDEX_TO_HALOID(snap, index)    (snap*CONVERSION_FACTOR_FOR_GENESIS_UNIQUE_INDEX + index + 1)
 
 
-void get_forests_filename_genesis_hdf5(char *filename, const size_t len, const struct params *run_params)
+/* Builds the base path for Genesis HDF5 files: <SimulationDir>/<TreeName><TreeExtension>.
+   Individual files are opened as "<base>.<filenr>"; the metadata file is "<base>.foreststats.hdf5". */
+static void get_forests_filename_genesis_hdf5(char *filename, const size_t len, const struct params *run_params)
 {
     snprintf(filename, len - 1, "%s/%s%s", run_params->SimulationDir, run_params->TreeName, run_params->TreeExtension);
 }
 
 
-void get_forest_metadata_filename(const char *forestfilename, const size_t stringlen, char *metadata_filename)
+/* Replaces the ".hdf5" suffix in forestfilename with ".foreststats.hdf5" in-place. */
+static void get_forest_metadata_filename(const char *forestfilename, const size_t stringlen, char *metadata_filename)
 {
     memmove(metadata_filename, forestfilename, stringlen);
     metadata_filename[stringlen - 1] = '\0';
@@ -83,7 +108,30 @@ void get_forest_metadata_filename(const char *forestfilename, const size_t strin
 
 
 
-/* Externally visible Functions */
+/*
+ * setup_forests_io_genesis_hdf5 -- initialise I/O state for the Genesis HDF5 reader.
+ *
+ * Genesis forests are spread across numbered HDF5 files with a companion
+ * metadata file (<base>.foreststats.hdf5) that holds forest-level statistics.
+ * This function performs these steps:
+ *
+ *   Step 1  Opens the metadata file to read NFiles, NSnaps, NForests, and the
+ *           max forest size; validates that the requested file range is sane.
+ *   Step 2  Opens each forest file in [FirstFile, LastFile] to read per-file
+ *           forest counts and (optionally) per-forest halo counts for load
+ *           balancing.
+ *   Step 3  Calls distribute_weighted_forests_over_ntasks() to assign a
+ *           contiguous range [start_forestnum, end_forestnum) to this task.
+ *   Step 4  Builds the per-forest FileNr and original_treenr arrays, populates
+ *           offset_for_global_forestnum, and reads halo_offset_per_snap for the
+ *           first forest on this task from its file's ForestInfoInFile group.
+ *   Step 5  Opens all needed HDF5 forest files and stores handles in gen->h5_fds.
+ *   Step 6  Reads cosmological parameters and unit factors from the first file
+ *           and validates them against the parameter file (aborts on mismatch).
+ *   Step 7  Sets the GalaxyIndex multiplier factors for this tree format.
+ *
+ * Returns EXIT_SUCCESS or a negative error code.
+ */
 int setup_forests_io_genesis_hdf5(struct forest_info *forests_info, const int ThisTask, const int NTasks, struct params *run_params)
 {
     const int firstfile = run_params->FirstFile;
@@ -550,6 +598,32 @@ int setup_forests_io_genesis_hdf5(struct forest_info *forests_info, const int Th
  */
 
 
+/*
+ * load_forest_genesis_hdf5 -- read one forest from Genesis HDF5 files.
+ *
+ * Genesis halos are stored per-snapshot (Snap_NNN groups) rather than per-tree.
+ * Each halo carries a temporally-unique ID encoding both its snapshot and its
+ * index-within-snapshot; merger-tree links (Head->Descendant, Tail->FirstProgenitor,
+ * hostHaloID->FirstHaloInFOFgroup) are 64-bit IDs that must be decoded into
+ * forest-local indices. This function:
+ *
+ *   1. Determines nhalos and per-snapshot counts from the metadata file and the
+ *      forest's ForestSizesAllSnaps dataset; computes forest-local offsets so
+ *      each snapshot's halos map to a contiguous slice of the output array.
+ *   2. Iterates over snapshots in reverse time order (end_snap -> forest_start_snap),
+ *      reading each halo property via READ_PARTIAL_1D_ARRAY and the ASSIGN_BUFFER_*
+ *      macros. For Head/Tail/hostHaloID, ASSIGN_BUFFER_WITH_MERGERTREE_IDX_TO_SAGE
+ *      decodes the 64-bit ID into a forest-local 32-bit index.
+ *   3. Applies in-place cosmological unit conversions: positions (Mpc/h),
+ *      velocities (/scale_factor), masses (*hubble_h), spins (*h^2 * 1e-10).
+ *   4. After all snapshots are read, builds NextProgenitor and NextHaloInFOFgroup
+ *      linked lists by scanning the Descendant/FirstHaloInFOFgroup arrays.
+ *   5. Calls fix_flybys_genesis() to merge multiple z=0 FOF roots into one.
+ *   6. Advances halo_offset_per_snap so the next forest reads from the correct
+ *      position in each snapshot group.
+ *
+ * Returns the total number of halos in the forest, or a negative error code.
+ */
 int64_t load_forest_genesis_hdf5(int64_t forestnr, struct halo_data **halos, struct forest_info *forests_info, struct params *run_params)
 {
     struct genesis_info *gen = &(forests_info->gen);
@@ -1025,6 +1099,7 @@ int64_t load_forest_genesis_hdf5(int64_t forestnr, struct halo_data **halos, str
 #undef ASSIGN_BUFFER_TO_SAGE
 #undef ASSIGN_BUFFER_TO_NDIM_SAGE
 
+/* Closes all open HDF5 forest and metadata file handles; frees per-task bookkeeping arrays. */
 void cleanup_forests_io_genesis_hdf5(struct forest_info *forests_info)
 {
     struct genesis_info *gen = &(forests_info->gen);
@@ -1041,7 +1116,18 @@ void cleanup_forests_io_genesis_hdf5(struct forest_info *forests_info)
 
 #define CHECK_IF_HALO_IS_FOF(halos, index)  (halos[index].FirstHaloInFOFgroup == index ? 1:0)
 
-int fix_flybys_genesis(struct halo_data *halos, const int64_t nhalos_last_snap, const int64_t forestnr)
+/*
+ * fix_flybys_genesis -- enforce a single z=0 FOF root per forest.
+ *
+ * Genesis forests can contain multiple FOF halos at the last snapshot (flybys:
+ * halos that passed through one another but are not physically merged). SAGE
+ * requires exactly one root per forest. This function identifies the most massive
+ * FOF halo at the last snapshot and attaches all other z=0 FOF halos as members
+ * of that group by updating their FirstHaloInFOFgroup and linking them through
+ * NextHaloInFOFgroup. The flyby halos' MostBoundIDs are negated to flag them as
+ * non-primary centrals.
+ */
+static int fix_flybys_genesis(struct halo_data *halos, const int64_t nhalos_last_snap, const int64_t forestnr)
 {
     if(nhalos_last_snap == 0) {
         fprintf(stderr,"Warning: There are no halos at the last snapshot. Therefore nothing to fix for flybys. BUT this should not happen - check code\n");
