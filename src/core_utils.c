@@ -1,28 +1,17 @@
-/* File: utils.c */
 /*
-  This file is a part of the Corrfunc package
-  Copyright (C) 2015-- Manodeep Sinha (manodeep@gmail.com)
-  License: MIT LICENSE. See LICENSE file under the top-level
-  directory at https://github.com/manodeep/Corrfunc/
-*/
-
-/*
-  A collection of C wrappers I use. Should be
-  very obvious. The ones that are not obvious
-  have comments before the function itself.
-
-  Bugs:
-  Please email me manodeep at gmail dot com
-
-  Ver 1.0: Manodeep Sinha, 2nd April, 2012
-  Ver 1.1: Manodeep Sinha, 14th June, 2012 - replaced
-  check_string_copy with a "real" wrapper to
-  snprintf.
-  Ver 1.2: Manodeep Sinha, Jan 8, 2012 - replaced
-  print_time with timeval and gettimeofday
-  Ver 2?: Manodeep Sinha, Jan 15, 2020 - the history has been
-  lost to time.
-*/
+ * core_utils.c -- low-level I/O and utility helpers.
+ *
+ * Derived from the Corrfunc package by Manodeep Sinha
+ * (https://github.com/manodeep/Corrfunc/), MIT License.
+ *
+ * Provides: my_snprintf (bounds-checked snprintf wrapper), get_time_string
+ * (human-readable elapsed time), getnumlines (count non-comment lines),
+ * myfread/myfwrite/myfseek (stdio wrappers), mywrite/mypread/mypwrite
+ * (POSIX fd wrappers with retry loops), and AlmostEqualRelativeAndAbs_double
+ * (floating-point comparison with absolute and relative tolerances).
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
 
 #include <inttypes.h>    //defines PRId64 for printing int64_t + includes stdint.h
 #include <math.h>
@@ -40,8 +29,12 @@
 #include "core_utils.h"
 
 
-// A real wrapper to snprintf that will exit() if the allocated buffer length
-// was not sufficient. Usage is the same as snprintf
+/*
+ * my_snprintf -- bounds-checked vsnprintf wrapper.
+ *
+ * Behaves exactly like snprintf but prints an error and returns -1 if the
+ * output was truncated (nwritten > len) or an encoding error occurred.
+ */
 int my_snprintf(char *buffer, int len, const char *format, ...)
 {
   va_list args;
@@ -62,26 +55,9 @@ int my_snprintf(char *buffer, int len, const char *format, ...)
 }
 
 /*
-  I like this particular function. Generic replacement for printing
-  (in meaningful units) the actual execution time of a code/code segment.
-
-  The function call should be like this:
-
-  ---------------------------
-  struct timeval t_start,t_end;
-  gettimeofday(&t_start,NULL);
-  do_something();
-  gettimeofday(&t_end,NULL);
-  print_time(t_start,t_end,"do something");
-  ---------------------------
-
-  if the code took 220 mins 30.1 secs
-  -> print_time will output `Time taken to execute `do something' = 3 hours 40 mins 30.1 seconds
-
-
-  (code can be easily extended to include `weeks' as a system of time unit. left to the reader)
-*/
-
+ * get_time_string -- format elapsed time between t0 and t1 as a human-readable
+ * string ("N secs", "N mins N secs", etc.).  Caller must free() the result.
+ */
 char *get_time_string(struct timeval t0, struct timeval t1)
 {
   const size_t MAXLINESIZE = 1024;
@@ -124,6 +100,7 @@ char *get_time_string(struct timeval t0, struct timeval t1)
   return time_string;
 }
 
+/* getnumlines -- count non-empty, non-comment lines in a text file. */
 int64_t getnumlines(const char *fname,const char comment)
 {
     const int MAXLINESIZE = 10000;
@@ -157,6 +134,7 @@ int64_t getnumlines(const char *fname,const char comment)
 }
 
 
+/* myfread/myfwrite/myfseek -- thin wrappers around fread/fwrite/fseeko. */
 size_t myfread(void *ptr, const size_t size, const size_t nmemb, FILE * stream)
 {
     return fread(ptr, size, nmemb, stream);
@@ -172,6 +150,10 @@ int myfseek(FILE * stream, const long offset, const int whence)
     return fseeko(stream, offset, whence);
 }
 
+/*
+ * mywrite -- write nbytes to fd, retrying on partial writes until all bytes
+ * are written.  Aborts on a write error.
+ */
 ssize_t mywrite(int fd, const void *ptr, size_t nbytes)
 {
     size_t nbytes_left = nbytes;
@@ -195,6 +177,10 @@ ssize_t mywrite(int fd, const void *ptr, size_t nbytes)
 
 
 
+/*
+ * mypread -- positional read, retrying until all nbytes are read from offset.
+ * Aborts on read error.
+ */
 ssize_t mypread(int fd, void *ptr, const size_t nbytes, off_t offset)
 {
     size_t nbytes_left = nbytes;
@@ -216,6 +202,10 @@ ssize_t mypread(int fd, void *ptr, const size_t nbytes, off_t offset)
     return tot_nbytes_read;
 }
 
+/*
+ * mypwrite -- positional write, retrying until all nbytes are written from offset.
+ * Returns FILE_WRITE_ERROR on failure.
+ */
 ssize_t mypwrite(int fd, const void *ptr, const size_t nbytes, off_t offset)
 {
     size_t nbytes_left = nbytes;
@@ -236,6 +226,10 @@ ssize_t mypwrite(int fd, const void *ptr, const size_t nbytes, off_t offset)
     return tot_nbytes_written;
 }
 
+/*
+ * AlmostEqualRelativeAndAbs_double -- return EXIT_SUCCESS when A and B are
+ * within maxDiff (absolute) or maxRelDiff * max(|A|,|B|) (relative).
+ */
 int AlmostEqualRelativeAndAbs_double(double A, double B,
                                      const double maxDiff,
                                      const double maxRelDiff)
