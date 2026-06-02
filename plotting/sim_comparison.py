@@ -39,9 +39,9 @@ except Exception:
 
 # File paths
 PRIMARY_DIR    = './output/millennium/'
-SECONDARY_DIR  = './output/millennium_AGN_heatingreservoir/'  # optional; set to None to disable
-TERTIARY_DIR   = './output/millennium_AGN_entropy/'
-QUATERNARY_DIR = './output/millennium_AGN_rheat/'  # optional; set to None to disable 
+SECONDARY_DIR  = './output/millennium_AGN_CGMoff/'  # optional; set to None to disable
+TERTIARY_DIR   = './output/millennium_vanilla/'
+QUATERNARY_DIR = None  # optional; set to None to disable 
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
 
@@ -62,19 +62,19 @@ Z_SUN = 0.0134
 # Model display names, colours, and line styles — edit here to change
 # labels globally across all plots.
 # ------------------------------------------------------------------
-PRIMARY_LABEL    = 'Millennium'
+PRIMARY_LABEL    = 'miniMillennium'
 PRIMARY_COLOR    = 'steelblue'
 PRIMARY_LS       = ':'
 
-SECONDARY_LABEL  = r'Heating Reservoir'
+SECONDARY_LABEL  = 'miniMillennium (AGN CGM off)'
 SECONDARY_COLOR  = 'coral'
 SECONDARY_LS     = '--'
 
-TERTIARY_LABEL   = r'Entropy Injection'
+TERTIARY_LABEL   = 'miniMillennium (SAGE C16)'
 TERTIARY_COLOR   = 'mediumseagreen'
 TERTIARY_LS      = '-'
 
-QUATERNARY_LABEL = r'r_heat Suppression'
+QUATERNARY_LABEL = ''
 QUATERNARY_COLOR = 'mediumpurple'
 QUATERNARY_LS    = '-.'
 
