@@ -368,7 +368,6 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 
         double lambda = get_metaldependent_cooling_rate(log10(temp), logZ);
 
-        // BUG FIX: Check lambda > 0 to avoid division by zero
         if(lambda <= 0.0) {
             return 0.0;  // No cooling if cooling function is zero/negative
         }
@@ -377,7 +376,6 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
         x /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);         // now in internal units
         const double rho_rcool = x / tcool * 0.885;  // 0.885 = 3/2 * mu, mu=0.59 for a fully ionized gas
 
-        // BUG FIX: Check rho_rcool > 0 to avoid sqrt of negative or division by zero
         if(rho_rcool <= 0.0) {
             return 0.0;
         }
@@ -507,20 +505,12 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxies,
                          const struct params *run_params)
 {
-    long precipitation_debug_counter = 0;
-    precipitation_debug_counter++;
-
     double coolingGas = 0.0;
 
     // ========================================================================
     // EARLY EXIT CONDITIONS
     // ========================================================================
     if(galaxies[gal].CGMgas <= 0.0 || galaxies[gal].Vvir <= 0.0 || galaxies[gal].Rvir <= 0.0) {
-        if(precipitation_debug_counter % 50000 == 0) {
-            printf("DEBUG PRECIP [%ld]: Early exit - CGMgas=%.2e, Vvir=%.2f, Rvir=%.2e\n",
-                   precipitation_debug_counter, galaxies[gal].CGMgas,
-                   galaxies[gal].Vvir, galaxies[gal].Rvir);
-        }
         return 0.0;
     }
 
@@ -993,7 +983,6 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
 
         // coefficient to heat the cooling gas back to the virial temperature of the halo
         // AGN_HEATING_COEFF_KMS = sqrt(2*eta*c^2), eta=0.1 (standard efficiency), c in km/s
-        // BUG FIX: Check Vvir > 0 to avoid division by zero
         if(galaxies[centralgal].Vvir <= 0.0) {
             AGNcoeff = 0.0;
             AGNheating = 0.0;
