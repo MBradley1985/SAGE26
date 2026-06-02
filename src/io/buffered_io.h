@@ -1,3 +1,13 @@
+/*
+ * buffered_io.h -- write-buffering layer for binary galaxy catalogue output.
+ *
+ * Declares the buffered_io struct and three functions (setup, write, cleanup)
+ * that accumulate writes in an in-memory buffer and flush to a file descriptor
+ * only when the buffer is full, reducing syscall overhead for binary output.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #ifdef __cplusplus

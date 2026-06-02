@@ -1,3 +1,13 @@
+/*
+ * read_tree_gadget4_hdf5.h -- public interface for the Gadget-4 HDF5 tree reader.
+ *
+ * Declares the three entry points used by core_io_tree.c to load merger trees
+ * written by Gadget-4's FOF/SubFind group finder in HDF5 format:
+ * setup (per process), load (one forest), and cleanup.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #ifdef __cplusplus

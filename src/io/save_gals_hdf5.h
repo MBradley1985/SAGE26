@@ -1,3 +1,15 @@
+/*
+ * save_gals_hdf5.h -- public interface for the HDF5 galaxy catalogue writer.
+ *
+ * Defines HDF5_GALAXY_OUTPUT (the column-array struct holding all per-galaxy
+ * properties for one forest before they are written as HDF5 datasets) and
+ * declares the three entry points -- initialize, save, finalize -- plus
+ * create_hdf5_master_file(), called by core_save.c when OutputFormat is
+ * sage_hdf5.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #include <stdint.h>

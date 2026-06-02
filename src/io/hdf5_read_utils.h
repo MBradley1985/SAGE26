@@ -1,3 +1,14 @@
+/*
+ * hdf5_read_utils.h -- low-level HDF5 read helpers shared by all HDF5 readers.
+ *
+ * Declares read_attribute(), read_dataset_shape(), read_dataset(), and
+ * fill_hdf5_metadata_names(), plus the READ_PARTIAL_DATASET macro for
+ * hyperslab reads.  Used by every tree reader and galaxy writer that
+ * accesses HDF5 files.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #include <hdf5.h>

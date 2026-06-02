@@ -1,3 +1,13 @@
+/*
+ * core_tree_utils.h -- public interface for merger-tree index utilities.
+ *
+ * Declares functions for reordering and re-indexing merger-tree halo arrays:
+ * fixing halo indices after tree reordering, converting lhalo to lhvt order,
+ * and computing per-snapshot FOF-group counts across a forest.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #ifdef __cplusplus

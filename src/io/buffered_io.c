@@ -1,3 +1,13 @@
+/*
+ * buffered_io.c -- write-buffering layer for binary galaxy catalogue output.
+ *
+ * Accumulates writes in an in-memory buffer and flushes to a file descriptor
+ * when the buffer is full, reducing syscall overhead for the many small per-
+ * galaxy writes produced by save_binary_galaxies().
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>

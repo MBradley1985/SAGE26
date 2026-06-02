@@ -1,3 +1,13 @@
+/*
+ * core_save.h -- public interface for the galaxy output dispatcher.
+ *
+ * Declares the three output entry points (initialize, save, finalize) called
+ * per forest by sage.c.  These dispatch to the format-specific writers in
+ * io/save_gals_binary.c and io/save_gals_hdf5.c based on OutputFormat.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #ifdef __cplusplus

@@ -1,3 +1,14 @@
+/*
+ * model_misc.h -- public interface for galaxy utilities and regime logic.
+ *
+ * Declares galaxy initialisation, virial property accessors, the CGM-regime
+ * determination function (determine_and_store_regime, based on Voit 2015),
+ * FFB regime classification, H2 fraction prescriptions (BR06, KD12, K13,
+ * radial integration), halo concentration calculators, and size-mass relations.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #ifdef __cplusplus

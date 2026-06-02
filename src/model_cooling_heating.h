@@ -1,3 +1,13 @@
+/*
+ * model_cooling_heating.h -- public interface for cooling and AGN heating.
+ *
+ * Declares the regime-aware cooling entry points (hot-halo and CGM modes),
+ * the CGM inflow model, the gas-deposition helpers, and the AGN radio-mode
+ * heating functions used by evolve_galaxies() in core_build_model.c.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #ifdef __cplusplus

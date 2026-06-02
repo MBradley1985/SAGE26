@@ -1,3 +1,13 @@
+/*
+ * read_tree_consistentrees_hdf5.c -- reader for Consistent Trees HDF5 merger trees.
+ *
+ * Implements setup_forests_io_ctrees_hdf5(), load_forest_ctrees_hdf5(), and
+ * cleanup_forests_io_ctrees_hdf5() for merger trees in the Consistent Trees
+ * HDF5 format (Behroozi+2013 stored in HDF5 via the ctrees2hdf5 converter).
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

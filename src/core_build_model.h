@@ -1,3 +1,13 @@
+/*
+ * core_build_model.h -- public interface for the merger-tree walker.
+ *
+ * Declares construct_galaxies(), which recursively walks a merger-tree forest
+ * depth-first and calls evolve_galaxies() once all progenitors of a halo have
+ * been processed.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #ifdef __cplusplus

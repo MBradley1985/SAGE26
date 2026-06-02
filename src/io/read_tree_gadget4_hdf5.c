@@ -1,3 +1,13 @@
+/*
+ * read_tree_gadget4_hdf5.c -- reader for Gadget-4 FOF/SubFind HDF5 merger trees.
+ *
+ * Implements setup_forests_io_gadget4_hdf5(), load_forest_gadget4_hdf5(), and
+ * cleanup_forests_io_gadget4_hdf5() for merger trees written by Gadget-4's
+ * FOF/SubFind group finder in HDF5 format.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

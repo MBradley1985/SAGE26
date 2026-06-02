@@ -1,3 +1,13 @@
+/*
+ * save_gals_binary.h -- public interface for the binary galaxy catalogue writer.
+ *
+ * Defines GALAXY_OUTPUT (the on-disk fixed-size struct written per galaxy in
+ * binary output mode) and declares the three entry points -- initialize, save,
+ * finalize -- called by core_save.c when OutputFormat is sage_binary.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #include <stdint.h>

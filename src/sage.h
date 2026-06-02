@@ -1,3 +1,14 @@
+/*
+ * sage.h -- top-level public API for SAGE26.
+ *
+ * Declares run_sage() and finalize_sage(), the two entry points called by
+ * main.c (serial) or by external callers via libsage.so (e.g. SAGE-PSO).
+ * Also defines SAGE_VERSION and SAGE_DATA_VERSION, which identify output
+ * binary compatibility -- do not change without bumping both constants.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #include "core_allvars.h"

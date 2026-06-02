@@ -1,3 +1,14 @@
+/*
+ * model_mergers.h -- public interface for galaxy mergers.
+ *
+ * Declares estimate_merging_time() (dynamical friction timescale per
+ * Binney & Tremaine), deal_with_galaxy_merger() (the merger dispatcher),
+ * collisional_starburst_recipe(), BH growth from cold-gas accretion,
+ * and satellite disruption to the intra-cluster stellar component.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #ifdef __cplusplus

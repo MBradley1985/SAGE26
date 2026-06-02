@@ -1,3 +1,13 @@
+/*
+ * ctrees_utils.h -- utility types and functions for Consistent Trees ASCII parsing.
+ *
+ * Declares the forest/location structs (locations_with_forests, filenames_and_fd,
+ * additional_info) and the functions that read forest lists, assign forest IDs,
+ * sort locations, and correct flyby/upid errors in Consistent Trees ASCII output.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #include <stdint.h>

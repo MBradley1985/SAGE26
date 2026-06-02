@@ -1,3 +1,14 @@
+/*
+ * forest_utils.h -- forest distribution utilities for MPI load-balancing.
+ *
+ * Declares distribute_forests_over_ntasks() and the weighted variant, which
+ * assign forests to MPI tasks according to ForestDistributionScheme, and
+ * find_start_and_end_filenum(), which computes per-file read ranges from a
+ * task's forest assignment.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #include <stdint.h>

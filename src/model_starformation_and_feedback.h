@@ -1,3 +1,14 @@
+/*
+ * model_starformation_and_feedback.h -- public interface for SF and SN feedback.
+ *
+ * Declares starformation_and_feedback() (the main per-substep entry point),
+ * update_from_star_formation() and update_from_feedback() (mass/metal bookkeeping
+ * helpers), and starformation_ffb() (the feedback-free burst prescription).
+ * The HYDROGEN_MASS_FRAC constant used across SF prescriptions is defined here.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #define HYDROGEN_MASS_FRAC 0.74  // primordial hydrogen mass fraction

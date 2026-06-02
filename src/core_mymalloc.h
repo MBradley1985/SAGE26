@@ -1,3 +1,13 @@
+/*
+ * core_mymalloc.h -- public interface for tracked memory allocation wrappers.
+ *
+ * Declares thin wrappers around malloc/calloc/realloc/free that abort with
+ * file/line context on allocation failure rather than returning NULL silently.
+ * All SAGE26 heap allocations go through these wrappers.
+ *
+ * SAGE26 -- released under MIT (see LICENSE).
+ */
+
 #pragma once
 
 #ifdef __cplusplus
