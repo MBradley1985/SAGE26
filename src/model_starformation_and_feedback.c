@@ -24,15 +24,26 @@
 /*
  * Main star formation and feedback driver for one galaxy per substep.
  *
- * Selects the active SF prescription (run_params->SFprescription) and
- * computes star formation rate, reheated mass, and ejected mass. Applies
- * disk instability if triggered and records SFR history. Calls
- * update_from_star_formation() and update_from_feedback() to commit changes.
+ * Selects the active SF prescription (run_params->SFprescription):
+ *   0 = Croton+06 cold-gas threshold (Kauffmann 1996 Eq. 7)
+ *   1 = Blitz & Rosolowsky 2006 (BR06) H2 fraction
+ *   2 = Somerville+2025 density-modulated efficiency, cold gas
+ *   3 = Somerville+2025 density-modulated efficiency + BR06 H2
+ *   4 = Krumholz & Dekel 2012 (KD12)
+ *   5 = Krumholz, McKee & Tumlinson 2009 (KMT09)
+ *   6 = Krumholz 2013 (K13)
+ *   7 = Gnedin & Draine 2014 (GD14), 2016 Erratum fit
+ *
+ * SN feedback uses FIRE (Muratov+2015) when FIREmodeOn=1, otherwise fixed
+ * reheating epsilon. Ejected mass set by energy budget. Calls
+ * update_from_star_formation() and update_from_feedback() to commit reservoir
+ * changes, then checks disk instability and applies instantaneous metal
+ * recycling (Krumholz & Dekel 2011 Eq. 22). If the galaxy is in FFB regime,
+ * delegates to starformation_ffb() and returns immediately.
  */
 void starformation_and_feedback(const int p, const int centralgal, const double time, const double dt, const int halonr, const int step,
                                 struct GALAXY *galaxies, const struct params *run_params)
 {
-    // BUG FIX: Validate step is within array bounds
     XASSERT(step >= 0 && step < STEPS, -1,
             "Error: step = %d is out of bounds [0, %d)\n", step, STEPS);
 
@@ -58,7 +69,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
         reff = 3.0 * galaxies[p].DiskScaleRadius;
 
-        // BUG FIX: Check Vvir > 0 before division to avoid NaN/Inf
         if(galaxies[p].Vvir <= 0.0) {
             strdot = 0.0;
         } else {
@@ -81,7 +91,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
         reff = 3.0 * galaxies[p].DiskScaleRadius;
 
-        // BUG FIX: Check Vvir > 0 before division
         if(galaxies[p].Vvir <= 0.0) {
             galaxies[p].H2gas = 0.0;
             strdot = 0.0;
@@ -137,7 +146,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
         reff = 3.0 * galaxies[p].DiskScaleRadius;
 
-        // BUG FIX: Check Vvir > 0 before division
         if(galaxies[p].Vvir <= 0.0) {
             strdot = 0.0;
         } else {
@@ -175,7 +183,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
         reff = 3.0 * galaxies[p].DiskScaleRadius;
 
-        // BUG FIX: Check Vvir > 0 before division
         if(galaxies[p].Vvir <= 0.0) {
             galaxies[p].H2gas = 0.0;
             strdot = 0.0;
@@ -239,7 +246,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // Krumholz and Dekel (2012) - KD12 Model
         // ========================================================================
 
-        // BUG FIX: Check Vvir > 0 before division to avoid NaN/Inf
         if(galaxies[p].Vvir <= 0.0) {
             galaxies[p].H2gas = 0.0;
             strdot = 0.0;
@@ -295,7 +301,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // ========================================================================
 
         
-        // 1. Geometry and Units [cite: 60-64]
+        // 1. Geometry and Units
         reff = 3.0 * galaxies[p].DiskScaleRadius;
         tdyn = reff / galaxies[p].Vvir;
         
@@ -586,8 +592,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             } else {
                 double z_term = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
                 double v_term;
-                /* BUG FIX: Apply floor to vc to prevent overflow in pow() for very small halos */
-                double vc_floored = (vc < 1.0) ? 1.0 : vc;  /* Floor at 1 km/s */
+                double vc_floored = (vc < 1.0) ? 1.0 : vc;
                 if (vc_floored < V_CRIT) {
                     v_term = pow(vc_floored / V_CRIT, -3.2);
                 } else {
@@ -619,7 +624,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
     // determine ejection
     if(run_params->SupernovaRecipeOn == 1) {
-        // BUG FIX: Check galaxies[p].Vvir consistently (was checking centralgal but using p)
         if(galaxies[p].Vvir > 0.0) {
             if(run_params->FIREmodeOn == 1) {
                 // FIRE model: Energy-based ejection following Hirschmann+2016
@@ -634,8 +638,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 } else {
                     double z_term = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
                     double v_term;
-                    /* BUG FIX: Apply floor to vc to prevent overflow in pow() for very small halos */
-                    double vc_floored = (vc < 1.0) ? 1.0 : vc;  /* Floor at 1 km/s */
+                    double vc_floored = (vc < 1.0) ? 1.0 : vc;
                     if (vc_floored < V_CRIT) {
                         v_term = pow(vc_floored / V_CRIT, -3.2);
                     } else {
@@ -831,7 +834,6 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
                 }
                 const double metallicityCGM = get_metallicity(galaxies[centralgal].CGMgas, galaxies[centralgal].MetalsCGMgas);
 
-                // FIX 2.1: Bounds check on metals to prevent floating-point precision issues
                 double metalsCGM_to_eject = metallicityCGM * ejected_mass;
                 if(metalsCGM_to_eject > galaxies[centralgal].MetalsCGMgas) {
                     metalsCGM_to_eject = galaxies[centralgal].MetalsCGMgas;
@@ -856,7 +858,6 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
                 }
                 const double metallicityHot = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);
 
-                // FIX 2.1: Bounds check on metals to prevent floating-point precision issues
                 double metalsHot_to_eject = metallicityHot * ejected_mass;
                 if(metalsHot_to_eject > galaxies[centralgal].MetalsHotGas) {
                     metalsHot_to_eject = galaxies[centralgal].MetalsHotGas;
@@ -881,7 +882,6 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
             }
             const double metallicityHot = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);
 
-            // FIX 2.1: Bounds check on metals to prevent floating-point precision issues
             double metalsHot_to_eject = metallicityHot * ejected_mass;
             if(metalsHot_to_eject > galaxies[centralgal].MetalsHotGas) {
                 metalsHot_to_eject = galaxies[centralgal].MetalsHotGas;
@@ -902,10 +902,10 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
 /*
  * Feedback-free burst (FFB) star formation (Li et al. 2024).
  *
- * Triggered when FeedbackFreeModeOn > 0. Computes a burst SFR from the cold
- * gas with no supernova feedback, updating StellarMass, BulgeMass, SFR history,
- * and cold gas in a single substep. Called instead of the main SF loop when
- * the FFB criterion is met.
+ * Triggered when FeedbackFreeModeOn > 0 and FFBRegime==1. Computes a burst
+ * SFR from cold gas (or H2 for modes 6/7) and runs standard SN feedback,
+ * updating StellarMass, SFR history, and cold gas per substep. Metal
+ * production and CGM/HotGas routing follow the main SF path.
  */
 void starformation_ffb(const int p, const int centralgal, const double dt, const int step,
                        struct GALAXY *galaxies, const struct params *run_params)
