@@ -136,7 +136,6 @@ int construct_galaxies(const int halonr, int *numgals, int *galaxycounter, int *
 
   return EXIT_SUCCESS;
 }
-/* end of construct_galaxies*/
 
 
 /*
@@ -339,7 +338,6 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
     return ngal;
 
 }
-/* end of join_galaxies_of_progenitors */
 
 /*
  * evolve_galaxies -- advance ngal galaxies through one snapshot interval.
