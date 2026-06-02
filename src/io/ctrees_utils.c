@@ -223,7 +223,7 @@ int64_t read_locations(const char *filename, const int64_t ntrees, struct locati
 
 
 /* sort_forests_by_treeid -- sort forests[] and treeids[] together by treeid. */
-void sort_forests_by_treeid(const int64_t ntrees, int64_t *forests, int64_t *treeids)
+static void sort_forests_by_treeid(const int64_t ntrees, int64_t *forests, int64_t *treeids)
 {
 
 #define MULTIPLE_ARRAY_EXCHANGER(type,a,i,j) {                      \
@@ -237,37 +237,15 @@ void sort_forests_by_treeid(const int64_t ntrees, int64_t *forests, int64_t *tre
 }
 
 /* Comparators for qsort on struct locations_with_forests. */
-int compare_locations_treeids(const void *l1, const void *l2)
+static int compare_locations_treeids(const void *l1, const void *l2)
 {
     const struct locations_with_forests *aa = (const struct locations_with_forests *) l1;
     const struct locations_with_forests *bb = (const struct locations_with_forests *) l2;
     return (aa->treeid < bb->treeid) ? -1:(aa->treeid==bb->treeid ? 0:1);
 }
 
-int compare_locations_fid(const void *l1, const void *l2)
-{
-    const struct locations_with_forests *aa = (const struct locations_with_forests *) l1;
-    const struct locations_with_forests *bb = (const struct locations_with_forests *) l2;
-    return (aa->forestid < bb->forestid) ? -1:1;
-}
 
-int compare_locations_file_offset(const void *l1, const void *l2)
-{
-    const struct locations_with_forests *aa = (const struct locations_with_forests *) l1;
-    const struct locations_with_forests *bb = (const struct locations_with_forests *) l2;
-
-    const int file_id_cmp = (aa->fileid == bb->fileid) ? 0:((aa->fileid < bb->fileid) ? -1:1);
-    if(file_id_cmp == 0) {
-        /* trees are in same file -> sort by offset */
-        return (aa->offset < bb->offset) ? -1:1;
-    } else {
-        return file_id_cmp;
-    }
-
-    return 0;
-}
-
-int compare_locations_fid_file_offset(const void *l1, const void *l2)
+static int compare_locations_fid_file_offset(const void *l1, const void *l2)
 {
     const struct locations_with_forests *aa = (const struct locations_with_forests *) l1;
     const struct locations_with_forests *bb = (const struct locations_with_forests *) l2;
@@ -289,20 +267,11 @@ int compare_locations_fid_file_offset(const void *l1, const void *l2)
 }
 
 /* Wrappers around qsort using the above comparators. */
-void sort_locations_on_treeroot(const int64_t ntrees, struct locations_with_forests *locations)
+static void sort_locations_on_treeroot(const int64_t ntrees, struct locations_with_forests *locations)
 {
     qsort(locations, ntrees, sizeof(*locations), compare_locations_treeids);
 }
 
-void sort_locations_file_offset(const int64_t ntrees, struct locations_with_forests *locations)
-{
-    qsort(locations, ntrees, sizeof(*locations), compare_locations_file_offset);
-}
-
-void sort_locations_on_fid(const int64_t ntrees, struct locations_with_forests *locations)
-{
-    qsort(locations, ntrees, sizeof(*locations), compare_locations_fid);
-}
 
 void sort_locations_on_fid_file_offset(const int64_t ntrees, struct locations_with_forests *locations)
 {
