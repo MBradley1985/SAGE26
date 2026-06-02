@@ -27,11 +27,11 @@
 /* Local Proto-Types */
 static void get_forests_filename_gadget4_hdf5(char *filename, const size_t len, const int filenr, const struct params *run_params);
 
-int load_tree_table_gadget4_hdf5(const int firstfile, const int lastfile, const int64_t *totnforests_per_file, 
+static int load_tree_table_gadget4_hdf5(const int firstfile, const int lastfile, const int64_t *totnforests_per_file,
                                  const struct params *run_params, const int ThisTask, 
                                  int64_t *nhalos_per_forest);
 
-void get_forests_filename_gadget4_hdf5(char *filename, const size_t len, const int filenr,  const struct params *run_params)
+static void get_forests_filename_gadget4_hdf5(char *filename, const size_t len, const int filenr,  const struct params *run_params)
 {
     snprintf(filename, len - 1, "%s/%s.%d%s", run_params->SimulationDir, run_params->TreeName, filenr, run_params->TreeExtension);
 }
@@ -719,7 +719,7 @@ void cleanup_forests_io_gadget4_hdf5(struct forest_info *forests_info)
     myfree(g4->num_files_per_forest);
 }
 
-int load_tree_table_gadget4_hdf5(const int firstfile, const int lastfile, const int64_t *totnforests_per_file, 
+static int load_tree_table_gadget4_hdf5(const int firstfile, const int lastfile, const int64_t *totnforests_per_file,
                                  const struct params *run_params, const int ThisTask, 
                                  int64_t *nhalos_per_forest)
 {

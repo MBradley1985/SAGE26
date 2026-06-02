@@ -40,7 +40,7 @@ static void convert_ctrees_conventions_to_lht(struct halo_data *halos, const int
                                               const int32_t snap_offset, const double part_mass);
 
 
-void get_forest_metadata_filename(char *metadata_filename, const size_t len, struct params *run_params)
+static void get_forest_metadata_filename(char *metadata_filename, const size_t len, struct params *run_params)
 {
     snprintf(metadata_filename, len, "%s/%s%s", run_params->SimulationDir, run_params->TreeName, run_params->TreeExtension);
     return;
@@ -563,7 +563,7 @@ int64_t load_forest_ctrees_hdf5(int64_t forestnr, struct halo_data **halos,
         ASSIGN_TREE_PROPERTY_MULTIDIM(buffer, buffer_dtype, dest, sage_name, dim);                                               \
 }
 
-int read_contiguous_forest_ctrees_h5(hid_t h5_forests_group, const hsize_t nhalos, const hsize_t halosoffset,
+static int read_contiguous_forest_ctrees_h5(hid_t h5_forests_group, const hsize_t nhalos, const hsize_t halosoffset,
                                      const char *snap_field_name, const int8_t snap_field_is_double,
                                      struct halo_data *halos)
 {
@@ -620,7 +620,7 @@ int read_contiguous_forest_ctrees_h5(hid_t h5_forests_group, const hsize_t nhalo
 }
 
 
-void convert_ctrees_conventions_to_lht(struct halo_data *halos, const int64_t nhalos,
+static void convert_ctrees_conventions_to_lht(struct halo_data *halos, const int64_t nhalos,
                                        const int32_t snap_offset, const double part_mass)
 {
     const double inv_part_mass = 1.0/part_mass;
