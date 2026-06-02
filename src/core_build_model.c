@@ -45,6 +45,9 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, int *galaxycounter, int *maxgals, struct halo_data *halos,
                                         struct halo_aux_data *haloaux, struct GALAXY **ptr_to_galaxies, struct GALAXY **ptr_to_halogal, struct params *run_params);
 
+/* Conversion from Mpc (code length unit) to km, used for dynamical time calculation. */
+static const double KM_PER_MPC = 3.086e19;
+
 
 
 /*
@@ -396,12 +399,8 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
     // so we use more substeps when needed
     const double deltaT_total = run_params->Age[galaxies[0].SnapNum] - halo_age;
 
-    // Dynamical time ~ Rvir / Vvir
-    // Rvir is in Mpc/h, Vvir is in km/s, so t_dyn = Rvir/Vvir is in (Mpc/h)/(km/s)
-    // Convert to code units (same as Age): multiply by UnitVelocity/UnitLength
-    // which equals 1/UnitTime_in_s * (Mpc_in_cm / km_in_cm) = 1/UnitTime * 1e24/1e5 = 1e19/UnitTime
-    // Simpler: t_dyn [Mpc/km*s] * (3.086e19 km/Mpc) = t_dyn [s], then divide by UnitTime_in_s
-    double t_dyn_seconds = (galaxies[centralgal].Rvir / (galaxies[centralgal].Vvir + 1e-10)) * 3.086e19;
+    /* t_dyn = Rvir [Mpc/h] / Vvir [km/s] * KM_PER_MPC [km/Mpc] gives t_dyn in seconds. */
+    double t_dyn_seconds = (galaxies[centralgal].Rvir / (galaxies[centralgal].Vvir + 1e-10)) * KM_PER_MPC;
     double t_dyn = t_dyn_seconds / run_params->UnitTime_in_s;
 
     // Scale steps proportionally: ensure we resolve evolution within each dynamical time
@@ -415,7 +414,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
             effective_steps = needed;
         }
     }
-    const int MAX_STEPS = 30;
     if(effective_steps > MAX_STEPS) {
         effective_steps = MAX_STEPS;
     }

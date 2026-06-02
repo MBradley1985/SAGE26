@@ -13,6 +13,7 @@
 
 #define  NDIM             3
 #define  STEPS            10         /* Number of integration intervals between two snapshots */
+#define  MAX_STEPS        30         /* Maximum adaptive substeps; SFR arrays are sized to STEPS, adaptive substeps map back */
 #define  MAXGALFAC        1
 #define  ABSOLUTEMAXSNAPS 200  /* The largest number of snapshots for any simulation */
 
