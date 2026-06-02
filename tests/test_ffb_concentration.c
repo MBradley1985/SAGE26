@@ -525,6 +525,7 @@ void test_ffb_mode1_respects_persistent_random()
     init_millennium_params(&rp);
     rp.FeedbackFreeModeOn  = 1;
     rp.FFBConcSigma        = 0.0;
+    rp.FFBRandomMode       = 1;  /* use persistent FFBRandom, not rand() */
 
     double z = 10.0;
     double M_thresh = calculate_ffb_threshold_mass(z, &rp);
@@ -811,6 +812,7 @@ void test_ffb_mode4_deterministic()
     init_millennium_params(&rp);
     rp.FeedbackFreeModeOn = 4;
     rp.FFBConcSigma       = 0.2;
+    rp.FFBRandomMode      = 1;  /* use persistent FFBRandom, not rand() */
 
     /* Use a moderately sized halo so g_max stays within float range */
     struct GALAXY gal;
