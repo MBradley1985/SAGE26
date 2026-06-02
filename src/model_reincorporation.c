@@ -35,7 +35,6 @@ void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *gal
     // halo has an escape velocity greater than this, i.e. V_SN/sqrt(2) = 445.48km/s
     const double Vcrit = 445.48 * run_params->ReIncorporationFactor;
 
-    // BUG FIX: Also check Rvir > 0 to avoid division issues
     if(galaxies[centralgal].Vvir > Vcrit && galaxies[centralgal].Rvir > 0.0) {
         // Note: Vvir > Vcrit already ensures Vvir > 0, so Rvir/Vvir is safe
         double reincorporated =

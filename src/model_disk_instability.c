@@ -90,7 +90,6 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
         // same specific angular momentum per unit mass as before, so r_d stays constant.
 
         // burst excess gas and feed black hole (really need a dedicated model for bursts and BH growth here)
-        // BUG FIX: Also check ColdGas > 0 to avoid division by zero
         if(unstable_gas > 0.0 && galaxies[p].ColdGas > 0.0) {
 #ifdef VERBOSE
             if(unstable_gas > 1.0001 * galaxies[p].ColdGas ) {
