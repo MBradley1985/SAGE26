@@ -216,7 +216,7 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
                 galaxies[gal].MetalsCGMgas -= strippedGasMetals;
                 
                 // Add to central galaxy's correct reservoir
-                // BUG FIX: Use bounds-checked strippedGasMetals, not recalculated metallicity * strippedGas
+                // Use bounds-checked strippedGasMetals to avoid precision creep
                 if(galaxies[centralgal].Regime == 0) {
                     // Central is CGM regime
                     galaxies[centralgal].CGMgas += strippedGas;
@@ -237,7 +237,7 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
                 galaxies[gal].HotGas -= strippedGas;
                 galaxies[gal].MetalsHotGas -= strippedGasMetals;
 
-                // BUG FIX: Use bounds-checked strippedGasMetals, not recalculated metallicity * strippedGas
+                // Use bounds-checked strippedGasMetals to avoid precision creep
                 if(galaxies[centralgal].Regime == 0) {
                     // Central is CGM regime
                     galaxies[centralgal].CGMgas += strippedGas;
