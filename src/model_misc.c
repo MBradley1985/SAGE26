@@ -482,7 +482,6 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
         // Calculate mass ratio for sigmoid
         const double mass_ratio = Mvir_physical / Mshock;
 
-        // BUG FIX: Protect against log10(0) or log10(negative)
         if(mass_ratio <= 0.0) {
             galaxies[p].Regime = 0;  // Default to CGM regime for invalid mass
             continue;
@@ -1031,7 +1030,6 @@ double calculate_ffb_fraction(const double Mvir, const double z, const struct pa
     // Calculate FFB threshold mass
     const double Mvir_ffb = calculate_ffb_threshold_mass(z, run_params);
 
-    // BUG FIX: Protect against log10(0) or log10(negative)
     if(Mvir <= 0.0 || Mvir_ffb <= 0.0) {
         return 0.0;  // Return no FFB for invalid masses
     }
@@ -1405,7 +1403,6 @@ float calculate_H2_fraction_KD12(const float surface_density, const float metall
     // s = ln(1 + 0.6*chi + 0.01*chi^2) / (0.6 * tau_c)
     float chi_sq = chi * chi;
     float s;
-    // BUG FIX: Protect against division by zero when tau_c is very small
     if(tau_c > 1e-10) {
         s = log(1.0 + 0.6 * chi + 0.01 * chi_sq) / (0.6 * tau_c);
     } else {
