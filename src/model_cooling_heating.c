@@ -1,10 +1,35 @@
 /*
  * model_cooling_heating.c -- Cooling and AGN heating prescriptions.
  *
- * Implements the two-regime cooling model: classical hot-halo (C16-style) and
- * CGM precipitation-driven cooling. File-private helpers compute NFW and
- * beta-profile CGM density structures and iteratively solve for the cooling
- * radius. AGN feedback reduces cooling in both regimes via radio-mode heating.
+ * Implements the two-regime cooling model selected per-galaxy by the Regime
+ * flag set in model_misc.c:
+ *
+ *   Regime == 0 (CGM-dominated) -- precipitation-driven cooling from the CGMgas
+ *     reservoir using the Voit (2015) / McCourt et al. (2012) t_cool/t_ff < 10
+ *     threshold.  The CGM density structure is modelled with a uniform, NFW, or
+ *     beta (beta = 2/3) profile selected by CGMDensityProfile.  AGN heating is
+ *     accumulated in a persistent HeatingReservoir that decays on the dynamical
+ *     time, preventing all-or-nothing shutoffs.
+ *
+ *   Regime == 1 (hot halo) -- classical isothermal-halo cooling following
+ *     White & Frenk (1991) and Croton et al. (2006).  When CGMrecipeOn > 0 a
+ *     De Lucia & Blaizot (2006) cold-stream fraction is blended in for halos
+ *     above the virial shock mass.
+ *
+ * AGN radio-mode accretion is computed via three models (AGNrecipeOn 1/2/3):
+ * empirical (Croton+06 eq. 10), Bondi-Hoyle, and cold-cloud triggering.
+ * In all modes accretion is Eddington-limited and draws from the reservoir
+ * appropriate to the regime (HotGas for Regime==1, CGMgas for Regime==0).
+ *
+ * File-private helpers compute NFW/beta density profiles, their enclosed-mass
+ * integrals, and iteratively solve for the cooling radius.
+ *
+ * Code units (10^10 Msun/h, Mpc/h, km/s) used throughout; conversions to
+ * physical units happen only at the entry points of CGM-mode functions.
+ *
+ * References: Croton et al. (2006), MNRAS 365, 11; Voit (2015), ApJL 808, L30;
+ *   McCourt et al. (2012), MNRAS 419, 3319; Duffy et al. (2008), MNRAS 390, L64;
+ *   De Lucia & Blaizot (2006), MNRAS 375, 2.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -57,6 +82,39 @@ static const double C_SQ_KMS2                  = 9.0e10;  /* (km/s)^2 */
  * and c is in km/s.  Equals the ratio of radiated energy to halo kinetic energy
  * per unit accreted mass.  Croton et al. (2006) eq. 19. */
 static const double AGN_HEATING_COEFF_KMS = 1.34e5;  /* km/s */
+
+/* Gravitational constant in CGS (NIST CODATA 2018). */
+static const double G_CGS = 6.674e-8;  /* cm^3 g^-1 s^-2 */
+
+/* Virial temperature coefficient: T_vir = VIRIAL_TEMP_COEFF * Vvir^2 [Kelvin].
+ * Follows from T = mu * m_p * Vvir^2 / (2 * k_B) with mu = MU_IONISED = 0.59;
+ * gives 35.9 K (km/s)^-2. */
+static const double VIRIAL_TEMP_COEFF = 35.9;  /* K (km/s)^-2 */
+
+/* McCourt et al. (2012) thermal instability threshold: precipitation occurs
+ * when t_cool / t_ff < PRECIP_THRESHOLD (= 10). */
+static const double PRECIP_THRESHOLD = 10.0;
+
+/* Width of the tanh/sigmoid transition zone around PRECIP_THRESHOLD.
+ * Smooths the discontinuity at exactly t_cool/t_ff = 10. */
+static const double PRECIP_TRANSITION_WIDTH = 2.0;
+
+/* Beta-profile core radius as a fraction of the virial radius: r_c = frac * Rvir.
+ * A value of 0.1 is the standard choice for the hot CGM (e.g., Makino+98). */
+static const double CGM_BETA_CORE_RADIUS_FRAC = 0.1;
+
+/* De Lucia & Blaizot (2006) eq. 38: virial shock mass scale.
+ * Hot-mode shock heating is efficient only above this halo mass. */
+static const double MSHOCK_DB06_MSUN = 6.0e11;  /* Msun */
+
+/* Critical redshift below which cold streams are suppressed in M > Mshock halos.
+ * De Lucia & Blaizot (2006) estimate z_crit ~ 1-2; we adopt the midpoint. */
+static const double Z_CRIT_DB06 = 1.5;
+
+/* Cold-cloud AGN accretion (AGNrecipeOn == 3): BH triggers when its mass exceeds
+ * this fraction of the sonic-radius enclosed virial mass, and accretes at this
+ * fraction of the current cooling rate. Croton et al. (2006), AGN appendix. */
+static const double AGN_COLD_CLOUD_FRAC = 1.0e-4;
 
 // ============================================================================
 // CGM Density Profile Helper Functions (file-private)
@@ -191,8 +249,8 @@ static double cgm_enclosed_mass(const double r, const double M_total, const doub
         const double c_NFW = nfw_concentration(Mvir_Msun, z);
         return nfw_enclosed_mass(r, M_total, Rvir, c_NFW);
     } else if(profile_type == 2) {
-        // Beta profile (beta = 2/3, r_c = 0.1 Rvir)
-        const double r_c = 0.1 * Rvir;
+        // Beta profile (beta = 2/3, r_c = CGM_BETA_CORE_RADIUS_FRAC * Rvir)
+        const double r_c = CGM_BETA_CORE_RADIUS_FRAC * Rvir;
         return beta_enclosed_mass(r, M_total, Rvir, r_c);
     } else {
         // Default to uniform
@@ -223,9 +281,9 @@ static double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs,
         return nfw_density(r_cgs, rho_s, r_s_cgs);
 
     } else if(profile_type == 2) {
-        // Beta profile with beta = 2/3 and r_c = 0.1 R_vir
+        // Beta profile with beta = 2/3 and r_c = CGM_BETA_CORE_RADIUS_FRAC * Rvir
         const double beta = 2.0 / 3.0;
-        const double r_c_cgs = 0.1 * Rvir_cgs;
+        const double r_c_cgs = CGM_BETA_CORE_RADIUS_FRAC * Rvir_cgs;
         const double rho_0 = beta_rho_0(CGMgas_cgs, Rvir_cgs, r_c_cgs, beta);
         return beta_density(r_cgs, rho_0, r_c_cgs, beta);
 
@@ -249,7 +307,6 @@ static double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, co
                               const double z, const int profile_type,
                               __attribute__((unused)) const struct params *run_params)
 {
-    const double G_cgs = 6.674e-8;  // cm^3 g-1 s-^2
     const double mu = MU_IONISED;
 
     // ========================================================================
@@ -262,7 +319,7 @@ static double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, co
     // which gives r_cool = sqrt(rho0 / rho_cool) where rho_cool is the critical density.
     if(profile_type == 0 || profile_type == 2) {
         // t_ff at R_vir: t_ff = sqrt(2 R^3 / (G M))
-        const double t_ff_Rvir = sqrt(2.0 * Rvir_cgs * Rvir_cgs * Rvir_cgs / (G_cgs * Mvir_cgs));
+        const double t_ff_Rvir = sqrt(2.0 * Rvir_cgs * Rvir_cgs * Rvir_cgs / (G_CGS * Mvir_cgs));
 
         // Critical density where t_cool = t_ff
         // rho_cool = (3/2) mu m_p k T / (Lambda t_ff)
@@ -301,7 +358,7 @@ static double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, co
         const double t_cool = prefactor / rho;
 
         const double M_enclosed = cgm_enclosed_mass(r_cool, Mvir_cgs, Rvir_cgs, Mvir_Msun, z, profile_type);
-        const double g_accel = (M_enclosed > 0.0) ? G_cgs * M_enclosed / (r_cool * r_cool) : 0.0;
+        const double g_accel = (M_enclosed > 0.0) ? G_CGS * M_enclosed / (r_cool * r_cool) : 0.0;
 
         if(g_accel <= 0.0) {
             r_cool = Rvir_cgs;
@@ -359,7 +416,7 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 
     if(galaxies[gal].HotGas > 0.0 && galaxies[gal].Vvir > 0.0) {
         const double tcool = galaxies[gal].Rvir / galaxies[gal].Vvir;
-        const double temp = 35.9 * galaxies[gal].Vvir * galaxies[gal].Vvir;         // in Kelvin
+        const double temp = VIRIAL_TEMP_COEFF * galaxies[gal].Vvir * galaxies[gal].Vvir;  // in Kelvin
 
         double logZ = -10.0;
         if(galaxies[gal].MetalsHotGas > 0) {
@@ -374,7 +431,7 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 
         double x = PROTONMASS * BOLTZMANN * temp / lambda;        // now this has units sec g/cm^3
         x /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);         // now in internal units
-        const double rho_rcool = x / tcool * 0.885;  // 0.885 = 3/2 * mu, mu=0.59 for a fully ionized gas
+        const double rho_rcool = x / tcool * (1.5 * MU_IONISED);  // 3/2 * mu for a fully ionized gas
 
         if(rho_rcool <= 0.0) {
             return 0.0;
@@ -402,34 +459,19 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             // All halos here are in the hot regime (have virial shocks)
             const double z = run_params->ZZ[galaxies[gal].SnapNum];
             
-            // Calculate mass ratio for penetration factor
+            // D&B06 eqs 39-41: stream penetration factor f_stream.
+            // Mass suppression (M/Mshock)^(-4/3) -- halos well above the shock
+            // threshold host weaker cold streams. Redshift factor (1+z)/(1+1)
+            // enhances streams at high-z where cooling is more efficient.
             const double Mvir_physical = galaxies[gal].Mvir * 1.0e10 / run_params->Hubble_h;
-            const double Mshock = 6.0e11;  // Msun (D&B06 shock heating threshold)
-            const double mass_ratio = Mvir_physical / Mshock;
-            
-            // D&B06 equations 39-41: Stream penetration factor
-            // The characteristic mass for streams is M_stream ~ M_shock / (fM_*)
-            // where fM_* is the universal baryon fraction that collapses into stars
-            // At high-z, M_stream > M_shock, allowing cold streams in massive halos
-            // At low-z, M_stream < M_shock, cold streams only in halos below shock threshold
-            
-            // Simplified prescription: cold stream fraction depends on M/Mshock and redshift
-            // f_stream decreases with mass: halos much larger than Mshock have fewer cold streams
-            // f_stream increases with redshift: high-z universe has more cold streams
-            
-            // Mass suppression: (M/Mshock)^(-4/3) from D&B06 eq 39
-            // double f_stream = pow(mass_ratio, -4.0/3.0);
-            
-            // Redshift enhancement: cold streams more prominent at high z
-            // Use smooth scaling that enhances at high-z, suppresses at low-z
-            const double z_factor = (1.0 + z) / (1.0 + 1.0);  // Normalized to z=1
-            // f_stream *= z_factor;
-            // D&B06 eq 41: critical redshift where fM* = Mshock
-            // Below this redshift, no cold streams in M > Mshock haloes
-            const double z_crit = 1.5;  // D&B06 estimate ~1-2
-            double f_stream;
+            const double mass_ratio = Mvir_physical / MSHOCK_DB06_MSUN;
 
-            if(z < z_crit && mass_ratio > 1.0) {
+            // Redshift enhancement: normalized to z=1 following D&B06 eq 40
+            const double z_factor = (1.0 + z) / (1.0 + 1.0);
+
+            // D&B06 eq 41: below z_crit cold streams are suppressed in M > Mshock halos
+            double f_stream;
+            if(z < Z_CRIT_DB06 && mass_ratio > 1.0) {
                 f_stream = 0.0;  // Hard cutoff per D&B06
             } else {
                 // High-z regime: streams can penetrate
@@ -519,7 +561,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // ========================================================================
 
     // Virial temperature
-    const double temp = 35.9 * galaxies[gal].Vvir * galaxies[gal].Vvir; // Kelvin
+    const double temp = VIRIAL_TEMP_COEFF * galaxies[gal].Vvir * galaxies[gal].Vvir; // Kelvin
 
     // Metallicity
     double logZ = -10.0;
@@ -613,8 +655,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     double tcool_over_tff_char = tcool / tff;
 
     if(run_params->CGMPrecipRadiusMode == 1) {
-        const double G_cgs = 6.674e-8;
-        const double r_char_cgs = 0.1 * Rvir_cgs;
+        const double r_char_cgs = CGM_BETA_CORE_RADIUS_FRAC * Rvir_cgs;
         const double rho_char = cgm_density_at_radius(r_char_cgs, CGMgas_cgs, Rvir_cgs,
                                                        Mvir_Msun, z, profile_type);
         if(rho_char > 0.0) {
@@ -622,7 +663,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
             const double M_enc_char = cgm_enclosed_mass(r_char_cgs, Mvir_cgs, Rvir_cgs,
                                                          Mvir_Msun, z, profile_type);
             if(M_enc_char > 0.0) {
-                const double g_char_cgs = G_cgs * M_enc_char / (r_char_cgs * r_char_cgs);
+                const double g_char_cgs = G_CGS * M_enc_char / (r_char_cgs * r_char_cgs);
                 if(g_char_cgs > 0.0) {
                     const double tff_char_cgs = sqrt(2.0 * r_char_cgs / g_char_cgs);
                     tcool_char = tcool_char_cgs / run_params->UnitTime_in_s;
@@ -657,17 +698,15 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // STEP 3: PRECIPITATION CRITERION
     // ========================================================================
 
-    const double precipitation_threshold = 10;  // McCourt et al. 2012
-
     double precipitation_fraction = 0.0;
 
     if(run_params->CGMPrecipitationMode == 1) {
-        // Mode 1: logistic sigmoid centred on t_cool/t_ff = 10, characteristic width = 2
+        // Mode 1: logistic sigmoid centred on PRECIP_THRESHOLD, characteristic width = 2.
         // f = 1 / (1 + exp(-(threshold - r) / 2))
         // Smoothly ranges from ~1 (very unstable) through 0.5 at threshold to ~0 (very stable).
         // Falls back to standard cooling once the sigmoid is negligible (< 0.01),
         // which occurs at t_cool/t_ff ~ 19.
-        const double x = (precipitation_threshold - tcool_over_tff_char) / 2.0;
+        const double x = (PRECIP_THRESHOLD - tcool_over_tff_char) / PRECIP_TRANSITION_WIDTH;
         const double f = 1.0 / (1.0 + exp(-x));
         if(f >= 0.01) {
             precipitation_fraction = f;
@@ -679,22 +718,20 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
             }
         }
     } else {
-        // Mode 0 (default): tanh, McCourt+12 style
-        const double transition_width = 2.0;
-
-        if(tcool_over_tff_char < precipitation_threshold) {
+        // Mode 0 (default): tanh transition per McCourt et al. (2012).
+        if(tcool_over_tff_char < PRECIP_THRESHOLD) {
             // UNSTABLE: precipitation fraction via tanh
-            double instability_factor = precipitation_threshold / tcool_over_tff_char;
+            double instability_factor = PRECIP_THRESHOLD / tcool_over_tff_char;
             instability_factor = fmin(instability_factor, 3.0);
             precipitation_fraction = tanh(instability_factor / 2.0);
 
-        } else if(tcool_over_tff_char < precipitation_threshold + transition_width) {
+        } else if(tcool_over_tff_char < PRECIP_THRESHOLD + PRECIP_TRANSITION_WIDTH) {
             // TRANSITION: smoothly reduce to zero
-            const double x = (tcool_over_tff_char - precipitation_threshold) / transition_width;
+            const double x = (tcool_over_tff_char - PRECIP_THRESHOLD) / PRECIP_TRANSITION_WIDTH;
             precipitation_fraction = 0.5 * (1.0 - tanh(x));
 
         } else {
-            // STABLE: standard cooling
+            // STABLE: standard cooling on the cooling timescale
             if(tcool_char > 0) {
                 coolingGas = galaxies[gal].CGMgas / tcool_char * dt;
                 if(coolingGas > galaxies[gal].CGMgas)
@@ -724,6 +761,11 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
 
     const double Vvir2_b = galaxies[gal].Vvir * galaxies[gal].Vvir;
 
+    // AGN x parameter: (k_B T / lambda) in code-units density*time -- passed to
+    // both AGN heating paths (Bondi-Hoyle uses it; empirical and cold-cloud do not).
+    const double x_agn = (PROTONMASS * BOLTZMANN * temp / lambda)
+                         / (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);
+
     if(run_params->CGMHeatingRheatOn > 0) {
         // r_heat analog for CGM regime: decaying suppression fraction.
         // f_heat_cgm plays the role of r_heat/rcool in the hot-halo path --
@@ -746,12 +788,8 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
 
         // AGN call: grows BH from CGMgas, accumulates in .Heating
         const double heating_before = galaxies[gal].Heating;
-        {
-            double x_agn = PROTONMASS * BOLTZMANN * temp / lambda;
-            x_agn /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);
-            if(run_params->AGNrecipeOn > 0 && run_params->CGMAGNOn > 0) {
-                coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
-            }
+        if(run_params->AGNrecipeOn > 0 && run_params->CGMAGNOn > 0) {
+            coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
         }
 
         // Ratchet update -- same logic as hot-regime r_heat update but expressed
@@ -792,12 +830,8 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
 
         // 3. AGN call
         const double heating_before = galaxies[gal].Heating;
-        {
-            double x_agn = PROTONMASS * BOLTZMANN * temp / lambda;
-            x_agn /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);
-            if(run_params->AGNrecipeOn > 0 && run_params->CGMAGNOn > 0) {
-                coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
-            }
+        if(run_params->AGNrecipeOn > 0 && run_params->CGMAGNOn > 0) {
+            coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
         }
 
         // 4. Feed this substep's new heat into the reservoir
@@ -947,9 +981,10 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
             // Bondi-Hoyle accretion recipe
             AGNrate = (2.5 * M_PI * run_params->G) * (0.375 * 0.6 * x) * galaxies[centralgal].BlackHoleMass * run_params->RadioModeEfficiency;
         } else if(run_params->AGNrecipeOn == 3) {
-            // Cold cloud accretion: trigger: rBH > 1.0e-4 Rsonic, and accretion rate = 0.01% cooling rate
-            if(galaxies[centralgal].BlackHoleMass > 0.0001 * galaxies[centralgal].Mvir * CUBE(rcool/galaxies[centralgal].Rvir)) {
-                AGNrate = 0.0001 * coolingGas / dt;
+            // Cold cloud accretion: BH triggers when M_BH > AGN_COLD_CLOUD_FRAC * M_sonic;
+            // accretion rate = AGN_COLD_CLOUD_FRAC of the current cooling rate.
+            if(galaxies[centralgal].BlackHoleMass > AGN_COLD_CLOUD_FRAC * galaxies[centralgal].Mvir * CUBE(rcool/galaxies[centralgal].Rvir)) {
+                AGNrate = AGN_COLD_CLOUD_FRAC * coolingGas / dt;
             } else {
                 AGNrate = 0.0;
             }
@@ -1044,9 +1079,10 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
             // Bondi-Hoyle accretion recipe
             AGNrate = (2.5 * M_PI * run_params->G) * (0.375 * 0.6 * x) * galaxies[centralgal].BlackHoleMass * run_params->RadioModeEfficiency;
         } else if(run_params->AGNrecipeOn == 3) {
-            // Cold cloud accretion: trigger: rBH > 1.0e-4 Rsonic, and accretion rate = 0.01% cooling rate
-            if(galaxies[centralgal].BlackHoleMass > 0.0001 * galaxies[centralgal].Mvir * CUBE(rcool/galaxies[centralgal].Rvir)) {
-                AGNrate = 0.0001 * coolingGas / dt;
+            // Cold cloud accretion: BH triggers when M_BH > AGN_COLD_CLOUD_FRAC * M_sonic;
+            // accretion rate = AGN_COLD_CLOUD_FRAC of the current cooling rate.
+            if(galaxies[centralgal].BlackHoleMass > AGN_COLD_CLOUD_FRAC * galaxies[centralgal].Mvir * CUBE(rcool/galaxies[centralgal].Rvir)) {
+                AGNrate = AGN_COLD_CLOUD_FRAC * coolingGas / dt;
             } else {
                 AGNrate = 0.0;
             }
