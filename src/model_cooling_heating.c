@@ -22,6 +22,41 @@
 #include "model_cooling_heating.h"
 #include "model_misc.h"
 
+/* -------------------------------------------------------------------------
+ * File-scope empirical constants (lifted per STYLE_C.md SS8).
+ * -------------------------------------------------------------------------*/
+
+/* Duffy et al. (2008) NFW concentration-mass-redshift relation,
+ * Table 1 "Full sample" (relaxed halos, NFW profile, 200c overdensity).
+ * c = A * (M/M_pivot)^B * (1+z)^C */
+static const double DUFFY08_A       =  7.85;
+static const double DUFFY08_M_PIVOT =  2.0e12;  /* pivot mass in Msun */
+static const double DUFFY08_B       = -0.081;
+static const double DUFFY08_C       = -0.71;
+
+/* Mean molecular weight for fully ionised, primordial (H+He) gas.
+ * X_H = 0.76, Y_He = 0.24 => mu = 1/(2*X + 3*Y/4) ~ 0.59. */
+static const double MU_IONISED = 0.59;
+
+/* Croton et al. (2006) AGN empirical radio-mode accretion pivots
+ * (their eq. 10 / Sec. 4.2).  Normalisation values chosen to reproduce
+ * observed BH-bulge mass relation at z=0. */
+static const double AGN_BH_MASS_PIVOT  = 0.01;    /* 10^8 Msun for h=1 in code units of 10^10 Msun/h */
+static const double AGN_VVIR_PIVOT_KMS = 200.0;   /* km/s */
+static const double AGN_HOT_GAS_PIVOT  = 0.1;     /* hot-gas-to-halo mass fraction normalisation */
+
+/* Eddington accretion rate formula.
+ * L_Edd = 1.3e38 * (M_BH/Msun) erg/s  (Rybicki & Lightman 1979, eq. 1.4.9).
+ * Standard AGN radiative efficiency eta = 0.1.
+ * C_SQ_KMS2 = c^2 in (km/s)^2; c = 3e5 km/s => c^2 = 9e10. */
+static const double EDDINGTON_LUM_PER_MSUN_CGS = 1.3e38;  /* erg/s per Msun */
+static const double AGN_RADIATIVE_EFFICIENCY    = 0.1;
+static const double C_SQ_KMS2                  = 9.0e10;  /* (km/s)^2 */
+
+/* AGN heating coefficient: sqrt(2 * eta * c^2) where eta = AGN_RADIATIVE_EFFICIENCY
+ * and c is in km/s.  Equals the ratio of radiated energy to halo kinetic energy
+ * per unit accreted mass.  Croton et al. (2006) eq. 19. */
+static const double AGN_HEATING_COEFF_KMS = 1.34e5;  /* km/s */
 
 // ============================================================================
 // CGM Density Profile Helper Functions (file-private)
@@ -52,8 +87,8 @@ static double nfw_density(const double r, const double rho_s, const double r_s)
 /* NFW concentration c(M, z) from Duffy et al. (2008): c = 7.85*(M/2e12)^-0.081*(1+z)^-0.71. */
 static double nfw_concentration(const double Mvir_Msun, const double z)
 {
-    // c = 7.85 * (M/2e12)^(-0.081) * (1+z)^(-0.71)
-    return 7.85 * pow(Mvir_Msun / 2.0e12, -0.081) * pow(1.0 + z, -0.71);
+    // c = A * (M/M_pivot)^B * (1+z)^C  (Duffy et al. 2008)
+    return DUFFY08_A * pow(Mvir_Msun / DUFFY08_M_PIVOT, DUFFY08_B) * pow(1.0 + z, DUFFY08_C);
 }
 
 /*
@@ -215,7 +250,7 @@ static double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, co
                               __attribute__((unused)) const struct params *run_params)
 {
     const double G_cgs = 6.674e-8;  // cm^3 g-1 s-^2
-    const double mu = 0.59;
+    const double mu = MU_IONISED;
 
     // ========================================================================
     // UNIFORM / BETA: Use isothermal r_cool formula (like hot-regime)
@@ -545,7 +580,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     const double r_cool = r_cool_cgs / (CM_PER_MPC / run_params->Hubble_h);
 
     // Cooling time at r_cool: tcool = (3/2) * mu * m_p * k * T / (rho * Lambda)
-    const double mu = 0.59;
+    const double mu = MU_IONISED;
     const double tcool_cgs = (1.5 * mu * PROTONMASS * BOLTZMANN * temp) / (mass_density_cgs * lambda);
     const double tcool = tcool_cgs / run_params->UnitTime_in_s; // code units
 
@@ -875,19 +910,19 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
                 AGNrate = 0.0;
             }
         } else {
-            // empirical (standard) accretion recipe
+            // empirical (standard) accretion recipe  (Croton et al. 2006, eq. 10)
             if(galaxies[centralgal].Mvir > 0.0) {
                 AGNrate = run_params->RadioModeEfficiency / (run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS)
-                    * (galaxies[centralgal].BlackHoleMass / 0.01) * CUBE(galaxies[centralgal].Vvir / 200.0)
-                    * ((galaxies[centralgal].HotGas / galaxies[centralgal].Mvir) / 0.1);
+                    * (galaxies[centralgal].BlackHoleMass / AGN_BH_MASS_PIVOT) * CUBE(galaxies[centralgal].Vvir / AGN_VVIR_PIVOT_KMS)
+                    * ((galaxies[centralgal].HotGas / galaxies[centralgal].Mvir) / AGN_HOT_GAS_PIVOT);
             } else {
                 AGNrate = run_params->RadioModeEfficiency / (run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS)
-                    * (galaxies[centralgal].BlackHoleMass / 0.01) * CUBE(galaxies[centralgal].Vvir / 200.0);
+                    * (galaxies[centralgal].BlackHoleMass / AGN_BH_MASS_PIVOT) * CUBE(galaxies[centralgal].Vvir / AGN_VVIR_PIVOT_KMS);
             }
         }
 
-        // Eddington rate
-        EDDrate = (1.3e38 * galaxies[centralgal].BlackHoleMass * 1e10 / run_params->Hubble_h) / (run_params->UnitEnergy_in_cgs / run_params->UnitTime_in_s) / (0.1 * 9e10);
+        // Eddington rate (Rybicki & Lightman 1979)
+        EDDrate = (EDDINGTON_LUM_PER_MSUN_CGS * galaxies[centralgal].BlackHoleMass * 1e10 / run_params->Hubble_h) / (run_params->UnitEnergy_in_cgs / run_params->UnitTime_in_s) / (AGN_RADIATIVE_EFFICIENCY * C_SQ_KMS2);
 
         // accretion onto BH is always limited by the Eddington rate
         if(AGNrate > EDDrate) {
@@ -903,13 +938,13 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
         }
 
         // coefficient to heat the cooling gas back to the virial temperature of the halo
-        // 1.34e5 = sqrt(2*eta*c^2), eta=0.1 (standard efficiency) and c in km/s
+        // AGN_HEATING_COEFF_KMS = sqrt(2*eta*c^2), eta=0.1 (standard efficiency), c in km/s
         // BUG FIX: Check Vvir > 0 to avoid division by zero
         if(galaxies[centralgal].Vvir <= 0.0) {
             AGNcoeff = 0.0;
             AGNheating = 0.0;
         } else {
-            AGNcoeff = (1.34e5 / galaxies[centralgal].Vvir) * (1.34e5 / galaxies[centralgal].Vvir);
+            AGNcoeff = (AGN_HEATING_COEFF_KMS / galaxies[centralgal].Vvir) * (AGN_HEATING_COEFF_KMS / galaxies[centralgal].Vvir);
 
             // cooling mass that can be suppresed from AGN heating
             AGNheating = AGNcoeff * AGNaccreted;
@@ -973,19 +1008,19 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
                 AGNrate = 0.0;
             }
         } else {
-            // empirical (standard) accretion recipe
+            // empirical (standard) accretion recipe  (Croton et al. 2006, eq. 10)
             if(galaxies[centralgal].Mvir > 0.0) {
                 AGNrate = run_params->RadioModeEfficiency / (run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS)
-                    * (galaxies[centralgal].BlackHoleMass / 0.01) * CUBE(galaxies[centralgal].Vvir / 200.0)
-                    * ((galaxies[centralgal].CGMgas / galaxies[centralgal].Mvir) / 0.1);
+                    * (galaxies[centralgal].BlackHoleMass / AGN_BH_MASS_PIVOT) * CUBE(galaxies[centralgal].Vvir / AGN_VVIR_PIVOT_KMS)
+                    * ((galaxies[centralgal].CGMgas / galaxies[centralgal].Mvir) / AGN_HOT_GAS_PIVOT);
             } else {
                 AGNrate = run_params->RadioModeEfficiency / (run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS)
-                    * (galaxies[centralgal].BlackHoleMass / 0.01) * CUBE(galaxies[centralgal].Vvir / 200.0);
+                    * (galaxies[centralgal].BlackHoleMass / AGN_BH_MASS_PIVOT) * CUBE(galaxies[centralgal].Vvir / AGN_VVIR_PIVOT_KMS);
             }
         }
 
-        // Eddington rate
-        EDDrate = (1.3e38 * galaxies[centralgal].BlackHoleMass * 1e10 / run_params->Hubble_h) / (run_params->UnitEnergy_in_cgs / run_params->UnitTime_in_s) / (0.1 * 9e10);
+        // Eddington rate (Rybicki & Lightman 1979)
+        EDDrate = (EDDINGTON_LUM_PER_MSUN_CGS * galaxies[centralgal].BlackHoleMass * 1e10 / run_params->Hubble_h) / (run_params->UnitEnergy_in_cgs / run_params->UnitTime_in_s) / (AGN_RADIATIVE_EFFICIENCY * C_SQ_KMS2);
 
         // accretion onto BH is always limited by the Eddington rate
         if(AGNrate > EDDrate) {
@@ -1006,7 +1041,7 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
             AGNcoeff = 0.0;
             AGNheating = 0.0;
         } else {
-            AGNcoeff = (1.34e5 / galaxies[centralgal].Vvir) * (1.34e5 / galaxies[centralgal].Vvir);
+            AGNcoeff = (AGN_HEATING_COEFF_KMS / galaxies[centralgal].Vvir) * (AGN_HEATING_COEFF_KMS / galaxies[centralgal].Vvir);
             AGNheating = AGNcoeff * AGNaccreted;
 
             // Cap AGN heating at this substep's coolingGas -- bounds the per-step

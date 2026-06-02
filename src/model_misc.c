@@ -19,6 +19,30 @@
 
 #include "model_misc.h"
 
+/* -------------------------------------------------------------------------
+ * File-scope empirical constants (lifted per STYLE_C.md SS8).
+ * -------------------------------------------------------------------------*/
+
+/* Shen et al. (2003) early-type size-mass relations.
+ * log(R/kpc) = slope * log(M/Msun) + intercept.
+ * Eq. (33) single power law (high-mass / giant-elliptical branch). */
+static const double SHEN03_SLOPE_HIGH     =  0.56;
+static const double SHEN03_INTERCEPT_HIGH = -5.54;
+/* Eq. (32) low-mass (dwarf-elliptical) branch. */
+static const double SHEN03_SLOPE_LOW      =  0.14;
+static const double SHEN03_INTERCEPT_LOW  = -1.21;
+/* Transition mass between the two eq.(32) regimes, in Msun. */
+static const double SHEN03_M_TRANSITION   =  2.0e10;
+
+/* Dekel & Birnboim (2006) critical virial-shock stability mass.
+ * Halos below this mass lack a stable virial shock and are classified as
+ * CGM-regime.  Value ~6e11 Msun from DB06 Fig. 1 / eq. 4. */
+static const double DEKEL06_M_SHOCK_MSUN  =  6.0e11;
+
+/* Parsec in cm (IAU 2012).  Used when converting radii between Mpc/h
+ * (code units) and pc for surface-density calculations. */
+static const double PC_IN_CM              =  3.08568e18;
+
 /*
  * Initialise all fields of a newly created galaxy struct to safe defaults.
  *
@@ -199,7 +223,7 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
         const double M_bulge_sun = galaxies[p].BulgeMass * 1.0e10 / h;
         
         // Shen+2003 equation (33): log(R/kpc) = 0.56 log(M/Msun) - 5.54
-        const double log_R_kpc = 0.56 * log10(M_bulge_sun) - 5.54;
+        const double log_R_kpc = SHEN03_SLOPE_HIGH * log10(M_bulge_sun) + SHEN03_INTERCEPT_HIGH;
         double R_bulge_kpc = pow(10.0, log_R_kpc);
         
         // Convert to code units (Mpc/h)
@@ -225,19 +249,19 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
         const double M_bulge_sun = galaxies[p].BulgeMass * 1.0e10 / h;
         
         // Transition mass from Shen et al. (2003) equation (32)
-        const double M_transition = 2.0e10;  // M_sun
+        const double M_transition = SHEN03_M_TRANSITION;  // M_sun
         
         double R_bulge_kpc;
         
         if(M_bulge_sun > M_transition) {
             // High-mass regime: like giant ellipticals
             // log(R/kpc) = 0.56 log(M) - 5.54
-            const double log_R = 0.56 * log10(M_bulge_sun) - 5.54;
+            const double log_R = SHEN03_SLOPE_HIGH * log10(M_bulge_sun) + SHEN03_INTERCEPT_HIGH;
             R_bulge_kpc = pow(10.0, log_R);
         } else {
-            // Low-mass regime: like dwarf ellipticals  
+            // Low-mass regime: like dwarf ellipticals
             // log(R/kpc) = 0.14 log(M) - 1.21
-            const double log_R = 0.14 * log10(M_bulge_sun) - 1.21;
+            const double log_R = SHEN03_SLOPE_LOW * log10(M_bulge_sun) + SHEN03_INTERCEPT_LOW;
             R_bulge_kpc = pow(10.0, log_R);
         }
         
@@ -280,7 +304,7 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
         double R_merger = galaxies[p].MergerBulgeRadius;
         if(M_merger > 0.0 && R_merger <= 0.0) {
              const double M_merger_sun = M_merger * 1.0e10 / h;
-             const double log_R_kpc = 0.56 * log10(M_merger_sun) - 5.54;
+             const double log_R_kpc = SHEN03_SLOPE_HIGH * log10(M_merger_sun) + SHEN03_INTERCEPT_HIGH;
              R_merger = pow(10.0, log_R_kpc) * 1.0e-3 * h;
              galaxies[p].MergerBulgeRadius = R_merger;
         }
@@ -444,7 +468,7 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
         const double Mvir_physical = galaxies[p].Mvir * 1.0e10 / run_params->Hubble_h;
 
         // Shock mass threshold (Dekel & Birnboim 2006)
-        const double Mshock = 6.0e11;  // Msun
+        const double Mshock = DEKEL06_M_SHOCK_MSUN;  // Msun
 
         // Calculate mass ratio for sigmoid
         const double mass_ratio = Mvir_physical / Mshock;
@@ -541,7 +565,7 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
     if(run_params->FeedbackFreeModeOn == 2 || run_params->FeedbackFreeModeOn == 3 ||
        run_params->FeedbackFreeModeOn == 4 || run_params->FeedbackFreeModeOn == 7) {
         const double Msun_code = SOLAR_MASS / run_params->UnitMass_in_g;
-        const double pc_code = 3.08568e18 / run_params->UnitLength_in_cm;
+        const double pc_code = PC_IN_CM / run_params->UnitLength_in_cm;
         g_crit = run_params->G * 3100.0 * Msun_code / (pc_code * pc_code) / run_params->Hubble_h;
     }
 
