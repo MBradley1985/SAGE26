@@ -40,7 +40,11 @@
       "Bash(grep -n \"[^a-zA-Z_][0-9]\\\\+\\\\.[0-9]\\\\+e[+-]\\\\?[0-9]\\\\+\\\\|[^a-zA-Z_][0-9]\\\\{2,3\\\\}\\\\.[0-9]\\\\{2,\\\\}\" /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/src/model_starformation_and_feedback.c)",
       "Bash(nm /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/sage)",
       "Bash(git stash *)",
-      "Bash(make -j4)"
+      "Bash(sed -n '735,742p' /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/src/model_cooling_heating.c)",
+      "Bash(sed -n '86,93p' /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/src/core_read_parameter_file.c)",
+      "Bash(sed -n '120,127p' /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/src/model_infall.c)",
+      "Bash(sed -n '195,202p' /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/src/model_misc.c)",
+      "Bash(sed -n '492,498p' /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/src/core_allvars.h)"
     ]
   }
 }
