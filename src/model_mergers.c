@@ -264,9 +264,15 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     }
 
     // starburst recipe - now tracks which bulge component receives the stars
-    collisional_starburst_recipe(mass_ratio, merger_centralgal, centralgal, time, dt, halonr, 
-                                 0, step, burst_to_merger_bulge, old_disk_radius, 
+    collisional_starburst_recipe(mass_ratio, merger_centralgal, centralgal, time, dt, halonr,
+                                 0, step, burst_to_merger_bulge, old_disk_radius,
                                  galaxies, run_params);
+
+    // Sync the central's BulgeRadius after add_galaxies_together + starburst have
+    // modified bulge mass.  calculate_merger_remnant_radius reads BulgeRadius for
+    // the energy conservation calculation; a stale or zero value there would bias
+    // the resulting remnant radius.
+    get_bulge_radius(merger_centralgal, galaxies, run_params);
 
     // 1. Calculate the merger remnant radius via Energy Conservation
     // We do this AFTER the starburst so the energy budget includes burst stars
