@@ -44,7 +44,8 @@
       "Bash(sed -n '86,93p' /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/src/core_read_parameter_file.c)",
       "Bash(sed -n '120,127p' /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/src/model_infall.c)",
       "Bash(sed -n '195,202p' /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/src/model_misc.c)",
-      "Bash(sed -n '492,498p' /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/src/core_allvars.h)"
+      "Bash(sed -n '492,498p' /Users/mbradley/Documents/PhD/SAGE26-dev/SAGE26/src/core_allvars.h)",
+      "Bash(grep -E \"error:|warning:|make\\\\[|^$\")"
     ]
   }
 }
