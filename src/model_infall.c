@@ -259,7 +259,7 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
             galaxies[gal].HotGas -= strippedGas;
             galaxies[gal].MetalsHotGas -= strippedGasMetals;
 
-            // BUG FIX: Use bounds-checked strippedGasMetals, not recalculated metallicity * strippedGas
+            // Use bounds-checked strippedGasMetals to avoid precision creep
             galaxies[centralgal].HotGas += strippedGas;
             galaxies[centralgal].MetalsHotGas += strippedGasMetals;
         }

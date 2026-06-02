@@ -139,7 +139,7 @@ int setup_forests_io_lht_hdf5(struct forest_info *forests_info,
         status = H5Fclose(fd);
         if(status < 0) {
             fprintf(stderr,"Error: Could not properly close the hdf5 file for filename = '%s'\n", filename);
-            H5Eprint(H5E_DEFAULT, stderr);  /* BUG FIX: Use H5E_DEFAULT for error stack */
+            H5Eprint(H5E_DEFAULT, stderr);
             return status;
         }
     }
