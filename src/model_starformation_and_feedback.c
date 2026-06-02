@@ -428,7 +428,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
                 const double t_dep_Gyr = calculate_tdep_K13_Gyr((float)Sigma_gas_k13, (float)Sigma_star_k13,
                                                                    rs_pc, (float)Z_prime_k13, (float)f_H2_2p_k13);
-                const double t_dep_code = t_dep_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
                 galaxies[p].H2DepletionTime_Gyr = (t_dep_Gyr > 0.0) ? (float)t_dep_Gyr : -1.0f;
 
                 strdot = (galaxies[p].H2gas > 0.0 && tdyn > 0.0)
