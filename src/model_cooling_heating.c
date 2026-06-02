@@ -648,6 +648,21 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     galaxies[gal].tff = tff_char;
     galaxies[gal].tcool_over_tff = tcool_over_tff_char;
 
+    // AGN entropy injection: decay the boost on t_dyn, then raise the effective t_cool.
+    // AGN heating deposits entropy into the CGM, increasing the cooling time without
+    // changing the free-fall time. Multiplying both tcool_char and tcool_over_tff_char
+    // by (1 + boost) consistently suppresses both the precipitation criterion and the
+    // standard-cooling fallback rate. The boost is incremented below after the AGN call.
+    if(run_params->CGMHeatingEntropyOn > 0) {
+        if(galaxies[gal].AGNEntropyBoost > 0.0) {
+            const double t_dyn = galaxies[gal].Rvir / galaxies[gal].Vvir;
+            galaxies[gal].AGNEntropyBoost *= exp(-dt / t_dyn);
+        }
+        const double boost = 1.0 + galaxies[gal].AGNEntropyBoost;
+        tcool_char          *= boost;
+        tcool_over_tff_char *= boost;
+    }
+
     // ========================================================================
     // STEP 3: PRECIPITATION CRITERION
     // ========================================================================
@@ -717,59 +732,98 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         }
     }
 
-    // ------------------------------------------------------------------
-    // Option 3: persistent HeatingReservoir model.
-    // The reservoir holds AGN heat energy that survives across snapshots,
-    // decaying on the halo dynamical timescale (t_dyn = Rvir / Vvir).
-    // Sequence each substep:
-    //   1. Decay the reservoir.
-    //   2. Spend reservoir energy to suppress this substep's coolingGas.
-    //   3. Run AGN (grows BH, adds heat energy to .Heating accumulator).
-    //   4. Feed the newly-added heat into the reservoir.
-    // This decouples heat memory from precipitation bursts: a single big
-    // cooling event can't saturate the reservoir's effectiveness (decay),
-    // and small per-step heating contributions accumulate across many
-    // substeps and snapshots to eventually compete with the cooling rate.
-    // ------------------------------------------------------------------
-    const int use_heating_reservoir = (run_params->CGMHeatingReservoirOn > 0);
     const double Vvir2_b = galaxies[gal].Vvir * galaxies[gal].Vvir;
 
-    // 1. Decay
-    if(use_heating_reservoir && Vvir2_b > 0.0 && galaxies[gal].Rvir > 0.0 && galaxies[gal].HeatingReservoir > 0.0) {
-        const double t_dyn = galaxies[gal].Rvir / galaxies[gal].Vvir;  // code units
-        if(t_dyn > 0.0) {
-            galaxies[gal].HeatingReservoir *= exp(-dt / t_dyn);
-        }
-    }
+    if(run_params->CGMHeatingRheatOn > 0) {
+        // r_heat analog for CGM regime: decaying suppression fraction.
+        // f_heat_cgm plays the role of r_heat/rcool in the hot-halo path —
+        // a dimensionless suppression fraction (0-1) that accumulates via a
+        // ratchet and decays on t_dyn so quenching fades when the AGN weakens.
 
-    // 2. Use reservoir to suppress this substep's cooling
-    if(use_heating_reservoir && Vvir2_b > 0.0 && coolingGas > 0.0 && galaxies[gal].HeatingReservoir > 0.0) {
-        const double cool_energy = 0.5 * coolingGas * Vvir2_b;
-        if(galaxies[gal].HeatingReservoir >= cool_energy) {
-            galaxies[gal].HeatingReservoir -= cool_energy;
+        // Decay on dynamical time
+        if(galaxies[gal].f_heat_cgm > 0.0f && galaxies[gal].Rvir > 0.0 && galaxies[gal].Vvir > 0.0) {
+            const double t_dyn = galaxies[gal].Rvir / galaxies[gal].Vvir;
+            galaxies[gal].f_heat_cgm *= (float)exp(-dt / t_dyn);
+        }
+
+        // Apply suppression — identical formula to hot-regime: coolingGas *= (1 - f)
+        const double coolingGas_pre = coolingGas;
+        if(galaxies[gal].f_heat_cgm >= 1.0f) {
             coolingGas = 0.0;
-        } else {
-            coolingGas *= 1.0 - galaxies[gal].HeatingReservoir / cool_energy;
-            galaxies[gal].HeatingReservoir = 0.0;
+        } else if(galaxies[gal].f_heat_cgm > 0.0f) {
+            coolingGas *= 1.0 - (double)galaxies[gal].f_heat_cgm;
         }
-    }
 
-    // 3. AGN call (grows BH, adds to .Heating; may suppress this substep's coolingGas)
-    const double heating_before = galaxies[gal].Heating;
-    {
-        double x_agn = PROTONMASS * BOLTZMANN * temp / lambda;       // sec g/cm^3
-        x_agn /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);  // internal units
-
-        if(run_params->AGNrecipeOn > 0) {
-            coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
+        // AGN call: grows BH from CGMgas, accumulates in .Heating
+        const double heating_before = galaxies[gal].Heating;
+        {
+            double x_agn = PROTONMASS * BOLTZMANN * temp / lambda;
+            x_agn /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);
+            if(run_params->AGNrecipeOn > 0) {
+                coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
+            }
         }
-    }
 
-    // 4. Feed this substep's new heat into the reservoir
-    if(use_heating_reservoir) {
-        const double heating_added = galaxies[gal].Heating - heating_before;
-        if(heating_added > 0.0) {
-            galaxies[gal].HeatingReservoir += heating_added;
+        // Ratchet update — same logic as hot-regime r_heat update but expressed
+        // as a dimensionless fraction: f_new = AGNheating / coolingGas_pre
+        if(coolingGas_pre > 0.0 && Vvir2_b > 0.0) {
+            const double heating_added = galaxies[gal].Heating - heating_before;
+            if(heating_added > 0.0) {
+                const double f_new = (heating_added / (0.5 * Vvir2_b)) / coolingGas_pre;
+                if((float)f_new > galaxies[gal].f_heat_cgm) {
+                    galaxies[gal].f_heat_cgm = (float)fmin(f_new, 1.0);
+                }
+            }
+        }
+
+    } else {
+        // HeatingReservoir + EntropyBoost path
+        const int use_heating_reservoir = (run_params->CGMHeatingReservoirOn > 0);
+
+        // 1. Decay
+        if(use_heating_reservoir && Vvir2_b > 0.0 && galaxies[gal].Rvir > 0.0 && galaxies[gal].HeatingReservoir > 0.0) {
+            const double t_dyn = galaxies[gal].Rvir / galaxies[gal].Vvir;
+            if(t_dyn > 0.0) {
+                galaxies[gal].HeatingReservoir *= exp(-dt / t_dyn);
+            }
+        }
+
+        // 2. Use reservoir to suppress this substep's cooling
+        if(use_heating_reservoir && Vvir2_b > 0.0 && coolingGas > 0.0 && galaxies[gal].HeatingReservoir > 0.0) {
+            const double cool_energy = 0.5 * coolingGas * Vvir2_b;
+            if(galaxies[gal].HeatingReservoir >= cool_energy) {
+                galaxies[gal].HeatingReservoir -= cool_energy;
+                coolingGas = 0.0;
+            } else {
+                coolingGas *= 1.0 - galaxies[gal].HeatingReservoir / cool_energy;
+                galaxies[gal].HeatingReservoir = 0.0;
+            }
+        }
+
+        // 3. AGN call
+        const double heating_before = galaxies[gal].Heating;
+        {
+            double x_agn = PROTONMASS * BOLTZMANN * temp / lambda;
+            x_agn /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);
+            if(run_params->AGNrecipeOn > 0) {
+                coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
+            }
+        }
+
+        // 4. Feed this substep's new heat into the reservoir
+        if(use_heating_reservoir) {
+            const double heating_added = galaxies[gal].Heating - heating_before;
+            if(heating_added > 0.0) {
+                galaxies[gal].HeatingReservoir += heating_added;
+            }
+        }
+
+        // Increment the entropy boost from this substep's AGN heating
+        if(run_params->CGMHeatingEntropyOn > 0) {
+            const double entropy_heating = galaxies[gal].Heating - heating_before;
+            if(entropy_heating > 0.0 && galaxies[gal].CGMgas > 0.0 && Vvir2_b > 0.0) {
+                galaxies[gal].AGNEntropyBoost += entropy_heating / (1.5 * galaxies[gal].CGMgas * Vvir2_b);
+            }
         }
     }
 

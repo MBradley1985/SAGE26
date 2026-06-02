@@ -182,6 +182,8 @@ struct GALAXY
     double Cooling;
     double Heating;
     double HeatingReservoir;  /* CGM-regime persistent AGN heat reservoir, decays on t_dyn; carries memory across snapshots */
+    float AGNEntropyBoost;    /* CGM-regime entropy boost: raises effective t_cool/t_ff, decays on t_dyn */
+    float f_heat_cgm;         /* CGM-regime r_heat analog: dimensionless suppression fraction (0-1), decays on t_dyn */
     float r_heat;
     float QuasarModeBHaccretionMass;
     float TimeOfLastMajorMerger;
@@ -488,6 +490,8 @@ struct params
     int32_t    CGMPrecipitationMode;  // 0: tanh (McCourt+12 style); 1: logistic sigmoid centred on t_cool/t_ff=10, width=2
     int32_t    CGMPrecipRadiusMode;   // 0: evaluate t_cool/t_ff at r_cool; 1: evaluate at 0.1*R_vir
     int32_t    CGMHeatingReservoirOn; // 0: disable persistent HeatingReservoir model; 1: enable (default)
+    int32_t    CGMHeatingEntropyOn;   // 0: off; 1: AGN heating raises t_cool/t_ff via entropy injection (alternative to HeatingReservoir)
+    int32_t    CGMHeatingRheatOn;     // 0: off; 1: r_heat analog for CGM regime — decaying suppression fraction on t_dyn
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation
     int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
     int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too
