@@ -489,6 +489,7 @@ struct params
     int32_t    CGMrecipeSAGEOn;
     int32_t    CGMPrecipitationMode;  // 0: tanh (McCourt+12 style); 1: logistic sigmoid centred on t_cool/t_ff=10, width=2
     int32_t    CGMPrecipRadiusMode;   // 0: evaluate t_cool/t_ff at r_cool; 1: evaluate at 0.1*R_vir
+    int32_t    CGMAGNOn;              // 0: disable AGN heating in CGM-regime entirely; 1: enable (default)
     int32_t    CGMHeatingReservoirOn; // 0: disable persistent HeatingReservoir model; 1: enable (default)
     int32_t    CGMHeatingEntropyOn;   // 0: off; 1: AGN heating raises t_cool/t_ff via entropy injection (alternative to HeatingReservoir)
     int32_t    CGMHeatingRheatOn;     // 0: off; 1: r_heat analog for CGM regime — decaying suppression fraction on t_dyn

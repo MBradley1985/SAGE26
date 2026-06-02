@@ -759,7 +759,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         {
             double x_agn = PROTONMASS * BOLTZMANN * temp / lambda;
             x_agn /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);
-            if(run_params->AGNrecipeOn > 0) {
+            if(run_params->AGNrecipeOn > 0 && run_params->CGMAGNOn > 0) {
                 coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
             }
         }
@@ -805,7 +805,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         {
             double x_agn = PROTONMASS * BOLTZMANN * temp / lambda;
             x_agn /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);
-            if(run_params->AGNrecipeOn > 0) {
+            if(run_params->AGNrecipeOn > 0 && run_params->CGMAGNOn > 0) {
                 coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
             }
         }

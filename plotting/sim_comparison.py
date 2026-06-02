@@ -38,10 +38,10 @@ except Exception:
 # ========================== CONFIGURATION ==========================
 
 # File paths
-PRIMARY_DIR    = './output/microuchuu_originaltrees/'
-SECONDARY_DIR  = './output/microuchuu_lhalobinarymergertrees/'
-TERTIARY_DIR   = './output/microuchuu_STCbinary/'
-QUATERNARY_DIR = './output/microuchuu_STChdf5/'  # optional; set to None to disable 
+PRIMARY_DIR    = './output/millennium_AGN_CGMoff/'
+SECONDARY_DIR  = './output/millennium_AGN_heatingreservoir/'  # optional; set to None to disable
+TERTIARY_DIR   = './output/millennium_AGN_entropy/'
+QUATERNARY_DIR = './output/millennium_AGN_rheat/'  # optional; set to None to disable 
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
 
@@ -62,19 +62,19 @@ Z_SUN = 0.0134
 # Model display names, colours, and line styles — edit here to change
 # labels globally across all plots.
 # ------------------------------------------------------------------
-PRIMARY_LABEL    = 'Rockstar consistent trees'
+PRIMARY_LABEL    = 'No AGN-CGM'
 PRIMARY_COLOR    = 'steelblue'
 PRIMARY_LS       = ':'
 
-SECONDARY_LABEL  = r'MS converted lhalo-binary'
+SECONDARY_LABEL  = r'Heating Reservoir'
 SECONDARY_COLOR  = 'coral'
 SECONDARY_LS     = '--'
 
-TERTIARY_LABEL   = r'STC binary'
+TERTIARY_LABEL   = r'Entropy Injection'
 TERTIARY_COLOR   = 'mediumseagreen'
 TERTIARY_LS      = '-'
 
-QUATERNARY_LABEL = r'STC hdf5'
+QUATERNARY_LABEL = r'r_heat Suppression'
 QUATERNARY_COLOR = 'mediumpurple'
 QUATERNARY_LS    = '-.'
 
@@ -2064,6 +2064,213 @@ def plot_7_smf_centrals_satellites(snapdata_h2, snapdata_cold, snapdata_tertiary
     plt.close(fig)
 
 
+def plot_8_central_satellite_counts(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_quaternary=None):
+    """Raw number-count histograms split by galaxy type at many redshifts.
+
+    2×6 grid: top row = centrals, bottom row = satellites, one column per
+    redshift (z=0,1,2,3,5,7). All models are overlaid per panel.
+    y-axis is raw count N (log scale); no volume normalisation.
+    """
+    print('Plot 8: Central/satellite number counts at many redshifts (2×6)')
+
+    z_snaps  = [SNAP_Z0, SNAP_Z1, SNAP_Z2, SNAP_Z3, SNAP_Z5, SNAP_Z7]
+    ncols    = len(z_snaps)
+    binwidth = 0.2
+
+    fig, axes = plt.subplots(2, ncols, figsize=(24, 9))
+
+    _type_rows = [
+        ('Centrals',   lambda t: t == 0),
+        ('Satellites', lambda t: t > 0),
+    ]
+
+    for col, snap in enumerate(z_snaps):
+        d_h2   = snapdata_h2.get(snap,   {}) if snapdata_h2        else {}
+        d_cold = snapdata_cold.get(snap,  {}) if snapdata_cold       else {}
+        d_tert = snapdata_tertiary.get(snap, {})  if snapdata_tertiary  else {}
+        d_quat = snapdata_quaternary.get(snap, {}) if snapdata_quaternary else {}
+
+        models = [
+            (PRIMARY_LABEL,   d_h2,   PRIMARY_COLOR,   PRIMARY_LS),
+            (SECONDARY_LABEL, d_cold, SECONDARY_COLOR, SECONDARY_LS),
+        ]
+        if d_tert:
+            models.append((TERTIARY_LABEL,   d_tert, TERTIARY_COLOR,   TERTIARY_LS))
+        if d_quat:
+            models.append((QUATERNARY_LABEL, d_quat, QUATERNARY_COLOR, QUATERNARY_LS))
+
+        z_val = REDSHIFTS[snap] if isinstance(REDSHIFTS, (list, np.ndarray)) and snap < len(REDSHIFTS) else col
+
+        # Shared x-range across all models and both types for this redshift
+        all_log_m = []
+        for _n, d, _c, _ls in models:
+            if not d or 'StellarMass' not in d:
+                continue
+            m = np.asarray(d['StellarMass'], dtype=float)
+            ok = np.isfinite(m) & (m > 0.0)
+            if ok.any():
+                all_log_m.append(np.log10(m[ok]))
+
+        if not all_log_m:
+            for row in range(2):
+                axes[row, col].text(0.5, 0.5, 'No data', ha='center', va='center',
+                                    transform=axes[row, col].transAxes)
+            continue
+
+        combined = np.concatenate(all_log_m)
+        mi = max(np.floor(np.min(combined)) - 1, 4.0)
+        ma = min(np.ceil(np.max(combined)) + 1, 13.0)
+        bins = np.arange(mi, ma + binwidth, binwidth)
+
+        for row, (type_label, type_mask) in enumerate(_type_rows):
+            ax = axes[row, col]
+            is_left   = col == 0
+            is_bottom = row == 1
+
+            ax.text(0.97, 0.95, f'z = {z_val:.2f}',
+                    transform=ax.transAxes, fontsize=10, va='top', ha='right')
+            ax.set_xlabel(r'$\log_{10}\, m_{\ast}\ [M_\odot]$' if is_bottom else '')
+            ax.set_ylabel(f'{type_label}\nN' if is_left else '')
+            ax.set_yscale('log')
+            ax.grid(True, alpha=0.25)
+            ax.set_xlim(mi, ma)
+
+            for name, d, color, ls in models:
+                if not d or 'StellarMass' not in d or 'Type' not in d:
+                    continue
+                mstar = np.asarray(d['StellarMass'], dtype=float)
+                gtype = np.asarray(d['Type'])
+                sub   = mstar[type_mask(gtype)]
+                ok    = np.isfinite(sub) & (sub > 0.0)
+                if not ok.any():
+                    continue
+                counts, edges = np.histogram(np.log10(sub[ok]), bins=bins)
+                c = counts.astype(float)
+                c[c <= 0] = np.nan
+                ax.bar(edges[:-1], c, width=binwidth, align='edge',
+                       color=color, alpha=0.4, edgecolor=color, linewidth=0.8,
+                       label=name if (row == 0 and col == 0) else None)
+
+    axes[0, 0].legend(loc='upper left', frameon=False, fontsize=9)
+
+    fig.tight_layout()
+    outfile = os.path.join(OUTPUT_DIR, f'Central_Satellite_Counts_redshift{OUTPUT_FORMAT}')
+    fig.savefig(outfile, bbox_inches='tight')
+    print(f'  Saved {outfile}')
+    plt.close(fig)
+
+
+def plot_9_quiescent_counts(snapdata_h2, snapdata_cold, snapdata_tertiary=None, snapdata_quaternary=None):
+    """Quiescent-only number-count histograms split by central/satellite at many redshifts.
+
+    Same layout as plot_8 (2x6 grid) but only galaxies with log10(sSFR) < SSFR_CUT
+    are included. Quiescent defined as log10(sSFR/yr^-1) < SSFR_CUT (-11).
+    Galaxies with SFR=0 are counted as quiescent.
+    """
+    print(f'Plot 9: Quiescent central/satellite counts at many redshifts (2x6, sSFR < {SSFR_CUT})')
+
+    z_snaps  = [SNAP_Z0, SNAP_Z1, SNAP_Z2, SNAP_Z3, SNAP_Z5, SNAP_Z7]
+    ncols    = len(z_snaps)
+    binwidth = 0.2
+
+    fig, axes = plt.subplots(2, ncols, figsize=(24, 9))
+
+    _type_rows = [
+        ('Centrals',   lambda t: t == 0),
+        ('Satellites', lambda t: t > 0),
+    ]
+
+    for col, snap in enumerate(z_snaps):
+        d_h2   = snapdata_h2.get(snap,        {}) if snapdata_h2        else {}
+        d_cold = snapdata_cold.get(snap,       {}) if snapdata_cold      else {}
+        d_tert = snapdata_tertiary.get(snap,   {}) if snapdata_tertiary  else {}
+        d_quat = snapdata_quaternary.get(snap, {}) if snapdata_quaternary else {}
+
+        models = [
+            (PRIMARY_LABEL,   d_h2,   PRIMARY_COLOR,   PRIMARY_LS),
+            (SECONDARY_LABEL, d_cold, SECONDARY_COLOR, SECONDARY_LS),
+        ]
+        if d_tert:
+            models.append((TERTIARY_LABEL,   d_tert, TERTIARY_COLOR,   TERTIARY_LS))
+        if d_quat:
+            models.append((QUATERNARY_LABEL, d_quat, QUATERNARY_COLOR, QUATERNARY_LS))
+
+        z_val = REDSHIFTS[snap] if isinstance(REDSHIFTS, (list, np.ndarray)) and snap < len(REDSHIFTS) else col
+
+        # Quiescent mask: SFR=0 counts as quiescent; SFR>0 requires log10(sSFR) < SSFR_CUT
+        def _quiescent_mask(d):
+            mstar  = np.asarray(d['StellarMass'], dtype=float)
+            sfrd   = np.asarray(d.get('SfrDisk',  np.zeros(len(mstar))), dtype=float)
+            sfrb   = np.asarray(d.get('SfrBulge', np.zeros(len(mstar))), dtype=float)
+            sfr    = sfrd + sfrb
+            valid  = np.isfinite(mstar) & (mstar > 0.0)
+            zero   = valid & (sfr <= 0.0)
+            active = valid & (sfr > 0.0)
+            lssfr  = np.full(len(mstar), np.nan)
+            lssfr[active] = np.log10(sfr[active] / mstar[active])
+            return zero | (active & (lssfr < SSFR_CUT))
+
+        # Shared x-range from all quiescent stellar masses across all models
+        all_log_m = []
+        for _n, d, _c, _ls in models:
+            if not d or 'StellarMass' not in d:
+                continue
+            q = _quiescent_mask(d)
+            m = np.asarray(d['StellarMass'], dtype=float)[q]
+            if m.size:
+                all_log_m.append(np.log10(m))
+
+        if not all_log_m:
+            for row in range(2):
+                axes[row, col].text(0.5, 0.5, 'No data', ha='center', va='center',
+                                    transform=axes[row, col].transAxes)
+            continue
+
+        combined = np.concatenate(all_log_m)
+        mi = max(np.floor(np.min(combined)) - 1, 4.0)
+        ma = min(np.ceil(np.max(combined)) + 1, 13.0)
+        bins = np.arange(mi, ma + binwidth, binwidth)
+
+        for row, (type_label, type_mask) in enumerate(_type_rows):
+            ax = axes[row, col]
+            is_left   = col == 0
+            is_bottom = row == 1
+
+            ax.text(0.97, 0.95, f'z = {z_val:.2f}',
+                    transform=ax.transAxes, fontsize=10, va='top', ha='right')
+            ax.set_xlabel(r'$\log_{10}\, m_{\ast}\ [M_\odot]$' if is_bottom else '')
+            ax.set_ylabel(f'{type_label}\nN (quiescent)' if is_left else '')
+            ax.set_yscale('log')
+            ax.grid(True, alpha=0.25)
+            ax.set_xlim(mi, ma)
+
+            for name, d, color, ls in models:
+                if not d or 'StellarMass' not in d or 'Type' not in d:
+                    continue
+                q     = _quiescent_mask(d)
+                gtype = np.asarray(d['Type'])
+                sel   = q & type_mask(gtype)
+                m     = np.asarray(d['StellarMass'], dtype=float)[sel]
+                ok    = np.isfinite(m) & (m > 0.0)
+                if not ok.any():
+                    continue
+                counts, edges = np.histogram(np.log10(m[ok]), bins=bins)
+                c = counts.astype(float)
+                c[c <= 0] = np.nan
+                ax.bar(edges[:-1], c, width=binwidth, align='edge',
+                       color=color, alpha=0.4, edgecolor=color, linewidth=0.8,
+                       label=name if (row == 0 and col == 0) else None)
+
+    axes[0, 0].legend(loc='upper left', frameon=False, fontsize=9)
+
+    fig.suptitle(r'Quiescent galaxies ($\log_{10}\,\mathrm{sSFR} < -11$)', y=1.01, fontsize=12)
+    fig.tight_layout()
+    outfile = os.path.join(OUTPUT_DIR, f'Quiescent_Counts_redshift{OUTPUT_FORMAT}')
+    fig.savefig(outfile, bbox_inches='tight')
+    print(f'  Saved {outfile}')
+    plt.close(fig)
+
+
 Z0_PLOTS = {
     1: plot_1_number_counts,
     2: plot_2_diagnostics,
@@ -2075,6 +2282,8 @@ EVOLUTION_PLOTS = {
     5: plot_5_fH2_redshift,
     6: plot_6_satellite_smf_redshift,
     7: plot_7_smf_centrals_satellites,
+    8: plot_8_central_satellite_counts,
+    9: plot_9_quiescent_counts,
 }
 
 # Standalone plots (load their own data)
