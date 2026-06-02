@@ -26,6 +26,38 @@
 #include "model_starformation_and_feedback.h"
 #include "model_disk_instability.h"
 
+/* -------------------------------------------------------------------------
+ * File-scope empirical constants (lifted per STYLE_C.md SS8).
+ * -------------------------------------------------------------------------*/
+
+/* Exponential disk half-mass radius factor: r_half = DISK_HALF_MASS_FRAC * r_s.
+ * Exact result from integration of Sigma(r) = Sigma_0 exp(-r/r_s). */
+static const double DISK_HALF_MASS_FRAC = 1.68;
+
+/* Covington et al. (2011) radiative loss coefficient for gas-rich mergers.
+ * Scales the energy radiated by the gas component during the merger. */
+static const double COVINGTON11_C_RAD = 2.75;
+
+/* Kauffmann & Haehnelt (2000) BH-growth velocity scale: cold-gas accretion rate
+ * falls off as 1 / (1 + (BH_GROWTH_V_KMS / Vvir)^2). */
+static const double BH_GROWTH_V_KMS = 280.0;  /* km/s */
+
+/* Somerville et al. (2001) starburst burst fraction for disk instabilities:
+ * eburst = STARBURST_FRAC_COEFF * mass_ratio^STARBURST_MASS_POWER.
+ * Merger mode uses eburst = mass_ratio directly. */
+static const double STARBURST_FRAC_COEFF = 0.56;
+static const double STARBURST_MASS_POWER = 0.7;
+
+/* FIRE (Muratov et al. 2015) critical velocity separating the two power-law
+ * slopes of the wind loading factor.  Same value as in
+ * model_starformation_and_feedback.c. */
+static const double FIRE_V_CRIT_KMS = 60.0;  /* km/s */
+
+/* Krumholz & Dekel (2011) characteristic halo mass for metal enrichment scaling:
+ * FracZleaveDisk ~ exp(-Mvir / KD11_METAL_HALO_MASS) in code units (10^10 Msun/h).
+ * Same constant used in model_starformation_and_feedback.c. */
+static const double KD11_METAL_HALO_MASS = 30.0;  /* 10^10 Msun/h */
+
 /* File-private forward declaration */
 static double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GALAXY *g2);
 
@@ -96,7 +128,7 @@ static double calculate_merger_remnant_radius(const struct GALAXY *g1, const str
     // For Bulges: We assume the stored radius is the half-mass radius
     
     // Progenitor 1 (Central)
-    double R1_disk_half = 1.68 * g1->DiskScaleRadius;
+    double R1_disk_half = DISK_HALF_MASS_FRAC * g1->DiskScaleRadius;
     double R1_bulge_half = g1->BulgeRadius;
     double R1;
 
@@ -111,7 +143,7 @@ static double calculate_merger_remnant_radius(const struct GALAXY *g1, const str
     }
 
     // Progenitor 2 (Satellite)
-    double R2_disk_half = 1.68 * g2->DiskScaleRadius;
+    double R2_disk_half = DISK_HALF_MASS_FRAC * g2->DiskScaleRadius;
     double R2_bulge_half = g2->BulgeRadius;
     double R2;
 
@@ -139,8 +171,8 @@ static double calculate_merger_remnant_radius(const struct GALAXY *g1, const str
     double E_orb = (M1 * M2) / (R1 + R2);
 
     // E_rad (Eq 23): Radiative losses due to gas
-    // C_rad = 2.75 (from Covington et al. 2011, cited in Tonini 2016)
-    double C_rad = 2.75;
+    // C_rad from Covington et al. (2011), calibrated to hydrodynamic simulations
+    double C_rad = COVINGTON11_C_RAD;
     double f_gas = (g1->ColdGas + g2->ColdGas) / M_tot;
     double E_rad = C_rad * E_init * f_gas;
 
@@ -293,7 +325,7 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
 
     if(galaxies[merger_centralgal].ColdGas > 0.0) {
         BHaccrete = run_params->BlackHoleGrowthRate * mass_ratio /
-            (1.0 + SQR(280.0 / galaxies[merger_centralgal].Vvir)) * galaxies[merger_centralgal].ColdGas;
+            (1.0 + SQR(BH_GROWTH_V_KMS / galaxies[merger_centralgal].Vvir)) * galaxies[merger_centralgal].ColdGas;
 
         // cannot accrete more gas than is available!
         if(BHaccrete > galaxies[merger_centralgal].ColdGas) {
@@ -530,7 +562,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     if(mode == 1) {
         eburst = mass_ratio;
     } else {
-        eburst = 0.56 * pow(mass_ratio, 0.7);
+        eburst = STARBURST_FRAC_COEFF * pow(mass_ratio, STARBURST_MASS_POWER);
     }
 
     if (run_params->StarburstColdGasOn == 0 &&
@@ -640,28 +672,25 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         stars = 0.0;
     }
     
+    // FIRE velocity/redshift scaling (Muratov et al. 2015) -- pre-computed once
+    // and reused for both reheating and ejection.
+    double fire_scaling = 0.0;
+    if(run_params->FIREmodeOn == 1 && run_params->SupernovaRecipeOn == 1) {
+        const double z_fire = run_params->ZZ[galaxies[merger_centralgal].SnapNum];
+        const double vc_fire = galaxies[merger_centralgal].Vvir;
+        if(vc_fire > 0.0 && z_fire >= 0.0) {
+            const double vc_floored = (vc_fire < 1.0) ? 1.0 : vc_fire;
+            const double v_term = (vc_floored < FIRE_V_CRIT_KMS)
+                ? pow(vc_floored / FIRE_V_CRIT_KMS, -3.2)
+                : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
+            fire_scaling = pow(1.0 + z_fire, run_params->RedshiftPowerLawExponent) * v_term;
+        }
+    }
+
     // this bursting results in SN feedback on the cold/hot gas
     if(run_params->SupernovaRecipeOn == 1) {
         if(run_params->FIREmodeOn == 1) {
-            const double z = run_params->ZZ[galaxies[merger_centralgal].SnapNum];
-            const double vc = galaxies[merger_centralgal].Vvir;
-            const double V_CRIT = 60.0;
-            
-            if(vc <= 0.0 || z < 0.0) {
-                reheated_mass = 0.0;
-            } else {
-                double z_term = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
-                double v_term;
-                const double vc_floored = (vc < 1.0) ? 1.0 : vc;  /* Floor at 1 km/s */
-                if (vc_floored < V_CRIT) {
-                    v_term = pow(vc_floored / V_CRIT, -3.2);
-                } else {
-                    v_term = pow(vc_floored / V_CRIT, -1.0);
-                }
-                double scaling_factor = z_term * v_term;
-                double eta_reheat = run_params->FeedbackReheatingEpsilon * scaling_factor;
-                reheated_mass = eta_reheat * stars;
-            }
+            reheated_mass = run_params->FeedbackReheatingEpsilon * fire_scaling * stars;
         } else {
             reheated_mass = run_params->FeedbackReheatingEpsilon * stars;
         }
@@ -682,33 +711,12 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     if(run_params->SupernovaRecipeOn == 1) {
         if(galaxies[merger_centralgal].Vvir > 0.0) {
             if(run_params->FIREmodeOn == 1) {
-                const double z = run_params->ZZ[galaxies[merger_centralgal].SnapNum];
+                // FIRE energy-based ejection; fire_scaling pre-computed above
                 const double vc = galaxies[merger_centralgal].Vvir;
-                const double V_CRIT = 60.0;
-                
-                if(vc <= 0.0 || z < 0.0) {
-                    ejected_mass = 0.0;
-                } else {
-                    double z_term = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
-                    double v_term;
-                    const double vc_floored = (vc < 1.0) ? 1.0 : vc;  /* Floor at 1 km/s */
-                    if (vc_floored < V_CRIT) {
-                        v_term = pow(vc_floored / V_CRIT, -3.2);
-                    } else {
-                        v_term = pow(vc_floored / V_CRIT, -1.0);
-                    }
-                    double scaling_factor = z_term * v_term;
-
-                    double E_FB = run_params->FeedbackEjectionEfficiency * scaling_factor *
-                                  0.5 * stars * (run_params->EtaSNcode * run_params->EnergySNcode);
-                    double E_lift = 0.5 * reheated_mass * vc * vc;
-
-                    if(E_FB > E_lift) {
-                        ejected_mass = (E_FB - E_lift) / (0.5 * vc * vc);
-                    } else {
-                        ejected_mass = 0.0;
-                    }
-                }
+                const double E_FB = run_params->FeedbackEjectionEfficiency * fire_scaling *
+                                    0.5 * stars * (run_params->EtaSNcode * run_params->EnergySNcode);
+                const double E_lift = 0.5 * reheated_mass * vc * vc;
+                ejected_mass = (E_FB > E_lift) ? (E_FB - E_lift) / (0.5 * vc * vc) : 0.0;
             } else {
                 ejected_mass =
                     (run_params->FeedbackEjectionEfficiency * (run_params->EtaSNcode * run_params->EnergySNcode) / 
@@ -787,7 +795,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     // formation of new metals - instantaneous recycling approximation - only SNII
     if(galaxies[merger_centralgal].ColdGas > 1e-8 && mass_ratio < run_params->ThreshMajorMerger) {
         // MINOR MERGER with sufficient cold gas: some metals stay in disk
-        const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / 30.0);
+        const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / KD11_METAL_HALO_MASS);
         
         // Metals that stay in disk
         galaxies[merger_centralgal].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;

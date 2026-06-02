@@ -43,6 +43,11 @@ static const double SOMERVILLE25_SIGMA_CRIT = 30.0 / (M_PI * 4.302e-3);  /* Msun
  * two power-law slopes of the wind loading factor (their eq. 11, Table 1). */
 static const double FIRE_V_CRIT_KMS = 60.0;  /* km/s */
 
+/* Krumholz & Dekel (2011) eq. 22 characteristic halo mass for metal enrichment.
+ * FracZleaveDisk ~ exp(-Mvir / KD11_METAL_HALO_MASS) in code units (10^10 Msun/h).
+ * Same constant used in model_mergers.c. */
+static const double KD11_METAL_HALO_MASS = 30.0;  /* 10^10 Msun/h */
+
 /*
  * Main star formation and feedback driver for one galaxy per substep.
  *
@@ -702,7 +707,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
     // formation of new metals - instantaneous recycling approximation - only SNII
     if(galaxies[p].ColdGas > 1.0e-8) {
-        const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / 30.0);  // Krumholz & Dekel 2011 Eq. 22
+        const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / KD11_METAL_HALO_MASS);  /* Krumholz & Dekel 2011 Eq. 22 */
         
         // Metals that stay in disk (same for all regimes)
         galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
