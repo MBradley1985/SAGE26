@@ -20,6 +20,28 @@
 #include "model_misc.h"
 #include "model_disk_instability.h"
 
+/* -------------------------------------------------------------------------
+ * File-scope empirical constants (lifted per STYLE_C.md SS8).
+ * -------------------------------------------------------------------------*/
+
+/* SF disk effective radius: reff = SF_DISK_RADIUS_FRAC * r_s, calibrated to
+ * the Milky Way disk.  Used for both the dynamical time and disk area in all
+ * SF prescriptions. */
+static const double SF_DISK_RADIUS_FRAC = 3.0;
+
+/* Kauffmann (1996) eq. 7 cold-gas surface density threshold coefficient.
+ * cold_crit = KAUFFMANN96_SF_THRESHOLD * Vvir * reff in code units
+ * (Vvir in km/s, reff in Mpc/h, cold_crit in 10^10 Msun/h). */
+static const double KAUFFMANN96_SF_THRESHOLD = 0.19;
+
+/* Somerville et al. (2025) eq. 2: critical gas surface density below which
+ * cloud formation is inefficient.  30/(pi*G) where G = 4.302e-3 pc (km/s)^2 Msun^-1.
+ * Evaluates to ~2217 Msun/pc^2. */
+static const double SOMERVILLE25_SIGMA_CRIT = 30.0 / (M_PI * 4.302e-3);  /* Msun/pc^2 */
+
+/* FIRE (Muratov et al. 2015) critical circular velocity separating the
+ * two power-law slopes of the wind loading factor (their eq. 11, Table 1). */
+static const double FIRE_V_CRIT_KMS = 60.0;  /* km/s */
 
 /*
  * Main star formation and feedback driver for one galaxy per substep.
@@ -67,7 +89,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // star formation recipes
     if(run_params->SFprescription == 0) {
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
-        reff = 3.0 * galaxies[p].DiskScaleRadius;
+        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
 
         if(galaxies[p].Vvir <= 0.0) {
             strdot = 0.0;
@@ -75,7 +97,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             tdyn = reff / galaxies[p].Vvir;
 
             // from Kauffmann (1996) eq7 x piR^2, (Vvir in km/s, reff in Mpc/h) in units of 10^10Msun/h
-            const double cold_crit = 0.19 * galaxies[p].Vvir * reff;
+            const double cold_crit = KAUFFMANN96_SF_THRESHOLD * galaxies[p].Vvir * reff;
             if(galaxies[p].ColdGas > cold_crit && tdyn > 0.0) {
                 strdot = run_params->SfrEfficiency * (galaxies[p].ColdGas - cold_crit) / tdyn;
             } else {
@@ -89,7 +111,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // ========================================================================
 
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
-        reff = 3.0 * galaxies[p].DiskScaleRadius;
+        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
 
         if(galaxies[p].Vvir <= 0.0) {
             galaxies[p].H2gas = 0.0;
@@ -144,7 +166,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         galaxies[p].H2gas = 0.0;
 
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
-        reff = 3.0 * galaxies[p].DiskScaleRadius;
+        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
 
         if(galaxies[p].Vvir <= 0.0) {
             strdot = 0.0;
@@ -157,7 +179,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2 : 0.0; // Msun/pc^2
 
             // Critical surface density from Equation 2
-            const double Sigma_crit = 30.0 / (M_PI * 4.302e-3); // ~2176 Msun/pc^2
+            const double Sigma_crit = SOMERVILLE25_SIGMA_CRIT;
 
             // Cloud-scale star formation efficiency from Equation 3
             double epsilon_cl = (gas_surface_density / Sigma_crit) / (1.0 + gas_surface_density / Sigma_crit);
@@ -181,7 +203,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // =======================================================================
 
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
-        reff = 3.0 * galaxies[p].DiskScaleRadius;
+        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
 
         if(galaxies[p].Vvir <= 0.0) {
             galaxies[p].H2gas = 0.0;
@@ -223,7 +245,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                     galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
 
                 // Critical surface density from Equation 2
-                const double Sigma_crit = 30.0 / (M_PI * 4.302e-3); // ~2176 Msun/pc^2
+                const double Sigma_crit = SOMERVILLE25_SIGMA_CRIT;
 
                 // Cloud-scale star formation efficiency from Equation 3
                 double epsilon_cl = (gas_surface_density / Sigma_crit) / (1.0 + gas_surface_density / Sigma_crit);
@@ -250,7 +272,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             galaxies[p].H2gas = 0.0;
             strdot = 0.0;
         } else {
-            reff = 3.0 * galaxies[p].DiskScaleRadius;
+            reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
             tdyn = reff / galaxies[p].Vvir;
             const float h = run_params->Hubble_h;
             const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
@@ -302,7 +324,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
         
         // 1. Geometry and Units
-        reff = 3.0 * galaxies[p].DiskScaleRadius;
+        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
         tdyn = reff / galaxies[p].Vvir;
         
         // Check for physical validity
@@ -377,7 +399,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // Uses the analytic approximation for depletion time (Equation 28)
         // ========================================================================
 
-        reff = 3.0 * galaxies[p].DiskScaleRadius;
+        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
         tdyn = reff / galaxies[p].Vvir;
 
         // Basic safety checks
@@ -438,10 +460,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
                 strdot = (galaxies[p].H2gas > 0.0 && tdyn > 0.0)
                          ? run_params->SfrEfficiency * galaxies[p].H2gas / tdyn : 0.0;
-
-                // Alternative: use K13 depletion time directly for SFR, bypassing tdyn. This is more faithful to K13 but less consistent with other prescriptions that use tdyn.
-                // strdot = (galaxies[p].ColdGas > 0.0 && t_dep_code > 0.0)
-                //          ? galaxies[p].ColdGas / t_dep_code : 0.0;
             }
         }
     } else if(run_params->SFprescription == 7) {
@@ -453,7 +471,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // ========================================================================
 
         // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
-        reff = 3.0 * galaxies[p].DiskScaleRadius;
+        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
 
         // Basic safety checks
         if(galaxies[p].Vvir <= 0.0 || galaxies[p].ColdGas <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
@@ -576,37 +594,32 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         stars = 0.0;
     }
 
+    // FIRE velocity/redshift scaling (Muratov et al. 2015, eq. 9/11).
+    // Pre-computed once and reused for both reheating and ejection to avoid
+    // duplication. scaling = (1+z)^alpha * (V/V_crit)^beta, where beta has two
+    // slopes: -3.2 below FIRE_V_CRIT_KMS and -1.0 above.  Zero when FIRE is off.
+    double fire_scaling = 0.0;
+    if(run_params->FIREmodeOn == 1 && run_params->SupernovaRecipeOn == 1) {
+        const double z_fire = run_params->ZZ[galaxies[p].SnapNum];
+        const double vc_fire = galaxies[p].Vvir;
+        if(vc_fire > 0.0 && z_fire >= 0.0) {
+            const double vc_floored = (vc_fire < 1.0) ? 1.0 : vc_fire;
+            const double v_term = (vc_floored < FIRE_V_CRIT_KMS)
+                ? pow(vc_floored / FIRE_V_CRIT_KMS, -3.2)
+                : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
+            fire_scaling = pow(1.0 + z_fire, run_params->RedshiftPowerLawExponent) * v_term;
+        }
+    }
+
     // Calculate reheated mass - use FIRE model if enabled, otherwise use original feedback
     double reheated_mass = 0.0;
-    
+
     if(run_params->SupernovaRecipeOn == 1) {
         if(run_params->FIREmodeOn == 1) {
-            // FIRE: Calculate velocity/redshift scaling from Muratov et al. 2015
-            const double z = run_params->ZZ[galaxies[p].SnapNum];
-            const double vc = galaxies[p].Vvir;
-            const double V_CRIT = 60.0;
-            
-            // Check for valid inputs to avoid NaN
-            if(vc <= 0.0 || z < 0.0) {
-                reheated_mass = 0.0;
-            } else {
-                double z_term = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
-                double v_term;
-                double vc_floored = (vc < 1.0) ? 1.0 : vc;
-                if (vc_floored < V_CRIT) {
-                    v_term = pow(vc_floored / V_CRIT, -3.2);
-                } else {
-                    v_term = pow(vc_floored / V_CRIT, -1.0);
-                }
-                double scaling_factor = z_term * v_term;
-
-                // Reheating with Muratov scaling: eta = 2.9 * (1+z)^alpha * (V/60)^beta
-                double eta_reheat = run_params->FeedbackReheatingEpsilon * scaling_factor;
-                // Store mass loading for analysis (cast to float)
-                galaxies[p].MassLoading = (float)eta_reheat;
-                reheated_mass = eta_reheat * stars;
-            }
-            
+            // FIRE: eta = FeedbackReheatingEpsilon * fire_scaling (Muratov+2015)
+            const double eta_reheat = run_params->FeedbackReheatingEpsilon * fire_scaling;
+            galaxies[p].MassLoading = (float)eta_reheat;
+            reheated_mass = eta_reheat * stars;
         } else {
             reheated_mass = run_params->FeedbackReheatingEpsilon * stars;
         }
@@ -626,41 +639,14 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     if(run_params->SupernovaRecipeOn == 1) {
         if(galaxies[p].Vvir > 0.0) {
             if(run_params->FIREmodeOn == 1) {
-                // FIRE model: Energy-based ejection following Hirschmann+2016
-                // Energy from supernovae (with Muratov scaling)
-                const double z = run_params->ZZ[galaxies[p].SnapNum];
+                // FIRE: energy-based ejection (Hirschmann+2016).
+                // E_FB = epsilon_eject * fire_scaling * 0.5 * M_* * (eta_SN * E_SN)
+                // Eject whatever energy remains after lifting the reheated gas.
                 const double vc = galaxies[p].Vvir;
-                const double V_CRIT = 60.0;
-                
-                // Check for valid inputs to avoid NaN
-                if(vc <= 0.0 || z < 0.0) {
-                    ejected_mass = 0.0;
-                } else {
-                    double z_term = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
-                    double v_term;
-                    double vc_floored = (vc < 1.0) ? 1.0 : vc;
-                    if (vc_floored < V_CRIT) {
-                        v_term = pow(vc_floored / V_CRIT, -3.2);
-                    } else {
-                        v_term = pow(vc_floored / V_CRIT, -1.0);
-                    }
-                    double scaling_factor = z_term * v_term;
-                    
-                    // Total feedback energy: E_FB = epsilon_eject * scaling * 0.5 * M_* * (eta_SN * E_SN)
-                    double E_FB = run_params->FeedbackEjectionEfficiency * scaling_factor * 
-                                  0.5 * stars * (run_params->EtaSNcode * run_params->EnergySNcode);
-                    
-                    // Energy needed to lift reheated gas to virial radius: E_lift = 0.5 * M_reheat * V_vir^2
-                    double E_lift = 0.5 * reheated_mass * vc * vc;
-                    
-                    // Leftover energy ejects additional gas: E_eject = E_FB - E_lift
-                    // Ejected mass: M_eject = E_eject / (0.5 * V_vir^2)
-                    if(E_FB > E_lift) {
-                        ejected_mass = (E_FB - E_lift) / (0.5 * vc * vc);
-                    } else {
-                        ejected_mass = 0.0;
-                    }
-                }
+                const double E_FB = run_params->FeedbackEjectionEfficiency * fire_scaling *
+                                    0.5 * stars * (run_params->EtaSNcode * run_params->EnergySNcode);
+                const double E_lift = 0.5 * reheated_mass * vc * vc;
+                ejected_mass = (E_FB > E_lift) ? (E_FB - E_lift) / (0.5 * vc * vc) : 0.0;
             } else {
                 // Original non-FIRE calculation
                 ejected_mass = (run_params->FeedbackEjectionEfficiency * 
@@ -918,7 +904,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     double reff, tdyn, strdot, stars, metallicity;
 
     // Calculate dynamical time
-    reff = 3.0 * galaxies[p].DiskScaleRadius;
+    reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
     tdyn = (reff > 0.0 && galaxies[p].Vvir > 0.0) ? reff / galaxies[p].Vvir : 0.0;
 
     // ========================================================================
