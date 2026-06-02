@@ -21,6 +21,17 @@
 #include "model_reincorporation.h"
 #include "model_misc.h"
 
+/* -------------------------------------------------------------------------
+ * File-scope empirical constants (lifted per STYLE_C.md SS8).
+ * -------------------------------------------------------------------------*/
+
+/* Critical velocity for gas reincorporation.
+ * SN ejecta leave the disk at V_SN ~ 630 km/s; a halo can retain the gas when
+ * its escape velocity (V_esc = sqrt(2)*V_vir) exceeds V_SN, i.e. when
+ * V_vir > V_SN / sqrt(2) ~ 445.48 km/s.  Scaled further by
+ * ReIncorporationFactor in the parameter file. */
+static const double REINC_VCRIT_KMS = 445.48;  /* km/s */
+
 /*
  * reincorporate_gas -- move ejected gas back into the hot reservoir for one
  * central galaxy over timestep dt.
@@ -31,9 +42,7 @@
  */
 void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
-    // SN velocity is 630km/s, and the condition for reincorporation is that the
-    // halo has an escape velocity greater than this, i.e. V_SN/sqrt(2) = 445.48km/s
-    const double Vcrit = 445.48 * run_params->ReIncorporationFactor;
+    const double Vcrit = REINC_VCRIT_KMS * run_params->ReIncorporationFactor;
 
     if(galaxies[centralgal].Vvir > Vcrit && galaxies[centralgal].Rvir > 0.0) {
         // Note: Vvir > Vcrit already ensures Vvir > 0, so Rvir/Vvir is safe

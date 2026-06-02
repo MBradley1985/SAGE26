@@ -27,6 +27,31 @@
 #include "model_infall.h"
 #include "model_misc.h"
 
+/* -------------------------------------------------------------------------
+ * File-scope empirical constants (lifted per STYLE_C.md SS8).
+ * -------------------------------------------------------------------------*/
+
+/* Gnedin (2000) suppression: f = 1 / (1 + GNEDIN_FILTER_COEFF * M_F/Mvir)^3.
+ * Coefficient 0.26 from Kravtsov et al. (2004) Appendix B fit to Gnedin data. */
+static const double GNEDIN_FILTER_COEFF = 0.26;
+
+/* Jeans mass prefactor at mean IGM density in units of 10^10 Msun/h.
+ * From Kravtsov et al. (2004) Appendix B, assuming Omega_b and their
+ * normalisation; the 2.21 factor is mu^{-1.5} for mean molecular weight
+ * mu = 0.59 (fully ionised plasma). */
+static const double KRAVTSOV04_MJEANS_0 = 25.0;   /* 10^10 Msun/h at Omega=1 */
+static const double KRAVTSOV04_MU_NEG1PT5 = 2.21; /* mu^(-1.5), mu=0.59 */
+
+/* Bryan & Norman (1998) linear and quadratic fit coefficients for the
+ * collapsed overdensity Delta_c(Omega_m): Delta_c = 18 pi^2 + 82 x - 39 x^2,
+ * where x = Omega_m(z) - 1. */
+static const double BN98_DELTA_LIN  = 82.0;
+static const double BN98_DELTA_QUAD = 39.0;
+
+/* Virial temperature to characteristic velocity: T_vir [K] = 36 * V_char^2 [km/s]^2.
+ * Derived from T_vir = (mu m_H / 2 k_B) Vchar^2 with mu=0.59. */
+static const double TVIR_VCHAR_COEFF = 36.0;
+
 /*
  * infall_recipe -- compute the net baryon infall for this timestep and
  * distribute it to reservoirs.
@@ -192,7 +217,6 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
     double reionization_modifier;
 
     if(run_params->ReionizationOn) {
-        /* reionization_modifier = do_reionization(gal, ZZ[halos[halonr].SnapNum]); */
         reionization_modifier = do_reionization(gal, Zcurr, galaxies, run_params);
     } else {
         reionization_modifier = 1.0;
@@ -200,7 +224,6 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
 
     double strippedGas = -1.0 *
         (reionization_modifier * run_params->BaryonFrac * galaxies[gal].Mvir - (galaxies[gal].StellarMass + galaxies[gal].ColdGas + galaxies[gal].HotGas + galaxies[gal].CGMgas + galaxies[gal].BlackHoleMass + galaxies[gal].ICS + galaxies[gal].EjectedMass) ) / STEPS;
-    // ( reionization_modifier * run_params->BaryonFrac * galaxies[gal].deltaMvir ) / STEPS;
 
     if(strippedGas > 0.0) {
         if(run_params->CGMrecipeOn > 0) {
@@ -309,22 +332,23 @@ double do_reionization(const int gal, const double Zcurr, struct GALAXY *galaxie
                          a * run_params->ar / 3.0 - (run_params->ar * run_params->ar / 3.0) * (3.0 - 2.0 / sqrt(a_on_ar)));
     }
 
-    // this is in units of 10^10Msun/h, note mu=0.59 and mu^-1.5 = 2.21
-    const double Mjeans = 25.0 / sqrt(run_params->Omega) * 2.21;
+    /* Jeans mass in units of 10^10 Msun/h (Kravtsov+2004 Appendix B). */
+    const double Mjeans = KRAVTSOV04_MJEANS_0 / sqrt(run_params->Omega) * KRAVTSOV04_MU_NEG1PT5;
     const double Mfiltering = Mjeans * pow(f_of_a, 1.5);
 
-    // calculate the characteristic mass coresponding to a halo temperature of 10^4K
-    const double Vchar = sqrt(Tvir / 36.0);
+    /* Characteristic mass corresponding to a halo virial temperature of 10^4 K. */
+    const double Vchar = sqrt(Tvir / TVIR_VCHAR_COEFF);
     const double omegaZ = run_params->Omega * (CUBE(1.0 + Zcurr) / (run_params->Omega * CUBE(1.0 + Zcurr) + run_params->OmegaLambda));
     const double xZ = omegaZ - 1.0;
-    const double deltacritZ = 18.0 * M_PI * M_PI + 82.0 * xZ - 39.0 * xZ * xZ;
+    /* Bryan & Norman (1998) overdensity criterion for Delta_c at redshift z. */
+    const double deltacritZ = 18.0 * M_PI * M_PI + BN98_DELTA_LIN * xZ - BN98_DELTA_QUAD * xZ * xZ;
     const double HubbleZ = run_params->Hubble * sqrt(run_params->Omega * CUBE(1.0 + Zcurr) + run_params->OmegaLambda);
 
     const double Mchar = Vchar * Vchar * Vchar / (run_params->G * HubbleZ * sqrt(0.5 * deltacritZ));
 
-    // we use the maximum of Mfiltering and Mchar
+    /* Use the larger of the two filtering masses (Gnedin 2000 / Kravtsov+2004). */
     const double mass_to_use = dmax(Mfiltering, Mchar);
-    const double modifier = 1.0 / CUBE(1.0 + 0.26 * (mass_to_use / galaxies[gal].Mvir));
+    const double modifier = 1.0 / CUBE(1.0 + GNEDIN_FILTER_COEFF * (mass_to_use / galaxies[gal].Mvir));
 
     return modifier;
 

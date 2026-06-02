@@ -24,6 +24,16 @@
 #include "model_misc.h"
 #include "model_mergers.h"
 
+/* -------------------------------------------------------------------------
+ * File-scope empirical constants (lifted per STYLE_C.md SS8).
+ * -------------------------------------------------------------------------*/
+
+/* Numerical pre-factor in the Mo, Mao & White (1998) Toomre critical mass:
+ * M_crit = V_max^2 * (TOOMRE_DISK_FACTOR * R_d) / G.
+ * The factor of 3 comes from the disk half-mass radius being ~1.68 r_s and
+ * the MW98 stability analysis for an exponential disk. */
+static const double TOOMRE_DISK_FACTOR = 3.0;
+
 /*
  * check_disk_instability -- apply the Toomre instability criterion and
  * redistribute unstable mass for galaxy p at the current timestep.
@@ -44,7 +54,7 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
     const double diskmass = galaxies[p].ColdGas + (galaxies[p].StellarMass - galaxies[p].BulgeMass);
     if(diskmass > 0.0) {
         // calculate critical disk mass
-        double Mcrit = galaxies[p].Vmax * galaxies[p].Vmax * (3.0 * galaxies[p].DiskScaleRadius) / run_params->G;
+        double Mcrit = galaxies[p].Vmax * galaxies[p].Vmax * (TOOMRE_DISK_FACTOR * galaxies[p].DiskScaleRadius) / run_params->G;
         if(Mcrit > diskmass) {
             Mcrit = diskmass;
         }
@@ -71,19 +81,6 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
             // UPDATE: Tonini incremental radius evolution (equation 15)
             // Pass the OLD disc radius explicitly to ensure we use pre-instability value
             update_instability_bulge_radius(p, unstable_stars, old_disk_radius, galaxies, run_params);
-
-            // Need to fix this. Excluded for now.
-            // galaxies[p].mergeType = 3;  // mark as disk instability partial mass transfer
-            // galaxies[p].mergeIntoID = NumGals + p - 1;
-
-#ifdef VERBOSE
-            if((galaxies[p].BulgeMass >  1.0001 * galaxies[p].StellarMass)  || (galaxies[p].MetalsBulgeMass >  1.0001 * galaxies[p].MetalsStellarMass)) {
-                /* fprintf(stderr, "\nInstability: Mbulge > Mtot (stars or metals)\n"); */
-                /* run_params->interrupted = 1; */
-                //ABORT(EXIT_FAILURE);
-            }
-#endif
-
         }
 
         // Disc scale radius is unchanged by instability: the remaining disk retains the
@@ -95,7 +92,6 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
             if(unstable_gas > 1.0001 * galaxies[p].ColdGas ) {
                 fprintf(stdout, "unstable_gas > galaxies[p].ColdGas\t%e\t%e\n", unstable_gas, galaxies[p].ColdGas);
                 run_params->interrupted = 1;
-                // ABORT(EXIT_FAILURE);
             }
 #endif
 

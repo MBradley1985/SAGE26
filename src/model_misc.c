@@ -43,6 +43,21 @@ static const double DEKEL06_M_SHOCK_MSUN  =  6.0e11;
  * (code units) and pc for surface-density calculations. */
 static const double PC_IN_CM              =  3.08568e18;
 
+/* Overdensity criterion for virial radius: M_vir / (4/3 pi R_vir^3) = 200 rho_crit
+ * (Bryan & Norman 1998). */
+static const double DELTA_VIRT            = 200.0;
+
+/* Fallback disk scale radius: r_d = DISK_RADIUS_FALLBACK_FRAC * R_vir when spin is unavailable. */
+static const double DISK_RADIUS_FALLBACK_FRAC = 0.1;
+
+/* Tonini+2016 eq. (15): fraction of the disc scale radius that a newly
+ * transferred mass element contributes to the instability-bulge half-mass radius. */
+static const double TONINI16_DISK_FRAC    = 0.2;
+
+/* Boylan-Kolchin (2025) Table 1: critical gravitational acceleration for FFB.
+ * Units: M_sun / pc^2 (pre-multiplication by G to get acceleration). */
+static const double BK25_G_CRIT_MSUN_PC2 = 3100.0;
+
 /*
  * Initialise all fields of a newly created galaxy struct to safe defaults.
  *
@@ -179,15 +194,17 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
 double get_disk_radius(const int halonr, const int p, const struct halo_data *halos, const struct GALAXY *galaxies)
 {
 	if(galaxies[p].Vvir > 0.0 && galaxies[p].Rvir > 0.0) {
-		// See Mo, Shude & White (1998) eq12, and using a Bullock style lambda.
+		/* Mo, Shude & White (1998) eq. 12 with a Bullock-style spin parameter.
+		 * The literal 1.414 is intentional: the original code used this truncated
+		 * sqrt(2) rather than M_SQRT2 and changing it shifts every disk radius.
+		 * Do not replace with M_SQRT2 without re-calibrating. */
 		double SpinMagnitude = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
                                     halos[halonr].Spin[1] * halos[halonr].Spin[1] + halos[halonr].Spin[2] * halos[halonr].Spin[2]);
 
-		double SpinParameter = SpinMagnitude / ( 1.414 * galaxies[p].Vvir * galaxies[p].Rvir);
-		return (SpinParameter / 1.414 ) * galaxies[p].Rvir;
-        /* return SpinMagnitude * 0.5 / galaxies[p].Vvir; /\* should be equivalent to previous call *\/ */
+		double SpinParameter = SpinMagnitude / (1.414 * galaxies[p].Vvir * galaxies[p].Rvir);
+		return (SpinParameter / 1.414) * galaxies[p].Rvir;
 	} else {
-		return 0.1 * galaxies[p].Rvir;
+		return DISK_RADIUS_FALLBACK_FRAC * galaxies[p].Rvir;
     }
 }
 
@@ -316,7 +333,7 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
         if(M_instability > 0.0 && R_instability <= 0.0) {
             const double R_disc = galaxies[p].DiskScaleRadius;
             if(R_disc > 0.0) {
-                R_instability = 0.2 * R_disc;
+                R_instability = TONINI16_DISK_FRAC * R_disc;
             } else {
                 // No disk (post-major-merger or orphan): use Shen power-law fallback
                 const double M_inst_sun = M_instability * 1.0e10 / h;
@@ -368,8 +385,8 @@ void update_instability_bulge_radius(const int p, const double delta_mass,
     // Convert to kpc for calculation
     const double R_disc_kpc = old_disk_radius * 1.0e3 / h;
     
-    // New mass contribution scales with 0.2 * R_disc (Tonini+2016 eq. 15)
-    const double R_new_contribution_kpc = 0.2 * R_disc_kpc;
+    /* New mass contribution scales with TONINI16_DISK_FRAC * R_disc (Tonini+2016 eq. 15). */
+    const double R_new_contribution_kpc = TONINI16_DISK_FRAC * R_disc_kpc;
     const double R_new_contribution = R_new_contribution_kpc * 1.0e-3 * h;  // to Mpc/h
     
     double R_new;
@@ -453,7 +470,7 @@ double get_virial_radius(const int halonr, const struct halo_data *halos, const 
                                               run_params->OmegaLambda);
 
   const double rhocrit = 3.0 * hubble_of_z_sq / (8.0 * M_PI * run_params->G);
-  const double fac = 1.0 / (200.0 * 4.0 * M_PI / 3.0 * rhocrit);
+  const double fac = 1.0 / (DELTA_VIRT * 4.0 * M_PI / 3.0 * rhocrit);
 
   return cbrt(get_virial_mass(halonr, halos, run_params) * fac);
 }
@@ -574,7 +591,7 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
        run_params->FeedbackFreeModeOn == 4 || run_params->FeedbackFreeModeOn == 7) {
         const double Msun_code = SOLAR_MASS / run_params->UnitMass_in_g;
         const double pc_code = PC_IN_CM / run_params->UnitLength_in_cm;
-        g_crit = run_params->G * 3100.0 * Msun_code / (pc_code * pc_code) / run_params->Hubble_h;
+        g_crit = run_params->G * BK25_G_CRIT_MSUN_PC2 * Msun_code / (pc_code * pc_code) / run_params->Hubble_h;
     }
 
     // Classify each galaxy as FFB or normal
@@ -1020,34 +1037,19 @@ double calculate_ffb_fraction(const double Mvir, const double z, const struct pa
     // Uses smooth sigmoid transition from Li et al. 2024, equation (3)
     
     if (run_params->FeedbackFreeModeOn == 0) {
-        return 0.0;  // FFB mode disabled
+        return 0.0;
     }
 
-    // if (z < 5.0) {
-    //     return 0.0;  // FFB only active at z >= 6.2
-    // }
-    
-    // Calculate FFB threshold mass
     const double Mvir_ffb = calculate_ffb_threshold_mass(z, run_params);
 
     if(Mvir <= 0.0 || Mvir_ffb <= 0.0) {
-        return 0.0;  // Return no FFB for invalid masses
+        return 0.0;
     }
 
-    // Width of transition in dex (Li et al. use 0.15 dex)
+    /* Li+2024 eq. (3): sigmoid over 0.15 dex around M_v,ffb. */
     const double delta_log_M = 0.15;
-
-    // Calculate argument for sigmoid function
     const double x = log10(Mvir / Mvir_ffb) / delta_log_M;
-    
-    // Sigmoid function: S(x) = 1 / (1 + exp(-x))
-    // const double k = 5.0;  // Steepness parameter (can be adjusted)
-    // Sigmoid function with adjustable steepness
-    // Smoothly varies from 0 (well below threshold) to 1 (well above threshold)
     const double f_ffb = 1.0 / (1.0 + exp(-x));
-    // Steeper transition
-    // const double f_ffb = 1.0 / (1.0 + exp(-k * x));
-
 
     return f_ffb;
 }
