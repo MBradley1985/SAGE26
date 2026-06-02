@@ -492,7 +492,7 @@ struct params
     int32_t    CGMAGNOn;              // 0: disable AGN heating in CGM-regime entirely; 1: enable (default)
     int32_t    CGMHeatingReservoirOn; // 0: disable persistent HeatingReservoir model; 1: enable (default)
     int32_t    CGMHeatingEntropyOn;   // 0: off; 1: AGN heating raises t_cool/t_ff via entropy injection (alternative to HeatingReservoir)
-    int32_t    CGMHeatingRheatOn;     // 0: off; 1: r_heat analog for CGM regime — decaying suppression fraction on t_dyn
+    int32_t    CGMHeatingRheatOn;     // 0: off; 1: r_heat analog for CGM regime -- decaying suppression fraction on t_dyn
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation
     int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
     int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too

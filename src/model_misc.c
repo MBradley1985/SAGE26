@@ -195,7 +195,7 @@ double get_disk_radius(const int halonr, const int p, const struct halo_data *ha
 /*
  * Compute and store the half-mass bulge radius from merger and instability components.
  *
- * When BulgeSizeOn > 0, uses energy conservation (Croton+2016 §3.6) to derive
+ * When BulgeSizeOn > 0, uses energy conservation (Croton+2016 Sec. 3.6) to derive
  * radii for merger- and instability-driven bulge components separately, then
  * combines them into galaxies[p].BulgeRadius. Returns zero and sets all bulge
  * radii to zero when BulgeSizeOn == 0.

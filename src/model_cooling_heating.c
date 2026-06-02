@@ -736,7 +736,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
 
     if(run_params->CGMHeatingRheatOn > 0) {
         // r_heat analog for CGM regime: decaying suppression fraction.
-        // f_heat_cgm plays the role of r_heat/rcool in the hot-halo path —
+        // f_heat_cgm plays the role of r_heat/rcool in the hot-halo path --
         // a dimensionless suppression fraction (0-1) that accumulates via a
         // ratchet and decays on t_dyn so quenching fades when the AGN weakens.
 
@@ -746,7 +746,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
             galaxies[gal].f_heat_cgm *= (float)exp(-dt / t_dyn);
         }
 
-        // Apply suppression — identical formula to hot-regime: coolingGas *= (1 - f)
+        // Apply suppression -- identical formula to hot-regime: coolingGas *= (1 - f)
         const double coolingGas_pre = coolingGas;
         if(galaxies[gal].f_heat_cgm >= 1.0f) {
             coolingGas = 0.0;
@@ -764,7 +764,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
             }
         }
 
-        // Ratchet update — same logic as hot-regime r_heat update but expressed
+        // Ratchet update -- same logic as hot-regime r_heat update but expressed
         // as a dimensionless fraction: f_new = AGNheating / coolingGas_pre
         if(coolingGas_pre > 0.0 && Vvir2_b > 0.0) {
             const double heating_added = galaxies[gal].Heating - heating_before;

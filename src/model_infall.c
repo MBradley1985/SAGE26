@@ -121,7 +121,7 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
     // therefore consumes that contribution and we must zero the central's
     // CGMgas first to avoid double-counting it. In particular, the Regime==1
     // path used to `HotGas += tot_CGMgas` without zeroing CGMgas, which left
-    // the central's own CGM in both reservoirs — visible as a ~5% baryon-
+    // the central's own CGM in both reservoirs -- visible as a ~5% baryon-
     // fraction excess in 10^12 Msun halos that had transitioned across Mshock.
     // ========================================================================
     if(run_params->CGMrecipeOn == 1) {

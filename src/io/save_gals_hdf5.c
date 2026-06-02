@@ -1069,7 +1069,7 @@ static int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char
  * Appends all output fields of *g (with unit conversions matching
  * prepare_galaxy_for_output() in save_gals_binary.c) into the slot at index
  * num_gals_in_buffer[output_snap_idx] within buffer_output_gals[output_snap_idx].
- * Does not advance the buffer counter — caller is responsible.
+ * Does not advance the buffer counter -- caller is responsible.
  *
  * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
  */

@@ -87,7 +87,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     strncpy(my_forest_dist_scheme,"generic_power_in_nhalos",MAXTAGLEN);
 
     /* Pre-initialize optional numeric parameters with defaults.
-       Required parameters are left uninitialised — they must appear in the file. */
+       Required parameters are left uninitialised -- they must appear in the file. */
     run_params->NumSnapOutputs             = -1;
     run_params->ReionizationOn             = 1;
     run_params->SupernovaRecipeOn          = 1;
