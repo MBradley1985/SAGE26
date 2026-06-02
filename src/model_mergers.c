@@ -148,8 +148,7 @@ static double calculate_merger_remnant_radius(const struct GALAXY *g1, const str
     // E_final = E_init + E_orb + E_rad
     double E_final = E_init + E_orb + E_rad;
 
-    // BUG FIX: Check E_final > 0 to avoid division by zero or negative
-    // This can happen with high gas fractions where E_rad dominates
+    // High gas fractions can make E_rad dominant; fall back to mass-weighted average
     if(E_final <= 0.0) {
         // Fallback: use mass-weighted average of progenitor radii
         return (M1 * R1 + M2 * R2) / M_tot;
@@ -191,7 +190,6 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         ma = galaxies[p].StellarMass + galaxies[p].ColdGas;
     }
 
-    // BUG FIX: Handle zero-mass edge case properly
     if(ma > 0) {
         mass_ratio = mi / ma;
     } else if(mi > 0) {
@@ -306,7 +304,6 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
         galaxies[merger_centralgal].BlackHoleMass += BHaccrete;
         galaxies[merger_centralgal].ColdGas -= BHaccrete;
         galaxies[merger_centralgal].MetalsColdGas -= metallicity * BHaccrete;
-        /* BUG FIX: Ensure metals don't go negative due to numerical precision */
         if(galaxies[merger_centralgal].MetalsColdGas < 0.0) {
             galaxies[merger_centralgal].MetalsColdGas = 0.0;
         }
@@ -317,8 +314,6 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
             if(galaxies[merger_centralgal].H2gas > max_h_bh) galaxies[merger_centralgal].H2gas = max_h_bh;
             if(galaxies[merger_centralgal].H1gas > max_h_bh) galaxies[merger_centralgal].H1gas = max_h_bh;
         }
-
-        // galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
 
         quasar_mode_wind(merger_centralgal, BHaccrete, galaxies, run_params);
 
@@ -435,9 +430,7 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].BulgeMass += galaxies[p].StellarMass;
     galaxies[t].MetalsBulgeMass += galaxies[p].MetalsStellarMass;
 
-    // FIX 1.1: Preserve the satellite's existing bulge component breakdown
-    // The satellite's bulge already has InstabilityBulgeMass and MergerBulgeMass components
-    // These should be transferred to the central's corresponding components
+    // Transfer the satellite's bulge component breakdown to the central
     galaxies[t].InstabilityBulgeMass += galaxies[p].InstabilityBulgeMass;
     galaxies[t].MergerBulgeMass += galaxies[p].MergerBulgeMass;
 
@@ -523,7 +516,6 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                                   const int burst_to_merger_bulge, const double old_disk_radius,
                                   struct GALAXY *galaxies, const struct params *run_params)
 {
-    // BUG FIX: Validate step bounds and dt > 0
     XASSERT(step >= 0 && step < STEPS, -1,
             "Error: step = %d is out of bounds [0, %d)\n", step, STEPS);
     XASSERT(dt > 0.0, -1,
@@ -651,7 +643,6 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     // this bursting results in SN feedback on the cold/hot gas
     if(run_params->SupernovaRecipeOn == 1) {
         if(run_params->FIREmodeOn == 1) {
-            // [FIRE model code - unchanged]
             const double z = run_params->ZZ[galaxies[merger_centralgal].SnapNum];
             const double vc = galaxies[merger_centralgal].Vvir;
             const double V_CRIT = 60.0;
@@ -687,12 +678,10 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         reheated_mass *= fac;
     }
 
-    // [... ejected_mass calculation - unchanged ...]
     // determine ejection
     if(run_params->SupernovaRecipeOn == 1) {
         if(galaxies[merger_centralgal].Vvir > 0.0) {
             if(run_params->FIREmodeOn == 1) {
-                // [FIRE ejection code - unchanged]
                 const double z = run_params->ZZ[galaxies[merger_centralgal].SnapNum];
                 const double vc = galaxies[merger_centralgal].Vvir;
                 const double V_CRIT = 60.0;
@@ -753,7 +742,6 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         }
     }
 
-    // FIX: Track burst stars in the appropriate bulge component
     const double recycled_stars = (1 - run_params->RecycleFraction) * stars;
     
     galaxies[merger_centralgal].BulgeMass += recycled_stars;
