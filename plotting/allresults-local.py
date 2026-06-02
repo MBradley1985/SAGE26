@@ -266,7 +266,20 @@ if __name__ == '__main__':
 
     IntraClusterStars = read_hdf(file_list, Snapshot, 'IntraClusterStars') * 1.0e10 / Hubble_h
     DiskRadius = read_hdf(file_list, Snapshot, 'DiskRadius')
+
+    #Checking for zeroes in disk radius to avoid division by zero in later plots
+    w = np.where(DiskRadius < 1e-8)[0]
+    if len(w) > 0:
+        print(f'  Warning: Found {len(w)} galaxies with zero disk radius. Setting to 0.1 kpc to avoid division by zero in plots.')
+        DiskRadius[w] = 0.1
+
     BulgeRadius = read_hdf(file_list, Snapshot, 'BulgeRadius')
+
+    #Checking for zeroes in bulge radius to avoid division by zero in later plots
+    w = np.where(BulgeRadius < 0)[0]
+    if len(w) > 0:
+        print(f'  Warning: Found {len(w)} galaxies with zero bulge radius. Setting to 0.1 kpc to avoid division by zero in plots.')
+        BulgeRadius[w] = 0.1
     MergerBulgeRadius = read_hdf(file_list, Snapshot, 'MergerBulgeRadius')
     InstabilityBulgeRadius = read_hdf(file_list, Snapshot, 'InstabilityBulgeRadius')
     MergerBulgeMass = read_hdf(file_list, Snapshot, 'MergerBulgeMass') * 1.0e10 / Hubble_h

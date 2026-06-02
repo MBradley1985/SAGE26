@@ -251,7 +251,6 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         // the Shen fallsafe fires immediately if new_merger_radius == 0 (edge
         // case: both progenitors were orphan satellites with DiskScaleRadius==0).
         galaxies[merger_centralgal].MergerBulgeRadius = new_merger_radius;
-        galaxies[merger_centralgal].BulgeRadius = new_merger_radius;
         get_bulge_radius(merger_centralgal, galaxies, run_params);
 
         galaxies[merger_centralgal].TimeOfLastMajorMerger = time;
@@ -495,8 +494,6 @@ void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
     galaxies[p].MergerBulgeMass = galaxies[p].StellarMass;      // All merger-driven
     galaxies[p].InstabilityBulgeMass = 0.0;                      // Destroyed
     galaxies[p].MetalsBulgeMass = galaxies[p].MetalsStellarMass;
-
-    // galaxies[p].BulgeRadius = get_bulge_radius(p, galaxies, run_params);
 
     // update the star formation rate
     for(int step = 0; step < STEPS; step++) {

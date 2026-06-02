@@ -315,7 +315,14 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
         double R_instability = galaxies[p].InstabilityBulgeRadius;
         if(M_instability > 0.0 && R_instability <= 0.0) {
             const double R_disc = galaxies[p].DiskScaleRadius;
-            R_instability = 0.2 * R_disc;
+            if(R_disc > 0.0) {
+                R_instability = 0.2 * R_disc;
+            } else {
+                // No disk (post-major-merger or orphan): use Shen power-law fallback
+                const double M_inst_sun = M_instability * 1.0e10 / h;
+                const double log_R_kpc = SHEN03_SLOPE_HIGH * log10(M_inst_sun) + SHEN03_INTERCEPT_HIGH;
+                R_instability = pow(10.0, log_R_kpc) * 1.0e-3 * h;
+            }
             galaxies[p].InstabilityBulgeRadius = R_instability;
         }
 

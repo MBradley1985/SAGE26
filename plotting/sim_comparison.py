@@ -38,7 +38,7 @@ except Exception:
 # ========================== CONFIGURATION ==========================
 
 # File paths
-PRIMARY_DIR    = './output/millennium_AGN_CGMoff/'
+PRIMARY_DIR    = './output/millennium/'
 SECONDARY_DIR  = './output/millennium_AGN_heatingreservoir/'  # optional; set to None to disable
 TERTIARY_DIR   = './output/millennium_AGN_entropy/'
 QUATERNARY_DIR = './output/millennium_AGN_rheat/'  # optional; set to None to disable 
@@ -62,7 +62,7 @@ Z_SUN = 0.0134
 # Model display names, colours, and line styles — edit here to change
 # labels globally across all plots.
 # ------------------------------------------------------------------
-PRIMARY_LABEL    = 'No AGN-CGM'
+PRIMARY_LABEL    = 'Millennium'
 PRIMARY_COLOR    = 'steelblue'
 PRIMARY_LS       = ':'
 
@@ -2271,9 +2271,118 @@ def plot_9_quiescent_counts(snapdata_h2, snapdata_cold, snapdata_tertiary=None, 
     plt.close(fig)
 
 
+def plot_10_morphology(primary, secondary, tertiary=None, quaternary=None):
+    """2×3 panel morphology diagnostics at z=0.
+
+    Panels:
+      [0,0] BulgeMass vs StellarMass
+      [0,1] BulgeRadius vs StellarMass
+      [0,2] DiskRadius vs StellarMass
+      [1,0] DiskMass (StellarMass - BulgeMass) vs StellarMass
+      [1,1] B/T (BulgeMass / StellarMass) vs StellarMass
+      [1,2] SFE (StellarMass / 0.17*Mvir) vs StellarMass
+
+    All binned-median with 16-84% shaded band. Radii shown in kpc/h.
+    """
+    print('Plot 10: Morphology diagnostics (2x3)')
+
+    models = [
+        (PRIMARY_LABEL,   primary,   PRIMARY_COLOR,   PRIMARY_LS),
+        (SECONDARY_LABEL, secondary, SECONDARY_COLOR, SECONDARY_LS),
+    ]
+    if tertiary:
+        models.append((TERTIARY_LABEL,   tertiary,   TERTIARY_COLOR,   TERTIARY_LS))
+    if quaternary:
+        models.append((QUATERNARY_LABEL, quaternary, QUATERNARY_COLOR, QUATERNARY_LS))
+
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+
+    _XBINS = np.arange(7.0, 12.5, 0.2)
+    _XLABEL = r'$\log_{10}\, M_{\ast}\ [M_\odot]$'
+
+    def _panel(ax, title, ylabel, xys, *, ylim=None, legend=False):
+        for name, color, ls, x, y in xys:
+            ok = np.isfinite(x) & np.isfinite(y)
+            if not ok.any():
+                continue
+            plot_binned_median_1sigma(ax, x[ok], y[ok], _XBINS,
+                                      color=color, label=name, ls=ls,
+                                      alpha=0.20, lw=2.8, min_count=30)
+        ax.set_title(title)
+        ax.set_xlabel(_XLABEL)
+        ax.set_ylabel(ylabel)
+        ax.grid(True, alpha=0.25)
+        if ylim is not None:
+            ax.set_ylim(ylim)
+        if legend:
+            ax.legend(loc='upper left', frameon=False, fontsize=9)
+
+    # --- precompute per-model arrays ---
+    def _log(x):
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return np.where(x > 0, np.log10(x), np.nan)
+
+    # Panel [0,0]: BulgeMass vs StellarMass
+    xys = []
+    for name, d, color, ls in models:
+        ms = np.asarray(d['StellarMass'], dtype=float)
+        mb = np.asarray(d['BulgeMass'],   dtype=float)
+        xys.append((name, color, ls, _log(ms), _log(mb)))
+    _panel(axes[0, 0], 'Bulge Mass', r'$\log_{10}\, M_{\rm bulge}\ [M_\odot]$', xys, legend=True)
+
+    # Panel [0,1]: BulgeRadius vs StellarMass  (Mpc/h × 1000 → kpc/h)
+    xys = []
+    for name, d, color, ls in models:
+        ms = np.asarray(d['StellarMass'],  dtype=float)
+        rb = np.asarray(d.get('BulgeRadius', np.zeros(len(ms))), dtype=float) * 1e3
+        xys.append((name, color, ls, _log(ms), _log(rb)))
+    _panel(axes[0, 1], 'Bulge Radius', r'$\log_{10}\, r_{\rm bulge}\ [{\rm kpc}\,h^{-1}]$', xys)
+
+    # Panel [0,2]: DiskRadius vs StellarMass  (Mpc/h × 1000 → kpc/h)
+    xys = []
+    for name, d, color, ls in models:
+        ms = np.asarray(d['StellarMass'],  dtype=float)
+        rd = np.asarray(d.get('DiskRadius', np.zeros(len(ms))), dtype=float) * 1e3
+        xys.append((name, color, ls, _log(ms), _log(rd)))
+    _panel(axes[0, 2], 'Disk Radius', r'$\log_{10}\, r_{\rm disk}\ [{\rm kpc}\,h^{-1}]$', xys)
+
+    # Panel [1,0]: DiskMass vs StellarMass
+    xys = []
+    for name, d, color, ls in models:
+        ms = np.asarray(d['StellarMass'], dtype=float)
+        md = ms - np.asarray(d['BulgeMass'], dtype=float)
+        xys.append((name, color, ls, _log(ms), _log(md)))
+    _panel(axes[1, 0], 'Disk Mass', r'$\log_{10}\, M_{\rm disk}\ [M_\odot]$', xys)
+
+    # Panel [1,1]: B/T vs StellarMass  (linear y, 0-1)
+    xys = []
+    for name, d, color, ls in models:
+        ms  = np.asarray(d['StellarMass'], dtype=float)
+        bt  = np.asarray(d['BulgeMass'],   dtype=float) / ms
+        ok  = np.isfinite(ms) & (ms > 0) & np.isfinite(bt)
+        xys.append((name, color, ls, _log(ms[ok]), bt[ok]))
+    _panel(axes[1, 1], 'Bulge-to-Total Ratio', r'$B/T$', xys, ylim=(0.0, 1.0))
+
+    # Panel [1,2]: SFE = StellarMass / (0.17 * Mvir) vs StellarMass  (log y)
+    xys = []
+    for name, d, color, ls in models:
+        ms   = np.asarray(d['StellarMass'], dtype=float)
+        mv   = np.asarray(d['Mvir'],        dtype=float)
+        sfe  = ms / (0.17 * mv)
+        xys.append((name, color, ls, _log(ms), _log(sfe)))
+    _panel(axes[1, 2], r'Star Formation Efficiency', r'$\log_{10}\,(M_{\ast} / 0.17\,M_{\rm vir})$', xys)
+
+    fig.tight_layout()
+    outfile = os.path.join(OUTPUT_DIR, f'Morphology_diagnostics{OUTPUT_FORMAT}')
+    fig.savefig(outfile, bbox_inches='tight')
+    print(f'  Saved {outfile}')
+    plt.close(fig)
+
+
 Z0_PLOTS = {
     1: plot_1_number_counts,
     2: plot_2_diagnostics,
+    10: plot_10_morphology,
 }
 
 EVOLUTION_PLOTS = {
@@ -2314,8 +2423,8 @@ def main():
 
     _z0_props = ['StellarMass', 'SfrDisk', 'SfrBulge',
                  'ColdGas', 'MetalsColdGas', 'H1gas', 'H2gas',
-                 'BlackHoleMass', 'BulgeMass',
-                 'Mvir', 'Vmax', 'Vvir',
+                 'BlackHoleMass', 'BulgeMass', 'MergerBulgeMass', 'InstabilityBulgeMass',
+                 'Mvir', 'Vmax', 'Vvir', 'DiskRadius', 'BulgeRadius',
                  'Type', 'IntraClusterStars']
 
     # Load z=0 data only if needed

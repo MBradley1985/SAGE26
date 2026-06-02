@@ -105,9 +105,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->CGMPrecipitationMode       = 1;
     run_params->CGMPrecipRadiusMode        = 0;
     run_params->CGMAGNOn                   = 1;
-    run_params->CGMHeatingReservoirOn      = 1;
+    run_params->CGMHeatingReservoirOn      = 0;
     run_params->CGMHeatingEntropyOn        = 0;
-    run_params->CGMHeatingRheatOn          = 0;
+    run_params->CGMHeatingRheatOn          = 1;
     run_params->FIREmodeOn                 = 1;
     run_params->RedshiftPowerLawExponent   = 1.25;
     run_params->FFBMaxEfficiency           = 0.2;

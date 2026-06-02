@@ -4,10 +4,10 @@
 
 FileNameGalaxies   model
 %OutputDir         /<absolute>/<root>/<path>/sage-model/output/millennium/
-OutputDir          output/microuchuu_originaltrees/
+OutputDir          output/microuchuu_STCbinary/
 
 FirstFile         0
-LastFile          0
+LastFile          4
 
 %------------------------------------------
 %----- Snapshot output list ---------------
@@ -24,12 +24,12 @@ OutputFormat      sage_hdf5 % sets the desired output format. Either 'sage_binar
 %----- Simulation information  ------------
 %------------------------------------------
 
-TreeName              tree_0_0_0.dat  % assumes the trees are named TreeName.n where n is the file number
-TreeType              consistent_trees_ascii % either 'genesis_lhalo_hdf5' or 'lhalo_binary'
-NumSimulationTreeFiles 1 % Number of files the trees are split over. This can be different to `FirstFile` -> `LastFile` range.
+TreeName              microUchuu_STC  % assumes the trees are named TreeName.n where n is the file number
+TreeType              lhalo_binary % either 'genesis_lhalo_hdf5' or 'lhalo_binary'
+NumSimulationTreeFiles 5 % Number of files the trees are split over. This can be different to `FirstFile` -> `LastFile` range.
 
 
-SimulationDir       input/microuchuu/trees
+SimulationDir       ../sage_tree_converter/output
 FileWithSnapList    input/microuchuu/trees/Uchuu100_scalefactor.txt
 LastSnapShotNr        49
 
@@ -59,10 +59,7 @@ FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 
 
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
-CGMAGNOn                    1   %0: disable AGN heating in CGM-regime entirely; 1: enable (default)
-CGMHeatingReservoirOn       1   %0: disable persistent HeatingReservoir model; 1: enable (default)
-CGMHeatingEntropyOn         0   %0: off; 1: AGN heating raises t_cool/t_ff via entropy injection
-CGMHeatingRheatOn           0   %0: off; 1: r_heat analog for CGM regime (decaying suppression fraction on t_dyn)
+
 
 %------------------------------------------
 %----- SAGE model parameters --------------
