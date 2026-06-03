@@ -51,7 +51,7 @@ void test_stripping_removes_gas_from_satellite() {
     
     // Apply stripping
     double Zcurr = 0.0;
-    strip_from_satellite(0, 1, Zcurr, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
     
     // Satellite should lose gas
     ASSERT_LESS_THAN(galaxies[1].HotGas, initial_sat_hot,
@@ -92,7 +92,7 @@ void test_stripping_conserves_mass() {
     double initial_total_hot = galaxies[0].HotGas + galaxies[1].HotGas;
     double initial_total_metals = galaxies[0].MetalsHotGas + galaxies[1].MetalsHotGas;
     
-    strip_from_satellite(0, 1, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
     
     double final_total_hot = galaxies[0].HotGas + galaxies[1].HotGas;
     double final_total_metals = galaxies[0].MetalsHotGas + galaxies[1].MetalsHotGas;
@@ -135,7 +135,7 @@ void test_regime_dependent_stripping() {
         double initial_sat_cgm = galaxies[1].CGMgas;
         double initial_sat_hot = galaxies[1].HotGas;
         
-        strip_from_satellite(0, 1, 0.0, galaxies, &run_params);
+        strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
         
         // In CGM regime, should strip from CGMgas, not HotGas
         if(galaxies[1].CGMgas < initial_sat_cgm) {
@@ -167,7 +167,7 @@ void test_regime_dependent_stripping() {
         double initial_sat_hot = galaxies[1].HotGas;
         double initial_sat_cgm = galaxies[1].CGMgas;
         
-        strip_from_satellite(0, 1, 0.0, galaxies, &run_params);
+        strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
         
         // In Hot regime, should strip from HotGas
         if(galaxies[1].HotGas < initial_sat_hot) {
@@ -207,7 +207,7 @@ void test_no_stripping_if_gas_balanced() {
     
     double initial_sat_hot = galaxies[1].HotGas;
     
-    strip_from_satellite(0, 1, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
     
     // With balanced baryons, minimal or no stripping
     ASSERT_CLOSE(galaxies[1].HotGas, initial_sat_hot, 0.5,
@@ -245,7 +245,7 @@ void test_stripping_transfers_metals() {
     double Z_sat_before = get_metallicity(galaxies[1].HotGas, galaxies[1].MetalsHotGas);
     double initial_cen_metals = galaxies[0].MetalsHotGas;
     
-    strip_from_satellite(0, 1, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
     
     // Central should gain metals
     ASSERT_GREATER_THAN(galaxies[0].MetalsHotGas, initial_cen_metals,
@@ -290,7 +290,7 @@ void test_environmental_quenching() {
     
     double initial_cgm = galaxies[1].CGMgas;
     
-    strip_from_satellite(0, 1, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
     
     // CGM should be reduced
     if(galaxies[1].CGMgas < initial_cgm) {
@@ -334,7 +334,7 @@ void test_no_stripping_below_mass_threshold() {
     
     double initial_sat_hot = galaxies[1].HotGas;
     
-    strip_from_satellite(0, 1, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
     
     // Should strip at most what's available
     ASSERT_TRUE(galaxies[1].HotGas >= 0.0,
@@ -372,7 +372,7 @@ void test_stripping_timescale() {
     
     double initial_hot = galaxies[1].HotGas;
     
-    strip_from_satellite(0, 1, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
     
     double stripped = initial_hot - galaxies[1].HotGas;
     

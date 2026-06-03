@@ -443,7 +443,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 }
             } else {
                 if(galaxies[p].Type == 1 && galaxies[p].HotGas > 0.0) {
-                    strip_from_satellite(centralgal, p, Zcurr, galaxies, run_params);
+                    strip_from_satellite(centralgal, p, Zcurr, effective_steps, galaxies, run_params);
                 }
             }
 

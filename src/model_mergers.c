@@ -957,6 +957,19 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
         }
     }
 
-    // what should we do with the disrupted satellite BH?
+    // Transfer black hole mass to central (avoid baryons disappearing)
+    galaxies[centralgal].BlackHoleMass += galaxies[gal].BlackHoleMass;
+
+    // Zero all satellite baryonic fields after transfer — defensive cleanup so
+    // no downstream code can accidentally recount baryons from a merged galaxy.
+    galaxies[gal].ColdGas         = galaxies[gal].MetalsColdGas     = 0.0f;
+    galaxies[gal].HotGas          = galaxies[gal].MetalsHotGas      = 0.0f;
+    galaxies[gal].CGMgas          = galaxies[gal].MetalsCGMgas      = 0.0f;
+    galaxies[gal].EjectedMass     = galaxies[gal].MetalsEjectedMass = 0.0f;
+    galaxies[gal].ICS             = galaxies[gal].MetalsICS         = 0.0f;
+    galaxies[gal].StellarMass     = galaxies[gal].MetalsStellarMass = 0.0f;
+    galaxies[gal].BulgeMass       = galaxies[gal].MetalsBulgeMass   = 0.0f;
+    galaxies[gal].BlackHoleMass   = 0.0f;
+
     galaxies[gal].mergeType = 4;  // mark as disruption to the ICS
 }

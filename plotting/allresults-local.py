@@ -1142,7 +1142,7 @@ if __name__ == '__main__':
         w1 = np.where((Type == 0) & (bin_indices == i))[0]
         HalosFound = len(w1)
         
-        if HalosFound > 2:
+        if HalosFound > 10:
             # Pre-allocate arrays for better performance
             BaryonFractions = np.zeros(HalosFound)
             StarsFractions = np.zeros(HalosFound)
