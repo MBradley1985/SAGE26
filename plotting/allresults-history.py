@@ -1013,12 +1013,12 @@ if __name__ == '__main__':
     # Load and plot observational data
     data_dir = DataDir
     obs_files = {
-        0.1: 'fig4_bhmf_z0.1.txt',
-        1.0: 'fig4_bhmf_z1.0.txt',
-        2.0: 'fig4_bhmf_z2.0.txt',
-        4.0: 'fig4_bhmf_z4.0.txt',
-        6.0: 'fig4_bhmf_z6.0.txt',
-        8.0: 'fig4_bhmf_z8.0.txt'
+        0.1: 'bh/fig4_bhmf_z0.1.txt',
+        1.0: 'bh/fig4_bhmf_z1.0.txt',
+        2.0: 'bh/fig4_bhmf_z2.0.txt',
+        4.0: 'bh/fig4_bhmf_z4.0.txt',
+        6.0: 'bh/fig4_bhmf_z6.0.txt',
+        8.0: 'bh/fig4_bhmf_z8.0.txt'
     }
     
     for i, target_z in enumerate(bhmf_redshifts):

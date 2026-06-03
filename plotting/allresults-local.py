@@ -314,7 +314,7 @@ if __name__ == '__main__':
 
     # Load GAMA morphological SMF data
     # Columns: log_M, E_HE, E_HE_err, cBD, cBD_err, dBD, dBD_err, D, D_err
-    gama = np.genfromtxt(os.path.join(DataDir, 'gama_smf_morph.ecsv'), comments='#', skip_header=1)
+    gama = np.genfromtxt(os.path.join(DataDir, 'smf', 'gama_smf_morph.ecsv'), comments='#', skip_header=1)
     gama_mass = gama[:, 0]
     gama_E_HE = gama[:, 1]
     gama_E_HE_err = gama[:, 2]
@@ -323,7 +323,7 @@ if __name__ == '__main__':
 
     # Load Baldry et al. blue/red SMF data
     # Columns: SF_mass, SF_phi, Q_mass, Q_phi (all in log)
-    baldry = np.genfromtxt(os.path.join(DataDir, 'baldry_blue_red.csv'), delimiter=',', skip_header=2)
+    baldry = np.genfromtxt(os.path.join(DataDir, 'morphology', 'baldry_blue_red.csv'), delimiter=',', skip_header=2)
     baldry_sf_mass = baldry[:, 0]
     baldry_sf_phi = baldry[:, 1]
     baldry_q_mass = baldry[:, 2]
@@ -759,7 +759,7 @@ if __name__ == '__main__':
 
     # Tremonti et al. 2004 - the primary observational reference
     try:
-        tremonti_data = np.loadtxt(os.path.join(DataDir, 'Tremonti04.dat'))
+        tremonti_data = np.loadtxt(os.path.join(DataDir, 'metallicity', 'Tremonti04.dat'))
         tremonti_mass = tremonti_data[:, 0]
         tremonti_Z = tremonti_data[:, 1]
         tremonti_Z_err_low = tremonti_data[:, 2]
@@ -788,7 +788,7 @@ if __name__ == '__main__':
     
     # Curti et al. 2020
     try:
-        curti_data = np.loadtxt(os.path.join(DataDir, 'Curti2020.dat'))
+        curti_data = np.loadtxt(os.path.join(DataDir, 'metallicity', 'Curti2020.dat'))
         curti_mass = curti_data[:, 0]
         curti_Z = curti_data[:, 1]
         curti_Z_low = curti_data[:, 2]
@@ -802,7 +802,7 @@ if __name__ == '__main__':
     
     # Andrews & Martini 2013
     try:
-        andrews_data = np.loadtxt(os.path.join(DataDir, 'MMAdrews13.dat'))
+        andrews_data = np.loadtxt(os.path.join(DataDir, 'metallicity', 'MMAdrews13.dat'))
         andrews_mass = andrews_data[:, 0]
         andrews_Z = andrews_data[:, 1]
         if whichimf == 0:
@@ -817,7 +817,7 @@ if __name__ == '__main__':
     
     # Kewley & Ellison 2008 - T04 calibration (most commonly used)
     try:
-        kewley_data = np.loadtxt(os.path.join(DataDir, 'MMR-Kewley08.dat'))
+        kewley_data = np.loadtxt(os.path.join(DataDir, 'metallicity', 'MMR-Kewley08.dat'))
         t04_start = 59
         t04_end = 74
         kewley_mass_t04 = kewley_data[t04_start:t04_end, 0]
@@ -834,7 +834,7 @@ if __name__ == '__main__':
     
     # Gallazzi et al. 2005 - Stellar metallicity (note: this is different from gas metallicity)
     try:
-        gallazzi_data = np.loadtxt(os.path.join(DataDir, 'MSZR-Gallazzi05.dat'))
+        gallazzi_data = np.loadtxt(os.path.join(DataDir, 'metallicity', 'MSZR-Gallazzi05.dat'))
         gallazzi_mass = gallazzi_data[7:, 0]
         gallazzi_Z_stellar = gallazzi_data[7:, 1]
         gallazzi_Z_gas_approx = gallazzi_Z_stellar + 8.69

@@ -34,7 +34,7 @@ yy*
 *.csv
 
 # data files #
-data/
+
 
 # sage_analysis Package Stuff #
 *.egg-info
