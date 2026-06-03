@@ -267,7 +267,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
         for(int i=0;i<buf2len;i++) {  /* BUG FIX: Changed <= to < to avoid buffer over-read */
             if(buf2[i] == '%' || buf2[i] == ';' || buf2[i] == '#') {
                 int null_pos = i;
-                //Ignore all preceeding whitespace
+                //Ignore all preceding whitespace
                 for(int j=i-1;j>=0;j--) {
                     null_pos = isblank(buf2[j]) ? j:null_pos;
                 }

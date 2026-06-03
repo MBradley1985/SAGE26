@@ -64,7 +64,7 @@ int setup_forests_io(struct params *run_params, struct forest_info *forests_info
         {
 #ifdef HDF5
         case lhalo_hdf5:
-            //MS: 22/07/2021 - Why is firstfile, lastfile still passed even though those could be constructef
+            //MS: 22/07/2021 - Why is firstfile, lastfile still passed even though those could be constructed
             //from run_params (like done within this __FUNCTION__)
             status = setup_forests_io_lht_hdf5(forests_info, ThisTask, NTasks, run_params);
             break;

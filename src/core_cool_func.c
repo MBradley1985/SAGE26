@@ -36,7 +36,7 @@ static char *name[] = {
 };
 
 
-// Metallicies with repect to solar. Will be converted to absolut metallicities by adding log10(Z_sun), Zsun=0.02
+// Metallicities with respect to solar. Will be converted to absolute metallicities by adding log10(Z_sun), Zsun=0.02
 static double metallicities[8] = {
 	-5.0,   // actually primordial -> -infinity
 	-3.0,
@@ -120,7 +120,7 @@ static double get_rate(int tab, double logTemp)
         index = LAST_TAB_INDEX - 1;
     }
 
-    const double logTindex = 4.0 + 0.05 * index;
+    const double logTindex = 4.0 + dlogT * index;
 
     const double rate1 = CoolRate[tab][index];
     const double rate2 = CoolRate[tab][index + 1];

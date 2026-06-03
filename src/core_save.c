@@ -261,7 +261,7 @@ static int32_t generate_galaxy_indices(const struct halo_data *halos, const stru
         {
 #ifdef HDF5
         case lhalo_hdf5:
-            //MS: 22/07/2021 - Why is firstfile, lastfile still passed even though those could be constructef
+            //MS: 22/07/2021 - Why is firstfile, lastfile still passed even though those could be constructed
             //from run_params (like done within this __FUNCTION__)
             fprintf(stderr,"It is likely that your tree file contains too many trees or a tree contains too many galaxies, you can increase the maximum number "\
                     "of trees per file with the parameter run_params->FileNr_Mulfac at l. 264 in src/io/read_tree_lhalo_hdf5.c. "\
@@ -344,7 +344,7 @@ static int32_t generate_galaxy_indices(const struct halo_data *halos, const stru
 
         // Everything is good, generate the index.
         this_gal->GalaxyIndex = GalaxyNr + id_from_forest_and_file;
-        this_gal->CentralGalaxyIndex= CentralGalaxyNr + id_from_forest_and_file;
+        this_gal->CentralGalaxyIndex = CentralGalaxyNr + id_from_forest_and_file;
     }
 
     return EXIT_SUCCESS;
