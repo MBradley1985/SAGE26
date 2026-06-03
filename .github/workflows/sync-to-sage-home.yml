@@ -1,0 +1,20 @@
+name: Sync to sage-home/SAGE26
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history needed for mirror push
+
+      - name: Push to sage-home/SAGE26
+        run: |
+          git remote add sage-home https://x-access-token:${{ secrets.SAGE_HOME_TOKEN }}@github.com/sage-home/SAGE26.git
+          git push sage-home ${{ github.ref_name }}
