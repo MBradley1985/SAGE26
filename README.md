@@ -176,7 +176,7 @@ If you use SAGE26 in a publication, please cite:
 ```bibtex
 @article{bradley2026sage26,
   author  = {Bradley, Michael and Croton, Darren J.},
-  title   = {{SAGE26}: A Two-Regime CGM Model for Semi-Analytic Galaxy Evolution},
+  title   = {{SAGE26} Paper I: Modelling the baryon cycle from cosmic dawn to the present day},
   journal = {in preparation},
   year    = {2026},
 }
