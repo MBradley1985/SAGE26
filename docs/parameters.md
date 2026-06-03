@@ -126,7 +126,7 @@ optional parameters take the listed default if omitted.
 | Parameter | Units | Default | Description |
 |-----------|-------|---------|-------------|
 | `FeedbackReheatingEpsilon` | dimensionless | `2.9` | Mass of cold gas reheated per unit of stellar mass formed (Martin 1999). |
-| `FeedbackEjectionEfficiency` | dimensionless | `0.5` | Fraction of SN energy deposited into hot gas for ejection. |
+| `FeedbackEjectionEfficiency` | dimensionless | `0.3` | Fraction of SN energy deposited into hot gas for ejection. |
 | `EnergySN` | erg | `1.0e51` | Energy per supernova event. |
 | `EtaSN` | M_sun⁻¹ | `5.0e-3` | Number of supernovae per solar mass of stars formed. |
 
