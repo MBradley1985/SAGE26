@@ -5,8 +5,8 @@
 
 PROJECT_NAME           = "SAGE26"
 PROJECT_BRIEF          = "Semi-Analytic Galaxy Evolution"
-OUTPUT_DIRECTORY       = _doxygen
-INPUT                  = ../src
+OUTPUT_DIRECTORY       = docs/_doxygen
+INPUT                  = src
 RECURSIVE              = YES
 FILE_PATTERNS          = *.c *.h
 
