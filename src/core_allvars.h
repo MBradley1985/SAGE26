@@ -106,51 +106,48 @@ enum sage_error_types {
 struct GALAXY
 {
     int32_t   SnapNum;
-    int32_t   Type;
-    int32_t   Regime;
-    int32_t   FFBRegime;
-    float     FFBRandom;  // Persistent random number for sigmoid-based FFB determination
+    int32_t   Type;       /* 0=central; 1=satellite with subhalo; 2=orphan satellite; 3=merged (dead) */
+    int32_t   Regime;     /* 0=CGM-dominated (cold-flow/precipitation); 1=hot-halo (classical); set by determine_and_store_regime() */
+    int32_t   FFBRegime;  /* 0=standard SF; 1=feedback-free burst active; set by determine_and_store_ffb_regime() */
+    float     FFBRandom;  /* persistent random number for sigmoid-based FFB determination (drawn at galaxy creation) */
 
-    int32_t   GalaxyNr;
-    int32_t   CentralGal;
-    int32_t   HaloNr;
+    int32_t   GalaxyNr;   /* index within the current forest's galaxy array */
+    int32_t   CentralGal; /* index of the FOF central galaxy in the current galaxy array */
+    int32_t   HaloNr;     /* index of the host halo in the halos[] array */
     long long MostBoundID;
-    uint64_t GalaxyIndex; // This is a unique value based on the tree local galaxy number,
-    // file local tree number and the file number itself.
-                       // See ``generate_galaxy_index()`` in ``core_save.c``.
-    uint64_t CentralGalaxyIndex; // Same as above, except the ``GalaxyIndex`` value for the CentralGalaxy
-    // of this galaxy's FoF group.
+    uint64_t GalaxyIndex;        /* unique output ID encoding file/forest/galaxy; see generate_galaxy_index() in core_save.c */
+    uint64_t CentralGalaxyIndex; /* GalaxyIndex of this galaxy's FOF central */
 
     int32_t   mergeType;  /* 0=none; 1=minor merger; 2=major merger; 3=disk instability; 4=disrupt to ICS */
-    int32_t   mergeIntoID;
-    int32_t   mergeIntoSnapNum;
-    float dT;
+    int32_t   mergeIntoID;       /* GalaxyIndex of the merger target (output-array index before offset correction) */
+    int32_t   mergeIntoSnapNum;  /* snapshot at which the merger is recorded */
+    float dT;                    /* total time interval for this snapshot step [code time units] */
 
     /* (sub)halo properties */
     float Pos[3];
     float Vel[3];
-    int   Len;
-    float Mvir;
-    float deltaMvir;
-    float CentralMvir;
-    float Rvir;
-    float Vvir;
-    float Vmax;
-    float Concentration;
+    int   Len;           /* number of simulation particles in the host (sub)halo */
+    float Mvir;          /* virial mass [10^10 Msun/h] */
+    float deltaMvir;     /* change in virial mass since previous snapshot [10^10 Msun/h] */
+    float CentralMvir;   /* virial mass of the FOF host halo [10^10 Msun/h] */
+    float Rvir;          /* virial radius [Mpc/h] */
+    float Vvir;          /* virial circular velocity [km/s] */
+    float Vmax;          /* maximum circular velocity of the (sub)halo [km/s] */
+    float Concentration; /* NFW concentration parameter; computed if ConcentrationOn > 0 */
 
-    /* baryonic reservoirs */
+    /* baryonic reservoirs [all in 10^10 Msun/h] */
     float ColdGas;
     float StellarMass;
     float BulgeMass;
     float HotGas;
     float EjectedMass;
     float BlackHoleMass;
-    float ICS;
-    float CGMgas;
-    float H2gas;
-    float H1gas;
+    float ICS;       /* intracluster/intragroup stellar component */
+    float CGMgas;    /* CGM-regime gas reservoir (Regime==0 only) */
+    float H2gas;     /* molecular hydrogen mass */
+    float H1gas;     /* atomic hydrogen mass */
 
-    /* metals */
+    /* metals [shadow each baryonic reservoir; same units] */
     float MetalsColdGas;
     float MetalsStellarMass;
     float MetalsBulgeMass;
@@ -159,7 +156,7 @@ struct GALAXY
     float MetalsICS;
     float MetalsCGMgas;
 
-    /* to calculate magnitudes */
+    /* per-substep SFR trackers (used to compute magnitudes) */
     float SfrDisk[STEPS];
     float SfrBulge[STEPS];
     float SfrDiskColdGas[STEPS];
@@ -172,50 +169,50 @@ struct GALAXY
     float SFHMassBulge[ABSOLUTEMAXSNAPS];  /* stellar mass formed in bulge (starbursts) at each snapshot */
     float ICS_disrupt;                     /* cumulative stellar mass disrupted to ICS (assembly tracking) */
     float ICS_accrete;                     /* cumulative ICS accreted from satellites (assembly tracking) */
-    float ICS_sum_mt;                      /* mass-weighted accumulator: sum of m*t (code time) at ICS deposition.
-                                              Mean ICS-assembly lookback = ICS_sum_mt / (ICS_disrupt + ICS_accrete). */
+    float ICS_sum_mt;                      /* mass-weighted accumulator: sum of m*t (code time) at ICS deposition;
+                                              mean ICS-assembly lookback = ICS_sum_mt / (ICS_disrupt + ICS_accrete) */
 
     /* misc */
-    float DiskScaleRadius;
-    float BulgeRadius;
-    float MergTime;
-    double Cooling;
-    double Heating;
-    float f_heat_cgm;         /* CGM-regime r_heat analog: dimensionless suppression fraction (0-1), decays on t_dyn */
-    float r_heat;
-    float QuasarModeBHaccretionMass;
+    float DiskScaleRadius; /* exponential disk scale radius [Mpc/h] */
+    float BulgeRadius;     /* effective (half-mass) bulge radius [Mpc/h] */
+    float MergTime;        /* dynamical-friction merger clock; counts down to 0 [code time units]; >999 = unset */
+    double Cooling;        /* total cooling luminosity this snapshot [code energy / code time] */
+    double Heating;        /* total AGN heating luminosity this snapshot [code energy / code time] */
+    float f_heat_cgm;      /* CGM-regime AGN suppression fraction (0-1); analog of r_heat; decays on t_dyn */
+    float r_heat;          /* AGN radio-mode heating radius [Mpc/h]; suppresses cooling gas at r < r_heat */
+    float QuasarModeBHaccretionMass; /* BH mass accreted in quasar mode this snapshot [10^10 Msun/h] */
     float TimeOfLastMajorMerger;
     float TimeOfLastMinorMerger;
-    float OutflowRate;
-    float TotalSatelliteBaryons;
-    float RcoolToRvir;
+    float OutflowRate;           /* SN-driven gas outflow rate [10^10 Msun/h / code time] */
+    float TotalSatelliteBaryons; /* sum of all baryonic mass in satellites (used for output diagnostics) */
+    float RcoolToRvir;           /* ratio of cooling radius to virial radius at last cooling evaluation */
 
-    /* infall properties */
+    /* infall properties -- values frozen at the moment a galaxy first becomes a satellite */
     float infallMvir;
     float infallVvir;
     float infallVmax;
     float infallStellarMass;
-    float TimeOfInfall;
+    float TimeOfInfall; /* snapshot number at infall */
 
-    float MassLoading;
+    float MassLoading; /* SN mass-loading factor eta = M_ejected / M_* for the current SF episode */
 
-    /* CGM properties */
-    float tcool;
-    float tff;
-    float tcool_over_tff;
-    float tdeplete;
-    float H2DepletionTime_Gyr;
+    /* CGM properties (set each snapshot by cooling_recipe_cgm / cooling_recipe_regime_aware) */
+    float tcool;             /* cooling time at the precipitation radius [code time units] */
+    float tff;               /* free-fall time at the precipitation radius [code time units] */
+    float tcool_over_tff;    /* ratio used for precipitation threshold test */
+    float tdeplete;          /* gas depletion timescale from the current SF episode [code time units] */
+    float H2DepletionTime_Gyr; /* molecular depletion time from K13 prescription [Gyr] */
 
-    /* bulge properties */
-    float MergerBulgeMass;     
-    float InstabilityBulgeMass; 
-    float MergerBulgeRadius;      
-    float InstabilityBulgeRadius;
+    /* bulge properties -- split by formation channel for morphology tracking */
+    float MergerBulgeMass;        /* bulge mass built via mergers [10^10 Msun/h] */
+    float InstabilityBulgeMass;   /* bulge mass built via disk instability [10^10 Msun/h] */
+    float MergerBulgeRadius;      /* half-mass radius of merger-built bulge [Mpc/h] */
+    float InstabilityBulgeRadius; /* half-mass radius of instability-built bulge [Mpc/h] */
 
-    float mdot_cool;
-    float mdot_stream;
+    float mdot_cool;    /* instantaneous CGM cooling rate onto the disk [10^10 Msun/h / code time] */
+    float mdot_stream;  /* cold-stream inflow rate from CGMgas [10^10 Msun/h / code time] */
 
-    double g_max;
+    double g_max; /* maximum gravitational instability growth rate for BK25 FFB threshold (dimensionless) */
 };
 
 
@@ -460,15 +457,18 @@ struct params
     char   SimulationDir[MAX_STRING_LEN];
     char   FileWithSnapList[MAX_STRING_LEN];
 
-    double Omega;
-    double OmegaLambda;
-    double PartMass;
-    double Hubble_h;
-    double BoxSize;
-    double EnergySNcode;
-    double EnergySN;
-    double EtaSNcode;
-    double EtaSN;
+    /* cosmological parameters (read from parameter file) */
+    double Omega;        /* matter density parameter (z=0) */
+    double OmegaLambda;  /* dark energy density parameter (z=0) */
+    double PartMass;     /* N-body particle mass [10^10 Msun/h] */
+    double Hubble_h;     /* dimensionless Hubble parameter h (H0 = 100 h km/s/Mpc) */
+    double BoxSize;      /* simulation box side length [Mpc/h] */
+
+    /* supernova energy and mass-loading parameters */
+    double EnergySNcode; /* SN energy per unit stellar mass in code units */
+    double EnergySN;     /* SN energy per event in cgs (erg) */
+    double EtaSNcode;    /* SN rate per unit stellar mass in code units */
+    double EtaSN;        /* number of SN per solar mass of stars formed */
 
     /* moving for alignment */
     int32_t NumSimulationTreeFiles;
@@ -503,10 +503,11 @@ struct params
 
     double H2DepletionTime_Gyr;   // tau_dep for H2SFRMode=1 [Gyr] (default 2.0)
 
-    double RecycleFraction;
-    double Yield;
-    double FracZleaveDisk;
-    double ReIncorporationFactor;
+    /* baryonic physics calibration parameters */
+    double RecycleFraction;       /* fraction of stellar mass returned to cold gas by SN */
+    double Yield;                 /* metal yield per unit stellar mass locked up */
+    double FracZleaveDisk;        /* fraction of SN-enriched gas that leaves the disk (vs stays in ColdGas) */
+    double ReIncorporationFactor; /* rate at which ejected gas re-accretes onto the hot halo */
     double ThreshMajorMerger;
     double BaryonFrac;
     double SfrEfficiency;
@@ -526,20 +527,25 @@ struct params
     double DisruptionSplitCref;      // Reference concentration for concentration weighting (DynamicDisruptionSplit=2)
     double RedshiftPowerLawExponent;
 
-    double UnitLength_in_cm;
-    double UnitVelocity_in_cm_per_s;
-    double UnitMass_in_g;
+    /* code unit definitions (set from parameter file; all other unit fields derived from these) */
+    double UnitLength_in_cm;          /* 1 code length = this many cm (default: 1 Mpc/h) */
+    double UnitVelocity_in_cm_per_s;  /* 1 code velocity = this many cm/s (default: 1 km/s) */
+    double UnitMass_in_g;             /* 1 code mass = this many grams (default: 10^10 Msun) */
+
+    /* derived unit conversions (computed by core_init.c from the three above) */
     double UnitTime_in_s;
-    double RhoCrit;
+    double RhoCrit;               /* critical density in code units */
     double UnitPressure_in_cgs;
     double UnitDensity_in_cgs;
     double UnitCoolingRate_in_cgs;
     double UnitEnergy_in_cgs;
     double UnitTime_in_Megayears;
-    double G;
-    double Hubble;
-    double a0;
-    double ar;
+    double G;       /* gravitational constant in code units */
+    double Hubble;  /* Hubble constant in code units */
+
+    /* reionization filter-mass scale factors (Kravtsov+2004 / Gnedin 2000) */
+    double a0;  /* scale factor at which the filter mass M_F reaches its peak */
+    double ar;  /* scale factor at which reionization completes (used in M_F integral) */
 
     int32_t nsnapshots;
     int32_t LastSnapshotNr;
@@ -555,6 +561,7 @@ struct params
     enum Valid_Forest_Distribution_Schemes ForestDistributionScheme;
     double Exponent_Forest_Dist_Scheme;
 
+    /* GalaxyIndex encoding multipliers: GalaxyIndex = FileNr*FileNr_Mulfac + ForestNr*ForestNr_Mulfac + GalaxyNr */
     int64_t FileNr_Mulfac;
     int64_t ForestNr_Mulfac;
 

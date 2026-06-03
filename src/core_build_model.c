@@ -165,12 +165,15 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
 
     if(prog >=0) {
         if(haloaux[prog].NGalaxies > 0) {
+            /* FirstProgenitor already has a galaxy: keep it as first_occupied unconditionally.
+             * lenoccmax = -1 is a sentinel that prevents the loop below from updating first_occupied,
+             * since FirstProgenitor is by definition the most bound and should host the central. */
             lenoccmax = -1;
         }
     }
 
-    // Find most massive progenitor that contains an actual galaxy
-    // Maybe FirstProgenitor never was FirstHaloInFOFGroup and thus has no galaxy
+    // Find most massive progenitor that contains an actual galaxy.
+    // Maybe FirstProgenitor never was FirstHaloInFOFGroup and thus has no galaxy.
 
     while(prog >= 0) {
         if(halos[prog].Len > lenmax) {
@@ -545,12 +548,16 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
         // Merged galaxies won't be output. So go back through its history and find it
         // in the previous timestep. Then copy the current merger info there.
+        /* mergeIntoID was stored as a raw output-array index including all galaxies.
+         * Merged galaxies are not written to output, so every preceding merged galaxy
+         * whose mergeIntoID < galaxies[p].mergeIntoID would occupy a slot that is now
+         * absent -- shift the target index down by one for each such gap. */
         int offset = 0;
         int i = p-1;
         while(i >= 0) {
             if(galaxies[i].mergeType > 0) {
                 if(galaxies[p].mergeIntoID > galaxies[i].mergeIntoID) {
-                    offset++;  // these galaxies won't be kept so offset mergeIntoID below
+                    offset++;
                 }
             }
 
