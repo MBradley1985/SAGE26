@@ -241,13 +241,14 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                     galaxies[ngal].Len = halos[halonr].Len;
                     galaxies[ngal].Vmax = halos[halonr].Vmax;
 
-                    galaxies[ngal].deltaMvir = get_virial_mass(halonr, halos, run_params) - galaxies[ngal].Mvir;
+                    const double new_Mvir = get_virial_mass(halonr, halos, run_params);
+                    galaxies[ngal].deltaMvir = new_Mvir - galaxies[ngal].Mvir;
 
-                    if(get_virial_mass(halonr, halos, run_params) > galaxies[ngal].Mvir) {
-                        galaxies[ngal].Rvir = get_virial_radius(halonr, halos, run_params);  // use the maximum Rvir in model
-                        galaxies[ngal].Vvir = get_virial_velocity(halonr, halos, run_params);  // use the maximum Vvir in model
+                    if(new_Mvir > galaxies[ngal].Mvir) {
+                        galaxies[ngal].Rvir = get_virial_radius(halonr, halos, run_params);
+                        galaxies[ngal].Vvir = get_virial_velocity(halonr, halos, run_params);
                     }
-                    galaxies[ngal].Mvir = get_virial_mass(halonr, halos, run_params);
+                    galaxies[ngal].Mvir = new_Mvir;
 
                     galaxies[ngal].Cooling = 0.0;
                     galaxies[ngal].Heating = 0.0;
