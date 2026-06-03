@@ -56,9 +56,7 @@ CGMDensityProfile           0   %0: uniform; 1: NFW; 2: beta-profile (beta=2/3)
 CGMPrecipitationMode        1   %0: tanh (McCourt+12 style); 1: logistic sigmoid centred on t_cool/t_ff=10, width=2
 CGMPrecipRadiusMode         0   %0: evaluate t_cool/t_ff at r_cool; 1: evaluate at 0.1*R_vir
 CGMAGNOn                    1   %0: disable AGN heating in CGM-regime entirely; 1: enable (default)
-CGMHeatingReservoirOn       0   %0: disable persistent HeatingReservoir model; 1: enable
-CGMHeatingEntropyOn         0   %0: off; 1: AGN heating raises t_cool/t_ff via entropy injection
-CGMHeatingRheatOn           1   %0: off; 1: f_heat_cgm decaying suppression fraction on t_dyn; 2: standard r_heat ratchet capped at Rvir
+CGMHeatingRheatOn           2   %0: off; 1: f_heat_cgm decaying suppression fraction on t_dyn; 2: standard r_heat ratchet capped at Rvir
 FIREmodeOn                  1   %0: switch off
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
@@ -87,7 +85,7 @@ FFBConcSigma                0.2     %sigma_c for log-normal concentration scatte
 RedshiftPowerLawExponent    1.25    %alpha for (1+z)^alpha in mass loading calculation (FIREmodeOn=1)
 
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)
-FeedbackEjectionEfficiency  0.5     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
+FeedbackEjectionEfficiency  0.3     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
 
 ReIncorporationFactor       0.15    %fraction of ejected mass reincorporated per dynamical time to hot
 

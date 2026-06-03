@@ -105,9 +105,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->CGMPrecipitationMode       = 1;
     run_params->CGMPrecipRadiusMode        = 0;
     run_params->CGMAGNOn                   = 1;
-    run_params->CGMHeatingReservoirOn      = 0;
-    run_params->CGMHeatingEntropyOn        = 0;
-    run_params->CGMHeatingRheatOn          = 1;
+    run_params->CGMHeatingRheatOn          = 2;
     run_params->FIREmodeOn                 = 1;
     run_params->RedshiftPowerLawExponent   = 1.25;
     run_params->FFBMaxEfficiency           = 0.2;
@@ -130,7 +128,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->FracZleaveDisk             = 0.0;
     run_params->SfrEfficiency              = 0.05;
     run_params->FeedbackReheatingEpsilon   = 2.9;
-    run_params->FeedbackEjectionEfficiency = 0.5;
+    run_params->FeedbackEjectionEfficiency = 0.3;
     run_params->BlackHoleGrowthRate        = 0.015;
     run_params->RadioModeEfficiency        = 0.08;
     run_params->QuasarModeEfficiency       = 0.005;
@@ -191,8 +189,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("CGMPrecipitationMode",  &(run_params->CGMPrecipitationMode), INT, 0);
     REG("CGMPrecipRadiusMode",   &(run_params->CGMPrecipRadiusMode),  INT, 0);
     REG("CGMAGNOn",              &(run_params->CGMAGNOn),              INT, 0);
-    REG("CGMHeatingReservoirOn", &(run_params->CGMHeatingReservoirOn),INT, 0);
-    REG("CGMHeatingEntropyOn",   &(run_params->CGMHeatingEntropyOn),  INT, 0);
     REG("CGMHeatingRheatOn",     &(run_params->CGMHeatingRheatOn),    INT, 0);
     REG("FIREmodeOn",            &(run_params->FIREmodeOn),           INT, 0);
     REG("ConcentrationOn",       &(run_params->ConcentrationOn),      INT, 0);

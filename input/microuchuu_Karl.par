@@ -60,9 +60,7 @@ FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
 CGMAGNOn                    1   %0: disable AGN heating in CGM-regime entirely; 1: enable (default)
-CGMHeatingReservoirOn       0   %0: disable persistent HeatingReservoir model; 1: enable
-CGMHeatingEntropyOn         0   %0: off; 1: AGN heating raises t_cool/t_ff via entropy injection
-CGMHeatingRheatOn           1   %0: off; 1: f_heat_cgm decaying suppression fraction on t_dyn; 2: standard r_heat ratchet capped at Rvir
+CGMHeatingRheatOn           2   %0: off; 1: f_heat_cgm decaying suppression fraction on t_dyn; 2: standard r_heat ratchet capped at Rvir
 
 %------------------------------------------
 %----- SAGE model parameters --------------
@@ -72,7 +70,7 @@ SfrEfficiency               0.05    %efficiency of SF; unused for SFprescription
 FFBMaxEfficiency            1.0     %0.2 fits observations best, 1.0 is theoretical maximum
 
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)
-FeedbackEjectionEfficiency  0.5     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
+FeedbackEjectionEfficiency  0.3     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
 
 ReIncorporationFactor       0.15    %fraction of ejected mass reincorporated per dynamical time to hot
 

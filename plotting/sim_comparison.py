@@ -39,8 +39,8 @@ except Exception:
 
 # File paths
 PRIMARY_DIR    = './output/millennium/'
-SECONDARY_DIR  = './output/millennium_AGN_CGMoff/'  # optional; set to None to disable
-TERTIARY_DIR   = './output/millennium_vanilla/'
+SECONDARY_DIR  = './output/millennium_exprheat/'  # optional; set to None to disable
+TERTIARY_DIR   = './output/millennium_cgmoff/'
 QUATERNARY_DIR = None  # optional; set to None to disable 
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
@@ -62,15 +62,15 @@ Z_SUN = 0.0134
 # Model display names, colours, and line styles — edit here to change
 # labels globally across all plots.
 # ------------------------------------------------------------------
-PRIMARY_LABEL    = 'miniMillennium'
+PRIMARY_LABEL    = 'miniMillennium (Rvir capped r_heat)'
 PRIMARY_COLOR    = 'steelblue'
 PRIMARY_LS       = ':'
 
-SECONDARY_LABEL  = 'miniMillennium (AGN CGM off)'
+SECONDARY_LABEL  = 'miniMillennium (exponential r_heat)'
 SECONDARY_COLOR  = 'coral'
 SECONDARY_LS     = '--'
 
-TERTIARY_LABEL   = 'miniMillennium (SAGE C16)'
+TERTIARY_LABEL   = 'miniMillennium (no CGM-AGN interaction)'
 TERTIARY_COLOR   = 'mediumseagreen'
 TERTIARY_LS      = '-'
 
