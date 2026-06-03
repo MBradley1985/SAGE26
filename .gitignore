@@ -5,7 +5,6 @@ output/
 input/microuchuu/
 tests/test_build/
 tests/test_output/
-plotting/random_plotting_scripts
 
 *.o
 *.*~
