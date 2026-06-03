@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
-title: "SAGE26: Semi-Analytic Galaxy Evolution"
+title: "SAGE26: Semi-Analytic Galaxy Evolution model"
 abstract: >
   SAGE26 is a C99 semi-analytic code for modelling galaxy formation in a
   cosmological context. It extends Croton et al. (2016) with a two-regime CGM
@@ -26,6 +26,6 @@ preferred-citation:
       given-names: Michael
     - family-names: Croton
       given-names: Darren J.
-  title: "SAGE26: A Two-Regime CGM Model for Semi-Analytic Galaxy Evolution"
+  title: "SAGE26 Paper I: Modelling the baryon cycle from cosmic dawn to the present day"
   journal: "in preparation"
   year: 2026
