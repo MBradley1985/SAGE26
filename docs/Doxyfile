@@ -1,0 +1,30 @@
+# Doxyfile for SAGE26
+# Paths are relative to this file (docs/).
+# Run from docs/: doxygen Doxyfile
+# Run from repo root: doxygen docs/Doxyfile
+
+PROJECT_NAME           = "SAGE26"
+PROJECT_BRIEF          = "Semi-Analytic Galaxy Evolution"
+OUTPUT_DIRECTORY       = _doxygen
+INPUT                  = ../src
+RECURSIVE              = YES
+FILE_PATTERNS          = *.c *.h
+
+# Extract everything including static functions
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_LOCAL_CLASSES  = YES
+
+# Generate XML for Breathe; disable HTML (Sphinx handles rendering)
+GENERATE_XML           = YES
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+
+# Improve extraction quality
+JAVADOC_AUTOBRIEF      = YES
+MULTILINE_CPP_IS_BRIEF = NO
+STRIP_CODE_COMMENTS    = NO
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO

@@ -25,6 +25,8 @@ codecov
 *.ipynb_checkpoints
 *.dSYM
 *.txt
+!requirements.txt
+!docs/requirements.txt
 *.log
 *.out
 *.DS_Store
@@ -38,9 +40,10 @@ yy*
 *.egg-info
 *__pycache__*
 
-# Documentation with Sphinx #
+# Documentation with Sphinx / Doxygen #
 docs/build
 docs/make.bat
+docs/_doxygen/
 
 # Regression baseline — manifests for slow optional configs are captured locally on demand,
 # not committed. Only the default-sweep configs in tests/regression_baseline.sh are tracked.
