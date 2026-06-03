@@ -38,17 +38,34 @@ On a first run, execute `./first_run.sh` to create output directories and downlo
 Tests live in `tests/` and are standalone C programs linked against the sage sources. GSL is required.
 
 ```bash
-make tests                 # from root — invokes ./tests/test_sage.sh
-cd tests && make test      # alternatively, run from tests/ directly
-make test_conservation     # run a single suite (37 tests)
-make test_regime           # CGM/regime physics (21 tests)
-make test_physics          # physics validation (31 tests)
-make quick                 # fastest check — conservation only
-make check_dependencies    # show which suites can be built with current sources
-bash run_integration_tests.sh  # full integration test (slower, realistic physics)
+cd tests && make test      # build and run all suites (primary test command)
+cd tests && make test_conservation     # run a single suite (37 tests)
+cd tests && make test_regime           # CGM/regime physics (21 tests)
+cd tests && make test_physics          # physics validation (31 tests)
+cd tests && make quick                 # fastest check — conservation only
+cd tests && make check_dependencies    # show which suites can be built with current sources
+bash tests/run_integration_tests.sh   # full integration test (slower, realistic physics)
 ```
 
-The test build skips suites whose required source files are missing rather than failing — useful when working with a partial source tree. Logs go to `tests/test_output/*.log`. New tests need a corresponding entry in `tests/Makefile` and `run_integration_tests.sh`. The test framework is in `tests/test_framework.h` (macros: `ASSERT_CLOSE`, `ASSERT_IN_RANGE`, etc.).
+Note: `make tests` from the root Makefile references `./tests/test_sage.sh` which does not exist yet — always run tests from inside `tests/` instead.
+
+The test build skips suites whose required source files are missing rather than failing — useful when working with a partial source tree. Logs go to `tests/test_output/*.log`. New tests need a corresponding entry in `tests/Makefile` and `tests/run_integration_tests.sh`. The test framework is in `tests/test_framework.h` (macros: `ASSERT_CLOSE`, `ASSERT_IN_RANGE`, etc.).
+
+### Regression baseline
+
+A bit-identical output baseline is stored in `tests/baseline/millennium/manifest.json`. After any physics change, update it with:
+
+```bash
+python3 tests/regression_baseline.py capture input/millennium.par
+```
+
+Verify the current build has not drifted with:
+
+```bash
+bash tests/regression_baseline.sh
+```
+
+The regression script requires a serial (non-MPI) `sage` binary — rebuild with `make USE-MPI=` if needed before capturing.
 
 ## Plotting
 
@@ -131,7 +148,7 @@ Control all physics switches and model parameters. Key switches:
 
 ### Two-regime CGM model
 
-The key physics innovation. `Regime` field on `GALAXY` is set by `determine_and_store_regime()` based on the Voit (2015) criterion (M/Mshock)^(4/3). Regime 0 = hot halo (classical cooling), Regime 1 = CGM-dominated. In CGM regime, gas routes to `CGMgas` reservoir and cooling goes through `cooling_recipe_cgm()`. AGN heating in CGM regime uses a persistent `HeatingReservoir` that decays on the dynamical time.
+The key physics innovation. `Regime` field on `GALAXY` is set by `determine_and_store_regime()` based on the Dekel & Birnboim (2006) M_shock criterion. **Regime 0 = CGM-dominated (precipitation/cold-flow regime); Regime 1 = hot halo (classical cooling regime).** In Regime 0, infall routes to `CGMgas` and cooling goes through `cooling_recipe_cgm()`. In Regime 1, infall routes to `HotGas` and cooling uses the classical `cooling_recipe()`. AGN heating in Regime 0 uses a persistent `HeatingReservoir` that decays on the dynamical time `t_dyn = Rvir/Vvir`.
 
 ### Supported tree formats
 
@@ -148,3 +165,51 @@ The build produces both `./sage` (executable) and `libsage.so` (shared library) 
 ### SAGE-PSO companion package
 
 Particle Swarm Optimization for automated parameter calibration lives in a separate repo: <https://github.com/MBradley1985/SAGE-PSO>. It calls `libsage.so` to evaluate parameter samples against observational constraints. Not part of this tree.
+
+## Developer documentation (`docs/`)
+
+Style guides and developer references live in `docs/developer/`:
+
+| File | Contents |
+|------|----------|
+| `STYLE_C.md` | C coding conventions (naming, constants, comments, macros) |
+| `STYLE_COMMITS.md` | Commit message conventions |
+| `STYLE_DOCS.md` | Documentation standards |
+| `STYLE_PYTHON.md` | Python plotting script conventions |
+| `STYLE_TESTS.md` | Test writing guidelines |
+| `CLEANUP_PLAN.md` | Phase-by-phase cleanup roadmap |
+| `RUBRIC.md` | Code quality rubric |
+| `REGRESSION_BASELINE.md` | How to capture and verify the regression baseline |
+
+`docs/parameters.md` is the user-facing parameter reference.
+
+## Code conventions and known invariants
+
+### File-scope named constants (Phase 2B)
+
+Physics literals that were previously magic numbers are now file-scope `static const double` constants at the top of each physics file (e.g. `FIRE_V_CRIT_KMS`, `KD11_METAL_HALO_MASS`, `TOOMRE_DISK_FACTOR`). This is per STYLE_C.md §8. When adding new physics, follow the same pattern — do not embed bare literals in formulas.
+
+### The 1.414 invariant in `get_disk_radius()` (`model_misc.c`)
+
+`SpinParameter` uses the literal `1.414` (truncated sqrt(2)), not `M_SQRT2`. Do NOT replace it:
+- `1.414 * 1.414 = 1.999396`, while `M_SQRT2 * M_SQRT2 = 2.0` exactly
+- The difference is small (~0.03%) but propagates to every galaxy's disk radius and shifts thousands of output datasets
+- A warning comment in the source explains this; recalibration would be required before any change
+
+### ASCII-only in C source and parameter files
+
+`.c`, `.h`, and `.par` files must contain only ASCII characters. No Unicode, em-dashes, Greek letters, or smart quotes. AI-generated text is the common source of slip — grep with `LC_ALL=C grep -rn '[^ -~]'` before committing.
+
+### `MAX_STEPS` macro (`macros.h`)
+
+`MAX_STEPS 30` is defined in `macros.h` alongside `STEPS 10`. Do not redeclare it as a local variable in physics files.
+
+## Current development status (as of 2026-06)
+
+Phase 2B cleanup is complete across all physics files:
+- Named constants replace magic numbers in `model_starformation_and_feedback.c`, `model_mergers.c`, `model_reincorporation.c`, `model_disk_instability.c`, `model_infall.c`, `model_misc.c`, `core_build_model.c`
+- Dead code removed; FIRE scaling deduplicated; comments brought into style
+- Regression baseline updated and verified bit-identical (5380 datasets)
+- Test suite: 18/18 suites pass
+
+ReadTheDocs documentation (Doxygen + Breathe + Sphinx) is planned as the next major task.
