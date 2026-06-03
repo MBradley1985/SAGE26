@@ -1014,7 +1014,7 @@ def _standard_legend(ax, loc='lower left', handles=None, labels=None, **kwargs):
 
 def load_gama_smf_morph():
     """Load GAMA morphological SMF (Moffett et al. 2016)."""
-    path = os.path.join(OBS_DIR, 'gama_smf_morph.ecsv')
+    path = os.path.join(OBS_DIR, 'smf/gama_smf_morph.ecsv')
     data = np.genfromtxt(path, comments='#', skip_header=1)
     return {
         'mass': data[:, 0],
@@ -1027,7 +1027,7 @@ def load_gama_smf_morph():
 
 def load_baldry_blue_red():
     """Load Baldry et al. blue/red SMF data."""
-    path = os.path.join(OBS_DIR, 'baldry_blue_red.csv')
+    path = os.path.join(OBS_DIR, 'morphology/baldry_blue_red.csv')
     data = np.genfromtxt(path, delimiter=',', skip_header=2)
     return {
         'sf_mass': data[:, 0],
@@ -1047,7 +1047,7 @@ def load_mzr_observations():
     obs = []
 
     # Tremonti et al. 2004
-    path = os.path.join(OBS_DIR, 'Tremonti04.dat')
+    path = os.path.join(OBS_DIR, 'metallicity/Tremonti04.dat')
     if os.path.exists(path):
         d = np.loadtxt(path)
         obs.append({
@@ -1065,7 +1065,7 @@ def load_mzr_observations():
         })
 
     # Curti et al. 2020
-    path = os.path.join(OBS_DIR, 'Curti2020.dat')
+    path = os.path.join(OBS_DIR, 'metallicity/Curti2020.dat')
     if os.path.exists(path):
         d = np.loadtxt(path)
         obs.append({
@@ -1075,7 +1075,7 @@ def load_mzr_observations():
         })
 
     # Andrews & Martini 2013
-    path = os.path.join(OBS_DIR, 'MMAdrews13.dat')
+    path = os.path.join(OBS_DIR, 'metallicity/MMAdrews13.dat')
     if os.path.exists(path):
         d = np.loadtxt(path)
         obs.append({
@@ -1086,7 +1086,7 @@ def load_mzr_observations():
         })
 
     # Kewley & Ellison 2008 - T04 calibration
-    path = os.path.join(OBS_DIR, 'MMR-Kewley08.dat')
+    path = os.path.join(OBS_DIR, 'metallicity/MMR-Kewley08.dat')
     if os.path.exists(path):
         d = np.loadtxt(path)
         obs.append({
@@ -1096,7 +1096,7 @@ def load_mzr_observations():
         })
 
     # Gallazzi et al. 2005 (stellar -> gas-phase conversion)
-    path = os.path.join(OBS_DIR, 'MSZR-Gallazzi05.dat')
+    path = os.path.join(OBS_DIR, 'metallicity/MSZR-Gallazzi05.dat')
     if os.path.exists(path):
         d = np.loadtxt(path)
         m = d[7:, 0]
@@ -1208,7 +1208,7 @@ def load_shmr_observations():
     obs = {}
 
     # Moster et al. 2013 — best-fit relation (first pair of columns)
-    path = os.path.join(OBS_DIR, 'Moster_2013.csv')
+    path = os.path.join(OBS_DIR, 'smhm/Moster_2013.csv')
     if os.path.exists(path):
         d = np.genfromtxt(path)
         valid = ~np.isnan(d[:, 0])
@@ -1220,7 +1220,7 @@ def load_shmr_observations():
     # Romeo et al. 2020 — combined (all galaxies + ETGs)
     # Format: (log_Mvir, log_M*/Mvir)
     mvir_parts, mstar_parts = [], []
-    for fname in ['Romeo20_SMHM.dat', 'Romeo20_SMHM_ETGs.dat']:
+    for fname in ['smhm/Romeo20_SMHM.dat', 'smhm/Romeo20_SMHM_ETGs.dat']:
         path = os.path.join(OBS_DIR, fname)
         if os.path.exists(path):
             d = np.loadtxt(path)
@@ -1234,7 +1234,7 @@ def load_shmr_observations():
 
     # Kravtsov et al. 2018 — combined (ETGs + LTGs + Sat/Clusters)
     k_mvir, k_mstar, k_xerr_lo, k_xerr_hi, k_has_xerr = [], [], [], [], []
-    for fname in ['ETGs_Kravtsov18.dat', 'LTGs_Kravtsov18.dat']:
+    for fname in ['morphology/ETGs_Kravtsov18.dat', 'morphology/LTGs_Kravtsov18.dat']:
         path = os.path.join(OBS_DIR, fname)
         if os.path.exists(path):
             d = np.loadtxt(path)
@@ -1243,7 +1243,7 @@ def load_shmr_observations():
             k_xerr_lo.append(d[:, 0] - d[:, 2])
             k_xerr_hi.append(d[:, 3] - d[:, 0])
             k_has_xerr.append(np.ones(len(d), dtype=bool))
-    path = os.path.join(OBS_DIR, 'SatKinsAndClusters_Kravtsov18.dat')
+    path = os.path.join(OBS_DIR, 'morphology/SatKinsAndClusters_Kravtsov18.dat')
     if os.path.exists(path):
         d = np.loadtxt(path)
         k_mvir.append(d[:, 0])
@@ -1263,7 +1263,7 @@ def load_shmr_observations():
     # Taylor et al. 2020
     # Format: (log_Mhalo, log_Mhalo_lo, log_Mhalo_hi,
     #          M*/Mhalo, M*/Mhalo_lo, M*/Mhalo_hi)
-    path = os.path.join(OBS_DIR, 'Taylor20.dat')
+    path = os.path.join(OBS_DIR, 'morphology/Taylor20.dat')
     if os.path.exists(path):
         d = np.loadtxt(path)
         log_mvir = d[:, 0]
@@ -1288,7 +1288,7 @@ def load_madau_dickinson_2014_data():
     """Load Madau and Dickinson 2014 SFRD data."""
     if not HAS_ASTROPY:
         return None, None, None, None
-    filename = './data/MandD_sfrd_2014.ecsv'
+    filename = './data/sfrd/MandD_sfrd_2014.ecsv'
     if not os.path.exists(filename):
         print(f"Warning: {filename} not found.")
         return None, None, None, None
@@ -1308,7 +1308,7 @@ def load_madau_dickinson_smd_2014_data():
     """Load Madau and Dickinson 2014 SMD data."""
     if not HAS_ASTROPY:
         return None, None, None, None
-    filename = './data/MandD_smd_2014.ecsv'
+    filename = './data/sfrd/MandD_smd_2014.ecsv'
     if not os.path.exists(filename):
         print(f"Warning: {filename} not found.")
         return None, None, None, None
@@ -1328,7 +1328,7 @@ def load_kikuchihara_smd_2020_data():
     """Load Kikuchihara et al. 2020 SMD data."""
     if not HAS_ASTROPY:
         return None, None, None, None
-    filename = './data/kikuchihara_smd_2020.ecsv'
+    filename = './data/sfrd/kikuchihara_smd_2020.ecsv'
     if not os.path.exists(filename):
         print(f"Warning: {filename} not found.")
         return None, None, None, None
@@ -1348,7 +1348,7 @@ def load_papovich_smd_2023_data():
     """Load Papovich et al. 2023 SMD data."""
     if not HAS_ASTROPY:
         return None, None, None, None
-    filename = './data/papovich_smd_2023.ecsv'
+    filename = './data/sfrd/papovich_smd_2023.ecsv'
     if not os.path.exists(filename):
         print(f"Warning: {filename} not found.")
         return None, None, None, None
@@ -1368,7 +1368,7 @@ def load_oesch_sfrd_2018_data():
     """Load Oesch et al. 2018 SFRD data."""
     if not HAS_ASTROPY:
         return None, None, None, None
-    filename = './data/oesch_sfrd_2018.ecsv'
+    filename = './data/sfrd/oesch_sfrd_2018.ecsv'
     if not os.path.exists(filename):
         print(f"Warning: {filename} not found.")
         return None, None, None, None
@@ -1388,7 +1388,7 @@ def load_mcleod_rho_sfr_2024_data():
     """Load McLeod et al. 2024 SFR density data."""
     if not HAS_ASTROPY:
         return None, None, None, None
-    filename = './data/mcleod_rhouv_2024.ecsv'
+    filename = './data/sfrd/mcleod_rhouv_2024.ecsv'
     if not os.path.exists(filename):
         print(f"Warning: {filename} not found.")
         return None, None, None, None
@@ -1408,7 +1408,7 @@ def load_harikane_sfr_density_2023_data():
     """Load Harikane et al. 2023 SFR density data."""
     if not HAS_ASTROPY:
         return None, None, None, None
-    filename = './data/harikane_density_2023.ecsv'
+    filename = './data/sfrd/harikane_density_2023.ecsv'
     if not os.path.exists(filename):
         print(f"Warning: {filename} not found.")
         return None, None, None, None
@@ -1428,7 +1428,7 @@ def load_brinchmann_sfr_mass_2004_data():
     """Load Brinchmann et al. 2004 SFR vs Stellar Mass data."""
     if not HAS_ASTROPY:
         return None, None
-    filename = './data/Brinchmann04.dat'
+    filename = './data/sfr/Brinchmann04.dat'
     if not os.path.exists(filename):
         print(f"Warning: {filename} not found.")
         return None, None
@@ -1466,7 +1466,7 @@ def load_brinchmann_sfr_mass_2004_data():
 def load_terrazas17_mbh_host_sfr_data():
     """Load Terrazas et al. 2017 MBH host galaxy SFR data."""
     import numpy as np
-    filename = './data/MBH_host_gals_Terrazas17.dat'
+    filename = './data/bh/MBH_host_gals_Terrazas17.dat'
     if not os.path.exists(filename):
         print(f"Warning: {filename} not found.")
         return None, None
@@ -1484,7 +1484,7 @@ def load_gama_prospect_claudia(obsdir=None):
     """Load GAMA ProSpect Claudia data, apply SFR floor, and return log10(mass), log10(SFR)."""
     import numpy as np
     # If obsdir is given, use it; else assume data/ subdir
-    filename = os.path.join(obsdir, 'GAMA/ProSpect_Claudia.txt') if obsdir else './data/ProSpect_Claudia.txt'
+    filename = os.path.join(obsdir, 'GAMA/ProSpect_Claudia.txt') if obsdir else './data/morphology/ProSpect_Claudia.txt'
     if not os.path.exists(filename):
         print(f"Warning: {filename} not found.")
         return None, None
@@ -1504,7 +1504,7 @@ def load_gama_prospect_claudia(obsdir=None):
 def load_bell_smf_sf_data():
     """Load Bell+03 SMF starforming data."""
     import numpy as np
-    filename = './data/Bell_z0pt0_blue.dat'
+    filename = './data/morphology/Bell_z0pt0_blue.dat'
     if not os.path.exists(filename):
         print(f"Warning: {filename} not found.")
         return None, None
@@ -1523,7 +1523,7 @@ def load_bell_smf_sf_data():
 def load_bell_smf_q_data():
     """Load Bell+03 SMF quiescent data."""
     import numpy as np
-    filename = './data/Bell_z0pt0_red.dat'
+    filename = './data/morphology/Bell_z0pt0_red.dat'
     if not os.path.exists(filename):
         print(f"Warning: {filename} not found.")
         return None, None
@@ -1555,7 +1555,7 @@ def load_himf_observations():
     observations = []
 
     # Jones et al. (2018) - ALFALFA 100
-    jones_path = os.path.join(OBS_DIR, 'HIMF_Jones18.dat')
+    jones_path = os.path.join(OBS_DIR, 'Gas/HIMF_Jones18.dat')
     if os.path.exists(jones_path):
         try:
             data = np.loadtxt(jones_path, comments='#')
@@ -1574,7 +1574,7 @@ def load_himf_observations():
             print(f"Warning: Could not load Jones+18 HIMF: {e}")
 
     # Zwaan et al. (2005) - HIPASS
-    zwaan_path = os.path.join(OBS_DIR, 'HIMF_Zwaan2005.dat')
+    zwaan_path = os.path.join(OBS_DIR, 'Gas/HIMF_Zwaan2005.dat')
     if os.path.exists(zwaan_path):
         try:
             data = np.loadtxt(zwaan_path, comments='#')
@@ -6156,7 +6156,7 @@ def plot_16_sfrd_history():
 
     # --- COSMOS-Web ---
     if HAS_ASTROPY:
-        csfrd_file = './data/CSFRD_inferred_from_SMD.ecsv'
+        csfrd_file = './data/sfrd/CSFRD_inferred_from_SMD.ecsv'
         if os.path.exists(csfrd_file):
             try:
                 csfrd_table = Table.read(csfrd_file, format='ascii.ecsv')
@@ -6400,7 +6400,7 @@ def plot_17_smd_history():
 
     # --- COSMOS-Web ---
     if HAS_ASTROPY:
-        smd_file = './data/SMD.ecsv'
+        smd_file = './data/sfrd/SMD.ecsv'
         if os.path.exists(smd_file):
             try:
                 smd_table = Table.read(smd_file, format='ascii.ecsv')
@@ -6505,12 +6505,12 @@ def _load_smf_grid_observations():
     #    by Baldry+08, Muzzin+13, and SMF_data_points.
     # ------------------------------------------------------------------
     _thorne = [
-        ('./data/Thorne21/SMFvals_z1.6.csv', 1.6),
-        ('./data/Thorne21/SMFvals_z2.csv',   2.0),
-        ('./data/Thorne21/SMFvals_z2.4.csv', 2.4),
-        ('./data/Thorne21/SMFvals_z3.csv',   3.0),
-        ('./data/Thorne21/SMFvals_z3.5.csv', 3.5),
-        ('./data/Thorne21/SMFvals_z4.csv',   4.0),
+        ('./data/smf/Thorne21/SMFvals_z1.6.csv', 1.6),
+        ('./data/smf/Thorne21/SMFvals_z2.csv',   2.0),
+        ('./data/smf/Thorne21/SMFvals_z2.4.csv', 2.4),
+        ('./data/smf/Thorne21/SMFvals_z3.csv',   3.0),
+        ('./data/smf/Thorne21/SMFvals_z3.5.csv', 3.5),
+        ('./data/smf/Thorne21/SMFvals_z4.csv',   4.0),
     ]
     h_t = 0.7
     for fpath, z_val in _thorne:
@@ -6539,14 +6539,14 @@ def _load_smf_grid_observations():
     # 3. Weaver+23  (farmer TXT: logM, bw, phi, phi_lo, phi_hi — linear)
     # ------------------------------------------------------------------
     _weaver = [
-        ('./data/COSMOS2020/SMF_Farmer_v2.1_1.5z2.0_total.txt', 1.75),
-        ('./data/COSMOS2020/SMF_Farmer_v2.1_2.0z2.5_total.txt', 2.25),
-        ('./data/COSMOS2020/SMF_Farmer_v2.1_2.5z3.0_total.txt', 2.75),
-        ('./data/COSMOS2020/SMF_Farmer_v2.1_3.0z3.5_total.txt', 3.25),
-        ('./data/COSMOS2020/SMF_Farmer_v2.1_3.5z4.5_total.txt', 4.0),
-        ('./data/COSMOS2020/SMF_Farmer_v2.1_4.5z5.5_total.txt', 5.0),
-        ('./data/COSMOS2020/SMF_Farmer_v2.1_5.5z6.5_total.txt', 6.0),
-        ('./data/COSMOS2020/SMF_Farmer_v2.1_6.5z7.5_total.txt', 7.0),
+        ('./data/smf/COSMOS2020/SMF_Farmer_v2.1_1.5z2.0_total.txt', 1.75),
+        ('./data/smf/COSMOS2020/SMF_Farmer_v2.1_2.0z2.5_total.txt', 2.25),
+        ('./data/smf/COSMOS2020/SMF_Farmer_v2.1_2.5z3.0_total.txt', 2.75),
+        ('./data/smf/COSMOS2020/SMF_Farmer_v2.1_3.0z3.5_total.txt', 3.25),
+        ('./data/smf/COSMOS2020/SMF_Farmer_v2.1_3.5z4.5_total.txt', 4.0),
+        ('./data/smf/COSMOS2020/SMF_Farmer_v2.1_4.5z5.5_total.txt', 5.0),
+        ('./data/smf/COSMOS2020/SMF_Farmer_v2.1_5.5z6.5_total.txt', 6.0),
+        ('./data/smf/COSMOS2020/SMF_Farmer_v2.1_6.5z7.5_total.txt', 7.0),
     ]
     for fpath, z_val in _weaver:
         try:
@@ -6580,7 +6580,7 @@ def _load_smf_grid_observations():
     # 4. Muzzin+13  (dat: z_lo z_hi M_star E_M logPhi)
     # ------------------------------------------------------------------
     try:
-        _muz_file = './data/SMF_Muzzin2013.dat'
+        _muz_file = './data/smf/SMF_Muzzin2013.dat'
         if os.path.exists(_muz_file):
             h_m = 0.7
             bins = {}
@@ -6614,7 +6614,7 @@ def _load_smf_grid_observations():
     # 5. Santini+12  (dat: z_lo z_hi lg_mass lg_phi err_hi err_lo ...)
     # ------------------------------------------------------------------
     try:
-        _san_file = './data/SMF_Santini2012.dat'
+        _san_file = './data/smf/SMF_Santini2012.dat'
         if os.path.exists(_san_file):
             h_s = 0.7
             bins = {}
@@ -6652,7 +6652,7 @@ def _load_smf_grid_observations():
     # 6. Wright+18  (dat: med_z mass log_y dlog_yu dlog_yd ycv)
     # ------------------------------------------------------------------
     try:
-        _wr_file = './data/Wright18_CombinedSMF.dat'
+        _wr_file = './data/smf/Wright18_CombinedSMF.dat'
         if os.path.exists(_wr_file):
             h_w = 0.7
             bins = {}
@@ -6690,7 +6690,7 @@ def _load_smf_grid_observations():
     # ------------------------------------------------------------------
     if HAS_ASTROPY:
         try:
-            _obs_file = './data/SMF_data_points.ecsv'
+            _obs_file = './data/smf/SMF_data_points.ecsv'
             if os.path.exists(_obs_file):
                 with open(_obs_file, 'r') as f:
                     lines = f.readlines()
@@ -6740,7 +6740,7 @@ def _load_smf_grid_observations():
     # ------------------------------------------------------------------
     if HAS_ASTROPY:
         try:
-            _har_file = './data/FiducialBagpipesGSMF.ecsv'
+            _har_file = './data/smf/FiducialBagpipesGSMF.ecsv'
             if os.path.exists(_har_file):
                 t = Table.read(_har_file, format='ascii.ecsv')
                 # Handle possible column name variations
@@ -6771,22 +6771,22 @@ def _load_smf_grid_observations():
     #         Weibel+24, Kikuchihara+20)
     # ------------------------------------------------------------------
     _highz_ecsv = [
-        {'file': './data/stefanon_smf_2021.ecsv',
+        {'file': './data/smf/stefanon_smf_2021.ecsv',
          'label': 'Stefanon+21', 'marker': '*', 'ms': 8,
          'zcol': 'redshift_bin', 'mcol': 'log_M',
          'phi_col': 'phi', 'phi_eu': 'phi_err_up', 'phi_el': 'phi_err_low',
          'phi_scale': 1e-4, 'phi_log': False, 'zbins': [6, 7, 8, 9, 10]},
-        {'file': './data/navarro_carrera_smf_2023.ecsv',
+        {'file': './data/smf/navarro_carrera_smf_2023.ecsv',
          'label': 'Navarro-Carrera+23', 'marker': 'X', 'ms': 8,
          'zcol': 'redshift_bin', 'mcol': 'log_M',
          'phi_col': 'phi', 'phi_eu': 'phi_err_up', 'phi_el': 'phi_err_low',
          'phi_scale': 1e-4, 'phi_log': False, 'zbins': [6, 7, 8]},
-        {'file': './data/weibel_smf_2024.ecsv',
+        {'file': './data/smf/weibel_smf_2024.ecsv',
          'label': 'Weibel+24', 'marker': 'P', 'ms': 8,
          'zcol': 'redshift_bin', 'mcol': 'log_M',
          'phi_col': 'log_phi', 'phi_eu': 'log_phi_err_up', 'phi_el': 'log_phi_err_low',
          'phi_scale': 1.0, 'phi_log': True, 'zbins': [6, 7, 8, 9]},
-        {'file': './data/kikuchihara_smf_2020.ecsv',
+        {'file': './data/smf/kikuchihara_smf_2020.ecsv',
          'label': 'Kikuchihara+20', 'marker': 'd', 'ms': 8,
          'zcol': 'redshift_approx', 'mcol': 'log_M_star',
          'phi_col': 'phi_star', 'phi_eu': 'phi_star_err_up', 'phi_el': 'phi_star_err_low',
@@ -6845,7 +6845,7 @@ def _load_smf_grid_observations():
     # ------------------------------------------------------------------
     if HAS_ASTROPY:
         try:
-            _song_file = './data/song_smf_2016.ecsv'
+            _song_file = './data/smf/song_smf_2016.ecsv'
             if os.path.exists(_song_file):
                 t = Table.read(_song_file, format='ascii.ecsv')
                 h_s = 0.7
@@ -8434,19 +8434,19 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
     ax.plot(vvir_theory, mass_loading_theory, color='k', lw=2.5, ls='--',
             label='Muratov+16 Theory')
 
-    chisholm_ml = pd.read_csv('./data/Chisholm_17_ml.csv', header=None, delimiter='\t')
+    chisholm_ml = pd.read_csv('./data/outflows/Chisholm_17_ml.csv', header=None, delimiter='\t')
     chisholm_x = chisholm_ml[0]  # First column
     chisholm_y = chisholm_ml[1]  # Second column
 
-    heckman_ml = pd.read_csv('./data/Heckman_15_ml.csv', header=None, delimiter='\t')
+    heckman_ml = pd.read_csv('./data/outflows/Heckman_15_ml.csv', header=None, delimiter='\t')
     heckman_x = heckman_ml[0]  # First column
     heckman_y = heckman_ml[1]  # Second column
 
-    rupke_ml = pd.read_csv('./data/Rupke_05_ml.csv', header=None, delimiter='\t')
+    rupke_ml = pd.read_csv('./data/outflows/Rupke_05_ml.csv', header=None, delimiter='\t')
     rupke_x = rupke_ml[0]  # First column
     rupke_y = rupke_ml[1]  # Second column
 
-    sugahara_ml = pd.read_csv('./data/Sugahara_17_ml.csv', header=None, delimiter='\t')
+    sugahara_ml = pd.read_csv('./data/outflows/Sugahara_17_ml.csv', header=None, delimiter='\t')
     sugahara_x = sugahara_ml[0]  # First column
     sugahara_y = sugahara_ml[1]  # Second column 
 
@@ -9056,7 +9056,7 @@ def load_h2mf_observations():
 
     # Boselli et al. (2014) - H2 mass function
     # The file contains two sections: constant X_CO and luminosity-dependent X_CO.
-    path_b14 = os.path.join(OBS_DIR, 'GasMF', 'B14_MH2MF.dat')
+    path_b14 = os.path.join(OBS_DIR, 'Gas', 'B14_MH2MF.dat')
     if os.path.exists(path_b14):
         try:
             with open(path_b14, 'r') as fh:
@@ -9103,7 +9103,7 @@ def load_h2mf_observations():
             print(f"  Warning: could not load {path_b14}: {e}")
 
     # Fletcher et al. (2021) - Detected + Non-detected
-    path_det = os.path.join(OBS_DIR, 'H2MF_Fletcher21_DetNonDet.dat')
+    path_det = os.path.join(OBS_DIR, 'Gas/H2MF_Fletcher21_DetNonDet.dat')
     if os.path.exists(path_det):
         try:
             data = np.loadtxt(path_det, comments='#')
@@ -9121,7 +9121,7 @@ def load_h2mf_observations():
             print(f"  Warning: could not load {path_det}: {e}")
 
     # Fletcher et al. (2021) - Estimated
-    path_est = os.path.join(OBS_DIR, 'H2MF_Fletcher21_Estimated.dat')
+    path_est = os.path.join(OBS_DIR, 'Gas/H2MF_Fletcher21_Estimated.dat')
     if os.path.exists(path_est):
         try:
             data = np.loadtxt(path_est, comments='#')

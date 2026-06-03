@@ -33,8 +33,6 @@ yy*
 *.hdf5
 *.csv
 
-# data files #
-
 
 # sage_analysis Package Stuff #
 *.egg-info
