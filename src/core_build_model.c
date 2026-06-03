@@ -222,9 +222,9 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                 }
 
                 // remember properties from the last snapshot
-                const float previousMvir = galaxies[ngal].Mvir;
-                const float previousVvir = galaxies[ngal].Vvir;
-                const float previousVmax = galaxies[ngal].Vmax;
+                const double previousMvir = galaxies[ngal].Mvir;
+                const double previousVvir = galaxies[ngal].Vvir;
+                const double previousVmax = galaxies[ngal].Vmax;
 
                 if(prog == first_occupied) {
                     // update properties of this galaxy with physical properties of halo
