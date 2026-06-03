@@ -766,8 +766,8 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     const double x_agn = (PROTONMASS * BOLTZMANN * temp / lambda)
                          / (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);
 
-    if(run_params->CGMHeatingRheatOn > 0) {
-        // r_heat analog for CGM regime: decaying suppression fraction.
+    if(run_params->CGMHeatingRheatOn == 1) {
+        // CGM r_heat mode 1: decaying suppression fraction (f_heat_cgm).
         // f_heat_cgm plays the role of r_heat/rcool in the hot-halo path --
         // a dimensionless suppression fraction (0-1) that accumulates via a
         // ratchet and decays on t_dyn so quenching fades when the AGN weakens.
@@ -802,6 +802,28 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
                     galaxies[gal].f_heat_cgm = (float)fmin(f_new, 1.0);
                 }
             }
+        }
+
+    } else if(run_params->CGMHeatingRheatOn == 2) {
+        // CGM r_heat mode 2: standard hot-halo r_heat ratchet, capped at Rvir.
+        // Applies the same r_heat/rcool suppression as the hot-halo regime but
+        // prevents r_heat from growing beyond Rvir to bound quenching strength.
+
+        // Apply r_heat suppression (same logic as do_AGN_heating hot-halo entry)
+        if(galaxies[gal].r_heat >= r_cool) {
+            coolingGas = 0.0;
+        } else if(galaxies[gal].r_heat > 0.0) {
+            coolingGas *= 1.0 - galaxies[gal].r_heat / r_cool;
+        }
+
+        // AGN call: grows BH from CGMgas, updates r_heat ratchet, accumulates .Heating
+        if(run_params->AGNrecipeOn > 0 && run_params->CGMAGNOn > 0) {
+            coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
+        }
+
+        // Cap r_heat at Rvir
+        if(galaxies[gal].r_heat > galaxies[gal].Rvir) {
+            galaxies[gal].r_heat = galaxies[gal].Rvir;
         }
 
     } else {
@@ -1139,6 +1161,17 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
         galaxies[centralgal].MetalsCGMgas -= metallicity * AGNaccreted;
 
         if(AGNheating > 0.0) {
+            // For mode 2: update r_heat with same ratchet as hot-halo regime.
+            // Must happen before the subtraction below so coolingGas is still
+            // the pre-heating value. Caller applies the Rvir cap after return.
+            if(run_params->CGMHeatingRheatOn == 2 &&
+               galaxies[centralgal].r_heat < rcool && coolingGas > 0.0) {
+                double r_heat_new = (AGNheating / coolingGas) * rcool;
+                if(r_heat_new > galaxies[centralgal].r_heat) {
+                    galaxies[centralgal].r_heat = r_heat_new;
+                }
+            }
+
             // When the HeatingReservoir is active the caller handles cross-snapshot
             // suppression; skip the immediate subtraction here to avoid double-counting
             // (the same energy would be spent now AND fed into the reservoir for later).
