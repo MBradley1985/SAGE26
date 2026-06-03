@@ -41,7 +41,7 @@ except Exception:
 PRIMARY_DIR    = './output/millennium/'
 SECONDARY_DIR  = './output/millennium_exprheat/'  # optional; set to None to disable
 TERTIARY_DIR   = './output/millennium_cgmoff/'
-QUATERNARY_DIR = None  # optional; set to None to disable 
+QUATERNARY_DIR =  None # optional; set to None to disable 
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
 
@@ -74,7 +74,7 @@ TERTIARY_LABEL   = 'miniMillennium (no CGM-AGN interaction)'
 TERTIARY_COLOR   = 'mediumseagreen'
 TERTIARY_LS      = '-'
 
-QUATERNARY_LABEL = ''
+QUATERNARY_LABEL = 'miniMillennium (vanilla)'
 QUATERNARY_COLOR = 'mediumpurple'
 QUATERNARY_LS    = '-.'
 
