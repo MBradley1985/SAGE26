@@ -58,6 +58,22 @@ static const double TONINI16_DISK_FRAC    = 0.2;
  * Units: M_sun / pc^2 (pre-multiplication by G to get acceleration). */
 static const double BK25_G_CRIT_MSUN_PC2 = 3100.0;
 
+/* Solar metallicity (Asplund et al. 2009): used to normalise Z' in K13.
+ * Z' = Z_gas / Z_SOLAR_ASPLUND09.
+ * Also defined as a file-scope constant in model_starformation_and_feedback.c
+ * and model_mergers.c. */
+static const double Z_SOLAR_ASPLUND09 = 0.014;
+
+/* Solar metallicity from Grevesse & Sauval (1998): used in GD14 and KD12/KMT09.
+ * D_MW = Z_gas / Z_SOLAR_GD14.
+ * Also defined in model_starformation_and_feedback.c and model_mergers.c. */
+static const double Z_SOLAR_GD14 = 0.02;
+
+/* Gnedin & Draine (2014) UV-field s-parameter at U_MW = 1.0 (Milky Way ambient field).
+ * s_param = pow(GD14_S_PARAM_UMW1, 0.7) from their eq. 11 / Table 1.
+ * Also defined in model_starformation_and_feedback.c and model_mergers.c. */
+static const double GD14_S_PARAM_UMW1 = 0.101;
+
 /*
  * Initialise all fields of a newly created galaxy struct to safe defaults.
  *
@@ -1370,11 +1386,11 @@ float calculate_H2_fraction_KD12(const float surface_density, const float metall
         return 0.0;
     }
     
-    // Metallicity normalized to solar (Z_sun = 0.02)
-    // Z0 = (M_Z/M_g)/Z_sun as defined in KD12 equation after (17)
+    // Metallicity normalized to solar (Grevesse & Sauval 1998: Z_sun = 0.02).
+    // Z0 = (M_Z/M_g)/Z_sun as defined in KD12 equation after (17).
     // No floor: at Z=0, tau_c=0 -> s=100 -> f_H2=0 is handled by the guard below.
     // A floor here would give f_H2->1 for primordial gas at high Sigma, which is wrong.
-    float Z0 = (metallicity > 0.0f) ? metallicity / 0.02f : 0.0f;
+    float Z0 = (metallicity > 0.0f) ? metallicity / (float)Z_SOLAR_GD14 : 0.0f;
     
     // Convert surface density from M_sun/pc^2 to g/cm^2
     // Conversion: 1 M_sun/pc^2 = 2.088 * 10^-4 g/cm^2
@@ -1418,6 +1434,69 @@ float calculate_H2_fraction_KD12(const float surface_density, const float metall
     // Ensure fraction stays within bounds
     if (f_H2 < 0.0) f_H2 = 0.0;
     if (f_H2 > 1.0) f_H2 = 1.0;
-    
+
+    return f_H2;
+}
+
+
+/*
+ * H2 molecular fraction from the Krumholz (2013) two-phase ISM model.
+ *
+ * Implements the K13 "two-phase" (2p) approximation for the slab geometry.
+ * Sigma_gas_msun_pc2 is the gas surface density in Msun/pc^2.
+ * metallicity is the absolute metal fraction Z_gas (not Z') -- normalised
+ * internally to Z_SOLAR_ASPLUND09 = 0.014.  clumping_factor is the CNM
+ * clumping factor (typically 5.0 for kpc-scale surface densities).
+ * Returns f_H2 in [0, 1].
+ */
+double calculate_H2_fraction_K13(double Sigma_gas_msun_pc2, double metallicity, double clumping_factor)
+{
+    if(Sigma_gas_msun_pc2 <= 0.0) return 0.0;
+
+    double Z_prime = (metallicity > 0.0) ? metallicity / Z_SOLAR_ASPLUND09 : 0.0;
+    if(Z_prime < 0.01) Z_prime = 0.01;
+
+    const double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime, 0.365)) / 4.1;
+    const double tau_c  = 0.066 * clumping_factor * Z_prime * Sigma_gas_msun_pc2;
+    const double s      = (tau_c > 0.0) ?
+        log(1.0 + 0.6*chi_2p + 0.01*chi_2p*chi_2p) / (0.6*tau_c) : 100.0;
+
+    double f_H2 = (s < 2.0) ? 1.0 - (0.75*s) / (1.0 + 0.25*s) : 0.0;
+    if(f_H2 < 0.0) f_H2 = 0.0;
+    if(f_H2 > 1.0) f_H2 = 1.0;
+    return f_H2;
+}
+
+
+/*
+ * H2 molecular fraction from the Gnedin & Draine (2014) self-shielding model.
+ *
+ * Implements the GD14 slab-geometry model (their eq. 11) assuming U_MW = 1.0
+ * (Milky Way UV field).  Sigma_gas_msun_pc2 is the gas surface density in
+ * Msun/pc^2.  metallicity is the absolute metal fraction Z_gas -- normalised
+ * internally to Z_SOLAR_GD14 = 0.02 (Grevesse & Sauval 1998).  rs_pc is the
+ * disk scale radius in pc, used to evaluate the clumping/turbulence parameter
+ * S = 3 * rs_pc / 100 from their eq. 11.
+ * Returns f_H2 in [0, 1].
+ */
+double calculate_H2_fraction_GD14(double Sigma_gas_msun_pc2, double metallicity, double rs_pc)
+{
+    if(Sigma_gas_msun_pc2 <= 0.0) return 0.0;
+
+    double D_MW = (metallicity > 0.0) ? metallicity / Z_SOLAR_GD14 : 0.0;
+    if(D_MW < 1e-4) D_MW = 1e-4;
+
+    const double S        = 3.0 * rs_pc / 100.0;
+    const double s_param  = pow(GD14_S_PARAM_UMW1, 0.7);  /* U_MW = 1.0 */
+    const double D_star   = 0.17 * (2.0 + pow(S, 5.0)) / (1.0 + pow(S, 5.0));
+    const double g        = sqrt(D_MW*D_MW + D_star*D_star);
+    const double Sigma_R1 = (g > 0.0) ? (40.0/g) * (s_param/(1.0+s_param)) : 1e10;
+    const double alpha    = 1.0 + 0.7*sqrt(s_param) / (1.0 + s_param);
+    const double q        = (Sigma_R1 > 0.0) ?
+        pow(Sigma_gas_msun_pc2 / Sigma_R1, alpha) : 0.0;
+
+    double f_H2 = q / (1.0 + q);
+    if(f_H2 < 0.0) f_H2 = 0.0;
+    if(f_H2 > 1.0) f_H2 = 1.0;
     return f_H2;
 }

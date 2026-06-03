@@ -58,21 +58,10 @@ static const double FIRE_V_CRIT_KMS = 60.0;  /* km/s */
  * Same constant used in model_starformation_and_feedback.c. */
 static const double KD11_METAL_HALO_MASS = 30.0;  /* 10^10 Msun/h */
 
-/* Solar metallicity (Asplund et al. 2009): used to normalise Z' in K13.
- * Z' = Z_gas / Z_SOLAR_ASPLUND09.
- * Same constant used in model_starformation_and_feedback.c. */
-static const double Z_SOLAR_ASPLUND09 = 0.014;
-
-/* Solar metallicity used by GD14 (Grevesse & Sauval 1998 value).
- * Dust-to-gas ratio normalisation: D_MW = Z_gas / Z_SOLAR_GD14.
- * Also used as the Z-normalisation in KMT09.
- * Same constant used in model_starformation_and_feedback.c. */
+/* Solar metallicity (Grevesse & Sauval 1998): used in KMT09 Z' normalisation.
+ * Z' = metallicity / Z_SOLAR_GD14.
+ * Also the canonical definition in model_misc.c (calculate_H2_fraction_GD14). */
 static const double Z_SOLAR_GD14 = 0.02;
-
-/* Gnedin & Draine (2014) UV-field s-parameter at U_MW = 1.0 (Milky Way).
- * s_param = pow(GD14_S_PARAM_UMW1, 0.7) from their eq. 11 / Table 1.
- * Same constant used in model_starformation_and_feedback.c. */
-static const double GD14_S_PARAM_UMW1 = 0.101;
 
 /* File-private forward declaration */
 static double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GALAXY *g2);
@@ -644,35 +633,15 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                         h2gas_fresh = f_H2 * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
                     } else if(run_params->SFprescription == 6) {
                         // K13: two-phase molecular fraction
-                        double Z_gas = (galaxies[cgal].ColdGas > 0.0) ?
+                        const double Z_gas = (galaxies[cgal].ColdGas > 0.0) ?
                             galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0;
-                        double Z_prime = Z_gas / Z_SOLAR_ASPLUND09;
-                        if(Z_prime < 0.01) Z_prime = 0.01;
-                        const double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime, 0.365)) / 4.1;
-                        const double tau_c = 0.066 * 5.0 * Z_prime * (double)Sigma_gas;
-                        const double s_k13 = (tau_c > 0.0) ?
-                            log(1.0 + 0.6*chi_2p + 0.01*chi_2p*chi_2p) / (0.6*tau_c) : 100.0;
-                        double f_H2_2p = (s_k13 < 2.0) ? 1.0 - (0.75*s_k13)/(1.0+0.25*s_k13) : 0.0;
-                        if(f_H2_2p < 0.0) f_H2_2p = 0.0;
-                        if(f_H2_2p > 1.0) f_H2_2p = 1.0;
+                        const double f_H2_2p = calculate_H2_fraction_K13((double)Sigma_gas, Z_gas, 5.0);
                         h2gas_fresh = f_H2_2p * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
                     } else if(run_params->SFprescription == 7) {
                         // GD14
-                        double met_abs = (galaxies[cgal].ColdGas > 0.0) ?
+                        const double met_abs = (galaxies[cgal].ColdGas > 0.0) ?
                             galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0;
-                        double D_MW = met_abs / Z_SOLAR_GD14;
-                        if(D_MW < 1e-4) D_MW = 1e-4;
-                        const double S       = 3.0 * rs_pc / 100.0;
-                        const double s_param = pow(GD14_S_PARAM_UMW1, 0.7);  // U_MW = 1.0
-                        const double D_star  = 0.17 * (2.0 + pow(S, 5.0)) / (1.0 + pow(S, 5.0));
-                        const double g       = sqrt(D_MW*D_MW + D_star*D_star);
-                        const double Sigma_R1 = (g > 0.0) ? (40.0/g) * (s_param/(1.0+s_param)) : 1e10;
-                        const double alpha_gd = 1.0 + 0.7 * sqrt(s_param) / (1.0 + s_param);
-                        const double q = (Sigma_R1 > 0.0 && Sigma_gas > 0.0) ?
-                            pow((double)Sigma_gas / Sigma_R1, alpha_gd) : 0.0;
-                        double f_H2 = q / (1.0 + q);
-                        if(f_H2 > 1.0) f_H2 = 1.0;
-                        if(f_H2 < 0.0) f_H2 = 0.0;
+                        const double f_H2 = calculate_H2_fraction_GD14((double)Sigma_gas, met_abs, (double)rs_pc);
                         h2gas_fresh = f_H2 * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
                     }
                 }

@@ -52,18 +52,9 @@ static const double KD11_METAL_HALO_MASS = 30.0;  /* 10^10 Msun/h */
 static const double SOMERVILLE25_F_DENSE = 0.5;
 
 /* Solar metallicity (Asplund et al. 2009): used to normalise Z' in K13 and KMT09.
- * Z' = Z_gas / Z_SOLAR_ASPLUND09.  Same constant used in model_mergers.c. */
+ * Z' = Z_gas / Z_SOLAR_ASPLUND09.
+ * Also the canonical definition in model_misc.c (calculate_H2_fraction_K13). */
 static const double Z_SOLAR_ASPLUND09 = 0.014;
-
-/* Solar metallicity used by GD14 (Grevesse & Sauval 1998 value).
- * Dust-to-gas ratio normalisation: D_MW = Z_gas / Z_SOLAR_GD14.
- * Also used as the Z-normalisation in KMT09.  Same constant used in model_mergers.c. */
-static const double Z_SOLAR_GD14 = 0.02;
-
-/* Gnedin & Draine (2014) UV-field s-parameter evaluated at U_MW = 1.0 (Milky Way).
- * s_param = pow(GD14_S_PARAM_UMW1, 0.7) from their eq. 11 / Table 1.
- * Same constant used in model_mergers.c. */
-static const double GD14_S_PARAM_UMW1 = 0.101;
 
 /*
  * Main star formation and feedback driver for one galaxy per substep.
@@ -459,15 +450,10 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 if(area_pc2 > 0.0) {
                     Sigma_gas_k13  = (galaxies[p].ColdGas * 1.0e10 / h) / area_pc2;
                     Sigma_star_k13 = ((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h) / area_pc2;
-                    double Z_gas = (galaxies[p].ColdGas > 0.0) ? (galaxies[p].MetalsColdGas / galaxies[p].ColdGas) : 0.0;
-                    Z_prime_k13 = Z_gas / Z_SOLAR_ASPLUND09; if(Z_prime_k13 < 0.01) Z_prime_k13 = 0.01;
-                    const double fc = 5.0;
-                    const double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime_k13, 0.365)) / 4.1;
-                    const double tau_c = 0.066 * fc * Z_prime_k13 * Sigma_gas_k13;
-                    const double s = (tau_c > 0.0) ? log(1.0 + 0.6 * chi_2p + 0.01 * chi_2p * chi_2p) / (0.6 * tau_c) : 100.0;
-                    f_H2_2p_k13 = (s < 2.0) ? 1.0 - (0.75 * s) / (1.0 + 0.25 * s) : 0.0;
-                    if(f_H2_2p_k13 < 0.0) f_H2_2p_k13 = 0.0;
-                    if(f_H2_2p_k13 > 1.0) f_H2_2p_k13 = 1.0;
+                    const double Z_gas = (galaxies[p].ColdGas > 0.0) ? (galaxies[p].MetalsColdGas / galaxies[p].ColdGas) : 0.0;
+                    f_H2_2p_k13 = calculate_H2_fraction_K13(Sigma_gas_k13, Z_gas, 5.0);
+                    Z_prime_k13 = (Z_gas > 0.0) ? Z_gas / Z_SOLAR_ASPLUND09 : 0.0;
+                    if(Z_prime_k13 < 0.01) Z_prime_k13 = 0.01;
                     galaxies[p].H2gas = f_H2_2p_k13 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
                 } else {
                     galaxies[p].H2gas = 0.0;
@@ -524,29 +510,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                     Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
                 }
 
-                double metallicity_abs = 0.0;
-                if(galaxies[p].ColdGas > 0.0) {
-                    metallicity_abs = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
-                }
-                double D_MW = metallicity_abs / 0.02;
-                if(D_MW < 1e-4) D_MW = 1e-4;
-
-                const double U_MW    = 1.0;
-                const double S       = 3.0 * rs_pc / 100.0;
-                const double s_param = pow(0.001 + 0.1 * U_MW, 0.7);
-                const double D_star  = 0.17 * (2.0 + pow(S, 5.0)) / (1.0 + pow(S, 5.0));
-                const double g       = sqrt(D_MW * D_MW + D_star * D_star);
-                const double Sigma_R1 = (40.0 / g) * (s_param / (1.0 + s_param));
-                const double alpha   = 1.0 + 0.7 * sqrt(s_param) / (1.0 + s_param);
-
-                double q = 0.0;
-                if(Sigma_R1 > 0.0 && Sigma_gas > 0.0) {
-                    q = pow(Sigma_gas / Sigma_R1, alpha);
-                }
-                double f_H2 = q / (1.0 + q);
-                if(f_H2 > 1.0) f_H2 = 1.0;
-                if(f_H2 < 0.0) f_H2 = 0.0;
-
+                const double metallicity_abs = (galaxies[p].ColdGas > 0.0) ?
+                    galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
+                const double f_H2 = calculate_H2_fraction_GD14(Sigma_gas, metallicity_abs, rs_pc);
                 galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
             }
 
@@ -990,37 +956,17 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
                         galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
                     } else if(sfpres == 6) {
-                        // K13: store two-phase molecular fraction (f_H2_2p), matching non-FFB path
-                        double Z_gas = (galaxies[p].ColdGas > 0.0) ?
+                        // K13: two-phase molecular fraction
+                        const double Z_gas = (galaxies[p].ColdGas > 0.0) ?
                             galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
-                        double Z_prime = Z_gas / Z_SOLAR_ASPLUND09;
-                        if(Z_prime < 0.01) Z_prime = 0.01;
-                        const double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime, 0.365)) / 4.1;
-                        const double tau_c = 0.066 * 5.0 * Z_prime * Sigma_gas;
-                        const double s = (tau_c > 0.0) ?
-                            log(1.0 + 0.6*chi_2p + 0.01*chi_2p*chi_2p) / (0.6*tau_c) : 100.0;
-                        double f_H2_2p = (s < 2.0) ? 1.0 - (0.75*s)/(1.0+0.25*s) : 0.0;
-                        if(f_H2_2p < 0.0) f_H2_2p = 0.0;
-                        if(f_H2_2p > 1.0) f_H2_2p = 1.0;
+                        const double f_H2_2p = calculate_H2_fraction_K13(Sigma_gas, Z_gas, 5.0);
                         galaxies[p].H2gas = f_H2_2p * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 
                     } else if(sfpres == 7) {
                         // GD14
-                        double met_abs = (galaxies[p].ColdGas > 0.0) ?
+                        const double met_abs = (galaxies[p].ColdGas > 0.0) ?
                             galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
-                        double D_MW = met_abs / Z_SOLAR_GD14;
-                        if(D_MW < 1e-4) D_MW = 1e-4;
-                        const double S       = 3.0 * rs_pc / 100.0;
-                        const double s_param = pow(GD14_S_PARAM_UMW1, 0.7);  // U_MW = 1.0
-                        const double D_star  = 0.17 * (2.0 + pow(S, 5.0)) / (1.0 + pow(S, 5.0));
-                        const double g       = sqrt(D_MW*D_MW + D_star*D_star);
-                        const double Sigma_R1 = (g > 0.0) ? (40.0/g) * (s_param/(1.0+s_param)) : 1e10;
-                        const double alpha   = 1.0 + 0.7*sqrt(s_param)/(1.0+s_param);
-                        const double q       = (Sigma_R1 > 0.0 && Sigma_gas > 0.0) ?
-                            pow(Sigma_gas / Sigma_R1, alpha) : 0.0;
-                        double f_H2 = q / (1.0 + q);
-                        if(f_H2 > 1.0) f_H2 = 1.0;
-                        if(f_H2 < 0.0) f_H2 = 0.0;
+                        const double f_H2 = calculate_H2_fraction_GD14(Sigma_gas, met_abs, rs_pc);
                         galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
                     }
                 }

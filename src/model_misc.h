@@ -53,6 +53,8 @@ extern "C" {
                                      struct GALAXY *galaxies, const struct params *run_params);
 
     extern float calculate_H2_fraction_KD12(const float surface_density, const float metallicity, const float clumping_factor);
+    extern double calculate_H2_fraction_K13(double Sigma_gas_msun_pc2, double metallicity, double clumping_factor);
+    extern double calculate_H2_fraction_GD14(double Sigma_gas_msun_pc2, double metallicity, double rs_pc);
 
 
 #ifdef __cplusplus
