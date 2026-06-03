@@ -31,7 +31,6 @@ struct ctrees_forestinfo {
     int64_t forestntrees;
 };
 
-// static char galaxy_property_names[num_galaxy_props][MAX_STRING_LEN];
 static void get_forest_metadata_filename(char *metadata_filename, const size_t len, struct params *run_params);
 static int read_contiguous_forest_ctrees_h5(hid_t h5_forests_group, const hsize_t nhalos, const hsize_t halosoffset,
                                             const char *snap_field_name, const int8_t snap_field_is_double,
@@ -212,7 +211,6 @@ int setup_forests_io_ctrees_hdf5(struct forest_info *forests_info, const int Thi
     /* fprintf(stderr,"Thistask = %d start_forestnum = %"PRId64" end_forestnum = %"PRId64"\n", ThisTask, start_forestnum, end_forestnum); */
 
     ctr_h5->nforests = nforests_this_task;
-    //ctr_h5->start_forestnum = start_forestnum;
     forests_info->nforests_this_task = nforests_this_task;/* Note: Number of forests to process on this task is also stored at the container struct*/
 
     int64_t *num_forests_to_process_per_file = mycalloc(totnfiles, sizeof(num_forests_to_process_per_file[0]));

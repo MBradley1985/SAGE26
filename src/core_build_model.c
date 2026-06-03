@@ -495,11 +495,11 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                     if(isfinite(galaxies[p].MergTime)) {
                         // Time at which this event occurs (same formula used for mergers)
                         const double event_time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
-                        // disruption has occured!
+                        // disruption has occurred!
                         if(galaxies[p].MergTime > 0.0) {
                             disrupt_satellite_to_ICS(merger_centralgal, p, event_time, galaxies, run_params);
                         } else {
-                            // a merger has occured!
+                            // a merger has occurred!
                             // Map adaptive step to fixed STEPS bins for SFR arrays
                             int step_bin = (step * STEPS) / effective_steps;
                             if(step_bin >= STEPS) step_bin = STEPS - 1;
