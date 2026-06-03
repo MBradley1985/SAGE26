@@ -4,6 +4,8 @@
 
 # SAGE26 — Semi-Analytic Galaxy Evolution
 
+[![Documentation Status](https://readthedocs.org/projects/sage26/badge/?version=latest)](https://sage26.readthedocs.io/en/latest/)
+
 SAGE26 is a C99 semi-analytic code for modelling galaxy formation in a cosmological
 context. It is a major update to [Croton et al. (2016)](https://arxiv.org/abs/1601.04709),
 adding a two-regime CGM model, FIRE stellar feedback, feedback-free burst (FFB) galaxies,
@@ -203,7 +205,8 @@ Original SAGE is also available on [ascl.net](http://ascl.net/1601.006).
 
 ## Links
 
-- [Parameter reference](docs/parameters.md)
+- [Documentation](https://sage26.readthedocs.io/en/latest/)
+- [Parameter reference](https://sage26.readthedocs.io/en/latest/parameters.html)
 - [Developer guide](docs/developer/README.md)
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
