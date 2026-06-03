@@ -59,7 +59,10 @@ FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 
 
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
-
+CGMAGNOn                    1   %0: disable AGN heating in CGM-regime entirely; 1: enable (default)
+CGMHeatingReservoirOn       0   %0: disable persistent HeatingReservoir model; 1: enable
+CGMHeatingEntropyOn         0   %0: off; 1: AGN heating raises t_cool/t_ff via entropy injection
+CGMHeatingRheatOn           1   %0: off; 1: r_heat analog for CGM regime (decaying suppression fraction on t_dyn)
 
 %------------------------------------------
 %----- SAGE model parameters --------------
