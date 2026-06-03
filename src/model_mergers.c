@@ -960,7 +960,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     // Transfer black hole mass to central (avoid baryons disappearing)
     galaxies[centralgal].BlackHoleMass += galaxies[gal].BlackHoleMass;
 
-    // Zero all satellite baryonic fields after transfer — defensive cleanup so
+    // Zero all satellite baryonic fields after transfer -- defensive cleanup so
     // no downstream code can accidentally recount baryons from a merged galaxy.
     galaxies[gal].ColdGas         = galaxies[gal].MetalsColdGas     = 0.0f;
     galaxies[gal].HotGas          = galaxies[gal].MetalsHotGas      = 0.0f;
