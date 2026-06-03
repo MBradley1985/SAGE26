@@ -58,6 +58,22 @@ static const double FIRE_V_CRIT_KMS = 60.0;  /* km/s */
  * Same constant used in model_starformation_and_feedback.c. */
 static const double KD11_METAL_HALO_MASS = 30.0;  /* 10^10 Msun/h */
 
+/* Solar metallicity (Asplund et al. 2009): used to normalise Z' in K13.
+ * Z' = Z_gas / Z_SOLAR_ASPLUND09.
+ * Same constant used in model_starformation_and_feedback.c. */
+static const double Z_SOLAR_ASPLUND09 = 0.014;
+
+/* Solar metallicity used by GD14 (Grevesse & Sauval 1998 value).
+ * Dust-to-gas ratio normalisation: D_MW = Z_gas / Z_SOLAR_GD14.
+ * Also used as the Z-normalisation in KMT09.
+ * Same constant used in model_starformation_and_feedback.c. */
+static const double Z_SOLAR_GD14 = 0.02;
+
+/* Gnedin & Draine (2014) UV-field s-parameter at U_MW = 1.0 (Milky Way).
+ * s_param = pow(GD14_S_PARAM_UMW1, 0.7) from their eq. 11 / Table 1.
+ * Same constant used in model_starformation_and_feedback.c. */
+static const double GD14_S_PARAM_UMW1 = 0.101;
+
 /* File-private forward declaration */
 static double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GALAXY *g2);
 
@@ -617,7 +633,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                         // KMT09
                         float met_abs = (float)((galaxies[cgal].ColdGas > 0.0) ?
                             galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0);
-                        float Z_prime = (met_abs > 0.0f) ? met_abs / 0.02f : 0.0f;
+                        float Z_prime = (met_abs > 0.0f) ? met_abs / (float)Z_SOLAR_GD14 : 0.0f;
                         const float tau_c = 0.066f * 3.0f * Z_prime * Sigma_gas;
                         const float chi = 0.77f * (1.0f + 3.1f * powf(Z_prime, 0.365f));
                         const float s_kmt = (tau_c > 1e-10f) ?
@@ -630,7 +646,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                         // K13: two-phase molecular fraction
                         double Z_gas = (galaxies[cgal].ColdGas > 0.0) ?
                             galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0;
-                        double Z_prime = Z_gas / 0.014;
+                        double Z_prime = Z_gas / Z_SOLAR_ASPLUND09;
                         if(Z_prime < 0.01) Z_prime = 0.01;
                         const double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime, 0.365)) / 4.1;
                         const double tau_c = 0.066 * 5.0 * Z_prime * (double)Sigma_gas;
@@ -644,10 +660,10 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                         // GD14
                         double met_abs = (galaxies[cgal].ColdGas > 0.0) ?
                             galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0;
-                        double D_MW = met_abs / 0.02;
+                        double D_MW = met_abs / Z_SOLAR_GD14;
                         if(D_MW < 1e-4) D_MW = 1e-4;
                         const double S       = 3.0 * rs_pc / 100.0;
-                        const double s_param = pow(0.101, 0.7);  // U_MW = 1.0
+                        const double s_param = pow(GD14_S_PARAM_UMW1, 0.7);  // U_MW = 1.0
                         const double D_star  = 0.17 * (2.0 + pow(S, 5.0)) / (1.0 + pow(S, 5.0));
                         const double g       = sqrt(D_MW*D_MW + D_star*D_star);
                         const double Sigma_R1 = (g > 0.0) ? (40.0/g) * (s_param/(1.0+s_param)) : 1e10;

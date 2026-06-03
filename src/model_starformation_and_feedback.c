@@ -48,6 +48,23 @@ static const double FIRE_V_CRIT_KMS = 60.0;  /* km/s */
  * Same constant used in model_mergers.c. */
 static const double KD11_METAL_HALO_MASS = 30.0;  /* 10^10 Msun/h */
 
+/* Somerville et al. (2025) Equation 8: fraction of gas in dense clouds. */
+static const double SOMERVILLE25_F_DENSE = 0.5;
+
+/* Solar metallicity (Asplund et al. 2009): used to normalise Z' in K13 and KMT09.
+ * Z' = Z_gas / Z_SOLAR_ASPLUND09.  Same constant used in model_mergers.c. */
+static const double Z_SOLAR_ASPLUND09 = 0.014;
+
+/* Solar metallicity used by GD14 (Grevesse & Sauval 1998 value).
+ * Dust-to-gas ratio normalisation: D_MW = Z_gas / Z_SOLAR_GD14.
+ * Also used as the Z-normalisation in KMT09.  Same constant used in model_mergers.c. */
+static const double Z_SOLAR_GD14 = 0.02;
+
+/* Gnedin & Draine (2014) UV-field s-parameter evaluated at U_MW = 1.0 (Milky Way).
+ * s_param = pow(GD14_S_PARAM_UMW1, 0.7) from their eq. 11 / Table 1.
+ * Same constant used in model_mergers.c. */
+static const double GD14_S_PARAM_UMW1 = 0.101;
+
 /*
  * Main star formation and feedback driver for one galaxy per substep.
  *
@@ -190,7 +207,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             double epsilon_cl = (gas_surface_density / Sigma_crit) / (1.0 + gas_surface_density / Sigma_crit);
 
             // Fraction of gas in dense clouds (f_dense from Equation 8)
-            const double f_dense = 0.5;
+            const double f_dense = SOMERVILLE25_F_DENSE;
 
             // Star formation rate: SFR ~ epsilon_cl * f_dense * m_gas / tdyn
             if(tdyn > 0.0 && gas_surface_density > 0.0) {
@@ -256,7 +273,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 double epsilon_cl = (gas_surface_density / Sigma_crit) / (1.0 + gas_surface_density / Sigma_crit);
 
                 // Fraction of gas in dense clouds (f_dense from Equation 8)
-                const double f_dense = 0.5;
+                const double f_dense = SOMERVILLE25_F_DENSE;
 
                 // Star formation rate using H2 gas instead of total cold gas
                 if(tdyn > 0.0 && gas_surface_density > 0.0 && galaxies[p].H2gas > 0.0) {
@@ -443,7 +460,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                     Sigma_gas_k13  = (galaxies[p].ColdGas * 1.0e10 / h) / area_pc2;
                     Sigma_star_k13 = ((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h) / area_pc2;
                     double Z_gas = (galaxies[p].ColdGas > 0.0) ? (galaxies[p].MetalsColdGas / galaxies[p].ColdGas) : 0.0;
-                    Z_prime_k13 = Z_gas / 0.014; if(Z_prime_k13 < 0.01) Z_prime_k13 = 0.01;
+                    Z_prime_k13 = Z_gas / Z_SOLAR_ASPLUND09; if(Z_prime_k13 < 0.01) Z_prime_k13 = 0.01;
                     const double fc = 5.0;
                     const double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime_k13, 0.365)) / 4.1;
                     const double tau_c = 0.066 * fc * Z_prime_k13 * Sigma_gas_k13;
@@ -577,7 +594,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
                 else                                        area_pp = 2.0f * (float)M_PI * rs_pp * rs_pp;
                 const float Sg_pp = (area_pp > 0.0f) ? (float)(galaxies[p].ColdGas * 1.0e10 / h_pp) / area_pp : 0.0f;
                 const float Ss_pp = (area_pp > 0.0f) ? (float)((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h_pp) / area_pp : 0.0f;
-                const float Zp_pp = (galaxies[p].ColdGas > 0.0) ? (float)(galaxies[p].MetalsColdGas / galaxies[p].ColdGas / 0.014) : 0.02f;
+                const float Zp_pp = (galaxies[p].ColdGas > 0.0) ? (float)(galaxies[p].MetalsColdGas / galaxies[p].ColdGas / Z_SOLAR_ASPLUND09) : 0.02f;
                 const double tdep_Gyr = calculate_tdep_K13_Gyr(Sg_pp, Ss_pp, rs_pp, Zp_pp, 1.0f);
                 double tdep_code = tdep_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
                 galaxies[p].H2DepletionTime_Gyr = (tdep_Gyr > 0.0) ? (float)tdep_Gyr : -1.0f;
@@ -976,7 +993,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
                         // K13: store two-phase molecular fraction (f_H2_2p), matching non-FFB path
                         double Z_gas = (galaxies[p].ColdGas > 0.0) ?
                             galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
-                        double Z_prime = Z_gas / 0.014;
+                        double Z_prime = Z_gas / Z_SOLAR_ASPLUND09;
                         if(Z_prime < 0.01) Z_prime = 0.01;
                         const double chi_2p = 3.1 * (1.0 + 3.1 * pow(Z_prime, 0.365)) / 4.1;
                         const double tau_c = 0.066 * 5.0 * Z_prime * Sigma_gas;
@@ -991,10 +1008,10 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
                         // GD14
                         double met_abs = (galaxies[p].ColdGas > 0.0) ?
                             galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
-                        double D_MW = met_abs / 0.02;
+                        double D_MW = met_abs / Z_SOLAR_GD14;
                         if(D_MW < 1e-4) D_MW = 1e-4;
                         const double S       = 3.0 * rs_pc / 100.0;
-                        const double s_param = pow(0.101, 0.7);  // U_MW = 1.0
+                        const double s_param = pow(GD14_S_PARAM_UMW1, 0.7);  // U_MW = 1.0
                         const double D_star  = 0.17 * (2.0 + pow(S, 5.0)) / (1.0 + pow(S, 5.0));
                         const double g       = sqrt(D_MW*D_MW + D_star*D_star);
                         const double Sigma_R1 = (g > 0.0) ? (40.0/g) * (s_param/(1.0+s_param)) : 1e10;
