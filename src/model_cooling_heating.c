@@ -988,7 +988,7 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
         } else {
             AGNcoeff = (AGN_HEATING_COEFF_KMS / galaxies[centralgal].Vvir) * (AGN_HEATING_COEFF_KMS / galaxies[centralgal].Vvir);
 
-            // cooling mass that can be suppresed from AGN heating
+            // cooling mass that can be suppressed from AGN heating
             AGNheating = AGNcoeff * AGNaccreted;
 
             /// the above is the maximal heating rate. we now limit it to the current cooling rate

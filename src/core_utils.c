@@ -247,6 +247,5 @@ int AlmostEqualRelativeAndAbs_double(double A, double B,
     if (diff <= largest * maxRelDiff)
         return EXIT_SUCCESS;
 
-    /* fprintf(stderr,"diff = %e largest * maxRelDiff = %e\n", diff, largest * maxRelDiff); */
     return EXIT_FAILURE;
 }

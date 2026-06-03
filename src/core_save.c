@@ -179,7 +179,7 @@ int32_t save_galaxies(const int64_t task_forestnr, const int numgals, struct hal
 #endif
 
     default:
-        fprintf(stderr, "Uknown OutputFormat in `save_galaxies()`.\n");
+        fprintf(stderr, "Unknown OutputFormat in `save_galaxies()`.\n");
         status = INVALID_OPTION_IN_PARAMS;
 
     }

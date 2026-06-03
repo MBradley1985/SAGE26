@@ -105,7 +105,7 @@ static void set_units(struct params *run_params)
     // convert some physical input parameters to internal units
     run_params->Hubble = HUBBLE * run_params->UnitTime_in_s;
 
-    // compute a few quantitites
+    // compute a few quantities
     run_params->RhoCrit = 3.0 * run_params->Hubble * run_params->Hubble / (8 * M_PI * run_params->G);
 }
 

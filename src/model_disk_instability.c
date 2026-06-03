@@ -48,7 +48,7 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
                             struct GALAXY *galaxies, struct params *run_params)
 {
     // Here we calculate the stability of the stellar and gaseous disk as discussed in Mo, Mao & White (1998).
-    // For unstable stars and gas, we transfer the required ammount to the bulge to make the disk stable again
+    // For unstable stars and gas, we transfer the required amount to the bulge to make the disk stable again
 
     // Disk mass has to be > 0.0
     const double diskmass = galaxies[p].ColdGas + (galaxies[p].StellarMass - galaxies[p].BulgeMass);
