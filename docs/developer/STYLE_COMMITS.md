@@ -107,13 +107,7 @@ The "Regression baseline ... passes bit-identically" line is required for `style
 
 ### 6. AI co-authorship
 
-When AI assistance is heavily used to generate a commit's content (more than a small suggestion), add a trailer:
-
-```text
-Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
-```
-
-Use the actual model name and date the work was produced. No trailer needed for small suggestions.
+We will credit AI when needed
 
 ### 7. References and linking
 
@@ -136,8 +130,6 @@ What's new:
 - tests/regression_baseline.sh: thin driver ...
 - tests/baseline/millennium/manifest.json: seed manifest captured at this
   commit.
-
-Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
 ```
 
 ### Good (a hypothetical bug fix)
