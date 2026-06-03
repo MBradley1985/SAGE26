@@ -345,7 +345,6 @@ struct ctrees_h5_info {
 struct gadget4_info {
     int64_t nforests;/* number of forests to process on this task, scalar */
 
-    // int64_t start_forestnum_first_file;/* the forest number (file-local) that is the first forest assigned to this task, scalar*/
     int64_t *nhalos_per_forest; /* number of halos per forest, nforests elements*/
 
     int32_t numfiles;/* number of unique files being processed by this task,  must be >=1 and <= lastfile - firstfile + 1 */
@@ -383,7 +382,6 @@ struct gadget4_info {
                                             */
     int64_t *offset_in_nhalos_first_file_for_forests; /* offset counted in nhalos contained in all preceeding forests,
                                                         where to start reading the forest in the first files, nforests elements */
-    // int64_t *offset_in_forests_first_file_for_forests; /* offset counted as the number of preceeding forests in that first file, nforests elements */
 };
 #endif
 

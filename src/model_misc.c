@@ -1110,10 +1110,6 @@ float calculate_stellar_scale_height_BR06(float disk_scale_length_pc)
     float log_h_star = -0.23 + 0.8 * log10(disk_scale_length_pc);
     float h_star_pc = pow(10.0, log_h_star);
     
-    // Apply reasonable physical bounds (from 10 pc to 10 kpc)
-    // if (h_star_pc < 10.0) h_star_pc = 10.0;
-    // if (h_star_pc > 10000.0) h_star_pc = 10000.0;
-    
     return h_star_pc;
 }
 
