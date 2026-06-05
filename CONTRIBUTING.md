@@ -11,7 +11,9 @@ make                # build ./sage and libsage.so
 cd tests && make test   # build and run the test suites
 ```
 
-See [docs/developer/README.md](docs/developer/README.md) for architecture notes.
+See the developer style guides under
+<https://github.com/MBradley1985/SAGE26/tree/main/docs/developer>
+for architecture notes and code conventions.
 
 ## Branch model
 
@@ -23,10 +25,10 @@ See [docs/developer/README.md](docs/developer/README.md) for architecture notes.
 
 | Language | Guide |
 |----------|-------|
-| C | [docs/developer/STYLE_C.md](docs/developer/STYLE_C.md) |
-| Python | [docs/developer/STYLE_PYTHON.md](docs/developer/STYLE_PYTHON.md) |
-| Commits | [docs/developer/STYLE_COMMITS.md](docs/developer/STYLE_COMMITS.md) |
-| Docs | [docs/developer/STYLE_DOCS.md](docs/developer/STYLE_DOCS.md) |
+| C | [STYLE_C.md](https://github.com/MBradley1985/SAGE26/blob/main/docs/developer/STYLE_C.md) |
+| Commits | [STYLE_COMMITS.md](https://github.com/MBradley1985/SAGE26/blob/main/docs/developer/STYLE_COMMITS.md) |
+| Docs | [STYLE_DOCS.md](https://github.com/MBradley1985/SAGE26/blob/main/docs/developer/STYLE_DOCS.md) |
+| Tests | [STYLE_TESTS.md](https://github.com/MBradley1985/SAGE26/blob/main/docs/developer/STYLE_TESTS.md) |
 
 Key rules for C:
 - Every file has a `/* filename.c -- one-line summary. */` header.

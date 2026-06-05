@@ -1,0 +1,235 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SAGE26 Documentation &mdash; SAGE26 2026 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=fc6fd62b"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Getting Started" href="getting_started.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="#" class="icon icon-home">
+            SAGE26
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parameters.html">SAGE26 Parameter Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="core_build_model.html">Per-Halo Physics Loop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/infall.html">Infall, Reincorporation, and Stripping</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/cooling_and_heating.html">Cooling and AGN Heating</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/starformation_and_feedback.html">Star Formation and Feedback</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/mergers_and_disruptions.html">Mergers and Disruption</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api.html">C API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to SAGE26</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">SAGE26</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">SAGE26 Documentation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="sage26-documentation">
+<h1>SAGE26 Documentation<a class="headerlink" href="#sage26-documentation" title="Link to this heading"></a></h1>
+<p>SAGE26 is a C99 semi-analytic code for modelling galaxy formation in a cosmological
+context, extending <a class="reference external" href="https://arxiv.org/abs/1601.04709">Croton et al. (2016)</a> with a
+two-regime CGM model, FIRE stellar feedback, feedback-free burst (FFB) galaxies, and
+extended bulge/ICS tracking.</p>
+<p>Source code and issue tracker: <a class="reference external" href="https://github.com/MBradley1985/SAGE26">https://github.com/MBradley1985/SAGE26</a></p>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="getting_started.html#dependencies">Dependencies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting_started.html#build">Build</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting_started.html#first-run">First run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting_started.html#running-the-model">Running the model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting_started.html#plotting">Plotting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting_started.html#tests">Tests</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="parameters.html">SAGE26 Parameter Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="parameters.html#output">Output</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parameters.html#simulation">Simulation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parameters.html#units">Units</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parameters.html#physics-switches">Physics switches</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parameters.html#cgm-model-parameters">CGM model parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parameters.html#ffb-parameters">FFB parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parameters.html#h2-star-formation-parameters">H₂ star formation parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parameters.html#model-parameters">Model parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parameters.html#mpi-forest-distribution">MPI forest distribution</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="core_build_model.html">Per-Halo Physics Loop</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="core_build_model.html#in-one-paragraph">In one paragraph</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core_build_model.html#sub-stepping">Sub-stepping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core_build_model.html#order-of-operations-within-a-substep">Order of operations within a substep</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core_build_model.html#post-step-bookkeeping">Post-step bookkeeping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core_build_model.html#the-two-regime-split-as-a-code-path-map">The two-regime split as a code path map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core_build_model.html#galaxy-types">Galaxy types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core_build_model.html#reading-the-source">Reading the source</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core_build_model.html#where-to-go-next">Where to go next</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="physics/infall.html">Infall, Reincorporation, and Stripping</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="physics/infall.html#what-infall-represents">What infall represents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/infall.html#infall-recipe-the-per-snapshot-budget"><code class="docutils literal notranslate"><span class="pre">infall_recipe()</span></code> – the per-snapshot budget</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/infall.html#reionization-suppression-do-reionization">Reionization suppression – <code class="docutils literal notranslate"><span class="pre">do_reionization()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/infall.html#add-infall-to-hot-per-substep-injection"><code class="docutils literal notranslate"><span class="pre">add_infall_to_hot()</span></code> – per-substep injection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/infall.html#reincorporate-gas-ejected-mass-returning-to-hot"><code class="docutils literal notranslate"><span class="pre">reincorporate_gas()</span></code> – ejected mass returning to hot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/infall.html#strip-from-satellite-per-substep-satellite-stripping"><code class="docutils literal notranslate"><span class="pre">strip_from_satellite()</span></code> – per-substep satellite stripping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/infall.html#switches-and-parameters">Switches and parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/infall.html#references">References</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="physics/cooling_and_heating.html">Cooling and AGN Heating</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="physics/cooling_and_heating.html#the-two-cooling-regimes">The two cooling regimes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/cooling_and_heating.html#dispatcher-cooling-recipe-regime-aware">Dispatcher – <code class="docutils literal notranslate"><span class="pre">cooling_recipe_regime_aware()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/cooling_and_heating.html#cooling-recipe-hot-regime-1-classical-hot-halo"><code class="docutils literal notranslate"><span class="pre">cooling_recipe_hot()</span></code> – Regime 1 (classical hot halo)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/cooling_and_heating.html#cooling-recipe-cgm-regime-0-precipitation"><code class="docutils literal notranslate"><span class="pre">cooling_recipe_cgm()</span></code> – Regime 0 (precipitation)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/cooling_and_heating.html#agn-radio-mode-heating">AGN radio-mode heating</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/cooling_and_heating.html#cool-gas-onto-galaxy"><code class="docutils literal notranslate"><span class="pre">cool_gas_onto_galaxy()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/cooling_and_heating.html#switches-and-parameters">Switches and parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/cooling_and_heating.html#references">References</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="physics/starformation_and_feedback.html">Star Formation and Feedback</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="physics/starformation_and_feedback.html#per-substep-orchestration-starformation-and-feedback">Per-substep orchestration – <code class="docutils literal notranslate"><span class="pre">starformation_and_feedback()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/starformation_and_feedback.html#star-formation-prescriptions">Star formation prescriptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/starformation_and_feedback.html#supernova-feedback">Supernova feedback</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/starformation_and_feedback.html#update-from-star-formation-and-update-from-feedback"><code class="docutils literal notranslate"><span class="pre">update_from_star_formation()</span></code> and <code class="docutils literal notranslate"><span class="pre">update_from_feedback()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/starformation_and_feedback.html#metal-production-and-routing">Metal production and routing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/starformation_and_feedback.html#feedback-free-burst-mode-starformation-ffb">Feedback-free burst mode – <code class="docutils literal notranslate"><span class="pre">starformation_ffb()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/starformation_and_feedback.html#what-is-not-in-this-module">What is NOT in this module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/starformation_and_feedback.html#switches-and-parameters">Switches and parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/starformation_and_feedback.html#references">References</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="physics/mergers_and_disruptions.html">Mergers and Disruption</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="physics/mergers_and_disruptions.html#when-this-step-fires">When this step fires</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/mergers_and_disruptions.html#deal-with-galaxy-merger-the-merger-dispatcher"><code class="docutils literal notranslate"><span class="pre">deal_with_galaxy_merger()</span></code> – the merger dispatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/mergers_and_disruptions.html#quasar-mode-agn-grow-black-hole">Quasar-mode AGN – <code class="docutils literal notranslate"><span class="pre">grow_black_hole()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/mergers_and_disruptions.html#collisional-starburst-recipe-the-merger-starburst"><code class="docutils literal notranslate"><span class="pre">collisional_starburst_recipe()</span></code> – the merger starburst</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/mergers_and_disruptions.html#the-two-channel-bulge-model">The two-channel bulge model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/mergers_and_disruptions.html#satellite-disruption-disrupt-satellite-to-ics">Satellite disruption – <code class="docutils literal notranslate"><span class="pre">disrupt_satellite_to_ICS()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/mergers_and_disruptions.html#what-is-not-in-this-module">What is NOT in this module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/mergers_and_disruptions.html#switches-and-parameters">Switches and parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/mergers_and_disruptions.html#references">References</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api.html">C API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api.html#physics">Physics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#core">Core</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to SAGE26</a></li>
+</ul>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="getting_started.html" class="btn btn-neutral float-right" title="Getting Started" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Michael Bradley, Darren Croton.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

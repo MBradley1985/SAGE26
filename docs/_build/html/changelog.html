@@ -1,0 +1,212 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Changelog &mdash; SAGE26 2026 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=fc6fd62b"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Contributing to SAGE26" href="contributing.html" />
+    <link rel="prev" title="C API Reference" href="api.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            SAGE26
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parameters.html">SAGE26 Parameter Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="core_build_model.html">Per-Halo Physics Loop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/infall.html">Infall, Reincorporation, and Stripping</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/cooling_and_heating.html">Cooling and AGN Heating</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/starformation_and_feedback.html">Star Formation and Feedback</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/mergers_and_disruptions.html">Mergers and Disruption</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api.html">C API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Changelog</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#sage26-2026-major-release">SAGE26 (2026) — Major release</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#new-physics">New physics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#new-sf-prescriptions-sfprescription">New SF prescriptions (<code class="docutils literal notranslate"><span class="pre">SFprescription</span></code>)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#new-tree-formats">New tree formats</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#infrastructure">Infrastructure</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to SAGE26</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">SAGE26</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Changelog</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/changelog.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="changelog">
+<h1>Changelog<a class="headerlink" href="#changelog" title="Link to this heading"></a></h1>
+<section id="sage26-2026-major-release">
+<h2>SAGE26 (2026) — Major release<a class="headerlink" href="#sage26-2026-major-release" title="Link to this heading"></a></h2>
+<p>Built on <a class="reference external" href="https://arxiv.org/abs/1601.04709">Croton et al. (2016)</a>.</p>
+<section id="new-physics">
+<h3>New physics<a class="headerlink" href="#new-physics" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Two-regime CGM model</strong> (<code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span></code>): galaxies are classified as CGM-regime
+(below the Dekel &amp; Birnboim 2006 shock mass) or hot-halo regime. Each regime
+uses a dedicated cooling recipe. CGM-regime cooling uses the Voit (2015)
+precipitation criterion. AGN feedback in the CGM regime is controlled by
+<code class="docutils literal notranslate"><span class="pre">CGMHeatingRheatOn</span></code> (off / <code class="docutils literal notranslate"><span class="pre">f_heat_cgm</span></code> decay on <code class="docutils literal notranslate"><span class="pre">t_dyn</span></code> / <code class="docutils literal notranslate"><span class="pre">r_heat</span></code> ratchet
+capped at R_vir).</p></li>
+<li><p><strong>FIRE stellar feedback</strong> (<code class="docutils literal notranslate"><span class="pre">FIREmodeOn</span></code>): FIRE-calibrated wind mass-loading and
+ejection efficiencies replace the fixed Croton+2016 values.</p></li>
+<li><p><strong>Feedback-free burst galaxies</strong> (<code class="docutils literal notranslate"><span class="pre">FeedbackFreeModeOn</span></code>): implements the Li+2024
+and Boylan-Kolchin+2025 FFB criteria. Multiple sub-modes available (0–7).</p></li>
+<li><p><strong>NFW/beta-profile CGM density</strong> (<code class="docutils literal notranslate"><span class="pre">CGMDensityProfile</span></code>): cooling in CGM-regime
+halos can use a uniform, NFW, or beta-profile gas distribution.</p></li>
+<li><p><strong>Extended bulge tracking</strong>: merger-driven and instability-driven bulge
+components tracked separately (<code class="docutils literal notranslate"><span class="pre">MergerBulgeMass</span></code>, <code class="docutils literal notranslate"><span class="pre">InstabilityBulgeMass</span></code>,
+<code class="docutils literal notranslate"><span class="pre">MergerBulgeRadius</span></code>, <code class="docutils literal notranslate"><span class="pre">InstabilityBulgeRadius</span></code>). Radii follow Tonini+2016 eq. 15.</p></li>
+<li><p><strong>ICS assembly tracking</strong> (<code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span></code>): records satellite disruption
+contributions to intracluster stars.</p></li>
+</ul>
+</section>
+<section id="new-sf-prescriptions-sfprescription">
+<h3>New SF prescriptions (<code class="docutils literal notranslate"><span class="pre">SFprescription</span></code>)<a class="headerlink" href="#new-sf-prescriptions-sfprescription" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Prescription</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>Croton et al. (2006) original</p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>Blitz &amp; Rosolowsky (2006) H₂</p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>Somerville et al. (2025) SFR</p></td>
+</tr>
+<tr class="row-odd"><td><p>3</p></td>
+<td><p>Somerville et al. (2025) SFR + H₂</p></td>
+</tr>
+<tr class="row-even"><td><p>4</p></td>
+<td><p>Krumholz &amp; Dekel (2012)</p></td>
+</tr>
+<tr class="row-odd"><td><p>5</p></td>
+<td><p>Krumholz, McKee &amp; Tumlinson (2009)</p></td>
+</tr>
+<tr class="row-even"><td><p>6</p></td>
+<td><p>Krumholz (2013)</p></td>
+</tr>
+<tr class="row-odd"><td><p>7</p></td>
+<td><p>Gnedin &amp; Draine (2014)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="new-tree-formats">
+<h3>New tree formats<a class="headerlink" href="#new-tree-formats" title="Link to this heading"></a></h3>
+<p>ConsistentTrees ASCII and HDF5 (<code class="docutils literal notranslate"><span class="pre">consistent_trees_ascii</span></code>, <code class="docutils literal notranslate"><span class="pre">consistent_trees_hdf5</span></code>),
+Genesis HDF5 (<code class="docutils literal notranslate"><span class="pre">genesis_lhalo_hdf5</span></code>), Gadget-4 HDF5 (<code class="docutils literal notranslate"><span class="pre">gadget4_hdf5</span></code>).</p>
+</section>
+<section id="infrastructure">
+<h3>Infrastructure<a class="headerlink" href="#infrastructure" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>HDF5 output format (<code class="docutils literal notranslate"><span class="pre">OutputFormat</span> <span class="pre">sage_hdf5</span></code>) with buffered writes.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">libsage.so</span></code> shared library for Python bindings and PSO parameter calibration.</p></li>
+<li><p>Full star formation history arrays (<code class="docutils literal notranslate"><span class="pre">SaveFullSFH</span></code>).</p></li>
+<li><p>Regression baseline test (5380 datasets, bit-identical per dataset).</p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="api.html" class="btn btn-neutral float-left" title="C API Reference" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="contributing.html" class="btn btn-neutral float-right" title="Contributing to SAGE26" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Michael Bradley, Darren Croton.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,318 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Infall, Reincorporation, and Stripping &mdash; SAGE26 2026 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=fc6fd62b"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Cooling and AGN Heating" href="cooling_and_heating.html" />
+    <link rel="prev" title="Per-Halo Physics Loop" href="../core_build_model.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            SAGE26
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../parameters.html">SAGE26 Parameter Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../core_build_model.html">Per-Halo Physics Loop</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Infall, Reincorporation, and Stripping</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#what-infall-represents">What infall represents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#infall-recipe-the-per-snapshot-budget"><code class="docutils literal notranslate"><span class="pre">infall_recipe()</span></code> – the per-snapshot budget</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reionization-suppression-do-reionization">Reionization suppression – <code class="docutils literal notranslate"><span class="pre">do_reionization()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#add-infall-to-hot-per-substep-injection"><code class="docutils literal notranslate"><span class="pre">add_infall_to_hot()</span></code> – per-substep injection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reincorporate-gas-ejected-mass-returning-to-hot"><code class="docutils literal notranslate"><span class="pre">reincorporate_gas()</span></code> – ejected mass returning to hot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#strip-from-satellite-per-substep-satellite-stripping"><code class="docutils literal notranslate"><span class="pre">strip_from_satellite()</span></code> – per-substep satellite stripping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#switches-and-parameters">Switches and parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#references">References</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="cooling_and_heating.html">Cooling and AGN Heating</a></li>
+<li class="toctree-l1"><a class="reference internal" href="starformation_and_feedback.html">Star Formation and Feedback</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mergers_and_disruptions.html">Mergers and Disruption</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">C API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing to SAGE26</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SAGE26</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Infall, Reincorporation, and Stripping</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/physics/infall.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="infall-reincorporation-and-stripping">
+<h1>Infall, Reincorporation, and Stripping<a class="headerlink" href="#infall-reincorporation-and-stripping" title="Link to this heading"></a></h1>
+<p>This page covers the gas-supply side of the model: how baryons enter the
+halo, how previously ejected gas comes back, and how satellite gas is
+transferred to the central. All three operations are functions of the
+halo’s current potential and regime classification, not the local star
+formation state.</p>
+<p>Sources:
+<a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/model_infall.c"><code class="docutils literal notranslate"><span class="pre">src/model_infall.c</span></code></a>,
+<a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/model_reincorporation.c"><code class="docutils literal notranslate"><span class="pre">src/model_reincorporation.c</span></code></a></p>
+<p>Called from: <a class="reference internal" href="../core_build_model.html"><span class="std std-doc">Per-halo physics loop</span></a> – steps 4-7
+of the substep ordering.</p>
+<section id="what-infall-represents">
+<h2>What infall represents<a class="headerlink" href="#what-infall-represents" title="Link to this heading"></a></h2>
+<p>At each snapshot, a halo of virial mass <code class="docutils literal notranslate"><span class="pre">Mvir</span></code> “should” contain a baryonic
+mass <code class="docutils literal notranslate"><span class="pre">BaryonFrac</span> <span class="pre">*</span> <span class="pre">Mvir</span></code>. If it contains less, the missing baryons fall
+in over the snapshot interval. If it contains more (the halo lost mass,
+or its satellites brought in baryon-rich progenitors), the excess is
+removed – first from the ejected reservoir, then from the hot/CGM
+reservoir.</p>
+<p>SAGE26 routes the infalling gas to one of two destinations depending on the
+central’s regime classification:</p>
+<ul class="simple">
+<li><p><strong>Regime 0 (CGM):</strong> infall accumulates in <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code> and cools through the
+precipitation recipe.</p></li>
+<li><p><strong>Regime 1 (hot halo):</strong> infall accumulates in <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> and cools through
+the classical isothermal recipe.</p></li>
+</ul>
+</section>
+<section id="infall-recipe-the-per-snapshot-budget">
+<h2><code class="docutils literal notranslate"><span class="pre">infall_recipe()</span></code> – the per-snapshot budget<a class="headerlink" href="#infall-recipe-the-per-snapshot-budget" title="Link to this heading"></a></h2>
+<p>Computed once per snapshot, before the substep loop opens:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">infalling_mass</span> <span class="o">=</span> <span class="n">reionization_modifier</span> <span class="o">*</span> <span class="n">BaryonFrac</span> <span class="o">*</span> <span class="n">Mvir</span>
+               <span class="o">-</span> <span class="p">(</span><span class="n">StellarMass</span> <span class="o">+</span> <span class="n">ColdGas</span> <span class="o">+</span> <span class="n">HotGas</span> <span class="o">+</span> <span class="n">EjectedMass</span>
+                  <span class="o">+</span> <span class="n">BlackHoleMass</span> <span class="o">+</span> <span class="n">ICS</span> <span class="o">+</span> <span class="n">CGMgas</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The function also performs the per-snapshot satellite-to-central transfers:</p>
+<ul class="simple">
+<li><p><strong>Satellite EjectedMass</strong> is reassigned to the central (centrals own the
+full ejected reservoir of the FoF group).</p></li>
+<li><p><strong>Satellite ICS</strong> is added to the central’s ICS; if <code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span></code>
+is on, the mass-weighted assembly history is also inherited and the
+contribution is recorded as accretion.</p></li>
+<li><p><strong>Satellite CGMgas</strong> is summed into the central’s appropriate reservoir:
+<code class="docutils literal notranslate"><span class="pre">CGMgas</span></code> if the central is in Regime 0, <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> if it is in Regime 1
+(or unconditionally <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> if <code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span></code> is off).</p></li>
+</ul>
+<p>After these transfers, the function returns the per-snapshot total
+<code class="docutils literal notranslate"><span class="pre">infalling_mass</span></code> (may be negative). The substep loop in <code class="docutils literal notranslate"><span class="pre">evolve_galaxies()</span></code>
+then injects <code class="docutils literal notranslate"><span class="pre">infalling_mass</span> <span class="pre">/</span> <span class="pre">effective_steps</span></code> per substep via
+<code class="docutils literal notranslate"><span class="pre">add_infall_to_hot()</span></code>.</p>
+</section>
+<section id="reionization-suppression-do-reionization">
+<h2>Reionization suppression – <code class="docutils literal notranslate"><span class="pre">do_reionization()</span></code><a class="headerlink" href="#reionization-suppression-do-reionization" title="Link to this heading"></a></h2>
+<p>For halos with virial mass close to the filtering mass at the current
+redshift, photoheating from the UV background prevents some of the
+universal baryon fraction from falling in. SAGE26 uses the Gnedin (2000)
+prescription with the Kravtsov et al. (2004) Appendix B fitting formulae:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">modifier</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="mf">0.26</span> <span class="o">*</span> <span class="n">M_F</span> <span class="o">/</span> <span class="n">Mvir</span><span class="p">)</span><span class="o">^-</span><span class="mi">3</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">M_F</span></code> is the larger of the Gnedin filtering mass and the
+characteristic mass corresponding to a virial temperature of 10^4 K.
+The transition redshifts are controlled by:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Reionization_z0</span></code> – the redshift at which reionization begins.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Reionization_zr</span></code> – the redshift by which reionization is complete.</p></li>
+</ul>
+<p>When <code class="docutils literal notranslate"><span class="pre">ReionizationOn</span> <span class="pre">=</span> <span class="pre">0</span></code>, the modifier is fixed at 1 (no suppression).</p>
+</section>
+<section id="add-infall-to-hot-per-substep-injection">
+<h2><code class="docutils literal notranslate"><span class="pre">add_infall_to_hot()</span></code> – per-substep injection<a class="headerlink" href="#add-infall-to-hot-per-substep-injection" title="Link to this heading"></a></h2>
+<p>Receives <code class="docutils literal notranslate"><span class="pre">infalling_gas</span> <span class="pre">=</span> <span class="pre">infalling_mass</span> <span class="pre">/</span> <span class="pre">effective_steps</span></code> per substep
+and deposits it into the central’s hot reservoir. The destination depends
+on regime and the sign of the infall:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Case</p></th>
+<th class="head"><p>Destination</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">infalling_gas</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>, Regime 0</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CGMgas</span></code> (metallicity unchanged)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">infalling_gas</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>, Regime 1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">HotGas</span></code> (metallicity unchanged)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">infalling_gas</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>, <code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span> <span class="pre">=</span> <span class="pre">0</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">HotGas</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">infalling_gas</span> <span class="pre">&lt;</span> <span class="pre">0</span></code></p></td>
+<td><p>first drained from <code class="docutils literal notranslate"><span class="pre">EjectedMass</span></code>, remainder from <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code>/<code class="docutils literal notranslate"><span class="pre">HotGas</span></code> via metal-weighted draw</p></td>
+</tr>
+</tbody>
+</table>
+<p>The metal-weighted draw on negative infall preserves the metallicity of
+the donor reservoir so that mass and metal accounting stay consistent.</p>
+</section>
+<section id="reincorporate-gas-ejected-mass-returning-to-hot">
+<h2><code class="docutils literal notranslate"><span class="pre">reincorporate_gas()</span></code> – ejected mass returning to hot<a class="headerlink" href="#reincorporate-gas-ejected-mass-returning-to-hot" title="Link to this heading"></a></h2>
+<p>When supernova feedback ejects gas from the halo (into <code class="docutils literal notranslate"><span class="pre">EjectedMass</span></code>),
+some of it falls back over the dynamical time. SAGE26 uses the
+ReIncorporationFactor formulation from Henriques+13:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">reincorporated</span> <span class="o">=</span> <span class="p">(</span><span class="n">Vvir</span> <span class="o">/</span> <span class="n">Vcrit</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">EjectedMass</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="n">t_dyn</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">t_dyn</span> <span class="pre">=</span> <span class="pre">Rvir</span> <span class="pre">/</span> <span class="pre">Vvir</span></code> and <code class="docutils literal notranslate"><span class="pre">Vcrit</span> <span class="pre">=</span> <span class="pre">445.48</span> <span class="pre">km/s</span> <span class="pre">*</span> <span class="pre">ReIncorporationFactor</span></code>.
+The function only fires when <code class="docutils literal notranslate"><span class="pre">Vvir</span> <span class="pre">&gt;</span> <span class="pre">Vcrit</span></code>, so low-mass halos do not
+recover ejected material – this is the mechanism that lets SN feedback
+permanently quench faint galaxies.</p>
+<p>The reincorporated gas inherits the metallicity of the ejected reservoir
+and is routed by regime: <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code> if Regime 0, <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> if Regime 1
+(or always <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> when <code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span> <span class="pre">=</span> <span class="pre">0</span></code>).</p>
+</section>
+<section id="strip-from-satellite-per-substep-satellite-stripping">
+<h2><code class="docutils literal notranslate"><span class="pre">strip_from_satellite()</span></code> – per-substep satellite stripping<a class="headerlink" href="#strip-from-satellite-per-substep-satellite-stripping" title="Link to this heading"></a></h2>
+<p>For Type 1 satellites (those with their own dark matter subhalo) the
+function transfers excess gas from the satellite to the central, one
+substep at a time. The “excess” is defined as the satellite’s current
+baryons above <code class="docutils literal notranslate"><span class="pre">BaryonFrac</span> <span class="pre">*</span> <span class="pre">Mvir_sat</span> <span class="pre">*</span> <span class="pre">reionization_modifier</span></code>. A fraction
+<code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">/</span> <span class="pre">effective_steps</span></code> of the excess is stripped per call, so the total
+per-snapshot stripping fraction is independent of the adaptive substep
+count.</p>
+<p>For CGM-regime satellites the bulk transfer has already happened in
+<code class="docutils literal notranslate"><span class="pre">infall_recipe()</span></code> (CGMgas was zeroed and merged into the central’s
+reservoir). If the satellite’s <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code> is empty but <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> remains
+– typical of a satellite that crossed the M_shock threshold during its
+lifetime – the function falls back to stripping <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> so that residual
+hot gas is not stranded.</p>
+<p>Type 2 satellites (orphan satellites with no remaining subhalo) have no
+hot reservoir and are skipped.</p>
+</section>
+<section id="switches-and-parameters">
+<h2>Switches and parameters<a class="headerlink" href="#switches-and-parameters" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Effect</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ReionizationOn</span></code></p></td>
+<td><p>0 disables the Gnedin/Kravtsov filtering-mass modifier.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Reionization_z0</span></code></p></td>
+<td><p>Reionization onset redshift.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Reionization_zr</span></code></p></td>
+<td><p>Reionization completion redshift.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">BaryonFrac</span></code></p></td>
+<td><p>Universal baryon fraction f_b = Omega_b / Omega_m.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ReIncorporationFactor</span></code></p></td>
+<td><p>Sets <code class="docutils literal notranslate"><span class="pre">Vcrit</span></code> for the reincorporation cutoff. Larger values delay reincorporation in low-mass halos.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span></code></p></td>
+<td><p>Routes infall, reincorporation, and satellite CGM by regime when set.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span></code></p></td>
+<td><p>Records satellite-derived ICS mass into <code class="docutils literal notranslate"><span class="pre">ICS_accrete</span></code> for the central.</p></td>
+</tr>
+</tbody>
+</table>
+<p>See <a class="reference internal" href="../parameters.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">parameters.md</span></code></span></a> for full descriptions and defaults.</p>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Gnedin (2000), ApJ 542, 535 – reionization filtering mass.</p></li>
+<li><p>Kravtsov, Gnedin &amp; Klypin (2004), ApJ 609, 482 – Appendix B fitting
+formulae for the filtering mass.</p></li>
+<li><p>Bryan &amp; Norman (1998), ApJ 495, 80 – virial overdensity Delta_c(z).</p></li>
+<li><p>Henriques et al. (2013), MNRAS 431, 3373 – reincorporation formulation.</p></li>
+<li><p>Croton et al. (2006), MNRAS 365, 11 – original SAGE infall recipe and
+baryon budget.</p></li>
+<li><p>Dekel &amp; Birnboim (2006), MNRAS 368, 2 – M_shock criterion underlying
+regime classification.</p></li>
+<li><p>Voit (2015), ApJL 808, L30 – CGM precipitation framework.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../core_build_model.html" class="btn btn-neutral float-left" title="Per-Halo Physics Loop" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="cooling_and_heating.html" class="btn btn-neutral float-right" title="Cooling and AGN Heating" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Michael Bradley, Darren Croton.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

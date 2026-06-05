@@ -17,6 +17,16 @@ Source code and issue tracker: https://github.com/MBradley1985/SAGE26
 
 .. toctree::
    :maxdepth: 2
+   :caption: Physics
+
+   core_build_model
+   physics/infall
+   physics/cooling_and_heating
+   physics/starformation_and_feedback
+   physics/mergers_and_disruptions
+
+.. toctree::
+   :maxdepth: 2
    :caption: API Reference
 
    api
