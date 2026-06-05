@@ -136,10 +136,6 @@ Each regime uses a dedicated cooling recipe.
 |-----------|--------|--------|
 | `CGMrecipeOn` | 0/1 | 0=off (classical C16 cooling only); 1=on |
 | `CGMDensityProfile` | 0–2 | 0=uniform; 1=NFW; 2=beta-profile (β=2/3) |
-| `CGMPrecipitationMode` | 0/1 | 0=tanh; 1=logistic sigmoid at tcool/tff=10 |
-| `CGMPrecipRadiusMode` | 0/1 | Radius for tcool evaluation: 0=iterative r_cool; 1=0.1 R_vir |
-| `CGMAGNOn` | 0/1 | Enable AGN heating coupling to the CGM-regime cooling path |
-| `CGMHeatingRheatOn` | 0–2 | CGM-regime AGN suppression: 0=off; 1=f_heat_cgm with t_dyn decay; 2=r_heat ratchet capped at R_vir |
 
 ### FIRE stellar feedback (`FIREmodeOn`)
 
@@ -155,16 +151,6 @@ Each regime uses a dedicated cooling recipe.
 | 0 | Off |
 | 1 | Li+2024 sigmoid |
 | 2 | Boylan-Kolchin+2025 (Ishiyama+21 concentration) |
-| 3 | BK25 using the `ConcentrationOn` method |
-| 4 | BK25 + log-normal concentration scatter |
-| 5 | Li+2024 sharp threshold |
-| 6 | Li+2024 sigmoid + H2 SF coupling |
-| 7 | BK25 log-normal c scatter + H2 SF coupling |
-
-| Sub-switch | Values | Effect |
-|------------|--------|--------|
-| `FFBIgnoreRegime` | 0/1 | Apply FFB regardless of CGM regime classification |
-| `FFBRandomMode` | 0/1 | Stochastic FFB threshold instead of deterministic sigmoid |
 
 ### Halo concentration (`ConcentrationOn`)
 
@@ -175,15 +161,6 @@ Each regime uses a dedicated cooling recipe.
 | 2 | V_max / V_vir from the simulation |
 | 3 | V_max / V_vir with subhalo infall freeze for satellites |
 
-### Bulge sizes (`BulgeSizeOn`)
-
-| Value | Model |
-|-------|-------|
-| 0 | Off |
-| 1 | Shen+2003 eq. 33 |
-| 2 | Shen+2003 eq. 32 |
-| 3 | Tonini+2016 (separate merger and instability channels, mass-weighted average) |
-
 ### H2 star formation (auxiliary switches)
 
 | Parameter | Values | Effect |
@@ -191,13 +168,11 @@ Each regime uses a dedicated cooling recipe.
 | `H2DiskAreaOption` | 1–3 | Disk area for H2 surface density: 1=π r_disk²; 2=π (3 r_disk)²; 3=2π r_disk² |
 | `H2RadialIntegrationOn` | 0/1 | Radial ring integration for H2 fraction (slower, more accurate) |
 | `H2RadialNBins` | int | Number of radial bins for ring integration |
-| `H2SFRMode` | 0/1 | 0=use `SfrEfficiency`; 1=use a fixed depletion time `H2DepletionTime_Gyr` |
 
 ### Mergers and ICS tracking
 
 | Parameter | Values | Effect |
 |-----------|--------|--------|
-| `StarburstColdGasOn` | 0/1 | Include cold gas in merger starburst accounting |
 | `DynamicDisruptionSplit` | 0–2 | Route disrupted satellite mass: 0=all to ICS; 1=all to hot gas; 2=split via `FractionDisruptedToICS` |
 | `TrackICSAssembly` | 0/1 | Record satellite disruption / accretion contributions to ICS |
 
