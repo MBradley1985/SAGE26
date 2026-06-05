@@ -173,7 +173,7 @@ Each regime uses a dedicated cooling recipe.
 
 | Parameter | Values | Effect |
 |-----------|--------|--------|
-| `DynamicDisruptionSplit` | 0–2 | Route disrupted satellite mass: 0=all to ICS; 1=all to hot gas; 2=split via `FractionDisruptedToICS` |
+| `DynamicDisruptionSplit` | 0–2 | Route disrupted satellite mass: 0=fixed fraction via `FractionDisruptedToICS` ; 1=mass-ratio ;  2=mass-ratio with concentration weighting |
 | `TrackICSAssembly` | 0/1 | Record satellite disruption / accretion contributions to ICS |
 
 ### Output
