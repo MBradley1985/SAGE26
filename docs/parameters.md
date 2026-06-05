@@ -162,7 +162,7 @@ optional parameters take the listed default if omitted.
 | `Reionization_z0` | — | `8.0` | Characteristic redshift for reionization suppression (Kravtsov+04). |
 | `Reionization_zr` | — | `7.0` | Width parameter for reionization suppression. |
 
-See the [FFB parameters](#ffb-parameters) section above for `FFBMaxEfficiency`,
+See the **FFB parameters** section above for `FFBMaxEfficiency`,
 `FFBConcSigma`, and `RedshiftPowerLawExponent`.
 
 ---

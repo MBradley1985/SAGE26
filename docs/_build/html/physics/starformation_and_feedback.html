@@ -1,0 +1,421 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Star Formation and Feedback &mdash; SAGE26 2026 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=fc6fd62b"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Mergers and Disruption" href="mergers_and_disruptions.html" />
+    <link rel="prev" title="Cooling and AGN Heating" href="cooling_and_heating.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            SAGE26
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../parameters.html">SAGE26 Parameter Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../core_build_model.html">Per-Halo Physics Loop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="infall.html">Infall, Reincorporation, and Stripping</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cooling_and_heating.html">Cooling and AGN Heating</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Star Formation and Feedback</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#per-substep-orchestration-starformation-and-feedback">Per-substep orchestration – <code class="docutils literal notranslate"><span class="pre">starformation_and_feedback()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#star-formation-prescriptions">Star formation prescriptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#supernova-feedback">Supernova feedback</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#standard-croton-2006-budget-firemodeon-0">Standard Croton+2006 budget (<code class="docutils literal notranslate"><span class="pre">FIREmodeOn</span> <span class="pre">=</span> <span class="pre">0</span></code>)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fire-scaling-firemodeon-1">FIRE scaling (<code class="docutils literal notranslate"><span class="pre">FIREmodeOn</span> <span class="pre">=</span> <span class="pre">1</span></code>)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#update-from-star-formation-and-update-from-feedback"><code class="docutils literal notranslate"><span class="pre">update_from_star_formation()</span></code> and <code class="docutils literal notranslate"><span class="pre">update_from_feedback()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#metal-production-and-routing">Metal production and routing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#feedback-free-burst-mode-starformation-ffb">Feedback-free burst mode – <code class="docutils literal notranslate"><span class="pre">starformation_ffb()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#what-is-not-in-this-module">What is NOT in this module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#switches-and-parameters">Switches and parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#references">References</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mergers_and_disruptions.html">Mergers and Disruption</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">C API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing to SAGE26</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SAGE26</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Star Formation and Feedback</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/physics/starformation_and_feedback.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="star-formation-and-feedback">
+<h1>Star Formation and Feedback<a class="headerlink" href="#star-formation-and-feedback" title="Link to this heading"></a></h1>
+<p>This page covers the gas-to-stars conversion step: which star-formation
+prescription is used, how supernova feedback returns gas to the hot/CGM
+reservoir and ejects some beyond the halo, and how feedback-free burst (FFB)
+galaxies bypass the SN loop entirely.</p>
+<p>Source: <a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/model_starformation_and_feedback.c"><code class="docutils literal notranslate"><span class="pre">src/model_starformation_and_feedback.c</span></code></a></p>
+<p>Called from: <a class="reference internal" href="../core_build_model.html"><span class="std std-doc">Per-halo physics loop</span></a> – step 9 of the
+substep ordering.</p>
+<section id="per-substep-orchestration-starformation-and-feedback">
+<h2>Per-substep orchestration – <code class="docutils literal notranslate"><span class="pre">starformation_and_feedback()</span></code><a class="headerlink" href="#per-substep-orchestration-starformation-and-feedback" title="Link to this heading"></a></h2>
+<p>The function executes the following block once per galaxy per substep:</p>
+<ol class="arabic simple">
+<li><p><strong>FFB early exit.</strong> If <code class="docutils literal notranslate"><span class="pre">FeedbackFreeModeOn</span> <span class="pre">&gt;=</span> <span class="pre">1</span></code> and the galaxy is in FFB
+regime (<code class="docutils literal notranslate"><span class="pre">FFBRegime</span> <span class="pre">==</span> <span class="pre">1</span></code>, set in <code class="docutils literal notranslate"><span class="pre">core_build_model.c</span></code>), control jumps to
+<code class="docutils literal notranslate"><span class="pre">starformation_ffb()</span></code> and the standard SF/feedback path is skipped.</p></li>
+<li><p><strong>Compute the SFR</strong> via the prescription selected by <code class="docutils literal notranslate"><span class="pre">SFprescription</span></code>
+(see below). Returns a star formation rate <code class="docutils literal notranslate"><span class="pre">strdot</span></code> in code units.</p></li>
+<li><p><strong>Compute H1/H2 split</strong> for H2-tracking prescriptions (1, 3, 4, 5, 6, 7),
+storing <code class="docutils literal notranslate"><span class="pre">H2gas</span></code> and <code class="docutils literal notranslate"><span class="pre">H1gas</span></code> on the galaxy.</p></li>
+<li><p><strong>Compute reheated and ejected masses.</strong> Standard Croton+06 budget, or
+the FIRE-scaling alternative (Muratov+15) when <code class="docutils literal notranslate"><span class="pre">FIREmodeOn</span> <span class="pre">=</span> <span class="pre">1</span></code>.</p></li>
+<li><p><strong>Apply mass and metal updates</strong> via <code class="docutils literal notranslate"><span class="pre">update_from_star_formation()</span></code> and
+<code class="docutils literal notranslate"><span class="pre">update_from_feedback()</span></code>.</p></li>
+<li><p><strong>Record the SFR</strong> in the fixed-size <code class="docutils literal notranslate"><span class="pre">SfrDisk[step]</span></code> history bin.</p></li>
+<li><p><strong>Check disk instability</strong> (<code class="docutils literal notranslate"><span class="pre">check_disk_instability()</span></code> if
+<code class="docutils literal notranslate"><span class="pre">DiskInstabilityOn</span></code>).</p></li>
+<li><p><strong>Produce metals</strong> via the instantaneous-recycling approximation and
+route the fraction that leaves the disk to either <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code> (Regime 0)
+or <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> (Regime 1) using the Krumholz &amp; Dekel (2011) Eq. 22
+suppression factor <code class="docutils literal notranslate"><span class="pre">FracZleaveDisk</span> <span class="pre">*</span> <span class="pre">exp(-Mvir</span> <span class="pre">/</span> <span class="pre">3e11)</span></code>.</p></li>
+</ol>
+</section>
+<section id="star-formation-prescriptions">
+<h2>Star formation prescriptions<a class="headerlink" href="#star-formation-prescriptions" title="Link to this heading"></a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">SFprescription</span></code> parameter selects one of eight recipes. All share the
+same effective star-forming radius <code class="docutils literal notranslate"><span class="pre">r_eff</span> <span class="pre">=</span> <span class="pre">3.0</span> <span class="pre">*</span> <span class="pre">DiskScaleRadius</span></code> (Milky
+Way calibration) and dynamical time <code class="docutils literal notranslate"><span class="pre">t_dyn</span> <span class="pre">=</span> <span class="pre">r_eff</span> <span class="pre">/</span> <span class="pre">V_vir</span></code>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Recipe</p></th>
+<th class="head"><p>What sets the SFR</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>Croton+2006</p></td>
+<td><p>Kauffmann+96 cold-gas threshold; <code class="docutils literal notranslate"><span class="pre">SFR</span> <span class="pre">=</span> <span class="pre">epsilon</span> <span class="pre">*</span> <span class="pre">(ColdGas</span> <span class="pre">-</span> <span class="pre">cold_crit)</span> <span class="pre">/</span> <span class="pre">t_dyn</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>Blitz &amp; Rosolowsky 2006 (BR06)</p></td>
+<td><p>H2 from pressure-based fitting; <code class="docutils literal notranslate"><span class="pre">SFR</span> <span class="pre">=</span> <span class="pre">epsilon</span> <span class="pre">*</span> <span class="pre">H2gas</span> <span class="pre">/</span> <span class="pre">t_dyn</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>Somerville+25 (no H2)</p></td>
+<td><p>Density-modulated efficiency; <code class="docutils literal notranslate"><span class="pre">SFR</span> <span class="pre">=</span> <span class="pre">epsilon_cl</span> <span class="pre">*</span> <span class="pre">f_dense</span> <span class="pre">*</span> <span class="pre">ColdGas</span> <span class="pre">/</span> <span class="pre">t_dyn</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>3</p></td>
+<td><p>Somerville+25 + H2</p></td>
+<td><p>Same as 2, but with <code class="docutils literal notranslate"><span class="pre">ColdGas</span></code> replaced by <code class="docutils literal notranslate"><span class="pre">H2gas</span></code> from BR06</p></td>
+</tr>
+<tr class="row-even"><td><p>4</p></td>
+<td><p>Krumholz &amp; Dekel 2012 (KD12)</p></td>
+<td><p>Metallicity-dependent H2 fraction; <code class="docutils literal notranslate"><span class="pre">SFR</span> <span class="pre">=</span> <span class="pre">epsilon</span> <span class="pre">*</span> <span class="pre">H2gas</span> <span class="pre">/</span> <span class="pre">t_dyn</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>5</p></td>
+<td><p>Krumholz, McKee &amp; Tumlinson 2009 (KMT09)</p></td>
+<td><p>Photodissociation-balance H2; same form as KD12</p></td>
+</tr>
+<tr class="row-even"><td><p>6</p></td>
+<td><p>Krumholz 2013 (K13)</p></td>
+<td><p>Two-phase H2 model</p></td>
+</tr>
+<tr class="row-odd"><td><p>7</p></td>
+<td><p>Gnedin &amp; Draine 2014 (GD14)</p></td>
+<td><p>UV-modulated H2; same form as KMT09</p></td>
+</tr>
+</tbody>
+</table>
+<p>The H2-tracking prescriptions compute <code class="docutils literal notranslate"><span class="pre">H2gas</span></code> and <code class="docutils literal notranslate"><span class="pre">H1gas</span></code> either via a
+single-slab calculation (cheaper) or a radial ring integration
+(<code class="docutils literal notranslate"><span class="pre">H2RadialIntegrationOn</span> <span class="pre">=</span> <span class="pre">1</span></code>, more accurate). The single-slab disk area is
+selected by <code class="docutils literal notranslate"><span class="pre">H2DiskAreaOption</span></code>:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Area</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>pi * r_disk^2</p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>pi * (3 r_disk)^2 (default; matches Milky Way calibration)</p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>2 pi * r_disk^2</p></td>
+</tr>
+</tbody>
+</table>
+<p>The radial mode uses <code class="docutils literal notranslate"><span class="pre">H2RadialNBins</span></code> rings out to <code class="docutils literal notranslate"><span class="pre">H2RadialRMaxFactor</span> <span class="pre">*</span> <span class="pre">r_disk</span></code>.</p>
+<p>A fixed depletion time can override the per-prescription SFR efficiency:
+<code class="docutils literal notranslate"><span class="pre">H2SFRMode</span> <span class="pre">=</span> <span class="pre">1</span></code> switches every H2-based prescription to
+<code class="docutils literal notranslate"><span class="pre">SFR</span> <span class="pre">=</span> <span class="pre">H2gas</span> <span class="pre">/</span> <span class="pre">H2DepletionTime_Gyr</span></code>, useful for matching molecular gas
+observations directly.</p>
+</section>
+<section id="supernova-feedback">
+<h2>Supernova feedback<a class="headerlink" href="#supernova-feedback" title="Link to this heading"></a></h2>
+<p>Two reheating/ejection budgets are available, selected by <code class="docutils literal notranslate"><span class="pre">FIREmodeOn</span></code>.</p>
+<section id="standard-croton-2006-budget-firemodeon-0">
+<h3>Standard Croton+2006 budget (<code class="docutils literal notranslate"><span class="pre">FIREmodeOn</span> <span class="pre">=</span> <span class="pre">0</span></code>)<a class="headerlink" href="#standard-croton-2006-budget-firemodeon-0" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Reheated mass:</strong> <code class="docutils literal notranslate"><span class="pre">reheated_mass</span> <span class="pre">=</span> <span class="pre">FeedbackReheatingEpsilon</span> <span class="pre">*</span> <span class="pre">stars</span></code>.
+Transferred from <code class="docutils literal notranslate"><span class="pre">ColdGas</span></code> to <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> (or <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code> in Regime 0).</p></li>
+<li><p><strong>Ejected mass:</strong> energy balance with the unused SN energy:
+<code class="docutils literal notranslate"><span class="pre">ejected_mass</span> <span class="pre">=</span> <span class="pre">(FeedbackEjectionEfficiency</span> <span class="pre">*</span> <span class="pre">eta_SN</span> <span class="pre">*</span> <span class="pre">E_SN</span> <span class="pre">/</span> <span class="pre">V_vir^2</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">-</span> <span class="pre">FeedbackReheatingEpsilon)</span> <span class="pre">*</span> <span class="pre">stars</span></code>.
+Transferred from <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> (or <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code>) to <code class="docutils literal notranslate"><span class="pre">EjectedMass</span></code>. Clipped to zero
+if negative (deeper potentials retain all the reheated gas).</p></li>
+</ul>
+</section>
+<section id="fire-scaling-firemodeon-1">
+<h3>FIRE scaling (<code class="docutils literal notranslate"><span class="pre">FIREmodeOn</span> <span class="pre">=</span> <span class="pre">1</span></code>)<a class="headerlink" href="#fire-scaling-firemodeon-1" title="Link to this heading"></a></h3>
+<p>Replaces the fixed coefficients with the Muratov et al. (2015) velocity-
+and redshift-dependent scaling:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">fire_scaling</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">z</span><span class="p">)</span><span class="o">^</span><span class="n">RedshiftPowerLawExponent</span> <span class="o">*</span> <span class="p">(</span><span class="n">V_vir</span> <span class="o">/</span> <span class="n">V_crit</span><span class="p">)</span><span class="o">^</span><span class="n">beta</span>
+</pre></div>
+</div>
+<p>with <code class="docutils literal notranslate"><span class="pre">V_crit</span> <span class="pre">=</span> <span class="pre">60</span> <span class="pre">km/s</span></code> and the broken-power-law exponent
+<code class="docutils literal notranslate"><span class="pre">beta</span> <span class="pre">=</span> <span class="pre">-3.2</span></code> below <code class="docutils literal notranslate"><span class="pre">V_crit</span></code>, <code class="docutils literal notranslate"><span class="pre">-1.0</span></code> above. The reheating mass becomes
+<code class="docutils literal notranslate"><span class="pre">eta_reheat</span> <span class="pre">=</span> <span class="pre">FeedbackReheatingEpsilon</span> <span class="pre">*</span> <span class="pre">fire_scaling</span></code>, and the ejection
+mass is computed from the surplus SN energy after lifting the reheated
+gas (Hirschmann+2016 energy budget):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">E_FB</span> <span class="o">=</span> <span class="n">FeedbackEjectionEfficiency</span> <span class="o">*</span> <span class="n">fire_scaling</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">stars</span> <span class="o">*</span> <span class="n">eta_SN</span> <span class="o">*</span> <span class="n">E_SN</span>
+<span class="n">E_lift</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">reheated_mass</span> <span class="o">*</span> <span class="n">V_vir</span><span class="o">^</span><span class="mi">2</span>
+<span class="n">ejected_mass</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">E_FB</span> <span class="o">-</span> <span class="n">E_lift</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">0.5</span> <span class="o">*</span> <span class="n">V_vir</span><span class="o">^</span><span class="mi">2</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The FIRE coefficient is computed once per call and reused for both reheating
+and ejection.</p>
+</section>
+</section>
+<section id="update-from-star-formation-and-update-from-feedback">
+<h2><code class="docutils literal notranslate"><span class="pre">update_from_star_formation()</span></code> and <code class="docutils literal notranslate"><span class="pre">update_from_feedback()</span></code><a class="headerlink" href="#update-from-star-formation-and-update-from-feedback" title="Link to this heading"></a></h2>
+<p>These two helpers do the actual reservoir bookkeeping.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">update_from_star_formation()</span></code></strong> removes <code class="docutils literal notranslate"><span class="pre">(1</span> <span class="pre">-</span> <span class="pre">RecycleFraction)</span> <span class="pre">*</span> <span class="pre">stars</span></code>
+from <code class="docutils literal notranslate"><span class="pre">ColdGas</span></code> (the rest is instantaneously recycled), increments
+<code class="docutils literal notranslate"><span class="pre">StellarMass</span></code>, and tracks metallicity. H1 and H2 are clamped so they remain
+consistent with the post-SF cold gas.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">update_from_feedback()</span></code></strong> transfers <code class="docutils literal notranslate"><span class="pre">reheated_mass</span></code> from <code class="docutils literal notranslate"><span class="pre">ColdGas</span></code> to
+the central’s hot reservoir (regime-aware: <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code> if Regime 0,
+<code class="docutils literal notranslate"><span class="pre">HotGas</span></code> if Regime 1), then transfers <code class="docutils literal notranslate"><span class="pre">ejected_mass</span></code> from that same
+reservoir to <code class="docutils literal notranslate"><span class="pre">EjectedMass</span></code>. Metals follow the gas in both transfers.</p>
+</section>
+<section id="metal-production-and-routing">
+<h2>Metal production and routing<a class="headerlink" href="#metal-production-and-routing" title="Link to this heading"></a></h2>
+<p>After SF and feedback the function produces new metals via the
+instantaneous-recycling approximation: <code class="docutils literal notranslate"><span class="pre">metals_new</span> <span class="pre">=</span> <span class="pre">Yield</span> <span class="pre">*</span> <span class="pre">stars</span></code>. A
+fraction stays in the disk and the rest leaves to the hot reservoir,
+controlled by:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">FracZleaveDiskVal</span> <span class="o">=</span> <span class="n">FracZleaveDisk</span> <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">Mvir</span> <span class="o">/</span> <span class="mi">30</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>(Krumholz &amp; Dekel 2011 Eq. 22; mass in <code class="docutils literal notranslate"><span class="pre">10^10</span> <span class="pre">Msun/h</span></code>, so the
+characteristic scale is <code class="docutils literal notranslate"><span class="pre">3</span> <span class="pre">x</span> <span class="pre">10^11</span> <span class="pre">Msun/h</span></code>). The leaving fraction routes
+to <code class="docutils literal notranslate"><span class="pre">MetalsCGMgas</span></code> in Regime 0 and <code class="docutils literal notranslate"><span class="pre">MetalsHotGas</span></code> in Regime 1
+(or always <code class="docutils literal notranslate"><span class="pre">MetalsHotGas</span></code> when <code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span> <span class="pre">=</span> <span class="pre">0</span></code>). If <code class="docutils literal notranslate"><span class="pre">ColdGas</span></code> is
+exhausted, all metals leave the disk.</p>
+</section>
+<section id="feedback-free-burst-mode-starformation-ffb">
+<h2>Feedback-free burst mode – <code class="docutils literal notranslate"><span class="pre">starformation_ffb()</span></code><a class="headerlink" href="#feedback-free-burst-mode-starformation-ffb" title="Link to this heading"></a></h2>
+<p>When the FFB regime classification flags a galaxy as bursty, it skips the
+standard feedback loop:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">SFR</span> <span class="o">=</span> <span class="n">FFBMaxEfficiency</span> <span class="o">*</span> <span class="n">gas_for_sf</span> <span class="o">/</span> <span class="n">t_dyn</span>
+</pre></div>
+</div>
+<p>with no SN reheating, no ejection, no metal routing to hot. This implements
+the Li et al. (2024) and Boylan-Kolchin (2025) feedback-free burst regime,
+where dense compact gas reservoirs reach <code class="docutils literal notranslate"><span class="pre">epsilon_FFB</span> <span class="pre">~</span> <span class="pre">0.2-1.0</span></code> because
+the SN energy escapes before it can disrupt star formation.</p>
+<p><code class="docutils literal notranslate"><span class="pre">gas_for_sf</span></code> is either the full <code class="docutils literal notranslate"><span class="pre">ColdGas</span></code> (modes 1-5) or the molecular
+fraction <code class="docutils literal notranslate"><span class="pre">H2gas</span></code> (modes 6-7). For H2 modes the H2 calculation is run inline
+using whichever underlying SFprescription (BR06, KD12, KMT09, K13, GD14)
+is set.</p>
+<p>The seven sub-modes of <code class="docutils literal notranslate"><span class="pre">FeedbackFreeModeOn</span></code> (1-7) control which threshold
+classifies a galaxy as FFB-eligible (Li+2024 vs Boylan-Kolchin+2025, sigmoid
+vs sharp, concentration source). The classification itself lives in
+<code class="docutils literal notranslate"><span class="pre">determine_and_store_ffb_regime()</span></code>; this function only consumes the
+<code class="docutils literal notranslate"><span class="pre">FFBRegime</span></code> flag.</p>
+</section>
+<section id="what-is-not-in-this-module">
+<h2>What is NOT in this module<a class="headerlink" href="#what-is-not-in-this-module" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Quasar-mode AGN.</strong> BH accretion driven by mergers is handled in
+<code class="docutils literal notranslate"><span class="pre">model_mergers.c</span></code>. See <a class="reference internal" href="mergers_and_disruptions.html"><span class="std std-doc">Mergers and disruption</span></a>.</p></li>
+<li><p><strong>Radio-mode AGN.</strong> Handled in <code class="docutils literal notranslate"><span class="pre">model_cooling_heating.c</span></code>. See
+<a class="reference internal" href="cooling_and_heating.html"><span class="std std-doc">Cooling and AGN heating</span></a>.</p></li>
+<li><p><strong>Disk instability.</strong> Called from this module but implemented in
+<code class="docutils literal notranslate"><span class="pre">model_disk_instability.c</span></code>.</p></li>
+</ul>
+</section>
+<section id="switches-and-parameters">
+<h2>Switches and parameters<a class="headerlink" href="#switches-and-parameters" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Effect</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SFprescription</span></code></p></td>
+<td><p>Select SF recipe (0-7).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SfrEfficiency</span></code></p></td>
+<td><p>Efficiency factor in <code class="docutils literal notranslate"><span class="pre">epsilon</span> <span class="pre">*</span> <span class="pre">ColdGas</span> <span class="pre">/</span> <span class="pre">t_dyn</span></code> (most recipes).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SupernovaRecipeOn</span></code></p></td>
+<td><p>0 disables SN feedback entirely.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FeedbackReheatingEpsilon</span></code></p></td>
+<td><p>Mass-loading scaling for the reheating term.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FeedbackEjectionEfficiency</span></code></p></td>
+<td><p>Fraction of SN energy that drives ejection.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">EnergySN</span></code>, <code class="docutils literal notranslate"><span class="pre">EtaSN</span></code></p></td>
+<td><p>Energy per SN and number of SN per solar mass.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Yield</span></code>, <code class="docutils literal notranslate"><span class="pre">RecycleFraction</span></code></p></td>
+<td><p>Metal yield and instantaneous recycling fraction.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FracZleaveDisk</span></code></p></td>
+<td><p>Fraction of new metals that leave the disk (modulated by halo mass).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FIREmodeOn</span></code></p></td>
+<td><p>Switch to FIRE/Muratov+15 reheating and ejection.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">RedshiftPowerLawExponent</span></code></p></td>
+<td><p>Redshift exponent in the FIRE scaling.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FeedbackFreeModeOn</span></code></p></td>
+<td><p>FFB regime classification mode (0-7); 0 disables the FFB path.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FFBMaxEfficiency</span></code></p></td>
+<td><p>SF efficiency in FFB mode.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">H2DiskAreaOption</span></code>, <code class="docutils literal notranslate"><span class="pre">H2RadialIntegrationOn</span></code>, <code class="docutils literal notranslate"><span class="pre">H2RadialNBins</span></code>, <code class="docutils literal notranslate"><span class="pre">H2RadialRMaxFactor</span></code></p></td>
+<td><p>H2 surface-density geometry.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">H2SFRMode</span></code>, <code class="docutils literal notranslate"><span class="pre">H2DepletionTime_Gyr</span></code></p></td>
+<td><p>Override H2-based SFR with a fixed depletion time.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DiskInstabilityOn</span></code></p></td>
+<td><p>Run the Toomre check after SF.</p></td>
+</tr>
+</tbody>
+</table>
+<p>See <a class="reference internal" href="../parameters.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">parameters.md</span></code></span></a> for full descriptions and defaults.</p>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Croton et al. (2006), MNRAS 365, 11 – original SAGE star formation and
+feedback recipes.</p></li>
+<li><p>Kauffmann (1996), MNRAS 281, 487 – cold-gas threshold.</p></li>
+<li><p>Blitz &amp; Rosolowsky (2006), ApJ 650, 933 – pressure-based H2 fraction.</p></li>
+<li><p>Krumholz, McKee &amp; Tumlinson (2009), ApJ 693, 216 – photodissociation
+H2 model.</p></li>
+<li><p>Krumholz, Dekel &amp; McKee (2011), ApJ 745, 69 – metal-leaving-disk
+scaling (Eq. 22).</p></li>
+<li><p>Krumholz &amp; Dekel (2012), ApJ 753, 16 – KD12 H2 prescription.</p></li>
+<li><p>Krumholz (2013), MNRAS 436, 2747 – two-phase H2.</p></li>
+<li><p>Gnedin &amp; Draine (2014), ApJ 795, 37 – UV-modulated H2.</p></li>
+<li><p>Somerville et al. (2025) – density-modulated SF efficiency.</p></li>
+<li><p>Muratov et al. (2015), MNRAS 454, 2691 – FIRE wind mass loading.</p></li>
+<li><p>Hirschmann et al. (2016), MNRAS 461, 1760 – energy-balance ejection.</p></li>
+<li><p>Li et al. (2024) – feedback-free burst threshold.</p></li>
+<li><p>Boylan-Kolchin (2025) – FFB at high redshift.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="cooling_and_heating.html" class="btn btn-neutral float-left" title="Cooling and AGN Heating" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="mergers_and_disruptions.html" class="btn btn-neutral float-right" title="Mergers and Disruption" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Michael Bradley, Darren Croton.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

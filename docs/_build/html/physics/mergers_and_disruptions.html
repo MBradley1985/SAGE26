@@ -1,0 +1,453 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mergers and Disruption &mdash; SAGE26 2026 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=fc6fd62b"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="C API Reference" href="../api.html" />
+    <link rel="prev" title="Star Formation and Feedback" href="starformation_and_feedback.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            SAGE26
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../parameters.html">SAGE26 Parameter Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../core_build_model.html">Per-Halo Physics Loop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="infall.html">Infall, Reincorporation, and Stripping</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cooling_and_heating.html">Cooling and AGN Heating</a></li>
+<li class="toctree-l1"><a class="reference internal" href="starformation_and_feedback.html">Star Formation and Feedback</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Mergers and Disruption</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#when-this-step-fires">When this step fires</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#deal-with-galaxy-merger-the-merger-dispatcher"><code class="docutils literal notranslate"><span class="pre">deal_with_galaxy_merger()</span></code> – the merger dispatcher</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#step-by-step-execution">Step-by-step execution</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#quasar-mode-agn-grow-black-hole">Quasar-mode AGN – <code class="docutils literal notranslate"><span class="pre">grow_black_hole()</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#quasar-mode-wind-ejection-from-quasar-mode-energy"><code class="docutils literal notranslate"><span class="pre">quasar_mode_wind()</span></code> – ejection from quasar-mode energy</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#collisional-starburst-recipe-the-merger-starburst"><code class="docutils literal notranslate"><span class="pre">collisional_starburst_recipe()</span></code> – the merger starburst</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-two-channel-bulge-model">The two-channel bulge model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#satellite-disruption-disrupt-satellite-to-ics">Satellite disruption – <code class="docutils literal notranslate"><span class="pre">disrupt_satellite_to_ICS()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#what-is-not-in-this-module">What is NOT in this module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#switches-and-parameters">Switches and parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#references">References</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">C API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing to SAGE26</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SAGE26</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Mergers and Disruption</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/physics/mergers_and_disruptions.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="mergers-and-disruption">
+<h1>Mergers and Disruption<a class="headerlink" href="#mergers-and-disruption" title="Link to this heading"></a></h1>
+<p>This page covers what happens when two galaxies merge or when a satellite
+is tidally destroyed: how the events are classified, how mass and metals
+flow between the merging pair, how the starburst and quasar-mode AGN
+operate, and how the bulge grows in the two-channel SAGE26 model.</p>
+<p>Source: <a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/model_mergers.c"><code class="docutils literal notranslate"><span class="pre">src/model_mergers.c</span></code></a></p>
+<p>Called from: <a class="reference internal" href="../core_build_model.html"><span class="std std-doc">Per-halo physics loop</span></a> – step 10 of
+the substep ordering (the satellite/merger block after the per-galaxy
+cooling and SF loop).</p>
+<section id="when-this-step-fires">
+<h2>When this step fires<a class="headerlink" href="#when-this-step-fires" title="Link to this heading"></a></h2>
+<p>Each satellite carries a <code class="docutils literal notranslate"><span class="pre">MergTime</span></code> set when it first becomes a Type 1
+(by <code class="docutils literal notranslate"><span class="pre">estimate_merging_time()</span></code>, computed from a dynamical-friction estimate
+based on satellite/host mass ratio and the satellite’s orbital radius at
+infall). At each substep:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">MergTime</span></code> is decremented by <code class="docutils literal notranslate"><span class="pre">deltaT</span> <span class="pre">/</span> <span class="pre">effective_steps</span></code>.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">M_vir</span> <span class="pre">/</span> <span class="pre">baryon_mass</span> <span class="pre">&lt;=</span> <span class="pre">ThresholdSatDisruption</span></code> (or the satellite
+has zero baryons), the satellite is flagged for an event.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">MergTime</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>, the satellite is <strong>disrupted</strong> to ICS via
+<code class="docutils literal notranslate"><span class="pre">disrupt_satellite_to_ICS()</span></code>.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">MergTime</span> <span class="pre">&lt;=</span> <span class="pre">0</span></code>, the satellite has reached the central – the
+event is a <strong>merger</strong> handled by <code class="docutils literal notranslate"><span class="pre">deal_with_galaxy_merger()</span></code>.</p></li>
+</ol>
+<p>Type 1 satellites merge into the central of the host halo. Type 2
+(orphan) satellites merge into whatever was their central at the time
+their subhalo was lost.</p>
+</section>
+<section id="deal-with-galaxy-merger-the-merger-dispatcher">
+<h2><code class="docutils literal notranslate"><span class="pre">deal_with_galaxy_merger()</span></code> – the merger dispatcher<a class="headerlink" href="#deal-with-galaxy-merger-the-merger-dispatcher" title="Link to this heading"></a></h2>
+<p>The function classifies and processes one merger event. Mass ratio is
+computed from baryonic mass (<code class="docutils literal notranslate"><span class="pre">StellarMass</span> <span class="pre">+</span> <span class="pre">ColdGas</span></code>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">mass_ratio</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">m_sat</span><span class="p">,</span> <span class="n">m_central</span><span class="p">)</span> <span class="o">/</span> <span class="nb">max</span><span class="p">(</span><span class="n">m_sat</span><span class="p">,</span> <span class="n">m_central</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The threshold <code class="docutils literal notranslate"><span class="pre">mass_ratio</span> <span class="pre">&gt;</span> <span class="pre">ThreshMajorMerger</span></code> (default 0.3) classifies
+the event as a major merger; otherwise it is minor. Before any reservoir
+transfers happen, the function decides where burst stars will go:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Merger type</p></th>
+<th class="head"><p>Central morphology</p></th>
+<th class="head"><p>Burst destination</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Major</p></td>
+<td><p>irrelevant</p></td>
+<td><p>Merger-driven bulge</p></td>
+</tr>
+<tr class="row-odd"><td><p>Minor</p></td>
+<td><p>disk-dominated (disk &gt; 0.5 stellar)</p></td>
+<td><p>Instability bulge</p></td>
+</tr>
+<tr class="row-even"><td><p>Minor</p></td>
+<td><p>spheroid-dominated</p></td>
+<td><p>Merger-driven bulge</p></td>
+</tr>
+</tbody>
+</table>
+<p>This morphology-aware routing is the key SAGE26 change to the original
+Croton+06 merger model – minor mergers onto disks no longer pollute the
+merger-driven bulge channel.</p>
+<section id="step-by-step-execution">
+<h3>Step-by-step execution<a class="headerlink" href="#step-by-step-execution" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">add_galaxies_together()</span></code> – transfers the satellite’s gas, stars,
+metals, BH mass, and ICS into the central. Regime-aware for the gas
+reservoirs (CGMgas vs HotGas).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">grow_black_hole()</span></code> – quasar-mode BH accretion if <code class="docutils literal notranslate"><span class="pre">AGNrecipeOn</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>
+(see below).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">collisional_starburst_recipe()</span></code> – the merger-driven starburst (see
+below).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">get_bulge_radius()</span></code> – recomputes the displayed <code class="docutils literal notranslate"><span class="pre">BulgeRadius</span></code> after
+bulge masses changed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">calculate_merger_remnant_radius()</span></code> – energy-conservation calculation
+for the post-merger bulge radius.</p></li>
+<li><p><strong>Major merger branch:</strong> <code class="docutils literal notranslate"><span class="pre">make_bulge_from_burst()</span></code> destroys the disk
+(all stellar mass becomes bulge), sets <code class="docutils literal notranslate"><span class="pre">MergerBulgeRadius</span></code> from the
+energy-conservation calculation, stamps <code class="docutils literal notranslate"><span class="pre">TimeOfLastMajorMerger</span></code>,
+and marks the satellite <code class="docutils literal notranslate"><span class="pre">mergeType</span> <span class="pre">=</span> <span class="pre">2</span></code>.</p></li>
+<li><p><strong>Minor merger branch:</strong> mark <code class="docutils literal notranslate"><span class="pre">mergeType</span> <span class="pre">=</span> <span class="pre">1</span></code>, stamp
+<code class="docutils literal notranslate"><span class="pre">TimeOfLastMinorMerger</span></code>, and either update <code class="docutils literal notranslate"><span class="pre">InstabilityBulgeRadius</span></code>
+(disk-dominated central) or <code class="docutils literal notranslate"><span class="pre">MergerBulgeRadius</span></code> (spheroid-dominated)
+from the energy-conservation calculation.</p></li>
+</ol>
+</section>
+</section>
+<section id="quasar-mode-agn-grow-black-hole">
+<h2>Quasar-mode AGN – <code class="docutils literal notranslate"><span class="pre">grow_black_hole()</span></code><a class="headerlink" href="#quasar-mode-agn-grow-black-hole" title="Link to this heading"></a></h2>
+<p>Triggered on every merger (major or minor). Accreted mass is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">BHaccrete</span> <span class="o">=</span> <span class="n">BlackHoleGrowthRate</span> <span class="o">*</span> <span class="n">mass_ratio</span>
+            <span class="o">*</span> <span class="n">ColdGas</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="p">(</span><span class="mi">280</span> <span class="n">km</span><span class="o">/</span><span class="n">s</span> <span class="o">/</span> <span class="n">V_vir</span><span class="p">)</span><span class="o">^</span><span class="mi">2</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>So accretion scales with merger violence and is suppressed in shallow
+potential wells (the <code class="docutils literal notranslate"><span class="pre">V_vir</span> <span class="pre">=</span> <span class="pre">280</span> <span class="pre">km/s</span></code> floor is hard-coded from
+Croton+06). The accreted gas is removed from <code class="docutils literal notranslate"><span class="pre">ColdGas</span></code> with metallicity
+tracking, deposited into <code class="docutils literal notranslate"><span class="pre">BlackHoleMass</span></code>, and tallied in
+<code class="docutils literal notranslate"><span class="pre">QuasarModeBHaccretionMass</span></code>.</p>
+<section id="quasar-mode-wind-ejection-from-quasar-mode-energy">
+<h3><code class="docutils literal notranslate"><span class="pre">quasar_mode_wind()</span></code> – ejection from quasar-mode energy<a class="headerlink" href="#quasar-mode-wind-ejection-from-quasar-mode-energy" title="Link to this heading"></a></h3>
+<p>Each merger then computes the quasar wind energy:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">E_quasar</span> <span class="o">=</span> <span class="n">QuasarModeEfficiency</span> <span class="o">*</span> <span class="mf">0.1</span> <span class="o">*</span> <span class="n">BHaccrete</span> <span class="o">*</span> <span class="n">c</span><span class="o">^</span><span class="mi">2</span>
+</pre></div>
+</div>
+<p>(the <code class="docutils literal notranslate"><span class="pre">0.1</span></code> is the radiative efficiency.) The function compares
+<code class="docutils literal notranslate"><span class="pre">E_quasar</span></code> against successive reservoir binding energies:</p>
+<ol class="arabic simple">
+<li><p>If <code class="docutils literal notranslate"><span class="pre">E_quasar</span> <span class="pre">&gt;</span> <span class="pre">0.5</span> <span class="pre">*</span> <span class="pre">ColdGas</span> <span class="pre">*</span> <span class="pre">V_vir^2</span></code>, the entire cold reservoir is
+ejected to <code class="docutils literal notranslate"><span class="pre">EjectedMass</span></code>.</p></li>
+<li><p>Then it checks against the hot reservoir (regime-aware: <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> for
+Regime 1, <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code> for Regime 0). If <code class="docutils literal notranslate"><span class="pre">E_quasar</span></code> exceeds the combined
+cold + hot energy, the hot reservoir is ejected too.</p></li>
+</ol>
+<p>This is what gives bright quasars the ability to expel the entire
+baryonic content of low-mass hosts.</p>
+</section>
+</section>
+<section id="collisional-starburst-recipe-the-merger-starburst">
+<h2><code class="docutils literal notranslate"><span class="pre">collisional_starburst_recipe()</span></code> – the merger starburst<a class="headerlink" href="#collisional-starburst-recipe-the-merger-starburst" title="Link to this heading"></a></h2>
+<p>Implements the Somerville+2001 / Cox PhD-thesis form:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">eburst</span> <span class="o">=</span> <span class="n">STARBURST_FRAC_COEFF</span> <span class="o">*</span> <span class="n">mass_ratio</span><span class="o">^</span><span class="n">STARBURST_MASS_POWER</span>
+       <span class="o">=</span> <span class="mf">0.56</span> <span class="o">*</span> <span class="n">mass_ratio</span><span class="o">^</span><span class="mf">0.7</span>    <span class="p">(</span><span class="n">mergers</span><span class="p">,</span> <span class="n">mode</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">eburst</span> <span class="o">=</span> <span class="n">mass_ratio</span>               <span class="p">(</span><span class="n">disk</span> <span class="n">instabilities</span><span class="p">,</span> <span class="n">mode</span> <span class="o">==</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">stars_burst</span> <span class="pre">=</span> <span class="pre">eburst</span> <span class="pre">*</span> <span class="pre">gas_for_starburst</span></code> becomes the burst stellar
+mass. The <code class="docutils literal notranslate"><span class="pre">gas_for_starburst</span></code> is normally <code class="docutils literal notranslate"><span class="pre">ColdGas</span></code>, but when
+<code class="docutils literal notranslate"><span class="pre">StarburstColdGasOn</span> <span class="pre">=</span> <span class="pre">0</span></code> and an H2-tracking SFprescription is in use,
+it is recomputed from the current <code class="docutils literal notranslate"><span class="pre">ColdGas</span></code> using the same H2 recipe as
+the disk SF path – this avoids the stale stored <code class="docutils literal notranslate"><span class="pre">H2gas</span></code> value if SF and
+feedback have already depleted cold gas earlier in the substep.</p>
+<p>The burst then applies SN feedback through the same <code class="docutils literal notranslate"><span class="pre">update_from_feedback()</span></code>
+helper used by <code class="docutils literal notranslate"><span class="pre">starformation_and_feedback()</span></code>, including FIRE scaling when
+<code class="docutils literal notranslate"><span class="pre">FIREmodeOn</span> <span class="pre">=</span> <span class="pre">1</span></code>, and routes the burst stars into either the
+<code class="docutils literal notranslate"><span class="pre">MergerBulgeMass</span></code> or <code class="docutils literal notranslate"><span class="pre">InstabilityBulgeMass</span></code> channel per the
+<code class="docutils literal notranslate"><span class="pre">burst_to_merger_bulge</span></code> flag set in <code class="docutils literal notranslate"><span class="pre">deal_with_galaxy_merger()</span></code>.</p>
+<p>The SFR is recorded into <code class="docutils literal notranslate"><span class="pre">SfrBulge[step]</span></code> (separate from disk SF, which
+goes into <code class="docutils literal notranslate"><span class="pre">SfrDisk[step]</span></code>).</p>
+</section>
+<section id="the-two-channel-bulge-model">
+<h2>The two-channel bulge model<a class="headerlink" href="#the-two-channel-bulge-model" title="Link to this heading"></a></h2>
+<p>Every bulge-growth path in SAGE26 routes its contribution into one of two
+channels:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Channel</p></th>
+<th class="head"><p>Mass field</p></th>
+<th class="head"><p>Radius field</p></th>
+<th class="head"><p>Sources</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Merger</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MergerBulgeMass</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MergerBulgeRadius</span></code></p></td>
+<td><p>Major mergers (whole disk); minor merger bursts onto spheroid-dominated centrals</p></td>
+</tr>
+<tr class="row-odd"><td><p>Instability</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">InstabilityBulgeMass</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">InstabilityBulgeRadius</span></code></p></td>
+<td><p>Toomre instability; minor merger bursts onto disk-dominated centrals</p></td>
+</tr>
+</tbody>
+</table>
+<p>The two channels are tracked independently so that the bulge formation
+history can be decomposed into merger-driven and secular contributions.
+The combined <code class="docutils literal notranslate"><span class="pre">BulgeMass</span> <span class="pre">=</span> <span class="pre">MergerBulgeMass</span> <span class="pre">+</span> <span class="pre">InstabilityBulgeMass</span></code> and
+the displayed <code class="docutils literal notranslate"><span class="pre">BulgeRadius</span></code> is a mass-weighted average computed by
+<code class="docutils literal notranslate"><span class="pre">get_bulge_radius()</span></code> in <a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/model_misc.c"><code class="docutils literal notranslate"><span class="pre">model_misc.c</span></code></a>
+(Tonini+2016 prescription, <code class="docutils literal notranslate"><span class="pre">BulgeSizeOn</span> <span class="pre">=</span> <span class="pre">3</span></code>).</p>
+<p>Merger remnant radii are set via energy conservation
+(<code class="docutils literal notranslate"><span class="pre">calculate_merger_remnant_radius()</span></code> – Covington+11):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="mi">1</span> <span class="o">/</span> <span class="n">R_new</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">R_pair</span> <span class="o">+</span> <span class="n">C_rad</span> <span class="o">*</span> <span class="p">(</span><span class="n">m1</span> <span class="o">*</span> <span class="n">m2</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">m_total</span><span class="o">^</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="n">R1</span> <span class="o">+</span> <span class="n">R2</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>with <code class="docutils literal notranslate"><span class="pre">C_rad</span> <span class="pre">=</span> <span class="pre">2.75</span></code>, where <code class="docutils literal notranslate"><span class="pre">R_pair</span></code> is the mass-weighted progenitor
+radius and the second term accounts for orbital energy dissipated during
+the encounter.</p>
+</section>
+<section id="satellite-disruption-disrupt-satellite-to-ics">
+<h2>Satellite disruption – <code class="docutils literal notranslate"><span class="pre">disrupt_satellite_to_ICS()</span></code><a class="headerlink" href="#satellite-disruption-disrupt-satellite-to-ics" title="Link to this heading"></a></h2>
+<p>When the satellite has reached the central before the merger clock runs
+out, it is disrupted instead of merged. The function:</p>
+<ol class="arabic simple">
+<li><p><strong>Transfers gas</strong> to the central (regime-aware: total
+<code class="docutils literal notranslate"><span class="pre">ColdGas</span> <span class="pre">+</span> <span class="pre">HotGas</span> <span class="pre">+</span> <span class="pre">CGMgas</span></code> goes to the central’s <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code> if Regime 0
+or <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> if Regime 1).</p></li>
+<li><p><strong>Transfers ejected mass and pre-existing ICS</strong> unchanged.</p></li>
+<li><p><strong>Disrupts the satellite’s stellar mass</strong> – splits it between the
+central’s ICS and the central’s stellar mass (BCG accretion). The
+split is controlled by <code class="docutils literal notranslate"><span class="pre">DynamicDisruptionSplit</span></code>:</p></li>
+</ol>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Split</p></th>
+<th class="head"><p>Formula</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>Fixed</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">f_ICS</span> <span class="pre">=</span> <span class="pre">FractionDisruptedToICS</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>Mass-ratio</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">f_ICS</span> <span class="pre">=</span> <span class="pre">1</span> <span class="pre">-</span> <span class="pre">(Msub</span> <span class="pre">/</span> <span class="pre">Mhost)^DisruptionSplitAlpha</span></code> – low mass-ratio satellites are stripped on wider orbits and contribute more to ICS</p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>Mass-ratio with concentration weighting</p></td>
+<td><p>as mode 1, but with <code class="docutils literal notranslate"><span class="pre">alpha_eff</span> <span class="pre">=</span> <span class="pre">DisruptionSplitAlpha</span> <span class="pre">*</span> <span class="pre">DisruptionSplitCref</span> <span class="pre">/</span> <span class="pre">c_sat</span></code> – concentrated satellites resist stripping and deposit more onto the BCG</p></td>
+</tr>
+</tbody>
+</table>
+<ol class="arabic simple" start="4">
+<li><p><strong>Records assembly history</strong> if <code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span> <span class="pre">=</span> <span class="pre">1</span></code>:
+<code class="docutils literal notranslate"><span class="pre">ICS_disrupt</span></code> accumulates the satellite stellar mass newly disrupted
+into ICS; <code class="docutils literal notranslate"><span class="pre">ICS_accrete</span></code> accumulates ICS that the satellite already
+carried in. <code class="docutils literal notranslate"><span class="pre">ICS_sum_mt</span></code> tracks the mass-weighted deposit time so that
+the mean ICS-assembly time reflects when the stars were originally
+stripped, not when this packet transferred into the central.</p></li>
+</ol>
+<p>The satellite is then marked <code class="docutils literal notranslate"><span class="pre">mergeType</span> <span class="pre">=</span> <span class="pre">3</span></code> (disrupted, not merged) and
+will be skipped on subsequent substeps.</p>
+</section>
+<section id="what-is-not-in-this-module">
+<h2>What is NOT in this module<a class="headerlink" href="#what-is-not-in-this-module" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Radio-mode AGN.</strong> Handled in <code class="docutils literal notranslate"><span class="pre">model_cooling_heating.c</span></code>. See
+<a class="reference internal" href="cooling_and_heating.html"><span class="std std-doc">Cooling and AGN heating</span></a>.</p></li>
+<li><p><strong>Disk SF.</strong> Handled in <code class="docutils literal notranslate"><span class="pre">model_starformation_and_feedback.c</span></code>. See
+<a class="reference internal" href="starformation_and_feedback.html"><span class="std std-doc">Star formation and feedback</span></a>.</p></li>
+<li><p><strong>Toomre disk instability.</strong> Implemented in <code class="docutils literal notranslate"><span class="pre">model_disk_instability.c</span></code>.
+The starburst it triggers reuses <code class="docutils literal notranslate"><span class="pre">collisional_starburst_recipe(mode=1)</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">BulgeRadius</span></code> calculation.</strong> Implemented in <code class="docutils literal notranslate"><span class="pre">model_misc.c</span></code>
+(<code class="docutils literal notranslate"><span class="pre">get_bulge_radius()</span></code>). The merger code only sets <code class="docutils literal notranslate"><span class="pre">MergerBulgeRadius</span></code>
+and lets <code class="docutils literal notranslate"><span class="pre">get_bulge_radius()</span></code> derive the displayed <code class="docutils literal notranslate"><span class="pre">BulgeRadius</span></code>.</p></li>
+</ul>
+</section>
+<section id="switches-and-parameters">
+<h2>Switches and parameters<a class="headerlink" href="#switches-and-parameters" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Effect</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">AGNrecipeOn</span></code></p></td>
+<td><p>0 disables quasar-mode BH growth and wind during mergers.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">BlackHoleGrowthRate</span></code></p></td>
+<td><p>Scaling for <code class="docutils literal notranslate"><span class="pre">grow_black_hole()</span></code> accretion.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">QuasarModeEfficiency</span></code></p></td>
+<td><p>Coupling between BH accretion energy and wind energy.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ThreshMajorMerger</span></code></p></td>
+<td><p>Mass-ratio threshold for major vs minor classification.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ThresholdSatDisruption</span></code></p></td>
+<td><p>M_vir/baryon threshold below which a satellite is eligible for an event.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">StarburstColdGasOn</span></code></p></td>
+<td><p>0 forces the burst to recompute H2 from current ColdGas; 1 uses the stored value.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DynamicDisruptionSplit</span></code></p></td>
+<td><p>ICS-vs-BCG split mode for disrupted satellites (0 fixed, 1 mass-ratio, 2 mass-ratio with concentration weighting).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FractionDisruptedToICS</span></code></p></td>
+<td><p>Fixed-split fraction (mode 0) or fallback.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DisruptionSplitAlpha</span></code></p></td>
+<td><p>Exponent in the mass-ratio split (modes 1 and 2).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DisruptionSplitCref</span></code></p></td>
+<td><p>Reference concentration for mode 2.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">BulgeSizeOn</span></code></p></td>
+<td><p>Bulge radius model (0 off, 1-2 Shen+2003, 3 Tonini+2016 multi-channel).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span></code></p></td>
+<td><p>Record <code class="docutils literal notranslate"><span class="pre">ICS_disrupt</span></code> and <code class="docutils literal notranslate"><span class="pre">ICS_accrete</span></code> assembly history.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SFprescription</span></code></p></td>
+<td><p>Used to pick the H2 recipe in the burst when <code class="docutils literal notranslate"><span class="pre">StarburstColdGasOn</span> <span class="pre">=</span> <span class="pre">0</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FIREmodeOn</span></code></p></td>
+<td><p>Applies FIRE scaling to burst SN feedback if enabled.</p></td>
+</tr>
+</tbody>
+</table>
+<p>See <a class="reference internal" href="../parameters.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">parameters.md</span></code></span></a> for full descriptions and defaults.</p>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Croton et al. (2006), MNRAS 365, 11 – original SAGE merger and AGN
+prescriptions.</p></li>
+<li><p>Somerville et al. (2001), MNRAS 320, 504 – collisional starburst form.</p></li>
+<li><p>Cox et al. (2008), MNRAS 384, 386 – merger-driven SF efficiency calibration.</p></li>
+<li><p>Covington et al. (2011), ApJ 743, 76 – energy-conservation remnant radius.</p></li>
+<li><p>Tonini et al. (2016), MNRAS 459, 4109 – two-channel bulge formation.</p></li>
+<li><p>Shen et al. (2003), MNRAS 343, 978 – bulge size-mass relation.</p></li>
+<li><p>Hopkins et al. (2010), MNRAS 401, 1099 – merger-driven bulge growth.</p></li>
+<li><p>Dynamical-friction merger timescale: Binney &amp; Tremaine (2008) eq. 8.12.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="starformation_and_feedback.html" class="btn btn-neutral float-left" title="Star Formation and Feedback" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../api.html" class="btn btn-neutral float-right" title="C API Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Michael Bradley, Darren Croton.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

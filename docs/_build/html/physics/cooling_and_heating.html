@@ -1,0 +1,452 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cooling and AGN Heating &mdash; SAGE26 2026 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=fc6fd62b"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Star Formation and Feedback" href="starformation_and_feedback.html" />
+    <link rel="prev" title="Infall, Reincorporation, and Stripping" href="infall.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            SAGE26
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../parameters.html">SAGE26 Parameter Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../core_build_model.html">Per-Halo Physics Loop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="infall.html">Infall, Reincorporation, and Stripping</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Cooling and AGN Heating</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#the-two-cooling-regimes">The two cooling regimes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#dispatcher-cooling-recipe-regime-aware">Dispatcher – <code class="docutils literal notranslate"><span class="pre">cooling_recipe_regime_aware()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#cooling-recipe-hot-regime-1-classical-hot-halo"><code class="docutils literal notranslate"><span class="pre">cooling_recipe_hot()</span></code> – Regime 1 (classical hot halo)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#cooling-recipe-cgm-regime-0-precipitation"><code class="docutils literal notranslate"><span class="pre">cooling_recipe_cgm()</span></code> – Regime 0 (precipitation)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#step-1-density-profile">Step 1 – density profile</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-2-cooling-radius">Step 2 – cooling radius</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-3-characteristic-radius-selector">Step 3 – characteristic radius selector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-4-precipitation-fraction">Step 4 – precipitation fraction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-5-agn-heating-regime-0-only">Step 5 – AGN heating (Regime 0 only)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-6-diagnostics">Step 6 – diagnostics</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#agn-radio-mode-heating">AGN radio-mode heating</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#agn-accretion-compute-the-shared-accretion-calculation"><code class="docutils literal notranslate"><span class="pre">agn_accretion_compute()</span></code> – the shared accretion calculation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#do-agn-heating-regime-1-hot-halo"><code class="docutils literal notranslate"><span class="pre">do_AGN_heating()</span></code> – Regime 1 (hot halo)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#do-agn-heating-cgm-regime-0-cgm"><code class="docutils literal notranslate"><span class="pre">do_AGN_heating_cgm()</span></code> – Regime 0 (CGM)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#cool-gas-onto-galaxy"><code class="docutils literal notranslate"><span class="pre">cool_gas_onto_galaxy()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#switches-and-parameters">Switches and parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#references">References</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="starformation_and_feedback.html">Star Formation and Feedback</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mergers_and_disruptions.html">Mergers and Disruption</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">C API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing to SAGE26</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SAGE26</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Cooling and AGN Heating</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/physics/cooling_and_heating.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cooling-and-agn-heating">
+<h1>Cooling and AGN Heating<a class="headerlink" href="#cooling-and-agn-heating" title="Link to this heading"></a></h1>
+<p>This page covers how gas moves from the hot/CGM reservoir into the cold disk,
+how AGN radio-mode feedback suppresses that flow, and how SAGE26’s two-regime
+CGM model selects between classical hot-halo cooling and precipitation-driven
+CGM cooling.</p>
+<p>Source: <a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/model_cooling_heating.c"><code class="docutils literal notranslate"><span class="pre">src/model_cooling_heating.c</span></code></a></p>
+<p>Called from: <a class="reference internal" href="../core_build_model.html"><span class="std std-doc">Per-halo physics loop</span></a> – step 8 of the
+substep ordering.</p>
+<section id="the-two-cooling-regimes">
+<h2>The two cooling regimes<a class="headerlink" href="#the-two-cooling-regimes" title="Link to this heading"></a></h2>
+<p>A central galaxy is classified once per snapshot by
+<code class="docutils literal notranslate"><span class="pre">determine_and_store_regime()</span></code> based on the Dekel &amp; Birnboim (2006) shock
+mass <code class="docutils literal notranslate"><span class="pre">M_shock</span> <span class="pre">~</span> <span class="pre">6</span> <span class="pre">x</span> <span class="pre">10^11</span> <span class="pre">Msun</span></code> (modulated by redshift via <code class="docutils literal notranslate"><span class="pre">Z_CRIT_DB06</span> <span class="pre">=</span> <span class="pre">1.5</span></code>):</p>
+<ul class="simple">
+<li><p><strong>Regime 0 (CGM):</strong> halo is below <code class="docutils literal notranslate"><span class="pre">M_shock</span></code> (or above it but at z &lt; z_crit
+where cold streams penetrate). Cooling proceeds via the Voit (2015)
+precipitation criterion on the <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code> reservoir.</p></li>
+<li><p><strong>Regime 1 (hot halo):</strong> halo is above <code class="docutils literal notranslate"><span class="pre">M_shock</span></code> and has a stable virial
+shock. Cooling proceeds via the classical Croton+06 isothermal recipe on
+the <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> reservoir, optionally with a Dekel &amp; Birnboim cold-stream
+fraction blended in.</p></li>
+</ul>
+<p>When <code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span> <span class="pre">=</span> <span class="pre">0</span></code>, every galaxy uses Regime 1 unconditionally and the
+<code class="docutils literal notranslate"><span class="pre">CGMgas</span></code> reservoir is unused.</p>
+</section>
+<section id="dispatcher-cooling-recipe-regime-aware">
+<h2>Dispatcher – <code class="docutils literal notranslate"><span class="pre">cooling_recipe_regime_aware()</span></code><a class="headerlink" href="#dispatcher-cooling-recipe-regime-aware" title="Link to this heading"></a></h2>
+<p>The top-level entry point. Both regimes can produce some cooling from both
+reservoirs:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Galaxy regime</p></th>
+<th class="head"><p>Primary path</p></th>
+<th class="head"><p>Secondary path</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Regime 0 (CGM)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cooling_recipe_cgm()</span></code> on <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code></p></td>
+<td><p>–</p></td>
+</tr>
+<tr class="row-odd"><td><p>Regime 1 (hot)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cooling_recipe_hot()</span></code> on <code class="docutils literal notranslate"><span class="pre">HotGas</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cooling_recipe_cgm()</span></code> on any residual <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>The secondary CGM path for Regime 1 ensures that any leftover CGMgas
+(typical of a halo that crossed <code class="docutils literal notranslate"><span class="pre">M_shock</span></code> mid-life) drains naturally rather
+than being frozen.</p>
+<p>After computing the cooled masses, the dispatcher transfers them into
+<code class="docutils literal notranslate"><span class="pre">ColdGas</span></code> in-place, tracking metallicity from each donor reservoir
+separately.</p>
+</section>
+<section id="cooling-recipe-hot-regime-1-classical-hot-halo">
+<h2><code class="docutils literal notranslate"><span class="pre">cooling_recipe_hot()</span></code> – Regime 1 (classical hot halo)<a class="headerlink" href="#cooling-recipe-hot-regime-1-classical-hot-halo" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>Compute the virial temperature
+<code class="docutils literal notranslate"><span class="pre">T_vir</span> <span class="pre">=</span> <span class="pre">VIRIAL_TEMP_COEFF</span> <span class="pre">*</span> <span class="pre">Vvir^2</span> <span class="pre">=</span> <span class="pre">35.9</span> <span class="pre">*</span> <span class="pre">Vvir^2</span></code> (K, with Vvir in km/s).</p></li>
+<li><p>Look up the metal-dependent cooling rate <code class="docutils literal notranslate"><span class="pre">Lambda(T,</span> <span class="pre">Z)</span></code> from the
+Sutherland &amp; Dopita (1993) tables via
+<code class="docutils literal notranslate"><span class="pre">get_metaldependent_cooling_rate()</span></code>.</p></li>
+<li><p>Compute the cooling radius <code class="docutils literal notranslate"><span class="pre">r_cool</span></code> from the isothermal beta-model:
+the density at which <code class="docutils literal notranslate"><span class="pre">t_cool</span> <span class="pre">=</span> <span class="pre">t_dyn</span> <span class="pre">=</span> <span class="pre">R_vir</span> <span class="pre">/</span> <span class="pre">V_vir</span></code>.</p></li>
+<li><p>Pick the cooling regime:</p>
+<ul class="simple">
+<li><p>If <code class="docutils literal notranslate"><span class="pre">r_cool</span> <span class="pre">&gt;</span> <span class="pre">R_vir</span></code>: cold accretion – the whole <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> reservoir
+cools on the dynamical time.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">r_cool</span> <span class="pre">&lt;=</span> <span class="pre">R_vir</span></code>: hot-halo cooling – mass flux is
+<code class="docutils literal notranslate"><span class="pre">(HotGas</span> <span class="pre">/</span> <span class="pre">R_vir)</span> <span class="pre">*</span> <span class="pre">(r_cool</span> <span class="pre">/</span> <span class="pre">(2</span> <span class="pre">*</span> <span class="pre">t_cool))</span></code> per unit time.</p></li>
+</ul>
+</li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span> <span class="pre">=</span> <span class="pre">1</span></code> (Regime 1 only), blend in a Dekel &amp; Birnboim (2006)
+cold-stream fraction <code class="docutils literal notranslate"><span class="pre">f_stream</span> <span class="pre">=</span> <span class="pre">(M_vir</span> <span class="pre">/</span> <span class="pre">M_shock)^(-4/3)</span> <span class="pre">*</span> <span class="pre">(1</span> <span class="pre">+</span> <span class="pre">z)</span> <span class="pre">/</span> <span class="pre">2</span></code>,
+capped at 0.5 and hard-cut to 0 at <code class="docutils literal notranslate"><span class="pre">z</span> <span class="pre">&lt;</span> <span class="pre">1.5</span></code> for halos above <code class="docutils literal notranslate"><span class="pre">M_shock</span></code>.</p></li>
+<li><p>Apply <code class="docutils literal notranslate"><span class="pre">do_AGN_heating()</span></code> if <code class="docutils literal notranslate"><span class="pre">AGNrecipeOn</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>.</p></li>
+<li><p>Return the net cooled mass to the dispatcher.</p></li>
+</ol>
+</section>
+<section id="cooling-recipe-cgm-regime-0-precipitation">
+<h2><code class="docutils literal notranslate"><span class="pre">cooling_recipe_cgm()</span></code> – Regime 0 (precipitation)<a class="headerlink" href="#cooling-recipe-cgm-regime-0-precipitation" title="Link to this heading"></a></h2>
+<p>The CGM recipe replaces the isothermal cooling-radius construction with a
+Voit (2015) precipitation criterion based on the ratio of cooling time to
+free-fall time.</p>
+<section id="step-1-density-profile">
+<h3>Step 1 – density profile<a class="headerlink" href="#step-1-density-profile" title="Link to this heading"></a></h3>
+<p>The CGM gas distribution is selected by <code class="docutils literal notranslate"><span class="pre">CGMDensityProfile</span></code> (Regime 0 only;
+Regime 1 always uses uniform for the residual <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code> drain):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Profile</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>Uniform</p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>NFW (concentration from Duffy+08)</p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>Beta profile with <code class="docutils literal notranslate"><span class="pre">beta</span> <span class="pre">=</span> <span class="pre">2/3</span></code>, core radius <code class="docutils literal notranslate"><span class="pre">r_c</span> <span class="pre">=</span> <span class="pre">0.1</span> <span class="pre">R_vir</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>Helper functions <code class="docutils literal notranslate"><span class="pre">nfw_density()</span></code>, <code class="docutils literal notranslate"><span class="pre">beta_density()</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">cgm_density_at_radius()</span></code> evaluate the profile; <code class="docutils literal notranslate"><span class="pre">cgm_enclosed_mass()</span></code>
+returns the enclosed mass at any radius for free-fall calculations.</p>
+</section>
+<section id="step-2-cooling-radius">
+<h3>Step 2 – cooling radius<a class="headerlink" href="#step-2-cooling-radius" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">solve_for_rcool()</span></code> iteratively finds the radius at which
+<code class="docutils literal notranslate"><span class="pre">t_cool(r)</span> <span class="pre">=</span> <span class="pre">t_ff(r)</span></code>. The cooling time is
+<code class="docutils literal notranslate"><span class="pre">t_cool</span> <span class="pre">=</span> <span class="pre">(3/2)</span> <span class="pre">*</span> <span class="pre">mu</span> <span class="pre">*</span> <span class="pre">m_p</span> <span class="pre">*</span> <span class="pre">k_B</span> <span class="pre">*</span> <span class="pre">T</span> <span class="pre">/</span> <span class="pre">(rho(r)</span> <span class="pre">*</span> <span class="pre">Lambda(T,</span> <span class="pre">Z))</span></code>, and the
+free-fall time at that radius is <code class="docutils literal notranslate"><span class="pre">t_ff</span> <span class="pre">=</span> <span class="pre">sqrt(2</span> <span class="pre">r</span> <span class="pre">/</span> <span class="pre">g)</span></code> with
+<code class="docutils literal notranslate"><span class="pre">g</span> <span class="pre">=</span> <span class="pre">G</span> <span class="pre">M_enc(r)</span> <span class="pre">/</span> <span class="pre">r^2</span></code>.</p>
+</section>
+<section id="step-3-characteristic-radius-selector">
+<h3>Step 3 – characteristic radius selector<a class="headerlink" href="#step-3-characteristic-radius-selector" title="Link to this heading"></a></h3>
+<p>The precipitation criterion is evaluated at either <code class="docutils literal notranslate"><span class="pre">r_cool</span></code> itself or at
+<code class="docutils literal notranslate"><span class="pre">0.1</span> <span class="pre">R_vir</span></code>, controlled by <code class="docutils literal notranslate"><span class="pre">CGMPrecipRadiusMode</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">0</span></code> (default): evaluate <code class="docutils literal notranslate"><span class="pre">t_cool</span> <span class="pre">/</span> <span class="pre">t_ff</span></code> at <code class="docutils literal notranslate"><span class="pre">r_cool</span></code>. Traditional choice.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">1</span></code>: evaluate at <code class="docutils literal notranslate"><span class="pre">0.1</span> <span class="pre">R_vir</span></code>. Avoids the circularity of the NFW solver
+(which converges to <code class="docutils literal notranslate"><span class="pre">t_cool</span> <span class="pre">=</span> <span class="pre">t_ff</span></code> at <code class="docutils literal notranslate"><span class="pre">r_cool</span></code> by construction, making
+every halo look marginally unstable). At <code class="docutils literal notranslate"><span class="pre">0.1</span> <span class="pre">R_vir</span></code> the ratio reflects
+halo mass: more massive halos have lower density and higher
+<code class="docutils literal notranslate"><span class="pre">t_cool</span> <span class="pre">/</span> <span class="pre">t_ff</span></code>, so they correctly appear stable.</p></li>
+</ul>
+</section>
+<section id="step-4-precipitation-fraction">
+<h3>Step 4 – precipitation fraction<a class="headerlink" href="#step-4-precipitation-fraction" title="Link to this heading"></a></h3>
+<p>Controlled by <code class="docutils literal notranslate"><span class="pre">CGMPrecipitationMode</span></code>:</p>
+<ul class="simple">
+<li><p><strong>Mode 0 (tanh, McCourt+12):</strong> piecewise tanh transition centred on
+<code class="docutils literal notranslate"><span class="pre">t_cool</span> <span class="pre">/</span> <span class="pre">t_ff</span> <span class="pre">=</span> <span class="pre">10</span></code>. Smoothly turns off above the threshold.</p></li>
+<li><p><strong>Mode 1 (logistic sigmoid, default):</strong> smooth sigmoid centred on
+<code class="docutils literal notranslate"><span class="pre">t_cool</span> <span class="pre">/</span> <span class="pre">t_ff</span> <span class="pre">=</span> <span class="pre">10</span></code> with characteristic width 2. Falls back to standard
+cooling on the cooling timescale when the sigmoid is negligible
+(<code class="docutils literal notranslate"><span class="pre">f</span> <span class="pre">&lt;</span> <span class="pre">0.01</span></code>).</p></li>
+</ul>
+<p>When the gas is “stable” (<code class="docutils literal notranslate"><span class="pre">t_cool</span> <span class="pre">/</span> <span class="pre">t_ff</span></code> well above threshold), it cools
+slowly on the cooling timescale: <code class="docutils literal notranslate"><span class="pre">dM/dt</span> <span class="pre">=</span> <span class="pre">CGMgas</span> <span class="pre">/</span> <span class="pre">t_cool</span></code>. When it is
+“unstable” (below threshold), it precipitates on the free-fall timescale:
+<code class="docutils literal notranslate"><span class="pre">dM/dt</span> <span class="pre">=</span> <span class="pre">f_precip</span> <span class="pre">*</span> <span class="pre">CGMgas</span> <span class="pre">/</span> <span class="pre">t_ff</span></code>.</p>
+</section>
+<section id="step-5-agn-heating-regime-0-only">
+<h3>Step 5 – AGN heating (Regime 0 only)<a class="headerlink" href="#step-5-agn-heating-regime-0-only" title="Link to this heading"></a></h3>
+<p>The CGM cooling is then passed to one of three AGN suppression mechanisms,
+controlled by <code class="docutils literal notranslate"><span class="pre">CGMHeatingRheatOn</span></code>:</p>
+<ul class="simple">
+<li><p><strong>Mode 0:</strong> No <code class="docutils literal notranslate"><span class="pre">r_heat</span></code> suppression. AGN still fires and accretes from
+<code class="docutils literal notranslate"><span class="pre">CGMgas</span></code>, but the cooling stream is not gated.</p></li>
+<li><p><strong>Mode 1:</strong> Decaying <code class="docutils literal notranslate"><span class="pre">f_heat_cgm</span></code> – a dimensionless suppression fraction
+(0-1) that ratchets up when AGN heating exceeds cooling, and decays on
+<code class="docutils literal notranslate"><span class="pre">t_dyn</span> <span class="pre">=</span> <span class="pre">R_vir</span> <span class="pre">/</span> <span class="pre">V_vir</span></code> between substeps. Suppression formula:
+<code class="docutils literal notranslate"><span class="pre">coolingGas</span> <span class="pre">*=</span> <span class="pre">(1</span> <span class="pre">-</span> <span class="pre">f_heat_cgm)</span></code>.</p></li>
+<li><p><strong>Mode 2 (default):</strong> Standard <code class="docutils literal notranslate"><span class="pre">r_heat</span></code> ratchet, identical to the
+hot-halo path, capped at <code class="docutils literal notranslate"><span class="pre">R_vir</span></code>. Suppression formula:
+<code class="docutils literal notranslate"><span class="pre">coolingGas</span> <span class="pre">*=</span> <span class="pre">(1</span> <span class="pre">-</span> <span class="pre">r_heat</span> <span class="pre">/</span> <span class="pre">r_cool)</span></code>.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">CGMAGNOn</span> <span class="pre">=</span> <span class="pre">0</span></code> disables CGM-regime AGN coupling entirely (so no accretion
+from <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code>); mode 2 still keeps the <code class="docutils literal notranslate"><span class="pre">r_heat</span></code> suppression active so
+quenching persists after the AGN turns off.</p>
+</section>
+<section id="step-6-diagnostics">
+<h3>Step 6 – diagnostics<a class="headerlink" href="#step-6-diagnostics" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">cooling_recipe_cgm()</span></code> populates several diagnostic fields on the galaxy:
+<code class="docutils literal notranslate"><span class="pre">tcool</span></code>, <code class="docutils literal notranslate"><span class="pre">tff</span></code>, <code class="docutils literal notranslate"><span class="pre">tcool_over_tff</span></code>, <code class="docutils literal notranslate"><span class="pre">tdeplete</span></code>, <code class="docutils literal notranslate"><span class="pre">RcoolToRvir</span></code>. These are
+the values reported in the HDF5 output for plotting.</p>
+</section>
+</section>
+<section id="agn-radio-mode-heating">
+<h2>AGN radio-mode heating<a class="headerlink" href="#agn-radio-mode-heating" title="Link to this heading"></a></h2>
+<p>Two functions implement the AGN suppression for the two regimes. Both
+share the accretion calculation via the file-private
+<code class="docutils literal notranslate"><span class="pre">agn_accretion_compute()</span></code> helper.</p>
+<section id="agn-accretion-compute-the-shared-accretion-calculation">
+<h3><code class="docutils literal notranslate"><span class="pre">agn_accretion_compute()</span></code> – the shared accretion calculation<a class="headerlink" href="#agn-accretion-compute-the-shared-accretion-calculation" title="Link to this heading"></a></h3>
+<p>Computes the BH accretion rate from one of three recipes
+(<code class="docutils literal notranslate"><span class="pre">AGNrecipeOn</span> <span class="pre">=</span> <span class="pre">1,</span> <span class="pre">2,</span> <span class="pre">3</span></code>), applies the Eddington limit, and derives the
+corresponding heating mass. Three recipes:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p><code class="docutils literal notranslate"><span class="pre">AGNrecipeOn</span></code></p></th>
+<th class="head"><p>Recipe</p></th>
+<th class="head"><p>Source</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Empirical Croton+06 eq. 10: scales with <code class="docutils literal notranslate"><span class="pre">BH_mass</span> <span class="pre">/</span> <span class="pre">10^8</span> <span class="pre">Msun</span></code>, <code class="docutils literal notranslate"><span class="pre">(V_vir/200)^3</span></code>, <code class="docutils literal notranslate"><span class="pre">HotGas</span> <span class="pre">/</span> <span class="pre">M_vir</span></code></p></td>
+<td><p>Croton+06</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>Bondi-Hoyle accretion: <code class="docutils literal notranslate"><span class="pre">dM/dt</span> <span class="pre">=</span> <span class="pre">2.5</span> <span class="pre">pi</span> <span class="pre">G</span> <span class="pre">*</span> <span class="pre">(3/8)</span> <span class="pre">*</span> <span class="pre">0.6</span> <span class="pre">*</span> <span class="pre">x</span> <span class="pre">*</span> <span class="pre">BH_mass</span> <span class="pre">*</span> <span class="pre">eta</span></code></p></td>
+<td><p>Bondi (1952)</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>Cold-cloud accretion: triggers when <code class="docutils literal notranslate"><span class="pre">BH_mass</span> <span class="pre">&gt;</span> <span class="pre">1e-4</span> <span class="pre">*</span> <span class="pre">M_vir</span> <span class="pre">*</span> <span class="pre">(r_cool</span> <span class="pre">/</span> <span class="pre">R_vir)^3</span></code></p></td>
+<td><p>—</p></td>
+</tr>
+</tbody>
+</table>
+<p>Accretion is then capped at the Eddington rate. The resulting heating mass
+is converted from accreted mass via <code class="docutils literal notranslate"><span class="pre">AGNheating</span> <span class="pre">=</span> <span class="pre">(1.34e5</span> <span class="pre">/</span> <span class="pre">V_vir)^2</span> <span class="pre">*</span> <span class="pre">AGNaccreted</span></code> (with the coefficient derived from <code class="docutils literal notranslate"><span class="pre">sqrt(2</span> <span class="pre">*</span> <span class="pre">eta</span> <span class="pre">*</span> <span class="pre">c^2)</span></code>).</p>
+</section>
+<section id="do-agn-heating-regime-1-hot-halo">
+<h3><code class="docutils literal notranslate"><span class="pre">do_AGN_heating()</span></code> – Regime 1 (hot halo)<a class="headerlink" href="#do-agn-heating-regime-1-hot-halo" title="Link to this heading"></a></h3>
+<p>The classical Croton+06 ratchet:</p>
+<ol class="arabic simple">
+<li><p>Suppress cooling by <code class="docutils literal notranslate"><span class="pre">(1</span> <span class="pre">-</span> <span class="pre">r_heat</span> <span class="pre">/</span> <span class="pre">r_cool)</span></code>. If <code class="docutils literal notranslate"><span class="pre">r_heat</span> <span class="pre">&gt;=</span> <span class="pre">r_cool</span></code>,
+cooling is fully zeroed.</p></li>
+<li><p>Compute accretion via <code class="docutils literal notranslate"><span class="pre">agn_accretion_compute()</span></code>, draw it from <code class="docutils literal notranslate"><span class="pre">HotGas</span></code>,
+credit it to <code class="docutils literal notranslate"><span class="pre">BlackHoleMass</span></code>.</p></li>
+<li><p>Update <code class="docutils literal notranslate"><span class="pre">r_heat</span></code> monotonically: `r_heat_new = (AGNheating / coolingGas)</p>
+<ul class="simple">
+<li><p>r_cool<code class="docutils literal notranslate"><span class="pre">;</span> <span class="pre">if</span> <span class="pre">larger</span> <span class="pre">than</span> <span class="pre">the</span> <span class="pre">stored</span> </code>r_heat`, replace it.</p></li>
+</ul>
+</li>
+</ol>
+<p>The ratchet is never reduced, so <code class="docutils literal notranslate"><span class="pre">r_heat</span></code> can only grow over time. In the
+hot-halo path there is no <code class="docutils literal notranslate"><span class="pre">R_vir</span></code> cap – once <code class="docutils literal notranslate"><span class="pre">r_heat</span> <span class="pre">&gt;=</span> <span class="pre">r_cool</span></code>, cooling
+stays fully suppressed for that substep.</p>
+</section>
+<section id="do-agn-heating-cgm-regime-0-cgm">
+<h3><code class="docutils literal notranslate"><span class="pre">do_AGN_heating_cgm()</span></code> – Regime 0 (CGM)<a class="headerlink" href="#do-agn-heating-cgm-regime-0-cgm" title="Link to this heading"></a></h3>
+<p>Differences from the hot-halo path:</p>
+<ul class="simple">
+<li><p>Suppression is only applied when <code class="docutils literal notranslate"><span class="pre">CGMHeatingRheatOn</span> <span class="pre">=</span> <span class="pre">2</span></code> (mode 2). For
+modes 0 and 1 the function only handles accretion; suppression is done
+by the caller using <code class="docutils literal notranslate"><span class="pre">f_heat_cgm</span></code> (mode 1) or skipped entirely (mode 0).</p></li>
+<li><p>Accretion draws from <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code>, not <code class="docutils literal notranslate"><span class="pre">HotGas</span></code>.</p></li>
+<li><p>When mode 2 ratchets <code class="docutils literal notranslate"><span class="pre">r_heat</span></code>, the value is then capped at <code class="docutils literal notranslate"><span class="pre">R_vir</span></code> so
+the heating radius cannot grow past the halo boundary.</p></li>
+</ul>
+</section>
+</section>
+<section id="cool-gas-onto-galaxy">
+<h2><code class="docutils literal notranslate"><span class="pre">cool_gas_onto_galaxy()</span></code><a class="headerlink" href="#cool-gas-onto-galaxy" title="Link to this heading"></a></h2>
+<p>For the original SAGE path (<code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span> <span class="pre">=</span> <span class="pre">0</span></code>), <code class="docutils literal notranslate"><span class="pre">cooling_recipe()</span></code> calls
+<code class="docutils literal notranslate"><span class="pre">cool_gas_onto_galaxy()</span></code> to transfer the cooled gas from <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> to
+<code class="docutils literal notranslate"><span class="pre">ColdGas</span></code> with metallicity tracking. In the regime-aware path the
+dispatcher does the transfer itself.</p>
+</section>
+<section id="switches-and-parameters">
+<h2>Switches and parameters<a class="headerlink" href="#switches-and-parameters" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Effect</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span></code></p></td>
+<td><p>0 disables the two-regime split entirely; 1 enables it.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CGMDensityProfile</span></code></p></td>
+<td><p>CGM density profile: 0 uniform, 1 NFW, 2 beta.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CGMPrecipitationMode</span></code></p></td>
+<td><p>Precipitation transition shape: 0 tanh, 1 sigmoid (default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CGMPrecipRadiusMode</span></code></p></td>
+<td><p>Evaluation radius for <code class="docutils literal notranslate"><span class="pre">t_cool</span> <span class="pre">/</span> <span class="pre">t_ff</span></code>: 0 at <code class="docutils literal notranslate"><span class="pre">r_cool</span></code>, 1 at <code class="docutils literal notranslate"><span class="pre">0.1</span> <span class="pre">R_vir</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CGMAGNOn</span></code></p></td>
+<td><p>Enables AGN heating coupling in the CGM regime.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CGMHeatingRheatOn</span></code></p></td>
+<td><p>CGM AGN suppression mechanism: 0 off, 1 <code class="docutils literal notranslate"><span class="pre">f_heat_cgm</span></code>, 2 <code class="docutils literal notranslate"><span class="pre">r_heat</span></code> ratchet.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">AGNrecipeOn</span></code></p></td>
+<td><p>Radio-mode BH accretion recipe: 0 off, 1 empirical, 2 Bondi-Hoyle, 3 cold-cloud.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">RadioModeEfficiency</span></code></p></td>
+<td><p>Overall scaling on radio-mode accretion.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">QuasarModeEfficiency</span></code></p></td>
+<td><p>Used by the merger-driven AGN path – see <a class="reference internal" href="mergers_and_disruptions.html"><span class="std std-doc">Mergers and disruption</span></a>.</p></td>
+</tr>
+</tbody>
+</table>
+<p>See <a class="reference internal" href="../parameters.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">parameters.md</span></code></span></a> for full descriptions and defaults.</p>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>White &amp; Frenk (1991), ApJ 379, 52 – classical halo cooling framework.</p></li>
+<li><p>Sutherland &amp; Dopita (1993), ApJS 88, 253 – metal-dependent cooling tables.</p></li>
+<li><p>Croton et al. (2006), MNRAS 365, 11 – original SAGE cooling and AGN
+radio-mode prescriptions.</p></li>
+<li><p>Dekel &amp; Birnboim (2006), MNRAS 368, 2 – shock-mass criterion and cold
+streams.</p></li>
+<li><p>McCourt et al. (2012), MNRAS 419, 3319 – thermal instability criterion.</p></li>
+<li><p>Sharma et al. (2012), MNRAS 420, 3174 – precipitation-limited cooling.</p></li>
+<li><p>Voit (2015), ApJL 808, L30 – precipitation criterion at <code class="docutils literal notranslate"><span class="pre">t_cool/t_ff</span> <span class="pre">=</span> <span class="pre">10</span></code>.</p></li>
+<li><p>Duffy et al. (2008), MNRAS 390, L64 – NFW concentration scaling.</p></li>
+<li><p>Bondi (1952), MNRAS 112, 195 – accretion onto compact objects.</p></li>
+<li><p>Rybicki &amp; Lightman (1979) – Eddington luminosity.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="infall.html" class="btn btn-neutral float-left" title="Infall, Reincorporation, and Stripping" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="starformation_and_feedback.html" class="btn btn-neutral float-right" title="Star Formation and Feedback" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Michael Bradley, Darren Croton.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
