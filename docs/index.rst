@@ -14,6 +14,7 @@ Source code and issue tracker: https://github.com/MBradley1985/SAGE26
 
    getting_started
    parameters
+   outputs
 
 .. toctree::
    :maxdepth: 2

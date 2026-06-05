@@ -1,0 +1,943 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Outputs &mdash; SAGE26 2026 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=fc6fd62b"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Per-Halo Physics Loop" href="core_build_model.html" />
+    <link rel="prev" title="SAGE26 Parameter Reference" href="parameters.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            SAGE26
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parameters.html">SAGE26 Parameter Reference</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Outputs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#output-formats">Output formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#hdf5-layout">HDF5 layout</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#binary-layout">Binary layout</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#flag-conventions">Flag conventions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#type-galaxy-hierarchy-position"><code class="docutils literal notranslate"><span class="pre">Type</span></code> – galaxy hierarchy position</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#mergetype-merger-disruption-channel"><code class="docutils literal notranslate"><span class="pre">mergeType</span></code> – merger/disruption channel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#regime-cgm-regime-classification"><code class="docutils literal notranslate"><span class="pre">Regime</span></code> – CGM regime classification</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ffbregime-feedback-free-burst-classification"><code class="docutils literal notranslate"><span class="pre">FFBRegime</span></code> – feedback-free burst classification</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#galaxy-property-reference">Galaxy property reference</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#identity-and-tree-linkage">Identity and tree linkage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#halo-properties">Halo properties</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#baryonic-reservoirs">Baryonic reservoirs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#metals">Metals</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#star-formation-feedback-and-bh-accretion">Star formation, feedback, and BH accretion</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#sizes">Sizes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#times">Times</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#two-regime-cooling-cgm-model">Two-regime cooling (CGM model)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#infall-properties-type-0-only">Infall properties (Type &gt; 0 only)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#feedback-free-burst-diagnostic">Feedback-free burst diagnostic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ics-assembly-tracking-trackicsassembly-1">ICS assembly tracking (<code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span> <span class="pre">=</span> <span class="pre">1</span></code>)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#cumulative-star-formation-history-savefullsfh-1">Cumulative star formation history (<code class="docutils literal notranslate"><span class="pre">SaveFullSFH</span> <span class="pre">=</span> <span class="pre">1</span></code>)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#binary-vs-hdf5-name-differences">Binary vs HDF5 name differences</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#parameter-output-mapping">Parameter -&gt; output mapping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#where-to-go-next">Where to go next</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="core_build_model.html">Per-Halo Physics Loop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/infall.html">Infall, Reincorporation, and Stripping</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/cooling_and_heating.html">Cooling and AGN Heating</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/starformation_and_feedback.html">Star Formation and Feedback</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/disk_instability.html">Disk Instability</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/mergers_and_disruptions.html">Mergers and Disruption</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/ics.html">Intracluster Stars (ICS)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api.html">C API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to SAGE26</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">SAGE26</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Outputs</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/outputs.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="outputs">
+<h1>Outputs<a class="headerlink" href="#outputs" title="Link to this heading"></a></h1>
+<p>This page documents the galaxy catalogues SAGE26 writes to disk: file
+layout, per-field units and descriptions, flag conventions, and the
+optional auxiliary datasets controlled by run parameters.</p>
+<p>Sources:
+<a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/io/save_gals_hdf5.h"><code class="docutils literal notranslate"><span class="pre">src/io/save_gals_hdf5.h</span></code></a>,
+<a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/io/save_gals_hdf5.c"><code class="docutils literal notranslate"><span class="pre">src/io/save_gals_hdf5.c</span></code></a>,
+<a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/io/save_gals_binary.h"><code class="docutils literal notranslate"><span class="pre">src/io/save_gals_binary.h</span></code></a>,
+<a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/io/save_gals_binary.c"><code class="docutils literal notranslate"><span class="pre">src/io/save_gals_binary.c</span></code></a>.</p>
+<section id="output-formats">
+<h2>Output formats<a class="headerlink" href="#output-formats" title="Link to this heading"></a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">OutputFormat</span></code> parameter selects one of two writers:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Format</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sage_binary</span></code></p></td>
+<td><p>Raw little-endian C struct dump</p></td>
+<td><p>One file per task (<code class="docutils literal notranslate"><span class="pre">&lt;FileNameGalaxies&gt;_&lt;filenr&gt;</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">sage_hdf5</span></code></p></td>
+<td><p>HDF5 column store with metadata</p></td>
+<td><p>One file per task plus a master file linking them.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Both writers emit one file per output snapshot listed in
+<code class="docutils literal notranslate"><span class="pre">FileWithOutputSnaps</span></code>. Per-galaxy field content is the same in both
+formats, but field <em>names</em> and the on-disk layout differ – see the
+field reference below.</p>
+<p>Code units used internally are:</p>
+<ul class="simple">
+<li><p>Length: <code class="docutils literal notranslate"><span class="pre">Mpc</span> <span class="pre">/</span> <span class="pre">h</span></code></p></li>
+<li><p>Mass: <code class="docutils literal notranslate"><span class="pre">1.0e10</span> <span class="pre">Msun</span> <span class="pre">/</span> <span class="pre">h</span></code></p></li>
+<li><p>Velocity: <code class="docutils literal notranslate"><span class="pre">km</span> <span class="pre">/</span> <span class="pre">s</span></code></p></li>
+<li><p>Time: derived from length / velocity (UnitTime_in_Megayears stored in
+the header)</p></li>
+</ul>
+<p>Where the writer converts to a more convenient unit (SFR, outflow rate,
+cooling/heating power, merger times) it is noted explicitly in the
+field reference. Everything else is in code units.</p>
+</section>
+<section id="hdf5-layout">
+<h2>HDF5 layout<a class="headerlink" href="#hdf5-layout" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">FileNameGalaxies</span><span class="o">&gt;</span><span class="n">_</span><span class="o">&lt;</span><span class="n">N</span><span class="o">&gt;.</span><span class="n">hdf5</span>
+<span class="o">+-</span> <span class="n">Header</span><span class="o">/</span>
+<span class="o">|</span>  <span class="o">+-</span> <span class="n">Simulation</span><span class="o">/</span>   <span class="p">(</span><span class="n">attributes</span><span class="p">:</span> <span class="n">SimulationDir</span><span class="p">,</span> <span class="n">FileWithSnapList</span><span class="p">,</span>
+<span class="o">|</span>  <span class="o">|</span>                              <span class="n">LastSnapshotNr</span><span class="p">,</span> <span class="n">SimMaxSnaps</span><span class="p">,</span>
+<span class="o">|</span>  <span class="o">|</span>                              <span class="n">omega_matter</span><span class="p">,</span> <span class="n">omega_lambda</span><span class="p">,</span> <span class="n">particle_mass</span><span class="p">,</span>
+<span class="o">|</span>  <span class="o">|</span>                              <span class="n">hubble_h</span><span class="p">,</span> <span class="n">num_simulation_tree_files</span><span class="p">,</span>
+<span class="o">|</span>  <span class="o">|</span>                              <span class="n">box_size</span><span class="p">,</span> <span class="n">num_trees_this_file</span><span class="p">)</span>
+<span class="o">|</span>  <span class="o">+-</span> <span class="n">Runtime</span><span class="o">/</span>      <span class="p">(</span><span class="n">every</span> <span class="n">recipe</span> <span class="n">flag</span> <span class="ow">and</span> <span class="n">model</span> <span class="n">parameter</span> <span class="kn">from</span><span class="w"> </span><span class="nn">the</span> <span class="o">.</span><span class="n">par</span>
+<span class="o">|</span>  <span class="o">|</span>                 <span class="n">file</span><span class="p">,</span> <span class="n">plus</span> <span class="n">UnitLength_in_cm</span><span class="o">/</span><span class="n">UnitMass_in_g</span><span class="o">/</span>
+<span class="o">|</span>  <span class="o">|</span>                 <span class="n">UnitVelocity_in_cm_per_s</span> <span class="ow">and</span> <span class="n">frac_volume_processed</span><span class="p">)</span>
+<span class="o">|</span>  <span class="o">+-</span> <span class="n">Misc</span><span class="o">/</span>         <span class="p">(</span><span class="n">attributes</span><span class="p">:</span> <span class="n">num_cores</span><span class="p">,</span> <span class="n">sage_data_version</span><span class="p">,</span>
+<span class="o">|</span>  <span class="o">|</span>                              <span class="n">sage_version</span><span class="p">,</span> <span class="n">git_SHA_reference</span><span class="p">)</span>
+<span class="o">|</span>  <span class="o">+-</span> <span class="n">snapshot_redshifts</span>   <span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">D</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">length</span> <span class="n">SimMaxSnaps</span><span class="p">)</span>
+<span class="o">|</span>  <span class="o">+-</span> <span class="n">output_snapshots</span>     <span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">D</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">length</span> <span class="n">NumOutputs</span><span class="p">)</span>
+<span class="o">+-</span> <span class="n">TreeInfo</span><span class="o">/&lt;</span><span class="n">snap</span><span class="o">&gt;/</span>  <span class="p">(</span><span class="n">per</span><span class="o">-</span><span class="n">tree</span> <span class="n">galaxy</span> <span class="n">counts</span> <span class="k">for</span> <span class="n">each</span> <span class="n">output</span> <span class="n">snapshot</span><span class="p">)</span>
+<span class="o">+-</span> <span class="n">Snap_</span><span class="o">&lt;</span><span class="n">N</span><span class="o">&gt;/</span>         <span class="p">(</span><span class="n">one</span> <span class="n">group</span> <span class="n">per</span> <span class="n">output</span> <span class="n">snapshot</span><span class="p">)</span>
+   <span class="o">+-</span> <span class="n">SnapNum</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">GalaxyIndex</span><span class="p">,</span> <span class="o">...</span>   <span class="p">(</span><span class="n">one</span> <span class="n">dataset</span> <span class="n">per</span> <span class="n">field</span><span class="p">)</span>
+   <span class="o">+-</span> <span class="n">SFHMassDisk</span><span class="p">,</span> <span class="n">SFHMassBulge</span>          <span class="p">(</span><span class="n">only</span> <span class="k">if</span> <span class="n">SaveFullSFH</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Each galaxy-property dataset has two HDF5 attributes:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Description</span></code> – one-line text description.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Units</span></code> – unit string.</p></li>
+</ul>
+<p>The cumulative SFH datasets additionally carry a <code class="docutils literal notranslate"><span class="pre">NumSnapshots</span></code>
+attribute equal to <code class="docutils literal notranslate"><span class="pre">SimMaxSnaps</span></code>.</p>
+<p>A separate master file (<code class="docutils literal notranslate"><span class="pre">&lt;FileNameGalaxies&gt;.hdf5</span></code>) is written at the
+end of the run; it contains the same <code class="docutils literal notranslate"><span class="pre">Header</span></code> group and uses HDF5
+external links to expose each per-task file’s snapshot data under a
+single tree.</p>
+</section>
+<section id="binary-layout">
+<h2>Binary layout<a class="headerlink" href="#binary-layout" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">int32</span>  <span class="n">ntrees</span><span class="p">]</span>
+<span class="p">[</span><span class="n">int32</span>  <span class="n">tot_ngals</span><span class="p">]</span>
+<span class="p">[</span><span class="n">int32</span>  <span class="n">forest_ngals</span><span class="p">[</span><span class="n">ntrees</span><span class="p">]]</span>
+<span class="p">[</span><span class="n">GALAXY_OUTPUT</span>  <span class="n">galaxies</span><span class="p">[</span><span class="n">tot_ngals</span><span class="p">]]</span>
+</pre></div>
+</div>
+<p>Galaxies are stored in snapshot order; the i-th block of
+<code class="docutils literal notranslate"><span class="pre">forest_ngals[i]</span></code> galaxies belongs to tree <code class="docutils literal notranslate"><span class="pre">i</span></code>. The <code class="docutils literal notranslate"><span class="pre">GALAXY_OUTPUT</span></code>
+struct layout is fixed at compile time – see
+<code class="docutils literal notranslate"><span class="pre">src/io/save_gals_binary.h</span></code> for the canonical definition. No header
+metadata, descriptions, or units are written; downstream tools must
+know the struct layout in advance.</p>
+<p>The binary writer does <strong>not</strong> emit the cumulative SFH arrays; use HDF5
+output if you need <code class="docutils literal notranslate"><span class="pre">SFHMassDisk</span></code> / <code class="docutils literal notranslate"><span class="pre">SFHMassBulge</span></code>.</p>
+</section>
+<section id="flag-conventions">
+<h2>Flag conventions<a class="headerlink" href="#flag-conventions" title="Link to this heading"></a></h2>
+<section id="type-galaxy-hierarchy-position">
+<h3><code class="docutils literal notranslate"><span class="pre">Type</span></code> – galaxy hierarchy position<a class="headerlink" href="#type-galaxy-hierarchy-position" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>Central galaxy of the main FoF halo.</p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>Central of a sub-halo (Type 1 satellite, still has its own subhalo).</p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>Orphan satellite (subhalo lost; will merge or disrupt within the current timestep).</p></td>
+</tr>
+</tbody>
+</table>
+<p>For Type 0 galaxies, all infall fields (<code class="docutils literal notranslate"><span class="pre">infallMvir</span></code>, <code class="docutils literal notranslate"><span class="pre">infallVvir</span></code>,
+<code class="docutils literal notranslate"><span class="pre">infallVmax</span></code>, <code class="docutils literal notranslate"><span class="pre">infallStellarMass</span></code>, <code class="docutils literal notranslate"><span class="pre">TimeOfInfall</span></code>) are zeroed on
+output – they are only meaningful for satellites.</p>
+</section>
+<section id="mergetype-merger-disruption-channel">
+<h3><code class="docutils literal notranslate"><span class="pre">mergeType</span></code> – merger/disruption channel<a class="headerlink" href="#mergetype-merger-disruption-channel" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>None (galaxy still evolving).</p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>Minor merger (mass ratio below <code class="docutils literal notranslate"><span class="pre">ThreshMajorMerger</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>Major merger (mass ratio above <code class="docutils literal notranslate"><span class="pre">ThreshMajorMerger</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p>3</p></td>
+<td><p>Reserved for disk instability (header documents it, but no code path sets this value).</p></td>
+</tr>
+<tr class="row-even"><td><p>4</p></td>
+<td><p>Disrupted to intra-cluster stars.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="regime-cgm-regime-classification">
+<h3><code class="docutils literal notranslate"><span class="pre">Regime</span></code> – CGM regime classification<a class="headerlink" href="#regime-cgm-regime-classification" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>CGM regime (cool flow / precipitation; cooling driven by <code class="docutils literal notranslate"><span class="pre">cooling_recipe_cgm()</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>Hot-halo regime (Mvir above the Dekel &amp; Birnboim 2006 M_shock; cooling driven by <code class="docutils literal notranslate"><span class="pre">cooling_recipe_hot()</span></code>).</p></td>
+</tr>
+</tbody>
+</table>
+<p>Set every snapshot in <code class="docutils literal notranslate"><span class="pre">determine_and_store_regime()</span></code> when
+<code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span> <span class="pre">=</span> <span class="pre">1</span></code>. Left at zero (and unused) when <code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span> <span class="pre">=</span> <span class="pre">0</span></code>.</p>
+</section>
+<section id="ffbregime-feedback-free-burst-classification">
+<h3><code class="docutils literal notranslate"><span class="pre">FFBRegime</span></code> – feedback-free burst classification<a class="headerlink" href="#ffbregime-feedback-free-burst-classification" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>Normal halo (standard star formation + SN feedback).</p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>FFB halo (Li+2024 / Boylan-Kolchin+2025 starburst path; disk-instability check skipped, SN feedback still applied).</p></td>
+</tr>
+</tbody>
+</table>
+<p>Only set when <code class="docutils literal notranslate"><span class="pre">FeedbackFreeModeOn</span> <span class="pre">=</span> <span class="pre">1</span></code>.</p>
+</section>
+</section>
+<section id="galaxy-property-reference">
+<h2>Galaxy property reference<a class="headerlink" href="#galaxy-property-reference" title="Link to this heading"></a></h2>
+<p>The tables below list every per-galaxy field written to disk, with its
+HDF5 name (the binary writer uses the corresponding <code class="docutils literal notranslate"><span class="pre">GALAXY_OUTPUT</span></code>
+struct field name – see the “Binary vs HDF5 name differences”
+section below) and the unit actually written.</p>
+<section id="identity-and-tree-linkage">
+<h3>Identity and tree linkage<a class="headerlink" href="#identity-and-tree-linkage" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SnapNum</span></code></p></td>
+<td><p>–</p></td>
+<td><p>Snapshot the galaxy is located at.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Type</span></code></p></td>
+<td><p>–</p></td>
+<td><p>Galaxy hierarchy position (see flag table above).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GalaxyIndex</span></code></p></td>
+<td><p>–</p></td>
+<td><p>Galaxy ID unique across all trees and files. Computed from local galaxy number, tree number, and file number.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CentralGalaxyIndex</span></code></p></td>
+<td><p>–</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GalaxyIndex</span></code> of the central in this galaxy’s FoF group.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SAGEHaloIndex</span></code></p></td>
+<td><p>–</p></td>
+<td><p>Halo index from SAGE’s restructured tree (not the input tree’s).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SAGETreeIndex</span></code></p></td>
+<td><p>–</p></td>
+<td><p>Tree number (within file) this galaxy belongs to.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SimulationHaloIndex</span></code></p></td>
+<td><p>–</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">|MostBoundID|</span></code> from the input tree files.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TaskForestNr</span></code></p></td>
+<td><p>–</p></td>
+<td><p>HDF5 only. Task-local forest number used for parallel bookkeeping.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">mergeType</span></code></p></td>
+<td><p>–</p></td>
+<td><p>Merger/disruption channel (see flag table above).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">mergeIntoID</span></code></p></td>
+<td><p>–</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GalaxyIndex</span></code> of the galaxy this one is merging into.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">mergeIntoSnapNum</span></code></p></td>
+<td><p>–</p></td>
+<td><p>Snapshot of the merge target.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dT</span></code></p></td>
+<td><p>Myr</p></td>
+<td><p>Time since this galaxy was last evolved (snapshot interval / sub-step).</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="halo-properties">
+<h3>Halo properties<a class="headerlink" href="#halo-properties" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Posx</span></code>, <code class="docutils literal notranslate"><span class="pre">Posy</span></code>, <code class="docutils literal notranslate"><span class="pre">Posz</span></code></p></td>
+<td><p>Mpc / h</p></td>
+<td><p>Galaxy spatial position. HDF5 splits into three 1-D datasets; binary stores as <code class="docutils literal notranslate"><span class="pre">Pos[3]</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Velx</span></code>, <code class="docutils literal notranslate"><span class="pre">Vely</span></code>, <code class="docutils literal notranslate"><span class="pre">Velz</span></code></p></td>
+<td><p>km / s</p></td>
+<td><p>Galaxy peculiar velocity. HDF5 splits; binary stores as <code class="docutils literal notranslate"><span class="pre">Vel[3]</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Spinx</span></code>, <code class="docutils literal notranslate"><span class="pre">Spiny</span></code>, <code class="docutils literal notranslate"><span class="pre">Spinz</span></code></p></td>
+<td><p>Mpc * km / s</p></td>
+<td><p>Halo specific angular momentum vector. HDF5 splits; binary stores as <code class="docutils literal notranslate"><span class="pre">Spin[3]</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Len</span></code></p></td>
+<td><p>–</p></td>
+<td><p>Number of particles in the galaxy’s halo.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Mvir</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Virial mass of this galaxy’s halo.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CentralMvir</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Virial mass of the main FoF halo (central).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Rvir</span></code></p></td>
+<td><p>Mpc / h</p></td>
+<td><p>Virial radius of this galaxy’s halo.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Vvir</span></code></p></td>
+<td><p>km / s</p></td>
+<td><p>Virial velocity of this galaxy’s halo.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Vmax</span></code></p></td>
+<td><p>km / s</p></td>
+<td><p>Maximum circular velocity of this galaxy’s halo.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">VelDisp</span></code></p></td>
+<td><p>km / s</p></td>
+<td><p>Velocity dispersion of this galaxy’s halo.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Concentration</span></code></p></td>
+<td><p>–</p></td>
+<td><p>NFW halo concentration from the Ishiyama+21 c-M relation (set when <code class="docutils literal notranslate"><span class="pre">ConcentrationOn</span> <span class="pre">=</span> <span class="pre">1</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">g_max</span></code></p></td>
+<td><p>–</p></td>
+<td><p>Running maximum of the precipitation g-parameter across all snapshots for this halo (HDF5 dtype: float64).</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="baryonic-reservoirs">
+<h3>Baryonic reservoirs<a class="headerlink" href="#baryonic-reservoirs" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ColdGas</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Mass of gas in the cold reservoir (disk + bulge).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">StellarMass</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Total stellar mass (disk + bulge).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">BulgeMass</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Stellar mass in the bulge (= <code class="docutils literal notranslate"><span class="pre">MergerBulgeMass</span></code> + <code class="docutils literal notranslate"><span class="pre">InstabilityBulgeMass</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">HotGas</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Mass of gas in the hot halo reservoir.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">EjectedMass</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Mass of gas ejected from the halo by SN feedback.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">BlackHoleMass</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Mass of the central black hole.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">IntraClusterStars</span></code> / <code class="docutils literal notranslate"><span class="pre">ICS</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Total ICS mass (HDF5 name <code class="docutils literal notranslate"><span class="pre">IntraClusterStars</span></code>; binary field <code class="docutils literal notranslate"><span class="pre">ICS</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CGMgas</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Mass of gas in the circum-galactic medium (Regime 0 reservoir).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">H2gas</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Mass of molecular hydrogen in the cold gas.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">H1gas</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Mass of atomic hydrogen in the cold gas.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">MergerBulgeMass</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Stellar mass in the merger-built classical bulge (Tonini+2016 channel A).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">InstabilityBulgeMass</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Stellar mass in the disk-instability pseudo-bulge (Tonini+2016 channel B).</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="metals">
+<h3>Metals<a class="headerlink" href="#metals" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">MetalsColdGas</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Metals in the cold reservoir.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">MetalsStellarMass</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Metals locked in stars.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">MetalsBulgeMass</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Metals locked in bulge stars.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">MetalsHotGas</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Metals in the hot reservoir.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">MetalsEjectedMass</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Metals in the ejected reservoir.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">MetalsIntraClusterStars</span></code> / <code class="docutils literal notranslate"><span class="pre">MetalsICS</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Metals in intra-cluster stars (HDF5 name <code class="docutils literal notranslate"><span class="pre">MetalsIntraClusterStars</span></code>; binary field <code class="docutils literal notranslate"><span class="pre">MetalsICS</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">MetalsCGMgas</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Metals in the CGM reservoir.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="star-formation-feedback-and-bh-accretion">
+<h3>Star formation, feedback, and BH accretion<a class="headerlink" href="#star-formation-feedback-and-bh-accretion" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SfrDisk</span></code></p></td>
+<td><p>Msun / yr</p></td>
+<td><p>Disk SFR averaged over the snapshot interval (mean over the STEPS sub-steps).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SfrBulge</span></code></p></td>
+<td><p>Msun / yr</p></td>
+<td><p>Bulge SFR averaged over the snapshot interval (starburst component).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SfrDiskZ</span></code></p></td>
+<td><p>dimensionless</p></td>
+<td><p>Mass-weighted metallicity of the star-forming disk gas (<code class="docutils literal notranslate"><span class="pre">MetalsColdGas</span> <span class="pre">/</span> <span class="pre">ColdGas</span></code> averaged over sub-steps). Despite the “Units” attribute saying <code class="docutils literal notranslate"><span class="pre">Msun/yr</span></code>, this field is a metallicity ratio, not a rate.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SfrBulgeZ</span></code></p></td>
+<td><p>dimensionless</p></td>
+<td><p>Mass-weighted metallicity of the star-forming bulge gas. Same caveat as <code class="docutils literal notranslate"><span class="pre">SfrDiskZ</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">OutflowRate</span></code></p></td>
+<td><p>Msun / yr</p></td>
+<td><p>Cold-gas reheating rate (cold -&gt; hot) integrated over the substep.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">MassLoading</span></code></p></td>
+<td><p>dimensionless</p></td>
+<td><p>SN mass-loading factor (outflow rate / SFR).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Cooling</span></code></p></td>
+<td><p>log10(erg / s)</p></td>
+<td><p>log10 of cooling energy rate. Stored as 0.0 when no cooling occurred (i.e. zero, not “1 erg/s”).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Heating</span></code></p></td>
+<td><p>log10(erg / s)</p></td>
+<td><p>log10 of AGN radio-mode heating energy rate. Stored as 0.0 when no heating occurred.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">QuasarModeBHaccretionMass</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Mass accreted by the black hole during the last sub-step via the quasar (merger-driven) mode.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="sizes">
+<h3>Sizes<a class="headerlink" href="#sizes" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DiskRadius</span></code> / <code class="docutils literal notranslate"><span class="pre">DiskScaleRadius</span></code></p></td>
+<td><p>Mpc / h</p></td>
+<td><p>Disk exponential scale length from Mo, Mao &amp; White (1998). HDF5 name <code class="docutils literal notranslate"><span class="pre">DiskRadius</span></code>; binary field <code class="docutils literal notranslate"><span class="pre">DiskScaleRadius</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">BulgeRadius</span></code></p></td>
+<td><p>Mpc / h</p></td>
+<td><p>Bulge half-mass radius (Lange et al. 2015 / Shen et al. 2003 normalisation; updated by mergers and instabilities).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">MergerBulgeRadius</span></code></p></td>
+<td><p>Mpc / h</p></td>
+<td><p>Sub-component bulge radius from the merger channel.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">InstabilityBulgeRadius</span></code></p></td>
+<td><p>Mpc / h</p></td>
+<td><p>Sub-component bulge radius from the disk-instability channel (Tonini+2016 Eq. 15 incremental update).</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="times">
+<h3>Times<a class="headerlink" href="#times" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TimeOfLastMajorMerger</span></code></p></td>
+<td><p>Myr</p></td>
+<td><p>Code-time of the last major merger, converted to Myr.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TimeOfLastMinorMerger</span></code></p></td>
+<td><p>Myr</p></td>
+<td><p>Code-time of the last minor merger, converted to Myr.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TimeOfInfall</span></code></p></td>
+<td><p>Myr</p></td>
+<td><p>Code-time at which this galaxy became a satellite (zero for Type 0).</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="two-regime-cooling-cgm-model">
+<h3>Two-regime cooling (CGM model)<a class="headerlink" href="#two-regime-cooling-cgm-model" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Regime</span></code></p></td>
+<td><p>–</p></td>
+<td><p>CGM regime flag (see flag table above).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tcool</span></code></p></td>
+<td><p>Myr</p></td>
+<td><p>Cooling time of the CGM gas at the cooling radius.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tff</span></code></p></td>
+<td><p>Myr</p></td>
+<td><p>Free-fall time of the CGM gas at the cooling radius.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tcool_over_tff</span></code></p></td>
+<td><p>dimensionless</p></td>
+<td><p>Voit (2015) precipitation criterion ratio.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tdeplete</span></code></p></td>
+<td><p>Myr</p></td>
+<td><p>Depletion time of the CGM reservoir under the current cooling rate.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">H2DepletionTime_Gyr</span></code></p></td>
+<td><p>Gyr</p></td>
+<td><p>H2 depletion time from K13 (or the fixed <code class="docutils literal notranslate"><span class="pre">H2DepletionTime_Gyr</span></code> parameter when <code class="docutils literal notranslate"><span class="pre">H2SFRMode</span> <span class="pre">=</span> <span class="pre">1</span></code>). Set to -1 when not applicable.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">RcoolToRvir</span></code></p></td>
+<td><p>dimensionless</p></td>
+<td><p>Ratio of the cooling radius to the virial radius.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">mdot_cool</span></code></p></td>
+<td><p>Msun / yr</p></td>
+<td><p>Hot-halo cooling rate (mass flowing from hot to cold).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">mdot_stream</span></code></p></td>
+<td><p>Msun / yr</p></td>
+<td><p>Cold-stream accretion rate (CGM-regime mass flowing from CGM to cold).</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="infall-properties-type-0-only">
+<h3>Infall properties (Type &gt; 0 only)<a class="headerlink" href="#infall-properties-type-0-only" title="Link to this heading"></a></h3>
+<p>For Type 0 (central) galaxies, all five infall fields are zeroed on
+output. For satellites, they record the halo state at the snapshot
+just before infall:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">infallMvir</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Virial mass of this halo at the previous timestep (the “infall snapshot”).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">infallVvir</span></code></p></td>
+<td><p>km / s</p></td>
+<td><p>Virial velocity at the infall snapshot.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">infallVmax</span></code></p></td>
+<td><p>km / s</p></td>
+<td><p>Maximum circular velocity at the infall snapshot.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">infallStellarMass</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Stellar mass at the moment of becoming a satellite.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="feedback-free-burst-diagnostic">
+<h3>Feedback-free burst diagnostic<a class="headerlink" href="#feedback-free-burst-diagnostic" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FFBRegime</span></code></p></td>
+<td><p>–</p></td>
+<td><p>FFB classification flag (see flag table above).</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="ics-assembly-tracking-trackicsassembly-1">
+<h3>ICS assembly tracking (<code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span> <span class="pre">=</span> <span class="pre">1</span></code>)<a class="headerlink" href="#ics-assembly-tracking-trackicsassembly-1" title="Link to this heading"></a></h3>
+<p>These three fields accumulate per-channel deposits into the ICS so
+that the mean assembly time can be reconstructed downstream:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ICS_disrupt</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Cumulative stellar mass disrupted to ICS via satellite disruption.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ICS_accrete</span></code></p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Cumulative ICS accreted from satellites via per-snapshot inheritance.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ICS_sum_mt</span></code></p></td>
+<td><p>1.0e10 Msun / h * code_time</p></td>
+<td><p>Mass-weighted sum of <code class="docutils literal notranslate"><span class="pre">mass</span> <span class="pre">*</span> <span class="pre">time_of_deposition</span></code> (code-time units).</p></td>
+</tr>
+</tbody>
+</table>
+<p>Mean ICS assembly lookback for a given galaxy:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">t_assembly</span><span class="o">&gt;</span> <span class="o">=</span> <span class="n">ICS_sum_mt</span> <span class="o">/</span> <span class="p">(</span><span class="n">ICS_disrupt</span> <span class="o">+</span> <span class="n">ICS_accrete</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The result is in code-time units; multiply by
+<code class="docutils literal notranslate"><span class="pre">UnitTime_in_Megayears</span></code> (read from the HDF5 header) to convert to Myr.</p>
+<p>These fields are always present in both writers, but they only
+accumulate when <code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span> <span class="pre">=</span> <span class="pre">1</span></code>. With the parameter off, they
+remain at zero.</p>
+</section>
+</section>
+<section id="cumulative-star-formation-history-savefullsfh-1">
+<h2>Cumulative star formation history (<code class="docutils literal notranslate"><span class="pre">SaveFullSFH</span> <span class="pre">=</span> <span class="pre">1</span></code>)<a class="headerlink" href="#cumulative-star-formation-history-savefullsfh-1" title="Link to this heading"></a></h2>
+<p>HDF5 output only. When <code class="docutils literal notranslate"><span class="pre">SaveFullSFH</span> <span class="pre">=</span> <span class="pre">1</span></code>, two extra 2-D datasets are
+written per output snapshot:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Dataset</p></th>
+<th class="head"><p>Shape</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SFHMassDisk</span></code></p></td>
+<td><p>(ngalaxies, SimMaxSnaps)</p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Stellar mass formed in the disk at each snapshot up to the current one.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SFHMassBulge</span></code></p></td>
+<td><p>(ngalaxies, SimMaxSnaps)</p></td>
+<td><p>1.0e10 Msun / h</p></td>
+<td><p>Stellar mass formed in the bulge (starbursts) at each snapshot up to the current one.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Each dataset carries <code class="docutils literal notranslate"><span class="pre">Description</span></code>, <code class="docutils literal notranslate"><span class="pre">Units</span></code>, and <code class="docutils literal notranslate"><span class="pre">NumSnapshots</span></code>
+attributes. Entries for snapshots beyond the galaxy’s current
+<code class="docutils literal notranslate"><span class="pre">SnapNum</span></code> are zero. Reconstructing the SFR(z) curve for a galaxy
+amounts to differencing consecutive snapshot bins and dividing by
+the snapshot interval.</p>
+<p>This option roughly doubles the per-galaxy footprint of the output
+file, so leave it off unless you need the full SFH.</p>
+</section>
+<section id="binary-vs-hdf5-name-differences">
+<h2>Binary vs HDF5 name differences<a class="headerlink" href="#binary-vs-hdf5-name-differences" title="Link to this heading"></a></h2>
+<p>A handful of fields use different names between the two writers.
+Otherwise the field set is identical:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Binary (GALAXY_OUTPUT)</p></th>
+<th class="head"><p>HDF5 (HDF5_GALAXY_OUTPUT)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Pos[3]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Posx</span></code>, <code class="docutils literal notranslate"><span class="pre">Posy</span></code>, <code class="docutils literal notranslate"><span class="pre">Posz</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Vel[3]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Velx</span></code>, <code class="docutils literal notranslate"><span class="pre">Vely</span></code>, <code class="docutils literal notranslate"><span class="pre">Velz</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Spin[3]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Spinx</span></code>, <code class="docutils literal notranslate"><span class="pre">Spiny</span></code>, <code class="docutils literal notranslate"><span class="pre">Spinz</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DiskScaleRadius</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">DiskRadius</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ICS</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">IntraClusterStars</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">MetalsICS</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MetalsIntraClusterStars</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>–</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">TaskForestNr</span></code> (HDF5 only)</p></td>
+</tr>
+</tbody>
+</table>
+<p>The HDF5 writer also lays out fields as struct-of-arrays (one
+dataset per field), whereas the binary writer lays them out as
+array-of-structs.</p>
+</section>
+<section id="parameter-output-mapping">
+<h2>Parameter -&gt; output mapping<a class="headerlink" href="#parameter-output-mapping" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Effect on output</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">OutputFormat</span></code></p></td>
+<td><p>Selects <code class="docutils literal notranslate"><span class="pre">sage_binary</span></code> or <code class="docutils literal notranslate"><span class="pre">sage_hdf5</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">OutputDir</span></code></p></td>
+<td><p>Directory for the output files.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FileNameGalaxies</span></code></p></td>
+<td><p>Filename stem; final names are <code class="docutils literal notranslate"><span class="pre">&lt;stem&gt;_&lt;filenr&gt;</span></code> (binary) or <code class="docutils literal notranslate"><span class="pre">&lt;stem&gt;_&lt;filenr&gt;.hdf5</span></code> (HDF5), plus <code class="docutils literal notranslate"><span class="pre">&lt;stem&gt;.hdf5</span></code> master.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FileWithOutputSnaps</span></code></p></td>
+<td><p>Snapshot list to write. Each listed snap becomes either its own binary file or a <code class="docutils literal notranslate"><span class="pre">Snap_&lt;N&gt;</span></code> HDF5 group.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SaveFullSFH</span></code></p></td>
+<td><p>Enables the cumulative <code class="docutils literal notranslate"><span class="pre">SFHMassDisk</span></code> / <code class="docutils literal notranslate"><span class="pre">SFHMassBulge</span></code> 2-D HDF5 datasets.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span></code></p></td>
+<td><p>Activates accumulation into <code class="docutils literal notranslate"><span class="pre">ICS_disrupt</span></code>, <code class="docutils literal notranslate"><span class="pre">ICS_accrete</span></code>, <code class="docutils literal notranslate"><span class="pre">ICS_sum_mt</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ConcentrationOn</span></code></p></td>
+<td><p>Populates the <code class="docutils literal notranslate"><span class="pre">Concentration</span></code> field (otherwise 0).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span></code></p></td>
+<td><p>Populates <code class="docutils literal notranslate"><span class="pre">Regime</span></code>, <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code>, <code class="docutils literal notranslate"><span class="pre">MetalsCGMgas</span></code>, <code class="docutils literal notranslate"><span class="pre">tcool</span></code>, <code class="docutils literal notranslate"><span class="pre">tff</span></code>, <code class="docutils literal notranslate"><span class="pre">tcool_over_tff</span></code>, <code class="docutils literal notranslate"><span class="pre">tdeplete</span></code>, <code class="docutils literal notranslate"><span class="pre">RcoolToRvir</span></code>, <code class="docutils literal notranslate"><span class="pre">mdot_cool</span></code>, <code class="docutils literal notranslate"><span class="pre">mdot_stream</span></code>. With it off, these stay at their initialised values.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FeedbackFreeModeOn</span></code></p></td>
+<td><p>Populates <code class="docutils literal notranslate"><span class="pre">FFBRegime</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+<p>See <a class="reference internal" href="parameters.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">parameters.md</span></code></span></a> for full parameter descriptions
+and defaults.</p>
+</section>
+<section id="where-to-go-next">
+<h2>Where to go next<a class="headerlink" href="#where-to-go-next" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="getting_started.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">getting_started.md</span></code></span></a> – run SAGE26 and produce
+these outputs.</p></li>
+<li><p><a class="reference internal" href="parameters.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">parameters.md</span></code></span></a> – the parameter file that controls
+which fields are populated.</p></li>
+<li><p><a class="reference internal" href="physics/ics.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">physics/ics.md</span></code></span></a> – detail on the ICS assembly
+channels that feed <code class="docutils literal notranslate"><span class="pre">ICS_disrupt</span></code> / <code class="docutils literal notranslate"><span class="pre">ICS_accrete</span></code> / <code class="docutils literal notranslate"><span class="pre">ICS_sum_mt</span></code>.</p></li>
+<li><p><a class="reference internal" href="physics/cooling_and_heating.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">physics/cooling_and_heating.md</span></code></span></a> –
+what <code class="docutils literal notranslate"><span class="pre">tcool</span></code>, <code class="docutils literal notranslate"><span class="pre">tff</span></code>, <code class="docutils literal notranslate"><span class="pre">tcool_over_tff</span></code>, <code class="docutils literal notranslate"><span class="pre">Regime</span></code>, and <code class="docutils literal notranslate"><span class="pre">Cooling</span></code> /
+<code class="docutils literal notranslate"><span class="pre">Heating</span></code> actually measure.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="parameters.html" class="btn btn-neutral float-left" title="SAGE26 Parameter Reference" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="core_build_model.html" class="btn btn-neutral float-right" title="Per-Halo Physics Loop" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Michael Bradley, Darren Croton.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
