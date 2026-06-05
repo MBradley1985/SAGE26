@@ -68,7 +68,7 @@ optional parameters take the listed default if omitted.
 | `FIREmodeOn` | 0/1 | no | `1` | FIRE stellar feedback: 0=off; 1=on. |
 | `FeedbackFreeModeOn` | int | no | `1` | Feedback-free burst galaxies: 0=off; 1=Li+24 sigmoid; 2=BK25 (Ishiyama+21 c); 3=BK25 (ConcentrationOn method); 4=BK25 + log-normal c scatter; 5=Li+24 sharp; 6=Li+24 sigmoid + H₂ SF; 7=BK25 log-normal c scatter + H₂ SF. |
 | `ConcentrationOn` | int | no | `3` | Halo concentration method: 0=off; 1=Ishiyama+21 table; 2=V_max/V_vir; 3=V_max/V_vir with infall freeze for satellites. |
-| `BulgeSizeOn` | int | no | `3` | Bulge radius model: 0=off; 1=Shen+20 eq.33; 2=Shen+20 eq.32; 3=Tonini+16. |
+| `BulgeSizeOn` | int | no | `3` | Bulge radius model: 0=off; 1=Shen+2003 eq.33; 2=Shen+2003 eq.32; 3=Tonini+2016 (separate merger and instability channels, mass-weighted average). |
 | `StarburstColdGasOn` | 0/1 | no | `1` | Include cold gas contribution during merger starbursts. |
 | `DynamicDisruptionSplit` | int | no | `2` | Route disrupted satellite mass: 0=all to ICS; 1=all to hot gas; 2=split by `FractionDisruptedToICS`. |
 
@@ -81,7 +81,8 @@ optional parameters take the listed default if omitted.
 | `CGMDensityProfile` | int | no | `0` | CGM gas density profile for precipitation: 0=uniform; 1=NFW; 2=beta (β=2/3). |
 | `CGMPrecipitationMode` | int | no | `1` | Internal precipitation solver mode (leave at default). |
 | `CGMPrecipRadiusMode` | int | no | `0` | Radius at which cooling time is evaluated: 0=iterative r_cool; 1=0.1 R_vir. |
-| `CGMHeatingReservoirOn` | 0/1 | no | `1` | Toggle the persistent AGN heating memory used in the CGM cooling recipe (`HeatingReservoir`, decays on $t_\mathrm{dyn}$). Set 0 for purely instantaneous per-substep AGN suppression. |
+| `CGMAGNOn` | 0/1 | no | `1` | Enable AGN heating coupling to the CGM-regime cooling path. |
+| `CGMHeatingRheatOn` | int | no | `2` | CGM-regime AGN cooling suppression mechanism: 0=off (AGN fires but no radius/fraction suppression); 1=`f_heat_cgm` decaying suppression fraction on `t_dyn`; 2=standard `r_heat` ratchet capped at R_vir (mirrors hot-halo path). |
 
 ---
 
@@ -144,9 +145,9 @@ optional parameters take the listed default if omitted.
 |-----------|-------|---------|-------------|
 | `ThreshMajorMerger` | dimensionless | `0.3` | Mass ratio above which a merger is classified as major. |
 | `ThresholdSatDisruption` | dimensionless | `1.0` | M_vir-to-baryonic mass ratio below which a satellite is disrupted rather than merged. |
-| `FractionDisruptedToICS` | dimensionless | `0.0` | Fraction of disrupted satellite mass that goes to ICS (vs. hot gas). Active when DynamicDisruptionSplit=2. |
-| `DisruptionSplitAlpha` | dimensionless | `0.0` | Power-law exponent for mass-dependent disruption split. |
-| `DisruptionSplitCref` | dimensionless | `0.0` | Reference concentration for disruption split. |
+| `FractionDisruptedToICS` | dimensionless | `0.8` | Fraction of disrupted satellite mass that goes to ICS (vs. hot gas). Active when DynamicDisruptionSplit=2. |
+| `DisruptionSplitAlpha` | dimensionless | `0.25` | Power-law exponent for the mass-dependent disruption split. |
+| `DisruptionSplitCref` | dimensionless | `10.0` | Reference concentration for the disruption split. |
 
 ### Gas cycling
 
@@ -161,11 +162,8 @@ optional parameters take the listed default if omitted.
 | `Reionization_z0` | — | `8.0` | Characteristic redshift for reionization suppression (Kravtsov+04). |
 | `Reionization_zr` | — | `7.0` | Width parameter for reionization suppression. |
 
-### FFB efficiency
-
-| Parameter | — | Default | Description |
-|-----------|---|---------|-------------|
-| `FFBMaxEfficiency` | dimensionless | `0.2` | Maximum SFE in feedback-free burst mode (see FFB parameters above). |
+See the [FFB parameters](#ffb-parameters) section above for `FFBMaxEfficiency`,
+`FFBConcSigma`, and `RedshiftPowerLawExponent`.
 
 ---
 
