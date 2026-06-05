@@ -72,7 +72,9 @@
 <li class="toctree-l1"><a class="reference internal" href="physics/infall.html">Infall, Reincorporation, and Stripping</a></li>
 <li class="toctree-l1"><a class="reference internal" href="physics/cooling_and_heating.html">Cooling and AGN Heating</a></li>
 <li class="toctree-l1"><a class="reference internal" href="physics/starformation_and_feedback.html">Star Formation and Feedback</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/disk_instability.html">Disk Instability</a></li>
 <li class="toctree-l1"><a class="reference internal" href="physics/mergers_and_disruptions.html">Mergers and Disruption</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/ics.html">Intracluster Stars (ICS)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -385,7 +387,7 @@ optional parameters take the listed default if omitted.</p>
 <td><p>int</p></td>
 <td><p>no</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">2</span></code></p></td>
-<td><p>Route disrupted satellite mass: 0=all to ICS; 1=all to hot gas; 2=split by <code class="docutils literal notranslate"><span class="pre">FractionDisruptedToICS</span></code>.</p></td>
+<td><p>ICS-vs-BCG split for disrupted satellite stellar mass: 0=fixed fraction <code class="docutils literal notranslate"><span class="pre">FractionDisruptedToICS</span></code>; 1=mass-ratio split <code class="docutils literal notranslate"><span class="pre">f_ICS</span> <span class="pre">=</span> <span class="pre">1</span> <span class="pre">-</span> <span class="pre">(infallMvir</span> <span class="pre">/</span> <span class="pre">Mhost)^DisruptionSplitAlpha</span></code>; 2=mass-ratio split with concentration weighting (<code class="docutils literal notranslate"><span class="pre">alpha_eff</span> <span class="pre">=</span> <span class="pre">DisruptionSplitAlpha</span> <span class="pre">*</span> <span class="pre">DisruptionSplitCref</span> <span class="pre">/</span> <span class="pre">c_sat</span></code>).</p></td>
 </tr>
 </tbody>
 </table>
@@ -523,7 +525,7 @@ optional parameters take the listed default if omitted.</p>
 <td><p>int</p></td>
 <td><p>no</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">0</span></code></p></td>
-<td><p>Override SF efficiency with a fixed depletion time: 0=use SfrEfficiency; 1=use H2DepletionTime_Gyr.</p></td>
+<td><p>Override H2-based SF rate: 0=use <code class="docutils literal notranslate"><span class="pre">SfrEfficiency</span></code>; 1=use the fixed <code class="docutils literal notranslate"><span class="pre">H2DepletionTime_Gyr</span></code>; 2=use the K13 local depletion time. Only applied for SFprescription 1, 3, 4, 5, 7 (not 0/2 which have no H2, not 6 which already uses K13).</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">H2DepletionTime_Gyr</span></code></p></td>
 <td><p>double</p></td>
@@ -550,8 +552,8 @@ optional parameters take the listed default if omitted.</p>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SfrEfficiency</span></code></p></td>
 <td><p>dimensionless</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">0.05</span></code></p></td>
-<td><p>Cold gas consumption efficiency per dynamical time (SFprescription 0,1,2,3,4,5,7). Unused for SFprescription=6.</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.03</span></code></p></td>
+<td><p>Cold/H2 gas consumption efficiency per dynamical time. Used by SFprescription 0, 1, 4, 5, 7 unconditionally, and by 6 (K13) only in the single-slab path (<code class="docutils literal notranslate"><span class="pre">H2RadialIntegrationOn=0</span></code>). Unused by 2 and 3 (Somerville+25 use their own density-modulated <code class="docutils literal notranslate"><span class="pre">epsilon_cl</span></code>) and by 6 in the radial path (uses the K13 local depletion time natively).</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">RecycleFraction</span></code></p></td>
 <td><p>dimensionless</p></td>
@@ -658,7 +660,7 @@ optional parameters take the listed default if omitted.</p>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FractionDisruptedToICS</span></code></p></td>
 <td><p>dimensionless</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">0.8</span></code></p></td>
-<td><p>Fraction of disrupted satellite mass that goes to ICS (vs. hot gas). Active when DynamicDisruptionSplit=2.</p></td>
+<td><p>Fixed fraction of disrupted satellite stellar mass that goes to ICS (vs. central BCG). Used when <code class="docutils literal notranslate"><span class="pre">DynamicDisruptionSplit=0</span></code>, and as the fallback when modes 1/2 cannot compute a mass ratio.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DisruptionSplitAlpha</span></code></p></td>
 <td><p>dimensionless</p></td>

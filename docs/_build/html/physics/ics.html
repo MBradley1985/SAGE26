@@ -1,0 +1,342 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Intracluster Stars (ICS) &mdash; SAGE26 2026 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=fc6fd62b"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="C API Reference" href="../api.html" />
+    <link rel="prev" title="Mergers and Disruption" href="mergers_and_disruptions.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            SAGE26
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../parameters.html">SAGE26 Parameter Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../core_build_model.html">Per-Halo Physics Loop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="infall.html">Infall, Reincorporation, and Stripping</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cooling_and_heating.html">Cooling and AGN Heating</a></li>
+<li class="toctree-l1"><a class="reference internal" href="starformation_and_feedback.html">Star Formation and Feedback</a></li>
+<li class="toctree-l1"><a class="reference internal" href="disk_instability.html">Disk Instability</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mergers_and_disruptions.html">Mergers and Disruption</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Intracluster Stars (ICS)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#fields">Fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#how-ics-forms">How ICS forms</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#per-snapshot-inheritance-always">1. Per-snapshot inheritance (always)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#satellite-disruption">2. Satellite disruption</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#satellite-merger-transfer">3. Satellite merger transfer</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#how-to-compute-the-mean-ics-assembly-time">How to compute the mean ICS assembly time</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#ics-in-the-baryon-budget">ICS in the baryon budget</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#type-0-vs-satellite-ics">Type-0 vs satellite ICS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#switches-and-parameters">Switches and parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#references">References</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">C API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing to SAGE26</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SAGE26</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Intracluster Stars (ICS)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/physics/ics.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="intracluster-stars-ics">
+<h1>Intracluster Stars (ICS)<a class="headerlink" href="#intracluster-stars-ics" title="Link to this heading"></a></h1>
+<p>This page describes the intracluster (or intragroup) stellar component:
+the diffuse stellar light that fills the host halo outside any single
+galaxy. SAGE26 tracks ICS as a separate reservoir on every central, with
+optional assembly-history bookkeeping.</p>
+<p>Sources:
+<a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/model_infall.c"><code class="docutils literal notranslate"><span class="pre">src/model_infall.c</span></code></a>,
+<a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/model_mergers.c"><code class="docutils literal notranslate"><span class="pre">src/model_mergers.c</span></code></a>,
+<a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/core_allvars.h"><code class="docutils literal notranslate"><span class="pre">src/core_allvars.h</span></code></a>
+(GALAXY struct).</p>
+<section id="fields">
+<h2>Fields<a class="headerlink" href="#fields" title="Link to this heading"></a></h2>
+<p>ICS lives on every galaxy but is only ever non-zero on centrals – at the
+start of each snapshot any satellite ICS is transferred to the central
+(see below).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ICS</span></code></p></td>
+<td><p>10^10 M_sun/h</p></td>
+<td><p>Current intracluster stellar mass on this central.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">MetalsICS</span></code></p></td>
+<td><p>10^10 M_sun/h</p></td>
+<td><p>Metal mass in the ICS reservoir.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ICS_disrupt</span></code></p></td>
+<td><p>10^10 M_sun/h</p></td>
+<td><p>Cumulative stellar mass <em>disrupted</em> into ICS via <code class="docutils literal notranslate"><span class="pre">disrupt_satellite_to_ICS()</span></code>. Only populated when <code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span> <span class="pre">=</span> <span class="pre">1</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ICS_accrete</span></code></p></td>
+<td><p>10^10 M_sun/h</p></td>
+<td><p>Cumulative ICS mass <em>inherited</em> from satellites that already carried their own ICS (i.e. former group centrals that fell in). Only populated when <code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span> <span class="pre">=</span> <span class="pre">1</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ICS_sum_mt</span></code></p></td>
+<td><p>10^10 M_sun/h * code time</p></td>
+<td><p>Mass-weighted accumulator: sum over all ICS deposition events of <code class="docutils literal notranslate"><span class="pre">delta_M</span> <span class="pre">*</span> <span class="pre">t_deposit</span></code>. Used to derive the mean assembly lookback as <code class="docutils literal notranslate"><span class="pre">ICS_sum_mt</span> <span class="pre">/</span> <span class="pre">(ICS_disrupt</span> <span class="pre">+</span> <span class="pre">ICS_accrete)</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The split between <code class="docutils literal notranslate"><span class="pre">ICS_disrupt</span></code> and <code class="docutils literal notranslate"><span class="pre">ICS_accrete</span></code> lets you decompose the
+assembly history into “stars stripped here vs stars that arrived already
+stripped from a previous host” without needing a full SFH array on the
+ICS reservoir.</p>
+</section>
+<section id="how-ics-forms">
+<h2>How ICS forms<a class="headerlink" href="#how-ics-forms" title="Link to this heading"></a></h2>
+<p>There are three pathways:</p>
+<section id="per-snapshot-inheritance-always">
+<h3>1. Per-snapshot inheritance (always)<a class="headerlink" href="#per-snapshot-inheritance-always" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">infall_recipe()</span></code> runs once at the start of each snapshot. As it walks
+the FoF galaxy list, it:</p>
+<ul>
+<li><p>Sums every galaxy’s <code class="docutils literal notranslate"><span class="pre">ICS</span></code> and <code class="docutils literal notranslate"><span class="pre">MetalsICS</span></code> into a per-FoF total.</p></li>
+<li><p>Zeros each satellite’s <code class="docutils literal notranslate"><span class="pre">ICS</span></code> and <code class="docutils literal notranslate"><span class="pre">MetalsICS</span></code>.</p></li>
+<li><p>Assigns the total to the central:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">galaxies</span><span class="p">[</span><span class="n">centralgal</span><span class="p">]</span><span class="o">.</span><span class="n">ICS</span>        <span class="o">=</span> <span class="n">tot_ICS</span><span class="p">;</span>
+<span class="n">galaxies</span><span class="p">[</span><span class="n">centralgal</span><span class="p">]</span><span class="o">.</span><span class="n">MetalsICS</span>  <span class="o">=</span> <span class="n">tot_ICSMetals</span><span class="p">;</span>
+</pre></div>
+</div>
+</li>
+</ul>
+<p>This makes the FoF central own all of the group’s ICS by construction –
+which is what you want for plotting (no need to integrate over satellites
+when measuring a central’s ICS).</p>
+<p>If <code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span> <span class="pre">=</span> <span class="pre">1</span></code> and an incoming satellite carried ICS, the
+amount is recorded in the central’s <code class="docutils literal notranslate"><span class="pre">ICS_accrete</span></code> accumulator and the
+satellite’s <code class="docutils literal notranslate"><span class="pre">ICS_sum_mt</span></code> is added to the central’s. This preserves the
+deposition history of stars that were stripped in an earlier host before
+this halo absorbed them.</p>
+</section>
+<section id="satellite-disruption">
+<h3>2. Satellite disruption<a class="headerlink" href="#satellite-disruption" title="Link to this heading"></a></h3>
+<p>When <code class="docutils literal notranslate"><span class="pre">disrupt_satellite_to_ICS()</span></code> fires (see
+<a class="reference internal" href="mergers_and_disruptions.html"><span class="std std-doc">Mergers and disruption</span></a>), some fraction of
+the satellite’s stellar mass is added to the central’s ICS:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">new_ICS_from_stripping</span> <span class="o">=</span> <span class="n">f_ICS</span> <span class="o">*</span> <span class="n">StellarMass_sat</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">f_ICS</span></code> is set by <code class="docutils literal notranslate"><span class="pre">DynamicDisruptionSplit</span></code>:</p>
+<ul class="simple">
+<li><p>Mode 0: fixed <code class="docutils literal notranslate"><span class="pre">FractionDisruptedToICS</span></code>.</p></li>
+<li><p>Mode 1: mass-ratio split <code class="docutils literal notranslate"><span class="pre">f_ICS</span> <span class="pre">=</span> <span class="pre">1</span> <span class="pre">-</span> <span class="pre">(infallMvir_sat</span> <span class="pre">/</span> <span class="pre">Mhost)^DisruptionSplitAlpha</span></code>.</p></li>
+<li><p>Mode 2: as mode 1, with <code class="docutils literal notranslate"><span class="pre">alpha_eff</span> <span class="pre">=</span> <span class="pre">DisruptionSplitAlpha</span> <span class="pre">*</span> <span class="pre">DisruptionSplitCref</span> <span class="pre">/</span> <span class="pre">c_sat</span></code> so concentrated satellites resist stripping and deposit more onto the BCG.</p></li>
+</ul>
+<p>The remaining <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">-</span> <span class="pre">f_ICS</span></code> is added to the central’s <code class="docutils literal notranslate"><span class="pre">StellarMass</span></code>,
+<code class="docutils literal notranslate"><span class="pre">BulgeMass</span></code>, and <code class="docutils literal notranslate"><span class="pre">MergerBulgeMass</span></code> (BCG growth).</p>
+<p>When <code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span> <span class="pre">=</span> <span class="pre">1</span></code>, this event contributes:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ICS_disrupt</span> <span class="pre">+=</span> <span class="pre">new_ICS_from_stripping</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ICS_sum_mt</span> <span class="pre">+=</span> <span class="pre">new_ICS_from_stripping</span> <span class="pre">*</span> <span class="pre">time</span></code> (with <code class="docutils literal notranslate"><span class="pre">time</span></code> in code units, the substep midpoint)</p></li>
+</ul>
+</section>
+<section id="satellite-merger-transfer">
+<h3>3. Satellite merger transfer<a class="headerlink" href="#satellite-merger-transfer" title="Link to this heading"></a></h3>
+<p>When a satellite is merged (rather than disrupted) by
+<code class="docutils literal notranslate"><span class="pre">deal_with_galaxy_merger()</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">add_galaxies_together()</span></code>, any ICS the
+satellite already carried is added to the central:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">galaxies</span><span class="p">[</span><span class="n">t</span><span class="p">]</span><span class="o">.</span><span class="n">ICS</span>        <span class="o">+=</span> <span class="n">galaxies</span><span class="p">[</span><span class="n">p</span><span class="p">]</span><span class="o">.</span><span class="n">ICS</span><span class="p">;</span>
+<span class="n">galaxies</span><span class="p">[</span><span class="n">t</span><span class="p">]</span><span class="o">.</span><span class="n">MetalsICS</span>  <span class="o">+=</span> <span class="n">galaxies</span><span class="p">[</span><span class="n">p</span><span class="p">]</span><span class="o">.</span><span class="n">MetalsICS</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>This is bookkeeping rather than new ICS formation – the stars existed
+already; they just changed hosts.</p>
+</section>
+</section>
+<section id="how-to-compute-the-mean-ics-assembly-time">
+<h2>How to compute the mean ICS assembly time<a class="headerlink" href="#how-to-compute-the-mean-ics-assembly-time" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">ICS_sum_mt</span></code> is a mass-weighted sum: every time <code class="docutils literal notranslate"><span class="pre">delta_M</span></code> of stars is
+deposited at code time <code class="docutils literal notranslate"><span class="pre">t</span></code>, the accumulator gains <code class="docutils literal notranslate"><span class="pre">delta_M</span> <span class="pre">*</span> <span class="pre">t</span></code>. The
+mean deposition time is therefore:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">t_assembly</span><span class="o">&gt;</span> <span class="o">=</span> <span class="n">ICS_sum_mt</span> <span class="o">/</span> <span class="p">(</span><span class="n">ICS_disrupt</span> <span class="o">+</span> <span class="n">ICS_accrete</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To convert to lookback time, subtract from the host’s current snapshot
+age. SAGE26 does not store this derived quantity directly – compute it
+in post-processing from the three tracked fields.</p>
+<p>The denominator is the <em>cumulative deposited mass</em>, not the current
+<code class="docutils literal notranslate"><span class="pre">ICS</span></code>. The two can differ if stars merge into the BCG over time
+(consumed from the ICS reservoir but still counted in the assembly
+totals).</p>
+</section>
+<section id="ics-in-the-baryon-budget">
+<h2>ICS in the baryon budget<a class="headerlink" href="#ics-in-the-baryon-budget" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">ICS</span></code> participates in the baryon accounting in <code class="docutils literal notranslate"><span class="pre">infall_recipe()</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">infalling_mass</span> <span class="o">=</span> <span class="n">reionization_modifier</span> <span class="o">*</span> <span class="n">BaryonFrac</span> <span class="o">*</span> <span class="n">Mvir</span>
+               <span class="o">-</span> <span class="p">(</span><span class="n">StellarMass</span> <span class="o">+</span> <span class="n">ColdGas</span> <span class="o">+</span> <span class="n">HotGas</span> <span class="o">+</span> <span class="n">EjectedMass</span>
+                  <span class="o">+</span> <span class="n">BlackHoleMass</span> <span class="o">+</span> <span class="n">ICS</span> <span class="o">+</span> <span class="n">CGMgas</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>So ICS stars count toward the halo’s baryon budget for infall purposes –
+infalling gas is reduced by however much mass is already in the ICS
+reservoir, as it should be.</p>
+<p>ICS does <strong>not</strong> participate in cooling, star formation, or feedback –
+the stars are passive once deposited. No SFR is recorded for ICS, no
+SFH array is maintained, no metal production fires. If you need stellar
+ages for ICS, derive them in post-processing from the assembly history.</p>
+</section>
+<section id="type-0-vs-satellite-ics">
+<h2>Type-0 vs satellite ICS<a class="headerlink" href="#type-0-vs-satellite-ics" title="Link to this heading"></a></h2>
+<p>Strictly, only Type 0 (centrals) hold ICS. Satellites entering a halo
+that themselves were former centrals can carry ICS, but at every
+snapshot the FoF central absorbs all of it (see Pathway 1 above). So
+in any output snapshot you should typically see:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Type</span> <span class="pre">==</span> <span class="pre">0</span></code>: <code class="docutils literal notranslate"><span class="pre">ICS</span> <span class="pre">&gt;=</span> <span class="pre">0</span></code> (may be nonzero)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Type</span> <span class="pre">==</span> <span class="pre">1</span></code> or <code class="docutils literal notranslate"><span class="pre">2</span></code>: <code class="docutils literal notranslate"><span class="pre">ICS</span> <span class="pre">==</span> <span class="pre">0</span></code> (transferred to the central in the
+same snapshot it entered)</p></li>
+</ul>
+<p>If you find a satellite with nonzero <code class="docutils literal notranslate"><span class="pre">ICS</span></code> in the output, it’s the
+result of the satellite having just become a satellite this snapshot
+and the data being written before the next infall pass – not a bug,
+but worth knowing when computing population statistics.</p>
+</section>
+<section id="switches-and-parameters">
+<h2>Switches and parameters<a class="headerlink" href="#switches-and-parameters" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Effect</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span></code></p></td>
+<td><p>0 disables <code class="docutils literal notranslate"><span class="pre">ICS_disrupt</span></code> / <code class="docutils literal notranslate"><span class="pre">ICS_accrete</span></code> / <code class="docutils literal notranslate"><span class="pre">ICS_sum_mt</span></code> tracking; the <code class="docutils literal notranslate"><span class="pre">ICS</span></code> field itself is always tracked.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DynamicDisruptionSplit</span></code></p></td>
+<td><p>Controls the disruption split between ICS and BCG (see <a class="reference internal" href="mergers_and_disruptions.html"><span class="std std-doc">Mergers and disruption</span></a>).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FractionDisruptedToICS</span></code></p></td>
+<td><p>Fixed split fraction (mode 0) or fallback.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DisruptionSplitAlpha</span></code></p></td>
+<td><p>Exponent in the mass-ratio split (modes 1 and 2).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DisruptionSplitCref</span></code></p></td>
+<td><p>Reference concentration for mode 2.</p></td>
+</tr>
+</tbody>
+</table>
+<p>See <a class="reference internal" href="../parameters.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">parameters.md</span></code></span></a> for full descriptions and defaults.</p>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Murante et al. (2007), MNRAS 377, 2 – ICS as a distinct component
+growing primarily through satellite disruption.</p></li>
+<li><p>Conroy, Wechsler &amp; Kravtsov (2007), ApJ 668, 826 – BCG-vs-ICS
+partition during disruption.</p></li>
+<li><p>Pillepich et al. (2018), MNRAS 475, 648 – mass-ratio dependence of
+the disruption split.</p></li>
+<li><p>Contini et al. (2014), MNRAS 437, 3787 – semi-analytic ICS treatment
+underlying the SAGE26 implementation.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="mergers_and_disruptions.html" class="btn btn-neutral float-left" title="Mergers and Disruption" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../api.html" class="btn btn-neutral float-right" title="C API Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Michael Bradley, Darren Croton.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

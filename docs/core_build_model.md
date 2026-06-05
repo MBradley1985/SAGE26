@@ -35,33 +35,46 @@ substeps are mapped back into those bins via
 `step_bin = (step * STEPS) / effective_steps`, so the output schema is
 stable regardless of the integration cadence.
 
-## Order of operations within a substep
+## Order of operations
 
-The substep loop is the spine of the model. Steps 1-3 run once per snapshot,
-before the loop opens.
+`evolve_galaxies()` runs a few setup steps once per snapshot, then enters
+a substep loop that contains two inner per-galaxy loops.
+
+**Once per snapshot (before the substep loop):**
 
 | # | Step | Where |
 |---|------|-------|
 | 1 | Halo concentration (if `ConcentrationOn > 0`) | `get_halo_concentration()` |
 | 2 | CGM regime classification (if `CGMrecipeOn`) | `determine_and_store_regime()` |
 | 3 | FFB regime classification (if `FeedbackFreeModeOn`) | `determine_and_store_ffb_regime()` |
-| 4 | Compute total infalling gas for the snapshot | `infall_recipe()` |
-| 5 | Inject the per-substep share of infall into HotGas or CGMgas (central only) | `add_infall_to_hot()` |
-| 6 | Return ejected gas to hot reservoir on `t_dyn` (central only) | `reincorporate_gas()` |
-| 7 | Strip satellite hot gas to the central (Type 1 satellites only) | `strip_from_satellite()` |
-| 8 | Cool gas from the hot/CGM reservoir into cold gas | `cooling_recipe_regime_aware()` |
-| 9 | Form stars and apply SN + AGN feedback | `starformation_and_feedback()` |
-| 10 | Decrement `MergTime`; merge or disrupt flagged satellites | `deal_with_galaxy_merger()` / `disrupt_satellite_to_ICS()` |
+| 4 | Compute the total infalling gas for the snapshot interval | `infall_recipe()` |
+| 5 | Choose `effective_steps` (the adaptive sub-step count) | inline in `evolve_galaxies` |
 
-Steps 4-10 run on every substep. The infall total is divided by
-`effective_steps` and injected as `infallingGas / effective_steps` per pass.
+**Inner per-galaxy loop (each substep, every galaxy):**
+
+| # | Step | Where |
+|---|------|-------|
+| 6 | Central only: inject the per-substep share of infall into `HotGas` or `CGMgas` | `add_infall_to_hot()` |
+| 7 | Central only: return ejected gas to the hot reservoir (if `ReIncorporationFactor > 0`) | `reincorporate_gas()` |
+| 8 | Type 1 satellite with `HotGas > 0`: strip hot gas to the central | `strip_from_satellite()` |
+| 9 | Cool gas from the hot/CGM reservoir into `ColdGas` (regime-aware if `CGMrecipeOn`, else classical) | `cooling_recipe_regime_aware()` / `cooling_recipe()` |
+| 10 | Form stars and apply SN + AGN feedback (or FFB SF if flagged) | `starformation_and_feedback()` |
+
+**Inner satellite/merger loop (each substep, after the per-galaxy loop):**
+
+| # | Step | Where |
+|---|------|-------|
+| 11 | Decrement `MergTime`; if the satellite is past the disruption threshold, either disrupt (timer still running) or merge (timer elapsed) | `disrupt_satellite_to_ICS()` / `deal_with_galaxy_merger()` |
+
+The per-snapshot infall total is divided by `effective_steps` and injected
+as `infallingGas / effective_steps` per substep in step 6.
 
 Detailed treatment of each physics step lives in its own page:
 
-- Step 4-7: [Infall, reincorporation, stripping](physics/infall.md)
-- Step 8: [Cooling and AGN heating](physics/cooling_and_heating.md)
-- Step 9: [Star formation and feedback](physics/starformation_and_feedback.md)
-- Step 10: [Mergers and disruption](physics/mergers_and_disruptions.md)
+- Steps 4-8: [Infall, reincorporation, stripping](physics/infall.md)
+- Step 9: [Cooling and AGN heating](physics/cooling_and_heating.md)
+- Step 10: [Star formation and feedback](physics/starformation_and_feedback.md)
+- Step 11: [Mergers and disruption](physics/mergers_and_disruptions.md)
 
 ## Post-step bookkeeping
 
@@ -86,12 +99,14 @@ several decisions in the substep loop:
 | Step | Regime 0 (CGM) | Regime 1 (hot halo) |
 |------|----------------|---------------------|
 | Infall destination | `CGMgas` | `HotGas` |
-| Cooling recipe | `cooling_recipe_cgm()` | `cooling_recipe()` |
+| Cooling recipe | `cooling_recipe_cgm()` (primary) | `cooling_recipe_hot()` (primary) + `cooling_recipe_cgm()` for any residual `CGMgas` |
 | Density profile | `CGMDensityProfile` (uniform / NFW / beta) | isothermal |
-| AGN suppression mechanism | `CGMHeatingRheatOn` selector (off / `f_heat_cgm` decay / `r_heat` ratchet) | `r_heat` ratchet |
-| Precipitation threshold | `t_cool / t_ff` (Voit 2015) | Sutherland-Dopita cooling time |
+| AGN suppression mechanism | `CGMHeatingRheatOn` selector (off / `f_heat_cgm` decay / `r_heat` ratchet capped at R_vir) | `r_heat` ratchet (no R_vir cap) |
+| Precipitation criterion | `t_cool / t_ff` (Voit 2015) | none -- isothermal `r_cool` from Sutherland-Dopita cooling time |
 
-When `CGMrecipeOn = 0`, every galaxy uses the classical Regime 1 path
+When `CGMrecipeOn = 0`, `determine_and_store_regime()` is not called at
+all (the `Regime` field is left unset) and the substep loop dispatches
+cooling to `cooling_recipe()` -> `cooling_recipe_hot()` for every galaxy
 regardless of mass, recovering the original SAGE behaviour.
 
 ## Galaxy types
@@ -125,5 +140,7 @@ landmarks in `core_build_model.c`:
 - [Infall, reincorporation, stripping](physics/infall.md)
 - [Cooling and AGN heating](physics/cooling_and_heating.md)
 - [Star formation and feedback](physics/starformation_and_feedback.md)
+- [Disk instability](physics/disk_instability.md)
 - [Mergers and disruption](physics/mergers_and_disruptions.md)
+- [Intracluster stars (ICS)](physics/ics.md)
 - [Parameter reference](parameters.md)

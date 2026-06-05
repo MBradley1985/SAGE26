@@ -19,7 +19,7 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Mergers and Disruption" href="mergers_and_disruptions.html" />
+    <link rel="next" title="Disk Instability" href="disk_instability.html" />
     <link rel="prev" title="Cooling and AGN Heating" href="cooling_and_heating.html" /> 
 </head>
 
@@ -68,7 +68,9 @@
 <li class="toctree-l2"><a class="reference internal" href="#references">References</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="disk_instability.html">Disk Instability</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mergers_and_disruptions.html">Mergers and Disruption</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ics.html">Intracluster Stars (ICS)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -207,10 +209,30 @@ selected by <code class="docutils literal notranslate"><span class="pre">H2DiskA
 </tbody>
 </table>
 <p>The radial mode uses <code class="docutils literal notranslate"><span class="pre">H2RadialNBins</span></code> rings out to <code class="docutils literal notranslate"><span class="pre">H2RadialRMaxFactor</span> <span class="pre">*</span> <span class="pre">r_disk</span></code>.</p>
-<p>A fixed depletion time can override the per-prescription SFR efficiency:
-<code class="docutils literal notranslate"><span class="pre">H2SFRMode</span> <span class="pre">=</span> <span class="pre">1</span></code> switches every H2-based prescription to
-<code class="docutils literal notranslate"><span class="pre">SFR</span> <span class="pre">=</span> <span class="pre">H2gas</span> <span class="pre">/</span> <span class="pre">H2DepletionTime_Gyr</span></code>, useful for matching molecular gas
-observations directly.</p>
+<p>The per-prescription SFR can be overridden by <code class="docutils literal notranslate"><span class="pre">H2SFRMode</span></code> for H2-based
+prescriptions (applies to <code class="docutils literal notranslate"><span class="pre">SFprescription</span></code> 1, 3, 4, 5, 7 – not 0 and 2
+which have no H2, nor 6 which already uses K13 t_dep natively):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Effect</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>Use <code class="docutils literal notranslate"><span class="pre">SfrEfficiency</span></code> (default)</p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>Use a fixed depletion time: <code class="docutils literal notranslate"><span class="pre">SFR</span> <span class="pre">=</span> <span class="pre">H2gas</span> <span class="pre">/</span> <span class="pre">H2DepletionTime_Gyr</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>Use the K13 local depletion time computed from current Sigma_gas, Sigma_star, metallicity, and the base prescription’s local f_H2</p></td>
+</tr>
+</tbody>
+</table>
+<p>Mode 1 is useful for matching molecular gas observations directly. Mode 2
+gives every H2-based prescription a physically motivated, locally varying
+depletion time instead of a single value.</p>
 </section>
 <section id="supernova-feedback">
 <h2>Supernova feedback<a class="headerlink" href="#supernova-feedback" title="Link to this heading"></a></h2>
@@ -276,19 +298,42 @@ exhausted, all metals leave the disk.</p>
 </section>
 <section id="feedback-free-burst-mode-starformation-ffb">
 <h2>Feedback-free burst mode – <code class="docutils literal notranslate"><span class="pre">starformation_ffb()</span></code><a class="headerlink" href="#feedback-free-burst-mode-starformation-ffb" title="Link to this heading"></a></h2>
-<p>When the FFB regime classification flags a galaxy as bursty, it skips the
-standard feedback loop:</p>
+<p>When the FFB regime classification flags a galaxy as bursty, the SFR is
+set directly by the FFB efficiency rather than the usual Kauffmann
+threshold:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">SFR</span> <span class="o">=</span> <span class="n">FFBMaxEfficiency</span> <span class="o">*</span> <span class="n">gas_for_sf</span> <span class="o">/</span> <span class="n">t_dyn</span>
 </pre></div>
 </div>
-<p>with no SN reheating, no ejection, no metal routing to hot. This implements
-the Li et al. (2024) and Boylan-Kolchin (2025) feedback-free burst regime,
-where dense compact gas reservoirs reach <code class="docutils literal notranslate"><span class="pre">epsilon_FFB</span> <span class="pre">~</span> <span class="pre">0.2-1.0</span></code> because
-the SN energy escapes before it can disrupt star formation.</p>
+<p>The “feedback-free” label refers to the <strong>physical regime</strong>, not to the
+code path. The mechanism (Li+2024, Boylan-Kolchin+2025): in dense compact
+gas reservoirs the SN energy escapes the cloud before it can disrupt the
+burst, so the <em>star formation efficiency</em> reaches
+<code class="docutils literal notranslate"><span class="pre">epsilon_FFB</span> <span class="pre">~</span> <span class="pre">0.2-1.0</span></code> instead of the usual few percent. The code still
+bookkeeps the resulting SN feedback; it just does not let feedback
+throttle the SFR.</p>
+<p>Specifically, the only differences between <code class="docutils literal notranslate"><span class="pre">starformation_ffb()</span></code> and the
+standard <code class="docutils literal notranslate"><span class="pre">starformation_and_feedback()</span></code> path are:</p>
+<ol class="arabic simple">
+<li><p><strong>SFR formula:</strong> <code class="docutils literal notranslate"><span class="pre">epsilon_FFB</span> <span class="pre">*</span> <span class="pre">gas_for_sf</span> <span class="pre">/</span> <span class="pre">t_dyn</span></code> – no cold-gas
+threshold, no mediation by molecular fraction in <code class="docutils literal notranslate"><span class="pre">ColdGas</span></code> modes.</p></li>
+<li><p><strong>No disk-instability check</strong> after SF – rapid burst SF is assumed
+to stabilise the disk.</p></li>
+</ol>
+<p>Everything else still runs:</p>
+<ul class="simple">
+<li><p>SN reheating: <code class="docutils literal notranslate"><span class="pre">reheated_mass</span> <span class="pre">=</span> <span class="pre">FeedbackReheatingEpsilon</span> <span class="pre">*</span> <span class="pre">stars</span></code> (or
+the FIRE-scaled <code class="docutils literal notranslate"><span class="pre">eta_reheat</span> <span class="pre">*</span> <span class="pre">stars</span></code> when <code class="docutils literal notranslate"><span class="pre">FIREmodeOn</span> <span class="pre">=</span> <span class="pre">1</span></code>).</p></li>
+<li><p>SN ejection: the same energy-balance budget (Croton or FIRE form) as
+the main path.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">update_from_feedback()</span></code> transfers reheated and ejected mass with
+full regime-aware routing.</p></li>
+<li><p>Metal production and routing via the same Krumholz &amp; Dekel (2011)
+Eq. 22 factor, regime-aware to <code class="docutils literal notranslate"><span class="pre">MetalsCGMgas</span></code> or <code class="docutils literal notranslate"><span class="pre">MetalsHotGas</span></code>.</p></li>
+</ul>
 <p><code class="docutils literal notranslate"><span class="pre">gas_for_sf</span></code> is either the full <code class="docutils literal notranslate"><span class="pre">ColdGas</span></code> (modes 1-5) or the molecular
-fraction <code class="docutils literal notranslate"><span class="pre">H2gas</span></code> (modes 6-7). For H2 modes the H2 calculation is run inline
-using whichever underlying SFprescription (BR06, KD12, KMT09, K13, GD14)
-is set.</p>
+fraction <code class="docutils literal notranslate"><span class="pre">H2gas</span></code> (modes 6-7). For H2 modes the H2 calculation is run
+inline using whichever underlying SFprescription (BR06, KD12, KMT09,
+K13, GD14) is set.</p>
 <p>The seven sub-modes of <code class="docutils literal notranslate"><span class="pre">FeedbackFreeModeOn</span></code> (1-7) control which threshold
 classifies a galaxy as FFB-eligible (Li+2024 vs Boylan-Kolchin+2025, sigmoid
 vs sharp, concentration source). The classification itself lives in
@@ -302,8 +347,9 @@ vs sharp, concentration source). The classification itself lives in
 <code class="docutils literal notranslate"><span class="pre">model_mergers.c</span></code>. See <a class="reference internal" href="mergers_and_disruptions.html"><span class="std std-doc">Mergers and disruption</span></a>.</p></li>
 <li><p><strong>Radio-mode AGN.</strong> Handled in <code class="docutils literal notranslate"><span class="pre">model_cooling_heating.c</span></code>. See
 <a class="reference internal" href="cooling_and_heating.html"><span class="std std-doc">Cooling and AGN heating</span></a>.</p></li>
-<li><p><strong>Disk instability.</strong> Called from this module but implemented in
-<code class="docutils literal notranslate"><span class="pre">model_disk_instability.c</span></code>.</p></li>
+<li><p><strong>Disk instability.</strong> Called from this module (step 7 above) but
+implemented in <code class="docutils literal notranslate"><span class="pre">model_disk_instability.c</span></code>. See the dedicated
+<a class="reference internal" href="disk_instability.html"><span class="std std-doc">Disk instability</span></a> page.</p></li>
 </ul>
 </section>
 <section id="switches-and-parameters">
@@ -319,7 +365,7 @@ vs sharp, concentration source). The classification itself lives in
 <td><p>Select SF recipe (0-7).</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SfrEfficiency</span></code></p></td>
-<td><p>Efficiency factor in <code class="docutils literal notranslate"><span class="pre">epsilon</span> <span class="pre">*</span> <span class="pre">ColdGas</span> <span class="pre">/</span> <span class="pre">t_dyn</span></code> (most recipes).</p></td>
+<td><p>Efficiency factor in <code class="docutils literal notranslate"><span class="pre">epsilon</span> <span class="pre">*</span> <span class="pre">(Cold</span> <span class="pre">or</span> <span class="pre">H2)</span> <span class="pre">/</span> <span class="pre">t_dyn</span></code>. Used by SFprescription 0, 1, 4, 5, 7 always, and by 6 in slab mode only. Unused by 2 and 3 (Somerville+25) and by 6 in radial mode.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SupernovaRecipeOn</span></code></p></td>
 <td><p>0 disables SN feedback entirely.</p></td>
@@ -355,7 +401,7 @@ vs sharp, concentration source). The classification itself lives in
 <td><p>H2 surface-density geometry.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">H2SFRMode</span></code>, <code class="docutils literal notranslate"><span class="pre">H2DepletionTime_Gyr</span></code></p></td>
-<td><p>Override H2-based SFR with a fixed depletion time.</p></td>
+<td><p>Override H2-based SFR: 0 uses <code class="docutils literal notranslate"><span class="pre">SfrEfficiency</span></code>; 1 uses the fixed depletion time; 2 uses the K13 local depletion time.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DiskInstabilityOn</span></code></p></td>
 <td><p>Run the Toomre check after SF.</p></td>
@@ -392,7 +438,7 @@ scaling (Eq. 22).</p></li>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="cooling_and_heating.html" class="btn btn-neutral float-left" title="Cooling and AGN Heating" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="mergers_and_disruptions.html" class="btn btn-neutral float-right" title="Mergers and Disruption" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="disk_instability.html" class="btn btn-neutral float-right" title="Disk Instability" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

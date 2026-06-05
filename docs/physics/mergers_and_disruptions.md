@@ -57,7 +57,21 @@ merger-driven bulge channel.
 
 1. `add_galaxies_together()` -- transfers the satellite's gas, stars,
    metals, BH mass, and ICS into the central. Regime-aware for the gas
-   reservoirs (CGMgas vs HotGas).
+   reservoirs (CGMgas vs HotGas). The satellite's existing
+   `BulgeMass`, `MergerBulgeMass`, and `InstabilityBulgeMass` are added
+   to the central's like-for-like.
+
+   The satellite's **disk** mass (`StellarMass - BulgeMass`) is then
+   routed by the central's *post-add* morphology:
+   - Disk-dominated central (disk fraction > 0.5): the satellite's disk
+     mass joins `InstabilityBulgeMass` and `InstabilityBulgeRadius` is
+     updated via Tonini+2016 incremental evolution.
+   - Spheroid-dominated central: the satellite's disk mass joins
+     `MergerBulgeMass`.
+
+   Note this is independent of the burst-stars routing decided in
+   `deal_with_galaxy_merger()` (which uses the *pre-add* morphology
+   captured before this step runs).
 2. `grow_black_hole()` -- quasar-mode BH accretion if `AGNrecipeOn > 0`
    (see below).
 3. `collisional_starburst_recipe()` -- the merger-driven starburst (see
@@ -154,20 +168,30 @@ the displayed `BulgeRadius` is a mass-weighted average computed by
 (Tonini+2016 prescription, `BulgeSizeOn = 3`).
 
 Merger remnant radii are set via energy conservation
-(`calculate_merger_remnant_radius()` -- Covington+11):
+(`calculate_merger_remnant_radius()` -- Covington+11). The function uses
+baryonic mass (stellar + cold gas) and a mass-weighted half-mass radius
+for each progenitor (disk half-mass = 1.68 * `DiskScaleRadius`, bulge
+half-mass = `BulgeRadius`):
 
 ```
-1 / R_new = 1 / R_pair + C_rad * (m1 * m2) / (m_total^2 * (R1 + R2))
+E_init = M1^2 / R1 + M2^2 / R2                  (self-binding)
+E_orb  = M1 * M2 / (R1 + R2)                    (orbital interaction)
+E_rad  = C_rad * E_init * f_gas                 (radiative dissipation)
+R_final = (M1 + M2)^2 / (E_init + E_orb + E_rad)
 ```
 
-with `C_rad = 2.75`, where `R_pair` is the mass-weighted progenitor
-radius and the second term accounts for orbital energy dissipated during
-the encounter.
+with `C_rad = 2.75` from Covington+11 and
+`f_gas = (ColdGas_1 + ColdGas_2) / (M1 + M2)`. If the total energy comes
+out non-positive (very gas-rich pairs at the cap of `E_rad`), the
+function falls back to a mass-weighted average of the progenitor radii.
 
 ## Satellite disruption -- `disrupt_satellite_to_ICS()`
 
 When the satellite has reached the central before the merger clock runs
-out, it is disrupted instead of merged. The function:
+out, it is disrupted instead of merged. This is the primary formation
+channel for intracluster stars -- see the dedicated
+[Intracluster stars (ICS)](ics.md) page for the full lifecycle of the
+ICS reservoir. The function:
 
 1. **Transfers gas** to the central (regime-aware: total
    `ColdGas + HotGas + CGMgas` goes to the central's `CGMgas` if Regime 0
@@ -180,8 +204,12 @@ out, it is disrupted instead of merged. The function:
 | Value | Split | Formula |
 |-------|-------|---------|
 | 0 | Fixed | `f_ICS = FractionDisruptedToICS` |
-| 1 | Mass-ratio | `f_ICS = 1 - (Msub / Mhost)^DisruptionSplitAlpha` -- low mass-ratio satellites are stripped on wider orbits and contribute more to ICS |
+| 1 | Mass-ratio | `f_ICS = 1 - (infallMvir / Mhost)^DisruptionSplitAlpha` -- low mass-ratio satellites are stripped on wider orbits and contribute more to ICS. Uses the satellite's `infallMvir` (frozen at the time of infall), not its current `Mvir`. |
 | 2 | Mass-ratio with concentration weighting | as mode 1, but with `alpha_eff = DisruptionSplitAlpha * DisruptionSplitCref / c_sat` -- concentrated satellites resist stripping and deposit more onto the BCG |
+
+The `infallMvir / Mhost` ratio is clipped to 1.0. If either mass is
+zero or unknown, the function falls back to the fixed
+`FractionDisruptedToICS`.
 
 4. **Records assembly history** if `TrackICSAssembly = 1`:
    `ICS_disrupt` accumulates the satellite stellar mass newly disrupted
@@ -190,8 +218,11 @@ out, it is disrupted instead of merged. The function:
    the mean ICS-assembly time reflects when the stars were originally
    stripped, not when this packet transferred into the central.
 
-The satellite is then marked `mergeType = 3` (disrupted, not merged) and
-will be skipped on subsequent substeps.
+The satellite is then marked `mergeType = 4` (disrupted to ICS) and
+will be skipped on subsequent substeps. `mergeType` values defined in
+`core_allvars.h` are: 0 (still active / no event), 1 (minor merger),
+2 (major merger), 3 (reserved for disk instability; not currently set
+by any code path), 4 (disrupted to ICS).
 
 ## What is NOT in this module
 

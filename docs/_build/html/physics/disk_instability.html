@@ -1,0 +1,305 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Disk Instability &mdash; SAGE26 2026 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=fc6fd62b"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Mergers and Disruption" href="mergers_and_disruptions.html" />
+    <link rel="prev" title="Star Formation and Feedback" href="starformation_and_feedback.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            SAGE26
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../parameters.html">SAGE26 Parameter Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../core_build_model.html">Per-Halo Physics Loop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="infall.html">Infall, Reincorporation, and Stripping</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cooling_and_heating.html">Cooling and AGN Heating</a></li>
+<li class="toctree-l1"><a class="reference internal" href="starformation_and_feedback.html">Star Formation and Feedback</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Disk Instability</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#what-disk-instability-does">What disk instability does</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#splitting-the-unstable-mass">Splitting the unstable mass</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#where-the-unstable-stars-go">Where the unstable stars go</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#where-the-unstable-gas-goes">Where the unstable gas goes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#order-of-operations-and-bookkeeping">Order of operations and bookkeeping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#what-is-not-in-this-module">What is NOT in this module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#switches-and-parameters">Switches and parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#references">References</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mergers_and_disruptions.html">Mergers and Disruption</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ics.html">Intracluster Stars (ICS)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">C API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing to SAGE26</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SAGE26</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Disk Instability</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/physics/disk_instability.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="disk-instability">
+<h1>Disk Instability<a class="headerlink" href="#disk-instability" title="Link to this heading"></a></h1>
+<p>This page describes the Toomre disk-instability channel that grows the
+instability-driven bulge component and feeds the central black hole.</p>
+<p>Source: <a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/model_disk_instability.c"><code class="docutils literal notranslate"><span class="pre">src/model_disk_instability.c</span></code></a>
+(with the Tonini+2016 radius update in
+<a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/model_misc.c"><code class="docutils literal notranslate"><span class="pre">src/model_misc.c</span></code></a>)</p>
+<p>Called from: <code class="docutils literal notranslate"><span class="pre">starformation_and_feedback()</span></code> after star formation, when
+<code class="docutils literal notranslate"><span class="pre">DiskInstabilityOn</span> <span class="pre">=</span> <span class="pre">1</span></code>. Not run in the FFB path
+(<a class="reference internal" href="starformation_and_feedback.html"><span class="std std-doc">Star formation and feedback</span></a>).</p>
+<section id="what-disk-instability-does">
+<h2>What disk instability does<a class="headerlink" href="#what-disk-instability-does" title="Link to this heading"></a></h2>
+<p>After each star-formation event, the disk’s combined mass of cold gas and
+disk stars is compared against the Mo, Mao &amp; White (1998) Toomre critical
+mass:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">M_crit</span> <span class="o">=</span> <span class="n">V_max</span><span class="o">^</span><span class="mi">2</span> <span class="o">*</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">DiskScaleRadius</span> <span class="o">/</span> <span class="n">G</span>
+</pre></div>
+</div>
+<p>(the factor of 3 comes from the disk half-mass radius being ~1.68 r_s and
+the Mo-Mao-White stability analysis for an exponential disk; see
+<code class="docutils literal notranslate"><span class="pre">TOOMRE_DISK_FACTOR</span></code> in the source). If the disk mass exceeds <code class="docutils literal notranslate"><span class="pre">M_crit</span></code>,
+the excess is “unstable” and must be redistributed.</p>
+</section>
+<section id="splitting-the-unstable-mass">
+<h2>Splitting the unstable mass<a class="headerlink" href="#splitting-the-unstable-mass" title="Link to this heading"></a></h2>
+<p>The unstable excess is split between gas and stars in proportion to the
+current cold-gas fraction:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">gas_fraction</span>   <span class="o">=</span> <span class="n">ColdGas</span> <span class="o">/</span> <span class="n">disk_mass</span>
+<span class="n">unstable_gas</span>   <span class="o">=</span> <span class="n">gas_fraction</span>       <span class="o">*</span> <span class="p">(</span><span class="n">disk_mass</span> <span class="o">-</span> <span class="n">M_crit</span><span class="p">)</span>
+<span class="n">unstable_stars</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">gas_fraction</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">disk_mass</span> <span class="o">-</span> <span class="n">M_crit</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">disk_mass</span> <span class="pre">=</span> <span class="pre">ColdGas</span> <span class="pre">+</span> <span class="pre">(StellarMass</span> <span class="pre">-</span> <span class="pre">BulgeMass)</span></code>.</p>
+</section>
+<section id="where-the-unstable-stars-go">
+<h2>Where the unstable stars go<a class="headerlink" href="#where-the-unstable-stars-go" title="Link to this heading"></a></h2>
+<p>Unstable stars are transferred straight into the <strong>instability-driven
+bulge channel</strong>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">BulgeMass</span> <span class="pre">+=</span> <span class="pre">unstable_stars</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">InstabilityBulgeMass</span> <span class="pre">+=</span> <span class="pre">unstable_stars</span></code> (separate channel from
+merger-driven bulge growth – see
+<a class="reference internal" href="mergers_and_disruptions.html"><span class="std std-doc">Mergers and disruption</span></a>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MetalsBulgeMass</span></code> is updated with the disk-star metallicity</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">InstabilityBulgeRadius</span></code> is then updated via the Tonini+2016 incremental
+radius evolution (Eq. 15), using a snapshot of <code class="docutils literal notranslate"><span class="pre">DiskScaleRadius</span></code> taken
+<strong>before</strong> any mass transfer in this event:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">R_new</span> <span class="o">=</span> <span class="p">(</span><span class="n">R_old</span> <span class="o">*</span> <span class="n">M_old</span> <span class="o">+</span> <span class="n">delta_M</span> <span class="o">*</span> <span class="mf">0.2</span> <span class="o">*</span> <span class="n">R_disc</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">M_old</span> <span class="o">+</span> <span class="n">delta_M</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The 0.2 factor (<code class="docutils literal notranslate"><span class="pre">TONINI16_DISK_FRAC</span></code> in the source) is the fraction of the
+disk scale radius at which instability-driven bulge stars are deposited.
+On the first instability event when <code class="docutils literal notranslate"><span class="pre">M_old</span> <span class="pre">==</span> <span class="pre">0</span></code>, the radius is
+initialised directly as <code class="docutils literal notranslate"><span class="pre">0.2</span> <span class="pre">*</span> <span class="pre">R_disc</span></code>. This update only fires when
+<code class="docutils literal notranslate"><span class="pre">BulgeSizeOn</span> <span class="pre">=</span> <span class="pre">3</span></code> (Tonini mode); other bulge models leave
+<code class="docutils literal notranslate"><span class="pre">InstabilityBulgeRadius</span></code> unchanged.</p>
+<p>The disk scale radius itself is <strong>not changed</strong> by the instability: the
+remaining disk retains the same specific angular momentum per unit mass,
+so <code class="docutils literal notranslate"><span class="pre">DiskScaleRadius</span></code> stays constant.</p>
+</section>
+<section id="where-the-unstable-gas-goes">
+<h2>Where the unstable gas goes<a class="headerlink" href="#where-the-unstable-gas-goes" title="Link to this heading"></a></h2>
+<p>If there is unstable gas in the disk:</p>
+<ol class="arabic">
+<li><p><strong>Black hole accretion</strong> (if <code class="docutils literal notranslate"><span class="pre">AGNrecipeOn</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">grow_black_hole</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">unstable_gas_fraction</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>uses the same quasar-mode channel as mergers, with the unstable gas
+fraction playing the role of the merger mass ratio. This both grows
+the BH and triggers <code class="docutils literal notranslate"><span class="pre">quasar_mode_wind()</span></code> (see
+<a class="reference internal" href="mergers_and_disruptions.html"><span class="std std-doc">Mergers and disruption</span></a>).</p>
+</li>
+<li><p><strong>Collisional starburst</strong> (mode 1):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">collisional_starburst_recipe</span><span class="p">(</span><span class="n">unstable_gas_fraction</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">centralgal</span><span class="p">,</span>
+                             <span class="n">time</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">halonr</span><span class="p">,</span>
+                             <span class="o">/*</span><span class="n">mode</span><span class="o">=*/</span><span class="mi">1</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span>
+                             <span class="o">/*</span><span class="n">burst_to_merger_bulge</span><span class="o">=*/</span><span class="mi">0</span><span class="p">,</span>
+                             <span class="n">DiskScaleRadius</span><span class="p">,</span> <span class="n">galaxies</span><span class="p">,</span> <span class="n">run_params</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Mode 1 makes the burst efficiency <code class="docutils literal notranslate"><span class="pre">eburst</span> <span class="pre">=</span> <span class="pre">mass_ratio</span></code> (i.e. the
+entire unstable gas fraction is consumed) rather than the
+Cox-thesis power law used by mergers. The <code class="docutils literal notranslate"><span class="pre">burst_to_merger_bulge</span> <span class="pre">=</span> <span class="pre">0</span></code>
+flag routes burst stars into the instability bulge, consistent with
+the secular origin of the event.</p>
+</li>
+</ol>
+<p>The starburst itself applies SN feedback through the standard
+<code class="docutils literal notranslate"><span class="pre">update_from_feedback()</span></code> path, with FIRE scaling when <code class="docutils literal notranslate"><span class="pre">FIREmodeOn</span> <span class="pre">=</span> <span class="pre">1</span></code>.</p>
+</section>
+<section id="order-of-operations-and-bookkeeping">
+<h2>Order of operations and bookkeeping<a class="headerlink" href="#order-of-operations-and-bookkeeping" title="Link to this heading"></a></h2>
+<p>Inside the function the order matters because the bulge-radius update
+needs the pre-event disk radius:</p>
+<ol class="arabic simple">
+<li><p>Compute <code class="docutils literal notranslate"><span class="pre">M_crit</span></code> and clip if it exceeds the actual disk mass.</p></li>
+<li><p>Compute <code class="docutils literal notranslate"><span class="pre">unstable_gas</span></code> and <code class="docutils literal notranslate"><span class="pre">unstable_stars</span></code> from the gas fraction.</p></li>
+<li><p><strong>Save <code class="docutils literal notranslate"><span class="pre">old_disk_radius</span> <span class="pre">=</span> <span class="pre">DiskScaleRadius</span></code> before any mass transfers.</strong></p></li>
+<li><p>Transfer unstable stars to the bulge; call
+<code class="docutils literal notranslate"><span class="pre">update_instability_bulge_radius()</span></code> with <code class="docutils literal notranslate"><span class="pre">old_disk_radius</span></code>.</p></li>
+<li><p>Burst the unstable gas (BH growth + starburst).</p></li>
+</ol>
+<p>The “save disk radius first” step is the reason this function passes
+<code class="docutils literal notranslate"><span class="pre">old_disk_radius</span></code> explicitly into both helper paths rather than letting
+them read the live value.</p>
+</section>
+<section id="what-is-not-in-this-module">
+<h2>What is NOT in this module<a class="headerlink" href="#what-is-not-in-this-module" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Toomre Q itself.</strong> The criterion is implemented as a mass comparison
+against <code class="docutils literal notranslate"><span class="pre">M_crit</span></code>, not a stability parameter Q.</p></li>
+<li><p><strong>Pseudobulge classification.</strong> The instability bulge is treated as a
+classical bulge component for radius and ICS purposes.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">BulgeRadius</span></code> derivation.</strong> Done in <code class="docutils literal notranslate"><span class="pre">model_misc.c</span></code> via
+<code class="docutils literal notranslate"><span class="pre">get_bulge_radius()</span></code> as a mass-weighted combination of
+<code class="docutils literal notranslate"><span class="pre">InstabilityBulgeRadius</span></code> and <code class="docutils literal notranslate"><span class="pre">MergerBulgeRadius</span></code> (when <code class="docutils literal notranslate"><span class="pre">BulgeSizeOn</span> <span class="pre">=</span> <span class="pre">3</span></code>).</p></li>
+</ul>
+</section>
+<section id="switches-and-parameters">
+<h2>Switches and parameters<a class="headerlink" href="#switches-and-parameters" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Effect</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DiskInstabilityOn</span></code></p></td>
+<td><p>0 disables the entire channel.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">AGNrecipeOn</span></code></p></td>
+<td><p>0 skips the BH accretion step but still runs the gas burst.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">BulgeSizeOn</span></code></p></td>
+<td><p>Must be 3 (Tonini+2016 multi-channel) for the incremental <code class="docutils literal notranslate"><span class="pre">InstabilityBulgeRadius</span></code> update to fire.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FIREmodeOn</span></code></p></td>
+<td><p>Applies FIRE scaling to the burst SN feedback.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">StarburstColdGasOn</span></code></p></td>
+<td><p>Controls whether the burst uses stored <code class="docutils literal notranslate"><span class="pre">H2gas</span></code> or recomputes from <code class="docutils literal notranslate"><span class="pre">ColdGas</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">BlackHoleGrowthRate</span></code></p></td>
+<td><p>Scaling for <code class="docutils literal notranslate"><span class="pre">grow_black_hole()</span></code> accretion in the instability path.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">QuasarModeEfficiency</span></code></p></td>
+<td><p>Coupling between BH accretion and wind energy in <code class="docutils literal notranslate"><span class="pre">quasar_mode_wind()</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+<p>See <a class="reference internal" href="../parameters.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">parameters.md</span></code></span></a> for full descriptions and defaults.</p>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Mo, Mao &amp; White (1998), MNRAS 295, 319 – Toomre critical mass for an
+exponential disk; the form <code class="docutils literal notranslate"><span class="pre">M_crit</span> <span class="pre">=</span> <span class="pre">V_max^2</span> <span class="pre">*</span> <span class="pre">3</span> <span class="pre">R_d</span> <span class="pre">/</span> <span class="pre">G</span></code> used here.</p></li>
+<li><p>Toomre (1964), ApJ 139, 1217 – the underlying axisymmetric stability
+criterion for thin disks.</p></li>
+<li><p>Tonini et al. (2016), MNRAS 459, 4109 – two-channel bulge formation
+with separate radius evolution for instability- and merger-driven
+components (Eq. 15 used here).</p></li>
+<li><p>Croton et al. (2006), MNRAS 365, 11 – original SAGE disk-instability
+treatment.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="starformation_and_feedback.html" class="btn btn-neutral float-left" title="Star Formation and Feedback" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="mergers_and_disruptions.html" class="btn btn-neutral float-right" title="Mergers and Disruption" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Michael Bradley, Darren Croton.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

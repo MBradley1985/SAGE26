@@ -64,10 +64,19 @@ selected by `H2DiskAreaOption`:
 The radial mode uses `H2RadialNBins` rings out to `H2RadialRMaxFactor *
 r_disk`.
 
-A fixed depletion time can override the per-prescription SFR efficiency:
-`H2SFRMode = 1` switches every H2-based prescription to
-`SFR = H2gas / H2DepletionTime_Gyr`, useful for matching molecular gas
-observations directly.
+The per-prescription SFR can be overridden by `H2SFRMode` for H2-based
+prescriptions (applies to `SFprescription` 1, 3, 4, 5, 7 -- not 0 and 2
+which have no H2, nor 6 which already uses K13 t_dep natively):
+
+| Value | Effect |
+|-------|--------|
+| 0 | Use `SfrEfficiency` (default) |
+| 1 | Use a fixed depletion time: `SFR = H2gas / H2DepletionTime_Gyr` |
+| 2 | Use the K13 local depletion time computed from current Sigma_gas, Sigma_star, metallicity, and the base prescription's local f_H2 |
+
+Mode 1 is useful for matching molecular gas observations directly. Mode 2
+gives every H2-based prescription a physically motivated, locally varying
+depletion time instead of a single value.
 
 ## Supernova feedback
 
@@ -140,22 +149,45 @@ exhausted, all metals leave the disk.
 
 ## Feedback-free burst mode -- `starformation_ffb()`
 
-When the FFB regime classification flags a galaxy as bursty, it skips the
-standard feedback loop:
+When the FFB regime classification flags a galaxy as bursty, the SFR is
+set directly by the FFB efficiency rather than the usual Kauffmann
+threshold:
 
 ```
 SFR = FFBMaxEfficiency * gas_for_sf / t_dyn
 ```
 
-with no SN reheating, no ejection, no metal routing to hot. This implements
-the Li et al. (2024) and Boylan-Kolchin (2025) feedback-free burst regime,
-where dense compact gas reservoirs reach `epsilon_FFB ~ 0.2-1.0` because
-the SN energy escapes before it can disrupt star formation.
+The "feedback-free" label refers to the **physical regime**, not to the
+code path. The mechanism (Li+2024, Boylan-Kolchin+2025): in dense compact
+gas reservoirs the SN energy escapes the cloud before it can disrupt the
+burst, so the *star formation efficiency* reaches
+`epsilon_FFB ~ 0.2-1.0` instead of the usual few percent. The code still
+bookkeeps the resulting SN feedback; it just does not let feedback
+throttle the SFR.
+
+Specifically, the only differences between `starformation_ffb()` and the
+standard `starformation_and_feedback()` path are:
+
+1. **SFR formula:** `epsilon_FFB * gas_for_sf / t_dyn` -- no cold-gas
+   threshold, no mediation by molecular fraction in `ColdGas` modes.
+2. **No disk-instability check** after SF -- rapid burst SF is assumed
+   to stabilise the disk.
+
+Everything else still runs:
+
+- SN reheating: `reheated_mass = FeedbackReheatingEpsilon * stars` (or
+  the FIRE-scaled `eta_reheat * stars` when `FIREmodeOn = 1`).
+- SN ejection: the same energy-balance budget (Croton or FIRE form) as
+  the main path.
+- `update_from_feedback()` transfers reheated and ejected mass with
+  full regime-aware routing.
+- Metal production and routing via the same Krumholz & Dekel (2011)
+  Eq. 22 factor, regime-aware to `MetalsCGMgas` or `MetalsHotGas`.
 
 `gas_for_sf` is either the full `ColdGas` (modes 1-5) or the molecular
-fraction `H2gas` (modes 6-7). For H2 modes the H2 calculation is run inline
-using whichever underlying SFprescription (BR06, KD12, KMT09, K13, GD14)
-is set.
+fraction `H2gas` (modes 6-7). For H2 modes the H2 calculation is run
+inline using whichever underlying SFprescription (BR06, KD12, KMT09,
+K13, GD14) is set.
 
 The seven sub-modes of `FeedbackFreeModeOn` (1-7) control which threshold
 classifies a galaxy as FFB-eligible (Li+2024 vs Boylan-Kolchin+2025, sigmoid
@@ -169,15 +201,16 @@ vs sharp, concentration source). The classification itself lives in
   `model_mergers.c`. See [Mergers and disruption](mergers_and_disruptions.md).
 - **Radio-mode AGN.** Handled in `model_cooling_heating.c`. See
   [Cooling and AGN heating](cooling_and_heating.md).
-- **Disk instability.** Called from this module but implemented in
-  `model_disk_instability.c`.
+- **Disk instability.** Called from this module (step 7 above) but
+  implemented in `model_disk_instability.c`. See the dedicated
+  [Disk instability](disk_instability.md) page.
 
 ## Switches and parameters
 
 | Parameter | Effect |
 |-----------|--------|
 | `SFprescription` | Select SF recipe (0-7). |
-| `SfrEfficiency` | Efficiency factor in `epsilon * ColdGas / t_dyn` (most recipes). |
+| `SfrEfficiency` | Efficiency factor in `epsilon * (Cold or H2) / t_dyn`. Used by SFprescription 0, 1, 4, 5, 7 always, and by 6 in slab mode only. Unused by 2 and 3 (Somerville+25) and by 6 in radial mode. |
 | `SupernovaRecipeOn` | 0 disables SN feedback entirely. |
 | `FeedbackReheatingEpsilon` | Mass-loading scaling for the reheating term. |
 | `FeedbackEjectionEfficiency` | Fraction of SN energy that drives ejection. |
@@ -189,7 +222,7 @@ vs sharp, concentration source). The classification itself lives in
 | `FeedbackFreeModeOn` | FFB regime classification mode (0-7); 0 disables the FFB path. |
 | `FFBMaxEfficiency` | SF efficiency in FFB mode. |
 | `H2DiskAreaOption`, `H2RadialIntegrationOn`, `H2RadialNBins`, `H2RadialRMaxFactor` | H2 surface-density geometry. |
-| `H2SFRMode`, `H2DepletionTime_Gyr` | Override H2-based SFR with a fixed depletion time. |
+| `H2SFRMode`, `H2DepletionTime_Gyr` | Override H2-based SFR: 0 uses `SfrEfficiency`; 1 uses the fixed depletion time; 2 uses the K13 local depletion time. |
 | `DiskInstabilityOn` | Run the Toomre check after SF. |
 
 See [`parameters.md`](../parameters.md) for full descriptions and defaults.

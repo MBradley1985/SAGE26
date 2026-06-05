@@ -63,7 +63,9 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="cooling_and_heating.html">Cooling and AGN Heating</a></li>
 <li class="toctree-l1"><a class="reference internal" href="starformation_and_feedback.html">Star Formation and Feedback</a></li>
+<li class="toctree-l1"><a class="reference internal" href="disk_instability.html">Disk Instability</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mergers_and_disruptions.html">Mergers and Disruption</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ics.html">Intracluster Stars (ICS)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -202,8 +204,8 @@ the donor reservoir so that mass and metal accounting stay consistent.</p>
 <section id="reincorporate-gas-ejected-mass-returning-to-hot">
 <h2><code class="docutils literal notranslate"><span class="pre">reincorporate_gas()</span></code> – ejected mass returning to hot<a class="headerlink" href="#reincorporate-gas-ejected-mass-returning-to-hot" title="Link to this heading"></a></h2>
 <p>When supernova feedback ejects gas from the halo (into <code class="docutils literal notranslate"><span class="pre">EjectedMass</span></code>),
-some of it falls back over the dynamical time. SAGE26 uses the
-ReIncorporationFactor formulation from Henriques+13:</p>
+some of it falls back over the dynamical time. SAGE26 uses a
+velocity-thresholded recipe scaled by <code class="docutils literal notranslate"><span class="pre">ReIncorporationFactor</span></code>:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">reincorporated</span> <span class="o">=</span> <span class="p">(</span><span class="n">Vvir</span> <span class="o">/</span> <span class="n">Vcrit</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">EjectedMass</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="n">t_dyn</span>
 </pre></div>
 </div>
@@ -274,12 +276,12 @@ hot reservoir and are skipped.</p>
 <li><p>Kravtsov, Gnedin &amp; Klypin (2004), ApJ 609, 482 – Appendix B fitting
 formulae for the filtering mass.</p></li>
 <li><p>Bryan &amp; Norman (1998), ApJ 495, 80 – virial overdensity Delta_c(z).</p></li>
-<li><p>Henriques et al. (2013), MNRAS 431, 3373 – reincorporation formulation.</p></li>
-<li><p>Croton et al. (2006), MNRAS 365, 11 – original SAGE infall recipe and
-baryon budget.</p></li>
+<li><p>Croton et al. (2006), MNRAS 365, 11 – original SAGE infall recipe,
+baryon budget, and velocity-thresholded reincorporation.</p></li>
 <li><p>Dekel &amp; Birnboim (2006), MNRAS 368, 2 – M_shock criterion underlying
 regime classification.</p></li>
-<li><p>Voit (2015), ApJL 808, L30 – CGM precipitation framework.</p></li>
+<li><p>Voit (2015), ApJL 808, L30 – CGM precipitation framework that informs
+the regime-aware routing.</p></li>
 </ul>
 </section>
 </section>

@@ -70,7 +70,7 @@ optional parameters take the listed default if omitted.
 | `ConcentrationOn` | int | no | `3` | Halo concentration method: 0=off; 1=Ishiyama+21 table; 2=V_max/V_vir; 3=V_max/V_vir with infall freeze for satellites. |
 | `BulgeSizeOn` | int | no | `3` | Bulge radius model: 0=off; 1=Shen+2003 eq.33; 2=Shen+2003 eq.32; 3=Tonini+2016 (separate merger and instability channels, mass-weighted average). |
 | `StarburstColdGasOn` | 0/1 | no | `1` | Include cold gas contribution during merger starbursts. |
-| `DynamicDisruptionSplit` | int | no | `2` | Route disrupted satellite mass: 0=all to ICS; 1=all to hot gas; 2=split by `FractionDisruptedToICS`. |
+| `DynamicDisruptionSplit` | int | no | `2` | ICS-vs-BCG split for disrupted satellite stellar mass: 0=fixed fraction `FractionDisruptedToICS`; 1=mass-ratio split `f_ICS = 1 - (infallMvir / Mhost)^DisruptionSplitAlpha`; 2=mass-ratio split with concentration weighting (`alpha_eff = DisruptionSplitAlpha * DisruptionSplitCref / c_sat`). |
 
 ---
 
@@ -106,7 +106,7 @@ optional parameters take the listed default if omitted.
 | `H2RadialIntegrationOn` | 0/1 | no | `1` | Use radial ring integration for H₂ fraction (more accurate, slower). |
 | `H2RadialNBins` | int | no | `25` | Number of radial bins for the ring integration. |
 | `H2RadialRMaxFactor` | double | no | `5.0` | Outer integration radius as a multiple of the disk scale radius. |
-| `H2SFRMode` | int | no | `0` | Override SF efficiency with a fixed depletion time: 0=use SfrEfficiency; 1=use H2DepletionTime_Gyr. |
+| `H2SFRMode` | int | no | `0` | Override H2-based SF rate: 0=use `SfrEfficiency`; 1=use the fixed `H2DepletionTime_Gyr`; 2=use the K13 local depletion time. Only applied for SFprescription 1, 3, 4, 5, 7 (not 0/2 which have no H2, not 6 which already uses K13). |
 | `H2DepletionTime_Gyr` | double | no | `2.0` | Fixed molecular gas depletion time in Gyr (used when H2SFRMode=1). |
 
 ---
@@ -117,7 +117,7 @@ optional parameters take the listed default if omitted.
 
 | Parameter | Units | Default | Description |
 |-----------|-------|---------|-------------|
-| `SfrEfficiency` | dimensionless | `0.05` | Cold gas consumption efficiency per dynamical time (SFprescription 0,1,2,3,4,5,7). Unused for SFprescription=6. |
+| `SfrEfficiency` | dimensionless | `0.05` | Cold/H2 gas consumption efficiency per dynamical time. Used by SFprescription 0, 1, 4, 5, 7 unconditionally, and by 6 (K13) only in the single-slab path (`H2RadialIntegrationOn=0`). Unused by 2 and 3 (Somerville+25 use their own density-modulated `epsilon_cl`) and by 6 in the radial path (uses the K13 local depletion time natively). |
 | `RecycleFraction` | dimensionless | `0.43` | Fraction of stellar mass instantaneously recycled to cold gas. |
 | `Yield` | dimensionless | `0.025` | Fraction of stellar mass returned as metals. |
 | `FracZleaveDisk` | dimensionless | `0.0` | Fraction of newly produced metals transferred directly to hot gas. |
@@ -145,7 +145,7 @@ optional parameters take the listed default if omitted.
 |-----------|-------|---------|-------------|
 | `ThreshMajorMerger` | dimensionless | `0.3` | Mass ratio above which a merger is classified as major. |
 | `ThresholdSatDisruption` | dimensionless | `1.0` | M_vir-to-baryonic mass ratio below which a satellite is disrupted rather than merged. |
-| `FractionDisruptedToICS` | dimensionless | `0.8` | Fraction of disrupted satellite mass that goes to ICS (vs. hot gas). Active when DynamicDisruptionSplit=2. |
+| `FractionDisruptedToICS` | dimensionless | `0.8` | Fixed fraction of disrupted satellite stellar mass that goes to ICS (vs. central BCG). Used when `DynamicDisruptionSplit=0`, and as the fallback when modes 1/2 cannot compute a mass ratio. |
 | `DisruptionSplitAlpha` | dimensionless | `0.25` | Power-law exponent for the mass-dependent disruption split. |
 | `DisruptionSplitCref` | dimensionless | `10.0` | Reference concentration for the disruption split. |
 
