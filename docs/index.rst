@@ -23,7 +23,9 @@ Source code and issue tracker: https://github.com/MBradley1985/SAGE26
    physics/infall
    physics/cooling_and_heating
    physics/starformation_and_feedback
+   physics/disk_instability
    physics/mergers_and_disruptions
+   physics/ics
 
 .. toctree::
    :maxdepth: 2

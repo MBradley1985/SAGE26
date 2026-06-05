@@ -19,8 +19,8 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="C API Reference" href="../api.html" />
-    <link rel="prev" title="Star Formation and Feedback" href="starformation_and_feedback.html" /> 
+    <link rel="next" title="Intracluster Stars (ICS)" href="ics.html" />
+    <link rel="prev" title="Disk Instability" href="disk_instability.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -53,6 +53,7 @@
 <li class="toctree-l1"><a class="reference internal" href="infall.html">Infall, Reincorporation, and Stripping</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cooling_and_heating.html">Cooling and AGN Heating</a></li>
 <li class="toctree-l1"><a class="reference internal" href="starformation_and_feedback.html">Star Formation and Feedback</a></li>
+<li class="toctree-l1"><a class="reference internal" href="disk_instability.html">Disk Instability</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Mergers and Disruption</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#when-this-step-fires">When this step fires</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#deal-with-galaxy-merger-the-merger-dispatcher"><code class="docutils literal notranslate"><span class="pre">deal_with_galaxy_merger()</span></code> – the merger dispatcher</a><ul>
@@ -71,6 +72,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#references">References</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="ics.html">Intracluster Stars (ICS)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -172,10 +174,25 @@ Croton+06 merger model – minor mergers onto disks no longer pollute the
 merger-driven bulge channel.</p>
 <section id="step-by-step-execution">
 <h3>Step-by-step execution<a class="headerlink" href="#step-by-step-execution" title="Link to this heading"></a></h3>
-<ol class="arabic simple">
+<ol class="arabic">
 <li><p><code class="docutils literal notranslate"><span class="pre">add_galaxies_together()</span></code> – transfers the satellite’s gas, stars,
 metals, BH mass, and ICS into the central. Regime-aware for the gas
-reservoirs (CGMgas vs HotGas).</p></li>
+reservoirs (CGMgas vs HotGas). The satellite’s existing
+<code class="docutils literal notranslate"><span class="pre">BulgeMass</span></code>, <code class="docutils literal notranslate"><span class="pre">MergerBulgeMass</span></code>, and <code class="docutils literal notranslate"><span class="pre">InstabilityBulgeMass</span></code> are added
+to the central’s like-for-like.</p>
+<p>The satellite’s <strong>disk</strong> mass (<code class="docutils literal notranslate"><span class="pre">StellarMass</span> <span class="pre">-</span> <span class="pre">BulgeMass</span></code>) is then
+routed by the central’s <em>post-add</em> morphology:</p>
+<ul class="simple">
+<li><p>Disk-dominated central (disk fraction &gt; 0.5): the satellite’s disk
+mass joins <code class="docutils literal notranslate"><span class="pre">InstabilityBulgeMass</span></code> and <code class="docutils literal notranslate"><span class="pre">InstabilityBulgeRadius</span></code> is
+updated via Tonini+2016 incremental evolution.</p></li>
+<li><p>Spheroid-dominated central: the satellite’s disk mass joins
+<code class="docutils literal notranslate"><span class="pre">MergerBulgeMass</span></code>.</p></li>
+</ul>
+<p>Note this is independent of the burst-stars routing decided in
+<code class="docutils literal notranslate"><span class="pre">deal_with_galaxy_merger()</span></code> (which uses the <em>pre-add</em> morphology
+captured before this step runs).</p>
+</li>
 <li><p><code class="docutils literal notranslate"><span class="pre">grow_black_hole()</span></code> – quasar-mode BH accretion if <code class="docutils literal notranslate"><span class="pre">AGNrecipeOn</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>
 (see below).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">collisional_starburst_recipe()</span></code> – the merger-driven starburst (see
@@ -280,18 +297,28 @@ the displayed <code class="docutils literal notranslate"><span class="pre">Bulge
 <code class="docutils literal notranslate"><span class="pre">get_bulge_radius()</span></code> in <a class="reference external" href="https://github.com/MBradley1985/SAGE26/blob/main/src/model_misc.c"><code class="docutils literal notranslate"><span class="pre">model_misc.c</span></code></a>
 (Tonini+2016 prescription, <code class="docutils literal notranslate"><span class="pre">BulgeSizeOn</span> <span class="pre">=</span> <span class="pre">3</span></code>).</p>
 <p>Merger remnant radii are set via energy conservation
-(<code class="docutils literal notranslate"><span class="pre">calculate_merger_remnant_radius()</span></code> – Covington+11):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="mi">1</span> <span class="o">/</span> <span class="n">R_new</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">R_pair</span> <span class="o">+</span> <span class="n">C_rad</span> <span class="o">*</span> <span class="p">(</span><span class="n">m1</span> <span class="o">*</span> <span class="n">m2</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">m_total</span><span class="o">^</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="n">R1</span> <span class="o">+</span> <span class="n">R2</span><span class="p">))</span>
+(<code class="docutils literal notranslate"><span class="pre">calculate_merger_remnant_radius()</span></code> – Covington+11). The function uses
+baryonic mass (stellar + cold gas) and a mass-weighted half-mass radius
+for each progenitor (disk half-mass = 1.68 * <code class="docutils literal notranslate"><span class="pre">DiskScaleRadius</span></code>, bulge
+half-mass = <code class="docutils literal notranslate"><span class="pre">BulgeRadius</span></code>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">E_init</span> <span class="o">=</span> <span class="n">M1</span><span class="o">^</span><span class="mi">2</span> <span class="o">/</span> <span class="n">R1</span> <span class="o">+</span> <span class="n">M2</span><span class="o">^</span><span class="mi">2</span> <span class="o">/</span> <span class="n">R2</span>                  <span class="p">(</span><span class="bp">self</span><span class="o">-</span><span class="n">binding</span><span class="p">)</span>
+<span class="n">E_orb</span>  <span class="o">=</span> <span class="n">M1</span> <span class="o">*</span> <span class="n">M2</span> <span class="o">/</span> <span class="p">(</span><span class="n">R1</span> <span class="o">+</span> <span class="n">R2</span><span class="p">)</span>                    <span class="p">(</span><span class="n">orbital</span> <span class="n">interaction</span><span class="p">)</span>
+<span class="n">E_rad</span>  <span class="o">=</span> <span class="n">C_rad</span> <span class="o">*</span> <span class="n">E_init</span> <span class="o">*</span> <span class="n">f_gas</span>                 <span class="p">(</span><span class="n">radiative</span> <span class="n">dissipation</span><span class="p">)</span>
+<span class="n">R_final</span> <span class="o">=</span> <span class="p">(</span><span class="n">M1</span> <span class="o">+</span> <span class="n">M2</span><span class="p">)</span><span class="o">^</span><span class="mi">2</span> <span class="o">/</span> <span class="p">(</span><span class="n">E_init</span> <span class="o">+</span> <span class="n">E_orb</span> <span class="o">+</span> <span class="n">E_rad</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>with <code class="docutils literal notranslate"><span class="pre">C_rad</span> <span class="pre">=</span> <span class="pre">2.75</span></code>, where <code class="docutils literal notranslate"><span class="pre">R_pair</span></code> is the mass-weighted progenitor
-radius and the second term accounts for orbital energy dissipated during
-the encounter.</p>
+<p>with <code class="docutils literal notranslate"><span class="pre">C_rad</span> <span class="pre">=</span> <span class="pre">2.75</span></code> from Covington+11 and
+<code class="docutils literal notranslate"><span class="pre">f_gas</span> <span class="pre">=</span> <span class="pre">(ColdGas_1</span> <span class="pre">+</span> <span class="pre">ColdGas_2)</span> <span class="pre">/</span> <span class="pre">(M1</span> <span class="pre">+</span> <span class="pre">M2)</span></code>. If the total energy comes
+out non-positive (very gas-rich pairs at the cap of <code class="docutils literal notranslate"><span class="pre">E_rad</span></code>), the
+function falls back to a mass-weighted average of the progenitor radii.</p>
 </section>
 <section id="satellite-disruption-disrupt-satellite-to-ics">
 <h2>Satellite disruption – <code class="docutils literal notranslate"><span class="pre">disrupt_satellite_to_ICS()</span></code><a class="headerlink" href="#satellite-disruption-disrupt-satellite-to-ics" title="Link to this heading"></a></h2>
 <p>When the satellite has reached the central before the merger clock runs
-out, it is disrupted instead of merged. The function:</p>
+out, it is disrupted instead of merged. This is the primary formation
+channel for intracluster stars – see the dedicated
+<a class="reference internal" href="ics.html"><span class="std std-doc">Intracluster stars (ICS)</span></a> page for the full lifecycle of the
+ICS reservoir. The function:</p>
 <ol class="arabic simple">
 <li><p><strong>Transfers gas</strong> to the central (regime-aware: total
 <code class="docutils literal notranslate"><span class="pre">ColdGas</span> <span class="pre">+</span> <span class="pre">HotGas</span> <span class="pre">+</span> <span class="pre">CGMgas</span></code> goes to the central’s <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code> if Regime 0
@@ -315,7 +342,7 @@ split is controlled by <code class="docutils literal notranslate"><span class="p
 </tr>
 <tr class="row-odd"><td><p>1</p></td>
 <td><p>Mass-ratio</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">f_ICS</span> <span class="pre">=</span> <span class="pre">1</span> <span class="pre">-</span> <span class="pre">(Msub</span> <span class="pre">/</span> <span class="pre">Mhost)^DisruptionSplitAlpha</span></code> – low mass-ratio satellites are stripped on wider orbits and contribute more to ICS</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">f_ICS</span> <span class="pre">=</span> <span class="pre">1</span> <span class="pre">-</span> <span class="pre">(infallMvir</span> <span class="pre">/</span> <span class="pre">Mhost)^DisruptionSplitAlpha</span></code> – low mass-ratio satellites are stripped on wider orbits and contribute more to ICS. Uses the satellite’s <code class="docutils literal notranslate"><span class="pre">infallMvir</span></code> (frozen at the time of infall), not its current <code class="docutils literal notranslate"><span class="pre">Mvir</span></code>.</p></td>
 </tr>
 <tr class="row-even"><td><p>2</p></td>
 <td><p>Mass-ratio with concentration weighting</p></td>
@@ -323,6 +350,9 @@ split is controlled by <code class="docutils literal notranslate"><span class="p
 </tr>
 </tbody>
 </table>
+<p>The <code class="docutils literal notranslate"><span class="pre">infallMvir</span> <span class="pre">/</span> <span class="pre">Mhost</span></code> ratio is clipped to 1.0. If either mass is
+zero or unknown, the function falls back to the fixed
+<code class="docutils literal notranslate"><span class="pre">FractionDisruptedToICS</span></code>.</p>
 <ol class="arabic simple" start="4">
 <li><p><strong>Records assembly history</strong> if <code class="docutils literal notranslate"><span class="pre">TrackICSAssembly</span> <span class="pre">=</span> <span class="pre">1</span></code>:
 <code class="docutils literal notranslate"><span class="pre">ICS_disrupt</span></code> accumulates the satellite stellar mass newly disrupted
@@ -331,8 +361,11 @@ carried in. <code class="docutils literal notranslate"><span class="pre">ICS_sum
 the mean ICS-assembly time reflects when the stars were originally
 stripped, not when this packet transferred into the central.</p></li>
 </ol>
-<p>The satellite is then marked <code class="docutils literal notranslate"><span class="pre">mergeType</span> <span class="pre">=</span> <span class="pre">3</span></code> (disrupted, not merged) and
-will be skipped on subsequent substeps.</p>
+<p>The satellite is then marked <code class="docutils literal notranslate"><span class="pre">mergeType</span> <span class="pre">=</span> <span class="pre">4</span></code> (disrupted to ICS) and
+will be skipped on subsequent substeps. <code class="docutils literal notranslate"><span class="pre">mergeType</span></code> values defined in
+<code class="docutils literal notranslate"><span class="pre">core_allvars.h</span></code> are: 0 (still active / no event), 1 (minor merger),
+2 (major merger), 3 (reserved for disk instability; not currently set
+by any code path), 4 (disrupted to ICS).</p>
 </section>
 <section id="what-is-not-in-this-module">
 <h2>What is NOT in this module<a class="headerlink" href="#what-is-not-in-this-module" title="Link to this heading"></a></h2>
@@ -423,8 +456,8 @@ prescriptions.</p></li>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="starformation_and_feedback.html" class="btn btn-neutral float-left" title="Star Formation and Feedback" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="../api.html" class="btn btn-neutral float-right" title="C API Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="disk_instability.html" class="btn btn-neutral float-left" title="Disk Instability" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="ics.html" class="btn btn-neutral float-right" title="Intracluster Stars (ICS)" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

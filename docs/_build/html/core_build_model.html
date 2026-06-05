@@ -52,7 +52,7 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Per-Halo Physics Loop</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#in-one-paragraph">In one paragraph</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#sub-stepping">Sub-stepping</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#order-of-operations-within-a-substep">Order of operations within a substep</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#order-of-operations">Order of operations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#post-step-bookkeeping">Post-step bookkeeping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#the-two-regime-split-as-a-code-path-map">The two-regime split as a code path map</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#galaxy-types">Galaxy types</a></li>
@@ -63,7 +63,9 @@
 <li class="toctree-l1"><a class="reference internal" href="physics/infall.html">Infall, Reincorporation, and Stripping</a></li>
 <li class="toctree-l1"><a class="reference internal" href="physics/cooling_and_heating.html">Cooling and AGN Heating</a></li>
 <li class="toctree-l1"><a class="reference internal" href="physics/starformation_and_feedback.html">Star Formation and Feedback</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/disk_instability.html">Disk Instability</a></li>
 <li class="toctree-l1"><a class="reference internal" href="physics/mergers_and_disruptions.html">Mergers and Disruption</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/ics.html">Intracluster Stars (ICS)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -132,10 +134,11 @@ substeps are mapped back into those bins via
 <code class="docutils literal notranslate"><span class="pre">step_bin</span> <span class="pre">=</span> <span class="pre">(step</span> <span class="pre">*</span> <span class="pre">STEPS)</span> <span class="pre">/</span> <span class="pre">effective_steps</span></code>, so the output schema is
 stable regardless of the integration cadence.</p>
 </section>
-<section id="order-of-operations-within-a-substep">
-<h2>Order of operations within a substep<a class="headerlink" href="#order-of-operations-within-a-substep" title="Link to this heading"></a></h2>
-<p>The substep loop is the spine of the model. Steps 1-3 run once per snapshot,
-before the loop opens.</p>
+<section id="order-of-operations">
+<h2>Order of operations<a class="headerlink" href="#order-of-operations" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">evolve_galaxies()</span></code> runs a few setup steps once per snapshot, then enters
+a substep loop that contains two inner per-galaxy loops.</p>
+<p><strong>Once per snapshot (before the substep loop):</strong></p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>#</p></th>
@@ -157,43 +160,69 @@ before the loop opens.</p>
 <td><p><code class="docutils literal notranslate"><span class="pre">determine_and_store_ffb_regime()</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p>4</p></td>
-<td><p>Compute total infalling gas for the snapshot</p></td>
+<td><p>Compute the total infalling gas for the snapshot interval</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">infall_recipe()</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p>5</p></td>
-<td><p>Inject the per-substep share of infall into HotGas or CGMgas (central only)</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">add_infall_to_hot()</span></code></p></td>
-</tr>
-<tr class="row-odd"><td><p>6</p></td>
-<td><p>Return ejected gas to hot reservoir on <code class="docutils literal notranslate"><span class="pre">t_dyn</span></code> (central only)</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">reincorporate_gas()</span></code></p></td>
-</tr>
-<tr class="row-even"><td><p>7</p></td>
-<td><p>Strip satellite hot gas to the central (Type 1 satellites only)</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">strip_from_satellite()</span></code></p></td>
-</tr>
-<tr class="row-odd"><td><p>8</p></td>
-<td><p>Cool gas from the hot/CGM reservoir into cold gas</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">cooling_recipe_regime_aware()</span></code></p></td>
-</tr>
-<tr class="row-even"><td><p>9</p></td>
-<td><p>Form stars and apply SN + AGN feedback</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">starformation_and_feedback()</span></code></p></td>
-</tr>
-<tr class="row-odd"><td><p>10</p></td>
-<td><p>Decrement <code class="docutils literal notranslate"><span class="pre">MergTime</span></code>; merge or disrupt flagged satellites</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">deal_with_galaxy_merger()</span></code> / <code class="docutils literal notranslate"><span class="pre">disrupt_satellite_to_ICS()</span></code></p></td>
+<td><p>Choose <code class="docutils literal notranslate"><span class="pre">effective_steps</span></code> (the adaptive sub-step count)</p></td>
+<td><p>inline in <code class="docutils literal notranslate"><span class="pre">evolve_galaxies</span></code></p></td>
 </tr>
 </tbody>
 </table>
-<p>Steps 4-10 run on every substep. The infall total is divided by
-<code class="docutils literal notranslate"><span class="pre">effective_steps</span></code> and injected as <code class="docutils literal notranslate"><span class="pre">infallingGas</span> <span class="pre">/</span> <span class="pre">effective_steps</span></code> per pass.</p>
+<p><strong>Inner per-galaxy loop (each substep, every galaxy):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Step</p></th>
+<th class="head"><p>Where</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>6</p></td>
+<td><p>Central only: inject the per-substep share of infall into <code class="docutils literal notranslate"><span class="pre">HotGas</span></code> or <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">add_infall_to_hot()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>7</p></td>
+<td><p>Central only: return ejected gas to the hot reservoir (if <code class="docutils literal notranslate"><span class="pre">ReIncorporationFactor</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">reincorporate_gas()</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>8</p></td>
+<td><p>Type 1 satellite with <code class="docutils literal notranslate"><span class="pre">HotGas</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>: strip hot gas to the central</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">strip_from_satellite()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>9</p></td>
+<td><p>Cool gas from the hot/CGM reservoir into <code class="docutils literal notranslate"><span class="pre">ColdGas</span></code> (regime-aware if <code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span></code>, else classical)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cooling_recipe_regime_aware()</span></code> / <code class="docutils literal notranslate"><span class="pre">cooling_recipe()</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>10</p></td>
+<td><p>Form stars and apply SN + AGN feedback (or FFB SF if flagged)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">starformation_and_feedback()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Inner satellite/merger loop (each substep, after the per-galaxy loop):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Step</p></th>
+<th class="head"><p>Where</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>11</p></td>
+<td><p>Decrement <code class="docutils literal notranslate"><span class="pre">MergTime</span></code>; if the satellite is past the disruption threshold, either disrupt (timer still running) or merge (timer elapsed)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">disrupt_satellite_to_ICS()</span></code> / <code class="docutils literal notranslate"><span class="pre">deal_with_galaxy_merger()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>The per-snapshot infall total is divided by <code class="docutils literal notranslate"><span class="pre">effective_steps</span></code> and injected
+as <code class="docutils literal notranslate"><span class="pre">infallingGas</span> <span class="pre">/</span> <span class="pre">effective_steps</span></code> per substep in step 6.</p>
 <p>Detailed treatment of each physics step lives in its own page:</p>
 <ul class="simple">
-<li><p>Step 4-7: <a class="reference internal" href="physics/infall.html"><span class="std std-doc">Infall, reincorporation, stripping</span></a></p></li>
-<li><p>Step 8: <a class="reference internal" href="physics/cooling_and_heating.html"><span class="std std-doc">Cooling and AGN heating</span></a></p></li>
-<li><p>Step 9: <a class="reference internal" href="physics/starformation_and_feedback.html"><span class="std std-doc">Star formation and feedback</span></a></p></li>
-<li><p>Step 10: <a class="reference internal" href="physics/mergers_and_disruptions.html"><span class="std std-doc">Mergers and disruption</span></a></p></li>
+<li><p>Steps 4-8: <a class="reference internal" href="physics/infall.html"><span class="std std-doc">Infall, reincorporation, stripping</span></a></p></li>
+<li><p>Step 9: <a class="reference internal" href="physics/cooling_and_heating.html"><span class="std std-doc">Cooling and AGN heating</span></a></p></li>
+<li><p>Step 10: <a class="reference internal" href="physics/starformation_and_feedback.html"><span class="std std-doc">Star formation and feedback</span></a></p></li>
+<li><p>Step 11: <a class="reference internal" href="physics/mergers_and_disruptions.html"><span class="std std-doc">Mergers and disruption</span></a></p></li>
 </ul>
 </section>
 <section id="post-step-bookkeeping">
@@ -229,24 +258,26 @@ several decisions in the substep loop:</p>
 <td><p><code class="docutils literal notranslate"><span class="pre">HotGas</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p>Cooling recipe</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">cooling_recipe_cgm()</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">cooling_recipe()</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cooling_recipe_cgm()</span></code> (primary)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cooling_recipe_hot()</span></code> (primary) + <code class="docutils literal notranslate"><span class="pre">cooling_recipe_cgm()</span></code> for any residual <code class="docutils literal notranslate"><span class="pre">CGMgas</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p>Density profile</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">CGMDensityProfile</span></code> (uniform / NFW / beta)</p></td>
 <td><p>isothermal</p></td>
 </tr>
 <tr class="row-odd"><td><p>AGN suppression mechanism</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">CGMHeatingRheatOn</span></code> selector (off / <code class="docutils literal notranslate"><span class="pre">f_heat_cgm</span></code> decay / <code class="docutils literal notranslate"><span class="pre">r_heat</span></code> ratchet)</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">r_heat</span></code> ratchet</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CGMHeatingRheatOn</span></code> selector (off / <code class="docutils literal notranslate"><span class="pre">f_heat_cgm</span></code> decay / <code class="docutils literal notranslate"><span class="pre">r_heat</span></code> ratchet capped at R_vir)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">r_heat</span></code> ratchet (no R_vir cap)</p></td>
 </tr>
-<tr class="row-even"><td><p>Precipitation threshold</p></td>
+<tr class="row-even"><td><p>Precipitation criterion</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">t_cool</span> <span class="pre">/</span> <span class="pre">t_ff</span></code> (Voit 2015)</p></td>
-<td><p>Sutherland-Dopita cooling time</p></td>
+<td><p>none – isothermal <code class="docutils literal notranslate"><span class="pre">r_cool</span></code> from Sutherland-Dopita cooling time</p></td>
 </tr>
 </tbody>
 </table>
-<p>When <code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span> <span class="pre">=</span> <span class="pre">0</span></code>, every galaxy uses the classical Regime 1 path
+<p>When <code class="docutils literal notranslate"><span class="pre">CGMrecipeOn</span> <span class="pre">=</span> <span class="pre">0</span></code>, <code class="docutils literal notranslate"><span class="pre">determine_and_store_regime()</span></code> is not called at
+all (the <code class="docutils literal notranslate"><span class="pre">Regime</span></code> field is left unset) and the substep loop dispatches
+cooling to <code class="docutils literal notranslate"><span class="pre">cooling_recipe()</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">cooling_recipe_hot()</span></code> for every galaxy
 regardless of mass, recovering the original SAGE behaviour.</p>
 </section>
 <section id="galaxy-types">
@@ -297,7 +328,9 @@ and SF, followed by the satellite/merger loop.</p></li>
 <li><p><a class="reference internal" href="physics/infall.html"><span class="std std-doc">Infall, reincorporation, stripping</span></a></p></li>
 <li><p><a class="reference internal" href="physics/cooling_and_heating.html"><span class="std std-doc">Cooling and AGN heating</span></a></p></li>
 <li><p><a class="reference internal" href="physics/starformation_and_feedback.html"><span class="std std-doc">Star formation and feedback</span></a></p></li>
+<li><p><a class="reference internal" href="physics/disk_instability.html"><span class="std std-doc">Disk instability</span></a></p></li>
 <li><p><a class="reference internal" href="physics/mergers_and_disruptions.html"><span class="std std-doc">Mergers and disruption</span></a></p></li>
+<li><p><a class="reference internal" href="physics/ics.html"><span class="std std-doc">Intracluster stars (ICS)</span></a></p></li>
 <li><p><a class="reference internal" href="parameters.html"><span class="std std-doc">Parameter reference</span></a></p></li>
 </ul>
 </section>

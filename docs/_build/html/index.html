@@ -52,7 +52,9 @@
 <li class="toctree-l1"><a class="reference internal" href="physics/infall.html">Infall, Reincorporation, and Stripping</a></li>
 <li class="toctree-l1"><a class="reference internal" href="physics/cooling_and_heating.html">Cooling and AGN Heating</a></li>
 <li class="toctree-l1"><a class="reference internal" href="physics/starformation_and_feedback.html">Star Formation and Feedback</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/disk_instability.html">Disk Instability</a></li>
 <li class="toctree-l1"><a class="reference internal" href="physics/mergers_and_disruptions.html">Mergers and Disruption</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physics/ics.html">Intracluster Stars (ICS)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -127,7 +129,7 @@ extended bulge/ICS tracking.</p>
 <li class="toctree-l1"><a class="reference internal" href="core_build_model.html">Per-Halo Physics Loop</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="core_build_model.html#in-one-paragraph">In one paragraph</a></li>
 <li class="toctree-l2"><a class="reference internal" href="core_build_model.html#sub-stepping">Sub-stepping</a></li>
-<li class="toctree-l2"><a class="reference internal" href="core_build_model.html#order-of-operations-within-a-substep">Order of operations within a substep</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core_build_model.html#order-of-operations">Order of operations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="core_build_model.html#post-step-bookkeeping">Post-step bookkeeping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="core_build_model.html#the-two-regime-split-as-a-code-path-map">The two-regime split as a code path map</a></li>
 <li class="toctree-l2"><a class="reference internal" href="core_build_model.html#galaxy-types">Galaxy types</a></li>
@@ -169,6 +171,17 @@ extended bulge/ICS tracking.</p>
 <li class="toctree-l2"><a class="reference internal" href="physics/starformation_and_feedback.html#references">References</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="physics/disk_instability.html">Disk Instability</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="physics/disk_instability.html#what-disk-instability-does">What disk instability does</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/disk_instability.html#splitting-the-unstable-mass">Splitting the unstable mass</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/disk_instability.html#where-the-unstable-stars-go">Where the unstable stars go</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/disk_instability.html#where-the-unstable-gas-goes">Where the unstable gas goes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/disk_instability.html#order-of-operations-and-bookkeeping">Order of operations and bookkeeping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/disk_instability.html#what-is-not-in-this-module">What is NOT in this module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/disk_instability.html#switches-and-parameters">Switches and parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/disk_instability.html#references">References</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="physics/mergers_and_disruptions.html">Mergers and Disruption</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="physics/mergers_and_disruptions.html#when-this-step-fires">When this step fires</a></li>
 <li class="toctree-l2"><a class="reference internal" href="physics/mergers_and_disruptions.html#deal-with-galaxy-merger-the-merger-dispatcher"><code class="docutils literal notranslate"><span class="pre">deal_with_galaxy_merger()</span></code> – the merger dispatcher</a></li>
@@ -179,6 +192,16 @@ extended bulge/ICS tracking.</p>
 <li class="toctree-l2"><a class="reference internal" href="physics/mergers_and_disruptions.html#what-is-not-in-this-module">What is NOT in this module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="physics/mergers_and_disruptions.html#switches-and-parameters">Switches and parameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="physics/mergers_and_disruptions.html#references">References</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="physics/ics.html">Intracluster Stars (ICS)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="physics/ics.html#fields">Fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/ics.html#how-ics-forms">How ICS forms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/ics.html#how-to-compute-the-mean-ics-assembly-time">How to compute the mean ICS assembly time</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/ics.html#ics-in-the-baryon-budget">ICS in the baryon budget</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/ics.html#type-0-vs-satellite-ics">Type-0 vs satellite ICS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/ics.html#switches-and-parameters">Switches and parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="physics/ics.html#references">References</a></li>
 </ul>
 </li>
 </ul>

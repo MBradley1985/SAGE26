@@ -95,8 +95,8 @@ the donor reservoir so that mass and metal accounting stay consistent.
 ## `reincorporate_gas()` -- ejected mass returning to hot
 
 When supernova feedback ejects gas from the halo (into `EjectedMass`),
-some of it falls back over the dynamical time. SAGE26 uses the
-ReIncorporationFactor formulation from Henriques+13:
+some of it falls back over the dynamical time. SAGE26 uses a
+velocity-thresholded recipe scaled by `ReIncorporationFactor`:
 
 ```
 reincorporated = (Vvir / Vcrit - 1) * EjectedMass * dt / t_dyn
@@ -151,9 +151,9 @@ See [`parameters.md`](../parameters.md) for full descriptions and defaults.
 - Kravtsov, Gnedin & Klypin (2004), ApJ 609, 482 -- Appendix B fitting
   formulae for the filtering mass.
 - Bryan & Norman (1998), ApJ 495, 80 -- virial overdensity Delta_c(z).
-- Henriques et al. (2013), MNRAS 431, 3373 -- reincorporation formulation.
-- Croton et al. (2006), MNRAS 365, 11 -- original SAGE infall recipe and
-  baryon budget.
+- Croton et al. (2006), MNRAS 365, 11 -- original SAGE infall recipe,
+  baryon budget, and velocity-thresholded reincorporation.
 - Dekel & Birnboim (2006), MNRAS 368, 2 -- M_shock criterion underlying
   regime classification.
-- Voit (2015), ApJL 808, L30 -- CGM precipitation framework.
+- Voit (2015), ApJL 808, L30 -- CGM precipitation framework that informs
+  the regime-aware routing.
