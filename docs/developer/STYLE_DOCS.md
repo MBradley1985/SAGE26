@@ -2,12 +2,11 @@
 
 Governs every `.md` file in the repository plus the top-level `README.md`. Derived from rubric scoring of shark ([RUBRIC_SCORES_shark.md](RUBRIC_SCORES_shark.md)) plus SAGE26-specific decisions.
 
-shark's strongest pattern was its **canonical parameter reference** (D2=5) and **auto-generated output documentation** (D3=5). SAGE26 currently scatters parameter info between `CLAUDE.md`, comments in `input/*.par`, and source code — converging that is the highest-leverage Phase 3 task.
+shark's strongest pattern was its **canonical parameter reference** (D2=5) and **auto-generated output documentation** (D3=5). SAGE26 currently scatters parameter info between project notes, comments in `input/*.par`, and source code -- converging that is the highest-leverage Phase 3 task.
 
 ## Out of scope
 
 - Adopting Sphinx, MkDocs, or any other generator. Markdown in-repo, rendered by GitHub, is enough for SAGE26's audience.
-- Translating CLAUDE.md content into separate user-facing docs wholesale. CLAUDE.md remains the AI-facing onboarding doc.
 - Inventing a YAML frontmatter scheme. None of the existing docs need it.
 
 ## Rules
@@ -21,7 +20,6 @@ Every documentation file states its audience in the first sentence or paragraph.
 | `README.md` (root) | End users: install, run, cite. |
 | `docs/developer/` | Contributors: architecture, conventions, internals. |
 | `docs/` (other) | End users: deeper usage docs (parameter reference, output format, physics notes). |
-| `CLAUDE.md` | AI assistants helping with the codebase. |
 
 **Reason:** A reader who lands in the wrong file should know within the first paragraph. shark scores 3/5 on this — they don't separate dev from user docs. We already have `docs/developer/`; codifying the split.
 
@@ -69,7 +67,7 @@ Every parameter accepted in `input/*.par` is documented in **one canonical place
 - **Description** — one to three sentences. Says *what the parameter controls*, not what physics module it belongs to.
 - **Paper reference** if the parameter comes from a specific paper.
 
-**Reason:** shark's `doc/configuration/names.rst` is the model here (D2=5). SAGE26's parameter docs currently exist in three places: CLAUDE.md tables, `% comment` lines inside .par files, and constants in `core_read_parameter_file.c`. A reader who wants to understand a parameter has to triangulate. One canonical file ends that.
+**Reason:** shark's `doc/configuration/names.rst` is the model here (D2=5). SAGE26's parameter docs currently exist in two places: `% comment` lines inside .par files, and constants in `core_read_parameter_file.c`. A reader who wants to understand a parameter has to triangulate. One canonical file ends that.
 
 The .par files themselves keep their inline `% short comment` for at-a-glance reference, but the canonical reference is the markdown doc.
 

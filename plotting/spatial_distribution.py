@@ -771,12 +771,12 @@ def parse_args():
                    help='Override: use this snapshot number directly')
     p.add_argument('--dot-size', type=float, default=1.5,
                    help='Scatter point size (default: 1.5)')
-    p.add_argument('--min-len', type=int, default=0,
+    p.add_argument('--min-len', type=int, default=20,
                    help='Minimum halo particle count (default: 20)')
     p.add_argument('--quench-snaps', type=int, default=1,
                    help='Number of consecutive snapshots with SFR=0 to classify as quiescent '
                         '(default: 1; applies only to the strict mode)')
-    p.add_argument('--modes', nargs='+', default=['strict', 'loose', 'loose_massive'],
+    p.add_argument('--modes', nargs='+', default=['hubble_central'],
                    choices=list(QUIESCENT_MODES.keys()),
                    help='Quiescence definitions to produce outputs for. '
                         'strict = SFR==0; loose = sSFR<1e-11/yr; '
@@ -784,7 +784,7 @@ def parse_args():
                         'hubble = sSFR < 0.2/t_H(z) AND M* > 1e10 Msun AND 0.75<=B/T<=0.90 using the snapshot redshift; '
                         'hubble_central = hubble AND central only (Type==0); '
                         'massive_bt = M*>=1e11 Msun AND SFR==0 AND 0.75<=B/T<=0.90. '
-                        'Default: strict, loose, loose_massive. '
+                        'Default: hubble_central. '
                         'Each mode produces its own plots/tables/CSV with a _<mode> suffix.')
     p.add_argument('--output-dir', type=str, default=None,
                    help='Where to save figures (default: <output_folder>/plots/)')

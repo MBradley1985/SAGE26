@@ -9,8 +9,9 @@ Built on [Croton et al. (2016)](https://arxiv.org/abs/1601.04709).
 - **Two-regime CGM model** (`CGMrecipeOn`): galaxies are classified as CGM-regime
   (below the Dekel & Birnboim 2006 shock mass) or hot-halo regime. Each regime
   uses a dedicated cooling recipe. CGM-regime cooling uses the Voit (2015)
-  precipitation criterion and a HeatingReservoir for AGN feedback with
-  dynamical-time memory.
+  precipitation criterion. AGN feedback in the CGM regime is controlled by
+  `CGMHeatingRheatOn` (off / `f_heat_cgm` decay on `t_dyn` / `r_heat` ratchet
+  capped at R_vir).
 - **FIRE stellar feedback** (`FIREmodeOn`): FIRE-calibrated wind mass-loading and
   ejection efficiencies replace the fixed Croton+2016 values.
 - **Feedback-free burst galaxies** (`FeedbackFreeModeOn`): implements the Li+2024

@@ -84,7 +84,7 @@ Three targeted batches addressing style-guide items not covered in Phase 2.
 - [ ] Confirm `LICENSE` exists and is correct.
 - [ ] Add `CONTRIBUTING.md` describing how outside contributors should engage.
 - [ ] Start `CHANGELOG.md` from the `baseline/pre-cleanup` tag forward.
-- [ ] Create one canonical parameter reference doc covering every switch in `input/*.par` (currently scattered across CLAUDE.md and comments).
+- [ ] Create one canonical parameter reference doc covering every switch in `input/*.par` (currently scattered across project notes and inline comments).
 
 ## Phase 4 — CI (optional but recommended)
 

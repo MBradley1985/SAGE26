@@ -105,17 +105,7 @@ Regression baseline (millennium) passes bit-identically.
 
 The "Regression baseline ... passes bit-identically" line is required for `style:`, `refactor:`, and `test:` commits during the cleanup pass.
 
-### 6. AI co-authorship
-
-When AI assistance is heavily used to generate a commit's content (more than a small suggestion), add a trailer:
-
-```text
-Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
-```
-
-Use the actual model name and date the work was produced. No trailer needed for small suggestions.
-
-### 7. References and linking
+### 6. References and linking
 
 - Issue numbers: `Closes #42` or `Refs #42` in the body.
 - Paper references: `See Croton et al. (2016)` or full BibTeX-ish reference if first mention.
@@ -136,8 +126,6 @@ What's new:
 - tests/regression_baseline.sh: thin driver ...
 - tests/baseline/millennium/manifest.json: seed manifest captured at this
   commit.
-
-Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
 ```
 
 ### Good (a hypothetical bug fix)
@@ -184,4 +172,3 @@ When writing a cleanup-phase commit:
 - [ ] Body present unless the subject is genuinely self-explanatory.
 - [ ] If the commit altered scientific outputs: `fix:` prefix, body explains the change, re-baseline commit follows.
 - [ ] If the commit is `style:` / `refactor:` / `test:`: body confirms regression baseline passes bit-identically.
-- [ ] AI co-authorship trailer present if AI did substantive generation.

@@ -193,5 +193,5 @@ When applying this guide to a test file:
 - [ ] Tolerances are named constants with a comment for the source.
 - [ ] No `assert()` — use the macros in `test_framework.h`.
 - [ ] If a new test was added, it appears in both `tests/Makefile` and `tests/run_integration_tests.sh`.
-- [ ] `make tests` from the repo root passes (or the specific test target if scoping a single area).
+- [ ] `cd tests && make test` passes (or the specific test target if scoping a single area). The root `make tests` is not currently wired up.
 - [ ] Regression baseline (`bash tests/regression_baseline.sh`) passes.

@@ -12,7 +12,7 @@ shark is the obvious first comparison: same scientific niche (semi-analytic gala
 Three patterns shark does **very well** that SAGE26 should imitate:
 
 1. **Auto-generated output documentation** (`doc/hdf5_properties/`). The HDF5 dataset reference is generated from the files themselves, so it cannot drift from the code. Exemplary.
-2. **Canonical parameter reference** (`doc/configuration/names.rst` + `sample.rst`). One file lists every option, units, defaults, and meaning. SAGE26's equivalent is scattered across CLAUDE.md, .par comments, and code.
+2. **Canonical parameter reference** (`doc/configuration/names.rst` + `sample.rst`). One file lists every option, units, defaults, and meaning. SAGE26's equivalent is scattered across project notes, .par comments, and code.
 3. **Universal file headers** — every C++/Python/CMake/config file starts with the same ICRAR/GPL block, no exceptions. Cheap to adopt, immediately raises the "this is a serious project" signal.
 
 Three patterns where shark is **adequate but not aspirational**:
@@ -91,7 +91,7 @@ One pattern shark uses that's **directly relevant to our Phase 0 work**: their C
 
 Ordered by leverage (highest impact first):
 
-1. **One canonical parameter reference doc.** D2. SAGE26's parameter docs are scattered between CLAUDE.md, comments inside `input/*.par`, and code. A single `docs/parameters.md` (or RST equivalent) listing every switch with name, units, default, description, paper reference, valid range — would be a step change for outside users.
+1. **One canonical parameter reference doc.** D2. SAGE26's parameter docs are scattered between project notes, comments inside `input/*.par`, and code. A single `docs/parameters.md` (or RST equivalent) listing every switch with name, units, default, description, paper reference, valid range -- would be a step change for outside users.
 2. **Auto-generated output documentation.** D3. Walk the HDF5 file once, emit a `docs/output_format.md` listing every group + dataset + dtype + shape semantics. The `tests/regression_baseline.py` script already walks every dataset — could be extended in 30 lines to write this doc.
 3. **Universal file header.** C1. Cheap to adopt, raises the perceived bar instantly. ICRAR uses a copyright+license block + a `@file` marker; SAGE26 could use a shorter version (author/year + license + one-line file purpose).
 4. **Consistent header guards.** C4. Pick `#pragma once` *or* `#ifndef SAGE_<FILENAME>_H_` and apply repo-wide. Mixed styles look sloppy.

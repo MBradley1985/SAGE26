@@ -21,12 +21,14 @@ Every `.c` and `.h` file opens with a short comment block:
 
 ```c
 /*
- * model_cooling_heating.c — gas cooling and AGN heating prescriptions.
+ * model_cooling_heating.c -- gas cooling and AGN heating prescriptions.
  *
- * Implements regime-aware cooling (classical hot-halo vs CGM) per Voit (2015),
- * AGN radio-mode heating, and the persistent HeatingReservoir used in CGM mode.
+ * Implements regime-aware cooling (classical hot halo vs CGM precipitation per
+ * Voit 2015) and AGN radio-mode heating. In the CGM regime, AGN suppression is
+ * controlled by CGMHeatingRheatOn (f_heat_cgm decay on t_dyn, or the r_heat
+ * ratchet capped at R_vir).
  *
- * SAGE26 — released under MIT (see LICENSE).
+ * SAGE26 -- released under MIT (see LICENSE).
  */
 ```
 
@@ -196,7 +198,7 @@ for (int i = 0; i < ngal; i++) {
 /*
  * Cool gas at the local rate. compute_cooling() returns dM_cool/dt in code
  * units; we integrate over the current substep to get the mass cooled, then
- * subtract the AGN heating contribution (if Regime == 0) before depositing
+ * subtract the AGN heating contribution (if Regime == 1) before depositing
  * the remainder into ColdGas. The factor 0.5 below is the standard semi-
  * implicit trapezoidal correction (Croton+06, eqn 9).
  */
@@ -210,27 +212,29 @@ The file header described in §1 should genuinely orient a reader. For a physics
 
 ```c
 /*
- * model_cooling_heating.c — gas cooling and AGN heating prescriptions.
+ * model_cooling_heating.c -- gas cooling and AGN heating prescriptions.
  *
- * Implements two cooling regimes selected per-galaxy by Regime:
- *   Regime == 0 (hot halo)   — classical isothermal halo cooling per
+ * Implements two cooling regimes selected per-galaxy by Regime
+ * (set by determine_and_store_regime() from the Dekel & Birnboim 2006
+ * M_shock criterion):
+ *   Regime == 0 (CGM / precipitation) -- beta-profile (or NFW / uniform) CGM
+ *                              with cooling integrated over the density
+ *                              distribution; precipitation criterion follows
+ *                              Voit (2015) and Sharma et al. (2012).
+ *   Regime == 1 (hot halo)     -- classical isothermal halo cooling per
  *                              White & Frenk (1991) and Croton et al. (2006),
- *                              with cooling rate computed against the
- *                              Sutherland-Dopita (1993) cooling tables.
- *   Regime == 1 (CGM)        — beta-profile CGM with cooling integrated
- *                              over the density distribution; the
- *                              precipitation criterion follows Voit (2015)
- *                              and Sharma et al. (2012).
+ *                              evaluated against Sutherland-Dopita (1993)
+ *                              cooling tables.
  *
- * AGN radio-mode heating is computed in both regimes. In the CGM regime the
- * heating is accumulated into a persistent HeatingReservoir that decays on
- * the halo dynamical time (Sec. 3.2 of the SAGE26 paper) — this prevents
- * "all-or-nothing" cooling shutoffs that single-snapshot heating produces.
+ * AGN radio-mode heating is computed in both regimes. In Regime 1 the standard
+ * Croton+06 r_heat ratchet suppresses cooling at r < r_heat. In Regime 0 the
+ * suppression mechanism is selected by CGMHeatingRheatOn (off / f_heat_cgm
+ * decaying on t_dyn / r_heat ratchet capped at R_vir).
  *
  * Code units (10^10 Msun/h, Mpc/h, km/s) are used throughout. Conversions
  * to physical units happen only at the public entry points.
  *
- * SAGE26 — released under MIT (see LICENSE).
+ * SAGE26 -- released under MIT (see LICENSE).
  */
 ```
 
@@ -246,41 +250,43 @@ Non-trivial physics functions open with a substantial comment block:
 
 ```c
 /*
- * cooling_recipe_cgm — cooling rate in the CGM regime (Regime == 1).
+ * cooling_recipe_cgm -- cooling rate in the CGM regime (Regime == 0).
  *
  * Physical setup:
- *   The CGM is modelled as a beta profile (beta = 2/3) with the total CGM
- *   mass distributed between the inner core (r < r_c) and the outer halo.
- *   The cooling rate at each radius depends on local density and metallicity;
- *   we integrate the cooling rate over the radial profile to get the total
- *   dM_cool/dt for the halo.
+ *   The CGM is modelled by CGMDensityProfile (uniform / NFW / beta with
+ *   beta = 2/3). The cooling rate at each radius depends on local density and
+ *   metallicity; we integrate the cooling rate over the radial profile to get
+ *   the total dM_cool/dt for the halo.
  *
  * Algorithm:
- *   1. Compute the beta-profile normalisation rho_0 from M_CGM and Rvir.
- *   2. Integrate the local cooling rate from r_c outward to r_cool, where
- *      r_cool is the radius at which the cooling time equals the dynamical
- *      time (the precipitation radius per Voit 2015).
- *   3. Subtract heating contributed by the HeatingReservoir, which decays
- *      with timescale tau_dyn between calls.
+ *   1. Compute the profile normalisation from CGMgas and Rvir.
+ *   2. Integrate the local cooling rate inward to r_cool, the radius at
+ *      which t_cool / t_ff crosses the Voit (2015) precipitation threshold
+ *      (selector is CGMPrecipitationMode; radius selector is
+ *      CGMPrecipRadiusMode).
+ *   3. If CGMAGNOn and CGMHeatingRheatOn != 0, suppress cooling either via
+ *      f_heat_cgm (mode 1, decays on t_dyn) or via the r_heat ratchet capped
+ *      at R_vir (mode 2).
  *   4. Return the net mass cooled in the current substep.
  *
  * Inputs:
- *   gal     — the central galaxy of the halo. Reads M_CGM, Rvir, metallicity,
- *             HeatingReservoir; writes nothing.
- *   dt      — substep duration in code units (Myr / unit_time).
+ *   gal     -- the central galaxy of the halo. Reads CGMgas, Rvir, metallicity,
+ *              f_heat_cgm, r_heat; writes f_heat_cgm or r_heat depending on
+ *              CGMHeatingRheatOn.
+ *   dt      -- substep duration in code units (Myr / unit_time).
  *
  * Returns:
  *   Mass cooled into the central galaxy's ColdGas reservoir in code units
  *   (10^10 Msun/h). Guaranteed non-negative; zero if heating dominates.
  *
  * References:
- *   - Voit (2015), ApJL 808, L30 — precipitation criterion (M/M_shock)^4/3.
- *   - Sharma et al. (2012), MNRAS 420, 3174 — beta-profile cooling.
- *   - SAGE26 paper Sec. 3.2 — HeatingReservoir formulation.
+ *   - Voit (2015), ApJL 808, L30 -- precipitation criterion (M/M_shock)^4/3.
+ *   - Sharma et al. (2012), MNRAS 420, 3174 -- beta-profile cooling.
+ *   - SAGE26 paper Sec. 3.2 -- CGM-regime AGN suppression formulation.
  *
  * Invariants:
- *   - Returned mass <= M_CGM (energy and mass conservation).
- *   - Returned mass continuous in M_CGM: no discontinuities at regime boundaries.
+ *   - Returned mass <= CGMgas (mass conservation).
+ *   - Returned mass continuous in CGMgas: no discontinuities at regime boundaries.
  */
 double cooling_recipe_cgm(struct GALAXY *gal, double dt)
 {

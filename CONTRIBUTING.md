@@ -7,8 +7,8 @@ This guide is for contributors to the SAGE26 codebase.
 ```bash
 git clone https://github.com/MBradley1985/SAGE26.git
 cd SAGE26
-make                # build
-make tests          # run test suite
+make                # build ./sage and libsage.so
+cd tests && make test   # build and run the test suites
 ```
 
 See [docs/developer/README.md](docs/developer/README.md) for architecture notes.
@@ -36,10 +36,14 @@ Key rules for C:
 
 ## Tests
 
+Always run tests from inside the `tests/` directory; the root `make tests` target
+references a launcher script that does not exist in this tree.
+
 ```bash
-make tests                  # all suites
-make test_conservation      # conservation only (fastest)
-bash tests/run_integration_tests.sh  # full integration test
+cd tests && make test               # all suites
+cd tests && make test_conservation  # conservation only (fastest)
+cd tests && make quick              # single fastest check
+bash tests/run_integration_tests.sh # full integration test (slower)
 ```
 
 New physics changes must keep the regression baseline bit-identical:
