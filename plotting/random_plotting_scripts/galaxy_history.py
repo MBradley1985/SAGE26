@@ -23,12 +23,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import quad
 from scipy.interpolate import PchipInterpolator
+from scipy.ndimage import gaussian_filter
 from scipy.spatial import cKDTree
 
 QUIESCENT_MODES = {
     'strict', 'loose', 'loose_massive', 'massive_bt', 'loose_massive_bt',
     'karls_galaxy', 'hubble', 'hubble_central',
 }
+
+# ---------------------------------------------------------------------------
+# Shared colour-map palette
+# ---------------------------------------------------------------------------
+# Density / number-count figures
+DENSITY_MASS_CMAP  = plt.cm.plasma     # rho_DM panels
+DENSITY_COUNT_CMAP = plt.cm.viridis   # n_halo panels
+# All history / scaling / skew figures share one palette so trajectories,
+# colourbars and highlight picks read consistently across the run.
+HISTORY_CMAP       = plt.cm.plasma_r  # sSFR and SMH history, scaling relations, main-branch history
+
+# Above this galaxy count, density-panel marker overlays switch from
+# uniform alpha=0.8 to the log10(M*)-modulated power-law alpha — matches
+# the LARGE_SIM_GALAXY_THRESHOLD in spatial_distribution.py.
+LARGE_SIM_GALAXY_THRESHOLD = 500_000
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +175,183 @@ def load_galaxy_sfh(filepaths, snap_num, galaxy_ids, hubble_h):
 
 
 # ---------------------------------------------------------------------------
+# Cross-model comparison — locate the same galaxy in a second run
+# and load its properties / main-branch trajectory.
+# ---------------------------------------------------------------------------
+
+def _extract_galaxy_properties(g, idx, hubble_h, matched_by='gid',
+                                match_distance_mpc=None):
+    """Pull a property dict for galaxy ``idx`` inside HDF5 group ``g``."""
+    def _val(name, dtype=np.float64, default=0.0):
+        if name in g:
+            arr = np.array(g[name])
+            return dtype(arr[idx])
+        return dtype(default)
+
+    sm   = _val('StellarMass')   * 1e10 / hubble_h
+    sfrd = _val('SfrDisk')
+    sfrb = _val('SfrBulge')
+    sfr  = sfrd + sfrb
+    bm   = _val('BulgeMass')     * 1e10 / hubble_h
+    mvir = _val('Mvir')          * 1e10 / hubble_h
+    cmvir = _val('CentralMvir')  * 1e10 / hubble_h
+    mbh  = _val('BlackHoleMass') * 1e10 / hubble_h
+    cg   = _val('ColdGas')       * 1e10 / hubble_h
+    metals_cg = _val('MetalsColdGas') * 1e10 / hubble_h
+    vdisp = _val('VelDisp')
+    vvir  = _val('Vvir')
+    disk_r_kpc  = _val('DiskRadius')  * 1e3 / hubble_h
+    bulge_r_kpc = _val('BulgeRadius') * 1e3 / hubble_h
+
+    posx = _val('Posx') / hubble_h
+    posy = _val('Posy') / hubble_h
+    posz = _val('Posz') / hubble_h
+
+    gid   = int(_val('GalaxyIndex', dtype=np.int64, default=-1))
+    gtype = int(_val('Type',        dtype=np.int32, default=0))
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        ssfr = (sfr / sm) if sm > 0 else np.nan
+        bt   = (bm  / sm) if sm > 0 else np.nan
+
+    return {
+        'gid': gid, 'type': gtype,
+        'sm_msun': sm, 'sfr': sfr, 'ssfr': ssfr,
+        'bulge_mass_msun': bm, 'bt': bt,
+        'mvir_msun': mvir, 'cmvir_msun': cmvir,
+        'mbh_msun': mbh, 'cold_gas_msun': cg,
+        'metals_cold_gas_msun': metals_cg,
+        'vdisp': vdisp, 'vvir': vvir,
+        'disk_radius_kpc': disk_r_kpc, 'bulge_radius_kpc': bulge_r_kpc,
+        'pos_mpc': (posx, posy, posz),
+        'matched_by': matched_by,
+        'match_distance_mpc': match_distance_mpc,
+    }
+
+
+def find_galaxy_in_run(filepaths, target_gid, target_pos_mpc, snap,
+                        hubble_h, box_size_mpc=None,
+                        search_radius_mpc=1.0):
+    """Locate ``target_gid`` in the given model run at ``snap``.
+
+    Strategy:
+      1. exact ``GalaxyIndex`` match — works when the two runs share the
+         same N-body simulation (halo IDs deterministic).
+      2. fallback: most massive central within ``search_radius_mpc`` of
+         ``target_pos_mpc`` at ``snap``.
+    Returns the property dict from ``_extract_galaxy_properties`` or
+    ``None`` if no match is found.
+    """
+    snap_key = f'Snap_{snap}'
+    tgid     = int(target_gid)
+
+    for fp in filepaths:
+        with h5.File(fp, 'r') as f:
+            if snap_key not in f or 'GalaxyIndex' not in f[snap_key]:
+                continue
+            g    = f[snap_key]
+            gids = np.array(g['GalaxyIndex'], dtype=np.int64)
+            hit  = np.where(gids == tgid)[0]
+            if len(hit) > 0:
+                return _extract_galaxy_properties(g, int(hit[0]), hubble_h,
+                                                  matched_by='gid')
+
+    # Fallback — nearest massive central
+    tx, ty, tz = target_pos_mpc
+    best, best_dist = None, np.inf
+    for fp in filepaths:
+        with h5.File(fp, 'r') as f:
+            if snap_key not in f or 'Posx' not in f[snap_key]:
+                continue
+            g    = f[snap_key]
+            posx = np.array(g['Posx']) / hubble_h
+            posy = np.array(g['Posy']) / hubble_h
+            posz = np.array(g['Posz']) / hubble_h
+            dx, dy, dz = posx - tx, posy - ty, posz - tz
+            if box_size_mpc:
+                dx -= box_size_mpc * np.round(dx / box_size_mpc)
+                dy -= box_size_mpc * np.round(dy / box_size_mpc)
+                dz -= box_size_mpc * np.round(dz / box_size_mpc)
+            dist = np.sqrt(dx * dx + dy * dy + dz * dz)
+            in_sphere = dist <= search_radius_mpc
+            if not in_sphere.any():
+                continue
+            sm = (np.array(g['StellarMass'], dtype=np.float64)
+                  * 1e10 / hubble_h)
+            score = np.where(in_sphere, sm, -np.inf)
+            i_best = int(np.argmax(score))
+            if dist[i_best] < best_dist:
+                best_dist = float(dist[i_best])
+                best = _extract_galaxy_properties(
+                    g, i_best, hubble_h,
+                    matched_by='position',
+                    match_distance_mpc=best_dist)
+    return best
+
+
+def get_galaxy_properties(filepaths, target_gid, snap, hubble_h):
+    """Property dict for ``target_gid`` at ``snap`` in the given run, or None."""
+    snap_key = f'Snap_{snap}'
+    for fp in filepaths:
+        with h5.File(fp, 'r') as f:
+            if snap_key not in f or 'GalaxyIndex' not in f[snap_key]:
+                continue
+            g    = f[snap_key]
+            gids = np.array(g['GalaxyIndex'], dtype=np.int64)
+            idx  = np.where(gids == int(target_gid))[0]
+            if len(idx) > 0:
+                return _extract_galaxy_properties(g, int(idx[0]), hubble_h)
+    return None
+
+
+def load_target_history(filepaths, target_gid, snap_sel, snap_times, hubble_h):
+    """Return [(t_gyr, log_sm, log_sfr, log_ssfr, gtype)] for target_gid's
+    main branch from Snap_0 up to ``snap_sel``.
+
+    Skips snapshots where ``target_gid`` is not present.
+    """
+    out = []
+    for s in range(snap_sel + 1):
+        snap_key = f'Snap_{s}'
+        found = False
+        for fp in filepaths:
+            with h5.File(fp, 'r') as f:
+                if snap_key not in f or 'GalaxyIndex' not in f[snap_key]:
+                    continue
+                g    = f[snap_key]
+                gids = np.array(g['GalaxyIndex'], dtype=np.int64)
+                idx  = np.where(gids == target_gid)[0]
+                if len(idx) == 0:
+                    continue
+                i = int(idx[0])
+                sm  = float(np.array(g['StellarMass'])[i]) * 1e10 / hubble_h
+                sfrd = (float(np.array(g['SfrDisk'])[i])
+                        if 'SfrDisk' in g else 0.0)
+                sfrb = (float(np.array(g['SfrBulge'])[i])
+                        if 'SfrBulge' in g else 0.0)
+                sfr = sfrd + sfrb
+                gtype = (int(np.array(g['Type'])[i])
+                         if 'Type' in g else -1)
+                bt = (float(np.array(g['BulgeMass'])[i]) * 1e10 / hubble_h) / sm if sm > 0 else np.nan
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    ssfr = (sfr / sm) if sm > 0 else np.nan
+                out.append({
+                    't_gyr':    float(snap_times[s]),
+                    'log_sm':   np.log10(sm)   if sm   > 0 else np.nan,
+                    'log_sfr':  np.log10(sfr)  if sfr  > 0 else np.nan,
+                    'log_ssfr': np.log10(ssfr) if (np.isfinite(ssfr)
+                                                    and ssfr > 0) else np.nan,
+                    'type':     gtype,
+                    'bulge_to_total': bt,
+                })
+                found = True
+                break
+        if not found:
+            continue
+    return out
+
+
+# ---------------------------------------------------------------------------
 # sSFR history computation
 # ---------------------------------------------------------------------------
 
@@ -199,6 +392,439 @@ def compute_smh(sfh, snap_times, snap_num, hubble_h):
     return t, log_mstar
 
 
+def compute_formation_epochs(sfh, snap_times, snap_num, hubble_h,
+                              fractions=(0.5, 0.8)):
+    """For one galaxy's SFH array, return the cosmic times (Gyr) and the
+    lookback ages (Gyr from the selection-snap epoch) at which the
+    cumulative stellar mass crossed each fraction of its final value.
+
+    Returns
+    -------
+    epochs   : dict {fraction -> (t_formation_gyr, lookback_age_gyr)}
+    t_bin    : cosmic-time array at the end of each SFH bin (length snap_num)
+    cum_msun : cumulative formed stellar mass at those times [Msun]
+    """
+    sfh_msun = sfh[:snap_num] * 1e10 / hubble_h
+    cum_msun = np.cumsum(sfh_msun)
+    if cum_msun.size == 0 or cum_msun[-1] <= 0:
+        return ({f: (np.nan, np.nan) for f in fractions}, None, None)
+    cum_frac = cum_msun / cum_msun[-1]
+    t_bin    = snap_times[:snap_num]
+    t_now    = float(snap_times[snap_num])
+    epochs = {}
+    for f in fractions:
+        t_f = float(np.interp(f, cum_frac, t_bin))
+        epochs[f] = (t_f, t_now - t_f)
+    return epochs, t_bin, cum_msun
+
+
+def load_carnall_sfh(path):
+    """Carnall+2024 SFH posterior (BAGPIPES).
+
+    Columns: t_BB [Gyr] (negatives are pre-Big-Bang padding, dropped),
+             SFR(low), SFR(median), SFR(high)   [Msun / yr].
+
+    Returns
+    -------
+    (t_bb, cum_lo, cum_med, cum_hi) — t_bb ascending in cosmic time, the
+    other three arrays are cumulative stellar mass formed by t_bb [Msun],
+    obtained by trapezoidal integration of SFR over t (dt in Gyr -> yr).
+    Returns ``None`` if the file cannot be read.
+    """
+    try:
+        arr = np.loadtxt(path)
+    except Exception as err:
+        print(f'    Could not read Carnall SFH file {path}: {err}')
+        return None
+    if arr.ndim != 2 or arr.shape[1] < 4:
+        print(f'    Carnall SFH file has unexpected shape {arr.shape}; '
+              'expected 4 columns.')
+        return None
+    t = arr[:, 0]
+    mask = t >= 0.0
+    t   = t[mask]
+    sfr_lo, sfr_med, sfr_hi = arr[mask, 1], arr[mask, 2], arr[mask, 3]
+    order   = np.argsort(t)
+    t       = t[order]
+    sfr_lo  = sfr_lo[order]
+    sfr_med = sfr_med[order]
+    sfr_hi  = sfr_hi[order]
+
+    dt_yr = np.diff(t) * 1.0e9
+    def _cum(sfr):
+        out = np.zeros_like(sfr)
+        out[1:] = np.cumsum(0.5 * (sfr[1:] + sfr[:-1]) * dt_yr)
+        return out
+
+    return t, _cum(sfr_lo), _cum(sfr_med), _cum(sfr_hi)
+
+
+def plot_target_formation_history(target_gid, sfh, snap_times, snap_num,
+                                   hubble_h, z_snap, out_path,
+                                   fractions=(0.5, 0.8),
+                                   carnall_sfh_path=None,
+                                   carnall_label='Carnall+2024 (Erigeneia)'):
+    """Print + plot the cumulative SFH and t_50 / t_80 of one target."""
+    epochs, t_bin, cum_msun = compute_formation_epochs(
+        sfh, snap_times, snap_num, hubble_h, fractions=fractions)
+
+    t_now = float(snap_times[snap_num])
+    print(f'\n  ── Formation history (GID {target_gid}) ──')
+    if cum_msun is None or cum_msun.size == 0 or cum_msun[-1] <= 0:
+        print('    No SFH data — skipping.')
+        return
+    total = float(cum_msun[-1])
+    print(f'    z_sel              : z = {z_snap:.3f}, t = {t_now:.2f} Gyr')
+    print(f'    final formed M*    : {total:.3e} Msun  '
+          f'(log = {np.log10(total):.2f})')
+    for f in fractions:
+        t_f, age_f = epochs[f]
+        if np.isfinite(t_f):
+            print(f'    {int(100*f):>3d}% formed by    : '
+                  f'{age_f:.2f} Gyr lookback   (cosmic t = {t_f:.2f} Gyr)')
+        else:
+            print(f'    {int(100*f):>3d}% formed by    : N/A')
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    cum_frac     = cum_msun / total
+    lookback_bin = t_now - t_bin
+    ax.plot(lookback_bin, cum_frac, '-', color=HISTORY_CMAP(0.25), lw=2.0,
+            label=f'GID {target_gid}')
+
+    for f in fractions:
+        t_f, age_f = epochs[f]
+        if not np.isfinite(t_f):
+            continue
+        ax.axhline(f,    color='grey', ls=':', lw=0.7, alpha=0.6)
+        ax.axvline(age_f, color='grey', ls=':', lw=0.7, alpha=0.6)
+        ax.scatter([age_f], [f], s=80, marker='s',
+                   facecolor='gold', edgecolor='black',
+                   linewidths=0.7, zorder=5,
+                   label=fr'$t_{{{int(100*f)}}} = {age_f:.2f}$ Gyr lookback')
+
+    ax.axvline(0.0, color='black', ls='--', lw=0.8, alpha=0.6,
+               label=fr'$z_{{\rm sel}} = {z_snap:.2f}$  (lookback = 0)')
+
+    # Optional: overlay observational Carnall+2024 cumulative formation.
+    if carnall_sfh_path:
+        loaded = load_carnall_sfh(carnall_sfh_path)
+        if loaded is not None:
+            t_bb_c, cum_lo, cum_med, cum_hi = loaded
+            if t_bb_c.size and cum_med[-1] > 0:
+                t_obs_c    = float(t_bb_c[-1])
+                lookback_c = t_obs_c - t_bb_c        # lookback from
+                                                     # Carnall's own
+                                                     # observation epoch
+                # Normalise each percentile by its own final formed mass so
+                # all three curves asymptote to 1 at lookback=0.
+                def _norm(cum):
+                    return cum / cum[-1] if cum[-1] > 0 else cum
+                frac_med = np.clip(_norm(cum_med), 0.0, 1.0)
+                frac_lo  = np.clip(_norm(cum_lo),  0.0, 1.0)
+                frac_hi  = np.clip(_norm(cum_hi),  0.0, 1.0)
+
+                # Carnall t_50 / t_80 (lookback from Carnall's own t_obs)
+                age50_c = t_obs_c - float(np.interp(0.5, frac_med, t_bb_c))
+                age80_c = t_obs_c - float(np.interp(0.8, frac_med, t_bb_c))
+                print(f'    Carnall median (M*_final = '
+                      f'{cum_med[-1]:.3e} Msun, log = '
+                      f'{np.log10(cum_med[-1]):.2f}):')
+                print(f'      t_50 = {age50_c:.2f} Gyr lookback')
+                print(f'      t_80 = {age80_c:.2f} Gyr lookback')
+
+                ax.fill_between(lookback_c, frac_lo, frac_hi,
+                                color='black', alpha=0.15, linewidth=0,
+                                label=f'{carnall_label} 16/84')
+                ax.plot(lookback_c, frac_med, '-', color='black', lw=1.4,
+                        alpha=0.85, label=f'{carnall_label} median')
+
+    ax.set_xlabel('Lookback time from selection epoch [Gyr]', fontsize=12)
+    ax.set_ylabel(r'Cumulative $M_*$ formed / final', fontsize=12)
+    ax.set_xlim(t_now * 1.02, 0.0)   # present on the right
+    ax.set_ylim(0.0, 1.05)
+    ax.grid(True, alpha=0.25)
+    ax.set_title(f'Formation history — GID {target_gid}', fontsize=12)
+    ax.legend(fontsize=9, loc='lower left')
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    print(f'Saved: {out_path}')
+
+
+def plot_catalogue_formation_histograms(gal_data, snap_times, snap_num,
+                                         hubble_h, z_snap, out_path,
+                                         t50_threshold=1.5,
+                                         t80_threshold=1.0,
+                                         n_bins=25):
+    """Histograms of t_50 and t_80 (lookback from the selection epoch) for
+    every catalogue galaxy with SFH.
+
+    Convention: ``t_50 = 1.5 Gyr`` means 50% of the stellar mass had formed
+    1.5 Gyr *before* the observation epoch (Erigeneia-style). The catalogue
+    is assumed to be already mass-filtered upstream (selection cut applied
+    in the CSV).  Prints the count of galaxies with ``t_50 > t50_threshold``
+    and ``t_80 > t80_threshold`` (and the intersection).
+    """
+    t50_list, t80_list, gid_list = [], [], []
+    for gid, d in gal_data.items():
+        if d.get('sfh') is None:
+            continue
+        epochs, _t, cum = compute_formation_epochs(
+            d['sfh'], snap_times, snap_num, hubble_h,
+            fractions=(0.5, 0.8))
+        if cum is None:
+            continue
+        _t50_cosmic, age50 = epochs[0.5]
+        _t80_cosmic, age80 = epochs[0.8]
+        if np.isfinite(age50) and np.isfinite(age80):
+            t50_list.append(age50)
+            t80_list.append(age80)
+            gid_list.append(int(gid))
+
+    t50_arr  = np.array(t50_list, dtype=float)   # lookback [Gyr]
+    t80_arr  = np.array(t80_list, dtype=float)   # lookback [Gyr]
+    n_total  = int(t50_arr.size)
+
+    print(f'\n  ── Catalogue formation epochs (lookback from z={z_snap:.2f}) ──')
+    print(f'    N with SFH data : {n_total}')
+    if n_total == 0:
+        print('    No qualifying galaxies — skipping histogram.')
+        return
+
+    n_t50 = int((t50_arr > t50_threshold).sum())
+    n_t80 = int((t80_arr > t80_threshold).sum())
+    n_both = int(((t50_arr > t50_threshold)
+                  & (t80_arr > t80_threshold)).sum())
+
+    print(f'    t_50 lookback [Gyr] : '
+          f'med={np.median(t50_arr):.2f}  mean={np.mean(t50_arr):.2f}  '
+          f'std={np.std(t50_arr):.2f}  '
+          f'range=[{t50_arr.min():.2f}, {t50_arr.max():.2f}]')
+    print(f'    t_80 lookback [Gyr] : '
+          f'med={np.median(t80_arr):.2f}  mean={np.mean(t80_arr):.2f}  '
+          f'std={np.std(t80_arr):.2f}  '
+          f'range=[{t80_arr.min():.2f}, {t80_arr.max():.2f}]')
+    pct = lambda n: f'{100.0 * n / n_total:5.1f}%'
+    print(f'    t_50 > {t50_threshold:.1f} Gyr lookback : '
+          f'{n_t50:>5d} / {n_total}  ({pct(n_t50)})')
+    print(f'    t_80 > {t80_threshold:.1f} Gyr lookback : '
+          f'{n_t80:>5d} / {n_total}  ({pct(n_t80)})')
+    print(f'    both                  : '
+          f'{n_both:>5d} / {n_total}  ({pct(n_both)})')
+
+    t_now = float(snap_times[snap_num])
+    bins  = np.linspace(0.0, t_now, n_bins + 1)
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.5), sharey=False)
+
+    def _panel(ax, data, label_sym, fraction, threshold, n_pass, colour):
+        ax.hist(data, bins=bins, color=colour,
+                edgecolor='black', linewidth=0.5)
+        med = float(np.median(data))
+        ax.axvline(med, color='black', ls=':', lw=1.0, alpha=0.7,
+                   label=f'median = {med:.2f} Gyr')
+        ax.axvline(threshold, color='red', ls='--', lw=1.2, alpha=0.85,
+                   label=(fr'${label_sym} > {threshold:.1f}$ Gyr lookback   '
+                          fr'({n_pass}/{n_total})'))
+        ax.set_xlabel(fr'${label_sym}$  lookback from $z_{{\rm sel}}$ [Gyr]',
+                      fontsize=11)
+        ax.set_ylabel('N galaxies', fontsize=11)
+        ax.set_title(fr'${label_sym}$  ({int(100*fraction)}% formation epoch)',
+                     fontsize=11)
+        ax.grid(True, alpha=0.25)
+        ax.legend(fontsize=9, loc='upper right')
+
+    _panel(axes[0], t50_arr, 't_{50}', 0.5, t50_threshold, n_t50,
+           HISTORY_CMAP(0.25))
+    _panel(axes[1], t80_arr, 't_{80}', 0.8, t80_threshold, n_t80,
+           HISTORY_CMAP(0.60))
+
+    fig.suptitle(f'Catalogue formation epochs (lookback)  —  '
+                 fr'$z_{{\rm sel}}={z_snap:.2f}$,  N = {n_total}',
+                 fontsize=12)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.savefig(out_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    print(f'Saved: {out_path}')
+
+
+# ---------------------------------------------------------------------------
+# Progenitor environment / overdensity scan
+# ---------------------------------------------------------------------------
+
+def _load_halo_positions_at_snap(filepaths, snap_num, hubble_h):
+    """Return (pos_cmpc[N,3], mvir_msun[N], gids[N]) for halos with Mvir>0
+    at `snap_num`, or None if the snapshot is missing/empty.
+    """
+    snap_key = f'Snap_{snap_num}'
+    px, py, pz, mvir, gi = [], [], [], [], []
+    for fp in filepaths:
+        with h5.File(fp, 'r') as f:
+            if snap_key not in f or 'GalaxyIndex' not in f[snap_key]:
+                continue
+            g = f[snap_key]
+            px.append(np.array(g['Posx']))
+            py.append(np.array(g['Posy']))
+            pz.append(np.array(g['Posz']))
+            mvir.append(np.array(g['Mvir'], dtype=np.float64))
+            gi.append(np.array(g['GalaxyIndex'], dtype=np.int64))
+    if not px:
+        return None
+    pos_cmpc  = np.stack([np.concatenate(px), np.concatenate(py),
+                          np.concatenate(pz)], axis=1) / hubble_h
+    mvir_msun = np.concatenate(mvir) * 1e10 / hubble_h
+    gids      = np.concatenate(gi)
+    valid = mvir_msun > 0
+    if not valid.any():
+        return None
+    return pos_cmpc[valid], mvir_msun[valid], gids[valid]
+
+
+def compute_progenitor_overdensity_history(
+        filepaths, snap_sel, target_gid, snap_redshifts,
+        hubble_h, box_size_mpc,
+        z_min=9.0, radius_cmpc=3.0,
+        n_sample=4000, rng_seed=0):
+    """For each snapshot at z>=z_min (up to snap_sel), locate the target's
+    progenitor by GalaxyIndex and compute the local mass + halo-number
+    overdensity inside a sphere of `radius_cmpc` cMpc.
+
+    Percentile ranks are estimated against a random subsample of all halos
+    at the snap (no FoF exclusion — this is a coarse environment proxy).
+
+    Returns a list of dicts (one per qualifying snap).
+    """
+    if snap_redshifts is None or box_size_mpc is None:
+        print('    Need snapshot_redshifts and box_size — skipping.')
+        return []
+    snaps_hi = [s for s in range(snap_sel + 1)
+                if s < len(snap_redshifts) and snap_redshifts[s] >= z_min]
+    if not snaps_hi:
+        print(f'    No snapshots with z>={z_min:.1f} below snap_sel.')
+        return []
+    print(f'    Scanning {len(snaps_hi)} snaps with z>={z_min:.1f}: '
+          f'Snap_{snaps_hi[0]} (z={snap_redshifts[snaps_hi[0]]:.2f}) .. '
+          f'Snap_{snaps_hi[-1]} (z={snap_redshifts[snaps_hi[-1]]:.2f})')
+
+    box_cmpc   = float(box_size_mpc)
+    vol_sphere = (4.0 / 3.0) * np.pi * radius_cmpc ** 3
+    vol_box    = box_cmpc ** 3
+    rng        = np.random.default_rng(rng_seed)
+
+    results = []
+    for s in snaps_hi:
+        z = float(snap_redshifts[s])
+        loaded = _load_halo_positions_at_snap(filepaths, s, hubble_h)
+        if loaded is None:
+            print(f'    Snap_{s:>2d}  z={z:5.2f} : no halos.')
+            continue
+        pos_cmpc, mvir_msun, gids = loaded
+        n_total = mvir_msun.size
+        m_total = float(mvir_msun.sum())
+
+        sel = np.where(gids == target_gid)[0]
+        if sel.size == 0:
+            print(f'    Snap_{s:>2d}  z={z:5.2f} : progenitor GID '
+                  f'{target_gid} not present.')
+            continue
+        tidx       = int(sel[0])
+        target_pos = pos_cmpc[tidx]
+
+        pos_wrap = np.mod(pos_cmpc, box_cmpc)
+        target_w = np.mod(target_pos, box_cmpc)
+        tree     = cKDTree(pos_wrap, boxsize=box_cmpc)
+
+        tgt_inds   = tree.query_ball_point(target_w, r=radius_cmpc)
+        n_local    = len(tgt_inds)
+        mass_local = float(mvir_msun[tgt_inds].sum())
+        rho_local  = mass_local / vol_sphere
+
+        rho_mean = m_total / vol_box
+        n_mean   = (n_total / vol_box) * vol_sphere
+        delta_M  = (rho_local / rho_mean - 1.0) if rho_mean > 0 else np.nan
+        delta_N  = (n_local   / n_mean   - 1.0) if n_mean   > 0 else np.nan
+
+        if n_total > 1:
+            k = int(min(n_sample, n_total))
+            sample_idx = rng.choice(n_total, size=k, replace=False)
+            all_inds   = tree.query_ball_point(pos_wrap[sample_idx],
+                                                r=radius_cmpc)
+            m_samples = np.fromiter(
+                (float(mvir_msun[inds].sum()) for inds in all_inds),
+                dtype=float, count=k)
+            n_samples = np.fromiter((len(inds) for inds in all_inds),
+                                     dtype=int, count=k)
+            pct_M = 100.0 * float((m_samples <= mass_local).sum()) / k
+            pct_N = 100.0 * float((n_samples <= n_local).sum())  / k
+        else:
+            pct_M = pct_N = np.nan
+
+        results.append(dict(
+            snap=s, z=z, pos_cmpc=target_pos,
+            n_total=n_total, m_total=m_total,
+            n_local=n_local, n_mean=n_mean, delta_N=delta_N, pct_rank_N=pct_N,
+            mass_local=mass_local, rho_local=rho_local,
+            rho_mean=rho_mean, delta_M=delta_M, pct_rank_M=pct_M,
+        ))
+        log_rho = (np.log10(rho_local) if rho_local > 0 else float('-inf'))
+        print(f'    Snap_{s:>2d}  z={z:5.2f}  '
+              f'N_local={n_local:>4d}  delta_N={delta_N:+7.2f}  '
+              f'rank_N={pct_N:5.1f}%   '
+              f'log_rho={log_rho:6.2f}  '
+              f'delta_M={delta_M:+7.2f}  rank_M={pct_M:5.1f}%')
+    return results
+
+
+def plot_progenitor_overdensity_history(results, target_gid, radius_cmpc,
+                                         run_label, out_path,
+                                         extreme_percentile=99.0):
+    """Two-panel plot of delta_M and delta_N vs z for the progenitor.
+    Snaps where percentile rank exceeds `extreme_percentile` get a gold star.
+    """
+    if not results:
+        return
+    zs      = np.array([r['z']         for r in results])
+    delta_M = np.array([r['delta_M']   for r in results])
+    delta_N = np.array([r['delta_N']   for r in results])
+    pct_M   = np.array([r['pct_rank_M'] for r in results])
+    pct_N   = np.array([r['pct_rank_N'] for r in results])
+
+    order = np.argsort(zs)
+    z_o   = zs[order]
+
+    fig, (axM, axN) = plt.subplots(1, 2, figsize=(11, 4.4), sharex=True)
+    panel_cfg = [
+        (axM, delta_M[order], pct_M[order], HISTORY_CMAP(0.25),
+         r'$\delta_{\rho}\;=\;\rho_{\rm local}/\bar{\rho} - 1$'),
+        (axN, delta_N[order], pct_N[order], HISTORY_CMAP(0.60),
+         r'$\delta_N\;=\;N_{\rm local}/\bar{N} - 1$'),
+    ]
+    for ax, dvals, pvals, colour, ylabel in panel_cfg:
+        ax.axhline(0.0, color='grey', lw=0.7, ls=':')
+        ax.plot(z_o, dvals, '-o', color=colour, lw=1.6, ms=4,
+                label=f'GID {target_gid}')
+        mask = pvals >= extreme_percentile
+        if mask.any():
+            ax.scatter(z_o[mask], dvals[mask], s=140, marker='*',
+                       facecolor='gold', edgecolor='black', linewidths=0.6,
+                       zorder=5,
+                       label=fr'rank $\geq$ {extreme_percentile:g}%')
+        ax.set_xlabel('Redshift')
+        ax.set_ylabel(ylabel)
+        ax.grid(True, alpha=0.25)
+        ax.legend(fontsize=9, loc='best')
+
+    axM.set_title(fr'Mass overdensity in $R={radius_cmpc:g}$ cMpc sphere')
+    axN.set_title(fr'Number overdensity in $R={radius_cmpc:g}$ cMpc sphere')
+    fig.suptitle(f'{run_label}  |  Progenitor environment at high z  '
+                 f'(GID {target_gid})', fontsize=11)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.savefig(out_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    print(f'Saved: {out_path}')
+
+
 # ---------------------------------------------------------------------------
 # Plot
 # ---------------------------------------------------------------------------
@@ -221,16 +847,16 @@ def plot_ssfr_vs_cosmic_time(histories, snap_times, snap_num, hubble_h,
     # Colour by log M* if range is meaningful, else use tab cycle
     sm_range = np.nanmax(log_sm_arr) - np.nanmin(log_sm_arr)
     if n <= 10:
-        colors = plt.cm.tab10(np.linspace(0, 1, max(n, 1)))
+        colors = HISTORY_CMAP(np.linspace(0.15, 0.85, max(n, 1)))
         use_cbar = False
     elif sm_range > 0.3:
         norm   = plt.Normalize(vmin=np.nanmin(log_sm_arr),
                                vmax=np.nanmax(log_sm_arr))
-        cmap   = plt.cm.viridis
+        cmap   = HISTORY_CMAP
         colors = [cmap(norm(lsm)) for lsm in log_sm_arr]
         use_cbar = True
     else:
-        colors = plt.cm.viridis(np.linspace(0.15, 0.85, n))
+        colors = HISTORY_CMAP(np.linspace(0.15, 0.85, n))
         use_cbar = False
 
     t_snap = snap_times[snap_num]   # cosmic time at selection redshift
@@ -273,29 +899,18 @@ def plot_ssfr_vs_cosmic_time(histories, snap_times, snap_num, hubble_h,
 
     # Mark the quiescent threshold and the selection epoch
     ax.axhline(-11, color='grey', ls='--', lw=1.0, alpha=0.7)
-    ax.axvline(t_snap, color='white', ls=':', lw=1.0, alpha=0.5)
+    ax.axvline(t_snap, color='grey', ls=':', lw=1.0, alpha=0.5)
 
     ax.set_xlabel('Cosmic time [Gyr]', fontsize=13)
     ax.set_ylabel(r'$\log_{10}(\mathrm{sSFR}\;[\mathrm{yr}^{-1}])$', fontsize=13)
     ax.set_xlim(t[0], t_snap)
 
-    fig.patch.set_facecolor('black')
-    ax.set_facecolor('black')
-    ax.tick_params(colors='white')
-    ax.xaxis.label.set_color('white')
-    ax.yaxis.label.set_color('white')
-
-    for spine in ax.spines.values():
-        spine.set_edgecolor('white')
 
     if use_cbar:
-        sm_sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis, norm=norm)
+        sm_sm = plt.cm.ScalarMappable(cmap=HISTORY_CMAP, norm=norm)
         sm_sm.set_array([])
         cbar = fig.colorbar(sm_sm, ax=ax, pad=0.02)
-        cbar.set_label(r'$\log_{10}(M_*\,/\,\mathrm{M}_\odot)$', fontsize=11, color='white')
-        cbar.ax.yaxis.set_tick_params(color='white')
-        cbar.outline.set_edgecolor('white')
-        plt.setp(cbar.ax.yaxis.get_ticklabels(), color='white')
+        cbar.set_label(r'$\log_{10}(M_*\,/\,\mathrm{M}_\odot)$', fontsize=11)
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=300, bbox_inches='tight')
@@ -323,16 +938,16 @@ def plot_smh_vs_cosmic_time(histories, snap_times, snap_num, hubble_h,
 
     sm_range = np.nanmax(log_sm_arr) - np.nanmin(log_sm_arr)
     if n <= 10:
-        colors   = plt.cm.tab10(np.linspace(0, 1, max(n, 1)))
+        colors   = HISTORY_CMAP(np.linspace(0.15, 0.85, max(n, 1)))
         use_cbar = False
     elif sm_range > 0.3:
         norm     = plt.Normalize(vmin=np.nanmin(log_sm_arr),
                                  vmax=np.nanmax(log_sm_arr))
-        cmap     = plt.cm.viridis
+        cmap     = HISTORY_CMAP
         colors   = [cmap(norm(lsm)) for lsm in log_sm_arr]
         use_cbar = True
     else:
-        colors   = plt.cm.viridis(np.linspace(0.15, 0.85, n))
+        colors   = HISTORY_CMAP(np.linspace(0.15, 0.85, n))
         use_cbar = False
 
     t_snap = snap_times[snap_num]
@@ -364,29 +979,18 @@ def plot_smh_vs_cosmic_time(histories, snap_times, snap_num, hubble_h,
     print(f'    growth dex (final-first)   : '
           f'{_array_stats(np.array(growth_log_dex))}')
 
-    ax.axvline(t_snap, color='white', ls=':', lw=1.0, alpha=0.5)
+    ax.axvline(t_snap, color='grey', ls=':', lw=1.0, alpha=0.5)
 
     ax.set_xlabel('Cosmic time [Gyr]', fontsize=13)
     ax.set_ylabel(r'$\log_{10}(M_*^{\rm formed}\;/\;\mathrm{M}_\odot)$', fontsize=13)
     ax.set_xlim(t[0], t_snap)
 
-    fig.patch.set_facecolor('black')
-    ax.set_facecolor('black')
-    ax.tick_params(colors='white')
-    ax.xaxis.label.set_color('white')
-    ax.yaxis.label.set_color('white')
-
-    for spine in ax.spines.values():
-        spine.set_edgecolor('white')
 
     if use_cbar:
-        sm_sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis, norm=norm)
+        sm_sm = plt.cm.ScalarMappable(cmap=HISTORY_CMAP, norm=norm)
         sm_sm.set_array([])
         cbar = fig.colorbar(sm_sm, ax=ax, pad=0.02)
-        cbar.set_label(r'$\log_{10}(M_*\,/\,\mathrm{M}_\odot)$', fontsize=11, color='white')
-        cbar.ax.yaxis.set_tick_params(color='white')
-        cbar.outline.set_edgecolor('white')
-        plt.setp(cbar.ax.yaxis.get_ticklabels(), color='white')
+        cbar.set_label(r'$\log_{10}(M_*\,/\,\mathrm{M}_\odot)$', fontsize=11)
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=300, bbox_inches='tight')
@@ -537,7 +1141,7 @@ def plot_main_branch_history(branch, snap_times, snap_sel, z_snap,
                   f'median {np.median(valid_peaks):.2f}')
 
     # Colour each merger by its peak stellar mass
-    cmap = plt.cm.plasma_r
+    cmap = HISTORY_CMAP
     peak_sms = []
     for mb in (merger_branches or []):
         vals = [sm for _, sm in mb if mb and not np.isnan(sm)]
@@ -553,11 +1157,9 @@ def plot_main_branch_history(branch, snap_times, snap_sel, z_snap,
         norm     = None
 
     fig, ax = plt.subplots(figsize=(9, 5.5))
-    fig.patch.set_facecolor('black')
-    ax.set_facecolor('black')
 
     main_label = f'GalaxyIndex {galaxy_id}' if galaxy_id is not None else 'Most massive galaxy'
-    _smooth_line(ax, branch, color='white', lw=1.2, label=main_label)
+    _smooth_line(ax, branch, color='black', lw=1.2, label=main_label)
 
     for i, mb in enumerate(merger_branches or []):
         if not mb:
@@ -574,37 +1176,23 @@ def plot_main_branch_history(branch, snap_times, snap_sel, z_snap,
             ax.plot([t_end, t_end], [sm_end, main_sm],
                     color=col, lw=0.4, ls=':', alpha=0.7)
 
-    ax.axvline(t_snap, color='white', ls=':', lw=1.0, alpha=0.5)
+    ax.axvline(t_snap, color='grey', ls=':', lw=1.0, alpha=0.5)
     ax.set_xlim(t_min, t_snap)
 
     ax.set_xlabel('Cosmic time [Gyr]', fontsize=13)
     ax.set_ylabel(r'$\log_{10}(M_*\,/\,\mathrm{M}_\odot)$', fontsize=13)
 
 
-    ax.tick_params(colors='white')
-    ax.xaxis.label.set_color('white')
-    ax.yaxis.label.set_color('white')
-
-    for spine in ax.spines.values():
-        spine.set_edgecolor('white')
-
     handles, _ = ax.get_legend_handles_labels()
     if handles:
         leg = ax.legend(fontsize=9, loc='upper left')
-        for text in leg.get_texts():
-            text.set_color('white')
-        leg.get_frame().set_facecolor('black')
-        leg.get_frame().set_edgecolor('white')
 
     if use_cbar and norm is not None:
         sm_sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm_sm.set_array([])
         cbar = fig.colorbar(sm_sm, ax=ax, pad=0.02)
         cbar.set_label(r'$\log_{10}(M_*^{\rm merger,\,peak}\,/\,\mathrm{M}_\odot)$',
-                       fontsize=10, color='white')
-        cbar.ax.yaxis.set_tick_params(color='white')
-        cbar.outline.set_edgecolor('white')
-        plt.setp(cbar.ax.yaxis.get_ticklabels(), color='white')
+                       fontsize=10)
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=300, bbox_inches='tight')
@@ -615,6 +1203,49 @@ def plot_main_branch_history(branch, snap_times, snap_sel, z_snap,
 # ---------------------------------------------------------------------------
 # Shared stats helper
 # ---------------------------------------------------------------------------
+
+def _binned_y_std_sorted(x_sorted, y_sorted, halfwidth=0.1, min_n=3):
+    """Per-point y std-dev within ±halfwidth bins, vectorised on sorted data.
+
+    Uses searchsorted to find the [lo, hi) window for every point in
+    one shot, then computes the window's std from the cumulative sums of
+    y and y² (so it's O(N log N) total — dominated by the caller's argsort
+    — and uses O(N) memory).  Returns NaN where the window has fewer
+    than ``min_n`` neighbours.
+    """
+    n = x_sorted.size
+    if n == 0:
+        return np.empty(0, dtype=np.float64)
+    y64 = y_sorted.astype(np.float64)
+    csum_y  = np.concatenate(([0.0], np.cumsum(y64)))
+    csum_y2 = np.concatenate(([0.0], np.cumsum(y64 * y64)))
+    lo = np.searchsorted(x_sorted, x_sorted - halfwidth, side='left')
+    hi = np.searchsorted(x_sorted, x_sorted + halfwidth, side='right')
+    counts = (hi - lo).astype(np.float64)
+    sy  = csum_y[hi]  - csum_y[lo]
+    sy2 = csum_y2[hi] - csum_y2[lo]
+    with np.errstate(divide='ignore', invalid='ignore'):
+        mean_y = sy / counts
+        var_y  = sy2 / counts - mean_y * mean_y
+    var_y = np.maximum(var_y, 0.0)   # floating-point safety
+    std_y = np.sqrt(var_y)
+    return np.where(counts >= min_n, std_y, np.nan)
+
+
+def _yerr_at_x(xc, x_sorted, y_sorted, halfwidth=0.1, min_n=3):
+    """Std-dev of ``y_sorted`` over the ±halfwidth window around ``xc``.
+
+    Returns None when the window contains fewer than ``min_n`` points
+    (so matplotlib's errorbar will skip the bar cleanly).
+    """
+    if xc is None or not np.isfinite(xc):
+        return None
+    lo = int(np.searchsorted(x_sorted, xc - halfwidth, side='left'))
+    hi = int(np.searchsorted(x_sorted, xc + halfwidth, side='right'))
+    if hi - lo < min_n:
+        return None
+    return float(np.std(y_sorted[lo:hi]))
+
 
 def _print_panel_stats(label, y, width=22):
     """Print median / mean / std / [min, max] for a panel's y-axis data."""
@@ -636,7 +1267,9 @@ def _print_panel_stats(label, y, width=22):
 # Scaling relations grid
 # ---------------------------------------------------------------------------
 
-def plot_scaling_relations(csv_data, hubble_h, z_snap, run_label, qmode, out_path):
+def plot_scaling_relations(csv_data, hubble_h, z_snap, run_label, qmode, out_path,
+                            comparison_galaxy=None, compare_label=None,
+                            default_label='default'):
     """4×2 grid of galaxy scaling relations from the quiescent catalogue."""
     def _col(key):
         v = csv_data.get(key)
@@ -736,24 +1369,59 @@ def plot_scaling_relations(csv_data, hubble_h, z_snap, run_label, qmode, out_pat
         finite  = age_fin[np.isfinite(age_fin)]
         if len(finite) > 1:
             norm_cb  = plt.Normalize(vmin=finite.min(), vmax=finite.max())
-            cmap_cb  = plt.cm.plasma
+            cmap_cb  = HISTORY_CMAP
             c_mapped = np.where(np.isfinite(age_fin), norm_cb(age_fin), 0.5)
             c_all    = cmap_cb(c_mapped)   # (N, 4) RGBA
             use_cbar = True
 
     n_gals = len(log_sm)
-    ms = max(4, min(50, 200 // max(1, n_gals)))
+    ms = max(12, min(90, 500 // max(1, n_gals)))
+
+    # Comparison-galaxy coordinates, one (x, y) per panel matching the
+    # order in `panels` above.
+    if comparison_galaxy is not None:
+        cg = comparison_galaxy
+        def _slog(v): return np.log10(v) if (v is not None and v > 0) else np.nan
+        sm_c   = cg['sm_msun']
+        sfr_c  = cg['sfr']
+        cg_msun = cg['cold_gas_msun']
+        metals_msun = cg.get('metals_cold_gas_msun', np.nan)
+        log_sm_c   = _slog(sm_c)
+        log_mvir_c = _slog(cg['mvir_msun'])
+        log_sfr_c  = _slog(sfr_c)
+        log_bm_c   = _slog(cg['bulge_mass_msun'])
+        log_bh_c   = _slog(cg['mbh_msun'])
+        log_vvir_c = _slog(cg['vvir'])
+        with np.errstate(divide='ignore', invalid='ignore'):
+            log_ssfr_c = (np.log10(sfr_c / sm_c)
+                          if (sfr_c > 0 and sm_c > 0) else np.nan)
+        # 12 + log(O/H) for the comparison galaxy, mirroring the formula above
+        if (cg_msun > 0 and np.isfinite(metals_msun) and metals_msun > 0):
+            Z_frac_c = metals_msun / cg_msun
+            OH_c     = 0.426 * Z_frac_c / (16.0 * 0.76)
+            log_Z_c  = 12.0 + np.log10(OH_c) if OH_c > 0 else np.nan
+        else:
+            log_Z_c = np.nan
+        compare_xy = [
+            (log_mvir_c, log_sm_c),
+            (log_sm_c,   log_sfr_c),
+            (log_sm_c,   log_ssfr_c),
+            (log_sm_c,   log_Z_c),
+            (log_sm_c,   log_bm_c),
+            (log_sm_c,   cg['bt']),
+            (log_sm_c,   log_bh_c),
+            (log_sm_c,   log_vvir_c),
+        ]
+        compare_marker_label = compare_label or 'compare'
+    else:
+        compare_xy = [None] * len(panels)
+        compare_marker_label = None
 
     fig, axes = plt.subplots(4, 2, figsize=(10, 14))
-    fig.patch.set_facecolor('black')
 
-    for ax, (_lbl, x, y, xl, yl) in zip(axes.flat, panels):
-        ax.set_facecolor('black')
-        ax.tick_params(colors='white', labelsize=8)
-        ax.xaxis.label.set_color('white')
-        ax.yaxis.label.set_color('white')
-        for spine in ax.spines.values():
-            spine.set_edgecolor('white')
+    for panel_idx, (ax, (_lbl, x, y, xl, yl)) in enumerate(
+            zip(axes.flat, panels)):
+        ax.tick_params(labelsize=8)
         ax.set_xlabel(xl, fontsize=9)
         ax.set_ylabel(yl, fontsize=9)
 
@@ -769,13 +1437,60 @@ def plot_scaling_relations(csv_data, hubble_h, z_snap, run_label, qmode, out_pat
             continue
 
         sc_c = c_all[ok] if isinstance(c_all, np.ndarray) else c_all
-        ax.scatter(x[ok], y[ok], c=sc_c, s=ms, alpha=0.8, linewidths=0)
+        ax.scatter(x[ok], y[ok], c=sc_c, s=ms, marker='s',
+                   alpha=0.8, linewidths=0)
+
+        # y-error per catalogue point = std-dev of y values for catalogue
+        # galaxies whose x is within ±0.1 dex of this point's x.  Sorted
+        # sliding window — O(N log N), no pairwise broadcasting.
+        x_ok = x[ok]
+        y_ok = y[ok]
+        if x_ok.size:
+            order   = np.argsort(x_ok)
+            x_sort  = x_ok[order]
+            y_sort  = y_ok[order]
+            yerr_sorted = _binned_y_std_sorted(x_sort, y_sort)
+            yerr_all    = np.empty_like(yerr_sorted)
+            yerr_all[order] = yerr_sorted
+            ax.errorbar(x_ok, y_ok, yerr=yerr_all,
+                        fmt='none', ecolor='black',
+                        elinewidth=0.4, capsize=2, capthick=0.4,
+                        alpha=0.35, zorder=1)
+        else:
+            x_sort = np.empty(0); y_sort = np.empty(0)
 
         # Gold star for the most massive target in the catalogue
         if (idx_max is not None and ok[idx_max]):
-            ax.scatter(x[idx_max], y[idx_max], s=180, marker='*',
-                       facecolor='gold', edgecolor='black',
-                       linewidths=0.8, zorder=5)
+            yerr_d = _yerr_at_x(float(x[idx_max]), x_sort, y_sort)
+            ax.errorbar(x[idx_max], y[idx_max],
+                        yerr=yerr_d, fmt='*', markersize=18,
+                        markerfacecolor='gold', markeredgecolor='black',
+                        markeredgewidth=0.8,
+                        ecolor='black', elinewidth=0.9,
+                        capsize=4, capthick=0.9,
+                        zorder=5,
+                        label=(default_label if (panel_idx == 0
+                                                  and compare_marker_label)
+                               else None))
+
+        # Same galaxy in the comparison run — cyan filled star
+        cxy = compare_xy[panel_idx]
+        if (cxy is not None and np.isfinite(cxy[0])
+                and np.isfinite(cxy[1])):
+            yerr_c = _yerr_at_x(float(cxy[0]), x_sort, y_sort)
+            ax.errorbar(cxy[0], cxy[1],
+                        yerr=yerr_c, fmt='*', markersize=17,
+                        markerfacecolor='cyan', markeredgecolor='black',
+                        markeredgewidth=0.8,
+                        ecolor='black', elinewidth=0.9,
+                        capsize=4, capthick=0.9,
+                        zorder=6,
+                        label=(compare_marker_label
+                               if (panel_idx == 0 and compare_marker_label)
+                               else None))
+
+        if panel_idx == 0 and compare_marker_label:
+            ax.legend(fontsize=8, loc='lower right', framealpha=0.85)
 
     if use_cbar:
         fig.tight_layout(rect=[0, 0.05, 1, 1])
@@ -783,10 +1498,7 @@ def plot_scaling_relations(csv_data, hubble_h, z_snap, run_label, qmode, out_pat
         sm_cb = plt.cm.ScalarMappable(cmap=cmap_cb, norm=norm_cb)
         sm_cb.set_array([])
         cbar = fig.colorbar(sm_cb, cax=cax, orientation='horizontal')
-        cbar.set_label('Mass-weighted stellar age [Gyr]', fontsize=10, color='white')
-        cbar.ax.xaxis.set_tick_params(color='white')
-        cbar.outline.set_edgecolor('white')
-        plt.setp(cbar.ax.xaxis.get_ticklabels(), color='white')
+        cbar.set_label('Mass-weighted stellar age [Gyr]', fontsize=10)
     else:
         fig.tight_layout()
 
@@ -799,7 +1511,9 @@ def plot_scaling_relations(csv_data, hubble_h, z_snap, run_label, qmode, out_pat
 # Structural and kinematic properties grid
 # ---------------------------------------------------------------------------
 
-def plot_structural_kinematics(csv_data, hubble_h, z_snap, run_label, qmode, out_path):
+def plot_structural_kinematics(csv_data, hubble_h, z_snap, run_label, qmode, out_path,
+                                comparison_galaxy=None, compare_label=None,
+                                default_label='default'):
     """2×2 grid: disk radius, bulge radius, velocity dispersion, circular velocity."""
     def _col(key):
         v = csv_data.get(key)
@@ -899,24 +1613,49 @@ def plot_structural_kinematics(csv_data, hubble_h, z_snap, run_label, qmode, out
         finite  = age_fin[np.isfinite(age_fin)]
         if len(finite) > 1:
             norm_cb  = plt.Normalize(vmin=finite.min(), vmax=finite.max())
-            cmap_cb  = plt.cm.plasma
+            cmap_cb  = HISTORY_CMAP
             c_mapped = np.where(np.isfinite(age_fin), norm_cb(age_fin), 0.5)
             c_all    = cmap_cb(c_mapped)
             use_cbar = True
 
     n_gals = len(log_sm)
-    ms = max(4, min(50, 200 // max(1, n_gals)))
+    ms = max(12, min(90, 500 // max(1, n_gals)))
+
+    # Comparison-galaxy coordinates per panel.  V_c uses (M* + ColdGas)
+    # and DiskRadius, so we can compute it directly from the dict.
+    if comparison_galaxy is not None:
+        cg = comparison_galaxy
+        def _slog(v): return np.log10(v) if (v is not None and v > 0) else np.nan
+        sm_c   = cg['sm_msun']
+        cold_c = cg['cold_gas_msun']
+        dr_kpc = cg['disk_radius_kpc']
+        br_kpc = cg['bulge_radius_kpc']
+        log_disk_c  = _slog(dr_kpc)
+        log_bulge_c = _slog(br_kpc)
+        log_vdisp_c = _slog(cg['vdisp'])
+        log_vc_c    = np.nan
+        if sm_c > 0 and dr_kpc > 0:
+            m_bar = sm_c + (cold_c if cold_c > 0 else 0.0)
+            G_kpc = 4.302e-6
+            vc2   = G_kpc * m_bar / dr_kpc
+            log_vc_c = 0.5 * np.log10(vc2) if vc2 > 0 else np.nan
+        log_sm_c = _slog(sm_c)
+        compare_xy = [
+            (log_sm_c, log_disk_c),
+            (log_sm_c, log_bulge_c),
+            (log_sm_c, log_vdisp_c),
+            (log_sm_c, log_vc_c),
+        ]
+        compare_marker_label = compare_label or 'compare'
+    else:
+        compare_xy = [None] * len(panels)
+        compare_marker_label = None
 
     fig, axes = plt.subplots(2, 2, figsize=(9, 8))
-    fig.patch.set_facecolor('black')
 
-    for ax, (_lbl, x, y, xl, yl) in zip(axes.flat, panels):
-        ax.set_facecolor('black')
-        ax.tick_params(colors='white', labelsize=9)
-        ax.xaxis.label.set_color('white')
-        ax.yaxis.label.set_color('white')
-        for spine in ax.spines.values():
-            spine.set_edgecolor('white')
+    for panel_idx, (ax, (_lbl, x, y, xl, yl)) in enumerate(
+            zip(axes.flat, panels)):
+        ax.tick_params(labelsize=9)
         ax.set_xlabel(xl, fontsize=10)
         ax.set_ylabel(yl, fontsize=10)
 
@@ -932,13 +1671,57 @@ def plot_structural_kinematics(csv_data, hubble_h, z_snap, run_label, qmode, out
             continue
 
         sc_c = c_all[ok] if isinstance(c_all, np.ndarray) else c_all
-        ax.scatter(x[ok], y[ok], c=sc_c, s=ms, alpha=0.8, linewidths=0)
+        ax.scatter(x[ok], y[ok], c=sc_c, s=ms, marker='s',
+                   alpha=0.8, linewidths=0)
+
+        # y-error per catalogue point — sorted sliding window.
+        x_ok = x[ok]
+        y_ok = y[ok]
+        if x_ok.size:
+            order   = np.argsort(x_ok)
+            x_sort  = x_ok[order]
+            y_sort  = y_ok[order]
+            yerr_sorted = _binned_y_std_sorted(x_sort, y_sort)
+            yerr_all    = np.empty_like(yerr_sorted)
+            yerr_all[order] = yerr_sorted
+            ax.errorbar(x_ok, y_ok, yerr=yerr_all,
+                        fmt='none', ecolor='black',
+                        elinewidth=0.4, capsize=2, capthick=0.4,
+                        alpha=0.35, zorder=1)
+        else:
+            x_sort = np.empty(0); y_sort = np.empty(0)
 
         # Gold star for the most massive target in the catalogue
         if (idx_max is not None and ok[idx_max]):
-            ax.scatter(x[idx_max], y[idx_max], s=180, marker='*',
-                       facecolor='gold', edgecolor='black',
-                       linewidths=0.8, zorder=5)
+            yerr_d = _yerr_at_x(float(x[idx_max]), x_sort, y_sort)
+            ax.errorbar(x[idx_max], y[idx_max],
+                        yerr=yerr_d, fmt='*', markersize=18,
+                        markerfacecolor='gold', markeredgecolor='black',
+                        markeredgewidth=0.8,
+                        ecolor='black', elinewidth=0.9,
+                        capsize=4, capthick=0.9,
+                        zorder=5,
+                        label=(default_label if (panel_idx == 0
+                                                  and compare_marker_label)
+                               else None))
+
+        cxy = compare_xy[panel_idx]
+        if (cxy is not None and np.isfinite(cxy[0])
+                and np.isfinite(cxy[1])):
+            yerr_c = _yerr_at_x(float(cxy[0]), x_sort, y_sort)
+            ax.errorbar(cxy[0], cxy[1],
+                        yerr=yerr_c, fmt='*', markersize=17,
+                        markerfacecolor='cyan', markeredgecolor='black',
+                        markeredgewidth=0.8,
+                        ecolor='black', elinewidth=0.9,
+                        capsize=4, capthick=0.9,
+                        zorder=6,
+                        label=(compare_marker_label
+                               if (panel_idx == 0 and compare_marker_label)
+                               else None))
+
+        if panel_idx == 0 and compare_marker_label:
+            ax.legend(fontsize=8, loc='lower right', framealpha=0.85)
 
     if use_cbar:
         fig.tight_layout(rect=[0, 0.08, 1, 1])
@@ -946,10 +1729,7 @@ def plot_structural_kinematics(csv_data, hubble_h, z_snap, run_label, qmode, out
         sm_cb = plt.cm.ScalarMappable(cmap=cmap_cb, norm=norm_cb)
         sm_cb.set_array([])
         cbar = fig.colorbar(sm_cb, cax=cax, orientation='horizontal')
-        cbar.set_label('Mass-weighted stellar age [Gyr]', fontsize=10, color='white')
-        cbar.ax.xaxis.set_tick_params(color='white')
-        cbar.outline.set_edgecolor('white')
-        plt.setp(cbar.ax.xaxis.get_ticklabels(), color='white')
+        cbar.set_label('Mass-weighted stellar age [Gyr]', fontsize=10)
     else:
         fig.tight_layout()
 
@@ -1328,300 +2108,152 @@ def print_environment_report(env_results, z_snap, run_label, qmode):
                   f'{sm_s:>7}  {ss_s:>9}  {bt_s:>5}{tag}')
 
 
-def plot_environment_summary(env_results, _z_snap, _run_label, _qmode, out_path):
-    """1×3 summary: environment class counts, host halo mass, overdensity."""
-    found = [r for r in env_results if r.get('found', False)]
-    if not found:
-        return
+# ---------------------------------------------------------------------------
+# Density rendering — same method as halo_mass_grid.py:
+#   bin halos into a 2D histogram, then Gaussian-smooth the binned field.
+# ---------------------------------------------------------------------------
 
-    classes      = [r['env_class'] for r in found]
-    log_mvir     = np.array([r['host_log_mvir'] for r in found])
-    delta_inner  = np.array([r.get('delta_inner', np.nan) for r in found])
-    delta_outer  = np.array([r.get('delta_outer', np.nan) for r in found])
-    kernel_arr   = np.array([r.get('kernel_deltas', [np.nan, np.nan]) for r in found])
-    kernel_lo    = kernel_arr[:, 0]
-    kernel_hi    = kernel_arr[:, 1]
-    sig_lo, sig_hi = found[0].get('kernel_sigmas', list(KERNEL_SIGMAS_MPC))
-    n_members    = np.array([r['n_group_members'] for r in found])
-    r_in         = found[0]['r_inner']
-    r_out        = found[0]['r_outer']
+def _bin_smooth_density(dx, dy, weights, R, grid_n, smooth_sigma_mpc):
+    """Bin halos onto an XY grid over [-R, R]² and Gaussian-smooth.
 
-    cls_colors = {'Isolated': '#4CAF50', 'Pair': '#8BC34A',
-                  'Field group': '#CDDC39', 'Group': '#FF9800', 'Cluster': '#F44336'}
-    cls_names  = [c for c in ['Isolated', 'Pair', 'Field group', 'Group', 'Cluster']
-                  if c in classes]
-
-    fig, axes2d = plt.subplots(2, 2, figsize=(9.5, 8))
-    axes = axes2d.flatten()
-    fig.patch.set_facecolor('black')
-
-    # Panel 1 — environment class bar chart
-    ax = axes[0]
-    ax.set_facecolor('black')
-    counts = [classes.count(c) for c in cls_names]
-    bars = ax.barh(cls_names, counts,
-                   color=[cls_colors[c] for c in cls_names], alpha=0.85)
-    for bar, val in zip(bars, counts):
-        if val > 0:
-            ax.text(bar.get_width() + 0.05, bar.get_y() + bar.get_height() / 2,
-                    str(val), va='center', color='white', fontsize=10)
-    ax.set_xlabel('Count', fontsize=11)
-    ax.set_xlim(0, max(counts) * 1.25 + 0.5)
-
-    # Panel 2 — host halo mass histogram
-    ax = axes[1]
-    ax.set_facecolor('black')
-    fin = log_mvir[np.isfinite(log_mvir)]
-    if len(fin):
-        lo, hi = fin.min() - 0.3, fin.max() + 0.3
-        bins = np.linspace(lo, hi, max(8, len(fin) // 3 + 3))
-        ax.hist(fin, bins=bins, color='cyan', alpha=0.75,
-                edgecolor='white', linewidth=0.5)
-        ax.axvline(12.5, color='orange', ls='--', lw=1.0, alpha=0.9,
-                   label='Group floor')
-        ax.axvline(14.0, color='red',    ls='--', lw=1.0, alpha=0.9,
-                   label='Cluster floor')
-        leg = ax.legend(fontsize=8)
-        leg.get_frame().set_facecolor('black')
-        leg.get_frame().set_edgecolor('white')
-        for t in leg.get_texts():
-            t.set_color('white')
-    ax.set_xlabel(r'$\log_{10}(M_{\rm host}\,/\,\mathrm{M}_\odot)$', fontsize=11)
-    ax.set_ylabel('Count', fontsize=11)
-
-    # Panel 3 — overdensity at both radii, or N-members fallback
-    ax = axes[2]
-    ax.set_facecolor('black')
-    di_fin = delta_inner[np.isfinite(delta_inner)]
-    do_fin = delta_outer[np.isfinite(delta_outer)]
-    if len(di_fin) or len(do_fin):
-        all_od = np.concatenate([di_fin, do_fin])
-        lo, hi = all_od.min() - 1, all_od.max() + 1
-        bins = np.linspace(lo, hi, max(8, len(all_od) // 4 + 3))
-        if len(di_fin):
-            ax.hist(di_fin, bins=bins, color='magenta', alpha=0.6,
-                    edgecolor='white', linewidth=0.5,
-                    label=fr'$\delta$({r_in:.0f} Mpc)')
-        if len(do_fin):
-            ax.hist(do_fin, bins=bins, color='cyan', alpha=0.5,
-                    edgecolor='white', linewidth=0.5,
-                    label=fr'$\delta$({r_out:.0f} Mpc)')
-        ax.axvline(0, color='white', ls=':', lw=1.0, alpha=0.5)
-        leg = ax.legend(fontsize=8)
-        leg.get_frame().set_facecolor('black')
-        leg.get_frame().set_edgecolor('white')
-        for t in leg.get_texts():
-            t.set_color('white')
-        ax.set_xlabel(r'Overdensity $\delta$', fontsize=11)
-    else:
-        bins = np.arange(0, n_members.max() + 2) - 0.5
-        ax.hist(n_members, bins=bins, color='magenta', alpha=0.75,
-                edgecolor='white', linewidth=0.5)
-        ax.set_xlabel('N FoF group members', fontsize=11)
-    ax.set_ylabel('Count', fontsize=11)
-
-    # Panel 4 — mass-weighted Gaussian-kernel overdensity (halo field)
-    ax = axes[3]
-    ax.set_facecolor('black')
-    kl_fin = kernel_lo[np.isfinite(kernel_lo)]
-    kh_fin = kernel_hi[np.isfinite(kernel_hi)]
-    if len(kl_fin) or len(kh_fin):
-        all_k = np.concatenate([kl_fin, kh_fin])
-        lo, hi = all_k.min() - 0.5, all_k.max() + 0.5
-        bins = np.linspace(lo, hi, max(8, len(all_k) // 4 + 3))
-        if len(kl_fin):
-            ax.hist(kl_fin, bins=bins, color='gold', alpha=0.6,
-                    edgecolor='white', linewidth=0.5,
-                    label=fr'$\delta_K(\sigma={sig_lo:.0f}\,\mathrm{{cMpc}})$')
-        if len(kh_fin):
-            ax.hist(kh_fin, bins=bins, color='tomato', alpha=0.5,
-                    edgecolor='white', linewidth=0.5,
-                    label=fr'$\delta_K(\sigma={sig_hi:.0f}\,\mathrm{{cMpc}})$')
-        ax.axvline(0, color='white', ls=':', lw=1.0, alpha=0.5)
-        leg = ax.legend(fontsize=8)
-        leg.get_frame().set_facecolor('black')
-        leg.get_frame().set_edgecolor('white')
-        for t in leg.get_texts():
-            t.set_color('white')
-    else:
-        ax.text(0.5, 0.5, 'No kernel data', ha='center', va='center',
-                color='grey', fontsize=10, transform=ax.transAxes)
-    ax.set_xlabel(r'Kernel overdensity $\delta_K$ (M$_{\rm vir}$-weighted)',
-                  fontsize=11)
-    ax.set_ylabel('Count', fontsize=11)
-
-    for ax in axes:
-        ax.tick_params(colors='white')
-        ax.xaxis.label.set_color('white')
-        ax.yaxis.label.set_color('white')
-        for spine in ax.spines.values():
-            spine.set_edgecolor('white')
-
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=300, bbox_inches='tight')
-    plt.close(fig)
-    print(f'Saved: {out_path}')
-
-
-def plot_group_maps(env_results, all_gals, _z_snap, _run_label, _qmode,
-                    out_path, box_size_mpc=None, max_panels=16,
-                    min_overdensity=None):
-    """Grid of projected XY maps, one panel per target galaxy.
-
-    Background grey points: all galaxies within the search sphere.
-    Coloured circles: FoF group members (size ∝ log m*, colour = log m*).
-    Red filled circle: target galaxy.
-
-    min_overdensity: if set, only include targets where max(delta_inner, delta_outer) >= this value.
+    Returns a (grid_n, grid_n) array ready for ``imshow`` with
+    ``origin='lower'`` and ``extent=[-R, R, -R, R]`` — i.e. rows index Y,
+    cols index X (transposed relative to ``np.histogram2d``).
     """
-    found = [r for r in env_results if r.get('found', False)]
-    if min_overdensity is not None:
-        found = [r for r in found
-                 if r.get('delta_outer', -np.inf) >= min_overdensity]
-        # Deduplicate: one panel per unique FoF group
-        seen, deduped = set(), []
-        for r in found:
-            key = frozenset(m['gid'] for m in r['group_members'])
-            if key not in seen:
-                seen.add(key)
-                deduped.append(r)
-        found = deduped
-    if not found:
-        if min_overdensity is not None:
-            print(f'  No targets with δ(5 Mpc) >= {min_overdensity:.0f} — skipping overdense maps.')
-        return
+    edges = np.linspace(-R, R, grid_n + 1)
+    rho, _, _ = np.histogram2d(dx, dy, bins=[edges, edges], weights=weights)
+    if smooth_sigma_mpc > 0:
+        cell_mpc = (2.0 * R) / grid_n
+        smooth_cells = float(smooth_sigma_mpc) / cell_mpc
+        rho = gaussian_filter(rho, sigma=smooth_cells,
+                              mode='constant', cval=0.0)
+    return rho.T
 
-    n = min(len(found), max_panels)
-    if len(found) > max_panels:
-        print(f'  Note: {len(found)} targets — showing first {max_panels} in group maps.')
 
-    ncols = min(n, 4)
-    nrows = (n + ncols - 1) // ncols
+def _density_norm_and_cmap(rho_max_all, panel_images, weight_mode):
+    """Shared colour normalisation for the multi-panel density figures.
 
-    fig, axes = plt.subplots(nrows, ncols, figsize=(4.5 * ncols, 4.5 * nrows),
-                              squeeze=False)
-    fig.patch.set_facecolor('black')
+    Mass mode → PowerNorm(γ=0.5) + magma (√-scaled ρ_DM, 99th-pct vmax cap).
+    Count mode → linear Normalize + viridis (matches halo_mass_grid.py
+    count panel).
 
-    # Global log-m* range across all group members for a shared colormap
-    all_log_sm = []
-    for r in found[:n]:
-        for m in r['group_members']:
-            if m['sm_msun'] > 0:
-                all_log_sm.append(np.log10(m['sm_msun']))
-    if all_log_sm:
-        sm_min, sm_max = np.nanmin(all_log_sm), np.nanmax(all_log_sm)
+    Empty cells (``rho == 0``) survive the histogram + Gaussian-filter
+    pipeline as exact zeros, which LogNorm renders as NaN/masked.  We
+    return a copy of the cmap with both ``bad`` and ``under`` set to
+    ``cmap(0)`` so those cells fall to the bottom of the colour scale
+    rather than punching through as white axes-background.
+    """
+    from matplotlib.colors import Normalize, PowerNorm, ListedColormap
+
+    def _patch_cmap(base_cmap, upper_clip=1.0):
+        if upper_clip < 1.0:
+            colors = base_cmap(np.linspace(0.0, upper_clip, 256))
+            c = ListedColormap(colors)
+        else:
+            c = base_cmap.copy()
+        c.set_bad(c(0.0))
+        c.set_under(c(0.0))
+        return c
+
+    if weight_mode == 'count':
+        cmap = _patch_cmap(DENSITY_COUNT_CMAP)
+        if rho_max_all > 0:
+            norm = Normalize(vmin=0.0, vmax=rho_max_all)
+        else:
+            norm = None
+        return norm, cmap
+
+    # Mass mode — softened in three combined ways:
+    #   * PowerNorm(γ=0.4): mid-density pixels lift further up the cmap so
+    #     the cluster core stops looking lonely against a dark sea.
+    #   * vmax = 95th percentile of positive pixels: the brightest 5% of
+    #     cells (almost always cluster cores) saturate to cmap top rather
+    #     than stretching the whole panel toward white.
+    #   * cmap truncated to magma[0, 0.70]: the cmap top reads as a deep
+    #     orange instead of pale yellow / near-white.
+    cmap = _patch_cmap(DENSITY_MASS_CMAP, upper_clip=1.0)
+    if rho_max_all <= 0:
+        return None, cmap
+    nonzero = [im[im > 0] for im in panel_images]
+    nonzero = [v for v in nonzero if v.size]
+    if nonzero:
+        flat = np.concatenate(nonzero)
+        vmax = float(np.percentile(flat, 95.0))
     else:
-        sm_min, sm_max = 8.0, 12.0
-    norm = plt.Normalize(vmin=sm_min, vmax=sm_max)
-    cmap = plt.cm.plasma
+        vmax = rho_max_all
+    return PowerNorm(gamma=0.5, vmin=0.0, vmax=vmax), cmap
 
-    R = found[0]['r_outer']   # outer aperture radius — sets map extent
 
-    for i, r in enumerate(found[:n]):
-        row, col = divmod(i, ncols)
-        ax = axes[row][col]
-        ax.set_facecolor('black')
-        ax.set_aspect('equal')
+def _density_cbar_label(weight_mode, sigma=None, zslab=None, perp_label='z'):
+    """Colorbar label matching the units actually plotted."""
+    if weight_mode == 'count':
+        return r'$n_{\rm halo}$  [$\mathrm{cMpc}^{-3}$]'
+    return r'$\rho_{\rm DM}$  [$\mathrm{M}_\odot\,\mathrm{kpc}^{-3}$]'
 
-        tx, ty, _ = r['pos']
 
-        # Background: all galaxies in the search sphere
-        if len(r['sphere_idx']) > 0:
-            sx = all_gals['posx'][r['sphere_idx']] - tx
-            sy = all_gals['posy'][r['sphere_idx']] - ty
-            if box_size_mpc:
-                sx -= box_size_mpc * np.round(sx / box_size_mpc)
-                sy -= box_size_mpc * np.round(sy / box_size_mpc)
-            ax.scatter(sx, sy, s=3, color='#3a3a3a', zorder=1, linewidths=0)
+def _scatter_galaxy_markers(ax, gxx, gyy, gsm, gssfr,
+                             ssfr_cmap, ssfr_norm, marker_size=1.5):
+    """Galaxy overlay for the density panels.
 
-        # FoF group members coloured by log m*
-        grp_dx, grp_dy = [], []
-        for m in r['group_members']:
-            if m['sm_msun'] <= 0:
-                continue
-            log_sm_m = np.log10(m['sm_msun'])
-            color    = cmap(norm(log_sm_m))
-            mx = m['posx'] - tx
-            my = m['posy'] - ty
-            if box_size_mpc:
-                mx -= box_size_mpc * np.round(mx / box_size_mpc)
-                my -= box_size_mpc * np.round(my / box_size_mpc)
-            grp_dx.append(mx)
-            grp_dy.append(my)
-            if m['is_target']:
-                ax.scatter(mx, my, s=20, color='red', zorder=5,
-                           linewidths=0)
-            else:
-                ax.scatter(mx, my, s=20, color=color, zorder=3,
-                           linewidths=0, alpha=0.9)
+    Exactly the same alpha + size recipe as ``make_projection`` in
+    spatial_distribution.py:
+      * ``s = dot_size`` (default 1.5 — matches the spatial_distribution
+        CLI default),
+      * ``linewidths=0`` (no edge ring),
+      * ``rasterized=True``,
+      * when ``len(gxx) > LARGE_SIM_GALAXY_THRESHOLD`` the per-point alpha
+        is the power-law of normalised log10(M*):
+            alpha = 0.01 + alpha_norm**2.5 * 0.80
+        with alpha_norm = (log_sm − min) / range.
+      * otherwise a uniform ``alpha=0.8`` is used (the small-sample branch
+        in spatial_distribution.py).
 
-        # Red circle enclosing the FoF group
-        if len(grp_dx) > 1:
-            cx = np.mean(grp_dx)
-            cy = np.mean(grp_dy)
-            r_grp = np.hypot(np.array(grp_dx) - cx,
-                             np.array(grp_dy) - cy).max() * 1.25
-            theta = np.linspace(0, 2 * np.pi, 200)
-            ax.plot(cx + r_grp * np.cos(theta), cy + r_grp * np.sin(theta),
-                    color='red', lw=1.0, ls='--', alpha=0.75, zorder=4)
+    Only the **colour** differs from ``make_projection``: this overlay
+    uses the target's sSFR cmap+norm instead of the log_sm cmap so the
+    galaxies share the colour key with the target star.  Missing/zero
+    sSFR is sentinelled at log10(sSFR) = -16 (below the TwoSlopeNorm
+    vmin → fully quiescent).
+    """
+    if not len(gsm):
+        return
+    log_sm = np.log10(np.maximum(gsm, 1.0))
+    with np.errstate(divide='ignore', invalid='ignore'):
+        log_ssfr = np.where(np.isfinite(gssfr) & (gssfr > 0),
+                            np.log10(np.where(gssfr > 0, gssfr, 1.0)),
+                            -16.0)
 
-        # Search-radius reference circle
-        theta = np.linspace(0, 2 * np.pi, 200)
-        ax.plot(R * np.cos(theta), R * np.sin(theta),
-                color='white', lw=0.5, ls=':', alpha=0.35, zorder=2)
-
-        ax.set_xlim(-R * 1.08, R * 1.08)
-        ax.set_ylim(-R * 1.08, R * 1.08)
-        ax.set_xlabel('ΔX [Mpc]', fontsize=8, color='white')
-        ax.set_ylabel('ΔY [Mpc]', fontsize=8, color='white')
-        ax.tick_params(colors='white', labelsize=7)
-        for spine in ax.spines.values():
-            spine.set_edgecolor('white')
-
-        di_s = (f'δ({found[0]["r_inner"]:.0f})={r["delta_inner"]:.1f}'
-                if np.isfinite(r.get('delta_inner', np.nan)) else '')
-        do_s = (f'  δ({found[0]["r_outer"]:.0f})={r["delta_outer"]:.1f}'
-                if np.isfinite(r.get('delta_outer', np.nan)) else '')
-        ax.set_title(
-            f'GID {r["gid"]}  —  {r["env_class"]}\n'
-            f'log M_host={r["host_log_mvir"]:.2f}  N_grp={r["n_group_members"]}\n'
-            f'{di_s}{do_s}',
-            fontsize=7, color='white', pad=4)
-
-    for i in range(n, nrows * ncols):
-        row, col = divmod(i, ncols)
-        axes[row][col].set_visible(False)
-
-    sm_cb = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    sm_cb.set_array([])
-    fig.tight_layout(rect=[0, 0.07, 1, 1])
-    cax = fig.add_axes([0.15, 0.02, 0.70, 0.025])
-    cbar = fig.colorbar(sm_cb, cax=cax, orientation='horizontal')
-    cbar.set_label(r'$\log_{10}(m_*\,/\,\mathrm{M}_\odot)$ — FoF group members',
-                   fontsize=10, color='white')
-    cbar.ax.xaxis.set_tick_params(color='white')
-    cbar.outline.set_edgecolor('white')
-    plt.setp(cbar.ax.xaxis.get_ticklabels(), color='white')
-
-    fig.savefig(out_path, dpi=300, bbox_inches='tight')
-    plt.close(fig)
-    print(f'Saved: {out_path}')
+    if len(gxx) > LARGE_SIM_GALAXY_THRESHOLD:
+        rgba = ssfr_cmap(ssfr_norm(log_ssfr)).copy()
+        sm_min   = float(log_sm.min())
+        sm_range = float(log_sm.max() - sm_min)
+        if sm_range > 0:
+            alpha_norm = (log_sm - sm_min) / sm_range
+        else:
+            alpha_norm = np.ones_like(log_sm)
+        rgba[:, 3] = 0.01 + alpha_norm ** 2.5 * 0.80
+        ax.scatter(gxx, gyy, c=rgba, s=marker_size, marker='o',
+                   linewidths=0, rasterized=True, zorder=2)
+    else:
+        ax.scatter(gxx, gyy, c=log_ssfr, cmap=ssfr_cmap, norm=ssfr_norm,
+                   s=marker_size, marker='o', alpha=0.8,
+                   linewidths=0, rasterized=True, zorder=2)
 
 
 def plot_kernel_density_maps(env_results, all_gals, _z_snap, _run_label, _qmode,
                               out_path, box_size_mpc=None, max_panels=16,
                               sigma_mpc=None, extent_mpc=None,
                               z_slab_mpc=None, grid_n=1024,
-                              min_overdensity=None):
-    """Per-target projected mass-weighted Gaussian kernel maps.
+                              min_overdensity=None, weight_mode='mass'):
+    """Per-target projected Gaussian kernel maps.
 
-    For each target the field of central halos (weighted by Mvir) is summed
-    with a 2D Gaussian of width ``sigma_mpc`` over an XY grid centred on the
-    target, restricting to halos inside a z-slab of half-thickness
-    ``z_slab_mpc``.  Halo positions are overlaid as cyan dots; the target sits
-    at the origin as a red star.  Dashed/dotted circles mark the kernel
-    scales used in ``compute_environment``.  All panels share a log colour
-    scale so densities can be compared between targets.
+    For each target the full halo field is summed with a 2D Gaussian of
+    width ``sigma_mpc`` over an XY grid centred on the target, restricting
+    to halos inside a z-slab of half-thickness ``z_slab_mpc``.  ``weight_mode``
+    selects ``'mass'`` (Mvir-weighted, inferno) or ``'count'`` (unweighted
+    number-density, viridis).  Halo positions are overlaid as cyan dots; the
+    target sits at the origin as a red star.  Dashed/dotted circles mark the
+    kernel scales used in ``compute_environment``.  All panels share a log
+    colour scale so densities can be compared between targets.
     """
     from matplotlib.colors import LogNorm, TwoSlopeNorm
 
@@ -1649,17 +2281,19 @@ def plot_kernel_density_maps(env_results, all_gals, _z_snap, _run_label, _qmode,
     R      = float(extent_mpc if extent_mpc is not None else 3.0 * max(sigmas))
     zslab  = float(z_slab_mpc if z_slab_mpc is not None else 2.0 * sigma)
 
-    # Field: ALL halos above the resolution floor, weighted by Mvir.
-    halo_mask = all_gals['mvir'] >= HALO_MASS_FLOOR_MSUN
-    cx = all_gals['posx'][halo_mask]
-    cy = all_gals['posy'][halo_mask]
-    cz = all_gals['posz'][halo_mask]
-    cm = all_gals['mvir'][halo_mask]
+    # Field: ALL halos (no mass floor).  weight_mode selects per-halo weight.
+    cx = all_gals['posx']
+    cy = all_gals['posy']
+    cz = all_gals['posz']
+    if weight_mode == 'count':
+        cm = np.ones(len(cx), dtype=np.float64)
+    else:
+        cm = all_gals['mvir']
 
     # sSFR colour normalisation for the target star — diverging, centred at
     # the conventional quiescent threshold log10(sSFR) = -11.
     ssfr_norm = TwoSlopeNorm(vmin=-12.0, vcenter=-11.0, vmax=-9.0)
-    ssfr_cmap = plt.cm.bwr_r
+    ssfr_cmap = plt.cm.coolwarm_r
 
     n = min(len(found), max_panels)
     if len(found) > max_panels:
@@ -1670,12 +2304,17 @@ def plot_kernel_density_maps(env_results, all_gals, _z_snap, _run_label, _qmode,
     nrows = (n + ncols - 1) // ncols
     fig, axes = plt.subplots(nrows, ncols, figsize=(4.5 * ncols, 4.5 * nrows),
                               squeeze=False)
-    fig.patch.set_facecolor('black')
 
-    norm_2d    = 1.0 / (2.0 * np.pi * sigma ** 2)
-    sigma2_inv = 1.0 / (2.0 * sigma ** 2)
-    grid_axis  = np.linspace(-R, R, grid_n)
-    gx, gy     = np.meshgrid(grid_axis, grid_axis)
+    # Physical depth of the projection slab — used to convert binned mass
+    # to a volumetric density (M⊙/kpc³).  After periodic wrap the maximum
+    # |Δz| is box/2, so the effective full depth caps at the box size.
+    if box_size_mpc:
+        slab_full_mpc = min(2.0 * zslab, box_size_mpc)
+    else:
+        slab_full_mpc = 2.0 * zslab
+    cell_mpc      = (2.0 * R) / grid_n
+    cell_vol_kpc3 = (cell_mpc * 1000.0) ** 2 * (slab_full_mpc * 1000.0)
+    cell_vol_mpc3 = cell_mpc * cell_mpc * slab_full_mpc
 
     images, extras = [], []
     rho_max_all    = 0.0
@@ -1691,25 +2330,19 @@ def plot_kernel_density_maps(env_results, all_gals, _z_snap, _run_label, _qmode,
             dy -= box_size_mpc * np.round(dy / box_size_mpc)
             dz -= box_size_mpc * np.round(dz / box_size_mpc)
 
-        # z-slab + XY pre-filter slightly larger than R so kernel tails are kept
+        # z-slab + XY window selection
         keep = ((np.abs(dz) <= zslab) &
-                (np.abs(dx) <= R + 3.0 * sigma) &
-                (np.abs(dy) <= R + 3.0 * sigma))
+                (np.abs(dx) <= R) &
+                (np.abs(dy) <= R))
         hdx = dx[keep]
         hdy = dy[keep]
         hm  = cm[keep]
 
-        rho = np.zeros((grid_n, grid_n), dtype=np.float64)
-        if len(hm):
-            # Chunk halos to keep peak memory bounded (grid_n^2 * chunk floats);
-            # chunk=32 keeps (1024² × 32 × 8B) ≈ 256 MB per iteration
-            chunk = 32
-            for k0 in range(0, len(hm), chunk):
-                hx = hdx[k0:k0 + chunk]
-                hy = hdy[k0:k0 + chunk]
-                hM = hm[k0:k0 + chunk]
-                rr = (gx[..., None] - hx) ** 2 + (gy[..., None] - hy) ** 2
-                rho += norm_2d * np.sum(hM * np.exp(-rr * sigma2_inv), axis=2)
+        rho = _bin_smooth_density(hdx, hdy, hm, R, grid_n, sigma)
+        if weight_mode == 'mass':
+            rho = rho / cell_vol_kpc3   # → M⊙/kpc³
+        else:
+            rho = rho / cell_vol_mpc3   # → halos/cMpc³
 
         # Marker overlay — ALL galaxies (no Mvir cut), inside slab + window
         gdx_all = all_gals['posx'] - tx
@@ -1722,19 +2355,23 @@ def plot_kernel_density_maps(env_results, all_gals, _z_snap, _run_label, _qmode,
         g_keep = ((np.abs(gdz_all) <= zslab) &
                   (np.abs(gdx_all) <= R) &
                   (np.abs(gdy_all) <= R))
-        g_dx = gdx_all[g_keep]
-        g_dy = gdy_all[g_keep]
-        g_sm = all_gals['sm'][g_keep]
+        g_dx  = gdx_all[g_keep]
+        g_dy  = gdy_all[g_keep]
+        g_sm  = all_gals['sm'][g_keep]
+        g_sfr = all_gals['sfr'][g_keep]
+        with np.errstate(divide='ignore', invalid='ignore'):
+            g_ssfr = np.where(g_sm > 0, g_sfr / g_sm, np.nan)
 
         images.append(rho)
-        extras.append((g_dx, g_dy, g_sm))
+        extras.append((g_dx, g_dy, g_sm, g_ssfr))
         rho_max_all = max(rho_max_all, float(rho.max()) if rho.size else 0.0)
 
     # --- Summary table of what each panel actually shows ---
     print(f'  ── Kernel density map data ──')
     print(f'    panels rendered : {len(images)}  (max requested {max_panels})')
-    print(f'    smoothing σ     : {sigma:.2f} cMpc   '
-          f'extent ±{R:.1f} cMpc   slab ±{zslab:.1f} cMpc')
+    print(f'    weight mode     : {weight_mode}   smoothing σ : {sigma:.2f} cMpc')
+    print(f'    extent ±{R:.1f} cMpc   slab ±{zslab:.1f} cMpc   '
+          f'grid {grid_n}×{grid_n}   cell {cell_mpc*1000:.1f} ckpc')
     delta_in  = []
     delta_out = []
     rho_peaks = []
@@ -1743,49 +2380,33 @@ def plot_kernel_density_maps(env_results, all_gals, _z_snap, _run_label, _qmode,
         delta_in.append(kd[0])
         delta_out.append(kd[1])
         rho_peaks.append(float(rho.max()) if rho.size else np.nan)
-    print(f'    panel Σ_max     : {_array_stats(np.array(rho_peaks), "{:.2e}")}')
+    peak_label = ('ρ_max [M⊙/kpc³]' if weight_mode == 'mass'
+                  else 'n_max [cMpc⁻³]')
+    print(f'    {peak_label} : {_array_stats(np.array(rho_peaks), "{:.2e}")}')
     print(f'    δ_K(3 cMpc)     : {_array_stats(np.array(delta_in))}')
     print(f'    δ_K(5 cMpc)     : {_array_stats(np.array(delta_out))}')
 
-    # Stretch the colour scale: 1st-percentile floor of the positive density
-    # values across all panels (brings out low-density structure), capped at
-    # vmax/1e7 to keep a sane dynamic range.  vmax = peak across all panels.
-    norm_img = None
-    if rho_max_all > 0:
-        nonzero = [im[im > 0] for im in images]
-        nonzero = [v for v in nonzero if v.size]
-        if nonzero:
-            flat = np.concatenate(nonzero)
-            vmin = max(float(np.percentile(flat, 1.0)), rho_max_all / 1e7)
-        else:
-            vmin = rho_max_all / 1e7
-        norm_img = LogNorm(vmin=vmin, vmax=rho_max_all)
-    cmap = plt.cm.inferno
+    norm_img, cmap = _density_norm_and_cmap(rho_max_all, images, weight_mode)
 
-    for i, (r, rho, (gxx, gyy, gsm)) in enumerate(
+    for i, (r, rho, (gxx, gyy, gsm, gssfr)) in enumerate(
             zip(found[:n], images, extras)):
         row, col = divmod(i, ncols)
         ax = axes[row][col]
-        ax.set_facecolor('black')
         ax.set_aspect('equal')
 
         ax.imshow(rho, origin='lower', extent=[-R, R, -R, R],
                   cmap=cmap, norm=norm_img,
                   interpolation='bilinear', zorder=1)
 
-        # All galaxies as markers (no Mvir cut), sized by log stellar mass
-        if len(gsm):
-            log_sm = np.log10(np.maximum(gsm, 1.0))
-            sizes  = 4.0 + 3.0 * np.clip(log_sm - 9.0, 0.0, 3.5)
-            ax.scatter(gxx, gyy, s=sizes,
-                       facecolor='white', edgecolor='black',
-                       linewidths=0.4, alpha=0.85, zorder=2)
+        _scatter_galaxy_markers(ax, gxx, gyy, gsm, gssfr,
+                                 ssfr_cmap, ssfr_norm)
 
-        # Kernel sigma reference circles — slateblue
+        # Kernel sigma reference circles
         theta = np.linspace(0, 2.0 * np.pi, 200)
         for ss, ls in zip(sigmas, ['--', ':']):
             ax.plot(ss * np.cos(theta), ss * np.sin(theta),
-                    color='slateblue', lw=1.4, ls=ls, alpha=0.9, zorder=3,
+                    color=('cyan' if weight_mode == 'mass' else 'white'),
+                    lw=1.4, ls=ls, alpha=0.9, zorder=3,
                     label=fr'$\sigma={ss:.0f}\,\mathrm{{cMpc}}$' if i == 0 else None)
 
         # Target marker — coloured by its own sSFR via bwr_r/TwoSlopeNorm,
@@ -1803,11 +2424,9 @@ def plot_kernel_density_maps(env_results, all_gals, _z_snap, _run_label, _qmode,
 
         ax.set_xlim(-R, R)
         ax.set_ylim(-R, R)
-        ax.set_xlabel(r'$\Delta X$ [cMpc]', fontsize=8, color='white')
-        ax.set_ylabel(r'$\Delta Y$ [cMpc]', fontsize=8, color='white')
-        ax.tick_params(colors='white', labelsize=7)
-        for spine in ax.spines.values():
-            spine.set_edgecolor('white')
+        ax.set_xlabel(r'$\Delta X$ [cMpc]', fontsize=8)
+        ax.set_ylabel(r'$\Delta Y$ [cMpc]', fontsize=8)
+        ax.tick_params(labelsize=7)
 
         kd = r.get('kernel_deltas', [np.nan, np.nan])
         kd_s = '  '.join(
@@ -1817,14 +2436,10 @@ def plot_kernel_density_maps(env_results, all_gals, _z_snap, _run_label, _qmode,
             f'GID {r["gid"]}  —  {r["env_class"]}\n'
             f'log M_host={r["host_log_mvir"]:.2f}\n'
             f'{kd_s}',
-            fontsize=7, color='white', pad=4)
+            fontsize=7, pad=4)
 
         if i == 0:
             leg = ax.legend(fontsize=6, loc='lower right')
-            leg.get_frame().set_facecolor('black')
-            leg.get_frame().set_edgecolor('white')
-            for t in leg.get_texts():
-                t.set_color('white')
 
     for i in range(n, nrows * ncols):
         row, col = divmod(i, ncols)
@@ -1832,22 +2447,13 @@ def plot_kernel_density_maps(env_results, all_gals, _z_snap, _run_label, _qmode,
 
     fig.tight_layout(rect=[0, 0.10, 1, 1])
 
-    log_floor = np.log10(HALO_MASS_FLOOR_MSUN)
-
     if norm_img is not None:
         sm_cb = plt.cm.ScalarMappable(cmap=cmap, norm=norm_img)
         sm_cb.set_array([])
         cax = fig.add_axes([0.07, 0.045, 0.42, 0.022])
         cbar = fig.colorbar(sm_cb, cax=cax, orientation='horizontal')
-        cbar.set_label(
-            fr'$\Sigma_{{M_{{\rm vir}}}}\;[\mathrm{{M}}_\odot\,\mathrm{{cMpc}}^{{-2}}]$  '
-            fr'($\sigma={sigma:.1f}\,\mathrm{{cMpc}}$, '
-            fr'$|\Delta z|<{zslab:.1f}\,\mathrm{{cMpc}}$, '
-            fr'$\log M_{{\rm vir}}\geq{log_floor:.1f}$)',
-            fontsize=9, color='white')
-        cbar.ax.xaxis.set_tick_params(color='white')
-        cbar.outline.set_edgecolor('white')
-        plt.setp(cbar.ax.xaxis.get_ticklabels(), color='white')
+        cbar.set_label(_density_cbar_label(weight_mode, sigma, zslab),
+                       fontsize=9)
 
     # sSFR colorbar for the halo markers
     sm_cb2 = plt.cm.ScalarMappable(cmap=ssfr_cmap, norm=ssfr_norm)
@@ -1856,11 +2462,8 @@ def plot_kernel_density_maps(env_results, all_gals, _z_snap, _run_label, _qmode,
     cbar2 = fig.colorbar(sm_cb2, cax=cax2, orientation='horizontal',
                           extend='both')
     cbar2.set_label(
-        r'$\log_{10}(\mathrm{sSFR}\;[\mathrm{yr}^{-1}])$ — target star colour',
-        fontsize=9, color='white')
-    cbar2.ax.xaxis.set_tick_params(color='white')
-    cbar2.outline.set_edgecolor('white')
-    plt.setp(cbar2.ax.xaxis.get_ticklabels(), color='white')
+        r'$\log_{10}(\mathrm{sSFR}\;[\mathrm{yr}^{-1}])$',
+        fontsize=9)
 
     fig.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close(fig)
@@ -1871,14 +2474,19 @@ def plot_kernel_density_projections(env_results, all_gals, _z_snap, _run_label,
                                      _qmode, out_path, box_size_mpc=None,
                                      target_gid=None,
                                      sigma_mpc=None, extent_mpc=None,
-                                     z_slab_mpc=None, grid_n=1024):
+                                     z_slab_mpc=None, grid_n=1024,
+                                     weight_mode='mass',
+                                     compare_log_ssfr=None,
+                                     compare_label=None,
+                                     default_label='default'):
     """Three orthogonal kernel-density projections (XY, XZ, YZ) for one target.
 
     Defaults to the most massive target (by target stellar mass) in
-    ``env_results``.  Each panel sums Mvir-weighted 2D Gaussians on a grid
-    over halos inside a slab perpendicular to the view; halo dots, sigma
-    rings and the sSFR-coloured target star follow the same conventions as
-    ``plot_kernel_density_maps``.
+    ``env_results``.  Each panel sums 2D Gaussians on a grid over halos
+    inside a slab perpendicular to the view.  ``weight_mode`` selects
+    ``'mass'`` (Mvir-weighted, inferno) or ``'count'`` (unweighted, viridis).
+    Halo dots, sigma rings and the sSFR-coloured target star follow the
+    same conventions as ``plot_kernel_density_maps``.
     """
     from matplotlib.colors import LogNorm, TwoSlopeNorm
 
@@ -1911,15 +2519,17 @@ def plot_kernel_density_projections(env_results, all_gals, _z_snap, _run_label,
     R      = float(extent_mpc if extent_mpc is not None else 3.0 * max(sigmas))
     zslab  = float(z_slab_mpc if z_slab_mpc is not None else 2.0 * sigma)
 
-    # Field: ALL halos above the resolution floor, weighted by Mvir.
-    halo_mask = all_gals['mvir'] >= HALO_MASS_FLOOR_MSUN
-    cx = all_gals['posx'][halo_mask]
-    cy = all_gals['posy'][halo_mask]
-    cz = all_gals['posz'][halo_mask]
-    cm = all_gals['mvir'][halo_mask]
+    # Field: ALL halos (no mass floor).  weight_mode selects per-halo weight.
+    cx = all_gals['posx']
+    cy = all_gals['posy']
+    cz = all_gals['posz']
+    if weight_mode == 'count':
+        cm = np.ones(len(cx), dtype=np.float64)
+    else:
+        cm = all_gals['mvir']
 
     ssfr_norm = TwoSlopeNorm(vmin=-12.0, vcenter=-11.0, vmax=-9.0)
-    ssfr_cmap = plt.cm.bwr_r
+    ssfr_cmap = plt.cm.coolwarm_r
 
     tx, ty, tz = best['pos']
     dx = cx - tx
@@ -1938,36 +2548,39 @@ def plot_kernel_density_projections(env_results, all_gals, _z_snap, _run_label,
         gdx_all -= box_size_mpc * np.round(gdx_all / box_size_mpc)
         gdy_all -= box_size_mpc * np.round(gdy_all / box_size_mpc)
         gdz_all -= box_size_mpc * np.round(gdz_all / box_size_mpc)
-    g_sm_all = all_gals['sm']
+    g_sm_all  = all_gals['sm']
+    g_sfr_all = all_gals['sfr']
+    with np.errstate(divide='ignore', invalid='ignore'):
+        g_ssfr_all = np.where(g_sm_all > 0, g_sfr_all / g_sm_all, np.nan)
 
-    grid_axis  = np.linspace(-R, R, grid_n)
-    gh, gv     = np.meshgrid(grid_axis, grid_axis)
-    norm_2d    = 1.0 / (2.0 * np.pi * sigma ** 2)
-    sigma2_inv = 1.0 / (2.0 * sigma ** 2)
+    # Physical depth of the projection slab — used to convert binned mass
+    # to a volumetric density (M⊙/kpc³).
+    if box_size_mpc:
+        slab_full_mpc = min(2.0 * zslab, box_size_mpc)
+    else:
+        slab_full_mpc = 2.0 * zslab
+    cell_mpc      = (2.0 * R) / grid_n
+    cell_vol_kpc3 = (cell_mpc * 1000.0) ** 2 * (slab_full_mpc * 1000.0)
+    cell_vol_mpc3 = cell_mpc * cell_mpc * slab_full_mpc
 
-    def _kernel_grid(h_off, v_off, perp_off):
+    def _projection_density(h_off, v_off, perp_off):
         keep = ((np.abs(perp_off) <= zslab) &
-                (np.abs(h_off)    <= R + 3.0 * sigma) &
-                (np.abs(v_off)    <= R + 3.0 * sigma))
-        hh = h_off[keep]
-        vv = v_off[keep]
-        mm = cm[keep]
-        rho = np.zeros((grid_n, grid_n), dtype=np.float64)
-        if len(mm):
-            chunk = 32
-            for k0 in range(0, len(mm), chunk):
-                hx = hh[k0:k0 + chunk]
-                hy = vv[k0:k0 + chunk]
-                hM = mm[k0:k0 + chunk]
-                rr = (gh[..., None] - hx) ** 2 + (gv[..., None] - hy) ** 2
-                rho += norm_2d * np.sum(hM * np.exp(-rr * sigma2_inv), axis=2)
+                (np.abs(h_off)    <= R) &
+                (np.abs(v_off)    <= R))
+        rho = _bin_smooth_density(h_off[keep], v_off[keep], cm[keep],
+                                  R, grid_n, sigma)
+        if weight_mode == 'mass':
+            rho = rho / cell_vol_kpc3
+        else:
+            rho = rho / cell_vol_mpc3
         return rho
 
     def _galaxy_markers(gh_off, gv_off, gperp_off):
         g_keep = ((np.abs(gperp_off) <= zslab) &
                   (np.abs(gh_off)    <= R) &
                   (np.abs(gv_off)    <= R))
-        return gh_off[g_keep], gv_off[g_keep], g_sm_all[g_keep]
+        return (gh_off[g_keep], gv_off[g_keep],
+                g_sm_all[g_keep], g_ssfr_all[g_keep])
 
     # (h_label, v_label, halo_h, halo_v, halo_perp, gal_h, gal_v, gal_perp)
     projections = [
@@ -1979,35 +2592,29 @@ def plot_kernel_density_projections(env_results, all_gals, _z_snap, _run_label,
     panels      = []
     rho_max_all = 0.0
     for hl, vl, h, v, sl, gh_off, gv_off, gsl_off in projections:
-        rho = _kernel_grid(h, v, sl)
-        gxx, gyy, gsm = _galaxy_markers(gh_off, gv_off, gsl_off)
-        panels.append((hl, vl, rho, gxx, gyy, gsm))
+        rho = _projection_density(h, v, sl)
+        gxx, gyy, gsm, gssfr = _galaxy_markers(gh_off, gv_off, gsl_off)
+        panels.append((hl, vl, rho, gxx, gyy, gsm, gssfr))
         rho_max_all = max(rho_max_all,
                           float(rho.max()) if rho.size else 0.0)
 
     # --- Summary per projection ---
     print(f'  ── Kernel density projections data ──')
     print(f'    target GID  : {best["gid"]}  ({best["env_class"]})')
-    print(f'    σ = {sigma:.2f} cMpc   extent ±{R:.1f}   slab ±{zslab:.1f}')
-    for hl, vl, rho, gxx, _gyy, gsm in panels:
+    print(f'    weight mode : {weight_mode}   σ = {sigma:.2f} cMpc   '
+          f'extent ±{R:.1f}   slab ±{zslab:.1f}   '
+          f'cell {cell_mpc*1000:.1f} ckpc')
+    peak_unit = 'M⊙/kpc³' if weight_mode == 'mass' else 'cMpc⁻³'
+    for hl, vl, rho, gxx, _gyy, gsm, _gssfr in panels:
         n_gal_in_window = int(len(gsm))
         rho_peak = float(rho.max()) if rho.size else 0.0
         n_above_floor = int(((rho > 0) & np.isfinite(rho)).sum())
-        print(f'    {hl}{vl}  Σ_max={rho_peak:.2e} M⊙/cMpc²  '
+        print(f'    {hl}{vl}  peak={rho_peak:.2e} {peak_unit}  '
               f'galaxies in window={n_gal_in_window:>5d}  '
               f'pixels with ρ>0={n_above_floor}/{rho.size}')
 
-    norm_img = None
-    if rho_max_all > 0:
-        nonzero = [p[2][p[2] > 0] for p in panels]
-        nonzero = [v for v in nonzero if v.size]
-        if nonzero:
-            flat = np.concatenate(nonzero)
-            vmin = max(float(np.percentile(flat, 1.0)), rho_max_all / 1e7)
-        else:
-            vmin = rho_max_all / 1e7
-        norm_img = LogNorm(vmin=vmin, vmax=rho_max_all)
-    cmap = plt.cm.inferno
+    images   = [p[2] for p in panels]
+    norm_img, cmap = _density_norm_and_cmap(rho_max_all, images, weight_mode)
 
     # Target star colour from its own sSFR
     target_ssfr = next((m['ssfr'] for m in best['group_members']
@@ -2020,51 +2627,51 @@ def plot_kernel_density_projections(env_results, all_gals, _z_snap, _run_label,
     t_color = ssfr_cmap(ssfr_norm(log_t_ssfr))
 
     fig, axes = plt.subplots(1, 3, figsize=(13.5, 5))
-    fig.patch.set_facecolor('black')
 
-    for ax_idx, (hl, vl, rho, gxx, gyy, gsm) in enumerate(panels):
+    for ax_idx, (hl, vl, rho, gxx, gyy, gsm, gssfr) in enumerate(panels):
         ax = axes[ax_idx]
-        ax.set_facecolor('black')
         ax.set_aspect('equal')
 
         ax.imshow(rho, origin='lower', extent=[-R, R, -R, R],
                   cmap=cmap, norm=norm_img,
                   interpolation='bilinear', zorder=1)
 
-        # All galaxies as markers (no Mvir cut), sized by log stellar mass
-        if len(gsm):
-            log_sm = np.log10(np.maximum(gsm, 1.0))
-            sizes  = 4.0 + 3.0 * np.clip(log_sm - 9.0, 0.0, 3.5)
-            ax.scatter(gxx, gyy, s=sizes,
-                       facecolor='white', edgecolor='black',
-                       linewidths=0.4, alpha=0.85, zorder=2)
+        _scatter_galaxy_markers(ax, gxx, gyy, gsm, gssfr,
+                                 ssfr_cmap, ssfr_norm)
 
         theta = np.linspace(0, 2.0 * np.pi, 200)
         for ss, ls in zip(sigmas, ['--', ':']):
             ax.plot(ss * np.cos(theta), ss * np.sin(theta),
-                    color='slateblue', lw=1.4, ls=ls, alpha=0.9, zorder=3,
+                    color=('cyan' if weight_mode == 'mass' else 'white'),
+                    lw=1.4, ls=ls, alpha=0.9, zorder=3,
                     label=(fr'$\sigma={ss:.0f}\,\mathrm{{cMpc}}$'
                            if ax_idx == 0 else None))
 
         ax.scatter([0], [0], s=220, marker='*', zorder=4,
-                   facecolor=t_color, edgecolor='black', linewidths=0.9)
+                   facecolor=t_color, edgecolor='black', linewidths=0.9,
+                   label=(default_label if (ax_idx == 0
+                                              and compare_log_ssfr is not None)
+                          else None))
+
+        # Same galaxy in the comparison run — drawn on top as an 'X'
+        if (compare_log_ssfr is not None
+                and np.isfinite(compare_log_ssfr)):
+            c_color = ssfr_cmap(ssfr_norm(float(compare_log_ssfr)))
+            ax.scatter([0], [0], s=140, marker='X', zorder=5,
+                       facecolor=c_color, edgecolor='black', linewidths=0.9,
+                       label=((compare_label or 'compare')
+                              if ax_idx == 0 else None))
 
         ax.set_xlim(-R, R)
         ax.set_ylim(-R, R)
-        ax.set_xlabel(fr'$\Delta {hl}$ [cMpc]', fontsize=10, color='white')
-        ax.set_ylabel(fr'$\Delta {vl}$ [cMpc]', fontsize=10, color='white')
-        ax.tick_params(colors='white', labelsize=9)
-        for spine in ax.spines.values():
-            spine.set_edgecolor('white')
-        ax.set_title(f'{hl}{vl} projection', fontsize=11, color='white')
+        ax.set_xlabel(fr'$\Delta {hl}$ [cMpc]', fontsize=10)
+        ax.set_ylabel(fr'$\Delta {vl}$ [cMpc]', fontsize=10)
+        ax.tick_params(labelsize=9)
+        ax.set_title(f'{hl}{vl} projection', fontsize=11)
 
     handles, _ = axes[0].get_legend_handles_labels()
     if handles:
         leg = axes[0].legend(fontsize=8, loc='lower right')
-        leg.get_frame().set_facecolor('black')
-        leg.get_frame().set_edgecolor('white')
-        for t in leg.get_texts():
-            t.set_color('white')
 
     kd     = best.get('kernel_deltas', [np.nan, np.nan])
     kd_s   = '  '.join(fr'$\delta_K({s:.0f})={d:.2f}$'
@@ -2075,25 +2682,19 @@ def plot_kernel_density_projections(env_results, all_gals, _z_snap, _run_label,
     suptitle = (f'GID {best["gid"]}  —  {best["env_class"]}    '
                 f'{sm_part}log $M_{{\\rm host}}$ = '
                 f'{best["host_log_mvir"]:.2f}    {kd_s}')
-    fig.suptitle(suptitle, fontsize=11, color='white', y=0.97)
+    fig.suptitle(suptitle, fontsize=11, y=0.97)
 
     fig.tight_layout(rect=[0, 0.14, 1, 0.93])
 
-    log_floor = np.log10(HALO_MASS_FLOOR_MSUN)
     if norm_img is not None:
         sm_cb = plt.cm.ScalarMappable(cmap=cmap, norm=norm_img)
         sm_cb.set_array([])
         cax = fig.add_axes([0.07, 0.05, 0.42, 0.022])
         cbar = fig.colorbar(sm_cb, cax=cax, orientation='horizontal')
         cbar.set_label(
-            fr'$\Sigma_{{M_{{\rm vir}}}}\;[\mathrm{{M}}_\odot\,\mathrm{{cMpc}}^{{-2}}]$  '
-            fr'($\sigma={sigma:.1f}\,\mathrm{{cMpc}}$, '
-            fr'$|\Delta_\perp|<{zslab:.1f}\,\mathrm{{cMpc}}$, '
-            fr'$\log M_{{\rm vir}}\geq{log_floor:.1f}$)',
-            fontsize=9, color='white')
-        cbar.ax.xaxis.set_tick_params(color='white')
-        cbar.outline.set_edgecolor('white')
-        plt.setp(cbar.ax.xaxis.get_ticklabels(), color='white')
+            _density_cbar_label(weight_mode, sigma, zslab,
+                                perp_label=r'\perp'),
+            fontsize=9)
 
     sm_cb2 = plt.cm.ScalarMappable(cmap=ssfr_cmap, norm=ssfr_norm)
     sm_cb2.set_array([])
@@ -2101,11 +2702,8 @@ def plot_kernel_density_projections(env_results, all_gals, _z_snap, _run_label,
     cbar2 = fig.colorbar(sm_cb2, cax=cax2, orientation='horizontal',
                           extend='both')
     cbar2.set_label(
-        r'$\log_{10}(\mathrm{sSFR}\;[\mathrm{yr}^{-1}])$ — target star colour',
-        fontsize=9, color='white')
-    cbar2.ax.xaxis.set_tick_params(color='white')
-    cbar2.outline.set_edgecolor('white')
-    plt.setp(cbar2.ax.xaxis.get_ticklabels(), color='white')
+        r'$\log_{10}(\mathrm{sSFR}\;[\mathrm{yr}^{-1}])$',
+        fontsize=9)
 
     fig.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close(fig)
@@ -2153,14 +2751,17 @@ def plot_kernel_density_skew_panels(env_results, all_gals, _z_snap,
                                      skew_targets=(-3.93, -0.88, 0.50),
                                      skew_aperture_mpc=5.0,
                                      sigma_mpc=None, extent_mpc=None,
-                                     z_slab_mpc=None, grid_n=1024):
+                                     z_slab_mpc=None, grid_n=1024,
+                                     weight_mode='mass'):
     """XY kernel-density panels for three targets matching given skew values.
 
     For each value in ``skew_targets`` the env_results target whose
     Mvir-weighted radial skew (Chittenden & Tojeiro 2023) is closest is
-    selected (no repeats).  Each chosen target is rendered as an XY
-    projection in the same wide style as ``plot_kernel_density_projections``,
-    with the computed skew printed above the panel.
+    selected (no repeats); the same picks are used in both ``weight_mode``
+    variants so mass- and count-weighted density fields can be compared.
+    Each chosen target is rendered as an XY projection in the same wide
+    style as ``plot_kernel_density_projections``, with the computed skew
+    printed above the panel.
     """
     from matplotlib.colors import LogNorm, TwoSlopeNorm
 
@@ -2173,22 +2774,27 @@ def plot_kernel_density_skew_panels(env_results, all_gals, _z_snap,
     R      = float(extent_mpc if extent_mpc is not None else 3.0 * max(sigmas))
     zslab  = float(z_slab_mpc if z_slab_mpc is not None else 2.0 * sigma)
 
-    # Field: ALL halos above the resolution floor, weighted by Mvir.
-    halo_mask = all_gals['mvir'] >= HALO_MASS_FLOOR_MSUN
-    cx = all_gals['posx'][halo_mask]
-    cy = all_gals['posy'][halo_mask]
-    cz = all_gals['posz'][halo_mask]
-    cm = all_gals['mvir'][halo_mask]
+    # Field: ALL halos (no mass floor).  The skew picks always use Mvir
+    # weights so the same triplet is selected regardless of weight_mode;
+    # only the rendered density field swaps between mass and number counts.
+    cx = all_gals['posx']
+    cy = all_gals['posy']
+    cz = all_gals['posz']
+    cm_mass = all_gals['mvir']    # always raw Mvir for skew computation
+    if weight_mode == 'count':
+        cm = np.ones(len(cx), dtype=np.float64)
+    else:
+        cm = cm_mass
     halo_pos_full = np.column_stack([cx, cy, cz])
 
     ssfr_norm = TwoSlopeNorm(vmin=-12.0, vcenter=-11.0, vmax=-9.0)
-    ssfr_cmap = plt.cm.bwr_r
+    ssfr_cmap = plt.cm.coolwarm_r
 
-    # --- Compute weighted radial skew per target ---
+    # --- Compute Mvir-weighted radial skew per target (picks stay stable) ---
     skews = np.full(len(found), np.nan)
     for i, r in enumerate(found):
         skews[i] = compute_radial_skew(
-            r['pos'], halo_pos_full, cm, skew_aperture_mpc,
+            r['pos'], halo_pos_full, cm_mass, skew_aperture_mpc,
             box_size_mpc=box_size_mpc)
 
     finite_mask = np.isfinite(skews)
@@ -2231,12 +2837,16 @@ def plot_kernel_density_skew_panels(env_results, all_gals, _z_snap,
         print('  No skew matches — skipping figure.')
         return
 
-    grid_axis  = np.linspace(-R, R, grid_n)
-    gh, gv     = np.meshgrid(grid_axis, grid_axis)
-    norm_2d    = 1.0 / (2.0 * np.pi * sigma ** 2)
-    sigma2_inv = 1.0 / (2.0 * sigma ** 2)
+    # Physical slab depth in kpc, used for mass-density normalisation.
+    if box_size_mpc:
+        slab_full_mpc = min(2.0 * zslab, box_size_mpc)
+    else:
+        slab_full_mpc = 2.0 * zslab
+    cell_mpc      = (2.0 * R) / grid_n
+    cell_vol_kpc3 = (cell_mpc * 1000.0) ** 2 * (slab_full_mpc * 1000.0)
+    cell_vol_mpc3 = cell_mpc * cell_mpc * slab_full_mpc
 
-    # XY projection per picked target — same kernel as the wide projection
+    # XY projection per picked target — histogram + Gaussian smoothing
     panels = []
     rho_max_all = 0.0
     for r, actual_sk, target_sk in picks:
@@ -2250,20 +2860,14 @@ def plot_kernel_density_skew_panels(env_results, all_gals, _z_snap,
             dz -= box_size_mpc * np.round(dz / box_size_mpc)
 
         keep = ((np.abs(dz) <= zslab) &
-                (np.abs(dx) <= R + 3.0 * sigma) &
-                (np.abs(dy) <= R + 3.0 * sigma))
-        hdx = dx[keep]
-        hdy = dy[keep]
-        hm  = cm[keep]
-        rho = np.zeros((grid_n, grid_n), dtype=np.float64)
-        if len(hm):
-            chunk = 32
-            for k0 in range(0, len(hm), chunk):
-                hx = hdx[k0:k0 + chunk]
-                hy = hdy[k0:k0 + chunk]
-                hM = hm[k0:k0 + chunk]
-                rr = (gh[..., None] - hx) ** 2 + (gv[..., None] - hy) ** 2
-                rho += norm_2d * np.sum(hM * np.exp(-rr * sigma2_inv), axis=2)
+                (np.abs(dx) <= R) &
+                (np.abs(dy) <= R))
+        rho = _bin_smooth_density(dx[keep], dy[keep], cm[keep],
+                                  R, grid_n, sigma)
+        if weight_mode == 'mass':
+            rho = rho / cell_vol_kpc3
+        else:
+            rho = rho / cell_vol_mpc3
 
         # Marker overlay: ALL galaxies (no Mvir cut), inside the slab + window
         gdx = all_gals['posx'] - tx
@@ -2276,52 +2880,42 @@ def plot_kernel_density_skew_panels(env_results, all_gals, _z_snap,
         g_keep = ((np.abs(gdz) <= zslab) &
                   (np.abs(gdx) <= R) &
                   (np.abs(gdy) <= R))
-        g_dx = gdx[g_keep]
-        g_dy = gdy[g_keep]
-        g_sm = all_gals['sm'][g_keep]   # Msun
+        g_dx  = gdx[g_keep]
+        g_dy  = gdy[g_keep]
+        g_sm  = all_gals['sm'][g_keep]    # Msun
+        g_sfr = all_gals['sfr'][g_keep]
+        with np.errstate(divide='ignore', invalid='ignore'):
+            g_ssfr = np.where(g_sm > 0, g_sfr / g_sm, np.nan)
 
-        panels.append((r, actual_sk, target_sk, rho, g_dx, g_dy, g_sm))
+        panels.append((r, actual_sk, target_sk, rho,
+                       g_dx, g_dy, g_sm, g_ssfr))
         rho_max_all = max(rho_max_all,
                           float(rho.max()) if rho.size else 0.0)
 
-    # Shared colour scale (same logic as plot_kernel_density_projections)
-    norm_img = None
-    if rho_max_all > 0:
-        nonzero = [p[3][p[3] > 0] for p in panels]
-        nonzero = [v for v in nonzero if v.size]
-        if nonzero:
-            flat = np.concatenate(nonzero)
-            vmin = max(float(np.percentile(flat, 1.0)), rho_max_all / 1e7)
-        else:
-            vmin = rho_max_all / 1e7
-        norm_img = LogNorm(vmin=vmin, vmax=rho_max_all)
-    cmap = plt.cm.inferno
+    # Shared colour scale (same as the other density plots)
+    images = [p[3] for p in panels]
+    norm_img, cmap = _density_norm_and_cmap(rho_max_all, images, weight_mode)
 
     fig, axes = plt.subplots(1, 3, figsize=(13.5, 5.5))
-    fig.patch.set_facecolor('black')
 
     # Fill only the panels we have picks for; hide any remainders
-    for ax_idx, (r, actual_sk, target_sk, rho, gxx, gyy, gsm) in enumerate(panels):
+    for ax_idx, (r, actual_sk, target_sk, rho,
+                 gxx, gyy, gsm, gssfr) in enumerate(panels):
         ax = axes[ax_idx]
-        ax.set_facecolor('black')
         ax.set_aspect('equal')
 
         ax.imshow(rho, origin='lower', extent=[-R, R, -R, R],
                   cmap=cmap, norm=norm_img,
                   interpolation='bilinear', zorder=1)
 
-        # All galaxies as markers (no Mvir cut), sized by log stellar mass
-        if len(gsm):
-            log_sm = np.log10(np.maximum(gsm, 1.0))
-            sizes  = 4.0 + 3.0 * np.clip(log_sm - 9.0, 0.0, 3.5)
-            ax.scatter(gxx, gyy, s=sizes,
-                       facecolor='white', edgecolor='black',
-                       linewidths=0.4, alpha=0.85, zorder=2)
+        _scatter_galaxy_markers(ax, gxx, gyy, gsm, gssfr,
+                                 ssfr_cmap, ssfr_norm)
 
         theta = np.linspace(0, 2.0 * np.pi, 200)
         for ss, ls in zip(sigmas, ['--', ':']):
             ax.plot(ss * np.cos(theta), ss * np.sin(theta),
-                    color='slateblue', lw=1.4, ls=ls, alpha=0.9, zorder=3,
+                    color=('cyan' if weight_mode == 'mass' else 'white'),
+                    lw=1.4, ls=ls, alpha=0.9, zorder=3,
                     label=(fr'$\sigma={ss:.0f}\,\mathrm{{cMpc}}$'
                            if ax_idx == 0 else None))
 
@@ -2338,11 +2932,9 @@ def plot_kernel_density_skew_panels(env_results, all_gals, _z_snap,
 
         ax.set_xlim(-R, R)
         ax.set_ylim(-R, R)
-        ax.set_xlabel(r'$\Delta X$ [cMpc]', fontsize=10, color='white')
-        ax.set_ylabel(r'$\Delta Y$ [cMpc]', fontsize=10, color='white')
-        ax.tick_params(colors='white', labelsize=9)
-        for spine in ax.spines.values():
-            spine.set_edgecolor('white')
+        ax.set_xlabel(r'$\Delta X$ [cMpc]', fontsize=10)
+        ax.set_ylabel(r'$\Delta Y$ [cMpc]', fontsize=10)
+        ax.tick_params(labelsize=9)
 
         kd     = r.get('kernel_deltas', [np.nan, np.nan])
         kd_s   = '  '.join(fr'$\delta_K({s:.0f})={d:.2f}$'
@@ -2353,7 +2945,7 @@ def plot_kernel_density_skew_panels(env_results, all_gals, _z_snap,
             f'GID {r["gid"]}  —  {r["env_class"]}    '
             f'log $M_{{\\rm host}}$ = {r["host_log_mvir"]:.2f}\n'
             f'{kd_s}',
-            fontsize=9, color='white', pad=6)
+            fontsize=9, pad=6)
 
     for j in range(len(panels), len(axes)):
         axes[j].set_visible(False)
@@ -2361,33 +2953,21 @@ def plot_kernel_density_skew_panels(env_results, all_gals, _z_snap,
     handles, _ = axes[0].get_legend_handles_labels()
     if handles:
         leg = axes[0].legend(fontsize=8, loc='lower right')
-        leg.get_frame().set_facecolor('black')
-        leg.get_frame().set_edgecolor('white')
-        for t in leg.get_texts():
-            t.set_color('white')
 
     target_sks_str = ',  '.join(f'{s:+.2f}' for s in skew_targets)
     suptitle = (fr'Radial skew triplet — requested $\mu_3 \in \{{ {target_sks_str} \}}$    '
                 fr'(aperture = {skew_aperture_mpc:.1f} cMpc, Mvir-weighted)')
-    fig.suptitle(suptitle, fontsize=11, color='white', y=0.97)
+    fig.suptitle(suptitle, fontsize=11, y=0.97)
 
     fig.tight_layout(rect=[0, 0.14, 1, 0.92])
 
-    log_floor = np.log10(HALO_MASS_FLOOR_MSUN)
     if norm_img is not None:
         sm_cb = plt.cm.ScalarMappable(cmap=cmap, norm=norm_img)
         sm_cb.set_array([])
         cax = fig.add_axes([0.07, 0.05, 0.42, 0.022])
         cbar = fig.colorbar(sm_cb, cax=cax, orientation='horizontal')
-        cbar.set_label(
-            fr'$\Sigma_{{M_{{\rm vir}}}}\;[\mathrm{{M}}_\odot\,\mathrm{{cMpc}}^{{-2}}]$  '
-            fr'($\sigma={sigma:.1f}\,\mathrm{{cMpc}}$, '
-            fr'$|\Delta z|<{zslab:.1f}\,\mathrm{{cMpc}}$, '
-            fr'$\log M_{{\rm vir}}\geq{log_floor:.1f}$)',
-            fontsize=9, color='white')
-        cbar.ax.xaxis.set_tick_params(color='white')
-        cbar.outline.set_edgecolor('white')
-        plt.setp(cbar.ax.xaxis.get_ticklabels(), color='white')
+        cbar.set_label(_density_cbar_label(weight_mode, sigma, zslab),
+                       fontsize=9)
 
     sm_cb2 = plt.cm.ScalarMappable(cmap=ssfr_cmap, norm=ssfr_norm)
     sm_cb2.set_array([])
@@ -2395,11 +2975,8 @@ def plot_kernel_density_skew_panels(env_results, all_gals, _z_snap,
     cbar2 = fig.colorbar(sm_cb2, cax=cax2, orientation='horizontal',
                           extend='both')
     cbar2.set_label(
-        r'$\log_{10}(\mathrm{sSFR}\;[\mathrm{yr}^{-1}])$ — target star colour',
-        fontsize=9, color='white')
-    cbar2.ax.xaxis.set_tick_params(color='white')
-    cbar2.outline.set_edgecolor('white')
-    plt.setp(cbar2.ax.xaxis.get_ticklabels(), color='white')
+        r'$\log_{10}(\mathrm{sSFR}\;[\mathrm{yr}^{-1}])$',
+        fontsize=9)
 
     fig.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close(fig)
@@ -2413,17 +2990,23 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
                                     target_redshifts=(7.0, 5.0, 2.95),
                                     sigma_mpc=None, extent_mpc=None,
                                     z_slab_mpc=None, grid_n=1024,
-                                    apertures_mpc=(1.0, 3.0, 5.0)):
+                                    apertures_mpc=(1.0, 3.0, 5.0),
+                                    weight_mode='mass',
+                                    compare_history=None,
+                                    compare_label=None,
+                                    default_label='default'):
     """Kernel-density XY views of one target tracked across three redshifts.
 
     Picks the most massive target in ``env_results`` (by stellar mass at the
     selection snap) or uses ``target_gid`` if given.  For each value in
     ``target_redshifts`` the closest available snapshot is selected; at that
-    snap every model file is opened, all halos above the resolution floor
-    are loaded, the target's main-branch position is located by
-    ``GalaxyIndex``, and the Mvir-weighted Gaussian kernel field is built
-    around it.  The Chittenden & Tojeiro radial skew μ₃ is evaluated at
-    every aperture in ``apertures_mpc``.
+    snap every model file is opened, the full halo field is loaded (no
+    mass floor), the target's main-branch position is located by
+    ``GalaxyIndex``, and the Gaussian kernel field is built around it.
+    ``weight_mode`` selects ``'mass'`` (Mvir-weighted, inferno) or
+    ``'count'`` (unweighted, viridis); the Chittenden & Tojeiro radial
+    skew μ₃ at each aperture in ``apertures_mpc`` is always Mvir-weighted
+    so the reported values are comparable across modes.
 
     The colour scale is shared across all three panels so densities are
     directly comparable across cosmic time.
@@ -2477,13 +3060,16 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
     apertures = tuple(float(a) for a in apertures_mpc)
 
     ssfr_norm = TwoSlopeNorm(vmin=-12.0, vcenter=-11.0, vmax=-9.0)
-    ssfr_cmap = plt.cm.bwr_r
+    ssfr_cmap = plt.cm.coolwarm_r
 
-    # Kernel-density grid setup (Gaussian smoothing, same as the wide map)
-    grid_axis  = np.linspace(-R, R, grid_n)
-    gh, gv     = np.meshgrid(grid_axis, grid_axis)
-    norm_2d    = 1.0 / (2.0 * np.pi * sigma ** 2)
-    sigma2_inv = 1.0 / (2.0 * sigma ** 2)
+    # Physical slab depth → mass-density normalisation (M⊙/kpc³).
+    if box_size_mpc:
+        slab_full_mpc = min(2.0 * zslab, box_size_mpc)
+    else:
+        slab_full_mpc = 2.0 * zslab
+    cell_mpc      = (2.0 * R) / grid_n
+    cell_vol_kpc3 = (cell_mpc * 1000.0) ** 2 * (slab_full_mpc * 1000.0)
+    cell_vol_mpc3 = cell_mpc * cell_mpc * slab_full_mpc
 
     panels = []        # one dict per snap_pick
     rho_max_all = 0.0
@@ -2493,6 +3079,7 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
         snap_key = f'Snap_{snap_i}'
 
         halo_xs, halo_ys, halo_zs, halo_ms = [], [], [], []
+        halo_sm, halo_sfr = [], []
         target_pos        = None
         target_sm_msun    = np.nan
         target_sfr        = np.nan
@@ -2513,12 +3100,24 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
                 posy = np.array(g['Posy'], dtype=np.float64) / hubble_h
                 posz = np.array(g['Posz'], dtype=np.float64) / hubble_h
 
-                hmask = mvir_msun >= HALO_MASS_FLOOR_MSUN
-                if hmask.any():
-                    halo_xs.append(posx[hmask])
-                    halo_ys.append(posy[hmask])
-                    halo_zs.append(posz[hmask])
-                    halo_ms.append(mvir_msun[hmask])
+                if 'StellarMass' in g:
+                    sm_arr = (np.array(g['StellarMass'], dtype=np.float64)
+                              * 1e10 / hubble_h)
+                else:
+                    sm_arr = np.zeros_like(mvir_msun)
+                if 'SfrDisk' in g and 'SfrBulge' in g:
+                    sfr_arr = (np.array(g['SfrDisk'],  dtype=np.float64)
+                               + np.array(g['SfrBulge'], dtype=np.float64))
+                else:
+                    sfr_arr = np.zeros_like(mvir_msun)
+
+                if mvir_msun.size:
+                    halo_xs.append(posx)
+                    halo_ys.append(posy)
+                    halo_zs.append(posz)
+                    halo_ms.append(mvir_msun)
+                    halo_sm.append(sm_arr)
+                    halo_sfr.append(sfr_arr)
 
                 if target_pos is None and 'GalaxyIndex' in g:
                     gids = np.array(g['GalaxyIndex'], dtype=np.int64)
@@ -2552,7 +3151,15 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
         cy = np.concatenate(halo_ys)
         cz = np.concatenate(halo_zs)
         cm = np.concatenate(halo_ms)
+        csm  = np.concatenate(halo_sm)
+        csfr = np.concatenate(halo_sfr)
         halo_pos = np.column_stack([cx, cy, cz])
+
+        # Rendering weights — count or mass; skew stays Mvir-weighted below.
+        if weight_mode == 'count':
+            cw = np.ones_like(cm)
+        else:
+            cw = cm
 
         tx, ty, tz_pos = target_pos
         dx = cx - tx
@@ -2563,28 +3170,27 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
             dy -= box_size_mpc * np.round(dy / box_size_mpc)
             dz -= box_size_mpc * np.round(dz / box_size_mpc)
 
-        # Filter to slab + slightly wider than R so kernel tails are kept
+        # Slab + XY window selection
         keep = ((np.abs(dz) <= zslab) &
-                (np.abs(dx) <= R + 3.0 * sigma) &
-                (np.abs(dy) <= R + 3.0 * sigma))
-        hdx = dx[keep]
-        hdy = dy[keep]
-        hm  = cm[keep]
+                (np.abs(dx) <= R) &
+                (np.abs(dy) <= R))
+        hdx  = dx[keep]
+        hdy  = dy[keep]
+        hm   = cm[keep]
+        hw   = cw[keep]
+        hsm  = csm[keep]
+        hsfr = csfr[keep]
+        with np.errstate(divide='ignore', invalid='ignore'):
+            hssfr = np.where(hsm > 0, hsfr / hsm, np.nan)
 
-        # Kernel density grid — Mvir-weighted Gaussian sum on the grid.
-        # Chunk = 32 keeps peak (grid, grid, chunk) memory ~256 MB at
-        # grid_n=1024 (1024² × 32 × 8 bytes).
-        rho = np.zeros((grid_n, grid_n), dtype=np.float64)
-        if len(hm):
-            chunk = 32
-            for k0 in range(0, len(hm), chunk):
-                hx = hdx[k0:k0 + chunk]
-                hy = hdy[k0:k0 + chunk]
-                hM = hm[k0:k0 + chunk]
-                rr = (gh[..., None] - hx) ** 2 + (gv[..., None] - hy) ** 2
-                rho += norm_2d * np.sum(hM * np.exp(-rr * sigma2_inv), axis=2)
+        rho = _bin_smooth_density(hdx, hdy, hw, R, grid_n, sigma)
+        if weight_mode == 'mass':
+            rho = rho / cell_vol_kpc3
+        else:
+            rho = rho / cell_vol_mpc3
 
-        # Skew at each requested aperture (full loaded halo field)
+        # Skew at each requested aperture — always Mvir-weighted so the
+        # printed μ₃ matches across weight_mode variants.
         sk_by_ap = {ap: compute_radial_skew(target_pos, halo_pos, cm, ap,
                                             box_size_mpc=box_size_mpc)
                     for ap in apertures}
@@ -2601,6 +3207,7 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
         panels.append({
             'snap': snap_i, 'z': z_actual, 't': t_gyr,
             'rho': rho, 'hdx': hdx, 'hdy': hdy, 'hm': hm,
+            'hsm': hsm, 'hssfr': hssfr,
             'target_sm': target_sm_msun, 'target_mvir': target_mvir_msun,
             'target_gtype': target_gtype,
             'log_ssfr':   log_target_ssfr,
@@ -2621,34 +3228,20 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
               f'type={type_lbl}  {sk_str}  '
               f'[load {_fmt_dt(time.time() - t_load)}]')
 
-    # --- Shared LogNorm across panels for the kernel density heatmap ---
-    norm_img = None
-    if rho_max_all > 0:
-        rho_pos = []
-        for p in panels:
-            r = p.get('rho')
-            if r is not None and r.size:
-                rho_pos.append(r[r > 0])
-        rho_pos = [v for v in rho_pos if v.size]
-        if rho_pos:
-            flat = np.concatenate(rho_pos)
-            vmin = max(float(np.percentile(flat, 1.0)), rho_max_all / 1e7)
-        else:
-            vmin = rho_max_all / 1e7
-        norm_img = LogNorm(vmin=vmin, vmax=rho_max_all)
-    cmap = plt.cm.inferno
+    # --- Shared colour scale across panels (LogNorm+magma for mass,
+    # linear+viridis for counts; same convention as the other density plots).
+    panel_rhos = [p['rho'] for p in panels if p.get('rho') is not None]
+    norm_img, cmap = _density_norm_and_cmap(rho_max_all, panel_rhos, weight_mode)
 
     n_panels = len(panels)
     fig, axes = plt.subplots(1, n_panels,
                               figsize=(5.0 * n_panels, 5.6),
                               sharey=False)
-    fig.patch.set_facecolor('black')
     if n_panels == 1:
         axes = [axes]
 
     for ax_idx, p in enumerate(panels):
         ax = axes[ax_idx]
-        ax.set_facecolor('black')
         ax.set_aspect('equal')
 
         # Missing-target panel
@@ -2656,12 +3249,9 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
             ax.text(0.5, 0.5, f'GID {tgid}\nnot in Snap_{p["snap"]}',
                     ha='center', va='center', color='grey',
                     transform=ax.transAxes, fontsize=10)
-            ax.tick_params(colors='white')
-            for spine in ax.spines.values():
-                spine.set_edgecolor('white')
             ax.set_title(fr'$z={p["z"]:.2f}$  '
                          fr'($t={p["t"]:.2f}$ Gyr)',
-                         fontsize=11, color='white')
+                         fontsize=11)
             continue
 
         # Mvir-weighted Gaussian kernel density field
@@ -2669,13 +3259,9 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
                   cmap=cmap, norm=norm_img,
                   interpolation='bilinear', zorder=1)
 
-        # Halo position markers — white fill, black edge, sized by log Mvir
-        if p['hm'].size:
-            log_m = np.log10(np.maximum(p['hm'], 1.0))
-            sizes_dot = 6.0 + 4.0 * np.clip(log_m - 10.5, 0.0, 4.5)
-            ax.scatter(p['hdx'], p['hdy'], s=sizes_dot,
-                       facecolor='white', edgecolor='black',
-                       linewidths=0.4, alpha=0.85, zorder=2)
+        _scatter_galaxy_markers(ax, p['hdx'], p['hdy'],
+                                 p['hsm'], p['hssfr'],
+                                 ssfr_cmap, ssfr_norm)
 
         # Reference σ_K rings (only those fitting in the window)
         theta = np.linspace(0.0, 2.0 * np.pi, 200)
@@ -2683,23 +3269,40 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
             if ss > R * 1.42:
                 continue
             ax.plot(ss * np.cos(theta), ss * np.sin(theta),
-                    color='slateblue', lw=1.4, ls=ls, alpha=0.9, zorder=5,
+                    color=('cyan' if weight_mode == 'mass' else 'white'),
+                    lw=1.4, ls=ls, alpha=0.9, zorder=5,
                     label=(fr'$\sigma={ss:.0f}\,\mathrm{{cMpc}}$'
                            if ax_idx == 0 else None))
 
         # Target star — sSFR-coloured, black outline
         t_color = ssfr_cmap(ssfr_norm(p['log_ssfr']))
         ax.scatter([0], [0], s=240, marker='*', zorder=6,
-                   facecolor=t_color, edgecolor='black', linewidths=0.9)
+                   facecolor=t_color, edgecolor='black', linewidths=0.9,
+                   label=(default_label if (ax_idx == 0 and compare_history)
+                          else None))
+
+        # Compare-run target — look up sSFR at the nearest snapshot time
+        if compare_history:
+            ct = np.array([h['t_gyr']    for h in compare_history])
+            cs = np.array([h['log_ssfr'] for h in compare_history])
+            if ct.size:
+                idx = int(np.argmin(np.abs(ct - p['t'])))
+                c_log_ssfr = cs[idx]
+                if not np.isfinite(c_log_ssfr):
+                    c_log_ssfr = -16.0
+                c_color = ssfr_cmap(ssfr_norm(float(c_log_ssfr)))
+                ax.scatter([0], [0], s=150, marker='X', zorder=7,
+                           facecolor=c_color, edgecolor='black',
+                           linewidths=0.9,
+                           label=((compare_label or 'compare')
+                                  if ax_idx == 0 else None))
 
         ax.set_xlim(-R, R)
         ax.set_ylim(-R, R)
-        ax.set_xlabel(r'$\Delta X$ [cMpc]', fontsize=10, color='white')
+        ax.set_xlabel(r'$\Delta X$ [cMpc]', fontsize=10)
         if ax_idx == 0:
-            ax.set_ylabel(r'$\Delta Y$ [cMpc]', fontsize=10, color='white')
-        ax.tick_params(colors='white', labelsize=9)
-        for spine in ax.spines.values():
-            spine.set_edgecolor('white')
+            ax.set_ylabel(r'$\Delta Y$ [cMpc]', fontsize=10)
+        ax.tick_params(labelsize=9)
 
         # Title — z, t, log M*, target type
         type_lbl = {0: 'cent', 1: 'sat', 2: 'orph'}.get(
@@ -2713,7 +3316,7 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
                      fr'log $M_* = {log_sm_str}$  '
                      fr'log $M_{{\rm vir}} = {log_mv_str}$  '
                      fr'[{type_lbl}]')
-        ax.set_title(title_top, fontsize=9, color='white', pad=4)
+        ax.set_title(title_top, fontsize=9, pad=4)
 
         # Skew annotation in panel — bottom left
         sk_lines = []
@@ -2724,18 +3327,15 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
             else:
                 sk_lines.append(fr'$\mu_3({ap:.0f})=$ N/A')
         ax.text(0.03, 0.03, '\n'.join(sk_lines),
-                transform=ax.transAxes, fontsize=9, color='white',
+                transform=ax.transAxes, fontsize=9,
                 ha='left', va='bottom',
-                bbox=dict(facecolor='black', edgecolor='white',
+                bbox=dict(facecolor='white', edgecolor='black',
                           alpha=0.75, boxstyle='round,pad=0.35',
                           linewidth=0.5))
 
     # Suptitle
-    fig.suptitle(fr'GID {tgid} — kernel density evolution'
-                 fr'   ($\sigma={sigma:.1f}$ cMpc, '
-                 fr'$|\Delta z|<{zslab:.1f}$ cMpc, '
-                 fr'$\log M_{{\rm vir}}\geq{np.log10(HALO_MASS_FLOOR_MSUN):.1f}$)',
-                 fontsize=11, color='white', y=0.99)
+    fig.suptitle(fr'GID {tgid} — kernel density evolution',
+                 fontsize=11, y=0.99)
 
     fig.tight_layout(rect=[0, 0.07, 1, 0.94])
 
@@ -2744,12 +3344,8 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
         sm_cb.set_array([])
         cax = fig.add_axes([0.07, 0.025, 0.42, 0.022])
         cbar = fig.colorbar(sm_cb, cax=cax, orientation='horizontal')
-        cbar.set_label(
-            r'$\Sigma_{M_{\rm vir}}\;[\mathrm{M}_\odot\,\mathrm{cMpc}^{-2}]$',
-            fontsize=9, color='white')
-        cbar.ax.xaxis.set_tick_params(color='white')
-        cbar.outline.set_edgecolor('white')
-        plt.setp(cbar.ax.xaxis.get_ticklabels(), color='white')
+        cbar.set_label(_density_cbar_label(weight_mode, sigma, zslab),
+                       fontsize=9)
 
     sm_cb2 = plt.cm.ScalarMappable(cmap=ssfr_cmap, norm=ssfr_norm)
     sm_cb2.set_array([])
@@ -2757,11 +3353,8 @@ def plot_target_redshift_evolution(env_results, filepaths, snap_times,
     cbar2 = fig.colorbar(sm_cb2, cax=cax2, orientation='horizontal',
                           extend='both')
     cbar2.set_label(
-        r'$\log_{10}(\mathrm{sSFR}\;[\mathrm{yr}^{-1}])$ — target star colour',
-        fontsize=9, color='white')
-    cbar2.ax.xaxis.set_tick_params(color='white')
-    cbar2.outline.set_edgecolor('white')
-    plt.setp(cbar2.ax.xaxis.get_ticklabels(), color='white')
+        r'$\log_{10}(\mathrm{sSFR}\;[\mathrm{yr}^{-1}])$',
+        fontsize=9)
 
     fig.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close(fig)
@@ -2922,13 +3515,13 @@ def plot_skew_history(history_by_ap, snap_times, snap_sel, _run_label,
         used.add(best_gid)
 
     picked_gids = [p[0] for p in picks]
-    pick_colors = ['gold', 'tomato', 'cyan']
+    pick_colors = HISTORY_CMAP(
+        np.linspace(0.15, 0.85, max(len(picked_gids), 1)))
 
     n_panels = len(apertures)
     fig, axes = plt.subplots(1, n_panels,
                               figsize=(5.0 * n_panels, 5.0),
                               sharey=False)
-    fig.patch.set_facecolor('black')
     if n_panels == 1:
         axes = [axes]
 
@@ -2936,7 +3529,6 @@ def plot_skew_history(history_by_ap, snap_times, snap_sel, _run_label,
 
     for ap_idx, ap in enumerate(apertures):
         ax  = axes[ap_idx]
-        ax.set_facecolor('black')
 
         ap_hist = history_by_ap[ap]
 
@@ -2947,7 +3539,7 @@ def plot_skew_history(history_by_ap, snap_times, snap_sel, _run_label,
                 continue
             t  = [p[0] for p in hist]
             sk = [p[1] for p in hist]
-            ax.plot(t, sk, color='lightgrey', ls='--', lw=0.7, alpha=0.45,
+            ax.plot(t, sk, color='grey', ls='--', lw=0.7, alpha=0.45,
                     zorder=1)
             n_dashed += 1
 
@@ -2968,17 +3560,15 @@ def plot_skew_history(history_by_ap, snap_times, snap_sel, _run_label,
             ax.plot(t, sk, color=col, lw=2.2, alpha=1.0, zorder=5,
                     label=label)
 
-        ax.axvline(t_snap, color='white', ls=':', lw=1.0, alpha=0.5)
-        ax.axhline(0.0,    color='white', ls='-', lw=0.4, alpha=0.3)
+        ax.axvline(t_snap, color='grey', ls=':', lw=1.0, alpha=0.5)
+        ax.axhline(0.0,    color='grey', ls='-', lw=0.4, alpha=0.3)
 
-        ax.set_xlabel('Cosmic time [Gyr]', fontsize=11, color='white')
+        ax.set_xlabel('Cosmic time [Gyr]', fontsize=11)
         if ap_idx == 0:
-            ax.set_ylabel(r'Radial skew $\mu_3$', fontsize=11, color='white')
+            ax.set_ylabel(r'Radial skew $\mu_3$', fontsize=11)
         ax.set_title(fr'aperture = {ap:.1f} cMpc',
-                     fontsize=11, color='white')
-        ax.tick_params(colors='white', labelsize=9)
-        for spine in ax.spines.values():
-            spine.set_edgecolor('white')
+                     fontsize=11)
+        ax.tick_params(labelsize=9)
 
         # X-range bounded to where we actually have data
         first_t = min((h[0][0] for h in ap_hist.values() if h),
@@ -2987,10 +3577,6 @@ def plot_skew_history(history_by_ap, snap_times, snap_sel, _run_label,
 
         if ap_idx == 0 and picks:
             leg = ax.legend(fontsize=8, loc='best', framealpha=0.85)
-            leg.get_frame().set_facecolor('black')
-            leg.get_frame().set_edgecolor('white')
-            for txt in leg.get_texts():
-                txt.set_color('white')
 
         # Per-aperture summary: distribution of final μ₃ across all targets
         all_finals = np.array([h[-1][1] for h in ap_hist.values() if h],
@@ -3018,7 +3604,7 @@ def plot_skew_history(history_by_ap, snap_times, snap_sel, _run_label,
 
     fig.suptitle(fr'Radial skew history — picks from {pick_ap:.1f} cMpc '
                   fr'aperture',
-                  fontsize=11, color='white', y=0.99)
+                  fontsize=11, y=0.99)
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     fig.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close(fig)
@@ -3142,6 +3728,221 @@ def _fmt_dt(dt):
 
 
 # ---------------------------------------------------------------------------
+# Cross-model comparison — figures and report
+# ---------------------------------------------------------------------------
+
+def _history_array(history, key):
+    """Pull (t, value) pairs from a load_target_history list, finite only."""
+    if not history:
+        return np.empty(0), np.empty(0)
+    t = np.array([h['t_gyr'] for h in history], dtype=float)
+    v = np.array([h[key]     for h in history], dtype=float)
+    ok = np.isfinite(v)
+    return t[ok], v[ok]
+
+
+def plot_target_history_compare(history_default, history_compare,
+                                 snap_times, snap_sel, z_snap,
+                                 gid_default, gid_compare,
+                                 default_label, compare_label, out_path):
+    """3-panel overlay: log M*(t), log SFR(t), log sSFR(t) for the matched
+    target across two model runs.
+    """
+    t_snap   = float(snap_times[snap_sel])
+    color_d  = HISTORY_CMAP(0.20)
+    color_c  = HISTORY_CMAP(0.80)
+
+    fig, axes = plt.subplots(4, 1, figsize=(8, 9), sharex=True)
+
+    panels = [
+        ('log_sm',   r'$\log_{10}(M_*\,/\,\mathrm{M}_\odot)$'),
+        ('log_sfr',  r'$\log_{10}(\mathrm{SFR}\;[\mathrm{M}_\odot\,'
+                     r'\mathrm{yr}^{-1}])$'),
+        ('log_ssfr', r'$\log_{10}(\mathrm{sSFR}\;[\mathrm{yr}^{-1}])$'),
+        ('bulge_to_total', r'$\mathrm{B/T}$'),
+    ]
+
+    for ax, (key, ylab) in zip(axes, panels):
+        td, vd = _history_array(history_default, key)
+        tc, vc = _history_array(history_compare, key)
+        if td.size:
+            ax.plot(td, vd, '-',  color=color_d, lw=2.0,
+                    label=f'{default_label} (GID {gid_default})')
+        if tc.size:
+            ax.plot(tc, vc, '--', color=color_c, lw=2.0,
+                    label=f'{compare_label} (GID {gid_compare})')
+        ax.axvline(t_snap, color='grey', ls=':', lw=1.0, alpha=0.6)
+        if key == 'log_ssfr':
+            ax.axhline(-11.0, color='grey', ls='--', lw=0.8, alpha=0.5)
+        ax.set_ylabel(ylab, fontsize=12)
+        ax.grid(True, alpha=0.25)
+        if ax is axes[0]:
+            ax.legend(fontsize=10, loc='best')
+
+    axes[-1].set_xlabel('Cosmic time [Gyr]', fontsize=12)
+    fig.suptitle(f'Target trajectory comparison  —  z_sel = {z_snap:.2f}',
+                 fontsize=12)
+    fig.tight_layout(rect=[0, 0, 1, 0.97])
+
+    # Terminal summary
+    print(f'  ── Target trajectory comparison ──')
+    for key, ylab in panels:
+        td, vd = _history_array(history_default, key)
+        tc, vc = _history_array(history_compare, key)
+        last_d = float(vd[-1]) if vd.size else np.nan
+        last_c = float(vc[-1]) if vc.size else np.nan
+        d_str  = f'{last_d:+.2f}' if np.isfinite(last_d) else '   N/A'
+        c_str  = f'{last_c:+.2f}' if np.isfinite(last_c) else '   N/A'
+        if np.isfinite(last_d) and np.isfinite(last_c):
+            delta = f'{last_c - last_d:+.2f}'
+        else:
+            delta = '   N/A'
+        print(f'    {key:>10} @ z_sel  default={d_str:>7}  '
+              f'{compare_label}={c_str:>7}  Δ={delta:>7}')
+
+    fig.savefig(out_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    print(f'Saved: {out_path}')
+
+
+def plot_skew_history_compare(history_default_by_ap, history_compare_by_ap,
+                               snap_times, snap_sel,
+                               gid_default, gid_compare,
+                               default_label, compare_label, out_path):
+    """Overlay μ₃(t) for the matched target across two runs, one panel
+    per aperture.  ``history_*_by_ap`` are dicts keyed by aperture (cMpc)
+    whose values are dicts of ``{gid: [(t, mu3), ...]}``.
+    """
+    apertures = sorted(set(history_default_by_ap) & set(history_compare_by_ap))
+    if not apertures:
+        print('  No common apertures for skew comparison — skipping.')
+        return
+
+    n_panels = len(apertures)
+    fig, axes = plt.subplots(1, n_panels,
+                              figsize=(5.0 * n_panels, 5.0),
+                              sharey=False)
+    if n_panels == 1:
+        axes = [axes]
+    t_snap = float(snap_times[snap_sel])
+
+    color_d = HISTORY_CMAP(0.20)
+    color_c = HISTORY_CMAP(0.80)
+
+    for ax_i, ap in enumerate(apertures):
+        ax = axes[ax_i]
+        hd = history_default_by_ap[ap].get(int(gid_default), [])
+        hc = history_compare_by_ap[ap].get(int(gid_compare), [])
+
+        if hd:
+            td = [p[0] for p in hd]
+            sd = [p[1] for p in hd]
+            ax.plot(td, sd, '-',  color=color_d, lw=2.0,
+                    label=f'{default_label} (GID {gid_default})')
+        if hc:
+            tc = [p[0] for p in hc]
+            sc = [p[1] for p in hc]
+            ax.plot(tc, sc, '--', color=color_c, lw=2.0,
+                    label=f'{compare_label} (GID {gid_compare})')
+
+        ax.axvline(t_snap, color='grey', ls=':', lw=1.0, alpha=0.6)
+        ax.axhline(0.0,    color='grey', ls='-', lw=0.4, alpha=0.3)
+        ax.set_xlabel('Cosmic time [Gyr]', fontsize=11)
+        if ax_i == 0:
+            ax.set_ylabel(r'Radial skew $\mu_3$', fontsize=11)
+            ax.legend(fontsize=9, loc='best')
+        ax.set_title(fr'aperture = {ap:.1f} cMpc', fontsize=11)
+        ax.grid(True, alpha=0.25)
+
+    fig.suptitle('Radial skew comparison', fontsize=12, y=0.99)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.savefig(out_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    print(f'Saved: {out_path}')
+
+
+def print_target_comparison(target_default, target_compare, z_snap,
+                             default_label, compare_label):
+    """Side-by-side property table for the matched target."""
+    if target_compare is None:
+        print(f'\n  No match for the target in {compare_label} — '
+              'skipping comparison table.')
+        return
+
+    def _log(v):
+        return np.log10(v) if (v is not None and np.isfinite(v) and v > 0) else np.nan
+
+    def _fmt(v, fmt='{:.3f}'):
+        if v is None or not np.isfinite(v):
+            return '      N/A'
+        return fmt.format(v)
+
+    def _delta(a, b, fmt='{:+.3f}'):
+        if (a is None or b is None or not np.isfinite(a) or not np.isfinite(b)):
+            return '      N/A'
+        return fmt.format(b - a)
+
+    rows = [
+        ('GalaxyIndex',       target_default['gid'],
+         target_compare['gid']),
+        ('Type (0=cen,1=sat,2=orph)',
+         target_default['type'], target_compare['type']),
+        ('log M*',            _log(target_default['sm_msun']),
+         _log(target_compare['sm_msun'])),
+        ('log M_vir',         _log(target_default['mvir_msun']),
+         _log(target_compare['mvir_msun'])),
+        ('log M_BH',          _log(target_default['mbh_msun']),
+         _log(target_compare['mbh_msun'])),
+        ('log M_bulge',       _log(target_default['bulge_mass_msun']),
+         _log(target_compare['bulge_mass_msun'])),
+        ('B/T',               target_default['bt'],
+         target_compare['bt']),
+        ('log M_cold',        _log(target_default['cold_gas_msun']),
+         _log(target_compare['cold_gas_msun'])),
+        ('SFR [M⊙/yr]',       target_default['sfr'],
+         target_compare['sfr']),
+        ('log sSFR [yr⁻¹]',   _log(target_default['ssfr']),
+         _log(target_compare['ssfr'])),
+        ('V_disp',            target_default['vdisp'],
+         target_compare['vdisp']),
+        ('V_vir',             target_default['vvir'],
+         target_compare['vvir']),
+        ('R_disk [kpc]',      target_default['disk_radius_kpc'],
+         target_compare['disk_radius_kpc']),
+        ('R_bulge [kpc]',     target_default['bulge_radius_kpc'],
+         target_compare['bulge_radius_kpc']),
+    ]
+
+    match_note = (f'matched by GalaxyIndex'
+                  if target_compare['matched_by'] == 'gid'
+                  else
+                  f'matched by position ({target_compare["match_distance_mpc"]:.3f} cMpc)')
+    title = (f'TARGET COMPARISON  —  z = {z_snap:.3f}  '
+             f'[{default_label} vs {compare_label}, {match_note}]')
+    print('\n' + '=' * max(60, len(title) + 4))
+    print('  ' + title)
+    print('=' * max(60, len(title) + 4))
+    hdr = (f'  {"property":<28}  {default_label:>12}  '
+           f'{compare_label:>12}  {"Δ":>10}')
+    print(hdr)
+    print('  ' + '-' * (len(hdr) - 2))
+    for label, vd, vc in rows:
+        if isinstance(vd, (int, np.integer)) and 'Type' not in label:
+            d_str = f'{vd:>12d}'
+            c_str = f'{vc:>12d}'
+            delta = f'{vc - vd:>+10d}'
+        elif label.startswith('GalaxyIndex') or label.startswith('Type'):
+            d_str = f'{int(vd):>12d}'
+            c_str = f'{int(vc):>12d}'
+            delta = '          —'
+        else:
+            d_str = _fmt(vd)
+            c_str = _fmt(vc)
+            delta = _delta(vd, vc)
+        print(f'  {label:<28}  {d_str:>12}  {c_str:>12}  {delta:>10}')
+
+
+# ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
 
@@ -3157,6 +3958,34 @@ def parse_args():
                         'defaults to the most massive galaxy')
     p.add_argument('--output-dir',   type=str,  default=None,
                    help='Output directory (default: <output_folder>/plots/history/)')
+    p.add_argument('--compare-folder', type=str, default=None,
+                   help='Optional second model folder (e.g. a noFFB run on the '
+                        'same simulation).  When provided, the target galaxy '
+                        'is matched in this run and a set of comparison '
+                        'figures + a property-difference table are produced.')
+    p.add_argument('--compare-label',  type=str, default=None,
+                   help='Short label for the compare run used in figure '
+                        'legends/filenames (default: basename of '
+                        '--compare-folder).')
+    p.add_argument('--default-label',  type=str,
+                   default='Most massive (FFB max efficiency)',
+                   help='Legend label for the primary/"default" run.')
+    p.add_argument('--carnall-sfh',    type=str, default=None,
+                   help='Optional Carnall+2024 mass-assembly file '
+                        '(t_BB [Gyr], M*_low, M*_med, M*_high). When given, '
+                        'the median (with low/high envelope) is overlaid on '
+                        'the per-target formation-history plot.')
+    p.add_argument('--overdensity-z-min', type=float, default=9.0,
+                   help='Lower-z bound for the progenitor overdensity scan '
+                        '(default: 9.0). Set very high to skip the scan.')
+    p.add_argument('--overdensity-radius', type=float, default=3.0,
+                   help='Sphere radius [cMpc] for the progenitor overdensity '
+                        'scan (default: 3.0, matches halo_environment_sphere.py).')
+    p.add_argument('--overdensity-extreme-pct', type=float, default=95.0,
+                   help='Percentile rank above which a snap is flagged '
+                        '"extreme" environment (default: 95 -> top 5%%, '
+                        'matching the Chiang+/Overzier proto-cluster-progenitor '
+                        'convention).')
     return p.parse_args()
 
 
@@ -3189,9 +4018,28 @@ def main():
         sys.exit(f'No model_*.hdf5 files found in {args.output_folder}')
     print(f'  HDF5 files     : {len(filepaths)}')
 
+    default_label = args.default_label
+
+    # Optional second model run (e.g. a noFFB variant on the same simulation)
+    compare_filepaths = None
+    compare_label     = None
+    if args.compare_folder:
+        compare_filepaths = sorted(glob.glob(
+            os.path.join(args.compare_folder, 'model_*.hdf5')))
+        if not compare_filepaths:
+            sys.exit(f'No model_*.hdf5 files found in {args.compare_folder}')
+        compare_label = (args.compare_label
+                         or os.path.basename(
+                             os.path.normpath(args.compare_folder)))
+        print(f'  compare folder : {args.compare_folder}')
+        print(f'  compare label  : {compare_label}')
+        print(f'  compare files  : {len(compare_filepaths)}')
+
     t0 = time.time()
     params = read_header(filepaths[0])
     h      = params['hubble_h']
+    box_size_mpc = (params['box_size'] / h
+                    if params['box_size'] > 0 else None)
     print(f'  header read    : h={h:.4f}  '
           f'Om={params["omega_matter"]:.3f}  '
           f'OL={params["omega_lambda"]:.3f}  '
@@ -3288,19 +4136,176 @@ def main():
             merger_branches=merger_branches)
         print(f'    rendered in {_fmt_dt(time.time()-t0)}')
 
+        # Formation epochs (t_50, t_80) of the most massive target
+        target_sfh = gal_data[target_gid]['sfh']
+        if target_sfh is not None:
+            _step('Most-massive target — formation epochs (t_50, t_80)')
+            t0 = time.time()
+            plot_target_formation_history(
+                target_gid, target_sfh, snap_times, snap, h, z_snap,
+                os.path.join(out_dir,
+                             f'formation_history_{tag}.pdf'),
+                carnall_sfh_path=args.carnall_sfh)
+            print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+        else:
+            print('    Target has no SFH array — skipping formation history.')
+
+        # Catalogue-wide t_50 / t_80 histograms (CSV already mass-cut)
+        _step('Catalogue formation-epoch histograms')
+        t0 = time.time()
+        plot_catalogue_formation_histograms(
+            gal_data, snap_times, snap, h, z_snap,
+            os.path.join(out_dir,
+                         f'formation_histogram_{tag}.pdf'),
+            t50_threshold=1.5,
+            t80_threshold=1.0)
+        print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+        # Progenitor overdensity scan at z >= overdensity_z_min
+        _step(f'Progenitor overdensity scan  (z >= '
+              f'{args.overdensity_z_min:g}, R = '
+              f'{args.overdensity_radius:g} cMpc)')
+        t0 = time.time()
+        od_results = compute_progenitor_overdensity_history(
+            filepaths, snap, target_gid,
+            params['snapshot_redshifts'],
+            h, box_size_mpc,
+            z_min=args.overdensity_z_min,
+            radius_cmpc=args.overdensity_radius)
+        if od_results:
+            ext = args.overdensity_extreme_pct
+            n_ext = sum(1 for r in od_results
+                        if (np.isfinite(r['pct_rank_M']) and r['pct_rank_M'] >= ext)
+                        or (np.isfinite(r['pct_rank_N']) and r['pct_rank_N'] >= ext))
+            print(f'    "Extreme" (rank >= {ext:g}%) snaps: '
+                  f'{n_ext} / {len(od_results)}')
+            plot_progenitor_overdensity_history(
+                od_results, target_gid, args.overdensity_radius,
+                run_label,
+                os.path.join(out_dir,
+                             f'overdensity_history_{tag}.pdf'),
+                extreme_percentile=ext)
+        print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+    # ------------------------------------------------------------------
+    # Cross-model comparison setup
+    # ------------------------------------------------------------------
+    compare_target  = None
+    compare_history = None
+    default_history = None
+    if compare_filepaths and gal_data:
+        _banner(f'CROSS-MODEL COMPARISON  ({compare_label})')
+        _step('Locating target in compare run')
+        target_default = get_galaxy_properties(filepaths, target_gid, snap, h)
+        if target_default is None:
+            print(f'  Target {target_gid} not present in default run at '
+                  f'Snap_{snap} — cannot perform comparison.')
+        else:
+            compare_target = find_galaxy_in_run(
+                compare_filepaths, target_gid,
+                target_default['pos_mpc'], snap, h,
+                box_size_mpc=box_size_mpc)
+            if compare_target is None:
+                print(f'  Target {target_gid} not located in '
+                      f'{compare_label} — skipping comparison figures.')
+            else:
+                tag_compare = (f'GID={compare_target["gid"]}  '
+                               f'matched_by={compare_target["matched_by"]}')
+                if compare_target['match_distance_mpc'] is not None:
+                    tag_compare += (f' ({compare_target["match_distance_mpc"]:.3f}'
+                                    ' cMpc)')
+                print(f'  Matched: {tag_compare}')
+
+                # Property table
+                print_target_comparison(target_default, compare_target,
+                                         z_snap, default_label, compare_label)
+
+                # Trajectory history figure
+                _step('Loading compare-run target history')
+                t0 = time.time()
+                history_default = load_target_history(
+                    filepaths, target_gid, snap, snap_times, h)
+                history_compare = load_target_history(
+                    compare_filepaths, compare_target['gid'],
+                    snap, snap_times, h)
+                print(f'    default: {len(history_default)} pts   '
+                      f'{compare_label}: {len(history_compare)} pts  '
+                      f'[{_fmt_dt(time.time()-t0)}]')
+                _step('Target trajectory comparison figure')
+                t0 = time.time()
+                plot_target_history_compare(
+                    history_default, history_compare,
+                    snap_times, snap, z_snap,
+                    target_gid, compare_target['gid'],
+                    default_label, compare_label,
+                    os.path.join(out_dir,
+                                 f'target_history_compare_{tag}.pdf'))
+                print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+                # Save histories at outer scope for downstream figures
+                compare_history = history_compare
+                default_history = history_default
+                _step('Compare-run main-branch + mergers')
+                t0 = time.time()
+                compare_branch = load_main_branch(
+                    compare_filepaths, snap, compare_target['gid'],
+                    snap_times, h)
+                compare_merger_gids = load_most_massive_merger(
+                    compare_filepaths, snap, compare_target['gid'],
+                    snap_times, h)
+                compare_merger_branches = [
+                    load_main_branch(compare_filepaths, snap, gid,
+                                     snap_times, h)
+                    for gid in (compare_merger_gids or [])
+                ]
+                print(f'    {len(compare_branch)} snap pts, '
+                      f'{len(compare_merger_gids or [])} mergers  '
+                      f'[{_fmt_dt(time.time()-t0)}]')
+                plot_main_branch_history(
+                    compare_branch, snap_times, snap, z_snap,
+                    run_label, qmode,
+                    os.path.join(out_dir,
+                                 f'main_branch_history_{compare_label}_{tag}.pdf'),
+                    galaxy_id=compare_target['gid'],
+                    merger_branches=compare_merger_branches)
+
+                # Formation epochs for the same galaxy in the compare run
+                compare_sfh_data = load_galaxy_sfh(
+                    compare_filepaths, snap, [compare_target['gid']], h)
+                compare_sfh = compare_sfh_data.get(
+                    int(compare_target['gid']), {}).get('sfh')
+                if compare_sfh is not None:
+                    _step(f'Compare-run target — formation epochs '
+                          f'({compare_label})')
+                    plot_target_formation_history(
+                        compare_target['gid'], compare_sfh,
+                        snap_times, snap, h, z_snap,
+                        os.path.join(out_dir,
+                                     f'formation_history_{compare_label}_{tag}.pdf'),
+                        carnall_sfh_path=args.carnall_sfh)
+                else:
+                    print(f'    Compare-run target has no SFH array — '
+                          'skipping formation history.')
+
     _banner('SCALING & STRUCTURAL FIGURES')
     _step('Scaling relations grid')
     t0 = time.time()
     plot_scaling_relations(
         csv_data, h, z_snap, run_label, qmode,
-        os.path.join(out_dir, f'scaling_relations_{tag}.pdf'))
+        os.path.join(out_dir, f'scaling_relations_{tag}.pdf'),
+        comparison_galaxy=compare_target,
+        compare_label=compare_label,
+        default_label=default_label)
     print(f'    rendered in {_fmt_dt(time.time()-t0)}')
 
     _step('Structural & kinematic grid')
     t0 = time.time()
     plot_structural_kinematics(
         csv_data, h, z_snap, run_label, qmode,
-        os.path.join(out_dir, f'structural_kinematics_{tag}.pdf'))
+        os.path.join(out_dir, f'structural_kinematics_{tag}.pdf'),
+        comparison_galaxy=compare_target,
+        compare_label=compare_label,
+        default_label=default_label)
     print(f'    rendered in {_fmt_dt(time.time()-t0)}')
 
     _banner('ENVIRONMENT ANALYSIS')
@@ -3310,7 +4315,6 @@ def main():
         filepaths, snap, params['particle_mass'], h)
     print(f'    load complete in {_fmt_dt(time.time()-t0)}')
     if all_gals is not None:
-        box_size_mpc = params['box_size'] / h if params['box_size'] > 0 else None
         box_str = f'box={box_size_mpc:.1f} Mpc' if box_size_mpc else 'box size unknown'
         print(f'  Loaded {len(all_gals["gid"]):,} galaxies  ({box_str})')
 
@@ -3325,36 +4329,30 @@ def main():
 
         print_environment_report(env_results, z_snap, run_label, qmode)
 
-        _step('Environment summary figure')
-        t0 = time.time()
-        plot_environment_summary(
-            env_results, z_snap, run_label, qmode,
-            os.path.join(out_dir, f'environment_summary_{tag}.pdf'))
-        print(f'    rendered in {_fmt_dt(time.time()-t0)}')
-
-        _step('Group maps (all targets)')
-        t0 = time.time()
-        plot_group_maps(
-            env_results, all_gals, z_snap, run_label, qmode,
-            os.path.join(out_dir, f'group_maps_{tag}.pdf'),
-            box_size_mpc=box_size_mpc)
-        print(f'    rendered in {_fmt_dt(time.time()-t0)}')
-
-        _step('Group maps (overdense subset)')
-        t0 = time.time()
-        plot_group_maps(
-            env_results, all_gals, z_snap, run_label, qmode,
-            os.path.join(out_dir, f'group_maps_overdense_{tag}.pdf'),
-            box_size_mpc=box_size_mpc, min_overdensity=15)
-        print(f'    rendered in {_fmt_dt(time.time()-t0)}')
-
         _banner('KERNEL DENSITY FIGURES')
+        # Shared kernel parameters: small smoothing, modest grid, full-box depth.
+        # z_slab covers the whole box (after periodic wrapping max |Δz| is box/2).
+        kd_sigma   = 0.5
+        kd_grid_n  = 512
+        kd_zslab   = box_size_mpc if box_size_mpc else 1e6
+
         _step('Per-target Σ_Mvir maps')
         t0 = time.time()
         plot_kernel_density_maps(
             env_results, all_gals, z_snap, run_label, qmode,
             os.path.join(out_dir, f'kernel_density_maps_{tag}.pdf'),
-            box_size_mpc=box_size_mpc, sigma_mpc=2.0)
+            box_size_mpc=box_size_mpc, sigma_mpc=kd_sigma,
+            grid_n=kd_grid_n, z_slab_mpc=kd_zslab)
+        print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+        _step('Per-target Σ_N (halo count) maps')
+        t0 = time.time()
+        plot_kernel_density_maps(
+            env_results, all_gals, z_snap, run_label, qmode,
+            os.path.join(out_dir, f'kernel_density_maps_counts_{tag}.pdf'),
+            box_size_mpc=box_size_mpc, sigma_mpc=kd_sigma,
+            grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
+            weight_mode='count')
         print(f'    rendered in {_fmt_dt(time.time()-t0)}')
 
         _step('Per-target Σ_Mvir maps (overdense subset, δ_K ≥ 5)')
@@ -3362,7 +4360,18 @@ def main():
         plot_kernel_density_maps(
             env_results, all_gals, z_snap, run_label, qmode,
             os.path.join(out_dir, f'kernel_density_maps_overdense_{tag}.pdf'),
-            box_size_mpc=box_size_mpc, min_overdensity=5.0, sigma_mpc=2.0)
+            box_size_mpc=box_size_mpc, min_overdensity=5.0,
+            sigma_mpc=kd_sigma, grid_n=kd_grid_n, z_slab_mpc=kd_zslab)
+        print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+        _step('Per-target Σ_N maps (overdense subset, δ_K ≥ 5)')
+        t0 = time.time()
+        plot_kernel_density_maps(
+            env_results, all_gals, z_snap, run_label, qmode,
+            os.path.join(out_dir, f'kernel_density_maps_counts_overdense_{tag}.pdf'),
+            box_size_mpc=box_size_mpc, min_overdensity=5.0,
+            sigma_mpc=kd_sigma, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
+            weight_mode='count')
         print(f'    rendered in {_fmt_dt(time.time()-t0)}')
 
         _step('XY/XZ/YZ projections for most massive target')
@@ -3370,7 +4379,20 @@ def main():
         plot_kernel_density_projections(
             env_results, all_gals, z_snap, run_label, qmode,
             os.path.join(out_dir, f'kernel_density_projections_{tag}.pdf'),
-            box_size_mpc=box_size_mpc, sigma_mpc=2.0)
+            box_size_mpc=box_size_mpc, sigma_mpc=kd_sigma,
+            grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
+            default_label=default_label)
+        print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+        _step('XY/XZ/YZ projections — halo counts')
+        t0 = time.time()
+        plot_kernel_density_projections(
+            env_results, all_gals, z_snap, run_label, qmode,
+            os.path.join(out_dir, f'kernel_density_projections_counts_{tag}.pdf'),
+            box_size_mpc=box_size_mpc, sigma_mpc=kd_sigma,
+            grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
+            weight_mode='count',
+            default_label=default_label)
         print(f'    rendered in {_fmt_dt(time.time()-t0)}')
 
         _step('Skew-triplet density panels')
@@ -3378,8 +4400,23 @@ def main():
         plot_kernel_density_skew_panels(
             env_results, all_gals, z_snap, run_label, qmode,
             os.path.join(out_dir, f'kernel_density_skew_panels_{tag}.pdf'),
-            box_size_mpc=box_size_mpc, sigma_mpc=2.0)
+            box_size_mpc=box_size_mpc, sigma_mpc=kd_sigma,
+            grid_n=kd_grid_n, z_slab_mpc=kd_zslab)
         print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+        _step('Skew-triplet density panels — halo counts')
+        t0 = time.time()
+        plot_kernel_density_skew_panels(
+            env_results, all_gals, z_snap, run_label, qmode,
+            os.path.join(out_dir, f'kernel_density_skew_panels_counts_{tag}.pdf'),
+            box_size_mpc=box_size_mpc, sigma_mpc=kd_sigma,
+            grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
+            weight_mode='count')
+        print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+        # Two extent settings — the standard full-window and a 5x5 cMpc zoom.
+        zoom_R_mpc     = 2.5   # half-extent → 5 cMpc on a side
+        zoom_sigma_mpc = 0.1   # match the smaller panel scale; keeps σ/R ≈ 1/25
 
         _step('Most-massive target — kernel density at z = 7, 5, 2.95')
         t0 = time.time()
@@ -3388,8 +4425,118 @@ def main():
             params['snapshot_redshifts'], h, box_size_mpc,
             os.path.join(out_dir, f'target_redshift_evolution_{tag}.pdf'),
             target_redshifts=(7.0, 5.0, 2.95),
-            sigma_mpc=2.0)
+            sigma_mpc=kd_sigma, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
+            default_label=default_label)
         print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+        _step('Most-massive target — kernel density at z = 7, 5, 2.95  (5x5 cMpc zoom)')
+        t0 = time.time()
+        plot_target_redshift_evolution(
+            env_results, filepaths, snap_times,
+            params['snapshot_redshifts'], h, box_size_mpc,
+            os.path.join(out_dir,
+                         f'target_redshift_evolution_zoom5cMpc_{tag}.pdf'),
+            target_redshifts=(7.0, 5.0, 2.95),
+            sigma_mpc=zoom_sigma_mpc, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
+            extent_mpc=zoom_R_mpc,
+            default_label=default_label)
+        print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+        _step('Most-massive target — halo-count density at z = 7, 5, 2.95')
+        t0 = time.time()
+        plot_target_redshift_evolution(
+            env_results, filepaths, snap_times,
+            params['snapshot_redshifts'], h, box_size_mpc,
+            os.path.join(out_dir, f'target_redshift_evolution_counts_{tag}.pdf'),
+            target_redshifts=(7.0, 5.0, 2.95),
+            sigma_mpc=kd_sigma, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
+            weight_mode='count',
+            default_label=default_label)
+        print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+        _step('Most-massive target — halo-count density at z = 7, 5, 2.95  (5x5 cMpc zoom)')
+        t0 = time.time()
+        plot_target_redshift_evolution(
+            env_results, filepaths, snap_times,
+            params['snapshot_redshifts'], h, box_size_mpc,
+            os.path.join(out_dir,
+                         f'target_redshift_evolution_counts_zoom5cMpc_{tag}.pdf'),
+            target_redshifts=(7.0, 5.0, 2.95),
+            sigma_mpc=zoom_sigma_mpc, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
+            weight_mode='count',
+            extent_mpc=zoom_R_mpc,
+            default_label=default_label)
+        print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+        # Same redshift evolution rendered on the compare run's halo field
+        # for the matched target.  On these the primary star is the noFFB
+        # target; the comparison "X" overlay shows the FFB-default galaxy.
+        if compare_filepaths and compare_target is not None:
+            _step(f'Compare-run target — kernel density at z = 7, 5, 2.95 '
+                  f'({compare_label})')
+            t0 = time.time()
+            plot_target_redshift_evolution(
+                env_results, compare_filepaths, snap_times,
+                params['snapshot_redshifts'], h, box_size_mpc,
+                os.path.join(out_dir,
+                             f'target_redshift_evolution_{compare_label}_{tag}.pdf'),
+                target_gid=compare_target['gid'],
+                target_redshifts=(7.0, 5.0, 2.95),
+                sigma_mpc=kd_sigma, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
+                default_label=compare_label,
+                compare_history=default_history,
+                compare_label=default_label)
+            print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+            _step(f'Compare-run target — kernel density at z = 7, 5, 2.95  (5x5 cMpc zoom)')
+            t0 = time.time()
+            plot_target_redshift_evolution(
+                env_results, compare_filepaths, snap_times,
+                params['snapshot_redshifts'], h, box_size_mpc,
+                os.path.join(out_dir,
+                             f'target_redshift_evolution_{compare_label}_zoom5cMpc_{tag}.pdf'),
+                target_gid=compare_target['gid'],
+                target_redshifts=(7.0, 5.0, 2.95),
+                sigma_mpc=zoom_sigma_mpc, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
+                extent_mpc=zoom_R_mpc,
+                default_label=compare_label,
+                compare_history=default_history,
+                compare_label=default_label)
+            print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+            _step(f'Compare-run target — halo-count density at z = 7, 5, 2.95 '
+                  f'({compare_label})')
+            t0 = time.time()
+            plot_target_redshift_evolution(
+                env_results, compare_filepaths, snap_times,
+                params['snapshot_redshifts'], h, box_size_mpc,
+                os.path.join(out_dir,
+                             f'target_redshift_evolution_counts_{compare_label}_{tag}.pdf'),
+                target_gid=compare_target['gid'],
+                target_redshifts=(7.0, 5.0, 2.95),
+                sigma_mpc=kd_sigma, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
+                weight_mode='count',
+                default_label=compare_label,
+                compare_history=default_history,
+                compare_label=default_label)
+            print(f'    rendered in {_fmt_dt(time.time()-t0)}')
+
+            _step(f'Compare-run target — halo-count density at z = 7, 5, 2.95  (5x5 cMpc zoom)')
+            t0 = time.time()
+            plot_target_redshift_evolution(
+                env_results, compare_filepaths, snap_times,
+                params['snapshot_redshifts'], h, box_size_mpc,
+                os.path.join(out_dir,
+                             f'target_redshift_evolution_counts_{compare_label}_zoom5cMpc_{tag}.pdf'),
+                target_gid=compare_target['gid'],
+                target_redshifts=(7.0, 5.0, 2.95),
+                sigma_mpc=zoom_sigma_mpc, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
+                weight_mode='count',
+                extent_mpc=zoom_R_mpc,
+                default_label=compare_label,
+                compare_history=default_history,
+                compare_label=default_label)
+            print(f'    rendered in {_fmt_dt(time.time()-t0)}')
 
         _banner('SKEW HISTORY (multi-aperture)')
         _step('Compute μ_3(t) for every target at 1, 3, 5 cMpc')
@@ -3407,6 +4554,28 @@ def main():
             out_path=os.path.join(out_dir, f'skew_history_{tag}.pdf'),
             picks_aperture_mpc=5.0)
         print(f'    skew-history figure rendered in {_fmt_dt(time.time()-t0)}')
+
+        # Compare-run skew history for the matched target only
+        if compare_filepaths and compare_target is not None:
+            _step(f'Compute μ_3(t) for matched target in {compare_label}')
+            t0 = time.time()
+            compare_skew_history = compute_skew_history(
+                compare_filepaths, snap, [compare_target['gid']],
+                snap_times, h, box_size_mpc,
+                apertures_mpc=(1.0, 3.0, 5.0))
+            print(f'    {compare_label} skew history complete in '
+                  f'{_fmt_dt(time.time()-t0)}')
+
+            _step('Render skew-history comparison')
+            t0 = time.time()
+            plot_skew_history_compare(
+                skew_history, compare_skew_history,
+                snap_times, snap,
+                target_gid, compare_target['gid'],
+                default_label, compare_label,
+                os.path.join(out_dir,
+                             f'skew_history_compare_{tag}.pdf'))
+            print(f'    rendered in {_fmt_dt(time.time()-t0)}')
     else:
         print('  No galaxies loaded — skipping environment analysis.')
 
