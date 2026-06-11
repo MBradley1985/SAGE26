@@ -106,6 +106,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->CGMPrecipRadiusMode        = 0;
     run_params->CGMAGNOn                   = 1;
     run_params->CGMHeatingRheatOn          = 2;
+    run_params->CGMAGNPrecipSuppressOn     = 0;
+    run_params->ResetRheatOnRegimeFlip     = 0;
+    run_params->RegimeRandomMode           = 0;
+    run_params->SatelliteCGMRetentionOn    = 1;
     run_params->FIREmodeOn                 = 1;
     run_params->RedshiftPowerLawExponent   = 1.25;
     run_params->FFBMaxEfficiency           = 0.2;
@@ -190,6 +194,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("CGMPrecipRadiusMode",   &(run_params->CGMPrecipRadiusMode),  INT, 0);
     REG("CGMAGNOn",              &(run_params->CGMAGNOn),              INT, 0);
     REG("CGMHeatingRheatOn",     &(run_params->CGMHeatingRheatOn),    INT, 0);
+    REG("CGMAGNPrecipSuppressOn",&(run_params->CGMAGNPrecipSuppressOn),INT, 0);
+    REG("ResetRheatOnRegimeFlip",&(run_params->ResetRheatOnRegimeFlip),INT, 0);
+    REG("RegimeRandomMode",      &(run_params->RegimeRandomMode),     INT, 0);
+    REG("SatelliteCGMRetentionOn",&(run_params->SatelliteCGMRetentionOn),INT, 0);
     REG("FIREmodeOn",            &(run_params->FIREmodeOn),           INT, 0);
     REG("ConcentrationOn",       &(run_params->ConcentrationOn),      INT, 0);
     REG("FeedbackFreeModeOn",    &(run_params->FeedbackFreeModeOn),   INT, 0);
@@ -520,6 +528,28 @@ int read_parameter_file(const char *fname, struct params *run_params)
                 run_params->Exponent_Forest_Dist_Scheme);
         fprintf(stderr,"Please change the value for the parameter 'ExponentForestDistributionScheme' in the parameter file (%s)\n", fname);
         ABORT(EXIT_FAILURE);
+    }
+
+    /* CGM-regime AGN suppression mode-combination check.
+     * CGMAGNPrecipSuppressOn applies an instantaneous energy-balance suppression
+     * of cooling by AGN heating; it must not stack with the r_heat ratchet
+     * paths (CGMHeatingRheatOn != 0) and only makes sense when the CGM-
+     * regime AGN itself fires (CGMAGNOn > 0). */
+    if(run_params->CGMAGNPrecipSuppressOn != 0) {
+        if(run_params->CGMHeatingRheatOn != 0) {
+            fprintf(stderr,
+                    "Error: CGMAGNPrecipSuppressOn = %d requires CGMHeatingRheatOn = 0 "
+                    "(got %d) to avoid stacking with the r_heat ratchet.\n",
+                    run_params->CGMAGNPrecipSuppressOn, run_params->CGMHeatingRheatOn);
+            ABORT(EXIT_FAILURE);
+        }
+        if(run_params->CGMAGNOn == 0) {
+            fprintf(stderr,
+                    "Error: CGMAGNPrecipSuppressOn = %d requires CGMAGNOn > 0; "
+                    "there is no CGM-regime AGN to suppress with.\n",
+                    run_params->CGMAGNPrecipSuppressOn);
+            ABORT(EXIT_FAILURE);
+        }
     }
 
     myfree(used_tag);

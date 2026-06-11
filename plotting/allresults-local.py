@@ -1249,7 +1249,20 @@ if __name__ == '__main__':
     MeanEjectedL = np.maximum(np.array(MeanEjectedL), 1e-6)
 
     baryon_frac = 0.17
-    plt.axhline(y=baryon_frac, color='grey', linestyle='--', linewidth=1.0, 
+
+    print('  Total baryon fraction per halo mass bin (cosmic f_b = {:.3f}):'.format(baryon_frac))
+    over_bins = 0
+    for hm, bf in zip(MeanCentralHaloMass, MeanBaryonFraction):
+        flag = '  <-- ABOVE cosmic f_b' if bf > baryon_frac else ''
+        if bf > baryon_frac:
+            over_bins += 1
+        print('    log10(Mvir) = {:5.2f}   f_b = {:.4f}{}'.format(hm, bf, flag))
+    if over_bins > 0:
+        print('  WARNING: {} bin(s) exceed cosmic baryon fraction.'.format(over_bins))
+    else:
+        print('  All bins are below the cosmic baryon fraction.')
+
+    plt.axhline(y=baryon_frac, color='grey', linestyle='--', linewidth=1.0,
             label='Baryon Fraction = {:.2f}'.format(baryon_frac))
 
     # Add 1-sigma shading for each mass reservoir

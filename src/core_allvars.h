@@ -110,6 +110,7 @@ struct GALAXY
     int32_t   Regime;     /* 0=CGM-dominated (cold-flow/precipitation); 1=hot-halo (classical); set by determine_and_store_regime() */
     int32_t   FFBRegime;  /* 0=standard SF; 1=feedback-free burst active; set by determine_and_store_ffb_regime() */
     float     FFBRandom;  /* persistent random number for sigmoid-based FFB determination (drawn at galaxy creation) */
+    float     RegimeRandom; /* persistent random number for sigmoid-based CGM/Hot regime determination (drawn at galaxy creation; used when RegimeRandomMode==1) */
 
     int32_t   GalaxyNr;   /* index within the current forest's galaxy array */
     int32_t   CentralGal; /* index of the FOF central galaxy in the current galaxy array */
@@ -178,8 +179,7 @@ struct GALAXY
     float MergTime;        /* dynamical-friction merger clock; counts down to 0 [code time units]; >999 = unset */
     double Cooling;        /* total cooling luminosity this snapshot [code energy / code time] */
     double Heating;        /* total AGN heating luminosity this snapshot [code energy / code time] */
-    float f_heat_cgm;      /* CGM-regime AGN suppression fraction (0-1); analog of r_heat; decays on t_dyn */
-    float r_heat;          /* AGN radio-mode heating radius [Mpc/h]; suppresses cooling gas at r < r_heat */
+    float r_heat;          /* AGN radio-mode heating radius [Mpc/h]; suppresses cooling gas at r < r_heat. CGMHeatingRheatOn modes 1 and 3 decay it on t_dyn / CGM t_cool respectively; mode 2 is ratchet-only. */
     float QuasarModeBHaccretionMass; /* BH mass accreted in quasar mode this snapshot [10^10 Msun/h] */
     float TimeOfLastMajorMerger;
     float TimeOfLastMinorMerger;
@@ -486,7 +486,11 @@ struct params
     int32_t    CGMPrecipitationMode;  // 0: tanh (McCourt+12 style); 1: logistic sigmoid centred on t_cool/t_ff=10, width=2
     int32_t    CGMPrecipRadiusMode;   // 0: evaluate t_cool/t_ff at r_cool; 1: evaluate at 0.1*R_vir
     int32_t    CGMAGNOn;              // 0: disable AGN heating in CGM-regime entirely; 1: enable (default)
-    int32_t    CGMHeatingRheatOn;     // 0: off; 1: f_heat_cgm decaying suppression fraction on t_dyn; 2: standard r_heat ratchet capped at Rvir
+    int32_t    CGMHeatingRheatOn;     // 0: off; 1: r_heat ratchet with t_dyn decay; 2: r_heat ratchet only (no decay), capped at Rvir; 3: r_heat ratchet with CGM t_cool decay
+    int32_t    CGMAGNPrecipSuppressOn;// 0: off; 1: instantaneous energy-balance suppression of cooling by AGN heating this step (requires CGMAGNOn>0 and CGMHeatingRheatOn==0)
+    int32_t    ResetRheatOnRegimeFlip;// 0: r_heat persists across Regime changes (default); 1: zero r_heat whenever determine_and_store_regime() flips a galaxy between CGM (0) and Hot (1)
+    int32_t    RegimeRandomMode;     // 0: fresh random draw each snapshot (default, original behaviour); 1: use the persistent RegimeRandom assigned at galaxy creation (deterministic regime evolution driven by mass)
+    int32_t    SatelliteCGMRetentionOn; // 0: satellite CGMgas is wiped to the central every snapshot in infall_recipe (original); 1: satellites retain CGMgas and only the baryon-excess fraction is stripped via strip_from_satellite, matching how HotGas is handled (CGMrecipeOn==1 only)
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation
     int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
     int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too

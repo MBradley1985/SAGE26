@@ -56,9 +56,20 @@ FIREmodeOn                  1   %0: switch off
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
 FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 conc); 3: BK25 (ConcentrationOn method); 4: BK25 + log-normal c scatter; 5: Li+24 sharp; 6: Li+24 sigmoid + H2 SF; 7: BK25 log-normal c scatter + H2 SF
+FFBRandomMode               0   %0: fresh random draw each snapshot; 1: persistent FFBRandom assigned at galaxy creation
 
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
+
+DynamicDisruptionSplit      2   %0: fixed fraction; 1: mass-ratio only; 2: concentration-weighted
+FractionDisruptedToICS      1.0     %fraction of disrupted satellite stellar mass to ICS (rest goes to BCG); 1.0 = original behavior
+
+CGMAGNOn                    1   %0: disable AGN heating in CGM-regime entirely; 1: enable (default)
+CGMHeatingRheatOn           2   %0: off; 1: r_heat ratchet with t_dyn decay; 2: r_heat ratchet only (no decay), capped at Rvir; 3: r_heat ratchet with CGM t_cool decay
+CGMAGNPrecipSuppressOn      0   %0: off; 1: instantaneous energy-balance suppression of cooling by AGN heating this step (requires CGMAGNOn>0 and CGMHeatingRheatOn==0)
+ResetRheatOnRegimeFlip      0   %0: r_heat persists across Regime changes (default); 1: zero r_heat whenever a galaxy flips between CGM (0) and Hot (1) regimes
+RegimeRandomMode            0   %0: fresh random draw each snapshot (original; borderline-mass galaxies thrash between regimes); 1: use persistent RegimeRandom assigned at galaxy creation (regime evolves smoothly with Mvir)
+SatelliteCGMRetentionOn     1   %0: satellite CGMgas wiped to central every snapshot (original; asymmetric vs HotGas); 1: satellites retain CGMgas, stripped only by baryon-excess rule (uniform with HotGas; CGMrecipeOn==1 only)
 
 %------------------------------------------
 %----- SAGE model parameters --------------

@@ -33,15 +33,16 @@ plt.rcParams['axes.edgecolor']   = 'black'
 
 
 # ── Configuration ──────────────────────────────────────────────────────────────
-MODEL_DIR     = './output/microuchuu/'
+MODEL_DIR     = './output/millennium/'
 OUTPUT_FORMAT = '.pdf'
 OUTPUT_DIR    = './output/ics_paper/plots/'
 OBS_DIR       = './data/'
-SIM_LABEL     = 'SAGE26'
+SIM_LABEL     = 'Millennium (SAGE26)'
 SIM_COLOR     = '#2166ac'   # carries through all ICS paper plots
+COLORMAP      = 'plasma'    # sequential cmap used for multi-redshift lines
 
-MIN_PARTICLES      = 50        # DM particle threshold for resolved halos
-MVIR_CLUSTER       = 1.0e14   # M_sun — cluster selection floor
+MIN_PARTICLES      = 0        # DM particle threshold for resolved halos
+MVIR_CLUSTER       = 1.0e13   # M_sun — cluster selection floor
 MIN_SATELLITES     = 2         # minimum satellite count per central
 BCG_MVIR_RATIO_MIN = 10**-3.5  # pathological BCG filter: M_BCG/M_vir
 DIST_300KPC        = 300.0     # kpc physical — aperture for panels 3 & 4
@@ -64,22 +65,46 @@ BCG_PROXY_C_TO_HALO = BCG_PROXY_C / ICS_PROXY_C
 # ── Multi-model configuration (Plots 4–5) ──────────────────────────────────────
 MODELS = [
     {
-        'dir':   './output/millennium_fixed100/',
-        'label': r'Fixed ($\alpha=1.0$)',
-        'color': '#d6604d',
+        'dir':   './output/millennium/',
+        'label': 'miniMillennium (SAGE26)',
+        'color': "#175cdb",
+        'ls':    '-',
+    },
+    {
+        'dir':   './output/millennium_vanilla/',
+        'label': 'miniMillennium (SAGE16)',
+        'color': "#168247",
         'ls':    '--',
     },
     {
-        'dir':   './output/millennium_fixed80/',
-        'label': r'Fixed ($\alpha=0.8$)',
-        'color': '#e08214',
-        'ls':    '-.',
+        'dir':   'output/millennium_noCGM',
+        'label': 'SAGE26: no CGM',
+        'color': "#214fd8",
+        'ls':    ':',
     },
     {
-        'dir':   './output/microuchuu/',
-        'label': 'Dynamic (fiducial)',
-        'color': '#2166ac',
-        'ls':    '-',
+        'dir':   'output/millennium_fixedsplit',
+        'label': r'SAGE26: $100\%$ ICS (SAGE16)',
+        'color': "#2170d8",
+        'ls':    ':',
+    },
+    {
+        'dir':   'output/millennium_noCGM_fixedsplit',
+        'label': 'SAGE26: no CGM and fixed split',
+        'color': "#21a1d8",
+        'ls':    ':',
+    },
+    {
+        'dir':   'output/millennium_noCGM_fixedsplit_noH2',
+        'label': 'SAGE26:no CGM, fixed split, no H2',
+        'color': "#21bdd8",
+        'ls':    ':',
+    },
+    {
+        'dir':   'output/millennium_noCGM_fixedsplit_noH2_noFFB',
+        'label': 'SAGE26:no CGM, fixed split, no H2, no FFBs',
+        'color': "#d89b21",
+        'ls':    ':',
     },
 ]
 
@@ -107,6 +132,11 @@ def _find_files(directory):
         if os.path.exists(single):
             files = [single]
     return files
+
+
+def _enabled_models():
+    """MODELS entries whose 'dir' is non-None and non-empty."""
+    return [m for m in MODELS if m.get('dir')]
 
 
 def _read_header(directory):
@@ -509,136 +539,132 @@ def plot_1_ics_fraction_vs_redshift():
     print('=' * 70)
     print(f'  BCG definition: {BCG_DEFINITION}')
 
-    files = _find_files(MODEL_DIR)
-    if not files:
-        print(f'  No model files found in {MODEL_DIR}')
+    models = _enabled_models()
+    if not models:
+        print('  No enabled models.')
         return
 
-    hdr = _read_header(MODEL_DIR)
-    if hdr is None:
-        return
+    # model_curves: list of (mdl, panel_pts) where panel_pts[i] is
+    # a list of (z, p50, p16, p84) for definition i.
+    model_curves = []
 
-    h_val     = hdr['hubble_h']
-    box       = hdr['box_size']       # Mpc/h comoving
-    f_b       = hdr['baryon_frac']
-    redshifts = hdr['redshifts']
-    avail     = hdr['output_snaps']
-    mass_conv = hdr['unit_mass_in_g'] / 1.989e33 / h_val   # code units -> M_sun
-    min_stel  = hdr['part_mass_msun'] * f_b                 # 1 DM particle * f_b
-
-    snaps = sorted(
-        [s for s in avail
-         if s < len(redshifts) and 0.0 <= redshifts[s] <= MAX_REDSHIFT],
-        reverse=True)
-
-    if not snaps:
-        print(f'  No snapshots in z <= {MAX_REDSHIFT}')
-        return
-
-    print(f'  {len(snaps)} snapshots, '
-          f'z = {redshifts[snaps[-1]]:.2f} to {redshifts[snaps[0]]:.2f}')
-
-    # per-panel: list of (z, p50, p16, p84)
-    panel_pts = [[] for _ in range(3)]
-
-    for snap in snaps:
-        z = redshifts[snap]
-
-        # IMPORTANT: do NOT apply the Len cut globally here.
-        # Orphan / poorly-resolved satellites can have Len~0 but still carry
-        # non-negligible stellar mass and should contribute to m_{*,tot}.
-        # We apply Len>=MIN_PARTICLES only when selecting the resolved *central*.
-        d = _load_snap(
-            files, snap,
-            ['Mvir', 'IntraClusterStars', 'StellarMass',
-             'Type', 'GalaxyIndex', 'CentralGalaxyIndex',
-             'Posx', 'Posy', 'Posz', 'Len'],
-            mass_conv,
-            min_len=None,
-        )
-        if not d or d['Mvir'].size == 0:
+    for mdl in models:
+        print(f"\n  Model: {mdl['label']} ({mdl['dir']})")
+        files = _find_files(mdl['dir'])
+        if not files:
+            print(f"    No model files found, skipping.")
             continue
 
-        Mvir  = d['Mvir']
-        ICS   = d['IntraClusterStars']
-        SM    = d['StellarMass']
-        Type  = d['Type']
-        Len   = d['Len']
-        Gidx  = d['GalaxyIndex']
-        CGidx = d['CentralGalaxyIndex']
-        Px, Py, Pz = d['Posx'], d['Posy'], d['Posz']
-
-        n_sat_all, sm_sat_all = _sat_sums_all(Type, SM, Gidx, CGidx)
-        n_sat_300, sm_sat_300 = _sat_sums_within_radius(
-            Type, SM, Gidx, CGidx, Px, Py, Pz, z, h_val, box)
-        c_halo = _halo_concentration_for_proxy(Mvir, z, h_val)
-        c_bcg = np.maximum(1.0, BCG_PROXY_C_TO_HALO * c_halo)
-        ics_300 = _ics_mass_within_radius_proxy(ICS, Mvir, z, h_val, c_halo=c_halo)
-        sm_300 = _bcg_mass_within_radius_proxy(SM, Mvir, z, h_val, c_halo=c_halo)
-
-        total_all = SM + sm_sat_all + ICS
-        total_300 = sm_300 + sm_sat_300 + ics_300
-
-        # Diagnostic: is the Type==0 central actually the most massive galaxy?
-        max_sat_sm = _sat_max_all(Type, SM, Gidx, CGidx)
-
-        if BCG_DEFINITION == 'central':
-            sm_bcg = SM
-        elif BCG_DEFINITION == 'most_massive':
-            sm_bcg = np.maximum(SM, max_sat_sm)
-        else:
-            raise ValueError(f'Unknown BCG_DEFINITION={BCG_DEFINITION!r}')
-
-        bcg_mvir = np.where(Mvir > 0, sm_bcg / Mvir, 0.0)
-
-        sel = (
-            (Type == 0) &
-            (Len >= MIN_PARTICLES) &
-            (Mvir >= MVIR_CLUSTER) &
-            (ICS > 0) &
-            (sm_bcg >= min_stel) &
-            (n_sat_all >= MIN_SATELLITES) &
-            (total_all > 0) &
-            (bcg_mvir >= BCG_MVIR_RATIO_MIN)
-        )
-        idx = np.where(sel)[0]
-        if len(idx) < MIN_N_SNAP:
+        hdr = _read_header(mdl['dir'])
+        if hdr is None:
             continue
 
-        t3 = total_300[idx]
-        fracs = [
-            ICS[idx] / (f_b * Mvir[idx]),
-            ICS[idx] / total_all[idx],
-            np.where(t3 > 0, ics_300[idx] / t3, np.nan),
-        ]
+        h_val     = hdr['hubble_h']
+        box       = hdr['box_size']       # Mpc/h comoving
+        f_b       = hdr['baryon_frac']
+        redshifts = hdr['redshifts']
+        avail     = hdr['output_snaps']
+        mass_conv = hdr['unit_mass_in_g'] / 1.989e33 / h_val
+        min_stel  = hdr['part_mass_msun'] * f_b
 
-        for pi, fv in enumerate(fracs):
-            fv = fv[np.isfinite(fv)]
-            if len(fv) < MIN_N_SNAP:
+        snaps = sorted(
+            [s for s in avail
+             if s < len(redshifts) and 0.0 <= redshifts[s] <= MAX_REDSHIFT],
+            reverse=True)
+
+        if not snaps:
+            print(f'    No snapshots in z <= {MAX_REDSHIFT}')
+            continue
+
+        print(f'    {len(snaps)} snapshots, '
+              f'z = {redshifts[snaps[-1]]:.2f} to {redshifts[snaps[0]]:.2f}')
+
+        panel_pts = [[] for _ in range(3)]
+
+        for snap in snaps:
+            z = redshifts[snap]
+
+            # IMPORTANT: do NOT apply the Len cut globally here.
+            # Orphan / poorly-resolved satellites can have Len~0 but still carry
+            # non-negligible stellar mass and should contribute to m_{*,tot}.
+            # We apply Len>=MIN_PARTICLES only when selecting the resolved central.
+            d = _load_snap(
+                files, snap,
+                ['Mvir', 'IntraClusterStars', 'StellarMass',
+                 'Type', 'GalaxyIndex', 'CentralGalaxyIndex',
+                 'Posx', 'Posy', 'Posz', 'Len'],
+                mass_conv,
+                min_len=None,
+            )
+            if not d or d['Mvir'].size == 0:
                 continue
-            p16, p50, p84 = np.percentile(fv, [16, 50, 84])
-            panel_pts[pi].append((z, p50, p16, p84))
 
-        logm_med = np.nanmedian(np.log10(np.clip(Mvir[idx], 1e-30, None)))
-        sat_share = np.nanmedian(np.where(t3 > 0, sm_sat_300[idx] / t3, np.nan))
-        bcg_share = np.nanmedian(np.where(t3 > 0, sm_300[idx] / t3, np.nan))
-        noncentral_bcg = np.mean(max_sat_sm[idx] > SM[idx])
-        central_self = np.mean(CGidx[idx] == Gidx[idx])
-        central_frac_all = np.nanmedian(SM[idx] / total_all[idx])
-        bcg_frac_all = np.nanmedian(sm_bcg[idx] / total_all[idx])
-        sat_frac_all = np.nanmedian(sm_sat_all[idx] / total_all[idx])
-        ics_frac_all = np.nanmedian(ICS[idx] / total_all[idx])
+            Mvir  = d['Mvir']
+            ICS   = d['IntraClusterStars']
+            SM    = d['StellarMass']
+            Type  = d['Type']
+            Len   = d['Len']
+            Gidx  = d['GalaxyIndex']
+            CGidx = d['CentralGalaxyIndex']
+            Px, Py, Pz = d['Posx'], d['Posy'], d['Posz']
 
-        print(f'  snap={snap:2d}  z={z:.3f}  N={len(idx):3d}  '
-              + '  '.join(f'p{i}={np.nanmedian(f):.4f}' for i, f in enumerate(fracs))
-              + f'  c_halo={np.nanmedian(c_halo[idx]):.2f}'
-              + f'  c_bcg={np.nanmedian(c_bcg[idx]):.2f}'
-              + f'  logMvir={logm_med:.2f}'
-              + f'  sat300={sat_share:.3f}'
-              + f'  bcg300={bcg_share:.3f}'
-              + f'  bcg_is_central={1.0 - noncentral_bcg:.3f}'
-              + f'  central_self={central_self:.3f}'
-              + f'  (central,BCG,sat,ICS)_all=({central_frac_all:.3f},{bcg_frac_all:.3f},{sat_frac_all:.3f},{ics_frac_all:.3f})')
+            n_sat_all, sm_sat_all = _sat_sums_all(Type, SM, Gidx, CGidx)
+            _, sm_sat_300 = _sat_sums_within_radius(
+                Type, SM, Gidx, CGidx, Px, Py, Pz, z, h_val, box)
+            c_halo  = _halo_concentration_for_proxy(Mvir, z, h_val)
+            ics_300 = _ics_mass_within_radius_proxy(ICS, Mvir, z, h_val, c_halo=c_halo)
+            sm_300  = _bcg_mass_within_radius_proxy(SM, Mvir, z, h_val, c_halo=c_halo)
+
+            total_all = SM + sm_sat_all + ICS
+            total_300 = sm_300 + sm_sat_300 + ics_300
+
+            max_sat_sm = _sat_max_all(Type, SM, Gidx, CGidx)
+
+            if BCG_DEFINITION == 'central':
+                sm_bcg = SM
+            elif BCG_DEFINITION == 'most_massive':
+                sm_bcg = np.maximum(SM, max_sat_sm)
+            else:
+                raise ValueError(f'Unknown BCG_DEFINITION={BCG_DEFINITION!r}')
+
+            bcg_mvir = np.where(Mvir > 0, sm_bcg / Mvir, 0.0)
+
+            sel = (
+                (Type == 0) &
+                (Len >= MIN_PARTICLES) &
+                (Mvir >= MVIR_CLUSTER) &
+                (ICS > 0) &
+                (sm_bcg >= min_stel) &
+                (n_sat_all >= MIN_SATELLITES) &
+                (total_all > 0) &
+                (bcg_mvir >= BCG_MVIR_RATIO_MIN)
+            )
+            idx = np.where(sel)[0]
+            if len(idx) < MIN_N_SNAP:
+                continue
+
+            t3 = total_300[idx]
+            fracs = [
+                ICS[idx] / (f_b * Mvir[idx]),
+                ICS[idx] / total_all[idx],
+                np.where(t3 > 0, ics_300[idx] / t3, np.nan),
+            ]
+
+            for pi, fv in enumerate(fracs):
+                fv = fv[np.isfinite(fv)]
+                if len(fv) < MIN_N_SNAP:
+                    continue
+                p16, p50, p84 = np.percentile(fv, [16, 50, 84])
+                panel_pts[pi].append((z, p50, p16, p84))
+
+            print(f'    snap={snap:2d}  z={z:.3f}  N={len(idx):3d}  '
+                  + '  '.join(f'p{i}={np.nanmedian(f):.4f}' for i, f in enumerate(fracs)))
+
+        model_curves.append((mdl, panel_pts))
+
+    if not model_curves:
+        print('  No models produced data.')
+        return
 
     # ── Figure ────────────────────────────────────────────────────────────────
     panel_titles = [
@@ -652,31 +678,26 @@ def plot_1_ics_fraction_vs_redshift():
     axes_flat = np.atleast_1d(axes).flatten()
 
     x_ticks = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5]
-
-    # Display panels in the requested order with the removed panel dropped: 2, 3, 1.
-    # (i.e. old indices 1,2,0 mapped onto axes_flat 0,1,2)
     panel_order = [1, 2, 0]
 
     for pi, ax in enumerate(axes_flat):
         src = panel_order[pi]
-        pts = panel_pts[src]
-        if pts:
+        for mdl, panel_pts in model_curves:
+            pts = panel_pts[src]
+            if not pts:
+                continue
             pts.sort(key=lambda t: t[0])
             zz  = np.array([t[0] for t in pts])
             med = np.array([t[1] for t in pts])
             lo  = np.array([t[2] for t in pts])
             hi  = np.array([t[3] for t in pts])
-            ax.fill_between(zz, lo, hi, color=SIM_COLOR, alpha=0.2, lw=0.0)
-            ax.plot(zz, med, color=SIM_COLOR, lw=2.5)
+            ax.fill_between(zz, lo, hi, color=mdl['color'], alpha=0.18, lw=0.0)
+            ax.plot(zz, med, color=mdl['color'], ls=mdl['ls'], lw=2.5,
+                    label=mdl['label'])
 
         _plot_obs(ax, obs)
 
-        # ax.text(0.97, 0.97, panel_titles[src],
-        #         transform=ax.transAxes, ha='right', va='top')
-        
-        # Make panel titles actual sub-plot titles, not legend entries
         ax.set_title(panel_titles[src], fontsize=16, pad=10)
-
         ax.set_xlim(0, MAX_REDSHIFT)
         ax.set_xticks(x_ticks)
         ax.set_ylim(0, 0.6)
@@ -687,6 +708,7 @@ def plot_1_ics_fraction_vs_redshift():
             ax.tick_params(labelleft=False)
 
     axes_flat[0].set_ylabel(r'ICS fraction')
+    axes_flat[0].legend(loc='upper left', frameon=False, fontsize=11)
 
     fig.tight_layout()
 
@@ -1346,6 +1368,723 @@ def plot_5_bcg_halo_redshift():
     print(f'  Saved: {out}')
 
 
+# ── Plot 6: ICS fraction vs halo mass (z=0) ────────────────────────────────────
+
+def plot_6_ics_fraction_vs_halo_mass():
+    """
+    Single-panel figure of ICS fraction as a function of halo mass at z=0,
+    showing all three definitions of f_ICS:
+        (0) M_ICS / (f_b * M_vir)                                  baryon-budget
+        (1) M_ICS / M_star_tot                                      full-halo stellar
+        (2) M_ICS(<300 kpc) / M_star_tot(<300 kpc)                  aperture stellar
+
+    Lines are medians; shading shows 16th-84th percentiles.
+    """
+    print('\n' + '=' * 70)
+    print('Plot 6: ICS fraction vs halo mass (z=0)')
+    print('=' * 70)
+
+    models = _enabled_models()
+    if not models:
+        print('  No enabled models.')
+        return
+
+    defs = [
+        {'label': r'$m_\mathrm{ICS}\ /\ (f_b\,M_\mathrm{vir})$',
+         'color': '#d6604d'},
+        {'label': r'$m_\mathrm{ICS}\ /\ m_{\star,\mathrm{tot}}$',
+         'color': SIM_COLOR},
+        {'label': r'$m_\mathrm{ICS}^{300\,\mathrm{kpc}}\ /\ m_{\star,\mathrm{tot}}^{\,300\,\mathrm{kpc}}$',
+         'color': '#1B7837'},
+    ]
+
+    bin_edges = np.arange(10.0, 15.01, 0.25)
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+
+    any_drawn = False
+    for mdl in models:
+        print(f"\n  Model: {mdl['label']} ({mdl['dir']})")
+        files = _find_files(mdl['dir'])
+        if not files:
+            print(f'    No model files found, skipping.')
+            continue
+        hdr = _read_header(mdl['dir'])
+        if hdr is None:
+            continue
+
+        h_val     = hdr['hubble_h']
+        box       = hdr['box_size']
+        f_b       = hdr['baryon_frac']
+        redshifts = hdr['redshifts']
+        avail     = hdr['output_snaps']
+        mass_conv = hdr['unit_mass_in_g'] / 1.989e33 / h_val
+        min_stel  = hdr['part_mass_msun'] * f_b
+
+        snap0 = _snap_nearest_z(redshifts, 0.0, avail)
+        z     = redshifts[snap0]
+
+        d = _load_snap(
+            files, snap0,
+            ['Mvir', 'IntraClusterStars', 'StellarMass',
+             'Type', 'GalaxyIndex', 'CentralGalaxyIndex',
+             'Posx', 'Posy', 'Posz', 'Len'],
+            mass_conv,
+            min_len=None,
+        )
+        if not d or d['Mvir'].size == 0:
+            print('    Empty z=0 snapshot.')
+            continue
+
+        Mvir  = d['Mvir']
+        ICS   = d['IntraClusterStars']
+        SM    = d['StellarMass']
+        Type  = d['Type']
+        Len   = d['Len']
+        Gidx  = d['GalaxyIndex']
+        CGidx = d['CentralGalaxyIndex']
+        Px, Py, Pz = d['Posx'], d['Posy'], d['Posz']
+
+        _, sm_sat_all = _sat_sums_all(Type, SM, Gidx, CGidx)
+        _, sm_sat_300 = _sat_sums_within_radius(
+            Type, SM, Gidx, CGidx, Px, Py, Pz, z, h_val, box)
+        c_halo  = _halo_concentration_for_proxy(Mvir, z, h_val)
+        ics_300 = _ics_mass_within_radius_proxy(ICS, Mvir, z, h_val, c_halo=c_halo)
+        sm_300  = _bcg_mass_within_radius_proxy(SM, Mvir, z, h_val, c_halo=c_halo)
+
+        total_all = SM + sm_sat_all + ICS
+        total_300 = sm_300 + sm_sat_300 + ics_300
+
+        max_sat_sm = _sat_max_all(Type, SM, Gidx, CGidx)
+        if BCG_DEFINITION == 'central':
+            sm_bcg = SM
+        elif BCG_DEFINITION == 'most_massive':
+            sm_bcg = np.maximum(SM, max_sat_sm)
+        else:
+            raise ValueError(f'Unknown BCG_DEFINITION={BCG_DEFINITION!r}')
+
+        bcg_mvir = np.where(Mvir > 0, sm_bcg / Mvir, 0.0)
+
+        sel = (
+            (Type == 0) &
+            (Len >= MIN_PARTICLES) &
+            (Mvir > 0) &
+            (ICS > 0) &
+            (sm_bcg >= min_stel) &
+            (total_all > 0) &
+            (bcg_mvir >= BCG_MVIR_RATIO_MIN)
+        )
+        idx = np.where(sel)[0]
+        if len(idx) < MIN_N_SNAP:
+            print('    Not enough selected halos.')
+            continue
+
+        log_mvir = np.log10(Mvir[idx])
+        t3       = total_300[idx]
+        fracs = [
+            ICS[idx] / (f_b * Mvir[idx]),
+            ICS[idx] / total_all[idx],
+            np.where(t3 > 0, ics_300[idx] / t3, np.nan),
+        ]
+
+        print(f'    snap={snap0:2d}  z={z:.3f}  N_selected={len(idx)}')
+
+        for fv, dd in zip(fracs, defs):
+            good = np.isfinite(fv)
+            bc, med, p16, p84 = _binned_stats(log_mvir[good], fv[good], bin_edges)
+            ok = ~np.isnan(med)
+            if not ok.any():
+                continue
+            ax.fill_between(bc[ok], p16[ok], p84[ok],
+                            color=dd['color'], alpha=0.12, lw=0)
+            ax.plot(bc[ok], med[ok], color=dd['color'], ls=mdl['ls'], lw=2.3)
+        any_drawn = True
+
+    if not any_drawn:
+        print('  No data plotted.')
+        plt.close(fig)
+        return
+
+    # Composite legend: definition (colour) + model (linestyle).
+    def_handles = [Line2D([0], [0], color=dd['color'], lw=2.5, label=dd['label'])
+                   for dd in defs]
+    mdl_handles = [Line2D([0], [0], color='black', ls=mdl['ls'], lw=2.0,
+                          label=mdl['label']) for mdl in models]
+    ax.legend(handles=def_handles + mdl_handles,
+              loc='upper left', frameon=False, fontsize=10)
+
+    ax.set_xlabel(r'$\log_{10}\, M_\mathrm{vir}\ [\mathrm{M}_\odot]$')
+    ax.set_ylabel(r'ICS fraction')
+    ax.set_xlim(10.0, 15.0)
+    ax.set_ylim(0, None)
+    ax.tick_params(which='both', direction='in', top=True, right=True)
+
+    fig.tight_layout()
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    out = os.path.join(OUTPUT_DIR, 'ICS_fraction_vs_halo_mass' + OUTPUT_FORMAT)
+    fig.savefig(out, bbox_inches='tight')
+    plt.close(fig)
+    print(f'  Saved: {out}')
+
+
+# ── Plot 7: M_ICS / (M_ICS + M_BCG) vs halo mass (z=0) ─────────────────────────
+
+def plot_7_ics_over_bcg_vs_halo_mass():
+    """
+    Single-panel figure of m_ICS / (m_ICS + m_BCG) as a function of halo mass
+    at z=0.  The BCG is taken as the central (Type==0) galaxy of each FoF group.
+    Line is the median; shading shows the 16th-84th percentiles.
+    """
+    print('\n' + '=' * 70)
+    print('Plot 7: M_ICS / (M_ICS + M_BCG) vs halo mass (z=0)')
+    print('=' * 70)
+
+    models = _enabled_models()
+    if not models:
+        print('  No enabled models.')
+        return
+
+    bin_edges = np.arange(10.0, 15.01, 0.25)
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+
+    any_drawn = False
+    for mdl in models:
+        print(f"\n  Model: {mdl['label']} ({mdl['dir']})")
+        files = _find_files(mdl['dir'])
+        if not files:
+            print('    No model files found, skipping.')
+            continue
+        hdr = _read_header(mdl['dir'])
+        if hdr is None:
+            continue
+
+        h_val     = hdr['hubble_h']
+        f_b       = hdr['baryon_frac']
+        redshifts = hdr['redshifts']
+        avail     = hdr['output_snaps']
+        mass_conv = hdr['unit_mass_in_g'] / 1.989e33 / h_val
+        min_stel  = hdr['part_mass_msun'] * f_b
+
+        snap0 = _snap_nearest_z(redshifts, 0.0, avail)
+        z     = redshifts[snap0]
+
+        d = _load_snap(
+            files, snap0,
+            ['Mvir', 'IntraClusterStars', 'StellarMass', 'Type', 'Len'],
+            mass_conv,
+            min_len=None,
+        )
+        if not d or d['Mvir'].size == 0:
+            print('    Empty z=0 snapshot.')
+            continue
+
+        Mvir = d['Mvir']
+        ICS  = d['IntraClusterStars']
+        SM   = d['StellarMass']
+        Type = d['Type']
+        Len  = d['Len']
+
+        bcg_mvir = np.where(Mvir > 0, SM / Mvir, 0.0)
+        sel = (
+            (Type == 0) &
+            (Len >= MIN_PARTICLES) &
+            (Mvir > 0) &
+            (ICS > 0) &
+            (SM >= min_stel) &
+            (bcg_mvir >= BCG_MVIR_RATIO_MIN)
+        )
+        idx = np.where(sel)[0]
+        if len(idx) < MIN_N_SNAP:
+            print('    Not enough selected halos.')
+            continue
+
+        log_mvir = np.log10(Mvir[idx])
+        denom    = ICS[idx] + SM[idx]
+        ratio    = np.where(denom > 0, ICS[idx] / denom, np.nan)
+        good     = np.isfinite(ratio)
+        bc, med, p16, p84 = _binned_stats(log_mvir[good], ratio[good], bin_edges)
+        ok = ~np.isnan(med)
+        if not ok.any():
+            continue
+
+        print(f'    snap={snap0:2d}  z={z:.3f}  N_selected={len(idx)}')
+
+        ax.fill_between(bc[ok], p16[ok], p84[ok],
+                        color=mdl['color'], alpha=0.18, lw=0)
+        ax.plot(bc[ok], med[ok], color=mdl['color'], ls=mdl['ls'], lw=2.5,
+                label=mdl['label'])
+        any_drawn = True
+
+    if not any_drawn:
+        print('  No data plotted.')
+        plt.close(fig)
+        return
+
+    ax.axhline(0.5, color='grey', ls=':', lw=1.0)
+
+    ax.set_xlabel(r'$\log_{10}\, M_\mathrm{vir}\ [\mathrm{M}_\odot]$')
+    ax.set_ylabel(r'$m_\mathrm{ICS}\,/\,(m_\mathrm{ICS}+m_\mathrm{BCG})$')
+    ax.set_xlim(10.0, 15.0)
+    ax.set_ylim(0, 1)
+    ax.tick_params(which='both', direction='in', top=True, right=True)
+    ax.legend(loc='upper left', frameon=False, fontsize=12)
+
+    fig.tight_layout()
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    out = os.path.join(OUTPUT_DIR, 'ICS_over_ICS_plus_BCG_vs_halo_mass' + OUTPUT_FORMAT)
+    fig.savefig(out, bbox_inches='tight')
+    plt.close(fig)
+    print(f'  Saved: {out}')
+
+
+# ── Plot 8: M_ICS / (M_ICS + M_BCG) vs halo mass — multi-z ─────────────────────
+
+_RATIO_Z_TARGETS = [0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+
+def plot_8_ics_over_bcg_vs_halo_mass_multi_z():
+    """
+    Single-panel figure of m_ICS / (m_ICS + m_BCG) as a function of halo mass,
+    with one median line (+ 16-84 percentile shading) per target redshift.
+    The BCG is taken as the central (Type==0) galaxy of each FoF group.
+    """
+    print('\n' + '=' * 70)
+    print('Plot 8: M_ICS / (M_ICS + M_BCG) vs halo mass (multi-z)')
+    print('=' * 70)
+
+    models = _enabled_models()
+    if not models:
+        print('  No enabled models.')
+        return
+
+    bin_edges = np.arange(10.0, 15.01, 0.25)
+
+    cmap   = plt.get_cmap(COLORMAP)
+    n_z    = len(_RATIO_Z_TARGETS)
+    colors = [cmap(0.15 + 0.7 * i / max(1, n_z - 1)) for i in range(n_z)]
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+
+    any_drawn = False
+    for mdl in models:
+        print(f"\n  Model: {mdl['label']} ({mdl['dir']})")
+        files = _find_files(mdl['dir'])
+        if not files:
+            print('    No model files found, skipping.')
+            continue
+        hdr = _read_header(mdl['dir'])
+        if hdr is None:
+            continue
+
+        h_val     = hdr['hubble_h']
+        f_b       = hdr['baryon_frac']
+        redshifts = hdr['redshifts']
+        avail     = hdr['output_snaps']
+        mass_conv = hdr['unit_mass_in_g'] / 1.989e33 / h_val
+        min_stel  = hdr['part_mass_msun'] * f_b
+
+        snaps  = [_snap_nearest_z(redshifts, tz, avail) for tz in _RATIO_Z_TARGETS]
+        z_vals = [redshifts[s] for s in snaps]
+
+        for snap, z_act, color in zip(snaps, z_vals, colors):
+            d = _load_snap(
+                files, snap,
+                ['Mvir', 'IntraClusterStars', 'StellarMass', 'Type', 'Len'],
+                mass_conv,
+                min_len=None,
+            )
+            if not d or d['Mvir'].size == 0:
+                print(f'    z={z_act:.2f}: empty snapshot')
+                continue
+
+            Mvir = d['Mvir']
+            ICS  = d['IntraClusterStars']
+            SM   = d['StellarMass']
+            Type = d['Type']
+            Len  = d['Len']
+
+            bcg_mvir = np.where(Mvir > 0, SM / Mvir, 0.0)
+            sel = (
+                (Type == 0) &
+                (Len >= MIN_PARTICLES) &
+                (Mvir > 0) &
+                (ICS > 0) &
+                (SM >= min_stel) &
+                (bcg_mvir >= BCG_MVIR_RATIO_MIN)
+            )
+            idx = np.where(sel)[0]
+            if len(idx) < MIN_N_SNAP:
+                print(f'    z={z_act:.2f}: too few selected halos ({len(idx)})')
+                continue
+
+            log_mvir = np.log10(Mvir[idx])
+            denom    = ICS[idx] + SM[idx]
+            ratio    = np.where(denom > 0, ICS[idx] / denom, np.nan)
+            good     = np.isfinite(ratio)
+            bc, med, p16, p84 = _binned_stats(log_mvir[good], ratio[good], bin_edges)
+            ok = ~np.isnan(med)
+            if not ok.any():
+                continue
+
+            print(f'    snap={snap:2d}  z={z_act:.3f}  N_selected={len(idx)}')
+
+            ax.fill_between(bc[ok], p16[ok], p84[ok],
+                            color=color, alpha=0.12, lw=0)
+            ax.plot(bc[ok], med[ok], color=color, ls=mdl['ls'], lw=2.3)
+            any_drawn = True
+
+    if not any_drawn:
+        print('  No data plotted.')
+        plt.close(fig)
+        return
+
+    # Legend: just model line styles (redshift indicated by colour gradient).
+    mdl_handles = [Line2D([0], [0], color='black', ls=mdl['ls'], lw=2.0,
+                          label=mdl['label']) for mdl in models]
+    ax.legend(handles=mdl_handles, loc='upper left', frameon=False, fontsize=10)
+
+    ax.axhline(0.5, color='grey', ls=':', lw=1.0)
+
+    ax.set_xlabel(r'$\log_{10}\, M_\mathrm{vir}\ [\mathrm{M}_\odot]$')
+    ax.set_ylabel(r'$m_\mathrm{ICS}\,/\,(m_\mathrm{ICS}+m_\mathrm{BCG})$')
+    ax.set_xlim(10.0, 15.0)
+    ax.set_ylim(0, 1)
+    ax.tick_params(which='both', direction='in', top=True, right=True)
+
+    fig.tight_layout()
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    out = os.path.join(OUTPUT_DIR,
+                       'ICS_over_ICS_plus_BCG_vs_halo_mass_multi_z' + OUTPUT_FORMAT)
+    fig.savefig(out, bbox_inches='tight')
+    plt.close(fig)
+    print(f'  Saved: {out}')
+
+
+# ── Plot 9: f_ICS vs halo mass — 3 panels (definitions) × multi-z ──────────────
+
+_FRAC_VS_M_Z_TARGETS = [0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+
+def plot_9_ics_fraction_vs_halo_mass_multi_z():
+    """
+    1x3 grid of f_ICS vs halo mass, one panel per definition:
+        (0) M_ICS / (f_b * M_vir)                                  baryon-budget
+        (1) M_ICS / M_star_tot                                      full-halo stellar
+        (2) M_ICS(<300 kpc) / M_star_tot(<300 kpc)                  aperture stellar
+    Each panel shows one median line (+ 16-84 percentile shading) per redshift.
+    """
+    print('\n' + '=' * 70)
+    print('Plot 9: f_ICS vs halo mass (3 definitions × multi-z)')
+    print('=' * 70)
+
+    models = _enabled_models()
+    if not models:
+        print('  No enabled models.')
+        return
+
+    bin_edges = np.arange(10.0, 15.01, 0.25)
+
+    cmap   = plt.get_cmap(COLORMAP)
+    n_z    = len(_FRAC_VS_M_Z_TARGETS)
+    colors = [cmap(0.10 + 0.80 * i / max(1, n_z - 1)) for i in range(n_z)]
+
+    # panel_curves[def_idx] is a list of (mdl, z_act, color, bc, med, p16, p84)
+    n_defs = 3
+    panel_curves = [[] for _ in range(n_defs)]
+
+    for mdl in models:
+        print(f"\n  Model: {mdl['label']} ({mdl['dir']})")
+        files = _find_files(mdl['dir'])
+        if not files:
+            print('    No model files found, skipping.')
+            continue
+        hdr = _read_header(mdl['dir'])
+        if hdr is None:
+            continue
+
+        h_val     = hdr['hubble_h']
+        box       = hdr['box_size']
+        f_b       = hdr['baryon_frac']
+        redshifts = hdr['redshifts']
+        avail     = hdr['output_snaps']
+        mass_conv = hdr['unit_mass_in_g'] / 1.989e33 / h_val
+        min_stel  = hdr['part_mass_msun'] * f_b
+
+        snaps  = [_snap_nearest_z(redshifts, tz, avail) for tz in _FRAC_VS_M_Z_TARGETS]
+        z_vals = [redshifts[s] for s in snaps]
+
+        for snap, z_act, color in zip(snaps, z_vals, colors):
+            d = _load_snap(
+                files, snap,
+                ['Mvir', 'IntraClusterStars', 'StellarMass',
+                 'Type', 'GalaxyIndex', 'CentralGalaxyIndex',
+                 'Posx', 'Posy', 'Posz', 'Len'],
+                mass_conv,
+                min_len=None,
+            )
+            if not d or d['Mvir'].size == 0:
+                print(f'    z={z_act:.2f}: empty snapshot')
+                continue
+
+            Mvir  = d['Mvir']
+            ICS   = d['IntraClusterStars']
+            SM    = d['StellarMass']
+            Type  = d['Type']
+            Len   = d['Len']
+            Gidx  = d['GalaxyIndex']
+            CGidx = d['CentralGalaxyIndex']
+            Px, Py, Pz = d['Posx'], d['Posy'], d['Posz']
+
+            _, sm_sat_all = _sat_sums_all(Type, SM, Gidx, CGidx)
+            _, sm_sat_300 = _sat_sums_within_radius(
+                Type, SM, Gidx, CGidx, Px, Py, Pz, z_act, h_val, box)
+            c_halo  = _halo_concentration_for_proxy(Mvir, z_act, h_val)
+            ics_300 = _ics_mass_within_radius_proxy(ICS, Mvir, z_act, h_val, c_halo=c_halo)
+            sm_300  = _bcg_mass_within_radius_proxy(SM, Mvir, z_act, h_val, c_halo=c_halo)
+
+            total_all = SM + sm_sat_all + ICS
+            total_300 = sm_300 + sm_sat_300 + ics_300
+
+            max_sat_sm = _sat_max_all(Type, SM, Gidx, CGidx)
+            if BCG_DEFINITION == 'central':
+                sm_bcg = SM
+            elif BCG_DEFINITION == 'most_massive':
+                sm_bcg = np.maximum(SM, max_sat_sm)
+            else:
+                raise ValueError(f'Unknown BCG_DEFINITION={BCG_DEFINITION!r}')
+
+            bcg_mvir = np.where(Mvir > 0, sm_bcg / Mvir, 0.0)
+            sel = (
+                (Type == 0) &
+                (Len >= MIN_PARTICLES) &
+                (Mvir > 0) &
+                (ICS > 0) &
+                (sm_bcg >= min_stel) &
+                (total_all > 0) &
+                (bcg_mvir >= BCG_MVIR_RATIO_MIN)
+            )
+            idx = np.where(sel)[0]
+            if len(idx) < MIN_N_SNAP:
+                print(f'    z={z_act:.2f}: too few selected halos ({len(idx)})')
+                continue
+
+            log_mvir = np.log10(Mvir[idx])
+            t3       = total_300[idx]
+            fracs = [
+                ICS[idx] / (f_b * Mvir[idx]),
+                ICS[idx] / total_all[idx],
+                np.where(t3 > 0, ics_300[idx] / t3, np.nan),
+            ]
+
+            print(f'    snap={snap:2d}  z={z_act:.3f}  N_selected={len(idx)}')
+
+            for di, fv in enumerate(fracs):
+                good = np.isfinite(fv)
+                if good.sum() < MIN_N_SNAP:
+                    continue
+                bc, med, p16, p84 = _binned_stats(
+                    log_mvir[good], fv[good], bin_edges)
+                panel_curves[di].append((mdl, z_act, color, bc, med, p16, p84))
+
+    # ── Figure ────────────────────────────────────────────────────────────────
+    panel_titles = [
+        r'$f_{ICS}=m_\mathrm{ICS}\ /\ (f_b\,M_\mathrm{vir})$',
+        r'$f_{ICS}=m_\mathrm{ICS}\ /\ m_{\star,\mathrm{tot}}$',
+        r'$f_{ICS}=m_\mathrm{ICS}^{300\,\mathrm{kpc}}\ /\ m_{\star,\mathrm{tot}}^{\,300\,\mathrm{kpc}}$',
+    ]
+    panel_order = [1, 2, 0]
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4.5), sharey=True)
+    axes_flat = np.atleast_1d(axes).flatten()
+
+    for pi, ax in enumerate(axes_flat):
+        src = panel_order[pi]
+        for (mdl, z_act, color, bc, med, p16, p84) in panel_curves[src]:
+            ok = ~np.isnan(med)
+            if not ok.any():
+                continue
+            ax.fill_between(bc[ok], p16[ok], p84[ok],
+                            color=color, alpha=0.10, lw=0)
+            ax.plot(bc[ok], med[ok], color=color, ls=mdl['ls'], lw=2.3)
+
+        ax.set_title(panel_titles[src], fontsize=16, pad=10)
+        ax.set_xlim(10.0, 15.0)
+        ax.set_ylim(0, 0.6)
+        ax.tick_params(which='both', direction='in', top=True, right=True)
+        ax.set_xlabel(r'$\log_{10}\, M_\mathrm{vir}\ [\mathrm{M}_\odot]$')
+        if pi != 0:
+            ax.tick_params(labelleft=False)
+
+    axes_flat[0].set_ylabel(r'ICS fraction')
+
+    mdl_handles = [Line2D([0], [0], color='black', ls=mdl['ls'], lw=2.0,
+                          label=mdl['label']) for mdl in models]
+    axes_flat[0].legend(handles=mdl_handles, loc='upper left',
+                        frameon=False, fontsize=10)
+
+    fig.tight_layout()
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    out = os.path.join(OUTPUT_DIR,
+                       'ICS_fraction_vs_halo_mass_multi_z' + OUTPUT_FORMAT)
+    fig.savefig(out, bbox_inches='tight')
+    plt.close(fig)
+    print(f'  Saved: {out}')
+
+
+# ── Plot 10: f_ICS and M_ICS/(M_ICS+M_BCG) vs halo mass — side by side ─────────
+
+def plot_10_ics_metrics_side_by_side():
+    """
+    1x2 side-by-side figure at z=0:
+        Left:  f_ICS = m_ICS / m_{*,tot} vs log10 M_vir
+        Right: m_ICS / (m_ICS + m_BCG)   vs log10 M_vir
+
+    All enabled models overplotted. No error shading.
+    Model colours come from the plasma colormap; the first two models use the
+    full line width while later models are drawn thinner.
+    """
+    print('\n' + '=' * 70)
+    print('Plot 10: ICS metrics vs halo mass (side-by-side, z=0)')
+    print('=' * 70)
+
+    models = _enabled_models()
+    if not models:
+        print('  No enabled models.')
+        return
+
+    bin_edges = np.arange(10.0, 15.01, 0.25)
+
+    cmap   = plt.get_cmap(COLORMAP)
+    n_mdl  = len(models)
+    colors = [cmap(0.10 + 0.80 * i / max(1, n_mdl - 1)) for i in range(n_mdl)]
+
+    fig, (ax_frac, ax_ratio) = plt.subplots(1, 2, figsize=(13, 5))
+
+    any_drawn = False
+    for mi, mdl in enumerate(models):
+        print(f"\n  Model: {mdl['label']} ({mdl['dir']})")
+        files = _find_files(mdl['dir'])
+        if not files:
+            print('    No model files found, skipping.')
+            continue
+        hdr = _read_header(mdl['dir'])
+        if hdr is None:
+            continue
+
+        h_val     = hdr['hubble_h']
+        f_b       = hdr['baryon_frac']
+        redshifts = hdr['redshifts']
+        avail     = hdr['output_snaps']
+        mass_conv = hdr['unit_mass_in_g'] / 1.989e33 / h_val
+        min_stel  = hdr['part_mass_msun'] * f_b
+
+        snap0 = _snap_nearest_z(redshifts, 0.0, avail)
+        z     = redshifts[snap0]
+
+        d = _load_snap(
+            files, snap0,
+            ['Mvir', 'IntraClusterStars', 'StellarMass',
+             'Type', 'GalaxyIndex', 'CentralGalaxyIndex', 'Len'],
+            mass_conv,
+            min_len=None,
+        )
+        if not d or d['Mvir'].size == 0:
+            print('    Empty z=0 snapshot.')
+            continue
+
+        Mvir  = d['Mvir']
+        ICS   = d['IntraClusterStars']
+        SM    = d['StellarMass']
+        Type  = d['Type']
+        Len   = d['Len']
+        Gidx  = d['GalaxyIndex']
+        CGidx = d['CentralGalaxyIndex']
+
+        _, sm_sat_all = _sat_sums_all(Type, SM, Gidx, CGidx)
+        total_all     = SM + sm_sat_all + ICS
+
+        max_sat_sm = _sat_max_all(Type, SM, Gidx, CGidx)
+        if BCG_DEFINITION == 'central':
+            sm_bcg = SM
+        elif BCG_DEFINITION == 'most_massive':
+            sm_bcg = np.maximum(SM, max_sat_sm)
+        else:
+            raise ValueError(f'Unknown BCG_DEFINITION={BCG_DEFINITION!r}')
+
+        bcg_mvir = np.where(Mvir > 0, sm_bcg / Mvir, 0.0)
+        sel = (
+            (Type == 0) &
+            (Len >= MIN_PARTICLES) &
+            (Mvir > 0) &
+            (ICS > 0) &
+            (sm_bcg >= min_stel) &
+            (total_all > 0) &
+            (bcg_mvir >= BCG_MVIR_RATIO_MIN)
+        )
+        idx = np.where(sel)[0]
+        if len(idx) < MIN_N_SNAP:
+            print('    Not enough selected halos.')
+            continue
+
+        log_mvir = np.log10(Mvir[idx])
+        frac     = ICS[idx] / total_all[idx]
+        denom    = ICS[idx] + sm_bcg[idx]
+        ratio    = np.where(denom > 0, ICS[idx] / denom, np.nan)
+
+        lw = 2.5 if mi < 2 else 1.2
+        color = colors[mi]
+
+        for ax, yvals in ((ax_frac, frac), (ax_ratio, ratio)):
+            good = np.isfinite(yvals)
+            bc, med, _, _ = _binned_stats(log_mvir[good], yvals[good], bin_edges)
+            ok = ~np.isnan(med)
+            if not ok.any():
+                continue
+            ax.plot(bc[ok], med[ok], color=color, ls=mdl['ls'], lw=lw,
+                    label=mdl['label'])
+
+        print(f'    snap={snap0:2d}  z={z:.3f}  N_selected={len(idx)}')
+        any_drawn = True
+
+    if not any_drawn:
+        print('  No data plotted.')
+        plt.close(fig)
+        return
+
+    ax_ratio.axhline(0.5, color='grey', ls=':', lw=1.0)
+
+    ax_frac.set_xlabel(r'$\log_{10}\, M_\mathrm{vir}\ [\mathrm{M}_\odot]$')
+    ax_frac.set_ylabel(r'$f_\mathrm{ICS}=m_\mathrm{ICS}\,/\,m_{\star,\mathrm{tot}}$')
+    ax_frac.set_xlim(10.0, 15.0)
+    ax_frac.set_ylim(0, None)
+    ax_frac.tick_params(which='both', direction='in', top=True, right=True)
+
+    ax_ratio.set_xlabel(r'$\log_{10}\, M_\mathrm{vir}\ [\mathrm{M}_\odot]$')
+    ax_ratio.set_ylabel(r'$m_\mathrm{ICS}\,/\,(m_\mathrm{ICS}+m_\mathrm{BCG})$')
+    ax_ratio.set_xlim(10.0, 15.0)
+    ax_ratio.set_ylim(0, 1)
+    ax_ratio.tick_params(which='both', direction='in', top=True, right=True)
+
+    handles, labels = ax_frac.get_legend_handles_labels()
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.28)
+    fig.legend(handles, labels,
+               loc='lower center', bbox_to_anchor=(0.5, 0.0),
+               ncol=3, frameon=False, fontsize=10)
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    out = os.path.join(OUTPUT_DIR,
+                       'ICS_metrics_vs_halo_mass_side_by_side' + OUTPUT_FORMAT)
+    fig.savefig(out, bbox_inches='tight')
+    plt.close(fig)
+    print(f'\n  Saved: {out}')
+
+
 # ── Main ────────────────────────────────────────────────────────────────────────
 
 _PLOTS = {
@@ -1354,6 +2093,11 @@ _PLOTS = {
     3: plot_3_ics_assembly_grid,
     # 4: plot_4_bcg_halo_mass,
     # 5: plot_5_bcg_halo_redshift,
+    6: plot_6_ics_fraction_vs_halo_mass,
+    7: plot_7_ics_over_bcg_vs_halo_mass,
+    8: plot_8_ics_over_bcg_vs_halo_mass_multi_z,
+    9: plot_9_ics_fraction_vs_halo_mass_multi_z,
+    10: plot_10_ics_metrics_side_by_side,
 }
 
 
