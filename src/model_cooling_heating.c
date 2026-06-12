@@ -647,34 +647,10 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // ========================================================================
     // STEP 2b: CHARACTERISTIC RADIUS FOR PRECIPITATION CRITERION
     // ========================================================================
-    // CGMPrecipRadiusMode == 0: evaluate t_cool/t_ff at r_cool (traditional).
-    // CGMPrecipRadiusMode == 1: evaluate at 0.1 R_vir -- avoids the circularity
-    //   of the NFW solver (which converges to t_cool = t_ff at r_cool, making
-    //   all haloes appear unstable). At 0.1 R_vir the ratio correctly reflects
-    //   halo mass: massive -> lower density -> higher t_cool/t_ff -> stable.
-    double tcool_char = tcool;
-    double tff_char = tff;
-    double tcool_over_tff_char = tcool / tff;
-
-    if(run_params->CGMPrecipRadiusMode == 1) {
-        const double r_char_cgs = CGM_BETA_CORE_RADIUS_FRAC * Rvir_cgs;
-        const double rho_char = cgm_density_at_radius(r_char_cgs, CGMgas_cgs, Rvir_cgs,
-                                                       Mvir_Msun, z, profile_type);
-        if(rho_char > 0.0) {
-            const double tcool_char_cgs = (1.5 * mu * PROTONMASS * BOLTZMANN * temp) / (rho_char * lambda);
-            const double M_enc_char = cgm_enclosed_mass(r_char_cgs, Mvir_cgs, Rvir_cgs,
-                                                         Mvir_Msun, z, profile_type);
-            if(M_enc_char > 0.0) {
-                const double g_char_cgs = G_CGS * M_enc_char / (r_char_cgs * r_char_cgs);
-                if(g_char_cgs > 0.0) {
-                    const double tff_char_cgs = sqrt(2.0 * r_char_cgs / g_char_cgs);
-                    tcool_char = tcool_char_cgs / run_params->UnitTime_in_s;
-                    tff_char = tff_char_cgs / run_params->UnitTime_in_s;
-                    tcool_over_tff_char = tcool_char_cgs / tff_char_cgs;
-                }
-            }
-        }
-    }
+    // Evaluate t_cool/t_ff at r_cool (traditional Voit-style choice).
+    const double tcool_char = tcool;
+    const double tff_char = tff;
+    const double tcool_over_tff_char = tcool / tff;
 
     // Store characteristic-radius values for diagnostics/plotting
     galaxies[gal].tcool = tcool_char;

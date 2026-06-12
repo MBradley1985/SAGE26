@@ -94,17 +94,10 @@ returns the enclosed mass at any radius for free-fall calculations.
 free-fall time at that radius is `t_ff = sqrt(2 r / g)` with
 `g = G M_enc(r) / r^2`.
 
-### Step 3 -- characteristic radius selector
+### Step 3 -- characteristic radius
 
-The precipitation criterion is evaluated at either `r_cool` itself or at
-`0.1 R_vir`, controlled by `CGMPrecipRadiusMode`:
-
-- `0` (default): evaluate `t_cool / t_ff` at `r_cool`. Traditional choice.
-- `1`: evaluate at `0.1 R_vir`. Avoids the circularity of the NFW solver
-  (which converges to `t_cool = t_ff` at `r_cool` by construction, making
-  every halo look marginally unstable). At `0.1 R_vir` the ratio reflects
-  halo mass: more massive halos have lower density and higher
-  `t_cool / t_ff`, so they correctly appear stable.
+The precipitation criterion is evaluated at `r_cool` itself -- the
+traditional Voit-style choice.
 
 ### Step 4 -- precipitation fraction
 
@@ -204,7 +197,6 @@ dispatcher does the transfer itself.
 |-----------|--------|
 | `CGMrecipeOn` | 0 disables the two-regime split entirely; 1 enables it. |
 | `CGMDensityProfile` | CGM density profile: 0 uniform, 1 NFW, 2 beta. |
-| `CGMPrecipRadiusMode` | Evaluation radius for `t_cool / t_ff`: 0 at `r_cool`, 1 at `0.1 R_vir`. |
 | `CGMAGNOn` | Enables AGN heating coupling in the CGM regime. |
 | `CGMHeatingRheatOn` | CGM AGN suppression mechanism: 0 off, 1 `f_heat_cgm`, 2 `r_heat` ratchet. |
 | `AGNrecipeOn` | Radio-mode BH accretion recipe: 0 off, 1 empirical, 2 Bondi-Hoyle, 3 cold-cloud. |
