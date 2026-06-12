@@ -750,8 +750,6 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // Regime==1 residual CGMgas drains naturally; do_AGN_heating() on HotGas
     // in cooling_recipe_hot() handles all AGN for hot-halo galaxies.
     if(galaxies[gal].Regime == 0) {
-        const double Vvir2_b = galaxies[gal].Vvir * galaxies[gal].Vvir;
-
         // AGN x parameter: (k_B T / lambda) in code-units density*time -- passed to
         // both AGN heating paths (Bondi-Hoyle uses it; empirical and cold-cloud do not).
         const double x_agn = (PROTONMASS * BOLTZMANN * temp / lambda)
@@ -790,25 +788,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         } else {
             // CGMHeatingRheatOn == 0: no r_heat suppression; AGN still fires and accretes
             if(run_params->AGNrecipeOn > 0 && run_params->CGMAGNOn > 0) {
-                const double heating_before = galaxies[gal].Heating;
                 coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
-
-                // Optional: instantaneous energy-balance suppression of cooling by
-                // AGN heating injected this step (memory-free alternative to the
-                // r_heat ratchet). do_AGN_heating_cgm() accumulates
-                // 0.5 * AGNheating_mass * Vvir^2 into galaxies[gal].Heating, so the
-                // mass-equivalent heating is recovered by dividing the delta by
-                // 0.5 * Vvir^2. Gated on CGMAGNPrecipSuppressOn; the parameter
-                // file check (core_read_parameter_file.c) enforces that this is
-                // only active when CGMHeatingRheatOn==0 and CGMAGNOn>0.
-                if(run_params->CGMAGNPrecipSuppressOn > 0 && Vvir2_b > 0.0) {
-                    const double heating_added = galaxies[gal].Heating - heating_before;
-                    if(heating_added > 0.0) {
-                        const double AGNheating_mass = heating_added / (0.5 * Vvir2_b);
-                        coolingGas -= AGNheating_mass;
-                        if(coolingGas < 0.0) coolingGas = 0.0;
-                    }
-                }
             }
         }
     }

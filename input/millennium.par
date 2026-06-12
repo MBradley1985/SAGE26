@@ -66,7 +66,6 @@ FractionDisruptedToICS      1.0     %fraction of disrupted satellite stellar mas
 
 CGMAGNOn                    1   %0: disable AGN heating in CGM-regime entirely; 1: enable (default)
 CGMHeatingRheatOn           2   %0: off; 1: r_heat ratchet with t_dyn decay; 2: r_heat ratchet only (no decay), capped at Rvir; 3: r_heat ratchet with CGM t_cool decay
-CGMAGNPrecipSuppressOn      0   %0: off; 1: instantaneous energy-balance suppression of cooling by AGN heating this step (requires CGMAGNOn>0 and CGMHeatingRheatOn==0)
 ResetRheatOnRegimeFlip      0   %0: r_heat persists across Regime changes (default); 1: zero r_heat whenever a galaxy flips between CGM (0) and Hot (1) regimes
 RegimeRandomMode            0   %0: fresh random draw each snapshot (original; borderline-mass galaxies thrash between regimes); 1: use persistent RegimeRandom assigned at galaxy creation (regime evolves smoothly with Mvir)
 SatelliteCGMRetentionOn     1   %0: satellite CGMgas wiped to central every snapshot (original; asymmetric vs HotGas); 1: satellites retain CGMgas, stripped only by baryon-excess rule (uniform with HotGas; CGMrecipeOn==1 only)

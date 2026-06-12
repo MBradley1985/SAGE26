@@ -487,7 +487,6 @@ struct params
     int32_t    CGMPrecipRadiusMode;   // 0: evaluate t_cool/t_ff at r_cool; 1: evaluate at 0.1*R_vir
     int32_t    CGMAGNOn;              // 0: disable AGN heating in CGM-regime entirely; 1: enable (default)
     int32_t    CGMHeatingRheatOn;     // 0: off; 1: r_heat ratchet with t_dyn decay; 2: r_heat ratchet only (no decay), capped at Rvir; 3: r_heat ratchet with CGM t_cool decay
-    int32_t    CGMAGNPrecipSuppressOn;// 0: off; 1: instantaneous energy-balance suppression of cooling by AGN heating this step (requires CGMAGNOn>0 and CGMHeatingRheatOn==0)
     int32_t    ResetRheatOnRegimeFlip;// 0: r_heat persists across Regime changes (default); 1: zero r_heat whenever determine_and_store_regime() flips a galaxy between CGM (0) and Hot (1)
     int32_t    RegimeRandomMode;     // 0: fresh random draw each snapshot (default, original behaviour); 1: use the persistent RegimeRandom assigned at galaxy creation (deterministic regime evolution driven by mass)
     int32_t    SatelliteCGMRetentionOn; // 0: satellite CGMgas is wiped to the central every snapshot in infall_recipe (original); 1: satellites retain CGMgas and only the baryon-excess fraction is stripped via strip_from_satellite, matching how HotGas is handled (CGMrecipeOn==1 only)
