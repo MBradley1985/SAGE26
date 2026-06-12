@@ -503,11 +503,6 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
     for(int p = 0; p < ngal; p++) {
         if(galaxies[p].mergeType > 0) continue;
 
-        // Capture the previous regime so we can detect flips below. init_galaxy
-        // sets Regime = -1, which we treat as "no prior state" and never count
-        // as a flip.
-        const int32_t old_regime = galaxies[p].Regime;
-
         // Convert Mvir to physical units (Msun)
         // Mvir is stored in units of 10^10 Msun/h
         const double Mvir_physical = galaxies[p].Mvir * 1.0e10 / run_params->Hubble_h;
@@ -545,17 +540,6 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
         }
 
         galaxies[p].Regime = new_regime;
-
-        // Optional: zero r_heat when the regime actually flips. With
-        // CGMHeatingRheatOn=2 (no-decay ratchet) a CGM-side r_heat would
-        // otherwise persist forever and keep biting whenever the galaxy
-        // returns to Regime==0. old_regime == -1 means freshly initialised --
-        // not a real flip.
-        if(run_params->ResetRheatOnRegimeFlip
-           && old_regime != -1
-           && new_regime != old_regime) {
-            galaxies[p].r_heat = 0.0f;
-        }
     }
 }
 

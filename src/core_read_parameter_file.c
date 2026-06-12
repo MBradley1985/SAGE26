@@ -106,7 +106,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->CGMPrecipRadiusMode        = 0;
     run_params->CGMAGNOn                   = 1;
     run_params->CGMHeatingRheatOn          = 2;
-    run_params->ResetRheatOnRegimeFlip     = 0;
     run_params->RegimeRandomMode           = 0;
     run_params->SatelliteCGMRetentionOn    = 1;
     run_params->FIREmodeOn                 = 1;
@@ -193,7 +192,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("CGMPrecipRadiusMode",   &(run_params->CGMPrecipRadiusMode),  INT, 0);
     REG("CGMAGNOn",              &(run_params->CGMAGNOn),              INT, 0);
     REG("CGMHeatingRheatOn",     &(run_params->CGMHeatingRheatOn),    INT, 0);
-    REG("ResetRheatOnRegimeFlip",&(run_params->ResetRheatOnRegimeFlip),INT, 0);
     REG("RegimeRandomMode",      &(run_params->RegimeRandomMode),     INT, 0);
     REG("SatelliteCGMRetentionOn",&(run_params->SatelliteCGMRetentionOn),INT, 0);
     REG("FIREmodeOn",            &(run_params->FIREmodeOn),           INT, 0);
