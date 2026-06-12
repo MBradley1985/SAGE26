@@ -9,9 +9,8 @@ Built on [Croton et al. (2016)](https://arxiv.org/abs/1601.04709).
 - **Two-regime CGM model** (`CGMrecipeOn`): galaxies are classified as CGM-regime
   (below the Dekel & Birnboim 2006 shock mass) or hot-halo regime. Each regime
   uses a dedicated cooling recipe. CGM-regime cooling uses the Voit (2015)
-  precipitation criterion. AGN feedback in the CGM regime is controlled by
-  `CGMHeatingRheatOn` (off / `f_heat_cgm` decay on `t_dyn` / `r_heat` ratchet
-  capped at R_vir).
+  precipitation criterion. AGN feedback in the CGM regime uses the same
+  `r_heat` ratchet as the hot-halo path, additionally capped at R_vir.
 - **FIRE stellar feedback** (`FIREmodeOn`): FIRE-calibrated wind mass-loading and
   ejection efficiencies replace the fixed Croton+2016 values.
 - **Feedback-free burst galaxies** (`FeedbackFreeModeOn`): implements the Li+2024
@@ -47,4 +46,4 @@ Genesis HDF5 (`genesis_lhalo_hdf5`), Gadget-4 HDF5 (`gadget4_hdf5`).
 - HDF5 output format (`OutputFormat sage_hdf5`) with buffered writes.
 - `libsage.so` shared library for Python bindings and PSO parameter calibration.
 - Full star formation history arrays (`SaveFullSFH`).
-- Regression baseline test (5380 datasets, bit-identical per dataset).
+- Regression baseline test (5444 datasets, bit-identical per dataset).
