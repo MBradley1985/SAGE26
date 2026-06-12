@@ -107,7 +107,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->CGMAGNOn                   = 1;
     run_params->CGMHeatingRheatOn          = 2;
     run_params->RegimeRandomMode           = 0;
-    run_params->SatelliteCGMRetentionOn    = 1;
     run_params->FIREmodeOn                 = 1;
     run_params->RedshiftPowerLawExponent   = 1.25;
     run_params->FFBMaxEfficiency           = 0.2;
@@ -193,7 +192,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("CGMAGNOn",              &(run_params->CGMAGNOn),              INT, 0);
     REG("CGMHeatingRheatOn",     &(run_params->CGMHeatingRheatOn),    INT, 0);
     REG("RegimeRandomMode",      &(run_params->RegimeRandomMode),     INT, 0);
-    REG("SatelliteCGMRetentionOn",&(run_params->SatelliteCGMRetentionOn),INT, 0);
     REG("FIREmodeOn",            &(run_params->FIREmodeOn),           INT, 0);
     REG("ConcentrationOn",       &(run_params->ConcentrationOn),      INT, 0);
     REG("FeedbackFreeModeOn",    &(run_params->FeedbackFreeModeOn),   INT, 0);

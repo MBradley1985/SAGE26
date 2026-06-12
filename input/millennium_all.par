@@ -58,7 +58,6 @@ CGMPrecipRadiusMode         0   %0: evaluate t_cool/t_ff at r_cool; 1: evaluate 
 CGMAGNOn                    1   %0: disable AGN heating in CGM-regime entirely; 1: enable (default)
 CGMHeatingRheatOn           2   %0: off; 1: r_heat ratchet with t_dyn decay; 2: r_heat ratchet only (no decay), capped at Rvir; 3: r_heat ratchet with CGM t_cool decay
 RegimeRandomMode            0   %0: fresh random draw each snapshot (original; borderline-mass galaxies thrash between regimes); 1: use persistent RegimeRandom assigned at galaxy creation (regime evolves smoothly with Mvir)
-SatelliteCGMRetentionOn     1   %0: satellite CGMgas wiped to central every snapshot (original; asymmetric vs HotGas); 1: satellites retain CGMgas, stripped only by baryon-excess rule (uniform with HotGas; CGMrecipeOn==1 only)
 FIREmodeOn                  1   %0: switch off
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites

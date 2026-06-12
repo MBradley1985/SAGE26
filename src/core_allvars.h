@@ -488,7 +488,6 @@ struct params
     int32_t    CGMAGNOn;              // 0: disable AGN heating in CGM-regime entirely; 1: enable (default)
     int32_t    CGMHeatingRheatOn;     // 0: off; 1: r_heat ratchet with t_dyn decay; 2: r_heat ratchet only (no decay), capped at Rvir; 3: r_heat ratchet with CGM t_cool decay
     int32_t    RegimeRandomMode;     // 0: fresh random draw each snapshot (default, original behaviour); 1: use the persistent RegimeRandom assigned at galaxy creation (deterministic regime evolution driven by mass)
-    int32_t    SatelliteCGMRetentionOn; // 0: satellite CGMgas is wiped to the central every snapshot in infall_recipe (original); 1: satellites retain CGMgas and only the baryon-excess fraction is stripped via strip_from_satellite, matching how HotGas is handled (CGMrecipeOn==1 only)
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation
     int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
     int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too
