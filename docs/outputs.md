@@ -244,7 +244,7 @@ section below) and the unit actually written.
 | `tff` | Myr | Free-fall time of the CGM gas at the cooling radius. |
 | `tcool_over_tff` | dimensionless | Voit (2015) precipitation criterion ratio. |
 | `tdeplete` | Myr | Depletion time of the CGM reservoir under the current cooling rate. |
-| `H2DepletionTime_Gyr` | Gyr | H2 depletion time from K13 (or the fixed `H2DepletionTime_Gyr` parameter when `H2SFRMode = 1`). Set to -1 when not applicable. |
+| `H2DepletionTime_Gyr` | Gyr | H2 depletion time from the K13 prescription. Set to -1 when not applicable. |
 | `RcoolToRvir` | dimensionless | Ratio of the cooling radius to the virial radius. |
 | `mdot_cool` | Msun / yr | Hot-halo cooling rate (mass flowing from hot to cold). |
 | `mdot_stream` | Msun / yr | Cold-stream accretion rate (CGM-regime mass flowing from CGM to cold). |

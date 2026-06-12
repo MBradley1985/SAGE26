@@ -1018,7 +1018,7 @@ static int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char
                                                                 "Free-fall time of the CGM gas in the halo.",
                                                                 "Ratio of cooling time to free-fall time of the CGM gas in the halo.",
                                                                 "Depletion time of the CGM gas reservoir.",
-                                                                "H2 depletion time from K13 (or fixed H2SFRMode=1 value). -1 if not applicable.",
+                                                                "H2 depletion time from the K13 prescription. -1 if not applicable.",
                                                                 "Ratio of the cooling radius to the virial radius of the halo.",
                                                                 "Time when the galaxy last became a satellite galaxy.",
                                                                 "FFB Regime of this galaxy's halo: 0 = Normal halo 1 = FFB halo.", "NFW halo concentration parameter from Ishiyama+21 c-M relation.", "Cooling rate of hot halo gas.", "Cooling rate of cold streams.",
@@ -1612,8 +1612,6 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2RadialIntegrationOn", run_params->H2RadialIntegrationOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2RadialNBins", run_params->H2RadialNBins, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2RadialRMaxFactor", run_params->H2RadialRMaxFactor, H5T_NATIVE_DOUBLE);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2SFRMode", run_params->H2SFRMode, H5T_NATIVE_INT);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2DepletionTime_Gyr", run_params->H2DepletionTime_Gyr, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "CGMDensityProfile", run_params->CGMDensityProfile, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ConcentrationOn", run_params->ConcentrationOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SaveFullSFH", run_params->SaveFullSFH, H5T_NATIVE_INT);

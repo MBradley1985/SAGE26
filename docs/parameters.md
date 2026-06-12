@@ -106,8 +106,6 @@ optional parameters take the listed default if omitted.
 | `H2RadialIntegrationOn` | 0/1 | no | `1` | Use radial ring integration for H₂ fraction (more accurate, slower). |
 | `H2RadialNBins` | int | no | `25` | Number of radial bins for the ring integration. |
 | `H2RadialRMaxFactor` | double | no | `5.0` | Outer integration radius as a multiple of the disk scale radius. |
-| `H2SFRMode` | int | no | `0` | Override H2-based SF rate: 0=use `SfrEfficiency`; 1=use the fixed `H2DepletionTime_Gyr`; 2=use the K13 local depletion time. Only applied for SFprescription 1, 3, 4, 5, 7 (not 0/2 which have no H2, not 6 which already uses K13). |
-| `H2DepletionTime_Gyr` | double | no | `2.0` | Fixed molecular gas depletion time in Gyr (used when H2SFRMode=1). |
 
 ---
 

@@ -497,12 +497,9 @@ struct params
     int32_t    H2RadialIntegrationOn;     // 0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk
     int32_t    H2RadialNBins;             // radial bins for integration (default 25)
     double     H2RadialRMaxFactor;        // R_max = factor * r_s (default 5.0)
-    int32_t    H2SFRMode;                 // 0: SFR = eps*H2/t_dyn (default); 1: SFR = H2/tau_dep (fixed Gyr); 2: SFR = H2/tau_dep(K13) (local depletion time)
     int32_t    SaveFullSFH;               // 0 = save averaged SFR (default), 1 = save full SfrDisk[STEPS] and SfrBulge[STEPS] arrays
     int32_t    TrackICSAssembly;          // 0 = off, 1 = track ICS_disrupt and ICS_accrete
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
-
-    double H2DepletionTime_Gyr;   // tau_dep for H2SFRMode=1 [Gyr] (default 2.0)
 
     /* baryonic physics calibration parameters */
     double RecycleFraction;       /* fraction of stellar mass returned to cold gas by SN */

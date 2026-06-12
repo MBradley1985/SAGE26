@@ -73,13 +73,12 @@ DynamicDisruptionSplit      2   %0: fixed fraction; 1: mass-ratio only; 2: conce
 
 H2DiskAreaOption            1   %0: pi*r_s^2 (default); 1: pi*(3*r_s)^2 (thrice); 2: 2*pi*r_s^2 (central Sigma_0); ignored when H2RadialIntegrationOn=1
 H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk (H2DiskAreaOption unused)
-H2SFRMode                   0   %0: SFR = eps*H2/t_dyn (default); 1: SFR = H2/tau_dep (fixed Gyr); 2: SFR = H2/tau_dep(K13) (local depletion time)
 
 %------------------------------------------
 %----- SAGE model parameters --------------
 %------------------------------------------
 
-SfrEfficiency               0.05    %efficiency of SF; unused for SFprescription=3,6; overridden by H2SFRMode>0 for pres.1,4,5,7
+SfrEfficiency               0.05    %efficiency of SF; unused for SFprescription=3,6
 FFBMaxEfficiency            0.2     %0.2 fits observations best, 1.0 is theoretical maximum
 FFBConcSigma                0.2     %sigma_c for log-normal concentration scatter in ln(c) (FeedbackFreeModeOn=4); ~0.2 (Jing 2000, Bullock+01)
 
@@ -113,7 +112,6 @@ EtaSN                       5.0e-3  %supernova efficiency
 
 H2RadialNBins               25      %number of radial bins for H2RadialIntegrationOn
 H2RadialRMaxFactor          5.0     %R_max = factor * r_s for H2RadialIntegrationOn
-H2DepletionTime_Gyr         2.0     %tau_dep for H2SFRMode=1 [Gyr]
 
 %------------------------------------------
 %----- Other code-related information -----

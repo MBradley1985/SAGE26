@@ -98,8 +98,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->H2RadialIntegrationOn      = 1;
     run_params->H2RadialNBins              = 25;
     run_params->H2RadialRMaxFactor         = 5.0;
-    run_params->H2SFRMode                  = 0;
-    run_params->H2DepletionTime_Gyr        = 2.0;
     run_params->CGMrecipeOn                = 1;
     run_params->CGMDensityProfile          = 0;
     run_params->CGMPrecipitationMode       = 1;
@@ -205,7 +203,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
     REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
     REG("H2RadialNBins",         &(run_params->H2RadialNBins),        INT, 0);
-    REG("H2SFRMode",             &(run_params->H2SFRMode),            INT, 0);
 
     /* ---- Optional: model parameters ---- */
     REG("ThreshMajorMerger",          &(run_params->ThreshMajorMerger),          DOUBLE, 0);
@@ -228,7 +225,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("DisruptionSplitAlpha",       &(run_params->DisruptionSplitAlpha),       DOUBLE, 0);
     REG("DisruptionSplitCref",        &(run_params->DisruptionSplitCref),        DOUBLE, 0);
     REG("H2RadialRMaxFactor",         &(run_params->H2RadialRMaxFactor),         DOUBLE, 0);
-    REG("H2DepletionTime_Gyr",        &(run_params->H2DepletionTime_Gyr),        DOUBLE, 0);
     REG("FFBMaxEfficiency",           &(run_params->FFBMaxEfficiency),           DOUBLE, 0);
     REG("FFBConcSigma",               &(run_params->FFBConcSigma),               DOUBLE, 0);
     REG("RedshiftPowerLawExponent",   &(run_params->RedshiftPowerLawExponent),   DOUBLE, 0);
