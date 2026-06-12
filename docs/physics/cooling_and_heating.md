@@ -108,14 +108,10 @@ The precipitation criterion is evaluated at either `r_cool` itself or at
 
 ### Step 4 -- precipitation fraction
 
-Controlled by `CGMPrecipitationMode`:
-
-- **Mode 0 (tanh, McCourt+12):** piecewise tanh transition centred on
-  `t_cool / t_ff = 10`. Smoothly turns off above the threshold.
-- **Mode 1 (logistic sigmoid, default):** smooth sigmoid centred on
-  `t_cool / t_ff = 10` with characteristic width 2. Falls back to standard
-  cooling on the cooling timescale when the sigmoid is negligible
-  (`f < 0.01`).
+A smooth logistic sigmoid centred on `t_cool / t_ff = 10` with
+characteristic width 2 sets the precipitation fraction. It falls back to
+standard cooling on the cooling timescale when the sigmoid is negligible
+(`f < 0.01`).
 
 When the gas is "stable" (`t_cool / t_ff` well above threshold), it cools
 slowly on the cooling timescale: `dM/dt = CGMgas / t_cool`. When it is
@@ -208,7 +204,6 @@ dispatcher does the transfer itself.
 |-----------|--------|
 | `CGMrecipeOn` | 0 disables the two-regime split entirely; 1 enables it. |
 | `CGMDensityProfile` | CGM density profile: 0 uniform, 1 NFW, 2 beta. |
-| `CGMPrecipitationMode` | Precipitation transition shape: 0 tanh, 1 sigmoid (default). |
 | `CGMPrecipRadiusMode` | Evaluation radius for `t_cool / t_ff`: 0 at `r_cool`, 1 at `0.1 R_vir`. |
 | `CGMAGNOn` | Enables AGN heating coupling in the CGM regime. |
 | `CGMHeatingRheatOn` | CGM AGN suppression mechanism: 0 off, 1 `f_heat_cgm`, 2 `r_heat` ratchet. |

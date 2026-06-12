@@ -687,38 +687,17 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
 
     double precipitation_fraction = 0.0;
 
-    if(run_params->CGMPrecipitationMode == 1) {
-        // Mode 1: logistic sigmoid centred on PRECIP_THRESHOLD, characteristic width = 2.
-        // f = 1 / (1 + exp(-(threshold - r) / 2))
-        // Smoothly ranges from ~1 (very unstable) through 0.5 at threshold to ~0 (very stable).
-        // Falls back to standard cooling once the sigmoid is negligible (< 0.01),
-        // which occurs at t_cool/t_ff ~ 19.
+    // Logistic sigmoid centred on PRECIP_THRESHOLD, characteristic width = 2.
+    // f = 1 / (1 + exp(-(threshold - r) / 2))
+    // Smoothly ranges from ~1 (very unstable) through 0.5 at threshold to ~0 (very stable).
+    // Falls back to standard cooling once the sigmoid is negligible (< 0.01),
+    // which occurs at t_cool/t_ff ~ 19.
+    {
         const double x = (PRECIP_THRESHOLD - tcool_over_tff_char) / PRECIP_TRANSITION_WIDTH;
         const double f = 1.0 / (1.0 + exp(-x));
         if(f >= 0.01) {
             precipitation_fraction = f;
         } else {
-            if(tcool_char > 0) {
-                coolingGas = galaxies[gal].CGMgas / tcool_char * dt;
-                if(coolingGas > galaxies[gal].CGMgas)
-                    coolingGas = galaxies[gal].CGMgas;
-            }
-        }
-    } else {
-        // Mode 0 (default): tanh transition per McCourt et al. (2012).
-        if(tcool_over_tff_char < PRECIP_THRESHOLD) {
-            // UNSTABLE: precipitation fraction via tanh
-            double instability_factor = PRECIP_THRESHOLD / tcool_over_tff_char;
-            instability_factor = fmin(instability_factor, 3.0);
-            precipitation_fraction = tanh(instability_factor / 2.0);
-
-        } else if(tcool_over_tff_char < PRECIP_THRESHOLD + PRECIP_TRANSITION_WIDTH) {
-            // TRANSITION: smoothly reduce to zero
-            const double x = (tcool_over_tff_char - PRECIP_THRESHOLD) / PRECIP_TRANSITION_WIDTH;
-            precipitation_fraction = 0.5 * (1.0 - tanh(x));
-
-        } else {
-            // STABLE: standard cooling on the cooling timescale
             if(tcool_char > 0) {
                 coolingGas = galaxies[gal].CGMgas / tcool_char * dt;
                 if(coolingGas > galaxies[gal].CGMgas)

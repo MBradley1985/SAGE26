@@ -100,7 +100,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->H2RadialRMaxFactor         = 5.0;
     run_params->CGMrecipeOn                = 1;
     run_params->CGMDensityProfile          = 0;
-    run_params->CGMPrecipitationMode       = 1;
     run_params->CGMPrecipRadiusMode        = 0;
     run_params->CGMAGNOn                   = 1;
     run_params->CGMHeatingRheatOn          = 2;
@@ -185,7 +184,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("AGNrecipeOn",           &(run_params->AGNrecipeOn),          INT, 0);
     REG("CGMrecipeOn",           &(run_params->CGMrecipeOn),          INT, 0);
     REG("CGMDensityProfile",     &(run_params->CGMDensityProfile),    INT, 0);
-    REG("CGMPrecipitationMode",  &(run_params->CGMPrecipitationMode), INT, 0);
     REG("CGMPrecipRadiusMode",   &(run_params->CGMPrecipRadiusMode),  INT, 0);
     REG("CGMAGNOn",              &(run_params->CGMAGNOn),              INT, 0);
     REG("CGMHeatingRheatOn",     &(run_params->CGMHeatingRheatOn),    INT, 0);

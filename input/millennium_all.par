@@ -53,7 +53,6 @@ DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through i
 
 CGMrecipeOn                 1   %0: switch off
 CGMDensityProfile           0   %0: uniform; 1: NFW; 2: beta-profile (beta=2/3)
-CGMPrecipitationMode        1   %0: tanh (McCourt+12 style); 1: logistic sigmoid centred on t_cool/t_ff=10, width=2
 CGMPrecipRadiusMode         0   %0: evaluate t_cool/t_ff at r_cool; 1: evaluate at 0.1*R_vir
 CGMAGNOn                    1   %0: disable AGN heating in CGM-regime entirely; 1: enable (default)
 CGMHeatingRheatOn           2   %0: off; 1: r_heat ratchet with t_dyn decay; 2: r_heat ratchet only (no decay), capped at Rvir; 3: r_heat ratchet with CGM t_cool decay

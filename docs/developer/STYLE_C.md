@@ -262,8 +262,7 @@ Non-trivial physics functions open with a substantial comment block:
  *   1. Compute the profile normalisation from CGMgas and Rvir.
  *   2. Integrate the local cooling rate inward to r_cool, the radius at
  *      which t_cool / t_ff crosses the Voit (2015) precipitation threshold
- *      (selector is CGMPrecipitationMode; radius selector is
- *      CGMPrecipRadiusMode).
+ *      (radius selector is CGMPrecipRadiusMode).
  *   3. If CGMAGNOn and CGMHeatingRheatOn != 0, suppress cooling either via
  *      f_heat_cgm (mode 1, decays on t_dyn) or via the r_heat ratchet capped
  *      at R_vir (mode 2).
