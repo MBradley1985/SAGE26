@@ -77,35 +77,35 @@ MODELS = [
         'ls':    '--',
     },
     {
-        'dir':   'output/millennium_noCGM',
-        'label': 'SAGE26: no CGM',
+        'dir':   'output/microuchuu',
+        'label': 'microUchuu (SAGE26)',
         'color': "#214fd8",
         'ls':    ':',
     },
-    {
-        'dir':   'output/millennium_fixedsplit',
-        'label': r'SAGE26: $100\%$ ICS (SAGE16)',
-        'color': "#2170d8",
-        'ls':    ':',
-    },
-    {
-        'dir':   'output/millennium_noCGM_fixedsplit',
-        'label': 'SAGE26: no CGM and fixed split',
-        'color': "#21a1d8",
-        'ls':    ':',
-    },
-    {
-        'dir':   'output/millennium_noCGM_fixedsplit_noH2',
-        'label': 'SAGE26:no CGM, fixed split, no H2',
-        'color': "#21bdd8",
-        'ls':    ':',
-    },
-    {
-        'dir':   'output/millennium_noCGM_fixedsplit_noH2_noFFB',
-        'label': 'SAGE26:no CGM, fixed split, no H2, no FFBs',
-        'color': "#d89b21",
-        'ls':    ':',
-    },
+    # {
+    #     'dir':   'output/millennium_fixedsplit',
+    #     'label': r'SAGE26: $100\%$ ICS (SAGE16)',
+    #     'color': "#2170d8",
+    #     'ls':    ':',
+    # },
+    # {
+    #     'dir':   'output/millennium_noCGM_fixedsplit',
+    #     'label': 'SAGE26: no CGM and fixed split',
+    #     'color': "#21a1d8",
+    #     'ls':    ':',
+    # },
+    # {
+    #     'dir':   'output/millennium_noCGM_fixedsplit_noH2',
+    #     'label': 'SAGE26:no CGM, fixed split, no H2',
+    #     'color': "#21bdd8",
+    #     'ls':    ':',
+    # },
+    # {
+    #     'dir':   'output/millennium_noCGM_fixedsplit_noH2_noFFB',
+    #     'label': 'SAGE26:no CGM, fixed split, no H2, no FFBs',
+    #     'color': "#d89b21",
+    #     'ls':    ':',
+    # },
 ]
 
 # Target redshifts for the redshift-evolution plot (Plot 5)

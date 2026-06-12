@@ -40,12 +40,14 @@ def truncated_cmap(cmap, minval=0.0, maxval=1.0, n=256):
 #   'massive_bt'         -> SFR == 0 AND M* >= 1e11 Msun AND 0.75 <= B/T <= 0.90.
 #   'loose_massive_bt'   -> sSFR < 1e-11 /yr AND M* >= 1e11 Msun AND 0.75 <= B/T <= 0.90.
 #   'karls_galaxy'       -> sSFR < 1e-11 /yr AND M* >= 1e11 Msun AND 0.79 <= B/T <= 0.81 AND central only.
+#   'hubble_massive'     -> sSFR < 0.2 / t_H(z) AND M* >= 1e11 Msun (any Type, any B/T).
 QUIESCENT_MODES = {
     'strict':           'SFR == 0',
     'loose':            'sSFR < 1e-11 /yr',
     'loose_massive':    'sSFR < 1e-11 /yr AND M* > 1e10 Msun',
     'hubble':           'sSFR < 0.2 / t_H(z) AND M* > 1e10 Msun AND 0.75 <= B/T <= 0.90  (snapshot Hubble time)',
     'hubble_central':   'hubble AND central only (Type==0)',
+    'hubble_massive':   'sSFR < 0.2 / t_H(z) AND M* >= 1e11 Msun (any Type, any B/T)',
     'massive_bt':       'M* >= 1e11 Msun, SFR == 0, 0.75 <= B/T <= 0.90',
     'loose_massive_bt': 'sSFR < 1e-11 /yr AND M* >= 1e11 Msun AND 0.75 <= B/T <= 0.90',
     'karls_galaxy':     'sSFR < 1e-11 /yr AND M* >= 1e11 Msun AND 0.79 <= B/T <= 0.81 AND central',
@@ -54,6 +56,7 @@ QUIESCENT_MODES = {
 MASSIVE_FLOOR_MSUN = 1.0e10       # used by 'loose_massive'
 MASSIVE_BT_FLOOR_MSUN = 1.0e10    # used by 'massive_bt'
 LOOSE_MASSIVE_BT_FLOOR_MSUN = 1.0e10  # used by 'loose_massive_bt'
+HUBBLE_MASSIVE_FLOOR_MSUN = 1.0e11    # used by 'hubble_massive'
 MASSIVE_BT_MIN = 0.750            # B/T lower bound for 'massive_bt'
 MASSIVE_BT_MAX = 0.900            # B/T upper bound for 'massive_bt'
 KARLS_GALAXY_SM_FLOOR  = 1.0e10   # M* > 1e11 Msun
@@ -116,6 +119,15 @@ def compute_quiescent_mask(sfr, sm, hubble_h, mode, sfh=None, snap_num=None, que
             q &= (bt >= MASSIVE_BT_MIN) & (bt <= MASSIVE_BT_MAX)
         if mode == 'hubble_central' and gtype is not None:
             q &= (gtype == 0)
+        return q
+    if mode == 'hubble_massive':
+        if ssfr_cut_yr is None:
+            raise ValueError(f"mode={mode!r} requires ssfr_cut_yr")
+        sm_msun = sm * 1e10 / hubble_h
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ssfr = np.where(sm_msun > 0, sfr / sm_msun, 0.0)
+        q = ssfr < ssfr_cut_yr
+        q &= sm_msun >= HUBBLE_MASSIVE_FLOOR_MSUN
         return q
     if mode == 'massive_bt':
         sm_msun = sm * 1e10 / hubble_h
@@ -783,6 +795,7 @@ def parse_args():
                         'loose_massive = sSFR<1e-11/yr AND M* > 1e10 Msun; '
                         'hubble = sSFR < 0.2/t_H(z) AND M* > 1e10 Msun AND 0.75<=B/T<=0.90 using the snapshot redshift; '
                         'hubble_central = hubble AND central only (Type==0); '
+                        'hubble_massive = sSFR < 0.2/t_H(z) AND M*>=1e11 Msun (any Type, any B/T); '
                         'massive_bt = M*>=1e11 Msun AND SFR==0 AND 0.75<=B/T<=0.90. '
                         'Default: hubble_central. '
                         'Each mode produces its own plots/tables/CSV with a _<mode> suffix.')
@@ -811,15 +824,20 @@ def run_workflow_for_mode(filepaths, snap, z_snap, params, particle_mass, snap_t
     print('=' * 70)
 
     ssfr_cut_yr = None
-    if qmode in ('hubble', 'hubble_central'):
+    if qmode in ('hubble', 'hubble_central', 'hubble_massive'):
         t_h_gyr = hubble_time_gyr(z_snap, params['omega_matter'], params['omega_lambda'], h)
         ssfr_cut_yr = HUBBLE_QUIESCENCE_FACTOR / (t_h_gyr * 1.0e9)
         print(f"  Hubble time at z={z_snap:.3f}: t_H = {t_h_gyr:.3f} Gyr")
         print(f"  Hubble-quiescent cut: sSFR < {HUBBLE_QUIESCENCE_FACTOR}/t_H = {ssfr_cut_yr:.3e} /yr")
-        print(f"  Stellar-mass cut: M* > {MASSIVE_FLOOR_MSUN:.2e} Msun")
-        print(f"  Morphology cut: {MASSIVE_BT_MIN:.3f} <= B/T <= {MASSIVE_BT_MAX:.3f}")
-        if qmode == 'hubble_central':
-            print("  Type cut: central only (Type==0)")
+        if qmode == 'hubble_massive':
+            print(f"  Stellar-mass cut: M* >= {HUBBLE_MASSIVE_FLOOR_MSUN:.2e} Msun")
+            print("  Morphology cut: none (any B/T)")
+            print("  Type cut: none (central or satellite)")
+        else:
+            print(f"  Stellar-mass cut: M* > {MASSIVE_FLOOR_MSUN:.2e} Msun")
+            print(f"  Morphology cut: {MASSIVE_BT_MIN:.3f} <= B/T <= {MASSIVE_BT_MAX:.3f}")
+            if qmode == 'hubble_central':
+                print("  Type cut: central only (Type==0)")
 
     # --- load galaxies for this mode ---
     px, py, pz, sm, mvir, gtype, quiescent, ages, extras = load_galaxies(

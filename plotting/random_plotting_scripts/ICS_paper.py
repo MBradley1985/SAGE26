@@ -335,7 +335,7 @@ def plot_halo_distributions(mvir, z, n_select, output_dir):
 
 def main():
     parser = argparse.ArgumentParser(description='Plot ICS fractions for 1000 random haloes (0 <= z <= 0.5)')
-    parser.add_argument('input_pattern', nargs='?', default='./output/millennium/model_*.hdf5',
+    parser.add_argument('input_pattern', nargs='?', default='./output/microuchuu/model_*.hdf5',
                         help='Path pattern to model HDF5 files')
     parser.add_argument('-o', '--output-dir', type=str, default='./plots',
                         help='Output directory for the plot')

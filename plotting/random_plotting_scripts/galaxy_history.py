@@ -28,7 +28,7 @@ from scipy.spatial import cKDTree
 
 QUIESCENT_MODES = {
     'strict', 'loose', 'loose_massive', 'massive_bt', 'loose_massive_bt',
-    'karls_galaxy', 'hubble', 'hubble_central',
+    'karls_galaxy', 'hubble', 'hubble_central', 'hubble_massive',
 }
 
 # ---------------------------------------------------------------------------

@@ -39,9 +39,9 @@ plt.rcParams['axes.edgecolor']   = 'black'
 # ----- Configuration -----------------------------------------------------------
 
 DEFAULT_MODEL1       = './output/millennium/'
-DEFAULT_MODEL2       = './output/millennium_oldCGMAGN/'
-DEFAULT_MODEL1_LABEL = 'SAGE26 (millennium)'
-DEFAULT_MODEL2_LABEL = 'SAGE26 (old CGM AGN)'
+DEFAULT_MODEL2       = './output/millennium_before/'
+DEFAULT_MODEL1_LABEL = 'SAGE26 (maybe fix?)'
+DEFAULT_MODEL2_LABEL = 'SAGE26 (before)'
 DEFAULT_REDSHIFT     = 3.0
 DEFAULT_N_TOP        = 1000
 DEFAULT_OUTPUT_DIR   = './output/quiescent_evolution/'
