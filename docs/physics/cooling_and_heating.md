@@ -113,22 +113,13 @@ slowly on the cooling timescale: `dM/dt = CGMgas / t_cool`. When it is
 
 ### Step 5 -- AGN heating (Regime 0 only)
 
-The CGM cooling is then passed to one of three AGN suppression mechanisms,
-controlled by `CGMHeatingRheatOn`:
-
-- **Mode 0:** No `r_heat` suppression. AGN still fires and accretes from
-  `CGMgas`, but the cooling stream is not gated.
-- **Mode 1:** Decaying `f_heat_cgm` -- a dimensionless suppression fraction
-  (0-1) that ratchets up when AGN heating exceeds cooling, and decays on
-  `t_dyn = R_vir / V_vir` between substeps. Suppression formula:
-  `coolingGas *= (1 - f_heat_cgm)`.
-- **Mode 2 (default):** Standard `r_heat` ratchet, identical to the
-  hot-halo path, capped at `R_vir`. Suppression formula:
-  `coolingGas *= (1 - r_heat / r_cool)`.
+The CGM cooling is passed to the standard `r_heat` ratchet, identical to
+the hot-halo path but capped at `R_vir`. Suppression formula:
+`coolingGas *= (1 - r_heat / r_cool)`.
 
 `CGMAGNOn = 0` disables CGM-regime AGN coupling entirely (so no accretion
-from `CGMgas`); mode 2 still keeps the `r_heat` suppression active so
-quenching persists after the AGN turns off.
+from `CGMgas`); the `r_heat` suppression still applies so quenching
+persists after the AGN turns off.
 
 ### Step 6 -- diagnostics
 
@@ -177,11 +168,8 @@ stays fully suppressed for that substep.
 
 Differences from the hot-halo path:
 
-- Suppression is only applied when `CGMHeatingRheatOn = 2` (mode 2). For
-  modes 0 and 1 the function only handles accretion; suppression is done
-  by the caller using `f_heat_cgm` (mode 1) or skipped entirely (mode 0).
 - Accretion draws from `CGMgas`, not `HotGas`.
-- When mode 2 ratchets `r_heat`, the value is then capped at `R_vir` so
+- After the ratchet updates `r_heat`, the value is capped at `R_vir` so
   the heating radius cannot grow past the halo boundary.
 
 ## `cool_gas_onto_galaxy()`
@@ -198,7 +186,6 @@ dispatcher does the transfer itself.
 | `CGMrecipeOn` | 0 disables the two-regime split entirely; 1 enables it. |
 | `CGMDensityProfile` | CGM density profile: 0 uniform, 1 NFW, 2 beta. |
 | `CGMAGNOn` | Enables AGN heating coupling in the CGM regime. |
-| `CGMHeatingRheatOn` | CGM AGN suppression mechanism: 0 off, 1 `f_heat_cgm`, 2 `r_heat` ratchet. |
 | `AGNrecipeOn` | Radio-mode BH accretion recipe: 0 off, 1 empirical, 2 Bondi-Hoyle, 3 cold-cloud. |
 | `RadioModeEfficiency` | Overall scaling on radio-mode accretion. |
 | `QuasarModeEfficiency` | Used by the merger-driven AGN path -- see [Mergers and disruption](mergers_and_disruptions.md). |

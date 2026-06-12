@@ -24,9 +24,8 @@ Every `.c` and `.h` file opens with a short comment block:
  * model_cooling_heating.c -- gas cooling and AGN heating prescriptions.
  *
  * Implements regime-aware cooling (classical hot halo vs CGM precipitation per
- * Voit 2015) and AGN radio-mode heating. In the CGM regime, AGN suppression is
- * controlled by CGMHeatingRheatOn (f_heat_cgm decay on t_dyn, or the r_heat
- * ratchet capped at R_vir).
+ * Voit 2015) and AGN radio-mode heating. In the CGM regime, AGN suppression
+ * uses the r_heat ratchet capped at R_vir.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -227,9 +226,8 @@ The file header described in §1 should genuinely orient a reader. For a physics
  *                              cooling tables.
  *
  * AGN radio-mode heating is computed in both regimes. In Regime 1 the standard
- * Croton+06 r_heat ratchet suppresses cooling at r < r_heat. In Regime 0 the
- * suppression mechanism is selected by CGMHeatingRheatOn (off / f_heat_cgm
- * decaying on t_dyn / r_heat ratchet capped at R_vir).
+ * Croton+06 r_heat ratchet suppresses cooling at r < r_heat. Regime 0 uses
+ * the same ratchet, additionally capped at R_vir.
  *
  * Code units (10^10 Msun/h, Mpc/h, km/s) are used throughout. Conversions
  * to physical units happen only at the public entry points.
@@ -263,15 +261,12 @@ Non-trivial physics functions open with a substantial comment block:
  *   2. Integrate the local cooling rate inward to r_cool, the radius at
  *      which t_cool / t_ff crosses the Voit (2015) precipitation threshold
  *      (evaluated at r_cool).
- *   3. If CGMAGNOn and CGMHeatingRheatOn != 0, suppress cooling either via
- *      f_heat_cgm (mode 1, decays on t_dyn) or via the r_heat ratchet capped
- *      at R_vir (mode 2).
+ *   3. If CGMAGNOn, suppress cooling via the r_heat ratchet capped at R_vir.
  *   4. Return the net mass cooled in the current substep.
  *
  * Inputs:
  *   gal     -- the central galaxy of the halo. Reads CGMgas, Rvir, metallicity,
- *              f_heat_cgm, r_heat; writes f_heat_cgm or r_heat depending on
- *              CGMHeatingRheatOn.
+ *              r_heat; writes r_heat via the ratchet.
  *   dt      -- substep duration in code units (Myr / unit_time).
  *
  * Returns:

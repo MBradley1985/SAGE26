@@ -80,7 +80,6 @@ optional parameters take the listed default if omitted.
 |-----------|------|----------|---------|-------------|
 | `CGMDensityProfile` | int | no | `0` | CGM gas density profile for precipitation: 0=uniform; 1=NFW; 2=beta (β=2/3). |
 | `CGMAGNOn` | 0/1 | no | `1` | Enable AGN heating coupling to the CGM-regime cooling path. |
-| `CGMHeatingRheatOn` | int | no | `2` | CGM-regime AGN cooling suppression mechanism: 0=off (AGN fires but no radius/fraction suppression); 1=`f_heat_cgm` decaying suppression fraction on `t_dyn`; 2=standard `r_heat` ratchet capped at R_vir (mirrors hot-halo path). |
 
 ---
 

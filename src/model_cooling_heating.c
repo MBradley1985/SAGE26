@@ -8,10 +8,7 @@
  *     reservoir using the Voit (2015) / McCourt et al. (2012) t_cool/t_ff < 10
  *     threshold.  The CGM density structure is modelled with a uniform, NFW, or
  *     beta (beta = 2/3) profile selected by CGMDensityProfile.  AGN heating uses
- *     the same r_heat ratchet as the hot-halo regime (capped at Rvir). The
- *     ratchet is shared across CGMHeatingRheatOn modes 1, 2, 3; modes 1 and 3
- *     add a decay of r_heat (on t_dyn or CGM t_cool respectively), mode 2 is
- *     ratchet-only.
+ *     the same r_heat ratchet as the hot-halo regime, capped at Rvir.
  *
  *   Regime == 1 (hot halo) -- classical isothermal-halo cooling following
  *     White & Frenk (1991) and Croton et al. (2006).  When CGMrecipeOn > 0 a
@@ -710,40 +707,16 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         const double x_agn = (PROTONMASS * BOLTZMANN * temp / lambda)
                              / (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);
 
-        if(run_params->CGMHeatingRheatOn > 0) {
-            // Modes 1, 2, 3 all use the r_heat ratchet (suppression and ratchet
-            // update handled inside do_AGN_heating_cgm). Modes 1 and 3 add a
-            // decay of r_heat on a finite timescale so quenching fades when the
-            // AGN weakens; mode 2 is ratchet-only (capped at Rvir).
-            //   mode 1: decay on t_dyn = Rvir/Vvir
-            //   mode 3: decay on CGM t_cool (galaxies[gal].tcool, set in step 1)
-            //   mode 2: no decay
-            if(run_params->CGMHeatingRheatOn == 1) {
-                if(galaxies[gal].r_heat > 0.0f && galaxies[gal].Rvir > 0.0 && galaxies[gal].Vvir > 0.0) {
-                    const double t_dyn = galaxies[gal].Rvir / galaxies[gal].Vvir;
-                    galaxies[gal].r_heat *= (float)exp(-dt / t_dyn);
-                }
-            } else if(run_params->CGMHeatingRheatOn == 3) {
-                if(galaxies[gal].r_heat > 0.0f && galaxies[gal].tcool > 0.0f) {
-                    galaxies[gal].r_heat *= (float)exp(-dt / (double)galaxies[gal].tcool);
-                }
-            }
-
-            if(run_params->AGNrecipeOn > 0 && run_params->CGMAGNOn > 0) {
-                coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
-            } else {
-                // No AGN: still apply r_heat suppression so quenching persists
-                if(galaxies[gal].r_heat >= r_cool) {
-                    coolingGas = 0.0;
-                } else if(galaxies[gal].r_heat > 0.0f) {
-                    coolingGas *= 1.0 - galaxies[gal].r_heat / r_cool;
-                }
-            }
-
+        // r_heat ratchet, no decay, capped at Rvir (suppression and ratchet
+        // update handled inside do_AGN_heating_cgm when AGN is active).
+        if(run_params->AGNrecipeOn > 0 && run_params->CGMAGNOn > 0) {
+            coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
         } else {
-            // CGMHeatingRheatOn == 0: no r_heat suppression; AGN still fires and accretes
-            if(run_params->AGNrecipeOn > 0 && run_params->CGMAGNOn > 0) {
-                coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
+            // No AGN: still apply r_heat suppression so quenching persists
+            if(galaxies[gal].r_heat >= r_cool) {
+                coolingGas = 0.0;
+            } else if(galaxies[gal].r_heat > 0.0f) {
+                coolingGas *= 1.0 - galaxies[gal].r_heat / r_cool;
             }
         }
     }
@@ -968,26 +941,18 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
 }
 
 /*
- * AGN radio-mode heating for CGM-regime halos (CGMgas reservoir).
- *
  * AGN radio-mode heating for CGM-dominated (Regime==0) galaxies.
  *
- * When CGMHeatingRheatOn > 0 (modes 1, 2, 3), applies the same r_heat/rcool
- * suppression and ratchet as the hot-halo path, then caps r_heat at Rvir.
- * The caller decays r_heat for modes 1 and 3 before invoking this function;
- * mode 2 is ratchet-only.  When CGMHeatingRheatOn == 0, BH accretion and
- * heating are computed without gating coolingGas (no suppression, no ratchet).
- * Accretion draws from CGMgas.
+ * Applies the same r_heat/rcool suppression and ratchet as the hot-halo
+ * path, then caps r_heat at Rvir. Accretion draws from CGMgas.
  */
 double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
                           struct GALAXY *galaxies, const struct params *run_params)
 {
-    if(run_params->CGMHeatingRheatOn > 0) {
-        if(galaxies[centralgal].r_heat < rcool) {
-            coolingGas = (1.0 - galaxies[centralgal].r_heat / rcool) * coolingGas;
-        } else {
-            coolingGas = 0.0;
-        }
+    if(galaxies[centralgal].r_heat < rcool) {
+        coolingGas = (1.0 - galaxies[centralgal].r_heat / rcool) * coolingGas;
+    } else {
+        coolingGas = 0.0;
     }
 
     XASSERT(coolingGas >= 0.0, -1,
@@ -1003,15 +968,13 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
         galaxies[centralgal].CGMgas         -= AGNaccreted;
         galaxies[centralgal].MetalsCGMgas   -= metallicity * AGNaccreted;
 
-        if(run_params->CGMHeatingRheatOn > 0) {
-            if(galaxies[centralgal].r_heat < rcool && coolingGas > 0.0) {
-                const double r_heat_new = (AGNheating / coolingGas) * rcool;
-                if(r_heat_new > galaxies[centralgal].r_heat)
-                    galaxies[centralgal].r_heat = r_heat_new;
-            }
-            if(galaxies[centralgal].r_heat > galaxies[centralgal].Rvir)
-                galaxies[centralgal].r_heat = galaxies[centralgal].Rvir;
+        if(galaxies[centralgal].r_heat < rcool && coolingGas > 0.0) {
+            const double r_heat_new = (AGNheating / coolingGas) * rcool;
+            if(r_heat_new > galaxies[centralgal].r_heat)
+                galaxies[centralgal].r_heat = r_heat_new;
         }
+        if(galaxies[centralgal].r_heat > galaxies[centralgal].Rvir)
+            galaxies[centralgal].r_heat = galaxies[centralgal].Rvir;
 
         if(AGNheating > 0.0)
             galaxies[centralgal].Heating += 0.5 * AGNheating * galaxies[centralgal].Vvir * galaxies[centralgal].Vvir;

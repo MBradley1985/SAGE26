@@ -1025,7 +1025,7 @@ static int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char
                                                                 "Cumulative stellar mass disrupted to ICS (tracks assembly).", "Cumulative ICS accreted from satellites (tracks assembly).",
                                                                 "Mass-weighted sum m*t (code time) at ICS deposition; divide by (ICS_disrupt+ICS_accrete) for mean assembly lookback.",
                                                                 "Maximum g value for this galaxy's halo across all snapshots.",
-                                                                "AGN radio-mode heating radius (ratchet; capped at Rvir in CGMHeatingRheatOn=2). Cooling is suppressed at r < r_heat."};
+                                                                "AGN radio-mode heating radius (ratchet, capped at Rvir in the CGM regime). Cooling is suppressed at r < r_heat."};
 
     char tmp_units[NUM_OUTPUT_FIELDS][MAX_STRING_LEN] = {"Unitless", "Unitless", "Unitless", "Unitless", "Unitless",
                                                          "Unitless", "Unitless", "Unitless", "Unitless",

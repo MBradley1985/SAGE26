@@ -65,7 +65,6 @@ DynamicDisruptionSplit      2   %0: fixed fraction; 1: mass-ratio only; 2: conce
 FractionDisruptedToICS      1.0     %fraction of disrupted satellite stellar mass to ICS (rest goes to BCG); 1.0 = original behavior
 
 CGMAGNOn                    1   %0: disable AGN heating in CGM-regime entirely; 1: enable (default)
-CGMHeatingRheatOn           2   %0: off; 1: r_heat ratchet with t_dyn decay; 2: r_heat ratchet only (no decay), capped at Rvir; 3: r_heat ratchet with CGM t_cool decay
 RegimeRandomMode            0   %0: fresh random draw each snapshot (original; borderline-mass galaxies thrash between regimes); 1: use persistent RegimeRandom assigned at galaxy creation (regime evolves smoothly with Mvir)
 
 %------------------------------------------

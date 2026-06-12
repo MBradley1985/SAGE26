@@ -101,7 +101,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->CGMrecipeOn                = 1;
     run_params->CGMDensityProfile          = 0;
     run_params->CGMAGNOn                   = 1;
-    run_params->CGMHeatingRheatOn          = 2;
     run_params->RegimeRandomMode           = 0;
     run_params->FIREmodeOn                 = 1;
     run_params->RedshiftPowerLawExponent   = 1.25;
@@ -184,7 +183,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("CGMrecipeOn",           &(run_params->CGMrecipeOn),          INT, 0);
     REG("CGMDensityProfile",     &(run_params->CGMDensityProfile),    INT, 0);
     REG("CGMAGNOn",              &(run_params->CGMAGNOn),              INT, 0);
-    REG("CGMHeatingRheatOn",     &(run_params->CGMHeatingRheatOn),    INT, 0);
     REG("RegimeRandomMode",      &(run_params->RegimeRandomMode),     INT, 0);
     REG("FIREmodeOn",            &(run_params->FIREmodeOn),           INT, 0);
     REG("ConcentrationOn",       &(run_params->ConcentrationOn),      INT, 0);

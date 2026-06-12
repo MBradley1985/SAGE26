@@ -54,7 +54,6 @@ DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through i
 CGMrecipeOn                 1   %0: switch off
 CGMDensityProfile           0   %0: uniform; 1: NFW; 2: beta-profile (beta=2/3)
 CGMAGNOn                    1   %0: disable AGN heating in CGM-regime entirely; 1: enable (default)
-CGMHeatingRheatOn           2   %0: off; 1: r_heat ratchet with t_dyn decay; 2: r_heat ratchet only (no decay), capped at Rvir; 3: r_heat ratchet with CGM t_cool decay
 RegimeRandomMode            0   %0: fresh random draw each snapshot (original; borderline-mass galaxies thrash between regimes); 1: use persistent RegimeRandom assigned at galaxy creation (regime evolves smoothly with Mvir)
 FIREmodeOn                  1   %0: switch off
 
