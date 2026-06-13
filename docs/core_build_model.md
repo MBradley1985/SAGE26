@@ -101,7 +101,7 @@ several decisions in the substep loop:
 | Infall destination | `CGMgas` | `HotGas` |
 | Cooling recipe | `cooling_recipe_cgm()` (primary) | `cooling_recipe_hot()` (primary) + `cooling_recipe_cgm()` for any residual `CGMgas` |
 | Density profile | `CGMDensityProfile` (uniform / NFW / beta) | isothermal |
-| AGN suppression mechanism | `CGMHeatingRheatOn` selector (off / `f_heat_cgm` decay / `r_heat` ratchet capped at R_vir) | `r_heat` ratchet (no R_vir cap) |
+| AGN suppression mechanism | `r_heat` ratchet capped at R_vir | `r_heat` ratchet (no R_vir cap) |
 | Precipitation criterion | `t_cool / t_ff` (Voit 2015) | none -- isothermal `r_cool` from Sutherland-Dopita cooling time |
 
 When `CGMrecipeOn = 0`, `determine_and_store_regime()` is not called at

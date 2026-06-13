@@ -93,6 +93,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].Regime = -1;
     galaxies[p].FFBRegime = 0;
     galaxies[p].FFBRandom = (float)rand() / (float)RAND_MAX;
+    galaxies[p].RegimeRandom = (float)rand() / (float)RAND_MAX;
     galaxies[p].Concentration = 0.0;
 
     galaxies[p].GalaxyNr = *galaxycounter;
@@ -169,7 +170,6 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].MergTime = 999.9f;
     galaxies[p].Cooling = 0.0;
     galaxies[p].Heating = 0.0;
-    galaxies[p].f_heat_cgm = 0.0f;       /* persistent across snapshots; only init_galaxy zeros it */
     galaxies[p].r_heat = 0.0;
     galaxies[p].QuasarModeBHaccretionMass = 0.0;
     galaxies[p].TimeOfLastMajorMerger = -1.0;
@@ -513,27 +513,33 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
         // Calculate mass ratio for sigmoid
         const double mass_ratio = Mvir_physical / Mshock;
 
+        int32_t new_regime;
         if(mass_ratio <= 0.0) {
-            galaxies[p].Regime = 0;  // Default to CGM regime for invalid mass
-            continue;
+            new_regime = 0;  // Default to CGM regime for invalid mass
+        } else {
+            // Smooth sigmoid transition (consistent with FFB approach)
+            // Width of transition in dex
+            const double delta_log_M = 0.1;
+
+            // Sigmoid argument: x = log10(M/Mshock) / width
+            const double x = log10(mass_ratio) / delta_log_M;
+
+            // Sigmoid function: probability of being in Hot regime
+            // Smoothly varies from 0 (well below Mshock) to 1 (well above Mshock)
+            const double hot_fraction = 1.0 / (1.0 + exp(-x));
+
+            // RegimeRandomMode=1: reuse the persistent RegimeRandom draw from
+            // galaxy creation, so the regime evolves deterministically with
+            // Mvir relative to a fixed per-galaxy quantile and never thrashes
+            // for borderline-mass centrals.
+            // RegimeRandomMode=0: fresh draw each snapshot (original behaviour).
+            const double random_uniform = (run_params->RegimeRandomMode == 1)
+                ? (double)galaxies[p].RegimeRandom
+                : (double)rand() / (double)RAND_MAX;
+            new_regime = (random_uniform < hot_fraction) ? 1 : 0;
         }
 
-        // Smooth sigmoid transition (consistent with FFB approach)
-        // Width of transition in dex
-        const double delta_log_M = 0.1;
-
-        // Sigmoid argument: x = log10(M/Mshock) / width
-        const double x = log10(mass_ratio) / delta_log_M;
-
-        // Sigmoid function: probability of being in Hot regime
-        // Smoothly varies from 0 (well below Mshock) to 1 (well above Mshock)
-        const double hot_fraction = 1.0 / (1.0 + exp(-x));
-
-        // Probabilistic assignment based on sigmoid
-        const double random_uniform = (double)rand() / (double)RAND_MAX;
-
-        galaxies[p].Regime = (random_uniform < hot_fraction) ? 1 : 0;
-
+        galaxies[p].Regime = new_regime;
     }
 }
 

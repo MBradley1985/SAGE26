@@ -106,8 +106,13 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
             }
             galaxies[i].ICS = galaxies[i].MetalsICS = 0.0;
 
-            // satellite CGM goes to central CGM
-            galaxies[i].CGMgas = galaxies[i].MetalsCGMgas = 0.0;
+            // Satellite CGM handling: when CGMrecipeOn==1, satellites retain
+            // their CGMgas across snapshots and stripping happens uniformly
+            // with HotGas via the baryon-excess rule in strip_from_satellite.
+            // When CGMrecipeOn != 1, CGMgas is unused and zeroed here.
+            if(run_params->CGMrecipeOn != 1) {
+                galaxies[i].CGMgas = galaxies[i].MetalsCGMgas = 0.0;
+            }
         }
     }
 
@@ -150,18 +155,22 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
     // fraction excess in 10^12 Msun halos that had transitioned across Mshock.
     // ========================================================================
     if(run_params->CGMrecipeOn == 1) {
-        // Clear the central's pre-loop CGM accounting (it's already in tot_CGMgas)
-        galaxies[centralgal].CGMgas = 0.0;
-        galaxies[centralgal].MetalsCGMgas = 0.0;
-
+        // Satellites kept their CGMgas above, so tot_CGMgas/tot_MetalsCGMgas
+        // still include satellite contributions that we must NOT donate to
+        // the central. Only migrate the central's own gas between CGM and
+        // Hot reservoirs based on its current regime.
         if(galaxies[centralgal].Regime == 0) {
-            // Central is CGM-regime: park combined CGM back in CGMgas
-            galaxies[centralgal].CGMgas = tot_CGMgas;
-            galaxies[centralgal].MetalsCGMgas = tot_MetalsCGMgas;
+            // CGM-regime central: any HotGas it has folds into CGMgas
+            galaxies[centralgal].CGMgas += galaxies[centralgal].HotGas;
+            galaxies[centralgal].MetalsCGMgas += galaxies[centralgal].MetalsHotGas;
+            galaxies[centralgal].HotGas = 0.0;
+            galaxies[centralgal].MetalsHotGas = 0.0;
         } else {
-            // Central is Hot-ICM-regime: combined CGM goes to HotGas
-            galaxies[centralgal].HotGas += tot_CGMgas;
-            galaxies[centralgal].MetalsHotGas += tot_MetalsCGMgas;
+            // Hot-regime central: any CGMgas it has folds into HotGas
+            galaxies[centralgal].HotGas += galaxies[centralgal].CGMgas;
+            galaxies[centralgal].MetalsHotGas += galaxies[centralgal].MetalsCGMgas;
+            galaxies[centralgal].CGMgas = 0.0;
+            galaxies[centralgal].MetalsCGMgas = 0.0;
         }
     } else {
         // Original SAGE: transfer to HotGas (CGMgas is unused in this mode)
@@ -214,10 +223,10 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
  * substep over effective_steps substeps yields a consistent per-snapshot
  * stripping fraction regardless of the adaptive timestep count.
  *
- * For CGM-regime satellites, `infall_recipe` has already zeroed CGMgas and
- * merged it into the central's pool.  If CGMgas is exhausted but HotGas
- * remains (a satellite that crossed the Mshock threshold mid-life), the
- * fallback strips from HotGas so that residual hot gas is not frozen forever.
+ * CGM-regime satellites retain CGMgas across snapshots; the CGM branch
+ * below strips it gradually using the same baryon-excess rule used for
+ * HotGas. Hot- and CGM-regime satellites are therefore handled by
+ * structurally identical rules.
  */
 void strip_from_satellite(const int centralgal, const int gal, const double Zcurr, const int effective_steps, struct GALAXY *galaxies, const struct params *run_params)
 {

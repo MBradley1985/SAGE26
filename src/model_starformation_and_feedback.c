@@ -532,43 +532,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         ABORT(0);
     }
 
-    // H2SFRMode override: applies to all H2-computing prescriptions except 0, 2, and 6.
-    // SFprescription==6 (K13) is excluded because it already uses K13 t_dep natively.
-    if(run_params->H2SFRMode > 0 && galaxies[p].H2gas > 0.0 && tdyn > 0.0
-       && run_params->SFprescription != 0 && run_params->SFprescription != 2
-       && run_params->SFprescription != 6) {
-        if(run_params->H2SFRMode == 1) {
-            double tdep_code = run_params->H2DepletionTime_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
-            galaxies[p].H2DepletionTime_Gyr = (float)run_params->H2DepletionTime_Gyr;
-            if(tdep_code > 0.0) strdot = galaxies[p].H2gas / tdep_code;
-        } else {
-            // H2SFRMode == 2: K13 depletion time using local f_H2 from base prescription
-            if(run_params->H2RadialIntegrationOn) {
-                // Re-run radial integration to get K13 SFR with local f_H2(r) from base prescription.
-                // H2gas result is identical to the first call; strdot_ri is the new output.
-                double strdot_ri = 0.0;
-                calculate_molecular_fraction_radial_integration(p, galaxies, run_params, &strdot_ri);
-                // H2DepletionTime_Gyr = M_gas / SFR_K13_integrated, set inside function
-                if(strdot_ri > 0.0) strdot = strdot_ri;
-            } else {
-                // Slab path: use H2DiskAreaOption for Sigma; pass f_H2=1 so SFR = H2/tau_dep,H2
-                const float h_pp  = run_params->Hubble_h;
-                const float rs_pp = (float)(galaxies[p].DiskScaleRadius * 1.0e6 / h_pp);
-                float area_pp;
-                if(run_params->H2DiskAreaOption == 0)      area_pp = (float)M_PI * rs_pp * rs_pp;
-                else if(run_params->H2DiskAreaOption == 1) area_pp = (float)M_PI * 9.0f * rs_pp * rs_pp;
-                else                                        area_pp = 2.0f * (float)M_PI * rs_pp * rs_pp;
-                const float Sg_pp = (area_pp > 0.0f) ? (float)(galaxies[p].ColdGas * 1.0e10 / h_pp) / area_pp : 0.0f;
-                const float Ss_pp = (area_pp > 0.0f) ? (float)((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h_pp) / area_pp : 0.0f;
-                const float Zp_pp = (galaxies[p].ColdGas > 0.0) ? (float)(galaxies[p].MetalsColdGas / galaxies[p].ColdGas / Z_SOLAR_ASPLUND09) : 0.02f;
-                const double tdep_Gyr = calculate_tdep_K13_Gyr(Sg_pp, Ss_pp, rs_pp, Zp_pp, 1.0f);
-                double tdep_code = tdep_Gyr * 1000.0 / run_params->UnitTime_in_Megayears;
-                galaxies[p].H2DepletionTime_Gyr = (tdep_Gyr > 0.0) ? (float)tdep_Gyr : -1.0f;
-                if(tdep_code > 0.0) strdot = galaxies[p].H2gas / tdep_code;
-            }
-        }
-    }
-
     // Calculate HI (atomic hydrogen) as the remainder of hydrogen after H2
     // Total hydrogen = ColdGas * HYDROGEN_MASS_FRAC (0.74)
     // HI = Total hydrogen - H2

@@ -53,10 +53,8 @@ DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through i
 
 CGMrecipeOn                 1   %0: switch off
 CGMDensityProfile           0   %0: uniform; 1: NFW; 2: beta-profile (beta=2/3)
-CGMPrecipitationMode        1   %0: tanh (McCourt+12 style); 1: logistic sigmoid centred on t_cool/t_ff=10, width=2
-CGMPrecipRadiusMode         0   %0: evaluate t_cool/t_ff at r_cool; 1: evaluate at 0.1*R_vir
 CGMAGNOn                    1   %0: disable AGN heating in CGM-regime entirely; 1: enable (default)
-CGMHeatingRheatOn           2   %0: off; 1: f_heat_cgm decaying suppression fraction on t_dyn; 2: standard r_heat ratchet capped at Rvir
+RegimeRandomMode            0   %0: fresh random draw each snapshot (original; borderline-mass galaxies thrash between regimes); 1: use persistent RegimeRandom assigned at galaxy creation (regime evolves smoothly with Mvir)
 FIREmodeOn                  1   %0: switch off
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
@@ -72,13 +70,12 @@ DynamicDisruptionSplit      2   %0: fixed fraction; 1: mass-ratio only; 2: conce
 
 H2DiskAreaOption            1   %0: pi*r_s^2 (default); 1: pi*(3*r_s)^2 (thrice); 2: 2*pi*r_s^2 (central Sigma_0); ignored when H2RadialIntegrationOn=1
 H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk (H2DiskAreaOption unused)
-H2SFRMode                   0   %0: SFR = eps*H2/t_dyn (default); 1: SFR = H2/tau_dep (fixed Gyr); 2: SFR = H2/tau_dep(K13) (local depletion time)
 
 %------------------------------------------
 %----- SAGE model parameters --------------
 %------------------------------------------
 
-SfrEfficiency               0.05    %efficiency of SF; unused for SFprescription=3,6; overridden by H2SFRMode>0 for pres.1,4,5,7
+SfrEfficiency               0.05    %efficiency of SF; unused for SFprescription=3,6
 FFBMaxEfficiency            0.2     %0.2 fits observations best, 1.0 is theoretical maximum
 FFBConcSigma                0.2     %sigma_c for log-normal concentration scatter in ln(c) (FeedbackFreeModeOn=4); ~0.2 (Jing 2000, Bullock+01)
 
@@ -112,7 +109,6 @@ EtaSN                       5.0e-3  %supernova efficiency
 
 H2RadialNBins               25      %number of radial bins for H2RadialIntegrationOn
 H2RadialRMaxFactor          5.0     %R_max = factor * r_s for H2RadialIntegrationOn
-H2DepletionTime_Gyr         2.0     %tau_dep for H2SFRMode=1 [Gyr]
 
 %------------------------------------------
 %----- Other code-related information -----

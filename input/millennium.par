@@ -64,7 +64,7 @@ TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_acc
 %----- SAGE model parameters --------------
 %------------------------------------------
 
-SfrEfficiency               0.05    %efficiency of SF; unused for SFprescription=3,6; overridden by H2SFRMode>0 for pres.1,4,5,7
+SfrEfficiency               0.05    %efficiency of SF; unused for SFprescription=3,6
 FFBMaxEfficiency            0.2     %0.2 fits observations best, 1.0 is theoretical maximum
 
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)

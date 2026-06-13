@@ -1675,6 +1675,132 @@ if __name__ == '__main__':
 
     # --------------------------------------------------------
 
+    print('Plotting central/satellite fraction as a function of redshift')
+
+    plt.figure(figsize=(10, 7))
+    ax = plt.subplot(111)
+
+    z_arr_cs = []
+    central_frac = []
+    satellite_frac = []
+
+    for snap in range(FirstSnap, LastSnap + 1):
+        types = TypeFull[snap]
+        if not isinstance(types, np.ndarray) or len(types) == 0:
+            continue
+        n_total = len(types)
+        n_cen = np.sum(types == 0)
+        n_sat = np.sum(types == 1)
+        if n_total == 0:
+            continue
+        z_arr_cs.append(redshifts[snap])
+        central_frac.append(n_cen / n_total)
+        satellite_frac.append(n_sat / n_total)
+
+    z_arr_cs = np.array(z_arr_cs)
+    central_frac = np.array(central_frac)
+    satellite_frac = np.array(satellite_frac)
+
+    sort_idx = np.argsort(z_arr_cs)
+    z_arr_cs = z_arr_cs[sort_idx]
+    central_frac = central_frac[sort_idx]
+    satellite_frac = satellite_frac[sort_idx]
+
+    ax.plot(z_arr_cs, central_frac, color='steelblue', lw=2.5, label='Centrals')
+    ax.plot(z_arr_cs, satellite_frac, color='firebrick', lw=2.5, label='Satellites')
+
+    ax.set_xlim(0, max(z_arr_cs) if len(z_arr_cs) > 0 else 12)
+    ax.set_ylim(0, 1.05)
+    ax.set_xlabel(r'Redshift $z$', fontsize=14)
+    ax.set_ylabel('Fraction', fontsize=14)
+    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.5))
+    ax.yaxis.set_minor_locator(plt.MultipleLocator(0.05))
+    ax.legend(loc='center right', fontsize=12, frameon=False)
+
+    plt.tight_layout()
+    outputFile = OutputDir + 'CentralSatelliteFraction' + OutputFormat
+    plt.savefig(outputFile, dpi=300, bbox_inches='tight')
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+    # --------------------------------------------------------
+
+    print('Plotting central/satellite fraction of most massive quiescent galaxies vs redshift')
+
+    plt.figure(figsize=(10, 7))
+    ax = plt.subplot(111)
+
+    OmegaM_cs = sim_params['Omega']
+    OmegaL_cs = sim_params['OmegaLambda']
+    inv_H0_yr = (9.778 / Hubble_h) * 1.0e9  # 1/H0 in years
+
+    z_arr_mq = []
+    central_frac_mq = []
+    satellite_frac_mq = []
+
+    for snap in range(FirstSnap, LastSnap + 1):
+        mstar = StellarMassFull[snap]
+        types = TypeFull[snap]
+        sfr_total = SfrDiskFull[snap] + SfrBulgeFull[snap]
+        if not isinstance(mstar, np.ndarray) or len(mstar) == 0:
+            continue
+
+        w = np.where(mstar > 0.0)[0]
+        if len(w) < 10:
+            continue
+
+        # Top 10% by stellar mass at this snapshot
+        mass_thresh = np.percentile(mstar[w], 90)
+        massive = w[mstar[w] >= mass_thresh]
+        if len(massive) == 0:
+            continue
+
+        # sSFR threshold = 0.2 / t_Hubble(z) in 1/yr
+        z = redshifts[snap]
+        E_z = np.sqrt(OmegaM_cs * (1.0 + z)**3 + OmegaL_cs)
+        ssfr_thresh = 0.2 * E_z / inv_H0_yr
+
+        sSFR = sfr_total[massive] / mstar[massive]
+        quiescent = massive[sSFR < ssfr_thresh]
+        n_q = len(quiescent)
+        if n_q == 0:
+            continue
+
+        n_cen = np.sum(types[quiescent] == 0)
+        n_sat = np.sum(types[quiescent] == 1)
+
+        z_arr_mq.append(z)
+        central_frac_mq.append(n_cen / n_q)
+        satellite_frac_mq.append(n_sat / n_q)
+
+    z_arr_mq = np.array(z_arr_mq)
+    central_frac_mq = np.array(central_frac_mq)
+    satellite_frac_mq = np.array(satellite_frac_mq)
+
+    sort_idx = np.argsort(z_arr_mq)
+    z_arr_mq = z_arr_mq[sort_idx]
+    central_frac_mq = central_frac_mq[sort_idx]
+    satellite_frac_mq = satellite_frac_mq[sort_idx]
+
+    ax.plot(z_arr_mq, central_frac_mq, color='steelblue', lw=2.5, label='Centrals')
+    ax.plot(z_arr_mq, satellite_frac_mq, color='firebrick', lw=2.5, label='Satellites')
+
+    ax.set_xlim(0, max(z_arr_mq) if len(z_arr_mq) > 0 else 12)
+    ax.set_ylim(0, 1.05)
+    ax.set_xlabel(r'Redshift $z$', fontsize=14)
+    ax.set_ylabel('Fraction (top 10% $M_*$, sSFR $< 0.2/t_{\\rm H}$)', fontsize=14)
+    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.5))
+    ax.yaxis.set_minor_locator(plt.MultipleLocator(0.05))
+    ax.legend(loc='center right', fontsize=12, frameon=False)
+
+    plt.tight_layout()
+    outputFile = OutputDir + 'CentralSatelliteFraction_MassiveQuiescent' + OutputFormat
+    plt.savefig(outputFile, dpi=300, bbox_inches='tight')
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+    # --------------------------------------------------------
+
     print('Plotting histogram of quiecent centrals with satellites overlaid as a function of redshift')
 
     plt.figure(figsize=(10, 7))

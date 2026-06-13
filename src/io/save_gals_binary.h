@@ -118,6 +118,7 @@ extern "C" {
       float mdot_cool;
       float mdot_stream;
       double g_max;
+      float r_heat;          /* AGN radio-mode heating radius [Mpc/h], capped at Rvir in the CGM regime */
     };
 
     /* Proto-Types */

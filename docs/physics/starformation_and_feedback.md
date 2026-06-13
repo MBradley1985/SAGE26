@@ -64,20 +64,6 @@ selected by `H2DiskAreaOption`:
 The radial mode uses `H2RadialNBins` rings out to `H2RadialRMaxFactor *
 r_disk`.
 
-The per-prescription SFR can be overridden by `H2SFRMode` for H2-based
-prescriptions (applies to `SFprescription` 1, 3, 4, 5, 7 -- not 0 and 2
-which have no H2, nor 6 which already uses K13 t_dep natively):
-
-| Value | Effect |
-|-------|--------|
-| 0 | Use `SfrEfficiency` (default) |
-| 1 | Use a fixed depletion time: `SFR = H2gas / H2DepletionTime_Gyr` |
-| 2 | Use the K13 local depletion time computed from current Sigma_gas, Sigma_star, metallicity, and the base prescription's local f_H2 |
-
-Mode 1 is useful for matching molecular gas observations directly. Mode 2
-gives every H2-based prescription a physically motivated, locally varying
-depletion time instead of a single value.
-
 ## Supernova feedback
 
 Two reheating/ejection budgets are available, selected by `FIREmodeOn`.
@@ -222,7 +208,6 @@ vs sharp, concentration source). The classification itself lives in
 | `FeedbackFreeModeOn` | FFB regime classification mode (0-7); 0 disables the FFB path. |
 | `FFBMaxEfficiency` | SF efficiency in FFB mode. |
 | `H2DiskAreaOption`, `H2RadialIntegrationOn`, `H2RadialNBins`, `H2RadialRMaxFactor` | H2 surface-density geometry. |
-| `H2SFRMode`, `H2DepletionTime_Gyr` | Override H2-based SFR: 0 uses `SfrEfficiency`; 1 uses the fixed depletion time; 2 uses the K13 local depletion time. |
 | `DiskInstabilityOn` | Run the Toomre check after SF. |
 
 See [`parameters.md`](../parameters.md) for full descriptions and defaults.
