@@ -32,7 +32,6 @@ codecov
 xx*
 yy*
 *.hdf5
-*.csv
 *.par
 
 # sage_analysis Package Stuff #
