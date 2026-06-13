@@ -23,7 +23,7 @@ codecov
 *.jpg
 *.ipynb_checkpoints
 *.dSYM
-*.txt
+
 !requirements.txt
 !docs/requirements.txt
 *.log
