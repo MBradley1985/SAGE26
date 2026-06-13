@@ -32,6 +32,7 @@ codecov
 xx*
 yy*
 *.hdf5
+*.csv
 *.par
 
 # sage_analysis Package Stuff #
@@ -46,5 +47,3 @@ docs/_doxygen/
 # Regression baseline — manifests for slow optional configs are captured locally on demand,
 # not committed. Only the default-sweep configs in tests/regression_baseline.sh are tracked.
 tests/baseline/microuchuu/
-
-settings.local.json
