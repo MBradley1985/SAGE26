@@ -795,9 +795,13 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
         }
     }
 
-    // Now apply the cooling directly to preserve the physics-based split
-    // Apply CGM cooling
+    // Apply CGM cooling. Clamp to available CGMgas after AGN heating (which
+    // runs inside cooling_recipe_cgm for Regime==0 and can drain CGMgas
+    // between the internal cap and this apply).
     if(cgm_cooling > 0.0) {
+        if(cgm_cooling > galaxies[gal].CGMgas) {
+            cgm_cooling = galaxies[gal].CGMgas;
+        }
         const double metallicity = get_metallicity(galaxies[gal].CGMgas, galaxies[gal].MetalsCGMgas);
         galaxies[gal].ColdGas += cgm_cooling;
         galaxies[gal].MetalsColdGas += metallicity * cgm_cooling;

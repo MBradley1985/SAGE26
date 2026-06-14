@@ -9513,7 +9513,7 @@ EVOLUTION_PLOTS = {
     # 12: plot_12_sfh_ffb,
     # 121: plot_12b_ffb_regime_history,
     # 122: plot_12c_ffb_regime_heatmap,
-    # 123: plot_12d_sfh_ffb_transitions,
+    123: plot_12d_sfh_ffb_transitions,
     # 124: plot_12e_sfh_ffb_transitions_mbk25,
     # 13: plot_13_ffb_vs_redshift,
 }

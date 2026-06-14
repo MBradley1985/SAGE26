@@ -90,6 +90,22 @@ def find_snap_for_redshift(params, target_z):
     return snap, float(zs[snap])
 
 
+def derive_target_redshifts(z_sel, z_high=7.0, z_mid=5.0):
+    """Three monotonically decreasing redshifts ending at z_sel.
+
+    The last entry is always the selection redshift so evolution panels
+    follow the target down to the epoch the user actually selected.
+    Anchors (z_high, z_mid) are kept when both are >= z_sel; otherwise the
+    mid (or both) is shifted so the triplet stays ordered and non-degenerate.
+    """
+    if z_sel >= z_high:
+        return (z_sel + 2.0, z_sel + 1.0, float(z_sel))
+    if z_sel >= z_mid:
+        log_mid = 0.5 * (np.log10(1.0 + z_high) + np.log10(1.0 + z_sel))
+        return (float(z_high), float(10.0 ** log_mid - 1.0), float(z_sel))
+    return (float(z_high), float(z_mid), float(z_sel))
+
+
 # ---------------------------------------------------------------------------
 # CSV metadata
 # ---------------------------------------------------------------------------
@@ -4418,50 +4434,55 @@ def main():
         zoom_R_mpc     = 2.5   # half-extent → 5 cMpc on a side
         zoom_sigma_mpc = 0.1   # match the smaller panel scale; keeps σ/R ≈ 1/25
 
-        _step('Most-massive target — kernel density at z = 7, 5, 2.95')
+        # Three redshifts spanning the target's main-branch evolution down to
+        # the selection epoch (so the last panel is always at z_sel).
+        target_zs = derive_target_redshifts(z_snap)
+        z_lbl = ', '.join(f'{z:.2f}' for z in target_zs)
+
+        _step(f'Most-massive target — kernel density at z = {z_lbl}')
         t0 = time.time()
         plot_target_redshift_evolution(
             env_results, filepaths, snap_times,
             params['snapshot_redshifts'], h, box_size_mpc,
             os.path.join(out_dir, f'target_redshift_evolution_{tag}.pdf'),
-            target_redshifts=(7.0, 5.0, 2.95),
+            target_redshifts=target_zs,
             sigma_mpc=kd_sigma, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
             default_label=default_label)
         print(f'    rendered in {_fmt_dt(time.time()-t0)}')
 
-        _step('Most-massive target — kernel density at z = 7, 5, 2.95  (5x5 cMpc zoom)')
+        _step(f'Most-massive target — kernel density at z = {z_lbl}  (5x5 cMpc zoom)')
         t0 = time.time()
         plot_target_redshift_evolution(
             env_results, filepaths, snap_times,
             params['snapshot_redshifts'], h, box_size_mpc,
             os.path.join(out_dir,
                          f'target_redshift_evolution_zoom5cMpc_{tag}.pdf'),
-            target_redshifts=(7.0, 5.0, 2.95),
+            target_redshifts=target_zs,
             sigma_mpc=zoom_sigma_mpc, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
             extent_mpc=zoom_R_mpc,
             default_label=default_label)
         print(f'    rendered in {_fmt_dt(time.time()-t0)}')
 
-        _step('Most-massive target — halo-count density at z = 7, 5, 2.95')
+        _step(f'Most-massive target — halo-count density at z = {z_lbl}')
         t0 = time.time()
         plot_target_redshift_evolution(
             env_results, filepaths, snap_times,
             params['snapshot_redshifts'], h, box_size_mpc,
             os.path.join(out_dir, f'target_redshift_evolution_counts_{tag}.pdf'),
-            target_redshifts=(7.0, 5.0, 2.95),
+            target_redshifts=target_zs,
             sigma_mpc=kd_sigma, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
             weight_mode='count',
             default_label=default_label)
         print(f'    rendered in {_fmt_dt(time.time()-t0)}')
 
-        _step('Most-massive target — halo-count density at z = 7, 5, 2.95  (5x5 cMpc zoom)')
+        _step(f'Most-massive target — halo-count density at z = {z_lbl}  (5x5 cMpc zoom)')
         t0 = time.time()
         plot_target_redshift_evolution(
             env_results, filepaths, snap_times,
             params['snapshot_redshifts'], h, box_size_mpc,
             os.path.join(out_dir,
                          f'target_redshift_evolution_counts_zoom5cMpc_{tag}.pdf'),
-            target_redshifts=(7.0, 5.0, 2.95),
+            target_redshifts=target_zs,
             sigma_mpc=zoom_sigma_mpc, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
             weight_mode='count',
             extent_mpc=zoom_R_mpc,
@@ -4472,7 +4493,7 @@ def main():
         # for the matched target.  On these the primary star is the noFFB
         # target; the comparison "X" overlay shows the FFB-default galaxy.
         if compare_filepaths and compare_target is not None:
-            _step(f'Compare-run target — kernel density at z = 7, 5, 2.95 '
+            _step(f'Compare-run target — kernel density at z = {z_lbl} '
                   f'({compare_label})')
             t0 = time.time()
             plot_target_redshift_evolution(
@@ -4481,14 +4502,14 @@ def main():
                 os.path.join(out_dir,
                              f'target_redshift_evolution_{compare_label}_{tag}.pdf'),
                 target_gid=compare_target['gid'],
-                target_redshifts=(7.0, 5.0, 2.95),
+                target_redshifts=target_zs,
                 sigma_mpc=kd_sigma, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
                 default_label=compare_label,
                 compare_history=default_history,
                 compare_label=default_label)
             print(f'    rendered in {_fmt_dt(time.time()-t0)}')
 
-            _step(f'Compare-run target — kernel density at z = 7, 5, 2.95  (5x5 cMpc zoom)')
+            _step(f'Compare-run target — kernel density at z = {z_lbl}  (5x5 cMpc zoom)')
             t0 = time.time()
             plot_target_redshift_evolution(
                 env_results, compare_filepaths, snap_times,
@@ -4496,7 +4517,7 @@ def main():
                 os.path.join(out_dir,
                              f'target_redshift_evolution_{compare_label}_zoom5cMpc_{tag}.pdf'),
                 target_gid=compare_target['gid'],
-                target_redshifts=(7.0, 5.0, 2.95),
+                target_redshifts=target_zs,
                 sigma_mpc=zoom_sigma_mpc, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
                 extent_mpc=zoom_R_mpc,
                 default_label=compare_label,
@@ -4504,7 +4525,7 @@ def main():
                 compare_label=default_label)
             print(f'    rendered in {_fmt_dt(time.time()-t0)}')
 
-            _step(f'Compare-run target — halo-count density at z = 7, 5, 2.95 '
+            _step(f'Compare-run target — halo-count density at z = {z_lbl} '
                   f'({compare_label})')
             t0 = time.time()
             plot_target_redshift_evolution(
@@ -4513,7 +4534,7 @@ def main():
                 os.path.join(out_dir,
                              f'target_redshift_evolution_counts_{compare_label}_{tag}.pdf'),
                 target_gid=compare_target['gid'],
-                target_redshifts=(7.0, 5.0, 2.95),
+                target_redshifts=target_zs,
                 sigma_mpc=kd_sigma, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
                 weight_mode='count',
                 default_label=compare_label,
@@ -4521,7 +4542,7 @@ def main():
                 compare_label=default_label)
             print(f'    rendered in {_fmt_dt(time.time()-t0)}')
 
-            _step(f'Compare-run target — halo-count density at z = 7, 5, 2.95  (5x5 cMpc zoom)')
+            _step(f'Compare-run target — halo-count density at z = {z_lbl}  (5x5 cMpc zoom)')
             t0 = time.time()
             plot_target_redshift_evolution(
                 env_results, compare_filepaths, snap_times,
@@ -4529,7 +4550,7 @@ def main():
                 os.path.join(out_dir,
                              f'target_redshift_evolution_counts_{compare_label}_zoom5cMpc_{tag}.pdf'),
                 target_gid=compare_target['gid'],
-                target_redshifts=(7.0, 5.0, 2.95),
+                target_redshifts=target_zs,
                 sigma_mpc=zoom_sigma_mpc, grid_n=kd_grid_n, z_slab_mpc=kd_zslab,
                 weight_mode='count',
                 extent_mpc=zoom_R_mpc,
