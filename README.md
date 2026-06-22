@@ -2,7 +2,7 @@
   <img src="SAGElogo.png" width="300" alt="SAGE26 logo"/>
 </p>
 
-# SAGE26 — Semi-Analytic Galaxy Evolution
+# SAGE26 — Semi-Analytic Galaxy Evolution - BH Branch
 
 [![Documentation Status](https://readthedocs.org/projects/sage26/badge/?version=latest)](https://sage26.readthedocs.io/en/latest/)
 
