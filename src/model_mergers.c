@@ -11,6 +11,23 @@
  * disruption into the ICS (disrupt_satellite_to_ICS).
  *
  * SAGE26 -- released under MIT (see LICENSE).
+ *
+ * --------------------------------------------------------------------------
+ * JOINT COLD-GAS BUDGET (this revision)
+ * --------------------------------------------------------------------------
+ * deal_with_galaxy_merger now sizes the merger starburst, its supernova
+ * reheating, and the merger-driven black-hole accretion *together*, against a
+ * single post-merge ColdGas pool, before any of that gas is consumed.  If the
+ * combined demand exceeds ColdGas, all three are scaled down by one common
+ * factor.  The pre-scaled values are then handed to grow_black_hole() and
+ * collisional_starburst_recipe(), which only *apply* them (no internal demand
+ * calculation, no internal ColdGas cap) when given a non-negative value.
+ *
+ * Sentinel convention for the new parameters:
+ *     value <  0  -> legacy path: compute the demand internally as before.
+ *     value >= 0  -> joint-budget path: use the supplied pre-scaled value.
+ * Legacy callers (e.g. the disk-instability path) pass -1.0.
+ * --------------------------------------------------------------------------
  */
 
 #include <stdio.h>
@@ -63,8 +80,10 @@ static const double KD11_METAL_HALO_MASS = 30.0;  /* 10^10 Msun/h */
  * Also the canonical definition in model_misc.c (calculate_H2_fraction_GD14). */
 static const double Z_SOLAR_GD14 = 0.02;
 
-/* File-private forward declaration */
+/* File-private forward declarations */
 static double calculate_merger_remnant_radius(const struct GALAXY *g1, const struct GALAXY *g2);
+static double merger_feedback_factor(const int gal, struct GALAXY *galaxies, const struct params *run_params);
+static double starburst_gas_reservoir(const int cgal, struct GALAXY *galaxies, const struct params *run_params);
 
 /*
  * estimate_merging_time -- compute the dynamical friction merger timescale
@@ -199,6 +218,136 @@ static double calculate_merger_remnant_radius(const struct GALAXY *g1, const str
 }
 
 // ============================================================================
+// Joint-budget helpers
+// ============================================================================
+
+/*
+ * merger_feedback_factor -- supernova reheating mass per unit of stars formed
+ * for a given galaxy, i.e. the ratio reheated_mass / stars.
+ *
+ * Mirrors the reheating logic in collisional_starburst_recipe so the caller can
+ * size the SN feedback demand (reheated_demanded = factor * stars_demanded)
+ * before any gas is consumed.  Returns 0.0 if SupernovaRecipeOn != 1.  In FIRE
+ * mode applies the Muratov+2015 scaling FeedbackReheatingEpsilon * (1+z)^alpha *
+ * (v/FIRE_V_CRIT_KMS)^beta; otherwise returns the constant
+ * FeedbackReheatingEpsilon.
+ */
+static double merger_feedback_factor(const int gal, struct GALAXY *galaxies, const struct params *run_params)
+{
+    if(run_params->SupernovaRecipeOn != 1) return 0.0;
+
+    if(run_params->FIREmodeOn == 1) {
+        const double z  = run_params->ZZ[galaxies[gal].SnapNum];
+        const double vc = galaxies[gal].Vvir;
+        if(vc <= 0.0 || z < 0.0) return 0.0;
+
+        const double vc_floored = (vc < 1.0) ? 1.0 : vc;
+        const double v_term = (vc_floored < FIRE_V_CRIT_KMS)
+            ? pow(vc_floored / FIRE_V_CRIT_KMS, -3.2)
+            : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
+        const double fire_scaling = pow(1.0 + z, run_params->RedshiftPowerLawExponent) * v_term;
+        return run_params->FeedbackReheatingEpsilon * fire_scaling;
+    } else {
+        return run_params->FeedbackReheatingEpsilon;
+    }
+}
+
+/*
+ * starburst_gas_reservoir -- select (and, for H2-based SF prescriptions, freshly
+ * recompute) the cold-gas reservoir available to a merger-driven starburst,
+ * returning gas_for_starburst.
+ *
+ * For H2-tracking prescriptions with StarburstColdGasOn == 0, the stored H2gas
+ * is stale by this point in the timestep (ColdGas has been depleted by disk SF,
+ * feedback, and stripping), so H2 is recomputed from the current ColdGas and
+ * written back to galaxies[cgal].H2gas.  Otherwise the full ColdGas is returned.
+ *
+ * Calling this from BOTH the demand calculation (deal_with_galaxy_merger) and
+ * the starburst application (collisional_starburst_recipe) guarantees both see
+ * the same reservoir, and keeps H2gas consistent as a side effect.
+ */
+static double starburst_gas_reservoir(const int cgal, struct GALAXY *galaxies, const struct params *run_params)
+{
+    if (run_params->StarburstColdGasOn == 0 &&
+        (run_params->SFprescription == 1 || run_params->SFprescription == 3 || run_params->SFprescription == 4 ||
+         run_params->SFprescription == 5 || run_params->SFprescription == 6 ||
+         run_params->SFprescription == 7)) {
+
+        double h2gas_fresh = 0.0;
+        if(galaxies[cgal].ColdGas > 0.0 && galaxies[cgal].DiskScaleRadius > 0.0) {
+            const float h     = run_params->Hubble_h;
+            const float rs_pc = (float)(galaxies[cgal].DiskScaleRadius * 1.0e6 / h);
+            if(rs_pc > 0.0f) {
+                if(run_params->H2RadialIntegrationOn) {
+                    // Radial integration stores result in galaxies[cgal].H2gas
+                    calculate_molecular_fraction_radial_integration(cgal, galaxies, run_params, NULL);
+                    h2gas_fresh = galaxies[cgal].H2gas;
+                } else {
+                    float disk_area_pc2;
+                    if(run_params->H2DiskAreaOption == 0)
+                        disk_area_pc2 = (float)M_PI * rs_pc * rs_pc;
+                    else if(run_params->H2DiskAreaOption == 1)
+                        disk_area_pc2 = (float)M_PI * 9.0f * rs_pc * rs_pc;
+                    else
+                        disk_area_pc2 = 2.0f * (float)M_PI * rs_pc * rs_pc;
+
+                    const float Sigma_gas = (float)(galaxies[cgal].ColdGas * 1.0e10 / h) / disk_area_pc2;
+
+                    if(run_params->SFprescription == 1 || run_params->SFprescription == 3) {
+                        // BR06 / Somerville+H2
+                        const float Sigma_star = (float)((galaxies[cgal].StellarMass - galaxies[cgal].BulgeMass)
+                                                 * 1.0e10 / h) / disk_area_pc2;
+                        h2gas_fresh = calculate_molecular_fraction_BR06(Sigma_gas, Sigma_star, rs_pc)
+                                      * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
+                    } else if(run_params->SFprescription == 4) {
+                        // KD12
+                        const float met = (float)((galaxies[cgal].ColdGas > 0.0) ?
+                            galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0);
+                        h2gas_fresh = calculate_H2_fraction_KD12(Sigma_gas, met, 5.0f)
+                                      * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
+                    } else if(run_params->SFprescription == 5) {
+                        // KMT09
+                        float met_abs = (float)((galaxies[cgal].ColdGas > 0.0) ?
+                            galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0);
+                        float Z_prime = (met_abs > 0.0f) ? met_abs / (float)Z_SOLAR_GD14 : 0.0f;
+                        const float tau_c = 0.066f * 3.0f * Z_prime * Sigma_gas;
+                        const float chi = 0.77f * (1.0f + 3.1f * powf(Z_prime, 0.365f));
+                        const float s_kmt = (tau_c > 1e-10f) ?
+                            logf(1.0f + 0.6f*chi + 0.01f*chi*chi) / (0.6f*tau_c) : 100.0f;
+                        float f_H2 = (s_kmt < 2.0f) ? 1.0f - (3.0f*s_kmt)/(4.0f+s_kmt) : 0.0f;
+                        if(f_H2 < 0.0f) f_H2 = 0.0f;
+                        if(f_H2 > 1.0f) f_H2 = 1.0f;
+                        h2gas_fresh = f_H2 * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
+                    } else if(run_params->SFprescription == 6) {
+                        // K13: two-phase molecular fraction
+                        const double Z_gas = (galaxies[cgal].ColdGas > 0.0) ?
+                            galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0;
+                        const double f_H2_2p = calculate_H2_fraction_K13((double)Sigma_gas, Z_gas, 5.0);
+                        h2gas_fresh = f_H2_2p * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
+                    } else if(run_params->SFprescription == 7) {
+                        // GD14
+                        const double met_abs = (galaxies[cgal].ColdGas > 0.0) ?
+                            galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0;
+                        const double f_H2 = calculate_H2_fraction_GD14((double)Sigma_gas, met_abs, (double)rs_pc);
+                        h2gas_fresh = f_H2 * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
+                    }
+                }
+            }
+        }
+        if(h2gas_fresh > galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC)
+            h2gas_fresh = galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC;
+        if(h2gas_fresh < 0.0)
+            h2gas_fresh = 0.0;
+        galaxies[cgal].H2gas = h2gas_fresh;
+        return h2gas_fresh;
+    } else {
+        double g = galaxies[cgal].ColdGas;
+        if(g < 0.0) g = 0.0;
+        return g;
+    }
+}
+
+// ============================================================================
 // Actually merge the galaxies and apply the starburst recipe
 // This is called from both mergers and disk instabilities, but the merger case is more complex
 // ============================================================================
@@ -207,10 +356,16 @@ static double calculate_merger_remnant_radius(const struct GALAXY *g1, const str
  * deal_with_galaxy_merger -- process one galaxy merger event.
  *
  * Classifies the event as major (mass_ratio > MajorMergerFraction) or minor,
- * calls collisional_starburst_recipe(), updates bulge mass and merger-origin
- * bulge radius, merges stellar/gas reservoirs via add_galaxies_together(), and
- * disrupts the satellite.  AGN growth is triggered on both major and minor
- * mergers via grow_black_hole().
+ * computes a single joint cold-gas budget shared between the starburst, its SN
+ * reheating, and the merger-driven BH accretion, applies the (pre-scaled)
+ * starburst and BH growth, updates bulge mass and merger-origin bulge radius,
+ * and finalises the remnant radius.
+ *
+ * Allocation order: the starburst is applied BEFORE grow_black_hole().  This is
+ * deliberate -- grow_black_hole() runs quasar_mode_wind(), which can eject the
+ * remaining ColdGas; applying the pre-sized burst first prevents the wind from
+ * retroactively starving it.  The joint budget guarantees that enough ColdGas
+ * remains for the BH after the burst.
  */
 void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int centralgal,
                              const double time, const double dt, const int halonr, const int step,
@@ -245,11 +400,6 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
 
     add_galaxies_together(merger_centralgal, p, galaxies, run_params);
 
-    // grow black hole through accretion from cold disk during mergers
-    if(run_params->AGNrecipeOn) {
-        grow_black_hole(merger_centralgal, mass_ratio, galaxies, run_params);
-    }
-
     // Determine which bulge component will receive burst stars
     // This must be decided BEFORE the starburst
     int burst_to_merger_bulge = 0;  // 0 = instability, 1 = merger
@@ -268,10 +418,71 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         }
     }
 
-    // starburst recipe - now tracks which bulge component receives the stars
+    // ========================================================================
+    // JOINT COLD-GAS BUDGET
+    // Compute all three demands against the same post-merge ColdGas, before any
+    // is consumed, then scale them together if their sum over-subscribes it.
+    // ========================================================================
+    const double cold_gas = galaxies[merger_centralgal].ColdGas;
+
+    // (a) Starburst demand (molecular-gas limited).  The reservoir helper also
+    //     refreshes H2gas as a side effect.  mode == 0 for the merger burst.
+    const double eburst = STARBURST_FRAC_COEFF * pow(mass_ratio, STARBURST_MASS_POWER);
+    double gas_for_starburst = starburst_gas_reservoir(merger_centralgal, galaxies, run_params);
+    if(gas_for_starburst < 0.0) gas_for_starburst = 0.0;
+
+    double stars_demanded = eburst * gas_for_starburst;
+    if(stars_demanded < 0.0) stars_demanded = 0.0;
+
+    // (b) SN reheating demand (proportional to stars)
+    double reheated_demanded = stars_demanded * merger_feedback_factor(merger_centralgal, galaxies, run_params);
+    if(reheated_demanded < 0.0) reheated_demanded = 0.0;
+
+    // Molecular-gas cap on the burst pair: the burst can never consume more than
+    // the molecular reservoir.  This preserves the original starburst behaviour
+    // (which capped stars + reheated against gas_for_starburst) and is applied
+    // before the joint ColdGas balance below.
+    if(gas_for_starburst > 0.0 && (stars_demanded + reheated_demanded) > gas_for_starburst) {
+        const double h2fac = gas_for_starburst / (stars_demanded + reheated_demanded);
+        stars_demanded    *= h2fac;
+        reheated_demanded *= h2fac;
+    }
+
+    // (c) BH accretion demand (Kauffmann & Haehnelt cold-gas accretion)
+    double BHaccrete_demanded = 0.0;
+    if(run_params->AGNrecipeOn && cold_gas > 0.0) {
+        BHaccrete_demanded = run_params->BlackHoleGrowthRate * mass_ratio /
+            (1.0 + SQR(BH_GROWTH_V_KMS / galaxies[merger_centralgal].Vvir)) * cold_gas;
+        if(BHaccrete_demanded < 0.0) BHaccrete_demanded = 0.0;
+    }
+
+    // Joint balance: if the combined demand exceeds ColdGas, scale all three
+    // down by one common factor so the total equals ColdGas exactly.
+    const double total_demanded = stars_demanded + reheated_demanded + BHaccrete_demanded;
+    double scale = 1.0;
+    if(total_demanded > cold_gas && total_demanded > 0.0)
+        scale = cold_gas / total_demanded;
+
+    double stars_scaled     = stars_demanded     * scale;
+    double reheated_scaled  = reheated_demanded  * scale;
+    double BHaccrete_scaled = BHaccrete_demanded * scale;
+    if(stars_scaled     < 0.0) stars_scaled     = 0.0;
+    if(reheated_scaled  < 0.0) reheated_scaled  = 0.0;
+    if(BHaccrete_scaled < 0.0) BHaccrete_scaled = 0.0;
+    // ========================================================================
+    // END JOINT COLD-GAS BUDGET
+    // ========================================================================
+
+    // starburst recipe (pre-scaled) -- applied first; see function header note.
     collisional_starburst_recipe(mass_ratio, merger_centralgal, centralgal, time, dt, halonr,
                                  0, step, burst_to_merger_bulge, old_disk_radius,
+                                 stars_scaled, reheated_scaled,
                                  galaxies, run_params);
+
+    // grow black hole through accretion from cold disk during mergers (pre-scaled)
+    if(run_params->AGNrecipeOn) {
+        grow_black_hole(merger_centralgal, mass_ratio, BHaccrete_scaled, galaxies, run_params);
+    }
 
     // Sync the central's BulgeRadius after add_galaxies_together + starburst have
     // modified bulge mass.  calculate_merger_remnant_radius reads BulgeRadius for
@@ -326,22 +537,32 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
 /*
  * grow_black_hole -- accrete cold gas onto the central black hole.
  *
- * Scales the accreted mass by (mass_ratio / (mass_ratio + BlackHoleCouplingFactor))
- * and removes it from the cold gas reservoir.  Computes quasar-mode energy
- * output for AGNrecipeOn == 1 via quasar_mode_wind().
+ * New parameter BHaccrete_in:
+ *     >= 0 -> joint-budget path: use this pre-scaled accretion mass directly.
+ *     <  0 -> legacy path: compute the demand internally from the
+ *             BlackHoleGrowthRate formula.
+ * In both paths the accreted mass is capped to the available ColdGas, removed
+ * from the cold reservoir, and fed to quasar_mode_wind().
  */
-void grow_black_hole(const int merger_centralgal, const double mass_ratio, struct GALAXY *galaxies, const struct params *run_params)
+void grow_black_hole(const int merger_centralgal, const double mass_ratio, const double BHaccrete_in, struct GALAXY *galaxies, const struct params *run_params)
 {
     double BHaccrete, metallicity;
 
     if(galaxies[merger_centralgal].ColdGas > 0.0) {
-        BHaccrete = run_params->BlackHoleGrowthRate * mass_ratio /
-            (1.0 + SQR(BH_GROWTH_V_KMS / galaxies[merger_centralgal].Vvir)) * galaxies[merger_centralgal].ColdGas;
+        if(BHaccrete_in >= 0.0) {
+            // Joint-budget path: use the pre-scaled demand.
+            BHaccrete = BHaccrete_in;
+        } else {
+            // Legacy path: compute the demand internally.
+            BHaccrete = run_params->BlackHoleGrowthRate * mass_ratio /
+                (1.0 + SQR(BH_GROWTH_V_KMS / galaxies[merger_centralgal].Vvir)) * galaxies[merger_centralgal].ColdGas;
+        }
 
-        // cannot accrete more gas than is available!
+        // cannot accrete more gas than is available! (defensive in the joint path)
         if(BHaccrete > galaxies[merger_centralgal].ColdGas) {
             BHaccrete = galaxies[merger_centralgal].ColdGas;
         }
+        if(BHaccrete < 0.0) BHaccrete = 0.0;
 
         metallicity = get_metallicity(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].MetalsColdGas);
         galaxies[merger_centralgal].BlackHoleMass += BHaccrete;
@@ -549,14 +770,23 @@ void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
 /*
  * collisional_starburst_recipe -- trigger an interaction-driven starburst.
  *
- * Called both during mergers (mode=1) and disk instabilities (mode=0).
- * Computes the burst SFR from the Somerville (2001) mass_ratio scaling, forms
- * stars into BulgeMass/MergerBulgeMass (mergers) or disk stars (instabilities),
- * applies SN feedback routing (FIRE or standard), and updates SFH arrays.
+ * Called both during mergers (mode=0) and disk instabilities (mode=1).
+ *
+ * New parameters stars_in, reheated_in:
+ *     both >= 0  -> joint-budget path: use these pre-scaled values directly,
+ *                   skipping the burst-fraction demand and the molecular-gas cap
+ *                   (the caller already sized and balanced them).
+ *     either < 0 -> legacy path: compute the demand here and cap against the
+ *                   starburst reservoir, as before.  Pass -1.0, -1.0.
+ *
+ * In both paths the function still: refreshes H2gas, computes ejected mass from
+ * the final stars value, forms stars into the appropriate bulge component,
+ * applies SN feedback, updates SFH, and runs the disk-instability check.
  */
 void collisional_starburst_recipe(const double mass_ratio, const int merger_centralgal, const int centralgal,
                                   const double time, const double dt, const int halonr, const int mode, const int step,
                                   const int burst_to_merger_bulge, const double old_disk_radius,
+                                  const double stars_in, const double reheated_in,
                                   struct GALAXY *galaxies, const struct params *run_params)
 {
     XASSERT(step >= 0 && step < STEPS, -1,
@@ -576,95 +806,14 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         eburst = STARBURST_FRAC_COEFF * pow(mass_ratio, STARBURST_MASS_POWER);
     }
 
-    if (run_params->StarburstColdGasOn == 0 &&
-        (run_params->SFprescription == 1 || run_params->SFprescription == 3 || run_params->SFprescription == 4 ||
-         run_params->SFprescription == 5 || run_params->SFprescription == 6 ||
-         run_params->SFprescription == 7)) {
-        // Recompute H2gas from the current ColdGas rather than using the stored value.
-        // The stored H2gas was set during disk SF earlier in this timestep, but ColdGas has
-        // since been depleted by SF, feedback, and satellite stripping, making the stored
-        // value stale (often H2gas >> 0.74*ColdGas, and even > ColdGas at high-z).
-        // Using the stale value + clamp would silently fall back to ColdGas for most events.
-        const int cgal = merger_centralgal;
-        double h2gas_fresh = 0.0;
-        if(galaxies[cgal].ColdGas > 0.0 && galaxies[cgal].DiskScaleRadius > 0.0) {
-            const float h     = run_params->Hubble_h;
-            const float rs_pc = (float)(galaxies[cgal].DiskScaleRadius * 1.0e6 / h);
-            if(rs_pc > 0.0f) {
-                if(run_params->H2RadialIntegrationOn) {
-                    // Radial integration stores result in galaxies[cgal].H2gas
-                    calculate_molecular_fraction_radial_integration(cgal, galaxies, run_params, NULL);
-                    h2gas_fresh = galaxies[cgal].H2gas;
-                } else {
-                    float disk_area_pc2;
-                    if(run_params->H2DiskAreaOption == 0)
-                        disk_area_pc2 = (float)M_PI * rs_pc * rs_pc;
-                    else if(run_params->H2DiskAreaOption == 1)
-                        disk_area_pc2 = (float)M_PI * 9.0f * rs_pc * rs_pc;
-                    else
-                        disk_area_pc2 = 2.0f * (float)M_PI * rs_pc * rs_pc;
-
-                    const float Sigma_gas = (float)(galaxies[cgal].ColdGas * 1.0e10 / h) / disk_area_pc2;
-
-                    if(run_params->SFprescription == 1 || run_params->SFprescription == 3) {
-                        // BR06 / Somerville+H2
-                        const float Sigma_star = (float)((galaxies[cgal].StellarMass - galaxies[cgal].BulgeMass)
-                                                 * 1.0e10 / h) / disk_area_pc2;
-                        h2gas_fresh = calculate_molecular_fraction_BR06(Sigma_gas, Sigma_star, rs_pc)
-                                      * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
-                    } else if(run_params->SFprescription == 4) {
-                        // KD12
-                        const float met = (float)((galaxies[cgal].ColdGas > 0.0) ?
-                            galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0);
-                        h2gas_fresh = calculate_H2_fraction_KD12(Sigma_gas, met, 5.0f)
-                                      * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
-                    } else if(run_params->SFprescription == 5) {
-                        // KMT09
-                        float met_abs = (float)((galaxies[cgal].ColdGas > 0.0) ?
-                            galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0);
-                        float Z_prime = (met_abs > 0.0f) ? met_abs / (float)Z_SOLAR_GD14 : 0.0f;
-                        const float tau_c = 0.066f * 3.0f * Z_prime * Sigma_gas;
-                        const float chi = 0.77f * (1.0f + 3.1f * powf(Z_prime, 0.365f));
-                        const float s_kmt = (tau_c > 1e-10f) ?
-                            logf(1.0f + 0.6f*chi + 0.01f*chi*chi) / (0.6f*tau_c) : 100.0f;
-                        float f_H2 = (s_kmt < 2.0f) ? 1.0f - (3.0f*s_kmt)/(4.0f+s_kmt) : 0.0f;
-                        if(f_H2 < 0.0f) f_H2 = 0.0f;
-                        if(f_H2 > 1.0f) f_H2 = 1.0f;
-                        h2gas_fresh = f_H2 * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
-                    } else if(run_params->SFprescription == 6) {
-                        // K13: two-phase molecular fraction
-                        const double Z_gas = (galaxies[cgal].ColdGas > 0.0) ?
-                            galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0;
-                        const double f_H2_2p = calculate_H2_fraction_K13((double)Sigma_gas, Z_gas, 5.0);
-                        h2gas_fresh = f_H2_2p * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
-                    } else if(run_params->SFprescription == 7) {
-                        // GD14
-                        const double met_abs = (galaxies[cgal].ColdGas > 0.0) ?
-                            galaxies[cgal].MetalsColdGas / galaxies[cgal].ColdGas : 0.0;
-                        const double f_H2 = calculate_H2_fraction_GD14((double)Sigma_gas, met_abs, (double)rs_pc);
-                        h2gas_fresh = f_H2 * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
-                    }
-                }
-            }
-        }
-        if(h2gas_fresh > galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC)
-            h2gas_fresh = galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC;
-        if(h2gas_fresh < 0.0)
-            h2gas_fresh = 0.0;
-        galaxies[merger_centralgal].H2gas = h2gas_fresh;
-        gas_for_starburst = h2gas_fresh;
-    } else {
-        gas_for_starburst = galaxies[merger_centralgal].ColdGas;
-    }
+    // Select / recompute the starburst gas reservoir.  Runs in BOTH paths so
+    // H2gas is refreshed against the current ColdGas; in the joint path the
+    // returned value is not used to size the burst (the caller did that).
+    gas_for_starburst = starburst_gas_reservoir(merger_centralgal, galaxies, run_params);
     if(gas_for_starburst < 0.0) gas_for_starburst = 0.0;
 
-    stars = eburst * gas_for_starburst;
-    if(stars < 0.0) {
-        stars = 0.0;
-    }
-    
     // FIRE velocity/redshift scaling (Muratov et al. 2015) -- pre-computed once
-    // and reused for both reheating and ejection.
+    // and reused for reheating (legacy path) and ejection (both paths).
     double fire_scaling = 0.0;
     if(run_params->FIREmodeOn == 1 && run_params->SupernovaRecipeOn == 1) {
         const double z_fire = run_params->ZZ[galaxies[merger_centralgal].SnapNum];
@@ -678,27 +827,41 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         }
     }
 
-    // this bursting results in SN feedback on the cold/hot gas
-    if(run_params->SupernovaRecipeOn == 1) {
-        if(run_params->FIREmodeOn == 1) {
-            reheated_mass = run_params->FeedbackReheatingEpsilon * fire_scaling * stars;
-        } else {
-            reheated_mass = run_params->FeedbackReheatingEpsilon * stars;
-        }
+    if(stars_in >= 0.0 && reheated_in >= 0.0) {
+        // ---- JOINT-BUDGET PATH: use pre-scaled values directly ----
+        stars = stars_in;
+        reheated_mass = reheated_in;
+        if(stars < 0.0) stars = 0.0;
+        if(reheated_mass < 0.0) reheated_mass = 0.0;
     } else {
-        reheated_mass = 0.0;
+        // ---- LEGACY PATH: compute demand here and cap against the reservoir ----
+        stars = eburst * gas_for_starburst;
+        if(stars < 0.0) {
+            stars = 0.0;
+        }
+
+        // this bursting results in SN feedback on the cold/hot gas
+        if(run_params->SupernovaRecipeOn == 1) {
+            if(run_params->FIREmodeOn == 1) {
+                reheated_mass = run_params->FeedbackReheatingEpsilon * fire_scaling * stars;
+            } else {
+                reheated_mass = run_params->FeedbackReheatingEpsilon * stars;
+            }
+        } else {
+            reheated_mass = 0.0;
+        }
+
+        XASSERT(reheated_mass >= 0.0, -1, "Error: Reheated mass = %g should be >= 0.0", reheated_mass);
+
+        // can't use more gas than is available for the burst
+        if((stars + reheated_mass) > gas_for_starburst) {
+            fac = gas_for_starburst / (stars + reheated_mass);
+            stars *= fac;
+            reheated_mass *= fac;
+        }
     }
 
-    XASSERT(reheated_mass >= 0.0, -1, "Error: Reheated mass = %g should be >= 0.0", reheated_mass);
-
-    // can't use more gas than is available for the burst
-    if((stars + reheated_mass) > gas_for_starburst) {
-        fac = gas_for_starburst / (stars + reheated_mass);
-        stars *= fac;
-        reheated_mass *= fac;
-    }
-
-    // determine ejection
+    // determine ejection (computed fresh from the final stars value in both paths)
     if(run_params->SupernovaRecipeOn == 1) {
         if(galaxies[merger_centralgal].Vvir > 0.0) {
             if(run_params->FIREmodeOn == 1) {
@@ -760,6 +923,13 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
 
     // recompute the metallicity of the cold phase
     metallicity = get_metallicity(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].MetalsColdGas);
+
+    // Guard against ColdGas going slightly negative after update_from_star_formation
+    // (floating-point precision when stars + reheated was right at the budget limit),
+    // so reheated_mass passed to update_from_feedback stays valid.
+    if(galaxies[merger_centralgal].ColdGas < 0.0) galaxies[merger_centralgal].ColdGas = 0.0;
+    if(reheated_mass > galaxies[merger_centralgal].ColdGas) reheated_mass = galaxies[merger_centralgal].ColdGas;
+    if(reheated_mass < 0.0) reheated_mass = 0.0;
 
     // update from feedback
     update_from_feedback(merger_centralgal, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);

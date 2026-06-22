@@ -25,10 +25,10 @@ extern "C" {
     extern void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *galaxies, const struct params *run_params);
     extern void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, const struct params *run_params);
     extern void make_bulge_from_burst(const int p, struct GALAXY *galaxies);
-    extern void grow_black_hole(const int merger_centralgal, const double mass_ratio, struct GALAXY *galaxies, const struct params *run_params);
+    void grow_black_hole(const int merger_centralgal, const double mass_ratio, const double BHaccrete_in, struct GALAXY *galaxies, const struct params *run_params);
     extern void collisional_starburst_recipe(const double mass_ratio, const int merger_centralgal, const int centralgal,
                                   const double time, const double dt, const int halonr, const int mode, const int step,
-                                  const int burst_to_merger_bulge, const double old_disk_radius,
+                                  const int burst_to_merger_bulge, const double old_disk_radius, const double stars_in, const double reheated_in,
                                   struct GALAXY *galaxies, const struct params *run_params);
 #ifdef __cplusplus
 }

@@ -97,12 +97,11 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
 
             const double unstable_gas_fraction = unstable_gas / galaxies[p].ColdGas;
             if(run_params->AGNrecipeOn > 0) {
-                grow_black_hole(p, unstable_gas_fraction, galaxies, run_params);
+                grow_black_hole(p, unstable_gas_fraction, -1.0, galaxies, run_params);
             }
 
-            collisional_starburst_recipe(unstable_gas_fraction, p, centralgal, time, dt, halonr, 1, step, 
-                             0, galaxies[p].DiskScaleRadius,  // burst_to_merger_bulge=0, use current disc radius
-                             galaxies, run_params);
+            collisional_starburst_recipe(unstable_gas_fraction, p, centralgal, time, dt, halonr, 1, step,
+                 0, galaxies[p].DiskScaleRadius, -1.0, -1.0, galaxies, run_params);
         }
     }
 }
