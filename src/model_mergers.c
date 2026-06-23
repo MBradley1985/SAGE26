@@ -481,7 +481,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
 
     // grow black hole through accretion from cold disk during mergers (pre-scaled)
     if(run_params->AGNrecipeOn) {
-        grow_black_hole(merger_centralgal, mass_ratio, BHaccrete_scaled, galaxies, run_params);
+        grow_black_hole(merger_centralgal, mass_ratio, 0, BHaccrete_scaled, galaxies, run_params);
     }
 
     // Sync the central's BulgeRadius after add_galaxies_together + starburst have
@@ -544,9 +544,11 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
  * In both paths the accreted mass is capped to the available ColdGas, removed
  * from the cold reservoir, and fed to quasar_mode_wind().
  */
-void grow_black_hole(const int merger_centralgal, const double mass_ratio, const double BHaccrete_in, struct GALAXY *galaxies, const struct params *run_params)
+void grow_black_hole(const int merger_centralgal, const double mass_ratio, const int from_instability,const double BHaccrete_in, struct GALAXY *galaxies, const struct params *run_params)
 {
     double BHaccrete, metallicity;
+    const int snap = galaxies[merger_centralgal].SnapNum;
+
 
     if(galaxies[merger_centralgal].ColdGas > 0.0) {
         if(BHaccrete_in >= 0.0) {
@@ -581,7 +583,15 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
 
         quasar_mode_wind(merger_centralgal, BHaccrete, galaxies, run_params);
 
-        galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
+        /* ---- PER-CHANNEL TRACKING ---- */
+    if(from_instability)
+        galaxies[merger_centralgal].InstabilityDrivenBHaccretionMass[snap] += BHaccrete;
+    else
+        galaxies[merger_centralgal].MergerDrivenBHaccretionMass[snap]      += BHaccrete;
+ 
+    quasar_mode_wind(merger_centralgal, BHaccrete, galaxies, run_params);
+ 
+    galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
     }
 }
 
@@ -679,6 +689,21 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].MetalsICS += galaxies[p].MetalsICS;
 
     galaxies[t].BlackHoleMass += galaxies[p].BlackHoleMass;
+    galaxies[t].BHMergerMass[galaxies[t].SnapNum] += galaxies[p].BlackHoleMass; 
+
+    //if BHExsituGrowthOn is enabled, we track the contributon to BH growth from satellites after merger.
+    if(run_params->BHExsituGrowthOn) {
+        
+        galaxies[t].QuasarModeBHaccretionMass += galaxies[p].QuasarModeBHaccretionMass;
+
+        for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
+
+            galaxies[t].RadioModeBHaccretionMass[snap] += galaxies[p].RadioModeBHaccretionMass[snap];
+            galaxies[t].InstabilityDrivenBHaccretionMass[snap] += galaxies[p].InstabilityDrivenBHaccretionMass[snap];
+            galaxies[t].MergerDrivenBHaccretionMass[snap] += galaxies[p].MergerDrivenBHaccretionMass[snap];
+        }
+    }
+
 
     galaxies[t].CGMgas += galaxies[p].CGMgas;
     galaxies[t].MetalsCGMgas += galaxies[p].MetalsCGMgas;

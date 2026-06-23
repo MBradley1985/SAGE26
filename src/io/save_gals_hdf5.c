@@ -315,6 +315,60 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
                                             "Failed to close the dataspace for output snapshot number %d.\n", snap_idx);
 
         }
+
+        {
+            const char *bh_names[4] = {"RadioModeBHaccretionMass", "InstabilityDrivenBHaccretionMass",
+                                       "MergerDrivenBHaccretionMass", "BHMergerMass"};
+            const char *bh_descriptions[4] = {
+                "Radio mode BH accretion across snapshots",
+                "Instability driven BH accretion across snapshots",
+                "Merger driven BH accretion across snapshots",
+                "BH merger mass across snapshots"
+            };
+            const char *bh_units[4] = {"1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h"};
+
+            for(int bh_idx = 0; bh_idx < 4; bh_idx++) {
+                snprintf(full_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/%s",
+                         run_params->ListOutputSnaps[snap_idx], bh_names[bh_idx]);
+
+                hsize_t dims_bh[2] = {0, (hsize_t)run_params->SimMaxSnaps};
+                hsize_t maxdims_bh[2] = {H5S_UNLIMITED, (hsize_t)run_params->SimMaxSnaps};
+                hsize_t chunk_dims_bh[2] = {NUM_GALS_PER_BUFFER, (hsize_t)run_params->SimMaxSnaps};
+
+                hid_t prop_bh = H5Pcreate(H5P_DATASET_CREATE);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(prop_bh, (int32_t) prop_bh,
+                                                "Could not create property list for BH history dataset %s", bh_names[bh_idx]);
+
+                herr_t bh_status = H5Pset_chunk(prop_bh, 2, chunk_dims_bh);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(bh_status, (int32_t) bh_status,
+                                                "Could not set chunking for BH history dataset %s", bh_names[bh_idx]);
+
+                hid_t dataspace_bh = H5Screate_simple(2, dims_bh, maxdims_bh);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(dataspace_bh, (int32_t) dataspace_bh,
+                                                "Could not create dataspace for BH history dataset %s", bh_names[bh_idx]);
+
+                hid_t dataset_bh = H5Dcreate2(file_id, full_field_name, H5T_NATIVE_FLOAT, dataspace_bh,
+                                              H5P_DEFAULT, prop_bh, H5P_DEFAULT);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(dataset_bh, (int32_t) dataset_bh,
+                                                "Could not create BH history dataset %s", bh_names[bh_idx]);
+
+                CREATE_STRING_ATTRIBUTE(dataset_bh, "Description", bh_descriptions[bh_idx], MAX_STRING_LEN);
+                CREATE_STRING_ATTRIBUTE(dataset_bh, "Units", bh_units[bh_idx], MAX_STRING_LEN);
+                CREATE_SINGLE_ATTRIBUTE(dataset_bh, "NumSnapshots", run_params->SimMaxSnaps, H5T_NATIVE_INT);
+
+                bh_status = H5Dclose(dataset_bh);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(bh_status, (int32_t) bh_status,
+                                                "Failed to close BH history dataset %s", bh_names[bh_idx]);
+
+                bh_status = H5Pclose(prop_bh);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(bh_status, (int32_t) bh_status,
+                                                "Failed to close property list for BH history dataset %s", bh_names[bh_idx]);
+
+                bh_status = H5Sclose(dataspace_bh);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(bh_status, (int32_t) bh_status,
+                                                "Failed to close dataspace for BH history dataset %s", bh_names[bh_idx]);
+            }
+        }
         
         // Conditionally create 2D datasets for cumulative SFH if SaveFullSFH is enabled
         if(run_params->SaveFullSFH) {
@@ -475,6 +529,26 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ICS_sum_mt);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, g_max);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, r_heat);
+
+        /* Allocate per-snapshot BH growth tracking arrays (2D: buffer_size x SimMaxSnaps) */
+        save_info->buffer_output_gals[snap_idx].RadioModeBHaccretionMass = malloc(save_info->buffer_size * run_params->SimMaxSnaps * sizeof(float));
+        save_info->buffer_output_gals[snap_idx].InstabilityDrivenBHaccretionMass = malloc(save_info->buffer_size * run_params->SimMaxSnaps * sizeof(float));
+        save_info->buffer_output_gals[snap_idx].MergerDrivenBHaccretionMass = malloc(save_info->buffer_size * run_params->SimMaxSnaps * sizeof(float));
+        save_info->buffer_output_gals[snap_idx].BHMergerMass = malloc(save_info->buffer_size * run_params->SimMaxSnaps * sizeof(float));
+
+        if(save_info->buffer_output_gals[snap_idx].RadioModeBHaccretionMass == NULL ||
+           save_info->buffer_output_gals[snap_idx].InstabilityDrivenBHaccretionMass == NULL ||
+           save_info->buffer_output_gals[snap_idx].MergerDrivenBHaccretionMass == NULL ||
+           save_info->buffer_output_gals[snap_idx].BHMergerMass == NULL) {
+            fprintf(stderr, "Could not allocate memory for BH history arrays (SimMaxSnaps=%d, buffer_size=%d)\n",
+                    run_params->SimMaxSnaps, save_info->buffer_size);
+            free(save_info->buffer_output_gals[snap_idx].RadioModeBHaccretionMass);
+            free(save_info->buffer_output_gals[snap_idx].InstabilityDrivenBHaccretionMass);
+            free(save_info->buffer_output_gals[snap_idx].MergerDrivenBHaccretionMass);
+            free(save_info->buffer_output_gals[snap_idx].BHMergerMass);
+            return MALLOC_FAILURE;
+        }
+
         
         /* Conditionally allocate cumulative SFH arrays if SaveFullSFH is enabled */
         if(run_params->SaveFullSFH) {
@@ -817,6 +891,13 @@ int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ICS_sum_mt);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, g_max);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, r_heat);
+
+        /* Free per-snapshot BH growth tracking arrays */
+        free(save_info->buffer_output_gals[snap_idx].RadioModeBHaccretionMass);
+        free(save_info->buffer_output_gals[snap_idx].InstabilityDrivenBHaccretionMass);
+        free(save_info->buffer_output_gals[snap_idx].MergerDrivenBHaccretionMass);
+        free(save_info->buffer_output_gals[snap_idx].BHMergerMass);
+
         
         /* Conditionally free full SFH arrays if they were allocated */
         /* Conditionally free SFH arrays if they were allocated */
@@ -1214,6 +1295,15 @@ static int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct sav
 
     save_info->buffer_output_gals[output_snap_idx].QuasarModeBHaccretionMass[gals_in_buffer] = g->QuasarModeBHaccretionMass;
 
+    /* Per-snapshot BH growth tracking (2D flattened: gal * SimMaxSnaps + snap) */
+    for(int snap = 0; snap < run_params->SimMaxSnaps; snap++) {
+        const int idx = gals_in_buffer * run_params->SimMaxSnaps + snap;
+        save_info->buffer_output_gals[output_snap_idx].RadioModeBHaccretionMass[idx]        = g->RadioModeBHaccretionMass[snap];
+        save_info->buffer_output_gals[output_snap_idx].InstabilityDrivenBHaccretionMass[idx] = g->InstabilityDrivenBHaccretionMass[snap];
+        save_info->buffer_output_gals[output_snap_idx].MergerDrivenBHaccretionMass[idx]     = g->MergerDrivenBHaccretionMass[snap];
+        save_info->buffer_output_gals[output_snap_idx].BHMergerMass[idx]                    = g->BHMergerMass[snap];
+    }
+
     save_info->buffer_output_gals[output_snap_idx].TimeOfLastMajorMerger[gals_in_buffer] = g->TimeOfLastMajorMerger * run_params->UnitTime_in_Megayears;
     save_info->buffer_output_gals[output_snap_idx].TimeOfLastMinorMerger[gals_in_buffer] = g->TimeOfLastMinorMerger * run_params->UnitTime_in_Megayears;
 
@@ -1464,6 +1554,56 @@ static int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to
     EXTEND_AND_WRITE_GALAXY_DATASET(ICS_sum_mt);
     EXTEND_AND_WRITE_GALAXY_DATASET(g_max);
     EXTEND_AND_WRITE_GALAXY_DATASET(r_heat);
+
+    // Write per-snapshot BH growth tracking datasets (2D, always written)
+    {
+        const char *bh_field_names[4] = {"RadioModeBHaccretionMass", "InstabilityDrivenBHaccretionMass",
+                                         "MergerDrivenBHaccretionMass", "BHMergerMass"};
+        float *bh_data_ptrs[4] = {
+            save_info->buffer_output_gals[snap_idx].RadioModeBHaccretionMass,
+            save_info->buffer_output_gals[snap_idx].InstabilityDrivenBHaccretionMass,
+            save_info->buffer_output_gals[snap_idx].MergerDrivenBHaccretionMass,
+            save_info->buffer_output_gals[snap_idx].BHMergerMass
+        };
+
+        for(int bh_idx = 0; bh_idx < 4; bh_idx++) {
+            char full_field_name[2*MAX_STRING_LEN];
+            snprintf(full_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/%s",
+                     run_params->ListOutputSnaps[snap_idx], bh_field_names[bh_idx]);
+
+            hid_t dataset_bh = H5Dopen2(save_info->file_id, full_field_name, H5P_DEFAULT);
+            if(dataset_bh >= 0) {
+                hid_t space_bh = H5Dget_space(dataset_bh);
+                hsize_t current_dims_bh[2];
+                H5Sget_simple_extent_dims(space_bh, current_dims_bh, NULL);
+                H5Sclose(space_bh);
+
+                hsize_t new_dims_bh[2] = {current_dims_bh[0] + num_to_write, (hsize_t)run_params->SimMaxSnaps};
+                status = H5Dset_extent(dataset_bh, new_dims_bh);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                                "Could not extend BH history dataset %s", bh_field_names[bh_idx]);
+
+                hid_t filespace_bh = H5Dget_space(dataset_bh);
+                hsize_t offset_bh[2] = {current_dims_bh[0], 0};
+                hsize_t count_bh[2] = {(hsize_t)num_to_write, (hsize_t)run_params->SimMaxSnaps};
+                status = H5Sselect_hyperslab(filespace_bh, H5S_SELECT_SET, offset_bh, NULL, count_bh, NULL);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                                "Could not select hyperslab for BH history dataset %s", bh_field_names[bh_idx]);
+
+                hid_t memspace_bh = H5Screate_simple(2, count_bh, NULL);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(memspace_bh, (int32_t) memspace_bh,
+                                                "Could not create memspace for BH history dataset %s", bh_field_names[bh_idx]);
+
+                status = H5Dwrite(dataset_bh, H5T_NATIVE_FLOAT, memspace_bh, filespace_bh, H5P_DEFAULT, bh_data_ptrs[bh_idx]);
+                CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
+                                                "Could not write BH history dataset %s", bh_field_names[bh_idx]);
+
+                H5Sclose(memspace_bh);
+                H5Sclose(filespace_bh);
+                H5Dclose(dataset_bh);
+            }
+        }
+    }
 
 
     // Conditionally write cumulative SFH datasets if SaveFullSFH is enabled

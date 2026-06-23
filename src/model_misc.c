@@ -184,6 +184,14 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].tdeplete = -1.0;
     galaxies[p].H2DepletionTime_Gyr = -1.0f;
 
+    // Initialize black hole mass tracking arrays
+    for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
+        galaxies[p].RadioModeBHaccretionMass[snap] = 0.0;
+        galaxies[p].MergerDrivenBHaccretionMass[snap] = 0.0;
+        galaxies[p].InstabilityDrivenBHaccretionMass[snap] = 0.0;
+        galaxies[p].BHMergerMass[snap] = 0.0;
+    }
+
 	// infall properties
     galaxies[p].infallMvir = -1.0;
     galaxies[p].infallVvir = -1.0;

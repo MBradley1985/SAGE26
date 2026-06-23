@@ -187,6 +187,12 @@ struct GALAXY
     float TotalSatelliteBaryons; /* sum of all baryonic mass in satellites (used for output diagnostics) */
     float RcoolToRvir;           /* ratio of cooling radius to virial radius at last cooling evaluation */
 
+    /* black hole growth tracking */
+    float RadioModeBHaccretionMass[ABSOLUTEMAXSNAPS]; 
+    float InstabilityDrivenBHaccretionMass[ABSOLUTEMAXSNAPS]; 
+    float MergerDrivenBHaccretionMass[ABSOLUTEMAXSNAPS]; 
+    float BHMergerMass[ABSOLUTEMAXSNAPS];
+
     /* infall properties -- values frozen at the moment a galaxy first becomes a satellite */
     float infallMvir;
     float infallVvir;
@@ -510,9 +516,15 @@ struct params
     double FFBConcSigma;      // sigma_c for log-normal concentration scatter (ln c); typical ~0.2 (Jing 2000, Bullock+01)
     double FeedbackReheatingEpsilon;
     double FeedbackEjectionEfficiency;
+    
+    /* Black Hole settings */
     double RadioModeEfficiency;
     double QuasarModeEfficiency;
     double BlackHoleGrowthRate;
+
+    int32_t BHExsituGrowthOn; // 0: off, 1: on
+    
+    
     double Reionization_z0;
     double Reionization_zr;
     double ThresholdSatDisruption;

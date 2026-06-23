@@ -111,6 +111,12 @@ struct HDF5_GALAXY_OUTPUT
     float *TimeOfLastMajorMerger;
     float *TimeOfLastMinorMerger;
     float *OutflowRate;
+
+    /* bh properties*/
+    float *RadioModeBHaccretionMass;
+    float *InstabilityDrivenBHaccretionMass;
+    float *MergerDrivenBHaccretionMass;
+    float *BHMergerMass;
     
     /* infall properties */
     float *infallMvir;
