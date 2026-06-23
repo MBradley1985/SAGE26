@@ -44,6 +44,7 @@
 #include "core_cool_func.h"
 
 #include "model_cooling_heating.h"
+#include "model_enhanced_bhphysics.h"
 #include "model_misc.h"
 
 /* -------------------------------------------------------------------------
@@ -868,11 +869,10 @@ static void agn_accretion_compute(const int centralgal, const double dt, const d
         AGNrate = (Mvir > 0.0) ? base * (reservoir_mass / Mvir) / AGN_HOT_GAS_PIVOT : base;
     }
 
-    // Eddington-limited accretion (Rybicki & Lightman 1979)
-    const double EDDrate = (EDDINGTON_LUM_PER_MSUN_CGS * BHmass * 1e10 / run_params->Hubble_h)
-        / (run_params->UnitEnergy_in_cgs / run_params->UnitTime_in_s)
-        / (AGN_RADIATIVE_EFFICIENCY * C_SQ_KMS2);
-    if(AGNrate > EDDrate) AGNrate = EDDrate;
+    AGNrate = eddington_limited_accretion_rate(AGNrate, 1, galaxies[centralgal].BlackHoleMass,
+                                                       galaxies[centralgal].SnapNum, 0, run_params,
+                                                       galaxies[centralgal].BHAccretionType, galaxies[centralgal].BHMaxaccretionRate, galaxies[centralgal].BHEddingtonRateLimit);
+        
 
     double AGNaccreted = AGNrate * dt;
     if(AGNaccreted > reservoir_mass) AGNaccreted = reservoir_mass;

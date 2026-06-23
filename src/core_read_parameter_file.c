@@ -136,6 +136,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->DisruptionSplitCref        = 10.0;
     run_params->Exponent_Forest_Dist_Scheme = 0.7;
 
+    run_params->EddingtonLimitOn = 0;
+    run_params->AGNDynamicAccretionOn = 1;
+    run_params->BHExsituGrowthOn = 0;
+
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
 #define REG(tag, addr, type, req) do {         \
     strncpy(ParamTag[NParam], tag, MAXTAGLEN); \
@@ -198,6 +202,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
     REG("H2RadialNBins",         &(run_params->H2RadialNBins),        INT, 0);
 
+    REG("EddingtonLimitOn",      &(run_params->EddingtonLimitOn),     INT, 0);
+    REG("AGNDynamicAccretionOn", &(run_params->AGNDynamicAccretionOn),INT, 0);
+    REG("BHExsituGrowthOn",      &(run_params->BHExsituGrowthOn),     INT, 0);
+
     /* ---- Optional: model parameters ---- */
     REG("ThreshMajorMerger",          &(run_params->ThreshMajorMerger),          DOUBLE, 0);
     REG("RecycleFraction",            &(run_params->RecycleFraction),            DOUBLE, 0);
@@ -222,6 +230,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("FFBMaxEfficiency",           &(run_params->FFBMaxEfficiency),           DOUBLE, 0);
     REG("FFBConcSigma",               &(run_params->FFBConcSigma),               DOUBLE, 0);
     REG("RedshiftPowerLawExponent",   &(run_params->RedshiftPowerLawExponent),   DOUBLE, 0);
+
+
 
 #undef REG
 

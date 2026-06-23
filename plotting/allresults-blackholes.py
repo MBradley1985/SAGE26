@@ -710,51 +710,63 @@ TS_LABELS  = {"dt": r"$\Delta t$ (snapshot step)",
               "halotime": r"$t_{\rm halo}=R_{\rm vir}/V_{\rm vir}$"}
 
 
-def _load_ts(directory, key, units):
-    path = os.path.join(directory, f"{key}.txt")
-    if not os.path.isfile(path):
+def load_dt_from_hdf(file_list, snap_num):
+    dt = read_hdf(file_list, snap_num, 'dt')
+
+    if len(dt) == 0:
         return None
-    data = np.loadtxt(path).ravel()
-    data = data[np.isfinite(data) & (data > 0.0)]
-    if units == "code":
-        data = data * UNIT_TIME_IN_MYR
-    return data if len(data) else None
+
+    dt = dt[np.isfinite(dt) & (dt > 0)]
+
+    # convert code units if necessary
+    dt *= UNIT_TIME_IN_MYR
+
+    return dt if len(dt) else None
 
 
-def plot_timescales_overlay(ts_dir, units, output_dir):
+def plot_timescales_overlay(file_list, snap_num,
+                            ts_dir, units, output_dir):
     name = "timescale overlay"
-    if not os.path.isdir(ts_dir):
-        print(f"[skip] {name}: directory {ts_dir} not found.")
-        return
-    datasets = {k: _load_ts(ts_dir, k, units) for k in TS_KEYS}
-    present = {k: v for k, v in datasets.items() if v is not None}
-    if not present:
-        print(f"[skip] {name}: no timescale .txt dumps in {ts_dir}.")
-        return
-    missing = [k for k in TS_KEYS if datasets[k] is None]
-    if missing:
-        print(f"  ({name}: missing {', '.join(missing)} - omitted.)")
 
-    allv = np.concatenate(list(present.values()))
+    datasets = {}
+
+    dt = read_hdf(file_list, snap_num, 'tacc')
+    dt = dt[np.isfinite(dt) & (dt > 0)]
+
+    # convert code units → Myr
+    dt = dt * UNIT_TIME_IN_MYR
+
+    present = {'dt': dt}
+
+    if dt is None or len(dt) == 0:
+        print(f"[skip] {name}: no valid dt data in HDF5.")
+        return
+
+    allv = dt
     bins = np.logspace(np.log10(allv.min()), np.log10(allv.max()), 80)
 
     fig, ax = plt.subplots(figsize=(9, 5.5))
-    for k, data in present.items():
-        c = TS_COLOURS[k]
-        ax.hist(data, bins=bins, color=c, alpha=0.45, histtype='stepfilled',
-                label=TS_LABELS[k] + rf"  (med {np.median(data):.2g} Myr)")
-        ax.hist(data, bins=bins, color=c, histtype='step', linewidth=1.5)
-        ax.axvline(np.median(data), color=c, ls=':', lw=1.4, alpha=0.9)
+
+    c = TS_COLOURS.get('dt', 'black')
+    label = TS_LABELS.get('dt', 'dt')
+
+    ax.hist(dt, bins=bins, color=c, alpha=0.45, histtype='stepfilled',
+            label=label + rf"  (med {np.median(dt):.2g} Myr)")
+    ax.hist(dt, bins=bins, color=c, histtype='step', linewidth=1.5)
+    ax.axvline(np.median(dt), color=c, ls=':', lw=1.4, alpha=0.9)
+
     ax.set_xscale('log')
     ax.xaxis.set_major_formatter(ScalarFormatter())
     ax.xaxis.get_major_formatter().set_scientific(False)
     ax.set_xlabel("Time (Myr)")
     ax.set_ylabel("Count")
     ax.legend(loc='upper right', fontsize=9)
+
     plt.tight_layout()
     out = os.path.join(output_dir, f"bh_timescales_overlay{OutputFormat}")
     fig.savefig(out, bbox_inches='tight')
     plt.close(fig)
+
     print(f"[ok]   {name} -> {out}")
 
 
@@ -1035,7 +1047,7 @@ def main():
     if not args.no_seeds:
         plot_seed_histogram(file_list, snap_num, hubble_h, output_dir)
     if not args.no_timescales:
-        plot_timescales_overlay(ts_dir, args.units, output_dir)
+        plot_timescales_overlay(file_list, snap_num, ts_dir, args.units, output_dir)
     if not args.no_bhbulge:
         plot_bh_bulge_relation(file_list, snap_num, hubble_h, output_dir)
     if not args.no_bhmf:

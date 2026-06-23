@@ -190,6 +190,10 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].MergerDrivenBHaccretionMass[snap] = 0.0;
         galaxies[p].InstabilityDrivenBHaccretionMass[snap] = 0.0;
         galaxies[p].BHMergerMass[snap] = 0.0;
+        galaxies[p].BHMaxaccretionRate[snap] = 0.0;
+        galaxies[p].BHEddingtonRateLimit[snap] = 0.0;
+        galaxies[p].BHAccretionType[snap] = 0.0; // jayde note
+        galaxies[p].tacc[snap] = 0.0;
     }
 
 	// infall properties

@@ -193,6 +193,12 @@ struct GALAXY
     float MergerDrivenBHaccretionMass[ABSOLUTEMAXSNAPS]; 
     float BHMergerMass[ABSOLUTEMAXSNAPS];
 
+    /* bh accretion*/
+    float BHMaxaccretionRate[ABSOLUTEMAXSNAPS]; 
+    float BHEddingtonRateLimit[ABSOLUTEMAXSNAPS];
+    float BHAccretionType[ABSOLUTEMAXSNAPS];
+    float tacc[ABSOLUTEMAXSNAPS];
+
     /* infall properties -- values frozen at the moment a galaxy first becomes a satellite */
     float infallMvir;
     float infallVvir;
@@ -523,7 +529,8 @@ struct params
     double BlackHoleGrowthRate;
 
     int32_t BHExsituGrowthOn; // 0: off, 1: on
-    
+    int32_t EddingtonLimitOn; // 0: off, 1: on
+    int32_t AGNDynamicAccretionOn; // 0: off, 1: on
     
     double Reionization_z0;
     double Reionization_zr;

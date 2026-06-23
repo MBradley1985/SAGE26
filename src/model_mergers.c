@@ -42,6 +42,7 @@
 #include "model_misc.h"
 #include "model_starformation_and_feedback.h"
 #include "model_disk_instability.h"
+#include "model_enhanced_bhphysics.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -473,16 +474,18 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     // END JOINT COLD-GAS BUDGET
     // ========================================================================
 
+    
+
+    // grow black hole through accretion from cold disk during mergers (pre-scaled)
+    if(run_params->AGNrecipeOn) {
+        grow_black_hole(merger_centralgal, mass_ratio, 0, dt, BHaccrete_scaled, galaxies, run_params);
+    }
+
     // starburst recipe (pre-scaled) -- applied first; see function header note.
     collisional_starburst_recipe(mass_ratio, merger_centralgal, centralgal, time, dt, halonr,
                                  0, step, burst_to_merger_bulge, old_disk_radius,
                                  stars_scaled, reheated_scaled,
                                  galaxies, run_params);
-
-    // grow black hole through accretion from cold disk during mergers (pre-scaled)
-    if(run_params->AGNrecipeOn) {
-        grow_black_hole(merger_centralgal, mass_ratio, 0, BHaccrete_scaled, galaxies, run_params);
-    }
 
     // Sync the central's BulgeRadius after add_galaxies_together + starburst have
     // modified bulge mass.  calculate_merger_remnant_radius reads BulgeRadius for
@@ -544,7 +547,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
  * In both paths the accreted mass is capped to the available ColdGas, removed
  * from the cold reservoir, and fed to quasar_mode_wind().
  */
-void grow_black_hole(const int merger_centralgal, const double mass_ratio, const int from_instability,const double BHaccrete_in, struct GALAXY *galaxies, const struct params *run_params)
+void grow_black_hole(const int merger_centralgal, const double mass_ratio, const int from_instability, const double dt, const double BHaccrete_in, struct GALAXY *galaxies, const struct params *run_params)
 {
     double BHaccrete, metallicity;
     const int snap = galaxies[merger_centralgal].SnapNum;
@@ -565,6 +568,50 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
             BHaccrete = galaxies[merger_centralgal].ColdGas;
         }
         if(BHaccrete < 0.0) BHaccrete = 0.0;
+
+        /* ---- ACCRETION TIME ---- */
+        double accretiontime;
+        if(run_params->AGNDynamicAccretionOn) {
+            double tdyn = dynamical_time(galaxies[merger_centralgal].BulgeRadius,
+                                        galaxies[merger_centralgal].BulgeMass,
+                                        run_params);
+            if (galaxies[merger_centralgal].BulgeMass<=0.0) {accretiontime = dt;}
+            if (galaxies[merger_centralgal].BlackHoleMass<=0.0) {accretiontime = dt;}
+            if (galaxies[merger_centralgal].BulgeMass<=0.0 || galaxies[merger_centralgal].BlackHoleMass<=0.0) {
+                accretiontime = dt;
+            } else {
+                accretiontime = 10 * tdyn * pow(galaxies[merger_centralgal].BulgeMass / galaxies[merger_centralgal].BlackHoleMass, 0.5);
+            }
+        } else {
+            accretiontime = dt;
+        }
+        /* Guard against zero or negative accretion time */
+        if(accretiontime <= 0.0) accretiontime = dt;
+
+        galaxies[merger_centralgal].tacc[snap] = (float)accretiontime;
+        double BHaccreterate = BHaccrete / accretiontime;
+    
+        /* ---- EDDINGTON LIMITING ---- */
+        int EddFlag = run_params->EddingtonLimitOn;
+        int EddType  = from_instability ? 2 : 1;
+    
+        BHaccreterate = eddington_limited_accretion_rate(
+                            BHaccreterate, EddFlag,
+                            galaxies[merger_centralgal].BlackHoleMass,
+                            galaxies[merger_centralgal].SnapNum,
+                            EddType, run_params,
+                            galaxies[merger_centralgal].BHAccretionType,
+                            galaxies[merger_centralgal].BHMaxaccretionRate,
+                            galaxies[merger_centralgal].BHEddingtonRateLimit);
+    
+        BHaccrete = BHaccreterate * accretiontime;
+    
+        /* Re-cap to ColdGas in case Eddington limiting didn't already do it */
+        if(BHaccrete > galaxies[merger_centralgal].ColdGas)
+            BHaccrete = galaxies[merger_centralgal].ColdGas;
+    
+        
+
 
         metallicity = get_metallicity(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].MetalsColdGas);
         galaxies[merger_centralgal].BlackHoleMass += BHaccrete;

@@ -117,6 +117,10 @@ struct HDF5_GALAXY_OUTPUT
     float *InstabilityDrivenBHaccretionMass;
     float *MergerDrivenBHaccretionMass;
     float *BHMergerMass;
+    float *BHMaxaccretionRate;
+    float *BHEddingtonRateLimit;
+    float *tacc;
+    float *BHAccretionType; // 0=radio-mode, 1=quasar-mode,
     
     /* infall properties */
     float *infallMvir;

@@ -639,9 +639,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
 
     // Safety check: ensure reheated_mass doesn't exceed remaining ColdGas (floating-point precision)
-    if(reheated_mass > galaxies[p].ColdGas) {
-        reheated_mass = galaxies[p].ColdGas;
-    }
+    if(galaxies[p].ColdGas < 0.0) galaxies[p].ColdGas = 0.0;
+    if(reheated_mass > galaxies[p].ColdGas) reheated_mass = galaxies[p].ColdGas;
+    if(reheated_mass < 0.0) reheated_mass = 0.0;
 
     // update from SN feedback
     update_from_feedback(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
@@ -735,9 +735,9 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
     // This can occur when dealing with very small masses (e.g., 1e-44) where rounding errors
     // cause reheated_mass to slightly exceed ColdGas after star formation has consumed gas
 
-    if(reheated_mass > galaxies[p].ColdGas) {
-        reheated_mass = galaxies[p].ColdGas;
-    }
+    if(galaxies[p].ColdGas < 0.0) galaxies[p].ColdGas = 0.0;
+    if(reheated_mass > galaxies[p].ColdGas) reheated_mass = galaxies[p].ColdGas;
+    if(reheated_mass < 0.0) reheated_mass = 0.0;
 
     XASSERT(reheated_mass >= 0.0, -1,
             "Error: For galaxy = %d (halonr = %d, centralgal = %d) with MostBoundID = %lld, the reheated mass = %g should be >=0.0",
