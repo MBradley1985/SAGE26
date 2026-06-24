@@ -18,6 +18,7 @@
 #include "core_allvars.h"
 
 #include "model_misc.h"
+#include "model_enhanced_bhphysics.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -129,6 +130,19 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].HotGas = 0.0;
     galaxies[p].EjectedMass = 0.0;
     galaxies[p].BlackHoleMass = 0.0;
+
+    /* Black Hole Seeding */
+    // Independent BH seeding: seed BH if halo exceeds mass threshold and has no BH
+    // BlackHoleSeedingOn == 0: no seeding (natural evolution)
+    // BlackHoleSeedingOn == 1: light seeds (power law 30-100 M_sun, slope -0.3)
+    // BlackHoleSeedingOn == 2: heavy seeds (constant 10^5 M_sun)
+    galaxies[p].BHSeedMass = 0.0;
+    if(run_params->BlackHoleSeedingOn == 1 || run_params->BlackHoleSeedingOn == 2) {
+        if(galaxies[p].BlackHoleMass <= 0.0 && galaxies[p].Mvir > run_params->BHSeedMinHaloMass) {
+            galaxies[p].BlackHoleMass = seed_black_hole(p, galaxies, run_params);
+            galaxies[p].BHSeedMass = galaxies[p].BlackHoleMass;
+        }
+    }
     
     galaxies[p].ICS = 0.0;
     galaxies[p].CGMgas = 0.0;

@@ -34,7 +34,7 @@
 #define NUM_OUTPUT_FIELDS 2
 #pragma message "Using SAGE in MCMC mode (will only write " STR(NUM_OUTPUT_FIELDS) " fields into the hdf5 file)"
 #else
-#define NUM_OUTPUT_FIELDS 82
+#define NUM_OUTPUT_FIELDS 83
 #endif
 
 #define NUM_GALS_PER_BUFFER 8192
@@ -507,6 +507,7 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, InstabilityBulgeMass);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Cooling);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Heating);
+        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, BHSeedMass);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, QuasarModeBHaccretionMass);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TimeOfLastMajorMerger);
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TimeOfLastMinorMerger);
@@ -881,6 +882,7 @@ int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, InstabilityBulgeMass);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Cooling);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Heating);
+        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, BHSeedMass);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, QuasarModeBHaccretionMass);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TimeOfLastMajorMerger);
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TimeOfLastMinorMerger);
@@ -1069,7 +1071,7 @@ static int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char
                                                          "Vmax", "VelDisp", "ColdGas", "StellarMass", "BulgeMass", "HotGas", "EjectedMass",
                                                          "BlackHoleMass", "IntraClusterStars", "MetalsColdGas", "MetalsStellarMass", "MetalsBulgeMass",
                                                          "MetalsHotGas", "MetalsEjectedMass", "MetalsIntraClusterStars", "SfrDisk", "SfrBulge", "SfrDiskZ",
-                                                         "SfrBulgeZ", "DiskRadius", "BulgeRadius", "MergerBulgeRadius", "InstabilityBulgeRadius", "MergerBulgeMass", "InstabilityBulgeMass", "Cooling", "Heating", "QuasarModeBHaccretionMass",
+                                                         "SfrBulgeZ", "DiskRadius", "BulgeRadius", "MergerBulgeRadius", "InstabilityBulgeRadius", "MergerBulgeMass", "InstabilityBulgeMass", "Cooling", "Heating", "BHSeedMass", "QuasarModeBHaccretionMass",
                                                          "TimeOfLastMajorMerger", "TimeOfLastMinorMerger", "OutflowRate", "infallMvir",
                                                          "infallVvir", "infallVmax", "infallStellarMass", "Regime", "CGMgas", "MetalsCGMgas", "MassLoading", "H2gas", "H1gas",
                                                          "tcool", "tff", "tcool_over_tff", "tdeplete", "H2DepletionTime_Gyr", "RcoolToRvir", "TimeOfInfall", "FFBRegime", "Concentration", "mdot_cool", "mdot_stream",
@@ -1106,6 +1108,7 @@ static int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char
                                                                 "Bulge radius formed from mergers (classical bulge).", "Bulge radius formed from disk instabilities (pseudo-bulge).",
                                                                 "Mass of stars in the bulge formed from mergers.", "Mass of stars in the bulge formed from disk instabilities.",
                                                                 "Energy rate for gas cooling in the galaxy.", "Energy rate for gas heating in the galaxy.",
+                                                                "Mass of the black hole seed when it was seeded.",
                                                                 "Mass that this galaxy's black hole accreted during the last time step.",
                                                                 "Time since this galaxy had a major merger.", "Time since this galaxy had a minor merger.",
                                                                 "Rate at which cold gas is reheated to hot gas.",
@@ -1140,7 +1143,7 @@ static int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char
                                                          "km/s", "km/s", "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h",
                                                          "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h",
                                                          "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "Msun/yr", "Msun/yr", "Msun/yr",
-                                                         "Msun/yr", "Mpc/h", "Mpc/h", "Mpc/h", "Mpc/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "erg/s", "erg/s", "1.0e10 Msun/h",
+                                                         "Msun/yr", "Mpc/h", "Mpc/h", "Mpc/h", "Mpc/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "erg/s", "erg/s", "1.0e10 Msun/h", "1.0e10 Msun/h",
                                                          "Myr", "Myr", "Msun/yr", "1.0e10 Msun/yr", "km/s", "km/s", "1.0e10 Msun/h", "Unitless", "1.0e10 Msun/h", "1.0e10 Msun/h", "Unitless", "1.0e10 Msun/h", "1.0e10 Msun/h",
                                                          "Myr", "Myr", "Unitless", "Myr", "Gyr", "Unitless", "Myr", "Unitless", "Unitless", "1.0e10 Msun/yr", "1.0e10 Msun/yr",
                                                          "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h * code_time", "1.0e10 Msun/h", "Mpc/h"};
@@ -1153,7 +1156,7 @@ static int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char
                                             H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
                                             H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
                                             H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
-                                            H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
+                                            H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
                                             H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
                                             H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_INT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
                                             H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_INT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
@@ -1317,6 +1320,7 @@ static int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct sav
         save_info->buffer_output_gals[output_snap_idx].Heating[gals_in_buffer] = 0.0;
     }
 
+    save_info->buffer_output_gals[output_snap_idx].BHSeedMass[gals_in_buffer] = g->BHSeedMass;
     save_info->buffer_output_gals[output_snap_idx].QuasarModeBHaccretionMass[gals_in_buffer] = g->QuasarModeBHaccretionMass;
 
     /* Per-snapshot BH growth tracking (2D flattened: gal * SimMaxSnaps + snap) */
@@ -1552,6 +1556,7 @@ static int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to
     EXTEND_AND_WRITE_GALAXY_DATASET(InstabilityBulgeMass);
     EXTEND_AND_WRITE_GALAXY_DATASET(Cooling);
     EXTEND_AND_WRITE_GALAXY_DATASET(Heating);
+    EXTEND_AND_WRITE_GALAXY_DATASET(BHSeedMass);
     EXTEND_AND_WRITE_GALAXY_DATASET(QuasarModeBHaccretionMass);
     EXTEND_AND_WRITE_GALAXY_DATASET(TimeOfLastMajorMerger);
     EXTEND_AND_WRITE_GALAXY_DATASET(TimeOfLastMinorMerger);

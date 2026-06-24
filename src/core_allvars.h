@@ -199,6 +199,8 @@ struct GALAXY
     float BHAccretionType[ABSOLUTEMAXSNAPS];
     float tacc[ABSOLUTEMAXSNAPS];
 
+    float BHSeedMass;
+
     /* infall properties -- values frozen at the moment a galaxy first becomes a satellite */
     float infallMvir;
     float infallVvir;
@@ -528,6 +530,9 @@ struct params
     double QuasarModeEfficiency;
     double BlackHoleGrowthRate;
 
+    double BHSeedMinHaloMass; // Minimum halo mass for seeding in units of 10^10 Msun/h
+
+    int32_t BlackHoleSeedingOn; // 0: off, 1: on
     int32_t BHExsituGrowthOn; // 0: off, 1: on
     int32_t EddingtonLimitOn; // 0: off, 1: on
     int32_t AGNDynamicAccretionOn; // 0: off, 1: on

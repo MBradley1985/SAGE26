@@ -23,6 +23,52 @@ static const double AGN_RADIATIVE_EFFICIENCY    = 0.1;
 static const double C_SQ_KMS2                  = 9.0e10;  /* (km/s)^2 */
 
 
+double seed_black_hole(const int p, const struct GALAXY *galaxies, const struct params *run_params)
+{
+    if(run_params->BlackHoleSeedingOn == 0) {
+        return 0.0; // No seeding
+    }
+
+    if(run_params->BlackHoleSeedingOn == 1) {
+        if(galaxies[p].Mvir > run_params->BHSeedMinHaloMass && galaxies[p].BlackHoleMass <= 0.0) {
+            
+            double seed_mass = 0.0;
+
+            // Draw from a power law with bounds 30 M_sun < M_seed < 100 M_sun and slope -0.3
+            // Following Ricarte & Natarajan 2018
+            // Power law: p(M) ∝ M^α, where α = -0.3
+            // We use inverse transform sampling to draw from this distribution
+            
+            double M_min = 30.0;   // Lower bound in solar masses
+            double M_max = 100.0;  // Upper bound in solar masses
+            double alpha = -0.3;   // Power law slope
+            
+            // Generate uniform random number in [0, 1)
+            double u = drand48(); // or use your preferred RNG
+            
+            // Inverse transform for power law sampling
+            // For α ≠ -1: M = M_min * (1 + u * (M_max^(α+1) / M_min^(α+1) - 1))^(1/(α+1))
+            // Simplified form:
+            // M = (M_min^(α+1) + u * (M_max^(α+1) - M_min^(α+1)))^(1/(α+1))
+            
+            double exp = 1.0 / (alpha + 1.0);  // exponent = 1 / (α + 1) = 1 / 0.7 ≈ 1.4286
+            double M_min_pow = pow(M_min, alpha + 1.0);
+            double M_max_pow = pow(M_max, alpha + 1.0);
+            
+            seed_mass = pow(M_min_pow + u * (M_max_pow - M_min_pow), exp);
+
+            return seed_mass / (1.0e10 / run_params->Hubble_h); // Convert to code units
+        } 
+    }
+
+    if(run_params->BlackHoleSeedingOn == 2) {
+        if(galaxies[p].Mvir > run_params->BHSeedMinHaloMass && galaxies[p].BlackHoleMass <= 0.0) {
+            return (1.0e5) / (1.0e10 / run_params->Hubble_h); // Heavy BH Seeds: constant 10^5 solar masses in code units
+        }
+    }
+
+    return 0.0; // Default fallback
+}
 
 
 // -------------------------------------------------------------------

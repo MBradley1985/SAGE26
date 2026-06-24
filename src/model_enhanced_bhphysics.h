@@ -6,6 +6,9 @@ extern "C" {
 
     #include "core_allvars.h"
 
+    /* Seed a black hole if the seeding model is enabled */
+    double seed_black_hole(const int p, const struct GALAXY *galaxies, const struct params *run_params);
+
     /* Eddington accretion and limiting functions for black hole growth. */
     double dynamical_time(const double r_bulge, const double M_bulge_encl, const struct params *run_params);
 
