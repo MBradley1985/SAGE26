@@ -537,6 +537,7 @@ struct params
     int32_t EddingtonLimitOn; // 0: off, 1: on
     int32_t AGNDynamicAccretionOn; // 0: off, 1: on
     
+    
     double Reionization_z0;
     double Reionization_zr;
     double ThresholdSatDisruption;

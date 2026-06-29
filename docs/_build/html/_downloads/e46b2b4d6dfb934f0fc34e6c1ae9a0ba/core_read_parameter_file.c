@@ -139,6 +139,11 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->DisruptionSplitAlpha       = 0.25;
     run_params->DisruptionSplitCref        = 10.0;
     run_params->Exponent_Forest_Dist_Scheme = 0.7;
+    run_params->EddingtonLimitOn            = 0;
+    run_params->AGNDynamicAccretionOn       = 1;
+    run_params->BHExsituGrowthOn            = 0;
+    run_params->BlackHoleSeedingOn          = 0;
+    run_params->BHSeedMinHaloMass           = 1.0;
 
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
 #define REG(tag, addr, type, req) do {         \

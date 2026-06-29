@@ -139,6 +139,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->EddingtonLimitOn = 0;
     run_params->AGNDynamicAccretionOn = 1;
     run_params->BHExsituGrowthOn = 0;
+    run_params->BlackHoleSeedingOn = 0;
+    run_params->BHSeedMinHaloMass = 1.0; 
 
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
 #define REG(tag, addr, type, req) do {         \
@@ -205,6 +207,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("EddingtonLimitOn",      &(run_params->EddingtonLimitOn),     INT, 0);
     REG("AGNDynamicAccretionOn", &(run_params->AGNDynamicAccretionOn),INT, 0);
     REG("BHExsituGrowthOn",      &(run_params->BHExsituGrowthOn),     INT, 0);
+    REG("BlackHoleSeedingOn",    &(run_params->BlackHoleSeedingOn),   INT, 0);
+    REG("BHSeedMinHaloMass",     &(run_params->BHSeedMinHaloMass),    DOUBLE, 1.0);
 
     /* ---- Optional: model parameters ---- */
     REG("ThreshMajorMerger",          &(run_params->ThreshMajorMerger),          DOUBLE, 0);

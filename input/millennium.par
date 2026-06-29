@@ -60,9 +60,10 @@ FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
 
-EddingtonLimitOn            0  %0: No forced limit; 1: All accretion EddLimited
+EddingtonLimitOn            0   %0: No forced limit; 1: All accretion EddLimited
 AGNDynamicAccretionOn       1   %0: default to dt; 1: Use tdyn 
 BHExsituGrowthOn            0   %0: default to no exsitu growth; 1:Consider Exsitu growth
+BlackHoleSeedingOn          0   %0: No forced seeding; 1: Light Seeding; 2: Heavy Seeding
 
 %------------------------------------------
 %----- SAGE model parameters --------------
@@ -79,6 +80,7 @@ ReIncorporationFactor       0.15    %fraction of ejected mass reincorporated per
 RadioModeEfficiency         0.08    %AGN radio mode efficiency (AGNrecipeOn=2)
 QuasarModeEfficiency        0.005   %AGN quasar mode wind heating efficiency (AGNrecipeOn>0)
 BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during mergers (AGNrecipeOn>0)
+BHSeedMinHaloMass           1.0     %Minimum halo mass for seeding in 10^10 Msun/h (1.0 = 10^10 Msun/h)
 
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
 ThresholdSatDisruption      1.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption
