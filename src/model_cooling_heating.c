@@ -70,13 +70,13 @@ static const double AGN_BH_MASS_PIVOT  = 0.01;    /* 10^8 Msun for h=1 in code u
 static const double AGN_VVIR_PIVOT_KMS = 200.0;   /* km/s */
 static const double AGN_HOT_GAS_PIVOT  = 0.1;     /* hot-gas-to-halo mass fraction normalisation */
 
-/* Eddington accretion rate formula.
- * L_Edd = 1.3e38 * (M_BH/Msun) erg/s  (Rybicki & Lightman 1979, eq. 1.4.9).
- * Standard AGN radiative efficiency eta = 0.1.
- * C_SQ_KMS2 = c^2 in (km/s)^2; c = 3e5 km/s => c^2 = 9e10. */
-static const double EDDINGTON_LUM_PER_MSUN_CGS = 1.3e38;  /* erg/s per Msun */
-static const double AGN_RADIATIVE_EFFICIENCY    = 0.1;
-static const double C_SQ_KMS2                  = 9.0e10;  /* (km/s)^2 */
+// /* Eddington accretion rate formula.
+//  * L_Edd = 1.3e38 * (M_BH/Msun) erg/s  (Rybicki & Lightman 1979, eq. 1.4.9).
+//  * Standard AGN radiative efficiency eta = 0.1.
+//  * C_SQ_KMS2 = c^2 in (km/s)^2; c = 3e5 km/s => c^2 = 9e10. */
+// static const double EDDINGTON_LUM_PER_MSUN_CGS = 1.3e38;  /* erg/s per Msun */
+// static const double AGN_RADIATIVE_EFFICIENCY    = 0.1;
+// static const double C_SQ_KMS2                  = 9.0e10;  /* (km/s)^2 */
 
 /* AGN heating coefficient: sqrt(2 * eta * c^2) where eta = AGN_RADIATIVE_EFFICIENCY
  * and c is in km/s.  Equals the ratio of radiated energy to halo kinetic energy
@@ -845,7 +845,7 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
 static void agn_accretion_compute(const int centralgal, const double dt, const double x,
                                    const double coolingGas, const double rcool,
                                    const double reservoir_mass,
-                                   const struct GALAXY *galaxies, const struct params *run_params,
+                                   struct GALAXY *galaxies, const struct params *run_params,
                                    double *AGNaccreted_out, double *AGNheating_out)
 {
     const double Vvir   = galaxies[centralgal].Vvir;

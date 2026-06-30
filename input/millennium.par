@@ -80,7 +80,10 @@ ReIncorporationFactor       0.15    %fraction of ejected mass reincorporated per
 RadioModeEfficiency         0.08    %AGN radio mode efficiency (AGNrecipeOn=2)
 QuasarModeEfficiency        0.005   %AGN quasar mode wind heating efficiency (AGNrecipeOn>0)
 BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during mergers (AGNrecipeOn>0)
+
 BHSeedMinHaloMass           1.0     %Minimum halo mass for seeding in 10^10 Msun/h (1.0 = 10^10 Msun/h)
+BHAccretionNorm             10.0    %The normalisation factor in front of BH Quasar Mode Accretion timescale
+BHMassScalingIndex          0.5.    %Scaling factor for the BH-Bulge Mass relation, used in the BH Quasar Mode Accretion timescale
 
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
 ThresholdSatDisruption      1.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption

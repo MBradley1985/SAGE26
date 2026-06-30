@@ -1801,6 +1801,8 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "AGNDynamicAccretionOn", run_params->AGNDynamicAccretionOn, H5T_NATIVE_INT32);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BHExsituGrowthOn", run_params->BHExsituGrowthOn, H5T_NATIVE_INT32);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BHSeedMinHaloMass", run_params->BHSeedMinHaloMass, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BHAccretionNorm", run_params->BHAccretionNorm, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BHMassScalingIndex", run_params->BHMassScalingIndex, H5T_NATIVE_DOUBLE);
 
     // Model parameters.
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SfrEfficiency", run_params->SfrEfficiency, H5T_NATIVE_DOUBLE);

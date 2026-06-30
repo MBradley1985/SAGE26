@@ -571,24 +571,26 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
 
         /* ---- ACCRETION TIME ---- */
         double accretiontime;
+
         if(run_params->AGNDynamicAccretionOn) {
-            double tdyn = dynamical_time(galaxies[merger_centralgal].BulgeRadius,
-                                        galaxies[merger_centralgal].BulgeMass,
-                                        run_params);
-            if (galaxies[merger_centralgal].BulgeMass<=0.0) {accretiontime = dt;}
-            if (galaxies[merger_centralgal].BlackHoleMass<=0.0) {accretiontime = dt;}
-            if (galaxies[merger_centralgal].BulgeMass<=0.0 || galaxies[merger_centralgal].BlackHoleMass<=0.0) {
+            const struct GALAXY *cg = &galaxies[merger_centralgal];
+
+            if(cg->BulgeMass <= 0.0 || cg->BlackHoleMass <= 0.0) {
                 accretiontime = dt;
             } else {
-                accretiontime = 10 * tdyn * pow(galaxies[merger_centralgal].BulgeMass / galaxies[merger_centralgal].BlackHoleMass, 0.5);
+                const double tdyn = dynamical_time(cg->BulgeRadius, cg->BulgeMass, run_params);
+                accretiontime = run_params->BHAccretionNorm * tdyn *
+                                pow(cg->BulgeMass / cg->BlackHoleMass, run_params->BHMassScalingIndex);
             }
         } else {
             accretiontime = dt;
         }
+
         /* Guard against zero or negative accretion time */
         if(accretiontime <= 0.0) accretiontime = dt;
 
         galaxies[merger_centralgal].tacc[snap] = (float)accretiontime;
+
         double BHaccreterate = BHaccrete / accretiontime;
     
         /* ---- EDDINGTON LIMITING ---- */

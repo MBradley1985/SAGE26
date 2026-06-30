@@ -529,6 +529,8 @@ struct params
     double RadioModeEfficiency;
     double QuasarModeEfficiency;
     double BlackHoleGrowthRate;
+    double BHAccretionNorm;
+    double BHMassScalingIndex;
 
     double BHSeedMinHaloMass; // Minimum halo mass for seeding in units of 10^10 Msun/h
 

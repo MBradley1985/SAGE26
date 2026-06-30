@@ -115,11 +115,11 @@ double eddington_accretion_rate(const double black_hole_mass, const struct param
         return 0.0; // No accretion for non-positive mass
     }
     // Eddington-limited accretion (Rybicki & Lightman 1979)
-    // const double EDDrate = (EDDINGTON_LUM_PER_MSUN_CGS * black_hole_mass * 1e10 / run_params->Hubble_h)
-    //     / (run_params->UnitEnergy_in_cgs / run_params->UnitTime_in_s)
-    //     / (AGN_RADIATIVE_EFFICIENCY * C_SQ_KMS2);
+    const double EDDrate = (EDDINGTON_LUM_PER_MSUN_CGS * black_hole_mass * 1e10 / run_params->Hubble_h)
+        / (run_params->UnitEnergy_in_cgs / run_params->UnitTime_in_s)
+        / (AGN_RADIATIVE_EFFICIENCY * C_SQ_KMS2);
     
-    double EDDrate = (1.3e38 * black_hole_mass * 1e10 / run_params->Hubble_h) / (run_params->UnitEnergy_in_cgs / run_params->UnitTime_in_s) / (0.1 * 9e10);
+    //double EDDrate = (1.3e38 * black_hole_mass * 1e10 / run_params->Hubble_h) / (run_params->UnitEnergy_in_cgs / run_params->UnitTime_in_s) / (0.1 * 9e10);
 
     return EDDrate;
 }
