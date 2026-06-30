@@ -57,7 +57,7 @@ MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
 
 # Plotting (analysis choices — not simulation parameters)
-OUTPUT_FORMAT = '.pdf'
+OUTPUT_FORMAT = '.png'
 DILUTE = 7500
 SEED = 2222
 
@@ -9513,35 +9513,35 @@ EVOLUTION_PLOTS = {
     # 12: plot_12_sfh_ffb,
     # 121: plot_12b_ffb_regime_history,
     # 122: plot_12c_ffb_regime_heatmap,
-    123: plot_12d_sfh_ffb_transitions,
+    # 123: plot_12d_sfh_ffb_transitions,
     # 124: plot_12e_sfh_ffb_transitions_mbk25,
     # 13: plot_13_ffb_vs_redshift,
 }
 
 # Standalone plots (load their own data)
 STANDALONE_PLOTS = {
-    # 14: plot_14_density_evolution,
-    # 142: plot_14c_density_evolution_mbk25,
-    # 141: plot_14b_density_evolution_methods,
+    14: plot_14_density_evolution,
+    142: plot_14c_density_evolution_mbk25,
+    141: plot_14b_density_evolution_methods,
     16: plot_16_sfrd_history,
     17: plot_17_smd_history,
     18: plot_18_smf_redshift_grid,
-    # 181: plot_18b_smf_redshift_grid_wide,
-    # 19: plot_19_smf_ffb_grid,
-    # 192: plot_19c_smf_ffb_grid_mbk25,
-    # 191: plot_19b_smf_ffb_methods_grid,
-    # 20: plot_20_smf_lowz_grid,
-    # 21: plot_21_smf_lowz_lowmass_grid,
-    # 22: plot_22_regime_histogram,
-    # 23: plot_23_ffb_histogram,
-    # 231: plot_23b_ffb_histogram_bk25,
-    # 25: plot_25_hi_mass_ratio,
-    # 26: plot_26_h2_mass_ratio,
-    # 27: plot_27_cold_gas_mass_ratio,
+    181: plot_18b_smf_redshift_grid_wide,
+    19: plot_19_smf_ffb_grid,
+    192: plot_19c_smf_ffb_grid_mbk25,
+    191: plot_19b_smf_ffb_methods_grid,
+    20: plot_20_smf_lowz_grid,
+    21: plot_21_smf_lowz_lowmass_grid,
+    22: plot_22_regime_histogram,
+    23: plot_23_ffb_histogram,
+    231: plot_23b_ffb_histogram_bk25,
+    25: plot_25_hi_mass_ratio,
+    26: plot_26_h2_mass_ratio,
+    27: plot_27_cold_gas_mass_ratio,
     28: plot_28_mdot_vs_mvir,
     29: plot_29_mdot_vs_vvir,
-    # 32: plot_32_hi_mass_function,
-    # 33: plot_33_h2_mass_function,
+    32: plot_32_hi_mass_function,
+    33: plot_33_h2_mass_function,
     34: plot_34_hi_mass_function_primary_uchuu,
     35: plot_35_h2_mass_function_primary_uchuu,
 }
