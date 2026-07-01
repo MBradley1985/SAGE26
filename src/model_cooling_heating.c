@@ -438,9 +438,16 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 
         // an isothermal density profile for the hot gas is assumed here
         const double rho0 = galaxies[gal].HotGas / (4 * M_PI * galaxies[gal].Rvir);
-        const double rcool = sqrt(rho0 / rho_rcool);
+        double rcool = sqrt(rho0 / rho_rcool);
 
-        galaxies[gal].RcoolToRvir = rcool / galaxies[gal].Rvir;
+        galaxies[gal].RcoolToRvir = rcool / galaxies[gal].Rvir;  // store uncapped ratio for diagnostics
+
+        // The cooling radius is physically bounded by the virial radius. Cap it
+        // here so neither the cooling rate nor any downstream consumer (e.g.
+        // do_AGN_heating) ever uses an unphysical rcool > Rvir value. This also
+        // removes the SAGE06/16 rapid-cooling discontinuity at Rvir: hot-mode
+        // cooling saturates at 0.5 * m_hot / t_cool rather than jumping.
+        if(rcool > galaxies[gal].Rvir) rcool = galaxies[gal].Rvir;
 
         coolingGas = 0.0;
         
