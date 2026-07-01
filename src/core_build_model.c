@@ -435,6 +435,24 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         effective_steps = cap_steps;
     }
 
+    // PhysicalStrippingOn == 2: analytic satellite stripping applied ONCE per
+    // snapshot, outside the substep loop, fully decoupled from the substep
+    // count. Each satellite loses exactly a fraction 1-exp(-dT/t_dyn) of its
+    // baryon excess (computed inside strip_from_satellite from dt=deltaT). This
+    // is operator-split before the substeps, mirroring how infallingGas is
+    // computed once up front. Schemes 0 and 1 instead strip inside the loop.
+    if(run_params->PhysicalStrippingOn == 2) {
+        for(int p = 0; p < ngal; p++) {
+            if(p == centralgal || galaxies[p].mergeType > 0) {
+                continue;
+            }
+            if(galaxies[p].Type == 1 && galaxies[p].HotGas > 0.0) {
+                const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
+                strip_from_satellite(centralgal, p, Zcurr, effective_steps, deltaT, t_dyn, galaxies, run_params);
+            }
+        }
+    }
+
     for(int step = 0; step < effective_steps; step++) {
 
         // Loop over all galaxies in the halo
@@ -459,7 +477,9 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                     reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
                 }
             } else {
-                if(galaxies[p].Type == 1 && galaxies[p].HotGas > 0.0) {
+                // Schemes 0/1 strip per substep here; scheme 2 already stripped
+                // once, outside this loop, so it is skipped.
+                if(run_params->PhysicalStrippingOn != 2 && galaxies[p].Type == 1 && galaxies[p].HotGas > 0.0) {
                     strip_from_satellite(centralgal, p, Zcurr, effective_steps, deltaT / effective_steps, t_dyn, galaxies, run_params);
                 }
             }

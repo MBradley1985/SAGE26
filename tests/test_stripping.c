@@ -482,6 +482,51 @@ void test_physical_stripping_caps_at_full_excess() {
                  "HotGas driven down to BF*Mvir (full excess removed)");
 }
 
+/* Helper for scheme 2: strip once with dt = full dT, return HotGas remaining.
+ * effective_steps is passed but must not affect the result. */
+static double analytic_strip_hotgas(int effective_steps, double dT, double t_strip) {
+    struct GALAXY galaxies[2];
+    memset(galaxies, 0, sizeof(struct GALAXY) * 2);
+
+    struct params run_params;
+    memset(&run_params, 0, sizeof(struct params));
+    run_params.PhysicalStrippingOn = 2;
+    run_params.CGMrecipeOn = 0;
+    run_params.BaryonFrac = 0.17;
+    run_params.ReionizationOn = 0;
+
+    galaxies[0].Regime = 1;
+    galaxies[1].Mvir = 10.0;           // BF*Mvir = 1.7
+    galaxies[1].HotGas = 5.0;          // excess = 3.3
+    galaxies[1].MetalsHotGas = 0.05;
+
+    strip_from_satellite(0, 1, 0.0, effective_steps, dT, t_strip, galaxies, &run_params);
+    return galaxies[1].HotGas;
+}
+
+void test_analytic_stripping_matches_exact_exponential() {
+    BEGIN_TEST("Analytic Stripping (mode 2) = exact 1-exp(-dT/t_strip)");
+
+    const double dT = 1.0, t_strip = 2.0;
+    const double excess0 = 5.0 - 0.17 * 10.0;      // 3.3
+    const double hot = analytic_strip_hotgas(10, dT, t_strip);
+
+    // Exact: HotGas -> BF*Mvir + excess0*exp(-dT/t_strip), in ONE call.
+    const double expected = 0.17 * 10.0 + excess0 * exp(-dT / t_strip);
+    ASSERT_CLOSE(expected, hot, 1e-6, "Strips exactly 1-exp(-dT/t_strip) of the excess");
+}
+
+void test_analytic_stripping_ignores_substep_count() {
+    BEGIN_TEST("Analytic Stripping (mode 2) Independent of effective_steps");
+
+    const double dT = 1.0, t_strip = 2.0;
+    const double h_lo = analytic_strip_hotgas(2, dT, t_strip);
+    const double h_hi = analytic_strip_hotgas(999, dT, t_strip);
+
+    // effective_steps must not enter mode 2 at all -> identical to machine precision.
+    ASSERT_CLOSE(h_lo, h_hi, 1e-9, "Result identical for effective_steps 2 vs 999");
+}
+
 int main() {
     BEGIN_TEST_SUITE("Ram Pressure Stripping");
 
@@ -496,6 +541,8 @@ int main() {
     test_physical_stripping_matches_exponential();
     test_physical_stripping_is_N_invariant();
     test_physical_stripping_caps_at_full_excess();
+    test_analytic_stripping_matches_exact_exponential();
+    test_analytic_stripping_ignores_substep_count();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();
