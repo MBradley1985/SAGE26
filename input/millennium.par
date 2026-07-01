@@ -4,7 +4,7 @@
 
 FileNameGalaxies   model
 %OutputDir         /<absolute>/<root>/<path>/sage-model/output/millennium/
-OutputDir   /Users/mbradley/Documents/PhD/SAGE26/output/phys_once/
+OutputDir   /Users/mbradley/Documents/PhD/SAGE26/output/millennium/
 
 FirstFile         0
 LastFile          7

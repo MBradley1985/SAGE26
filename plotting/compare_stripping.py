@@ -164,9 +164,22 @@ def mass_function(logm, volume):
 # ---------------------------------------------------------------------------
 # Diagnostics
 # ---------------------------------------------------------------------------
+# Restrict the satellite sample: 'all', 'cgm' (retain CGM gas), 'hotphase'
+# (retain hot-phase gas in either reservoir). The 'cgm'/'hotphase' cuts isolate
+# the partially-stripped population where the stripping scheme can still act,
+# rather than diluting it with satellites already stripped to the floor.
+SATELLITE_SUBSET = 'all'
+
+
 def satellite_mask(run):
-    """Satellites = Type >= 1 (subhalo satellites and orphans)."""
-    return run['Type'] >= 1
+    """Satellites = Type >= 1 (subhalo satellites and orphans), optionally
+    restricted to those still holding strippable hot-phase gas."""
+    m = run['Type'] >= 1
+    if SATELLITE_SUBSET == 'cgm':
+        m = m & (run['CGMgas'] > 0.0)
+    elif SATELLITE_SUBSET == 'hotphase':
+        m = m & ((run['CGMgas'] > 0.0) | (run['HotGas'] > 0.0))
+    return m
 
 
 def central_mask(run):
@@ -246,7 +259,8 @@ def make_figure(runs, labels, colours, redshift, out_path):
         ax.grid(alpha=0.3)
 
     ztxt = f'z = {redshift:.2f}' if redshift is not None else ''
-    fig.suptitle(f'Satellite-stripping comparison   {ztxt}', fontsize=14)
+    subtxt = '' if SATELLITE_SUBSET == 'all' else f'   [satellite subset: {SATELLITE_SUBSET}]'
+    fig.suptitle(f'Satellite-stripping comparison   {ztxt}{subtxt}', fontsize=14)
     fig.tight_layout(rect=(0, 0, 1, 0.98))
     fig.savefig(out_path, dpi=150, bbox_inches='tight')
     print(f'Wrote {out_path}')
@@ -273,7 +287,14 @@ def main():
                     help='Snapshot number (default: latest available / z~0).')
     ap.add_argument('-o', '--output', type=str, default='stripping_comparison.png',
                     help='Output figure path (default: stripping_comparison.png).')
+    ap.add_argument('--subset', choices=('all', 'cgm', 'hotphase'), default='all',
+                    help="Satellite subset: 'all' (default), 'cgm' (retain CGM gas), "
+                         "'hotphase' (retain Hot or CGM gas). The latter two isolate "
+                         "the partially-stripped population the scheme can still act on.")
     args = ap.parse_args()
+
+    global SATELLITE_SUBSET
+    SATELLITE_SUBSET = args.subset
 
     if len(args.run) < 2:
         print('Error: give at least two --run entries to compare.')

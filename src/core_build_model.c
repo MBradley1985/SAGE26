@@ -446,7 +446,10 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
             if(p == centralgal || galaxies[p].mergeType > 0) {
                 continue;
             }
-            if(galaxies[p].Type == 1 && galaxies[p].HotGas > 0.0) {
+            // Strip satellites holding hot-phase gas in either reservoir: Hot-regime
+            // in HotGas, CGM-regime in CGMgas (CGMgas is zeroed for satellites when
+            // CGMrecipeOn != 1, so legacy runs are unchanged).
+            if(galaxies[p].Type == 1 && (galaxies[p].HotGas > 0.0 || galaxies[p].CGMgas > 0.0)) {
                 const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
                 strip_from_satellite(centralgal, p, Zcurr, effective_steps, deltaT, t_dyn, galaxies, run_params);
             }
@@ -478,8 +481,9 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 }
             } else {
                 // Schemes 0/1 strip per substep here; scheme 2 already stripped
-                // once, outside this loop, so it is skipped.
-                if(run_params->PhysicalStrippingOn != 2 && galaxies[p].Type == 1 && galaxies[p].HotGas > 0.0) {
+                // once, outside this loop, so it is skipped. Trigger on Hot OR CGM
+                // so CGM-regime satellites are stripped from their CGMgas reservoir.
+                if(run_params->PhysicalStrippingOn != 2 && galaxies[p].Type == 1 && (galaxies[p].HotGas > 0.0 || galaxies[p].CGMgas > 0.0)) {
                     strip_from_satellite(centralgal, p, Zcurr, effective_steps, deltaT / effective_steps, t_dyn, galaxies, run_params);
                 }
             }
