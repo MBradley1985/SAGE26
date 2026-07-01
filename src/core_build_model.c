@@ -446,7 +446,12 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                     reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
                 }
             } else {
-                if(galaxies[p].Type == 1 && galaxies[p].HotGas > 0.0) {
+                // Strip satellites that hold hot-phase gas in either reservoir:
+                // Hot-regime satellites keep it in HotGas, CGM-regime satellites
+                // in CGMgas. Gating on HotGas alone excluded CGM-regime
+                // satellites from stripping entirely (CGMgas is zeroed for
+                // satellites when CGMrecipeOn != 1, so legacy runs are unchanged).
+                if(galaxies[p].Type == 1 && (galaxies[p].HotGas > 0.0 || galaxies[p].CGMgas > 0.0)) {
                     strip_from_satellite(centralgal, p, Zcurr, effective_steps, galaxies, run_params);
                 }
             }
