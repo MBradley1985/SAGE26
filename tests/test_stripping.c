@@ -51,7 +51,7 @@ void test_stripping_removes_gas_from_satellite() {
     
     // Apply stripping
     double Zcurr = 0.0;
-    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, STEPS, 0.0, 0.0, galaxies, &run_params);
     
     // Satellite should lose gas
     ASSERT_LESS_THAN(galaxies[1].HotGas, initial_sat_hot,
@@ -92,7 +92,7 @@ void test_stripping_conserves_mass() {
     double initial_total_hot = galaxies[0].HotGas + galaxies[1].HotGas;
     double initial_total_metals = galaxies[0].MetalsHotGas + galaxies[1].MetalsHotGas;
     
-    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, STEPS, 0.0, 0.0, galaxies, &run_params);
     
     double final_total_hot = galaxies[0].HotGas + galaxies[1].HotGas;
     double final_total_metals = galaxies[0].MetalsHotGas + galaxies[1].MetalsHotGas;
@@ -135,7 +135,7 @@ void test_regime_dependent_stripping() {
         double initial_sat_cgm = galaxies[1].CGMgas;
         double initial_sat_hot = galaxies[1].HotGas;
         
-        strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
+        strip_from_satellite(0, 1, 0.0, STEPS, 0.0, 0.0, galaxies, &run_params);
         
         // In CGM regime, should strip from CGMgas, not HotGas
         if(galaxies[1].CGMgas < initial_sat_cgm) {
@@ -167,7 +167,7 @@ void test_regime_dependent_stripping() {
         double initial_sat_hot = galaxies[1].HotGas;
         double initial_sat_cgm = galaxies[1].CGMgas;
         
-        strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
+        strip_from_satellite(0, 1, 0.0, STEPS, 0.0, 0.0, galaxies, &run_params);
         
         // In Hot regime, should strip from HotGas
         if(galaxies[1].HotGas < initial_sat_hot) {
@@ -207,7 +207,7 @@ void test_no_stripping_if_gas_balanced() {
     
     double initial_sat_hot = galaxies[1].HotGas;
     
-    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, STEPS, 0.0, 0.0, galaxies, &run_params);
     
     // With balanced baryons, minimal or no stripping
     ASSERT_CLOSE(galaxies[1].HotGas, initial_sat_hot, 0.5,
@@ -245,7 +245,7 @@ void test_stripping_transfers_metals() {
     double Z_sat_before = get_metallicity(galaxies[1].HotGas, galaxies[1].MetalsHotGas);
     double initial_cen_metals = galaxies[0].MetalsHotGas;
     
-    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, STEPS, 0.0, 0.0, galaxies, &run_params);
     
     // Central should gain metals
     ASSERT_GREATER_THAN(galaxies[0].MetalsHotGas, initial_cen_metals,
@@ -290,7 +290,7 @@ void test_environmental_quenching() {
     
     double initial_cgm = galaxies[1].CGMgas;
     
-    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, STEPS, 0.0, 0.0, galaxies, &run_params);
     
     // CGM should be reduced
     if(galaxies[1].CGMgas < initial_cgm) {
@@ -334,7 +334,7 @@ void test_no_stripping_below_mass_threshold() {
     
     double initial_sat_hot = galaxies[1].HotGas;
     
-    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, STEPS, 0.0, 0.0, galaxies, &run_params);
     
     // Should strip at most what's available
     ASSERT_TRUE(galaxies[1].HotGas >= 0.0,
@@ -372,7 +372,7 @@ void test_stripping_timescale() {
     
     double initial_hot = galaxies[1].HotGas;
     
-    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, STEPS, 0.0, 0.0, galaxies, &run_params);
     
     double stripped = initial_hot - galaxies[1].HotGas;
     
@@ -384,9 +384,107 @@ void test_stripping_timescale() {
     }
 }
 
+/*
+ * Physical (timescale-based) stripping: PhysicalStrippingOn = 1.
+ * These tests exercise the Option-2 path where the fraction of the satellite's
+ * baryon excess stripped over one snapshot interval is 1-exp(-dT/t_strip),
+ * independent of the substep count in the large-N limit.
+ */
+
+/* Helper: strip a satellite over N substeps of one snapshot of duration dT,
+ * on the physical path, and return the fraction of the initial excess removed.
+ * The satellite's only strippable/variable reservoir is HotGas, so the excess
+ * evolves purely by stripping and telescopes cleanly. */
+static double physical_strip_excess_fraction(int N, double dT, double t_strip) {
+    struct GALAXY galaxies[2];
+    memset(galaxies, 0, sizeof(struct GALAXY) * 2);
+
+    struct params run_params;
+    memset(&run_params, 0, sizeof(struct params));
+    run_params.PhysicalStrippingOn = 1;
+    run_params.CGMrecipeOn = 0;
+    run_params.BaryonFrac = 0.17;
+    run_params.ReionizationOn = 0;
+
+    galaxies[0].Regime = 1;            // central sink
+    galaxies[0].HotGas = 0.0;
+
+    galaxies[1].Mvir = 10.0;           // BF*Mvir = 1.7
+    galaxies[1].HotGas = 5.0;          // excess_0 = 5.0 - 1.7 = 3.3, all in HotGas
+    galaxies[1].MetalsHotGas = 0.05;
+
+    const double excess0 = galaxies[1].HotGas - run_params.BaryonFrac * galaxies[1].Mvir;
+    const double dt = dT / (double)N;
+    for(int step = 0; step < N; step++) {
+        strip_from_satellite(0, 1, 0.0, N, dt, t_strip, galaxies, &run_params);
+    }
+    const double excessN = galaxies[1].HotGas - run_params.BaryonFrac * galaxies[1].Mvir;
+    return (excess0 - excessN) / excess0;
+}
+
+void test_physical_stripping_matches_exponential() {
+    BEGIN_TEST("Physical Stripping Follows 1-exp(-dT/t_strip)");
+
+    const double dT = 1.0, t_strip = 2.0;
+    const int N = 30;
+    const double got = physical_strip_excess_fraction(N, dT, t_strip);
+
+    // Discrete forward-Euler value the code should produce exactly...
+    const double discrete = 1.0 - pow(1.0 - dT / (N * t_strip), N);
+    ASSERT_CLOSE(discrete, got, 1e-6,
+                 "Matches discrete 1-(1-dT/(N*t_strip))^N");
+
+    // ...which is close to the continuum limit 1-exp(-dT/t_strip).
+    const double continuum = 1.0 - exp(-dT / t_strip);
+    ASSERT_CLOSE(continuum, got, 0.01,
+                 "Close to continuum 1-exp(-dT/t_strip)");
+}
+
+void test_physical_stripping_is_N_invariant() {
+    BEGIN_TEST("Physical Stripping Is Substep-Count Invariant");
+
+    const double dT = 1.0, t_strip = 2.0;
+    const double f10 = physical_strip_excess_fraction(10, dT, t_strip);
+    const double f30 = physical_strip_excess_fraction(30, dT, t_strip);
+
+    // Both track the same physical fraction regardless of N (unlike the legacy
+    // geometric path, whose fraction swings ~65%->64% and up to 100% at N=1).
+    // ~1.3% residual is the expected first-order forward-Euler difference.
+    ASSERT_CLOSE(f10, f30, 0.02,
+                 "Stripped fraction nearly independent of substep count");
+    const double continuum = 1.0 - exp(-dT / t_strip);
+    ASSERT_CLOSE(continuum, f10, 0.02, "N=10 near continuum");
+    ASSERT_CLOSE(continuum, f30, 0.02, "N=30 near continuum");
+}
+
+void test_physical_stripping_caps_at_full_excess() {
+    BEGIN_TEST("Physical Stripping Caps When dt >= t_strip");
+
+    struct GALAXY galaxies[2];
+    memset(galaxies, 0, sizeof(struct GALAXY) * 2);
+
+    struct params run_params;
+    memset(&run_params, 0, sizeof(struct params));
+    run_params.PhysicalStrippingOn = 1;
+    run_params.CGMrecipeOn = 0;
+    run_params.BaryonFrac = 0.17;
+    run_params.ReionizationOn = 0;
+
+    galaxies[0].Regime = 1;
+    galaxies[1].Mvir = 10.0;           // BF*Mvir = 1.7
+    galaxies[1].HotGas = 5.0;          // excess = 3.3
+    galaxies[1].MetalsHotGas = 0.05;
+
+    // dt (3.0) > t_strip (1.0): frac caps at 1.0, whole excess stripped at once.
+    strip_from_satellite(0, 1, 0.0, 1, 3.0, 1.0, galaxies, &run_params);
+
+    ASSERT_CLOSE(1.7, galaxies[1].HotGas, 1e-5,
+                 "HotGas driven down to BF*Mvir (full excess removed)");
+}
+
 int main() {
     BEGIN_TEST_SUITE("Ram Pressure Stripping");
-    
+
     test_stripping_removes_gas_from_satellite();
     test_stripping_conserves_mass();
     test_regime_dependent_stripping();
@@ -395,9 +493,12 @@ int main() {
     test_environmental_quenching();
     test_no_stripping_below_mass_threshold();
     test_stripping_timescale();
-    
+    test_physical_stripping_matches_exponential();
+    test_physical_stripping_is_N_invariant();
+    test_physical_stripping_caps_at_full_excess();
+
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();
-    
+
     return TEST_EXIT_CODE();
 }

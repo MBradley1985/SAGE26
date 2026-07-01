@@ -115,6 +115,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->TrackICSAssembly           = 1;
     run_params->StarburstColdGasOn         = 1;
     run_params->DynamicDisruptionSplit     = 2;
+    run_params->PhysicalStrippingOn        = 0;   /* default: legacy geometric stripping (preserves baseline/parity) */
+    run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
     run_params->ReIncorporationFactor      = 0.15;
@@ -194,6 +196,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("TrackICSAssembly",      &(run_params->TrackICSAssembly),     INT, 0);
     REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
     REG("DynamicDisruptionSplit",&(run_params->DynamicDisruptionSplit),INT, 0);
+    REG("PhysicalStrippingOn",   &(run_params->PhysicalStrippingOn),   INT, 0);
+    REG("SubstepResolution",     &(run_params->SubstepResolution),     DOUBLE, 0);
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
     REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
     REG("H2RadialNBins",         &(run_params->H2RadialNBins),        INT, 0);

@@ -218,17 +218,35 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
  * strip_from_satellite -- remove excess gas from a satellite and donate it to
  * the central galaxy's hot/CGM reservoir, one effective substep at a time.
  *
- * The stripped fraction per call is 1/effective_steps of the satellite's
- * current baryon excess (baryons above BF*Mvir_sat).  Calling this once per
- * substep over effective_steps substeps yields a consistent per-snapshot
- * stripping fraction regardless of the adaptive timestep count.
+ * Two schemes are available, selected by run_params->PhysicalStrippingOn:
+ *
+ *   0 (legacy, default): strip 1/effective_steps of the satellite's *current*
+ *      baryon excess (baryons above BF*Mvir_sat) each substep. This is stock
+ *      SAGE behaviour. Because the excess is recomputed every substep, the
+ *      fraction stripped over a full snapshot is 1-(1-1/N)^N -- it depends on
+ *      the substep count N, NOT on the elapsed time dT or any physical
+ *      timescale, and converges to a discretization artifact (~1-1/e) as N
+ *      grows. Kept as the default so the calibrated baseline is unchanged.
+ *
+ *   1 (physical timescale): strip excess*(dt/t_strip) each substep, i.e. a
+ *      forward-Euler step of d(excess)/dt = -excess/t_strip. Iterated over the
+ *      N substeps of a snapshot this telescopes to a fraction stripped of
+ *      1-exp(-dT/t_strip) -- N-invariant in the limit and tied to real elapsed
+ *      time dT and a physical stripping timescale t_strip (the host dynamical
+ *      time Rvir/Vvir of the central, passed in by the caller). The per-substep
+ *      fraction is capped at 1 so that dt >= t_strip (short t_dyn at high z)
+ *      strips the full remaining excess, matching the 1-exp(-dT/t_strip) -> 1
+ *      limit.
+ *
+ * In both schemes the excess is recomputed from the satellite's current state,
+ * so intervening cooling/star formation between substeps is accounted for.
  *
  * CGM-regime satellites retain CGMgas across snapshots; the CGM branch
  * below strips it gradually using the same baryon-excess rule used for
  * HotGas. Hot- and CGM-regime satellites are therefore handled by
  * structurally identical rules.
  */
-void strip_from_satellite(const int centralgal, const int gal, const double Zcurr, const int effective_steps, struct GALAXY *galaxies, const struct params *run_params)
+void strip_from_satellite(const int centralgal, const int gal, const double Zcurr, const int effective_steps, const double dt, const double t_strip, struct GALAXY *galaxies, const struct params *run_params)
 {
     double reionization_modifier;
 
@@ -238,16 +256,32 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
         reionization_modifier = 1.0;
     }
 
-    /* Excess baryons over BF*Mvir, divided across the substeps so that a full
-     * snapshot of substeps yields a consistent fraction stripped regardless of
-     * effective_steps. By this point infall_recipe has already zeroed satellite
-     * EjectedMass and ICS (and CGMgas when CGMrecipeOn != 1), so these
-     * reservoirs do not double-count gas already pooled into the central. */
+    /* Excess baryons over BF*Mvir. By this point infall_recipe has already
+     * zeroed satellite EjectedMass and ICS (and CGMgas when CGMrecipeOn != 1),
+     * so these reservoirs do not double-count gas already pooled into the
+     * central. */
     const double satBaryons = galaxies[gal].StellarMass + galaxies[gal].ColdGas
                             + galaxies[gal].HotGas      + galaxies[gal].CGMgas
                             + galaxies[gal].BlackHoleMass + galaxies[gal].ICS
                             + galaxies[gal].EjectedMass;
-    double remainingToStrip = (satBaryons - reionization_modifier * run_params->BaryonFrac * galaxies[gal].Mvir) / effective_steps;
+    const double excess = satBaryons - reionization_modifier * run_params->BaryonFrac * galaxies[gal].Mvir;
+
+    if(excess <= 0.0) {
+        return;
+    }
+
+    /* Amount of the current excess to strip this substep. */
+    double remainingToStrip;
+    if(run_params->PhysicalStrippingOn) {
+        double strip_frac = (t_strip > 0.0) ? (dt / t_strip) : 1.0;
+        if(strip_frac > 1.0) strip_frac = 1.0;
+        remainingToStrip = excess * strip_frac;
+    } else {
+        /* Legacy geometric path: kept as an exact (bit-for-bit) reproduction of
+         * the original excess/effective_steps so the calibrated baseline is
+         * unchanged when PhysicalStrippingOn == 0. */
+        remainingToStrip = excess / effective_steps;
+    }
 
     if(remainingToStrip <= 0.0) {
         return;

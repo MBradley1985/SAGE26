@@ -35,6 +35,9 @@ yy*
 *.csv
 *.par
 
+# Claude Code local settings #
+.claude/
+
 # sage_analysis Package Stuff #
 *.egg-info
 *__pycache__*
