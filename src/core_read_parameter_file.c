@@ -115,7 +115,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->TrackICSAssembly           = 1;
     run_params->StarburstColdGasOn         = 1;
     run_params->DynamicDisruptionSplit     = 2;
-    run_params->PhysicalStrippingOn        = 0;   /* default: legacy geometric stripping (preserves baseline/parity) */
+    run_params->PhysicalStrippingOn        = 2;   /* default: analytic once-per-snapshot physical stripping, 1-exp(-dT/t_dyn) (cadence-invariant). Set 0 for legacy geometric, 1 for per-substep physical. */
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
