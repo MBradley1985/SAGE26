@@ -62,6 +62,7 @@ TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_acc
 
 PhysicalStrippingOn         2
 SubstepResolution           1.0
+StrippingTimescaleFactor    1.0
 
 %------------------------------------------
 %----- SAGE model parameters --------------

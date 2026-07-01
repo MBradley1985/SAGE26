@@ -520,6 +520,7 @@ struct params
     int32_t DynamicDisruptionSplit;  // 0: fixed fraction; 1: mass-ratio f_ICL = 1-(Msub/Mhost)^alpha; 2: concentration-weighted
     int32_t PhysicalStrippingOn;     // satellite stripping scheme: 0 = legacy geometric (excess/N per substep, stock-SAGE); 1 = physical timescale, per-substep forward-Euler -> 1-exp(-dT/t_dyn) in the limit; 2 = analytic once-per-snapshot, strips exactly 1-exp(-dT/t_dyn) outside the substep loop, no substep-count dependence (DEFAULT)
     double SubstepResolution;        // global multiplier on the adaptive substep count (floor STEPS and cap MAX_STEPS both scale by this); default 1.0. Runtime knob for convergence / N-invariance testing without recompiling.
+    double StrippingTimescaleFactor; // calibration prefactor on the satellite-stripping timescale: t_strip = factor * t_dyn(host); default 1.0. Only used by physical schemes (PhysicalStrippingOn 1/2). Larger = slower stripping.
     double DisruptionSplitAlpha;     // Base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
     double DisruptionSplitCref;      // Reference concentration for concentration weighting (DynamicDisruptionSplit=2)
     double RedshiftPowerLawExponent;

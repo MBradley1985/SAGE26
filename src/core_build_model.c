@@ -435,6 +435,13 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         effective_steps = cap_steps;
     }
 
+    // Satellite-stripping timescale for the physical schemes (1 and 2):
+    // t_strip = StrippingTimescaleFactor * t_dyn(host). The factor (default 1.0)
+    // is the calibration handle on how many host dynamical times stripping acts
+    // over; it does NOT affect the adaptive substep count above. Unused by the
+    // legacy scheme (0).
+    const double t_strip = t_dyn * run_params->StrippingTimescaleFactor;
+
     // PhysicalStrippingOn == 2: analytic satellite stripping applied ONCE per
     // snapshot, outside the substep loop, fully decoupled from the substep
     // count. Each satellite loses exactly a fraction 1-exp(-dT/t_dyn) of its
@@ -451,7 +458,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
             // CGMrecipeOn != 1, so legacy runs are unchanged).
             if(galaxies[p].Type == 1 && (galaxies[p].HotGas > 0.0 || galaxies[p].CGMgas > 0.0)) {
                 const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
-                strip_from_satellite(centralgal, p, Zcurr, effective_steps, deltaT, t_dyn, galaxies, run_params);
+                strip_from_satellite(centralgal, p, Zcurr, effective_steps, deltaT, t_strip, galaxies, run_params);
             }
         }
     }
@@ -484,7 +491,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 // once, outside this loop, so it is skipped. Trigger on Hot OR CGM
                 // so CGM-regime satellites are stripped from their CGMgas reservoir.
                 if(run_params->PhysicalStrippingOn != 2 && galaxies[p].Type == 1 && (galaxies[p].HotGas > 0.0 || galaxies[p].CGMgas > 0.0)) {
-                    strip_from_satellite(centralgal, p, Zcurr, effective_steps, deltaT / effective_steps, t_dyn, galaxies, run_params);
+                    strip_from_satellite(centralgal, p, Zcurr, effective_steps, deltaT / effective_steps, t_strip, galaxies, run_params);
                 }
             }
 
