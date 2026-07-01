@@ -438,9 +438,16 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 
         // an isothermal density profile for the hot gas is assumed here
         const double rho0 = galaxies[gal].HotGas / (4 * M_PI * galaxies[gal].Rvir);
-        const double rcool = sqrt(rho0 / rho_rcool);
+        double rcool = sqrt(rho0 / rho_rcool);
 
-        galaxies[gal].RcoolToRvir = rcool / galaxies[gal].Rvir;
+        galaxies[gal].RcoolToRvir = rcool / galaxies[gal].Rvir;  // store uncapped ratio for diagnostics
+
+        // The cooling radius is physically bounded by the virial radius. Cap it
+        // here so neither the cooling rate nor any downstream consumer (e.g.
+        // do_AGN_heating) ever uses an unphysical rcool > Rvir value. This also
+        // removes the SAGE06/16 rapid-cooling discontinuity at Rvir: hot-mode
+        // cooling saturates at 0.5 * m_hot / t_cool rather than jumping.
+        if(rcool > galaxies[gal].Rvir) rcool = galaxies[gal].Rvir;
 
         coolingGas = 0.0;
         
@@ -795,9 +802,13 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
         }
     }
 
-    // Now apply the cooling directly to preserve the physics-based split
-    // Apply CGM cooling
+    // Apply CGM cooling. Clamp to available CGMgas after AGN heating (which
+    // runs inside cooling_recipe_cgm for Regime==0 and can drain CGMgas
+    // between the internal cap and this apply).
     if(cgm_cooling > 0.0) {
+        if(cgm_cooling > galaxies[gal].CGMgas) {
+            cgm_cooling = galaxies[gal].CGMgas;
+        }
         const double metallicity = get_metallicity(galaxies[gal].CGMgas, galaxies[gal].MetalsCGMgas);
         galaxies[gal].ColdGas += cgm_cooling;
         galaxies[gal].MetalsColdGas += metallicity * cgm_cooling;

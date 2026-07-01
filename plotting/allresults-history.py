@@ -21,7 +21,7 @@ whichimf = 1        # 0=Salpeter; 1=Chabrier
 dilute = 7500       # Number of galaxies to plot in scatter plots
 sSFRcut = -11.0     # Divide quiescent from star forming galaxies
 
-OutputFormat = '.pdf'
+OutputFormat = '.png'
 plt.rcParams["figure.figsize"] = (8.34,6.25)
 plt.rcParams["figure.dpi"] = 96
 plt.rcParams["font.size"] = 14
@@ -244,6 +244,7 @@ if __name__ == '__main__':
     ConcentrationFull = [0] * (LastSnap + 1)
     MetallicityFull = [0] * (LastSnap + 1)
     H2GasFull = [0] * (LastSnap + 1)
+    RcoolToRvirFull = [0] * (LastSnap + 1)
 
     for snap in range(FirstSnap, LastSnap + 1):
         Snapshot = f'Snap_{snap}'
@@ -277,6 +278,98 @@ if __name__ == '__main__':
         RvirFull[snap] = read_hdf(file_list, Snapshot, 'Rvir') / Hubble_h
         ConcentrationFull[snap] = read_hdf(file_list, Snapshot, 'Concentration')
         MetallicityFull[snap] = read_hdf(file_list, Snapshot, 'MetalsStellarMass')
+        RcoolToRvirFull[snap] = read_hdf(file_list, Snapshot, 'RcoolToRvir')
+
+# --------------------------------------------------------
+
+    # ====================================================================
+    # MEASUREMENT: fraction of Mvir > Mshock haloes that have rcool > Rvir
+    # --------------------------------------------------------------------
+    # Mshock is the De Lucia & Blaizot (2006) eq. 38 virial-shock mass scale
+    # hardcoded in src/model_cooling_heating.c (MSHOCK_DB06_MSUN = 6e11 Msun,
+    # physical). Above it a stable virial shock can develop, so naively those
+    # haloes should cool in the "hot mode". The diagnostic rcool/Rvir is stored
+    # per galaxy as RcoolToRvir: rcool > Rvir flags rapid/whole-halo (cold-mode)
+    # cooling even though the halo is massive enough to shock-heat.
+    #
+    # Caveat on the cap: in the regime-aware cooling path (CGMrecipeOn=1, the
+    # default) solve_for_rcool() clamps rcool <= Rvir, so those galaxies pin at
+    # exactly RcoolToRvir = 1.0. Hot-regime haloes cooled via cooling_recipe_hot
+    # keep an uncapped value that can exceed 1. We therefore report both the
+    # strict rcool > Rvir fraction and the rcool >= Rvir (>= 1.0) fraction.
+    # RcoolToRvir < 0 is the sentinel for "undefined" and is excluded.
+    # ====================================================================
+    print('Measuring rcool > Rvir fraction for Mvir > Mshock haloes\n')
+
+    Mshock_Msun = 6.0e11  # MSHOCK_DB06_MSUN, physical Msun (must match the C source)
+    measure_targets = [0.0, 2.0, 6.0]
+
+    print(f'  Mshock = {Mshock_Msun:.2e} Msun (De Lucia & Blaizot 2006 eq. 38)')
+    print(f'  {"z":>6} {"snap":>5} {"N(Mvir>Mshock)":>15} '
+          f'{"f(rcool>Rvir)":>14} {"f(rcool>=Rvir)":>15}')
+
+    frac_strict = []
+    frac_geq = []
+    actual_z = []
+    for target_z in measure_targets:
+        snap = int(np.argmin(np.abs(np.array(redshifts) - target_z)))
+        z_here = redshifts[snap]
+        actual_z.append(z_here)
+
+        if not (FirstSnap <= snap <= LastSnap) or np.size(HaloMassFull[snap]) == 0:
+            print(f'  {target_z:>6.1f} {snap:>5} {"--":>15} {"--":>14} {"--":>15}')
+            frac_strict.append(np.nan)
+            frac_geq.append(np.nan)
+            continue
+
+        Mvir = HaloMassFull[snap]              # physical Msun
+        rcool_ratio = RcoolToRvirFull[snap]    # rcool / Rvir (sentinel < 0 = undefined)
+
+        sel = (Mvir > Mshock_Msun) & (rcool_ratio >= 0.0)
+        N = int(np.sum(sel))
+        if N == 0:
+            print(f'  {z_here:>6.2f} {snap:>5} {0:>15} {"--":>14} {"--":>15}')
+            frac_strict.append(np.nan)
+            frac_geq.append(np.nan)
+            continue
+
+        f_strict = np.mean(rcool_ratio[sel] > 1.0)
+        f_geq = np.mean(rcool_ratio[sel] >= 1.0)
+        frac_strict.append(f_strict)
+        frac_geq.append(f_geq)
+        print(f'  {z_here:>6.2f} {snap:>5} {N:>15} {f_strict:>14.3f} {f_geq:>15.3f}')
+
+    print()
+
+    # Quick visual: rcool/Rvir distribution for the Mvir > Mshock subset
+    plt.figure()
+    ax = plt.subplot(111)
+    rr_bins = np.arange(0.0, 2.2, 0.05)
+    colors_m = plt.cm.viridis(np.linspace(0.15, 0.85, len(measure_targets)))
+    for k, target_z in enumerate(measure_targets):
+        snap = int(np.argmin(np.abs(np.array(redshifts) - target_z)))
+        if np.size(HaloMassFull[snap]) == 0:
+            continue
+        Mvir = HaloMassFull[snap]
+        rcool_ratio = RcoolToRvirFull[snap]
+        sel = (Mvir > Mshock_Msun) & (rcool_ratio >= 0.0)
+        if np.sum(sel) == 0:
+            continue
+        ax.hist(np.clip(rcool_ratio[sel], rr_bins[0], rr_bins[-1]), bins=rr_bins,
+                histtype='step', lw=2, density=True, color=colors_m[k],
+                label=f'z = {actual_z[k]:.1f}  (N={int(np.sum(sel))}, '
+                      f'f$_{{>1}}$={frac_strict[k]:.2f})')
+    ax.axvline(1.0, color='k', ls='--', lw=1, alpha=0.7)
+    ax.set_xlabel(r'$r_{\rm cool}\,/\,R_{\rm vir}$', fontsize=14)
+    ax.set_ylabel('PDF', fontsize=14)
+    ax.set_title(r'$M_{\rm vir} > M_{\rm shock}\ (6\times10^{11}\,M_\odot)$ haloes',
+                 fontsize=13)
+    leg = ax.legend(loc='upper left', fontsize=10, frameon=False)
+    plt.tight_layout()
+    outputFile = OutputDir + 'RcoolToRvir_above_Mshock' + OutputFormat
+    plt.savefig(outputFile)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
 
 # --------------------------------------------------------
 
