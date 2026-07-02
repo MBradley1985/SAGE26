@@ -51,3 +51,5 @@ tests/baseline/microuchuu/
 # Claude Code local files
 .claude/
 CLAUDE.md
+
+plotting/random_plotting_scripts/
