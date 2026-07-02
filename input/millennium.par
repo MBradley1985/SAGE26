@@ -7,7 +7,7 @@ FileNameGalaxies   model
 OutputDir          output/millennium/
 
 FirstFile         0
-LastFile          7
+LastFile          15
 
 %------------------------------------------
 %----- Snapshot output list ---------------
@@ -26,20 +26,20 @@ OutputFormat      sage_hdf5 % sets the desired output format. Either 'sage_binar
 
 TreeName              trees_063   % assumes the trees are named TreeName.n where n is the file number
 TreeType              lhalo_binary % 'genesis_lhalo_hdf5', 'lhalo_binary', 'consistentrees_ascii', 'consistentrees_hdf5', 'lhalo_ascii', 'lhalo_hdf5' 
-NumSimulationTreeFiles 8 % Number of files the trees are split over. This can be different to `FirstFile` -> `LastFile` range.
+NumSimulationTreeFiles 512 % Number of files the trees are split over. This can be different to `FirstFile` -> `LastFile` range.
 
 %SimulationDir      /<absolute>/<root>/<path>/sage-home/sage-model/input/millennium/trees/
 SimulationDir       input/millennium/trees/
 %FileWithSnapList   /<absolute>/<root>/<path>/sage-home/sage-model/input/millennium/trees/millennium.a_list
 FileWithSnapList    input/millennium/trees/millennium.a_list
-LastSnapShotNr        63
+LastSnapShotNr       63
 
 Omega           0.25
 OmegaLambda     0.75
 BaryonFrac      0.17
 Hubble_h        0.73
 PartMass        0.086
-BoxSize         62.5 % Size of the simulation box in Mpc/h.
+BoxSize         500 %62.5 % Size of the simulation box in Mpc/h.
 
 %------------------------------------------
 %----- SAGE recipe options ----------------
@@ -60,7 +60,7 @@ FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
 
-EddingtonLimitOn            0   %0: No forced limit; 1: All accretion EddLimited
+EddingtonLimitOn            1   %0: No forced limit; 1: All accretion EddLimited
 AGNDynamicAccretionOn       1   %0: default to dt; 1: Use tdyn 
 BHExsituGrowthOn            0   %0: default to no exsitu growth; 1:Consider Exsitu growth
 BlackHoleSeedingOn          0   %0: No forced seeding; 1: Light Seeding; 2: Heavy Seeding
@@ -82,8 +82,8 @@ QuasarModeEfficiency        0.005   %AGN quasar mode wind heating efficiency (AG
 BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during mergers (AGNrecipeOn>0)
 
 BHSeedMinHaloMass           1.0     %Minimum halo mass for seeding in 10^10 Msun/h (1.0 = 10^10 Msun/h)
-BHAccretionNorm             10.0    %The normalisation factor in front of BH Quasar Mode Accretion timescale
-BHMassScalingIndex          0.5.    %Scaling factor for the BH-Bulge Mass relation, used in the BH Quasar Mode Accretion timescale
+BHAccretionNorm             10.0    %The normalisation factor in front of BH Quasar Mode Accretion timescale (default =10)
+BHMassScalingIndex          0.5    %Scaling factor for the BH-Bulge Mass relation, used in the BH Quasar Mode Accretion timescale
 
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
 ThresholdSatDisruption      1.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption

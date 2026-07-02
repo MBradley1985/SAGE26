@@ -140,31 +140,20 @@ double eddington_limited_accretion_rate(double accretion_rate, int eddington_fla
         //printf("DEBUG: Snapnum = %d, BH Accretion Type = %d\n", snapnum, bh_accretion_type);
     }
 
-    if (accretion_rate > 0.0) {
-        // Store the unlimited rate for diagnostics before any limit is applied.
-        if(valid_snap) {
-            BHMaxaccretionRate[snapnum] = (float)accretion_rate;
-        }
+    // always write both fields before any early returns
+    if(valid_snap) {
+        BHMaxaccretionRate[snapnum]    = (float)accretion_rate;
+        BHEddingtonRateLimit[snapnum]  = is_seed_bh ? 0.0f
+                                        : (float)eddington_accretion_rate(black_hole_mass, run_params);
+    }
 
-        if(is_seed_bh) {
-            // Seed black holes accrete without Eddington limiting.
-            if(valid_snap) {
-                BHEddingtonRateLimit[snapnum] = 0.0f;
-            }
-            return accretion_rate;
-        }
+    if(is_seed_bh) return accretion_rate;
 
-        // Calculate Eddington accretion rate 
-        edd_rate = eddington_accretion_rate(black_hole_mass, run_params);
-        if(valid_snap) {
-            BHEddingtonRateLimit[snapnum] = (float)edd_rate;
-        }
+    edd_rate = (double)BHEddingtonRateLimit[snapnum];
 
-        // If accretion exceeds Eddington limit and flag is set, apply the limit
-        if (accretion_rate > edd_rate && eddington_flag == 1) {
-            return_rate = edd_rate;
-            BHMaxaccretionRate[snapnum] = (float)return_rate; // Update to the limited rate for diagnostics
-        }
+    if(accretion_rate > edd_rate && eddington_flag == 1) {
+        return_rate = edd_rate;
+        BHMaxaccretionRate[snapnum] = (float)edd_rate;
     }
 
     return return_rate;

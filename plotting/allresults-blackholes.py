@@ -520,6 +520,8 @@ def _draw_rate_function(ax, accr, edd, acc_type, volume_h3, edd_limited,
 
     ax.axvline(0.0, color='k', ls='--', lw=1.3, alpha=0.7)
     ax.set_xlim(lo, 0.2 if edd_limited else bins[-1])
+    ax.set_xlim(-10, 5)
+    ax.set_ylim(0,-7)
     if allv:
         ax.set_ylim(floor + 1.0, np.nanmax(allv) + 0.8)
     ax.xaxis.set_minor_locator(AutoMinorLocator(5))
