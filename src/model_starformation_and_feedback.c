@@ -57,6 +57,42 @@ static const double SOMERVILLE25_F_DENSE = 0.5;
 static const double Z_SOLAR_ASPLUND09 = 0.014;
 
 /*
+ * Ionised-gas fraction of the cold disk (HIIonizationOn).
+ *
+ * SAGE assigns all non-molecular cold hydrogen to HI, with no allowance for the
+ * diffuse low-column outer disk that is kept ionised by the UV background and is
+ * invisible in HI. Peer H2-based SAMs correct for this: Shark truncates the
+ * neutral disk at a critical surface density (ionised_gas_fraction, sigma_hi_crit
+ * ~ 0.5 Msun/pc^2), DarkSage caps the neutral fraction with the cosmic HI
+ * photoionisation rate. We follow Shark: for an exponential gas disk with central
+ * surface density Sigma0 = M_gas / (2 pi r_s^2), the gas beyond the radius where
+ * Sigma(r) = SigmaHIcrit is ionised. With x = ln(Sigma0/Sigma_crit) the ionised
+ * mass fraction is f_ion = (1 + x) * Sigma_crit / Sigma0. Returns 0 when the
+ * correction is disabled or inapplicable, clamped to [0, 1].
+ *
+ * coldgas_code : ColdGas in code units (10^10 Msun/h)
+ * rs_code      : DiskScaleRadius in code units (Mpc/h)
+ */
+static double ionized_gas_fraction(const double coldgas_code, const double rs_code,
+                                   const double h, const double sigma_hi_crit)
+{
+    if(coldgas_code <= 0.0 || rs_code <= 0.0 || sigma_hi_crit <= 0.0 || h <= 0.0) {
+        return 0.0;
+    }
+    const double mgas   = coldgas_code * 1.0e10 / h;                 /* Msun */
+    const double rs_pc  = rs_code * 1.0e6 / h;                       /* pc */
+    const double sigma0 = mgas / (2.0 * M_PI * rs_pc * rs_pc);       /* Msun/pc^2 */
+    if(sigma0 <= sigma_hi_crit) {
+        return 1.0;   /* entire disk below the neutral threshold -> fully ionised */
+    }
+    const double x     = log(sigma0 / sigma_hi_crit);
+    double f_ion       = (1.0 + x) * sigma_hi_crit / sigma0;         /* = 1 - m(<r_thresh)/m */
+    if(f_ion < 0.0) f_ion = 0.0;
+    if(f_ion > 1.0) f_ion = 1.0;
+    return f_ion;
+}
+
+/*
  * Main star formation and feedback driver for one galaxy per substep.
  *
  * Selects the active SF prescription (run_params->SFprescription):
@@ -532,12 +568,21 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         ABORT(0);
     }
 
-    // Calculate HI (atomic hydrogen) as the remainder of hydrogen after H2
-    // Total hydrogen = ColdGas * HYDROGEN_MASS_FRAC (0.74)
-    // HI = Total hydrogen - H2
-    galaxies[p].H1gas = (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) - galaxies[p].H2gas;
-    if(galaxies[p].H1gas < 0.0) {
-        galaxies[p].H1gas = 0.0;  // Safety check
+    // Calculate HI (atomic hydrogen) as the remainder of hydrogen after H2.
+    // Total hydrogen = ColdGas * HYDROGEN_MASS_FRAC (0.74). Optionally remove the
+    // ionised outer-disk component first (HIIonizationOn; see ionized_gas_fraction).
+    // Only HI is debited -- H2 is central and unaffected -- so SF/ColdGas are untouched.
+    {
+        double neutralH = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+        if(run_params->HIIonizationOn) {
+            const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas, galaxies[p].DiskScaleRadius,
+                                                      run_params->Hubble_h, run_params->SigmaHIcrit);
+            neutralH *= (1.0 - f_ion);
+        }
+        galaxies[p].H1gas = neutralH - galaxies[p].H2gas;
+        if(galaxies[p].H1gas < 0.0) {
+            galaxies[p].H1gas = 0.0;  // Safety check
+        }
     }
 
     stars = strdot * dt;
@@ -939,9 +984,17 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
 
     if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
 
-    // HI = total hydrogen - H2, matching non-FFB path
-    galaxies[p].H1gas = (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) - galaxies[p].H2gas;
-    if(galaxies[p].H1gas < 0.0) galaxies[p].H1gas = 0.0;
+    // HI = total hydrogen - H2, matching non-FFB path (with optional ionisation cut)
+    {
+        double neutralH = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+        if(run_params->HIIonizationOn) {
+            const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas, galaxies[p].DiskScaleRadius,
+                                                      run_params->Hubble_h, run_params->SigmaHIcrit);
+            neutralH *= (1.0 - f_ion);
+        }
+        galaxies[p].H1gas = neutralH - galaxies[p].H2gas;
+        if(galaxies[p].H1gas < 0.0) galaxies[p].H1gas = 0.0;
+    }
 
     // ========================================================================
     // SELECT GAS RESERVOIR FOR FFB STAR FORMATION
