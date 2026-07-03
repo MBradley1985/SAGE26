@@ -32,7 +32,7 @@ NumSimulationTreeFiles 8 % Number of files the trees are split over. This can be
 SimulationDir       input/millennium/trees/
 %FileWithSnapList   /<absolute>/<root>/<path>/sage-home/sage-model/input/millennium/trees/millennium.a_list
 FileWithSnapList    input/millennium/trees/millennium.a_list
-LastSnapShotNr        63
+LastSnapshotNr        63
 
 Omega           0.25
 OmegaLambda     0.75
@@ -67,6 +67,10 @@ SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
 StarburstColdGasOn          1   %0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 DynamicDisruptionSplit      2   %0: fixed fraction; 1: mass-ratio only; 2: concentration-weighted
+
+PhysicalStrippingOn         2     %0: legacy geometric (excess/N per substep); 1: physical timescale per substep; 2: analytic once-per-snapshot 1-exp(-dT/t_strip) (default)
+SubstepResolution           1.0   %multiplier on the adaptive substep count (scales the STEPS floor and MAX_STEPS cap); 1.0 = unscaled
+StrippingTimescaleFactor    1.0   %t_strip = factor * t_dyn(host); used by physical stripping schemes 1 and 2 only
 
 H2DiskAreaOption            1   %0: pi*r_s^2 (default); 1: pi*(3*r_s)^2 (thrice); 2: 2*pi*r_s^2 (central Sigma_0); ignored when H2RadialIntegrationOn=1
 H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk (H2DiskAreaOption unused)
