@@ -24,12 +24,7 @@ struct HDF5_GALAXY_OUTPUT
 {
     int32_t   *SnapNum;
 
-#if 0
-    short Type;
-    short isFlyby;
-#else
     int32_t *Type;
-#endif
     
     long long   *GalaxyIndex;
     long long   *CentralGalaxyIndex;

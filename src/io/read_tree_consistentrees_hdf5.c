@@ -120,7 +120,6 @@ int setup_forests_io_ctrees_hdf5(struct forest_info *forests_info, const int Thi
 
         hid_t h5_forest_group = H5Gopen(h5_file_group, "Forests", H5P_DEFAULT);
         ctr_h5->h5_forests_group[ifile] = h5_forest_group;
-        // fprintf(stderr,"In %s> ifile = %d h5_forest_group = %lu\n", __FUNCTION__, ifile, h5_forest_group);
     }
 
     int64_t totnforests = 0;
@@ -208,7 +207,6 @@ int setup_forests_io_ctrees_hdf5(struct forest_info *forests_info, const int Thi
         free(nhalos_per_forest);
     }
     const int64_t end_forestnum = start_forestnum + nforests_this_task; /* not inclusive, i.e., do not process forestnr == end_forestnum */
-    /* fprintf(stderr,"Thistask = %d start_forestnum = %"PRId64" end_forestnum = %"PRId64"\n", ThisTask, start_forestnum, end_forestnum); */
 
     ctr_h5->nforests = nforests_this_task;
     forests_info->nforests_this_task = nforests_this_task;/* Note: Number of forests to process on this task is also stored at the container struct*/
@@ -355,11 +353,9 @@ int setup_forests_io_ctrees_hdf5(struct forest_info *forests_info, const int Thi
                 "Error: Failed to get the native HDF5 datatype class for snapshot dataset = '%s'.\n", snap_field_name);
         ctr_h5->snap_field_is_double = -1;
         if(snap_dtype_class == H5T_INTEGER) {
-            // fprintf(stderr, "Snapshot dataset datatype is 'H5T_INTEGER'.\n");
             ctr_h5->snap_field_is_double = 0;
             /* display size, signed, endianess, etc. */
         } else if(snap_dtype_class == H5T_FLOAT) {
-            // fprintf(stderr, "Snapshot dataset datatype is 'H5T_FLOAT'.\n");
             ctr_h5->snap_field_is_double = 1;
         } else {
             fprintf(stderr,"Error: Expected to find that the snapshot field ('%s') to be 'integer' or 'float' "
@@ -503,7 +499,6 @@ int64_t load_forest_ctrees_hdf5(int64_t forestnr, struct halo_data **halos,
     const int64_t halosoffset = ctrees_finfo.foresthalosoffset;
     const int64_t nhalos = ctrees_finfo.forestnhalos;
 
-    /* fprintf(stderr,"forestnr = %"PRId64" meta_fd = %lu treenum = %"PRId64" halosoffset = %"PRId64" nhalos = %"PRId64 " filenr = %d\n", forestnr, meta_fd, treenum_in_file, halosoffset, nhalos, filenum_for_tree); */
 
     /* okay now we have the offset and the total number of halos in this forest
         Now allocate the memory for the forest_halos and offload to a dedicated (private) loading
@@ -571,7 +566,6 @@ static int read_contiguous_forest_ctrees_h5(hid_t h5_forests_group, const hsize_
             (unsigned long long) nhalos, (unsigned long long) nhalos * sizeof(double));
 
 
-    // fprintf(stderr,"IN %s> h5_forests_group = %lu halosoffset = %llu nhalos = %llu\n", __FUNCTION__,  h5_forests_group, halosoffset, nhalos);
 
     // We now need to read in all the halo fields for this forest.
     // To do so, we read the field into a buffer and then properly slot the field into the Halo struct.

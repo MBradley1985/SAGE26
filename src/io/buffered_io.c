@@ -14,53 +14,6 @@
 #include <fcntl.h>
 #include <string.h> //for memcpy
 
-/*
-The initial version of this code was generated using ChatGPT as a fun exercise. The instructions
-given were (formatting applied to the following script):
-
-Write C code to write in binary to files using a 4 MB buffer that stores data until the 4 MB limit and then writes out. The code should have 3 functions 
-- a setup function that defines a struct, called "buffered_io" containing these items - 
-    i) number of bytes allocated of type size_t 
-    ii) number of bytes stored of type size_t 
-    iii) file descriptor of the output file of type integer and 
-    iv) the current file offset  of type off_t 
-    v) a void * pointer that holds the data. 
-
-    The setup function is called with the buffer size in bytes of type size_t, the output file description (> 0),  
-    the offset to start writing at (> 0), and a pointer to a struct of type buffered_io (must not be NULL). 
-    The setup function will allocate the buffer (return -1 if malloc fails), and store the file offset and the 
-    file descriptor within the passed struct. The will return EXIT_SUCCESS if no errors are encountered. 
-- a runtime function that is called with two parameters: 
-    i) the number of bytes to write 
-    ii) a void * pointer to the source that contains the data to be written out and 
-    iii) a pointer to the struct buffered_io previously setup. 
-    
-    This function will check whether the buffer is sufficiently large to hold the new set of bytes and will 
-    copy over the bytes from the source pointer if that's the case. After copying the data, the number of bytes 
-    within the bufferd_io struct should be incremented by the number of bytes copied.  If the buffer is not 
-    large enough to hold the new bytes requested, the function will first write out the data in the buffer using pwrite, 
-    and update the offset within the struct buffered_io. After that, the function will increment the offset 
-    within the buffered_io struct with the number of bytes written out, and set the number of bytes within the b
-    ufferd_io struct to 0. Then the function will keep writing out the data from the src pointer  (using pwrite) 
-    until the number of bytes remaining is less than the buffer size allocated. For every pwrite call, the offset 
-    within the buffered_io struct needs to be incremented by the number of bytes successfully written out. Once the 
-    remaining data is less than the buffer max size, then the data should be copied from the source into the 
-    struct buffered_io, and the number of bytes within the bufferd_io struct should be set to the number of bytes copied
-
-- a cleanup function that accepts only a single parameter for a pointer to a struct buffered_io and writes out (using pwrite) 
-    any remaining data in the buffer, and updates the offset and number of bytes correctly. If the write fails, then the 
-    return error from pwrite is returned. Assuming a successful write, the memory is cleared out from the buffer and returns EXIT_SUCCESS
-
-The original version was mostly correct but I had to add a *LOT* of error checking code, improve readability, and make for a consistent
-design across the three helper functions. 
-
-Side-note: The amount of explicit instruction required to generate the code meant I could have written the code in the time it took me to type
-out the instructions. -MS 27th Jul, 2023
-
-*/
-
-
-
 #include "buffered_io.h"
 #include "../core_utils.h" //for mypwrite
 

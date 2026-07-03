@@ -264,9 +264,6 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
             // Then create each field inside.
             snprintf(full_field_name, 2*MAX_STRING_LEN - 1,"Snap_%d/%s", run_params->ListOutputSnaps[snap_idx], field_names[field_idx]);
 
-            /* fprintf(stderr, "Creating field '%s' with description '%s' and unit '%s'\n",
-               field_names[field_idx], field_descriptions[field_idx], field_units[field_idx]); */
-
             hid_t prop = H5Pcreate(H5P_DATASET_CREATE);
             CHECK_STATUS_AND_RETURN_ON_FAIL(prop, (int32_t) prop,
                                             "Could not create the property list for output snapshot number %d.\n", snap_idx);
@@ -1070,7 +1067,6 @@ static int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct sav
 {
 
     int64_t gals_in_buffer = save_info->num_gals_in_buffer[output_snap_idx];
-    //fprintf(stderr, "Task %d, Snap %d, has %"PRId64" gals in buffer.\n", run_params->ThisTask, output_snap_idx, gals_in_buffer);
 
     save_info->buffer_output_gals[output_snap_idx].SnapNum[gals_in_buffer] = g->SnapNum;
 
