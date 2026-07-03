@@ -1047,18 +1047,28 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     double reheated_mass = 0.0;
     double ejected_mass  = 0.0;
 
+    // FIRE velocity/redshift scaling (Muratov et al. 2015), computed once and
+    // reused for both reheating and ejection: z and Vvir do not change between
+    // the two blocks, so the value is identical. Mirrors the main SF path.
+    double fire_scaling = 0.0;
+    int fire_scaling_valid = 0;
+    if(run_params->SupernovaRecipeOn == 1 && run_params->FIREmodeOn == 1) {
+        const double z  = run_params->ZZ[galaxies[p].SnapNum];
+        const double vc = galaxies[p].Vvir;
+        if(vc > 0.0 && z >= 0.0) {
+            const double vc_floored = (vc < 1.0) ? 1.0 : vc;
+            const double z_term     = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
+            const double v_term     = (vc_floored < FIRE_V_CRIT_KMS) ?
+                pow(vc_floored / FIRE_V_CRIT_KMS, -3.2) : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
+            fire_scaling = z_term * v_term;
+            fire_scaling_valid = 1;
+        }
+    }
+
     if(run_params->SupernovaRecipeOn == 1) {
         if(run_params->FIREmodeOn == 1) {
-            const double z       = run_params->ZZ[galaxies[p].SnapNum];
-            const double vc      = galaxies[p].Vvir;
-
-            if(vc > 0.0 && z >= 0.0) {
-                const double vc_floored  = (vc < 1.0) ? 1.0 : vc;
-                const double z_term      = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
-                const double v_term      = (vc_floored < FIRE_V_CRIT_KMS) ?
-                    pow(vc_floored / FIRE_V_CRIT_KMS, -3.2) : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
-                const double scaling     = z_term * v_term;
-                const double eta_reheat  = run_params->FeedbackReheatingEpsilon * scaling;
+            if(fire_scaling_valid) {
+                const double eta_reheat  = run_params->FeedbackReheatingEpsilon * fire_scaling;
                 galaxies[p].MassLoading  = (float)eta_reheat;
                 reheated_mass            = eta_reheat * stars;
             }
@@ -1079,16 +1089,9 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     if(run_params->SupernovaRecipeOn == 1) {
         if(galaxies[p].Vvir > 0.0) {
             if(run_params->FIREmodeOn == 1) {
-                const double z      = run_params->ZZ[galaxies[p].SnapNum];
-                const double vc     = galaxies[p].Vvir;
-
-                if(vc > 0.0 && z >= 0.0) {
-                    const double vc_floored = (vc < 1.0) ? 1.0 : vc;
-                    const double z_term     = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
-                    const double v_term     = (vc_floored < FIRE_V_CRIT_KMS) ?
-                        pow(vc_floored / FIRE_V_CRIT_KMS, -3.2) : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
-                    const double scaling    = z_term * v_term;
-                    const double E_FB       = run_params->FeedbackEjectionEfficiency * scaling
+                if(fire_scaling_valid) {
+                    const double vc         = galaxies[p].Vvir;
+                    const double E_FB       = run_params->FeedbackEjectionEfficiency * fire_scaling
                                               * 0.5 * stars
                                               * (run_params->EtaSNcode * run_params->EnergySNcode);
                     const double E_lift     = 0.5 * reheated_mass * vc * vc;
