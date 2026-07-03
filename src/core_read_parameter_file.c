@@ -235,9 +235,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
 #undef REG
 
-    /* Save original tag names before the parse loop zeroes them out for duplicate detection */
+    /* Save original tag names before the parse loop zeroes them out for duplicate detection.
+       Both arrays are MAXTAGLEN+1 with index MAXTAGLEN pre-set to '\0'. */
     for(int i = 0; i < NParam; i++) {
-        strncpy(OrigParamTag[i], ParamTag[i], MAXTAGLEN);
+        memcpy(OrigParamTag[i], ParamTag[i], MAXTAGLEN + 1);
     }
 
     used_tag = mymalloc(sizeof(int) * NParam);

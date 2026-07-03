@@ -262,7 +262,8 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
         for(int32_t field_idx = 0; field_idx < NUM_OUTPUT_FIELDS; field_idx++) {
 
             // Then create each field inside.
-            snprintf(full_field_name, 2*MAX_STRING_LEN - 1,"Snap_%d/%s", run_params->ListOutputSnaps[snap_idx], field_names[field_idx]);
+            snprintf(full_field_name, 2*MAX_STRING_LEN - 1,"Snap_%d/%.*s", run_params->ListOutputSnaps[snap_idx],
+                     MAX_STRING_LEN - 1, field_names[field_idx]);
 
             hid_t prop = H5Pcreate(H5P_DATASET_CREATE);
             CHECK_STATUS_AND_RETURN_ON_FAIL(prop, (int32_t) prop,
