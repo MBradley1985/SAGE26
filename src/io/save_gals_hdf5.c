@@ -30,12 +30,7 @@
 #include "../sage.h"
 
 
-#ifdef USE_SAGE_IN_MCMC_MODE
-#define NUM_OUTPUT_FIELDS 2
-#pragma message "Using SAGE in MCMC mode (will only write " STR(NUM_OUTPUT_FIELDS) " fields into the hdf5 file)"
-#else
 #define NUM_OUTPUT_FIELDS 82
-#endif
 
 #define NUM_GALS_PER_BUFFER 8192
 
@@ -943,7 +938,6 @@ int32_t create_hdf5_master_file(const struct params *run_params)
  * with one entry per output field.  Field names are kept identical to the
  * binary output format so that comparison scripts (e.g., tests/sagediff.py)
  * work against both formats without modification.
- * In USE_SAGE_IN_MCMC_MODE only SnapNum and StellarMass are registered.
  *
  * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
  */
@@ -951,12 +945,6 @@ static int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char
                                 char (*field_units)[MAX_STRING_LEN], hsize_t *field_dtypes)
 {
 
-#ifdef USE_SAGE_IN_MCMC_MODE
-    char tmp_names[NUM_OUTPUT_FIELDS][MAX_STRING_LEN] = {"SnapNum", "StellarMass"};//, "Mvir"};
-    char tmp_descriptions[NUM_OUTPUT_FIELDS][MAX_STRING_LEN] = {"", ""};
-    char tmp_units[NUM_OUTPUT_FIELDS][MAX_STRING_LEN] = {"", ""};
-    hsize_t tmp_dtype[NUM_OUTPUT_FIELDS] = {H5T_NATIVE_INT, H5T_NATIVE_FLOAT};//, H5T_NATIVE_FLOAT};
-#else
     char tmp_names[NUM_OUTPUT_FIELDS][MAX_STRING_LEN] = {"SnapNum", "Type", "GalaxyIndex", "CentralGalaxyIndex", "SAGEHaloIndex",
                                                          "SAGETreeIndex", "SimulationHaloIndex", "mergeType", "mergeIntoID",
                                                          "mergeIntoSnapNum", "dT", "Posx", "Posy", "Posz", "Velx", "Vely", "Velz",
@@ -1053,7 +1041,6 @@ static int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char
                                             H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_INT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
                                             H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_INT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
                                             H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_DOUBLE, H5T_NATIVE_FLOAT};
-#endif
     for(int32_t i = 0; i < NUM_OUTPUT_FIELDS; i++) {
         memcpy(field_names[i], tmp_names[i], MAX_STRING_LEN);
         memcpy(field_descriptions[i], tmp_descriptions[i], MAX_STRING_LEN);
@@ -1377,11 +1364,6 @@ static int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to
 
     // We now need to write each property to file.  This is performed in a stack of macros because
     // it's not possible to loop through the members of a struct.
-#ifdef USE_SAGE_IN_MCMC_MODE
-    EXTEND_AND_WRITE_GALAXY_DATASET(SnapNum);
-    EXTEND_AND_WRITE_GALAXY_DATASET(StellarMass);
-    // EXTEND_AND_WRITE_GALAXY_DATASET(Mvir);
-#else
     EXTEND_AND_WRITE_GALAXY_DATASET(SnapNum);
     EXTEND_AND_WRITE_GALAXY_DATASET(Type);
     EXTEND_AND_WRITE_GALAXY_DATASET(GalaxyIndex);
@@ -1522,7 +1504,6 @@ static int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to
         }
     }
 
-#endif
     // We've performed a write, so future galaxies will overwrite the old data.
     save_info->num_gals_in_buffer[snap_idx] = 0;
     save_info->tot_ngals[snap_idx] += num_to_write;
