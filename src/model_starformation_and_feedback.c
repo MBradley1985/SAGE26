@@ -621,7 +621,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         }
     }
 
-	XASSERT(reheated_mass >= 0.0, -1,
+    XASSERT(reheated_mass >= 0.0, -1,
             "Error: Expected reheated gas-mass = %g to be >=0.0\n", reheated_mass);
 
     // cant use more cold gas than is available! so balance SF and feedback
@@ -706,35 +706,13 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // Metals that leave disk - regime dependent
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
         
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0) {
-                // CGM-regime: metals go to CGM
-                galaxies[centralgal].MetalsCGMgas += metals_leaving_disk;
-            } else {
-                // Hot-ICM-regime: metals go to HotGas
-                galaxies[centralgal].MetalsHotGas += metals_leaving_disk;
-            }
-        } else {
-            // Original SAGE behavior: metals go to HotGas
-            galaxies[centralgal].MetalsHotGas += metals_leaving_disk;
-        }
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, metals_leaving_disk);
         
     } else {
         // All metals leave disk when ColdGas is very low - regime dependent
         const double all_metals = run_params->Yield * stars;
         
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0) {
-                // CGM-regime: metals go to CGM
-                galaxies[centralgal].MetalsCGMgas += all_metals;
-            } else {
-                // Hot-ICM-regime: metals go to HotGas
-                galaxies[centralgal].MetalsHotGas += all_metals;
-            }
-        } else {
-            // Original SAGE behavior: metals go to HotGas
-            galaxies[centralgal].MetalsHotGas += all_metals;
-        }
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }
 }
 
@@ -757,8 +735,7 @@ void update_from_star_formation(const int p, const double stars, const double me
     // H2gas and H1gas were computed before SF depleted ColdGas; clamp so they
     // remain consistent with the remaining cold gas. Only applies to H2-tracking
     // prescriptions (0=Croton and 2=Somerville-noH2 never set H2gas/H1gas).
-    const int sf = run_params->SFprescription;
-    if(sf != 0 && sf != 2) {
+    if(sf_prescription_tracks_h2(run_params->SFprescription)) {
         const float max_h = (galaxies[p].ColdGas > 0.0f) ? galaxies[p].ColdGas * HYDROGEN_MASS_FRAC : 0.0f;
         if(galaxies[p].H2gas > max_h) galaxies[p].H2gas = max_h;
         if(galaxies[p].H1gas > max_h) galaxies[p].H1gas = max_h;
@@ -795,8 +772,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
         // Remove reheated mass from cold gas (same for all regimes)
         galaxies[p].ColdGas -= reheated_mass;
         galaxies[p].MetalsColdGas -= metallicity * reheated_mass;
-        const int sf_fb = run_params->SFprescription;
-        if(sf_fb != 0 && sf_fb != 2) {
+        if(sf_prescription_tracks_h2(run_params->SFprescription)) {
             const float max_h_fb = (galaxies[p].ColdGas > 0.0f) ? galaxies[p].ColdGas * HYDROGEN_MASS_FRAC : 0.0f;
             if(galaxies[p].H2gas > max_h_fb) galaxies[p].H2gas = max_h_fb;
             if(galaxies[p].H1gas > max_h_fb) galaxies[p].H1gas = max_h_fb;
@@ -915,8 +891,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const float h     = run_params->Hubble_h;
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         const int sfpres  = run_params->SFprescription;
-        const int has_h2  = (sfpres == 1 || sfpres == 3 || sfpres == 4 ||
-                              sfpres == 5 || sfpres == 6 || sfpres == 7);
+        const int has_h2  = sf_prescription_tracks_h2(sfpres);
 
         if(rs_pc > 0.0 && has_h2) {
             if(run_params->H2RadialIntegrationOn) {
@@ -935,7 +910,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
                 if(disk_area_pc2 > 0.0) {
                     const float Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
 
-                    if(sfpres == 1 || sfpres == 3) {
+                    if(sf_prescription_is_br06(sfpres)) {
                         // BR06
                         const float Sigma_star = (galaxies[p].StellarMass - galaxies[p].BulgeMass)
                                                  * 1.0e10 / h / disk_area_pc2;
@@ -1047,19 +1022,28 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     double reheated_mass = 0.0;
     double ejected_mass  = 0.0;
 
+    // FIRE velocity/redshift scaling (Muratov et al. 2015), computed once and
+    // reused for both reheating and ejection: z and Vvir do not change between
+    // the two blocks, so the value is identical. Mirrors the main SF path.
+    double fire_scaling = 0.0;
+    int fire_scaling_valid = 0;
+    if(run_params->SupernovaRecipeOn == 1 && run_params->FIREmodeOn == 1) {
+        const double z  = run_params->ZZ[galaxies[p].SnapNum];
+        const double vc = galaxies[p].Vvir;
+        if(vc > 0.0 && z >= 0.0) {
+            const double vc_floored = (vc < 1.0) ? 1.0 : vc;
+            const double z_term     = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
+            const double v_term     = (vc_floored < FIRE_V_CRIT_KMS) ?
+                pow(vc_floored / FIRE_V_CRIT_KMS, -3.2) : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
+            fire_scaling = z_term * v_term;
+            fire_scaling_valid = 1;
+        }
+    }
+
     if(run_params->SupernovaRecipeOn == 1) {
         if(run_params->FIREmodeOn == 1) {
-            const double z       = run_params->ZZ[galaxies[p].SnapNum];
-            const double vc      = galaxies[p].Vvir;
-            const double V_CRIT  = 60.0;
-
-            if(vc > 0.0 && z >= 0.0) {
-                const double vc_floored  = (vc < 1.0) ? 1.0 : vc;
-                const double z_term      = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
-                const double v_term      = (vc_floored < V_CRIT) ?
-                    pow(vc_floored / V_CRIT, -3.2) : pow(vc_floored / V_CRIT, -1.0);
-                const double scaling     = z_term * v_term;
-                const double eta_reheat  = run_params->FeedbackReheatingEpsilon * scaling;
+            if(fire_scaling_valid) {
+                const double eta_reheat  = run_params->FeedbackReheatingEpsilon * fire_scaling;
                 galaxies[p].MassLoading  = (float)eta_reheat;
                 reheated_mass            = eta_reheat * stars;
             }
@@ -1080,17 +1064,9 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     if(run_params->SupernovaRecipeOn == 1) {
         if(galaxies[p].Vvir > 0.0) {
             if(run_params->FIREmodeOn == 1) {
-                const double z      = run_params->ZZ[galaxies[p].SnapNum];
-                const double vc     = galaxies[p].Vvir;
-                const double V_CRIT = 60.0;
-
-                if(vc > 0.0 && z >= 0.0) {
-                    const double vc_floored = (vc < 1.0) ? 1.0 : vc;
-                    const double z_term     = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
-                    const double v_term     = (vc_floored < V_CRIT) ?
-                        pow(vc_floored / V_CRIT, -3.2) : pow(vc_floored / V_CRIT, -1.0);
-                    const double scaling    = z_term * v_term;
-                    const double E_FB       = run_params->FeedbackEjectionEfficiency * scaling
+                if(fire_scaling_valid) {
+                    const double vc         = galaxies[p].Vvir;
+                    const double E_FB       = run_params->FeedbackEjectionEfficiency * fire_scaling
                                               * 0.5 * stars
                                               * (run_params->EtaSNcode * run_params->EnergySNcode);
                     const double E_lift     = 0.5 * reheated_mass * vc * vc;
@@ -1115,28 +1091,14 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     // ========================================================================
     if(galaxies[p].ColdGas > 1.0e-8) {
         const double FracZleaveDiskVal = run_params->FracZleaveDisk
-                                         * exp(-1.0 * galaxies[centralgal].Mvir / 30.0);
+                                         * exp(-1.0 * galaxies[centralgal].Mvir / KD11_METAL_HALO_MASS);
         galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
 
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0)
-                galaxies[centralgal].MetalsCGMgas  += metals_leaving_disk;
-            else
-                galaxies[centralgal].MetalsHotGas  += metals_leaving_disk;
-        } else {
-            galaxies[centralgal].MetalsHotGas += metals_leaving_disk;
-        }
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, metals_leaving_disk);
     } else {
         const double all_metals = run_params->Yield * stars;
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0)
-                galaxies[centralgal].MetalsCGMgas += all_metals;
-            else
-                galaxies[centralgal].MetalsHotGas += all_metals;
-        } else {
-            galaxies[centralgal].MetalsHotGas += all_metals;
-        }
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }
 
     // ========================================================================

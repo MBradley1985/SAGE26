@@ -16,7 +16,7 @@ ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 ROOT_DIR := $(if $(ROOT_DIR),$(ROOT_DIR),.)
 
 
-CCFLAGS += -DGNU_SOURCE -std=gnu99 -fPIC
+CCFLAGS += -std=gnu99 -fPIC
 LIBFLAGS :=
 
 OPTS := -DROOT_DIR='"${ROOT_DIR}"'
@@ -25,7 +25,7 @@ SRC_PREFIX := src
 LIBNAME := sage
 LIBSRC :=  sage.c core_read_parameter_file.c core_init.c core_io_tree.c \
            core_cool_func.c core_build_model.c core_save.c core_mymalloc.c core_utils.c progressbar.c \
-           core_tree_utils.c model_infall.c model_cooling_heating.c model_starformation_and_feedback.c \
+           model_infall.c model_cooling_heating.c model_starformation_and_feedback.c \
            model_disk_instability.c model_reincorporation.c model_mergers.c model_misc.c \
            io/read_tree_lhalo_binary.c io/read_tree_consistentrees_ascii.c io/ctrees_utils.c \
 	       io/save_gals_binary.c io/forest_utils.c io/buffered_io.c
@@ -259,7 +259,7 @@ else
 
 endif # End of DO_CHECKS if condition -> i.e., we do need to care about paths and such
 
-.PHONY: clean celan celna clena tests all
+.PHONY: clean celan celna clena tests regression all
 
 all:  $(SAGELIB) $(EXEC)
 
@@ -292,7 +292,12 @@ clean:
 
 tests: $(EXEC)
 ifdef GSL_FOUND
-	./tests/test_sage.sh
+	$(MAKE) -C tests test
 else
 	$(error GSL is required to run the tests)
 endif
+
+# Byte-for-byte output regression against the committed baseline manifests.
+# Requires a serial (non-MPI) build: make clean && make USE-MPI=
+regression: $(EXEC)
+	./tests/regression_baseline.sh

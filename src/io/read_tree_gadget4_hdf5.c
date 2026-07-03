@@ -367,7 +367,6 @@ int setup_forests_io_gadget4_hdf5(struct forest_info *forests_info,
             g4->num_files_per_forest[i - start_forestnum]  = numfiles_this_forest;
             forests_info->FileNr[i - start_forestnum] = start_filenr;
             forests_info->original_treenr[i - start_forestnum] = file_local_treenum;
-            // fprintf(stderr,"(ThisTask = %d) i = %"PRId64" start_filenr = %d numfiles = %d\n", ThisTask, i, start_filenr, numfiles_this_forest);
         }
 
         nhalos_so_far += nhalos_per_forest[i];
@@ -619,13 +618,7 @@ int64_t load_forest_gadget4_hdf5(const int64_t forestnr, struct halo_data **halo
         if(ifile == 0) {
             nhalo_offset[0] = g4->offset_in_nhalos_first_file_for_forests[forestnr];
         }
-        // fprintf(stderr,"forestnr = %"PRId64" ifile = %d fd_index = %d (numfiles_this_task=%d) nhalos = %"PRId64" offset = %lld\n",
-        //        forestnr, ifile, fd_index, g4->numfiles, nhalos, nhalo_offset[0]);
-
         const hsize_t numhalos_this_file[1] = {g4->nhalos_per_file_per_forest[forestnr][ifile]};
-        // fprintf(stderr,"forestnr = %"PRId64" fd = %ld (numfiles = %d) treenum = %"PRId64" nhalos = %"PRId64" nhalos_this_file = %llu\n", 
-        //                forestnr, (long) fd, numfiles_this_forest, treenum_in_file, nhalos, numhalos_this_file[0]);
-
         /* Merger Tree Pointers */
         READ_TREE_PROPERTY(fd, nhalo_offset, Descendant, "TreeDescendant", numhalos_this_file, int);
         READ_TREE_PROPERTY(fd, nhalo_offset, FirstProgenitor, "TreeFirstProgenitor", numhalos_this_file, int);

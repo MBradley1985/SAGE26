@@ -115,6 +115,10 @@ static const double Z_CRIT_DB06 = 1.5;
  * fraction of the current cooling rate. Croton et al. (2006), AGN appendix. */
 static const double AGN_COLD_CLOUD_FRAC = 1.0e-4;
 
+/* File-private: AGN radio-mode heating for CGM-regime galaxies (defined below). */
+static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
+                                 struct GALAXY *galaxies, const struct params *run_params);
+
 // ============================================================================
 // CGM Density Profile Helper Functions (file-private)
 // ============================================================================
@@ -523,21 +527,21 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             if(coolingGas < 0.0) coolingGas = 0.0;
         }
 
-		// at this point we have calculated the maximal cooling rate
-		// if AGNrecipeOn we now reduce it in line with past heating before proceeding
+        // at this point we have calculated the maximal cooling rate
+        // if AGNrecipeOn we now reduce it in line with past heating before proceeding
 
-		if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
-			coolingGas = do_AGN_heating(coolingGas, gal, dt, x, rcool, galaxies, run_params);
+        if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
+            coolingGas = do_AGN_heating(coolingGas, gal, dt, x, rcool, galaxies, run_params);
         }
 
-		if (coolingGas > 0.0) {
-			galaxies[gal].Cooling += 0.5 * coolingGas * galaxies[gal].Vvir * galaxies[gal].Vvir;
+        if (coolingGas > 0.0) {
+            galaxies[gal].Cooling += 0.5 * coolingGas * galaxies[gal].Vvir * galaxies[gal].Vvir;
         }
-	} else {
-		coolingGas = 0.0;
+    } else {
+        coolingGas = 0.0;
     }
 
-	XASSERT(coolingGas >= 0.0, -1,
+    XASSERT(coolingGas >= 0.0, -1,
             "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
     return coolingGas;
 }
@@ -957,8 +961,8 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
  * Applies the same r_heat/rcool suppression and ratchet as the hot-halo
  * path, then caps r_heat at Rvir. Accretion draws from CGMgas.
  */
-double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
-                          struct GALAXY *galaxies, const struct params *run_params)
+static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
+                                 struct GALAXY *galaxies, const struct params *run_params)
 {
     if(galaxies[centralgal].r_heat < rcool) {
         coolingGas = (1.0 - galaxies[centralgal].r_heat / rcool) * coolingGas;

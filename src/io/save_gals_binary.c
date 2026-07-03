@@ -150,6 +150,12 @@ int32_t save_binary_galaxies(const int32_t task_treenr, const int32_t num_gals, 
         return MALLOC_FAILURE;
     }
 
+    /* GALAXY_OUTPUT contains alignment padding (before g_max and after r_heat).
+       The structs are written raw to disk, so zero the block first: otherwise
+       uninitialised heap bytes leak into the padding, making the output files
+       non-reproducible at the byte level (every field value is unaffected). */
+    memset(all_outputgals, 0, num_output_gals * sizeof(all_outputgals[0]));
+
     // Prepare all the galaxies for output.
     for(int32_t gal_idx = 0; gal_idx < num_gals; gal_idx++) {
         if(haloaux[gal_idx].output_snap_n < 0) {

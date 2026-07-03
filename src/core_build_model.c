@@ -105,19 +105,7 @@ int construct_galaxies(const int halonr, int *numgals, int *galaxycounter, int *
   // evolve them in time.
 
   fofhalo = halos[halonr].FirstHaloInFOFgroup;
-#ifdef USE_SAGE_IN_MCMC_MODE
-  /* The extra condition stops sage from evolving any galaxies beyond the final output snapshot.
-     This optimised processing reduces the values GalaxyIndex and CentralGalaxyIndex (since fewer galaxies are
-     now processed). The values of mergetype, mergeintosnapnum and mergeintoid are all different that what
-     would be the case if *all* snapshots were processed. This will lead to different SEDs compared to the
-     fiducial runs -> however, for MCMC cases, presumably we are not interested in SED. This extra flag
-     improves runtime *significantly* if only processing up to high-z (say for targeting JWST-like observations).
-     - MS, DC: 25th Oct, 2023
-  */
-  if(haloaux[fofhalo].HaloFlag == 1 && halos[fofhalo].SnapNum <= run_params->ListOutputSnaps[0]) {
-#else
   if(haloaux[fofhalo].HaloFlag == 1 ) {
-#endif
       int ngal = 0;
       haloaux[fofhalo].HaloFlag = 2;
 
@@ -352,7 +340,8 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
  * Drives STEPS (or up to MAX_STEPS adaptively) sub-steps.  Each sub-step
  * calls: infall_recipe, cooling_recipe, starformation_and_feedback,
  * check_disk_instability, and reincorporate_gas.  After the sub-steps,
- * handles any remaining mergers and calls save_galaxies() for this forest.
+ * handles any remaining mergers; save_galaxies() is called afterwards by
+ * sage_per_forest().
  * Returns EXIT_SUCCESS or a negative SAGE error code.
  */
 static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals, struct halo_data *halos,
@@ -561,7 +550,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
     } // Go on to the next STEPS substep
 
     // Extra miscellaneous stuff before finishing this halo
-    galaxies[centralgal].TotalSatelliteBaryons = 0.0;
     const double deltaT = run_params->Age[galaxies[0].SnapNum] - halo_age;
     const double inv_deltaT = 1.0/deltaT;
 
@@ -575,11 +563,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         galaxies[p].Cooling *= inv_deltaT;
         galaxies[p].Heating *= inv_deltaT;
         galaxies[p].OutflowRate *= inv_deltaT;
-
-        if(p != centralgal) {
-            galaxies[centralgal].TotalSatelliteBaryons +=
-                (galaxies[p].StellarMass + galaxies[p].BlackHoleMass + galaxies[p].ColdGas + galaxies[p].HotGas + galaxies[p].CGMgas);
-        }
     }
 
 

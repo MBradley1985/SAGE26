@@ -2,8 +2,10 @@
  * macros.h -- compile-time constants, error-handling macros, and
  * function-like utility macros used throughout the codebase.
  *
- * XASSERT, XRETURN, XPRINT, CHECK_STATUS_AND_RETURN_ON_FAIL, and
- * CHECK_POINTER_AND_RETURN_ON_NULL all compile out under -DNDEBUG.
+ * XASSERT, XRETURN, and XPRINT compile out under -DNDEBUG; note that many
+ * call sites rely on XRETURN for control-flow validation, so SAGE must
+ * never be built with -DNDEBUG. CHECK_STATUS_AND_RETURN_ON_FAIL and
+ * CHECK_POINTER_AND_RETURN_ON_NULL are always active.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */

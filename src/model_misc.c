@@ -70,8 +70,7 @@ static const double Z_SOLAR_ASPLUND09 = 0.014;
 static const double Z_SOLAR_GD14 = 0.02;
 
 /* Gnedin & Draine (2014) UV-field s-parameter at U_MW = 1.0 (Milky Way ambient field).
- * s_param = pow(GD14_S_PARAM_UMW1, 0.7) from their eq. 11 / Table 1.
- * Also defined in model_starformation_and_feedback.c and model_mergers.c. */
+ * s_param = pow(GD14_S_PARAM_UMW1, 0.7) from their eq. 11 / Table 1. */
 static const double GD14_S_PARAM_UMW1 = 0.101;
 
 /*
@@ -85,7 +84,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
                  struct GALAXY *galaxies, const struct params *run_params)
 {
 
-	XASSERT(halonr == halos[halonr].FirstHaloInFOFgroup, -1,
+    XASSERT(halonr == halos[halonr].FirstHaloInFOFgroup, -1,
             "Error: halonr = %d should be equal to the FirsthaloInFOFgroup = %d\n",
             halonr, halos[halonr].FirstHaloInFOFgroup);
 
@@ -175,7 +174,6 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].TimeOfLastMajorMerger = -1.0;
     galaxies[p].TimeOfLastMinorMerger = -1.0;
     galaxies[p].OutflowRate = 0.0;
-	galaxies[p].TotalSatelliteBaryons = 0.0;
     galaxies[p].RcoolToRvir = -1.0;
     galaxies[p].MassLoading = 0.0;
     galaxies[p].tcool = -1.0;
@@ -184,7 +182,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].tdeplete = -1.0;
     galaxies[p].H2DepletionTime_Gyr = -1.0f;
 
-	// infall properties
+    // infall properties
     galaxies[p].infallMvir = -1.0;
     galaxies[p].infallVvir = -1.0;
     galaxies[p].infallVmax = -1.0;
@@ -207,18 +205,18 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
  */
 double get_disk_radius(const int halonr, const int p, const struct halo_data *halos, const struct GALAXY *galaxies)
 {
-	if(galaxies[p].Vvir > 0.0 && galaxies[p].Rvir > 0.0) {
-		/* Mo, Shude & White (1998) eq. 12 with a Bullock-style spin parameter.
-		 * The literal 1.414 is intentional: the original code used this truncated
-		 * sqrt(2) rather than M_SQRT2 and changing it shifts every disk radius.
-		 * Do not replace with M_SQRT2 without re-calibrating. */
-		double SpinMagnitude = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
+    if(galaxies[p].Vvir > 0.0 && galaxies[p].Rvir > 0.0) {
+        /* Mo, Shude & White (1998) eq. 12 with a Bullock-style spin parameter.
+         * The literal 1.414 is intentional: the original code used this truncated
+         * sqrt(2) rather than M_SQRT2 and changing it shifts every disk radius.
+         * Do not replace with M_SQRT2 without re-calibrating. */
+        double SpinMagnitude = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
                                     halos[halonr].Spin[1] * halos[halonr].Spin[1] + halos[halonr].Spin[2] * halos[halonr].Spin[2]);
 
-		double SpinParameter = SpinMagnitude / (1.414 * galaxies[p].Vvir * galaxies[p].Rvir);
-		return (SpinParameter / 1.414) * galaxies[p].Rvir;
-	} else {
-		return DISK_RADIUS_FALLBACK_FRAC * galaxies[p].Rvir;
+        double SpinParameter = SpinMagnitude / (1.414 * galaxies[p].Vvir * galaxies[p].Rvir);
+        return (SpinParameter / 1.414) * galaxies[p].Rvir;
+    } else {
+        return DISK_RADIUS_FALLBACK_FRAC * galaxies[p].Rvir;
     }
 }
 
@@ -457,14 +455,14 @@ double get_virial_mass(const int halonr, const struct halo_data *halos, const st
 /* Circular velocity at the virial radius: V_vir = sqrt(G * M_vir / R_vir). */
 double get_virial_velocity(const int halonr, const struct halo_data *halos, const struct params *run_params)
 {
-	double Rvir;
+    double Rvir;
 
-	Rvir = get_virial_radius(halonr, halos, run_params);
+    Rvir = get_virial_radius(halonr, halos, run_params);
 
     if(Rvir > 0.0)
-		return sqrt(run_params->G * get_virial_mass(halonr, halos, run_params) / Rvir);
-	else
-		return 0.0;
+        return sqrt(run_params->G * get_virial_mass(halonr, halos, run_params) / Rvir);
+    else
+        return 0.0;
 }
 
 
@@ -476,7 +474,6 @@ double get_virial_velocity(const int halonr, const struct halo_data *halos, cons
  */
 double get_virial_radius(const int halonr, const struct halo_data *halos, const struct params *run_params)
 {
-  // return halos[halonr].Rvir;  // Used for Bolshoi
   const int snapnum = halos[halonr].SnapNum;
   const double zplus1 = 1.0 + run_params->ZZ[snapnum];
   const double hubble_of_z_sq =
@@ -1121,7 +1118,7 @@ double calculate_gmax_BK25(const int p, const double z, const struct GALAXY *gal
 }
 
 /* Stellar disk scale height from disk scale length (Blitz & Rosolowsky 2006 eq. 9). */
-float calculate_stellar_scale_height_BR06(float disk_scale_length_pc)
+static float calculate_stellar_scale_height_BR06(float disk_scale_length_pc)
 {
     // BR06 equation (9): log h* = -0.23 - 0.8 log R*
     // where h* and R* are measured in parsecs
@@ -1136,32 +1133,6 @@ float calculate_stellar_scale_height_BR06(float disk_scale_length_pc)
 }
 
 
-/* Disk midplane pressure P_ext/k in K/cm^3 (Blitz & Rosolowsky 2006). */
-float calculate_midplane_pressure_BR06(float sigma_gas, float sigma_stars, float disk_scale_length_pc)
-{
-    // Early termination for edge cases
-    if (sigma_gas <= 0.0 || disk_scale_length_pc <= 0.0) {
-        return 0.0;
-    }
-
-    // For very low stellar surface density, use a minimal value to avoid numerical issues
-    float effective_sigma_stars = sigma_stars;
-    if (sigma_stars < 0.1) {
-        effective_sigma_stars = 0.1;
-    }
-
-    // Calculate stellar scale height using exact BR06 equation (9)
-    float h_star_pc = calculate_stellar_scale_height_BR06(disk_scale_length_pc);
-    if (h_star_pc <= 0.0) return 0.0;
-
-    const float v_g = 8.0;  // km/s, gas velocity dispersion (BR06)
-
-    // BR06 Equation (5) - stellar-dominated approximation:
-    // P_ext/k = 272 * Sigma_gas * sqrtSigma_* * v_g * h_*^(-0.5)
-    float pressure = 272.0 * sigma_gas * sqrt(effective_sigma_stars) * v_g / sqrt(h_star_pc);
-
-    return pressure; // K cm-^3
-}
 
 
 /*
@@ -1169,32 +1140,55 @@ float calculate_midplane_pressure_BR06(float sigma_gas, float sigma_stars, float
  *
  * Computes the ratio R_mol = (P_ext/P_0)^alpha and returns f_H2 = R_mol/(1+R_mol).
  */
-float calculate_molecular_fraction_BR06(float gas_surface_density, float stellar_surface_density,
-                                         float disk_scale_length_pc)
+/*
+ * Core of the BR06 molecular fraction with the stellar scale height already
+ * computed. The scale height depends only on the disk scale length, so the
+ * radial-integration loop hoists it out and calls this variant per bin;
+ * results are bit-identical to computing it in place.
+ */
+static float calculate_molecular_fraction_BR06_from_hstar(float gas_surface_density, float stellar_surface_density,
+                                                          float h_star_pc)
 {
-
-    // Calculate midplane pressure using exact BR06 formula
-    float pressure = calculate_midplane_pressure_BR06(gas_surface_density, stellar_surface_density, 
-                                                     disk_scale_length_pc);
+    float pressure = 0.0;
+    if (gas_surface_density > 0.0 && h_star_pc > 0.0) {
+        float effective_sigma_stars = stellar_surface_density;
+        if (stellar_surface_density < 0.1) {
+            effective_sigma_stars = 0.1;
+        }
+        const float v_g = 8.0;  // km/s, gas velocity dispersion (BR06)
+        // BR06 Equation (5) - stellar-dominated approximation:
+        // P_ext/k = 272 * Sigma_gas * sqrt(Sigma_*) * v_g * h_*^(-0.5)
+        pressure = 272.0 * gas_surface_density * sqrt(effective_sigma_stars) * v_g / sqrt(h_star_pc);
+    }
     
     if (pressure <= 0.0) {
         return 0.0;
     }
-    
+
     // BR06 parameters from equation (13) for non-interacting galaxies
     // These are the exact values from the paper
     const float P0 = 4.54e4;    // Reference pressure, K cm-^3 (equation 13)
     const float alpha = 0.92;  // Power law index (equation 13)
-    
+
     // BR06 Equation (11): R_mol = (P_ext/P0)^alpha
     float pressure_ratio = pressure / P0;
     float R_mol = pow(pressure_ratio, alpha);
-    
+
     // Convert to molecular fraction: f_mol = R_mol / (1 + R_mol)
     // This is the standard conversion from molecular-to-atomic ratio to molecular fraction
     double f_mol = R_mol / (1.0 + R_mol);
-    
+
     return f_mol;
+}
+
+float calculate_molecular_fraction_BR06(float gas_surface_density, float stellar_surface_density,
+                                        float disk_scale_length_pc)
+{
+    if (disk_scale_length_pc <= 0.0) {
+        return 0.0;
+    }
+    const float h_star_pc = calculate_stellar_scale_height_BR06(disk_scale_length_pc);
+    return calculate_molecular_fraction_BR06_from_hstar(gas_surface_density, stellar_surface_density, h_star_pc);
 }
 
 /*
@@ -1245,6 +1239,29 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
         alpha7 = 1.0f + 0.7f * sqrtf(s_param7) / (1.0f + s_param7);
     }
 
+    // BR06 (prescriptions 1/3): stellar scale height depends only on the disk
+    // scale length -- compute once instead of once per radial bin.
+    const float h_star_br06 = sf_prescription_is_br06(sfpres)
+                              ? calculate_stellar_scale_height_BR06(rs_pc) : 0.0f;
+
+    // KD12/KMT09/K13 (prescriptions 4/5/6): the disk metallicity and every
+    // quantity derived from it alone are radius-independent -- hoisted out of
+    // the loop. Values are identical to the previous per-bin evaluation.
+    const float met_disk = (galaxies[gal].ColdGas > 0.0f)
+                           ? (float)(galaxies[gal].MetalsColdGas / galaxies[gal].ColdGas) : 0.0f;
+    float Zp5 = 0.0f, lognum5 = 0.0f;
+    if(sfpres == 5) {
+        Zp5 = (met_disk > 0.0f) ? met_disk / 0.02f : 0.0f;
+        const float chi5 = 0.77f * (1.0f + 3.1f * powf(Zp5, 0.365f));
+        lognum5 = logf(1.0f + 0.6f * chi5 + 0.01f * chi5 * chi5);
+    }
+    float Zp6 = 0.0f, lognum6 = 0.0f;
+    if(sfpres == 6) {
+        Zp6 = met_disk / 0.014f; if(Zp6 < 0.01f) Zp6 = 0.01f;
+        const float chi6 = 3.1f * (1.0f + 3.1f * powf(Zp6, 0.365f)) / 4.1f;
+        lognum6 = logf(1.0f + 0.6f * chi6 + 0.01f * chi6 * chi6);
+    }
+
     // K13 radially-integrated SFR (only computed when caller requests it via strdot_code_out)
     double SFR_K13_total = 0.0;
     float Z_prime_k13 = 0.01f;
@@ -1272,35 +1289,28 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
         // Calculate molecular fraction at this radius using the appropriate prescription
         float f_mol_r = 0.0f;
 
-        if(sfpres == 1 || sfpres == 3) {
-            // BR06
-            f_mol_r = calculate_molecular_fraction_BR06(sigma_gas_r, sigma_star_r, rs_pc);
+        if(sf_prescription_is_br06(sfpres)) {
+            // BR06 (scale height precomputed above)
+            f_mol_r = calculate_molecular_fraction_BR06_from_hstar(sigma_gas_r, sigma_star_r, h_star_br06);
 
         } else if(sfpres == 4) {
             // KD12
-            float met4 = (galaxies[gal].ColdGas > 0.0f) ? (float)(galaxies[gal].MetalsColdGas / galaxies[gal].ColdGas) : 0.0f;
-            f_mol_r = calculate_H2_fraction_KD12(sigma_gas_r, met4, 5.0f);
+            f_mol_r = calculate_H2_fraction_KD12(sigma_gas_r, met_disk, 5.0f);
 
         } else if(sfpres == 5) {
-            // KMT09
-            float met5 = (galaxies[gal].ColdGas > 0.0f) ? (float)(galaxies[gal].MetalsColdGas / galaxies[gal].ColdGas) : 0.0f;
-            float Zp5 = (met5 > 0.0f) ? met5 / 0.02f : 0.0f;
+            // KMT09 (Zp5 and the chi log-numerator precomputed above)
             float fc5 = 3.0f;
             float tau_c5 = 0.066f * fc5 * Zp5 * sigma_gas_r;
-            float chi5 = 0.77f * (1.0f + 3.1f * powf(Zp5, 0.365f));
             float s5 = (sigma_gas_r > 0.0f && tau_c5 > 1e-10f)
-                       ? logf(1.0f + 0.6f * chi5 + 0.01f * chi5 * chi5) / (0.6f * tau_c5) : 100.0f;
+                       ? lognum5 / (0.6f * tau_c5) : 100.0f;
             f_mol_r = (s5 < 2.0f) ? 1.0f - (3.0f * s5) / (4.0f + s5) : 0.0f;
             if(f_mol_r < 0.0f) f_mol_r = 0.0f;
 
         } else if(sfpres == 6) {
-            // K13
-            float met6 = (galaxies[gal].ColdGas > 0.0f) ? (float)(galaxies[gal].MetalsColdGas / galaxies[gal].ColdGas) : 0.0f;
-            float Zp6 = met6 / 0.014f; if(Zp6 < 0.01f) Zp6 = 0.01f;
+            // K13 (Zp6 and the chi log-numerator precomputed above)
             float fc6 = 5.0f;
-            float chi6 = 3.1f * (1.0f + 3.1f * powf(Zp6, 0.365f)) / 4.1f;
             float tau_c6 = 0.066f * fc6 * Zp6 * sigma_gas_r;
-            float s6 = (tau_c6 > 0.0f) ? logf(1.0f + 0.6f * chi6 + 0.01f * chi6 * chi6) / (0.6f * tau_c6) : 100.0f;
+            float s6 = (tau_c6 > 0.0f) ? lognum6 / (0.6f * tau_c6) : 100.0f;
             f_mol_r = (s6 < 2.0f) ? 1.0f - (0.75f * s6) / (1.0f + 0.25f * s6) : 0.0f;
             if(f_mol_r < 0.0f) f_mol_r = 0.0f;
 

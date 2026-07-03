@@ -235,9 +235,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
 #undef REG
 
-    /* Save original tag names before the parse loop zeroes them out for duplicate detection */
+    /* Save original tag names before the parse loop zeroes them out for duplicate detection.
+       Both arrays are MAXTAGLEN+1 with index MAXTAGLEN pre-set to '\0'. */
     for(int i = 0; i < NParam; i++) {
-        strncpy(OrigParamTag[i], ParamTag[i], MAXTAGLEN);
+        memcpy(OrigParamTag[i], ParamTag[i], MAXTAGLEN + 1);
     }
 
     used_tag = mymalloc(sizeof(int) * NParam);
@@ -445,9 +446,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->TreeExtension[0] = '\0';
 
     // Check tree type is valid.
-    if (strncmp(my_treetype, "lhalo_hdf5", 511)   == 0 ||
-        strncmp(my_treetype, "genesis_hdf5", 511) == 0 ||
-        strncmp(my_treetype, "gadget4_hdf5", 511) == 0
+    if (strncmp(my_treetype, "lhalo_hdf5", MAX_STRING_LEN - 1)   == 0 ||
+        strncmp(my_treetype, "genesis_hdf5", MAX_STRING_LEN - 1) == 0 ||
+        strncmp(my_treetype, "gadget4_hdf5", MAX_STRING_LEN - 1) == 0
         ) {
 #ifndef HDF5
         fprintf(stderr, "You have specified to use a HDF5 file but have not compiled with the HDF5 option enabled.\n");
@@ -456,7 +457,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
 #endif
         // strncmp returns 0 if the two strings are equal.
         // only relevant options are HDF5 or binary files. Consistent-trees is *always* ascii (with different filename extensions)
-        snprintf(run_params->TreeExtension, 511, ".hdf5");
+        snprintf(run_params->TreeExtension, MAX_STRING_LEN - 1, ".hdf5");
     }
 
 #define CHECK_VALID_ENUM_IN_PARAM_FILE(paramname, num_enum_types, enum_names, enum_values, string_value) { \
@@ -514,6 +515,14 @@ int read_parameter_file(const char *fname, struct params *run_params)
     CHECK_VALID_ENUM_IN_PARAM_FILE(ForestDistributionScheme, nvalid_scheme_types, scheme_names, scheme_enums, my_forest_dist_scheme);
 #undef CHECK_VALID_ENUM_IN_PARAM_FILE
 
+
+    /* SF prescription must be one of the eight implemented recipes; the
+       H2-tracking predicate (sf_prescription_tracks_h2) relies on this range. */
+    if(run_params->SFprescription < 0 || run_params->SFprescription > 7) {
+        fprintf(stderr,"Error: SFprescription = %d is not valid; it must be in [0, 7].\n", run_params->SFprescription);
+        fprintf(stderr,"Please change the value for the parameter 'SFprescription' in the parameter file (%s)\n", fname);
+        ABORT(EXIT_FAILURE);
+    }
 
     /* Check that exponent supplied is non-negative (for cases where the exponent will be used) */
     if((run_params->ForestDistributionScheme == exponent_in_nhalos || run_params->ForestDistributionScheme == generic_power_in_nhalos)

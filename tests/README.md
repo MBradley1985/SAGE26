@@ -4,7 +4,7 @@ Comprehensive unit and integration tests for the SAGE26 semi-analytic galaxy for
 
 ## Overview
 
-This test suite validates the physical correctness and numerical stability of the SAGE26 model through **278 automated tests** across **16 test suites** covering:
+This test suite validates the physical correctness and numerical stability of the SAGE26 model through **559 automated tests** across **18 test suites** covering:
 - Conservation laws (mass, metals, energy)
 - Regime determination and CGM physics
 - Bulge size calculations and morphology
@@ -355,22 +355,24 @@ These help catch performance regressions during development.
 | Test Suite | Tests | Coverage |
 |------------|-------|----------|
 | Conservation Laws | 37 | Core physics operations |
-| Regime/CGM | 21 | Regime determination, CGM cooling |
-| Bulge Sizes | 13 | Size calculations all modes |
+| Regime/CGM | 39 | Regime determination, CGM cooling |
+| Bulge Sizes | 19 | Size calculations all modes |
 | Physics Validation | 31 | Physical bounds, quenching |
 | Mergers | 13 | Merger physics, timescales |
 | Disk Instability | 9 | Instability criterion |
 | Gas Infall | 12 | Infall routing, reionization |
 | Numerical Stability | 24 | Edge cases, precision |
 | Metal Enrichment | 22 | Stellar yields, SN feedback |
-| Ram Pressure Stripping | 14 | Hot/cold gas stripping |
-| Multi-Satellite Systems | 9 | Orbital dynamics, tidal effects |
+| Ram Pressure Stripping | 22 | Hot/cold gas stripping, physical schemes |
+| Multi-Satellite Systems | 8 | Orbital dynamics, tidal effects |
 | Star Formation Recipes | 27 | SF laws, quenching mechanisms |
 | Reincorporation | 21 | Ejected gas return rates |
 | Cooling & Heating | 25 | Thermal balance, precipitation |
 | Halo Assembly & Mergers | 24 | Mass ratios, dynamical friction |
 | AGN Feedback | 18 | Radio/quasar modes, Eddington limits |
-| **Total** | **278** | **Complete model physics** |
+| FFB & Concentration | 66 | Feedback-free bursts, halo concentration |
+| Halo & Galaxy IDs | 142 | Unique-ID encoding/decoding, overflow |
+| **Total** | **559** | **Complete model physics** |
 
 ## Unit Tests vs Integration Tests
 

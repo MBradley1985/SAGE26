@@ -130,7 +130,6 @@ struct GALAXY
     int   Len;           /* number of simulation particles in the host (sub)halo */
     float Mvir;          /* virial mass [10^10 Msun/h] */
     float deltaMvir;     /* change in virial mass since previous snapshot [10^10 Msun/h] */
-    float CentralMvir;   /* virial mass of the FOF host halo [10^10 Msun/h] */
     float Rvir;          /* virial radius [Mpc/h] */
     float Vvir;          /* virial circular velocity [km/s] */
     float Vmax;          /* maximum circular velocity of the (sub)halo [km/s] */
@@ -184,7 +183,6 @@ struct GALAXY
     float TimeOfLastMajorMerger;
     float TimeOfLastMinorMerger;
     float OutflowRate;           /* SN-driven gas outflow rate [10^10 Msun/h / code time] */
-    float TotalSatelliteBaryons; /* sum of all baryonic mass in satellites (used for output diagnostics) */
     float RcoolToRvir;           /* ratio of cooling radius to virial radius at last cooling evaluation */
 
     /* infall properties -- values frozen at the moment a galaxy first becomes a satellite */
@@ -224,9 +222,6 @@ struct halo_aux_data
     int32_t HaloFlag;
     int32_t NGalaxies;
     int FirstGalaxy;
-#ifdef PROCESS_LHVT_STYLE
-    int orig_index;
-#endif
     int output_snap_n;
 };
 
@@ -484,10 +479,9 @@ struct params
     double     SigmaHIcrit;        // critical neutral surface density [Msun/pc^2] for HIIonizationOn (Shark sigma_hi_crit, ~0.5)
     int32_t    CGMDensityProfile;  // 0: uniform, 1: NFW, 2: beta-profile
     int32_t    FIREmodeOn;
-    int32_t    CGMrecipeSAGEOn;
     int32_t    CGMAGNOn;              // 0: disable AGN heating in CGM-regime entirely; 1: enable (default)
     int32_t    RegimeRandomMode;     // 0: fresh random draw each snapshot (default, original behaviour); 1: use the persistent RegimeRandom assigned at galaxy creation (deterministic regime evolution driven by mass)
-    int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation
+    int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation, 3: hybrid (Vmax/Vvir, infall-frozen for satellites)
     int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
     int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too
     int32_t    FFBRandomMode;       // 0: draw a fresh random each snapshot; 1: use persistent FFBRandom assigned at galaxy creation

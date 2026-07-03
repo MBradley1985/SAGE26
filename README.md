@@ -200,7 +200,7 @@ cd tests && make quick              # single fastest check
 bash tests/run_integration_tests.sh # full integration test (slower)
 ```
 
-The regression baseline checks that output is bit-identical across 5380 datasets:
+The regression baseline checks that output is bit-identical across 5444 datasets:
 
 ```bash
 bash tests/regression_baseline.sh

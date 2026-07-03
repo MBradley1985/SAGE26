@@ -1,7 +1,7 @@
 # Satellite Stripping in SAGE26: Scheme, Cadence-Dependence, and Satellite HI
 
 **Status:** Working notes / summary of findings. **Date:** 2026-07-02.
-**Context:** Follow-up to `DYNAMIC-TIMESTEP-CONVERGENCE-NOTES.md`, which flagged that
+**Context:** Follow-up to `DYNAMIC_TIMESTEP_CONVERGENCE.md`, which flagged that
 satellite stripping in stock SAGE is tied to the substep *count* rather than to
 elapsed time — a latent issue that becomes visible now that SAGE26 uses
 dynamical-time (adaptive) substepping.

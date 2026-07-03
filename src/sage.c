@@ -35,7 +35,6 @@
 #include "core_save.h"
 #include "core_utils.h"
 #include "progressbar.h"
-#include "core_tree_utils.h"
 
 #ifdef HDF5
 #include "io/save_gals_hdf5.h"
@@ -324,17 +323,6 @@ static int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_in
         return nhalos;
     }
 
-#ifdef PROCESS_LHVT_STYLE
-#error Processing in Locally-horizontal vertical tree (LHVT) style not implemented yet
-
-    /* re-arrange the halos into a locally horizontal vertical forest */
-    int32_t *file_ordering_of_halos=NULL;
-    int status = reorder_lhalo_to_lhvt(nhalos, Halo, 0, &file_ordering_of_halos);/* the 3rd parameter is for testing the reorder code */
-    if(status != EXIT_SUCCESS) {
-        return status;
-    }
-#endif
-
     int maxgals = (int)(MAXGALFAC * nhalos);
     if(maxgals < 10000) maxgals = 10000;
 
@@ -346,39 +334,11 @@ static int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_in
         HaloAux[i].HaloFlag = 0;
         HaloAux[i].NGalaxies = 0;
         HaloAux[i].DoneFlag = 0;
-#ifdef PROCESS_LHVT_STYLE
-        HaloAux[i].orig_index = file_ordering_of_halos[i];
-#endif
     }
 
-    /* MS: numgals is shared by both LHVT and the standard processing */
     int numgals = 0;
 
-#ifdef PROCESS_LHVT_STYLE
-    free(file_ordering_of_halos);
-    /* done with re-ordering the halos into a locally horizontal vertical tree format */
-
-    int nfofs_all_snaps[ABSOLUTEMAXSNAPS] = {0};
-    /* getting the number of FOF halos at each snapshot */
-    status = get_nfofs_all_snaps(Halo, nhalos, nfofs_all_snaps, ABSOLUTEMAXSNAPS);
-    if(status != EXIT_SUCCESS) {
-        return status;
-    }
-
-    /* this will be the new processing style --> one snapshot at a time */
-    uint32_t ngal = 0;
-    for(int snapshot=min_snapshot;snapshot <= max_snapshot; snapshot++) {
-        uint32_t nfofs_this_snap = get_nfofs_at_snap(forestnr, snapshot);
-        for(int ifof=0;ifof<nfofs_this_snap;ifof++) {
-            ngal = process_fof_at_snap(ifof, snapshot, ngal);
-        }
-    }
-
-#else /* PROCESS_LHVT_STYLE */
-
-    /*MS: This is the normal SAGE processing on a tree-by-tree (vertical) basis */
-
-    /* Now start the processing */
+    /* SAGE processes each forest on a tree-by-tree (vertical) basis */
     int32_t galaxycounter = 0;
 
     /* First run construct_galaxies outside for loop -> takes care of the main tree */
@@ -396,8 +356,6 @@ static int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_in
             }
         }
     }
-
-#endif /* PROCESS_LHVT_STYLE */
 
     status = save_galaxies(forestnr, numgals, Halo, forest_info, HaloAux, HaloGal, save_info, run_params);
     if(status != EXIT_SUCCESS) {
