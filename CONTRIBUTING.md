@@ -38,25 +38,23 @@ Key rules for C:
 
 ## Tests
 
-Always run tests from inside the `tests/` directory; the root `make tests` target
-references a launcher script that does not exist in this tree.
-
 ```bash
-cd tests && make test               # all suites
+make tests                          # all unit-test suites (same as: cd tests && make test)
 cd tests && make test_conservation  # conservation only (fastest)
 cd tests && make quick              # single fastest check
 bash tests/run_integration_tests.sh # full integration test (slower)
 ```
 
-New physics changes must keep the regression baseline bit-identical:
+New physics changes must keep the regression baseline bit-identical
+(requires a serial build: `make clean && make USE-MPI=`):
 
 ```bash
-bash tests/regression_baseline.sh
+make regression                     # same as: bash tests/regression_baseline.sh
 ```
 
 ## Submitting changes
 
 1. Run `make tests` and verify all suites pass.
-2. Run the regression baseline and confirm 5380 datasets are bit-identical.
+2. Run the regression baseline and confirm all 5444 datasets are bit-identical.
 3. Open a pull request from your branch into `dev`.
 4. Tag `@MBradley1985` for review.

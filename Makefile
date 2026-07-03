@@ -259,7 +259,7 @@ else
 
 endif # End of DO_CHECKS if condition -> i.e., we do need to care about paths and such
 
-.PHONY: clean celan celna clena tests all
+.PHONY: clean celan celna clena tests regression all
 
 all:  $(SAGELIB) $(EXEC)
 
@@ -292,7 +292,12 @@ clean:
 
 tests: $(EXEC)
 ifdef GSL_FOUND
-	./tests/test_sage.sh
+	$(MAKE) -C tests test
 else
 	$(error GSL is required to run the tests)
 endif
+
+# Byte-for-byte output regression against the committed baseline manifests.
+# Requires a serial (non-MPI) build: make clean && make USE-MPI=
+regression: $(EXEC)
+	./tests/regression_baseline.sh
