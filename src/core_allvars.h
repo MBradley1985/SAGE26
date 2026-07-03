@@ -480,6 +480,8 @@ struct params
     int32_t    ReionizationOn;
     int32_t    DiskInstabilityOn;
     int32_t    CGMrecipeOn;
+    int32_t    HIIonizationOn;     // 0: off (all non-H2 cold H -> HI); 1: remove ionised low-column outer disk (Shark-style)
+    double     SigmaHIcrit;        // critical neutral surface density [Msun/pc^2] for HIIonizationOn (Shark sigma_hi_crit, ~0.5)
     int32_t    CGMDensityProfile;  // 0: uniform, 1: NFW, 2: beta-profile
     int32_t    FIREmodeOn;
     int32_t    CGMrecipeSAGEOn;

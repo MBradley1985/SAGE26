@@ -70,6 +70,8 @@ DynamicDisruptionSplit      2   %0: fixed fraction; 1: mass-ratio only; 2: conce
 
 H2DiskAreaOption            1   %0: pi*r_s^2 (default); 1: pi*(3*r_s)^2 (thrice); 2: 2*pi*r_s^2 (central Sigma_0); ignored when H2RadialIntegrationOn=1
 H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk (H2DiskAreaOption unused)
+HIIonizationOn              1     %0: all non-H2 cold H -> HI; 1: remove ionised low-column outer disk (Shark-style)
+SigmaHIcrit                 0.5   %critical neutral surface density [Msun/pc^2] when HIIonizationOn=1
 
 %------------------------------------------
 %----- SAGE model parameters --------------

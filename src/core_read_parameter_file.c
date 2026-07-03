@@ -99,6 +99,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->H2RadialNBins              = 25;
     run_params->H2RadialRMaxFactor         = 5.0;
     run_params->CGMrecipeOn                = 1;
+    run_params->HIIonizationOn             = 1;
+    run_params->SigmaHIcrit                = 0.5;   /* Msun/pc^2 (Shark sigma_hi_crit) */
     run_params->CGMDensityProfile          = 0;
     run_params->CGMAGNOn                   = 1;
     run_params->RegimeRandomMode           = 0;
@@ -184,6 +186,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("SFprescription",        &(run_params->SFprescription),       INT, 0);
     REG("AGNrecipeOn",           &(run_params->AGNrecipeOn),          INT, 0);
     REG("CGMrecipeOn",           &(run_params->CGMrecipeOn),          INT, 0);
+    REG("HIIonizationOn",        &(run_params->HIIonizationOn),       INT, 0);
+    REG("SigmaHIcrit",           &(run_params->SigmaHIcrit),          DOUBLE, 0);
     REG("CGMDensityProfile",     &(run_params->CGMDensityProfile),    INT, 0);
     REG("CGMAGNOn",              &(run_params->CGMAGNOn),              INT, 0);
     REG("RegimeRandomMode",      &(run_params->RegimeRandomMode),     INT, 0);
