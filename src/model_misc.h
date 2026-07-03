@@ -17,6 +17,33 @@ extern "C" {
 
     #include "core_allvars.h"
 
+    /*
+     * Deposit metals (or gas + metals) into a galaxy's hot-phase reservoir,
+     * routed by regime: CGMgas when the CGM recipe is active and the galaxy
+     * is CGM-regime (Regime == 0), HotGas otherwise. These helpers replace
+     * the identical if/else ladder previously repeated at every deposit site;
+     * the += operations are unchanged, so results are bit-identical.
+     */
+    static inline void add_metals_to_hot_reservoir(struct GALAXY *central, const struct params *run_params, const double metals)
+    {
+        if(run_params->CGMrecipeOn == 1 && central->Regime == 0) {
+            central->MetalsCGMgas += metals;
+        } else {
+            central->MetalsHotGas += metals;
+        }
+    }
+
+    static inline void add_gas_to_hot_reservoir(struct GALAXY *central, const struct params *run_params, const double gas, const double metals)
+    {
+        if(run_params->CGMrecipeOn == 1 && central->Regime == 0) {
+            central->CGMgas += gas;
+            central->MetalsCGMgas += metals;
+        } else {
+            central->HotGas += gas;
+            central->MetalsHotGas += metals;
+        }
+    }
+
     /* functions in model_misc.c */
     extern void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct halo_data *halos, struct GALAXY *galaxies, const struct params *run_params);
     extern double get_metallicity(const double gas, const double metals);

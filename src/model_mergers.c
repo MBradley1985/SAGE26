@@ -794,35 +794,13 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         // Metals that leave disk - regime dependent
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
         
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0) {
-                // CGM-regime: metals go to CGM
-                galaxies[centralgal].MetalsCGMgas += metals_leaving_disk;
-            } else {
-                // Hot-ICM-regime: metals go to HotGas
-                galaxies[centralgal].MetalsHotGas += metals_leaving_disk;
-            }
-        } else {
-            // Original SAGE behavior: metals go to HotGas
-            galaxies[centralgal].MetalsHotGas += metals_leaving_disk;
-        }
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, metals_leaving_disk);
     } else {
         // MAJOR MERGER or very low cold gas: ALL metals leave disk
         // No functional disk left, so all metals go directly to CGM/HotGas
         const double all_metals = run_params->Yield * stars;
         
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0) {
-                // CGM-regime: metals go to CGM
-                galaxies[centralgal].MetalsCGMgas += all_metals;
-            } else {
-                // Hot-ICM-regime: metals go to HotGas
-                galaxies[centralgal].MetalsHotGas += all_metals;
-            }
-        } else {
-            // Original SAGE behavior: metals go to HotGas
-            galaxies[centralgal].MetalsHotGas += all_metals;
-        }
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }
 }
 
@@ -844,21 +822,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     const double total_gas = galaxies[gal].ColdGas + galaxies[gal].HotGas + galaxies[gal].CGMgas;
     const double total_metals_gas = galaxies[gal].MetalsColdGas + galaxies[gal].MetalsHotGas + galaxies[gal].MetalsCGMgas;
     
-    if(run_params->CGMrecipeOn == 1) {
-        if(galaxies[centralgal].Regime == 0) {
-            // CGM-regime: disrupted gas goes to CGM
-            galaxies[centralgal].CGMgas += total_gas;
-            galaxies[centralgal].MetalsCGMgas += total_metals_gas;
-        } else {
-            // Hot-ICM-regime: disrupted gas goes to HotGas
-            galaxies[centralgal].HotGas += total_gas;
-            galaxies[centralgal].MetalsHotGas += total_metals_gas;
-        }
-    } else {
-        // Original SAGE behavior: disrupted gas goes to HotGas
-        galaxies[centralgal].HotGas += total_gas;
-        galaxies[centralgal].MetalsHotGas += total_metals_gas;
-    }
+    add_gas_to_hot_reservoir(&galaxies[centralgal], run_params, total_gas, total_metals_gas);
 
     // Transfer ejected mass (same for all regimes)
     galaxies[centralgal].EjectedMass += galaxies[gal].EjectedMass;

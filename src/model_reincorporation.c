@@ -60,20 +60,6 @@ void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *gal
         galaxies[centralgal].MetalsEjectedMass -= metallicity * reincorporated;
         
         // Add to appropriate hot reservoir (regime-dependent)
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0) {
-                // CGM-regime: reincorporate to CGM
-                galaxies[centralgal].CGMgas += reincorporated;
-                galaxies[centralgal].MetalsCGMgas += metallicity * reincorporated;
-            } else {
-                // Hot-ICM-regime: reincorporate to HotGas
-                galaxies[centralgal].HotGas += reincorporated;
-                galaxies[centralgal].MetalsHotGas += metallicity * reincorporated;
-            }
-        } else {
-            // Original SAGE behavior: reincorporate to HotGas
-            galaxies[centralgal].HotGas += reincorporated;
-            galaxies[centralgal].MetalsHotGas += metallicity * reincorporated;
-        }
+        add_gas_to_hot_reservoir(&galaxies[centralgal], run_params, reincorporated, metallicity * reincorporated);
     }
 }

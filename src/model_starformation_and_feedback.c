@@ -706,35 +706,13 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         // Metals that leave disk - regime dependent
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
         
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0) {
-                // CGM-regime: metals go to CGM
-                galaxies[centralgal].MetalsCGMgas += metals_leaving_disk;
-            } else {
-                // Hot-ICM-regime: metals go to HotGas
-                galaxies[centralgal].MetalsHotGas += metals_leaving_disk;
-            }
-        } else {
-            // Original SAGE behavior: metals go to HotGas
-            galaxies[centralgal].MetalsHotGas += metals_leaving_disk;
-        }
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, metals_leaving_disk);
         
     } else {
         // All metals leave disk when ColdGas is very low - regime dependent
         const double all_metals = run_params->Yield * stars;
         
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0) {
-                // CGM-regime: metals go to CGM
-                galaxies[centralgal].MetalsCGMgas += all_metals;
-            } else {
-                // Hot-ICM-regime: metals go to HotGas
-                galaxies[centralgal].MetalsHotGas += all_metals;
-            }
-        } else {
-            // Original SAGE behavior: metals go to HotGas
-            galaxies[centralgal].MetalsHotGas += all_metals;
-        }
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }
 }
 
@@ -1120,24 +1098,10 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
 
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0)
-                galaxies[centralgal].MetalsCGMgas  += metals_leaving_disk;
-            else
-                galaxies[centralgal].MetalsHotGas  += metals_leaving_disk;
-        } else {
-            galaxies[centralgal].MetalsHotGas += metals_leaving_disk;
-        }
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, metals_leaving_disk);
     } else {
         const double all_metals = run_params->Yield * stars;
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0)
-                galaxies[centralgal].MetalsCGMgas += all_metals;
-            else
-                galaxies[centralgal].MetalsHotGas += all_metals;
-        } else {
-            galaxies[centralgal].MetalsHotGas += all_metals;
-        }
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }
 
     // ========================================================================
