@@ -621,7 +621,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         }
     }
 
-	XASSERT(reheated_mass >= 0.0, -1,
+    XASSERT(reheated_mass >= 0.0, -1,
             "Error: Expected reheated gas-mass = %g to be >=0.0\n", reheated_mass);
 
     // cant use more cold gas than is available! so balance SF and feedback
@@ -1051,13 +1051,12 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         if(run_params->FIREmodeOn == 1) {
             const double z       = run_params->ZZ[galaxies[p].SnapNum];
             const double vc      = galaxies[p].Vvir;
-            const double V_CRIT  = 60.0;
 
             if(vc > 0.0 && z >= 0.0) {
                 const double vc_floored  = (vc < 1.0) ? 1.0 : vc;
                 const double z_term      = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
-                const double v_term      = (vc_floored < V_CRIT) ?
-                    pow(vc_floored / V_CRIT, -3.2) : pow(vc_floored / V_CRIT, -1.0);
+                const double v_term      = (vc_floored < FIRE_V_CRIT_KMS) ?
+                    pow(vc_floored / FIRE_V_CRIT_KMS, -3.2) : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
                 const double scaling     = z_term * v_term;
                 const double eta_reheat  = run_params->FeedbackReheatingEpsilon * scaling;
                 galaxies[p].MassLoading  = (float)eta_reheat;
@@ -1082,13 +1081,12 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
             if(run_params->FIREmodeOn == 1) {
                 const double z      = run_params->ZZ[galaxies[p].SnapNum];
                 const double vc     = galaxies[p].Vvir;
-                const double V_CRIT = 60.0;
 
                 if(vc > 0.0 && z >= 0.0) {
                     const double vc_floored = (vc < 1.0) ? 1.0 : vc;
                     const double z_term     = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
-                    const double v_term     = (vc_floored < V_CRIT) ?
-                        pow(vc_floored / V_CRIT, -3.2) : pow(vc_floored / V_CRIT, -1.0);
+                    const double v_term     = (vc_floored < FIRE_V_CRIT_KMS) ?
+                        pow(vc_floored / FIRE_V_CRIT_KMS, -3.2) : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
                     const double scaling    = z_term * v_term;
                     const double E_FB       = run_params->FeedbackEjectionEfficiency * scaling
                                               * 0.5 * stars
@@ -1115,7 +1113,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     // ========================================================================
     if(galaxies[p].ColdGas > 1.0e-8) {
         const double FracZleaveDiskVal = run_params->FracZleaveDisk
-                                         * exp(-1.0 * galaxies[centralgal].Mvir / 30.0);
+                                         * exp(-1.0 * galaxies[centralgal].Mvir / KD11_METAL_HALO_MASS);
         galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
 
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;

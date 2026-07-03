@@ -70,8 +70,7 @@ static const double Z_SOLAR_ASPLUND09 = 0.014;
 static const double Z_SOLAR_GD14 = 0.02;
 
 /* Gnedin & Draine (2014) UV-field s-parameter at U_MW = 1.0 (Milky Way ambient field).
- * s_param = pow(GD14_S_PARAM_UMW1, 0.7) from their eq. 11 / Table 1.
- * Also defined in model_starformation_and_feedback.c and model_mergers.c. */
+ * s_param = pow(GD14_S_PARAM_UMW1, 0.7) from their eq. 11 / Table 1. */
 static const double GD14_S_PARAM_UMW1 = 0.101;
 
 /*
@@ -85,7 +84,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
                  struct GALAXY *galaxies, const struct params *run_params)
 {
 
-	XASSERT(halonr == halos[halonr].FirstHaloInFOFgroup, -1,
+    XASSERT(halonr == halos[halonr].FirstHaloInFOFgroup, -1,
             "Error: halonr = %d should be equal to the FirsthaloInFOFgroup = %d\n",
             halonr, halos[halonr].FirstHaloInFOFgroup);
 
@@ -183,7 +182,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].tdeplete = -1.0;
     galaxies[p].H2DepletionTime_Gyr = -1.0f;
 
-	// infall properties
+    // infall properties
     galaxies[p].infallMvir = -1.0;
     galaxies[p].infallVvir = -1.0;
     galaxies[p].infallVmax = -1.0;
@@ -206,18 +205,18 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
  */
 double get_disk_radius(const int halonr, const int p, const struct halo_data *halos, const struct GALAXY *galaxies)
 {
-	if(galaxies[p].Vvir > 0.0 && galaxies[p].Rvir > 0.0) {
-		/* Mo, Shude & White (1998) eq. 12 with a Bullock-style spin parameter.
-		 * The literal 1.414 is intentional: the original code used this truncated
-		 * sqrt(2) rather than M_SQRT2 and changing it shifts every disk radius.
-		 * Do not replace with M_SQRT2 without re-calibrating. */
-		double SpinMagnitude = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
+    if(galaxies[p].Vvir > 0.0 && galaxies[p].Rvir > 0.0) {
+        /* Mo, Shude & White (1998) eq. 12 with a Bullock-style spin parameter.
+         * The literal 1.414 is intentional: the original code used this truncated
+         * sqrt(2) rather than M_SQRT2 and changing it shifts every disk radius.
+         * Do not replace with M_SQRT2 without re-calibrating. */
+        double SpinMagnitude = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
                                     halos[halonr].Spin[1] * halos[halonr].Spin[1] + halos[halonr].Spin[2] * halos[halonr].Spin[2]);
 
-		double SpinParameter = SpinMagnitude / (1.414 * galaxies[p].Vvir * galaxies[p].Rvir);
-		return (SpinParameter / 1.414) * galaxies[p].Rvir;
-	} else {
-		return DISK_RADIUS_FALLBACK_FRAC * galaxies[p].Rvir;
+        double SpinParameter = SpinMagnitude / (1.414 * galaxies[p].Vvir * galaxies[p].Rvir);
+        return (SpinParameter / 1.414) * galaxies[p].Rvir;
+    } else {
+        return DISK_RADIUS_FALLBACK_FRAC * galaxies[p].Rvir;
     }
 }
 
@@ -456,14 +455,14 @@ double get_virial_mass(const int halonr, const struct halo_data *halos, const st
 /* Circular velocity at the virial radius: V_vir = sqrt(G * M_vir / R_vir). */
 double get_virial_velocity(const int halonr, const struct halo_data *halos, const struct params *run_params)
 {
-	double Rvir;
+    double Rvir;
 
-	Rvir = get_virial_radius(halonr, halos, run_params);
+    Rvir = get_virial_radius(halonr, halos, run_params);
 
     if(Rvir > 0.0)
-		return sqrt(run_params->G * get_virial_mass(halonr, halos, run_params) / Rvir);
-	else
-		return 0.0;
+        return sqrt(run_params->G * get_virial_mass(halonr, halos, run_params) / Rvir);
+    else
+        return 0.0;
 }
 
 
@@ -1119,7 +1118,7 @@ double calculate_gmax_BK25(const int p, const double z, const struct GALAXY *gal
 }
 
 /* Stellar disk scale height from disk scale length (Blitz & Rosolowsky 2006 eq. 9). */
-float calculate_stellar_scale_height_BR06(float disk_scale_length_pc)
+static float calculate_stellar_scale_height_BR06(float disk_scale_length_pc)
 {
     // BR06 equation (9): log h* = -0.23 - 0.8 log R*
     // where h* and R* are measured in parsecs
@@ -1135,7 +1134,7 @@ float calculate_stellar_scale_height_BR06(float disk_scale_length_pc)
 
 
 /* Disk midplane pressure P_ext/k in K/cm^3 (Blitz & Rosolowsky 2006). */
-float calculate_midplane_pressure_BR06(float sigma_gas, float sigma_stars, float disk_scale_length_pc)
+static float calculate_midplane_pressure_BR06(float sigma_gas, float sigma_stars, float disk_scale_length_pc)
 {
     // Early termination for edge cases
     if (sigma_gas <= 0.0 || disk_scale_length_pc <= 0.0) {

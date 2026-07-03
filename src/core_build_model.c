@@ -340,7 +340,8 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
  * Drives STEPS (or up to MAX_STEPS adaptively) sub-steps.  Each sub-step
  * calls: infall_recipe, cooling_recipe, starformation_and_feedback,
  * check_disk_instability, and reincorporate_gas.  After the sub-steps,
- * handles any remaining mergers and calls save_galaxies() for this forest.
+ * handles any remaining mergers; save_galaxies() is called afterwards by
+ * sage_per_forest().
  * Returns EXIT_SUCCESS or a negative SAGE error code.
  */
 static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals, struct halo_data *halos,

@@ -16,7 +16,7 @@ ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 ROOT_DIR := $(if $(ROOT_DIR),$(ROOT_DIR),.)
 
 
-CCFLAGS += -DGNU_SOURCE -std=gnu99 -fPIC
+CCFLAGS += -std=gnu99 -fPIC
 LIBFLAGS :=
 
 OPTS := -DROOT_DIR='"${ROOT_DIR}"'

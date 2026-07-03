@@ -445,9 +445,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->TreeExtension[0] = '\0';
 
     // Check tree type is valid.
-    if (strncmp(my_treetype, "lhalo_hdf5", 511)   == 0 ||
-        strncmp(my_treetype, "genesis_hdf5", 511) == 0 ||
-        strncmp(my_treetype, "gadget4_hdf5", 511) == 0
+    if (strncmp(my_treetype, "lhalo_hdf5", MAX_STRING_LEN - 1)   == 0 ||
+        strncmp(my_treetype, "genesis_hdf5", MAX_STRING_LEN - 1) == 0 ||
+        strncmp(my_treetype, "gadget4_hdf5", MAX_STRING_LEN - 1) == 0
         ) {
 #ifndef HDF5
         fprintf(stderr, "You have specified to use a HDF5 file but have not compiled with the HDF5 option enabled.\n");
@@ -456,7 +456,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
 #endif
         // strncmp returns 0 if the two strings are equal.
         // only relevant options are HDF5 or binary files. Consistent-trees is *always* ascii (with different filename extensions)
-        snprintf(run_params->TreeExtension, 511, ".hdf5");
+        snprintf(run_params->TreeExtension, MAX_STRING_LEN - 1, ".hdf5");
     }
 
 #define CHECK_VALID_ENUM_IN_PARAM_FILE(paramname, num_enum_types, enum_names, enum_values, string_value) { \
