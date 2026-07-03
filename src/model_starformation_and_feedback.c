@@ -735,8 +735,7 @@ void update_from_star_formation(const int p, const double stars, const double me
     // H2gas and H1gas were computed before SF depleted ColdGas; clamp so they
     // remain consistent with the remaining cold gas. Only applies to H2-tracking
     // prescriptions (0=Croton and 2=Somerville-noH2 never set H2gas/H1gas).
-    const int sf = run_params->SFprescription;
-    if(sf != 0 && sf != 2) {
+    if(sf_prescription_tracks_h2(run_params->SFprescription)) {
         const float max_h = (galaxies[p].ColdGas > 0.0f) ? galaxies[p].ColdGas * HYDROGEN_MASS_FRAC : 0.0f;
         if(galaxies[p].H2gas > max_h) galaxies[p].H2gas = max_h;
         if(galaxies[p].H1gas > max_h) galaxies[p].H1gas = max_h;
@@ -773,8 +772,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
         // Remove reheated mass from cold gas (same for all regimes)
         galaxies[p].ColdGas -= reheated_mass;
         galaxies[p].MetalsColdGas -= metallicity * reheated_mass;
-        const int sf_fb = run_params->SFprescription;
-        if(sf_fb != 0 && sf_fb != 2) {
+        if(sf_prescription_tracks_h2(run_params->SFprescription)) {
             const float max_h_fb = (galaxies[p].ColdGas > 0.0f) ? galaxies[p].ColdGas * HYDROGEN_MASS_FRAC : 0.0f;
             if(galaxies[p].H2gas > max_h_fb) galaxies[p].H2gas = max_h_fb;
             if(galaxies[p].H1gas > max_h_fb) galaxies[p].H1gas = max_h_fb;
@@ -893,8 +891,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const float h     = run_params->Hubble_h;
         const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
         const int sfpres  = run_params->SFprescription;
-        const int has_h2  = (sfpres == 1 || sfpres == 3 || sfpres == 4 ||
-                              sfpres == 5 || sfpres == 6 || sfpres == 7);
+        const int has_h2  = sf_prescription_tracks_h2(sfpres);
 
         if(rs_pc > 0.0 && has_h2) {
             if(run_params->H2RadialIntegrationOn) {
@@ -913,7 +910,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
                 if(disk_area_pc2 > 0.0) {
                     const float Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
 
-                    if(sfpres == 1 || sfpres == 3) {
+                    if(sf_prescription_is_br06(sfpres)) {
                         // BR06
                         const float Sigma_star = (galaxies[p].StellarMass - galaxies[p].BulgeMass)
                                                  * 1.0e10 / h / disk_area_pc2;

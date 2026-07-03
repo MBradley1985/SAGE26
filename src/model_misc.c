@@ -1269,7 +1269,7 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
         // Calculate molecular fraction at this radius using the appropriate prescription
         float f_mol_r = 0.0f;
 
-        if(sfpres == 1 || sfpres == 3) {
+        if(sf_prescription_is_br06(sfpres)) {
             // BR06
             f_mol_r = calculate_molecular_fraction_BR06(sigma_gas_r, sigma_star_r, rs_pc);
 

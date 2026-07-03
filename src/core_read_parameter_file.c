@@ -515,6 +515,14 @@ int read_parameter_file(const char *fname, struct params *run_params)
 #undef CHECK_VALID_ENUM_IN_PARAM_FILE
 
 
+    /* SF prescription must be one of the eight implemented recipes; the
+       H2-tracking predicate (sf_prescription_tracks_h2) relies on this range. */
+    if(run_params->SFprescription < 0 || run_params->SFprescription > 7) {
+        fprintf(stderr,"Error: SFprescription = %d is not valid; it must be in [0, 7].\n", run_params->SFprescription);
+        fprintf(stderr,"Please change the value for the parameter 'SFprescription' in the parameter file (%s)\n", fname);
+        ABORT(EXIT_FAILURE);
+    }
+
     /* Check that exponent supplied is non-negative (for cases where the exponent will be used) */
     if((run_params->ForestDistributionScheme == exponent_in_nhalos || run_params->ForestDistributionScheme == generic_power_in_nhalos)
        && run_params->Exponent_Forest_Dist_Scheme < 0) {
