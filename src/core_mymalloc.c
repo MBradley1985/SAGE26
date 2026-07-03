@@ -24,7 +24,7 @@
 static long Nblocks = 0;
 static void *Table[MAXBLOCKS];
 static size_t SizeTable[MAXBLOCKS];
-static size_t TotMem = 0, HighMarkMem = 0, OldPrintedHighMark = 0;
+static size_t TotMem = 0, HighMarkMem = 0;
 
 /* file-local helpers */
 static long find_block(const void *p);
@@ -106,7 +106,7 @@ void *myrealloc(void *p, size_t n)
     }
     void *newp = realloc(Table[iblock], n);
     if(newp == NULL) {
-        fprintf(stderr, "Error: Failed to re-allocate memory for %g MB (old size = %g MB)\n",  n / (1024.0 * 1024.0), SizeTable[Nblocks-1]/ (1024.0 * 1024.0) );
+        fprintf(stderr, "Error: Failed to re-allocate memory for %g MB (old size = %g MB)\n",  n / (1024.0 * 1024.0), SizeTable[iblock]/ (1024.0 * 1024.0) );
         ABORT(MALLOC_FAILURE);
     }
     Table[iblock] = newp;
@@ -186,16 +186,10 @@ void print_allocated(void)
     return;
 }
 
-/* set_and_print_highwater_mark -- update HighMarkMem; print if new 10 MB band crossed. */
+/* set_and_print_highwater_mark -- track the peak tracked-heap usage. */
 static void set_and_print_highwater_mark(void)
 {
     if(TotMem > HighMarkMem) {
         HighMarkMem = TotMem;
-        if(HighMarkMem > OldPrintedHighMark + 10 * 1024.0 * 1024.0) {
-#ifdef VERBOSE
-#endif
-            OldPrintedHighMark = HighMarkMem;
-        }
     }
-    return;
 }

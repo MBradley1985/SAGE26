@@ -2,12 +2,14 @@
  * model_infall.c -- baryon infall, satellite stripping, and reionisation.
  *
  * Implements four routines called from evolve_galaxies() each timestep:
- *   infall_recipe      -- computes the net infalling mass for a central halo
- *                         and routes it to the correct reservoir (HotGas or
- *                         CGMgas) via add_infall_to_hot(); calls
- *                         strip_from_satellite() for each satellite.
- *   strip_from_satellite -- removes all remaining gas from a satellite galaxy
- *                           and adds it to the central's hot/CGM reservoir.
+ *   infall_recipe      -- computes the net infalling mass for a central halo,
+ *                         pools satellite ejecta/ICS into the central, and
+ *                         migrates the central's gas between the HotGas and
+ *                         CGMgas reservoirs according to its regime.
+ *   strip_from_satellite -- removes part of a satellite's baryon excess
+ *                           (scheme-dependent, see PhysicalStrippingOn) and
+ *                           adds it to the central's hot/CGM reservoir;
+ *                           called from evolve_galaxies().
  *   do_reionization    -- computes the reionisation suppression factor for
  *                         low-mass haloes using the Gnedin (2000) model.
  *   add_infall_to_hot  -- adds (or subtracts) infallingGas to the appropriate

@@ -57,7 +57,7 @@ static int compare_ints_descending (const void* p1, const void* p2)
 int read_parameter_file(const char *fname, struct params *run_params)
 {
     int errorFlag = 0;
-    int *used_tag = 0;
+    int *used_tag = NULL;
     char my_treetype[MAX_STRING_LEN], my_outputformat[MAX_STRING_LEN], my_forest_dist_scheme[MAX_STRING_LEN];
     int NParam = 0;
     char ParamTag[MAXTAGS][MAXTAGLEN + 1];
@@ -295,16 +295,29 @@ int read_parameter_file(const char *fname, struct params *run_params)
         }
 
         if(j >= 0) {
+            /* strtod/strtol instead of atof/atoi: a malformed numeric value
+               (e.g. a typo like "O.05") must be a startup error, not a silent 0. */
+            char *endptr = NULL;
             switch (ParamID[j])
                 {
                 case DOUBLE:
-                    *((double *) ParamAddr[j]) = atof(buf2);
+                    *((double *) ParamAddr[j]) = strtod(buf2, &endptr);
+                    if(endptr == buf2 || *endptr != '\0') {
+                        fprintf(stderr, "Error in file %s:   Value '%s' for parameter '%s' is not a valid number.\n",
+                                fname, buf2, buf1);
+                        errorFlag = 1;
+                    }
                     break;
                 case STRING:
                     snprintf(ParamAddr[j], MAX_STRING_LEN, "%s", buf2);
                     break;
                 case INT:
-                    *((int *) ParamAddr[j]) = atoi(buf2);
+                    *((int *) ParamAddr[j]) = (int) strtol(buf2, &endptr, 10);
+                    if(endptr == buf2 || *endptr != '\0') {
+                        fprintf(stderr, "Error in file %s:   Value '%s' for parameter '%s' is not a valid integer.\n",
+                                fname, buf2, buf1);
+                        errorFlag = 1;
+                    }
                     break;
                 }
         } else {

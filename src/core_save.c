@@ -98,8 +98,10 @@ int32_t save_galaxies(const int64_t task_forestnr, const int numgals, struct hal
 {
     int32_t status = EXIT_FAILURE;
 
-    // Reset the output galaxy count.
-    int32_t OutputGalCount[run_params->SimMaxSnaps];
+    // Reset the output galaxy count. SimMaxSnaps is validated to be
+    // < ABSOLUTEMAXSNAPS at parameter-read time, so a fixed array is safe
+    // (and avoids a variable-length array on the stack).
+    int32_t OutputGalCount[ABSOLUTEMAXSNAPS];
     for(int32_t snap_idx = 0; snap_idx < run_params->SimMaxSnaps; snap_idx++) {
         OutputGalCount[snap_idx] = 0;
     }

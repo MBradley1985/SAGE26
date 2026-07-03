@@ -454,16 +454,12 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
         if(rcool > galaxies[gal].Rvir) rcool = galaxies[gal].Rvir;
 
         coolingGas = 0.0;
-        
+
         if(run_params->CGMrecipeOn == 0) {
-            // Original behavior: SAGE C16 cooling recipe
-            if(rcool > galaxies[gal].Rvir) {
-                // "cold accretion" regime
-                coolingGas = galaxies[gal].HotGas / (galaxies[gal].Rvir / galaxies[gal].Vvir) * dt;
-            } else {
-                // "hot halo cooling" regime
-                coolingGas = (galaxies[gal].HotGas / galaxies[gal].Rvir) * (rcool / (2.0 * tcool)) * dt;
-            }
+            // SAGE C16 hot-halo cooling. rcool was capped at Rvir above, so the
+            // historical rcool > Rvir "cold accretion" branch is unreachable:
+            // cooling saturates at 0.5 * m_hot / t_cool instead of jumping.
+            coolingGas = (galaxies[gal].HotGas / galaxies[gal].Rvir) * (rcool / (2.0 * tcool)) * dt;
         } else {
             // CGMrecipeOn == 1: D&B06 cold streams for hot-regime halos
             // All halos here are in the hot regime (have virial shocks)

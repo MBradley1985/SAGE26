@@ -773,7 +773,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     // check for disk instability
     if(run_params->DiskInstabilityOn && mode == 0) {
         if(mass_ratio < run_params->ThreshMajorMerger) {
-            check_disk_instability(merger_centralgal, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
+            check_disk_instability(merger_centralgal, centralgal, halonr, time, dt, step, galaxies, run_params);
         }
     }
 

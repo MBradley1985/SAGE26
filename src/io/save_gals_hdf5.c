@@ -30,7 +30,9 @@
 #include "../sage.h"
 
 
-#define NUM_OUTPUT_FIELDS 82
+/* Field count derived from the single source of truth in save_gals_hdf5_fields.h */
+#define SAGE_FIELD_COUNT(dset, field, ctype, h5t, desc, unit) + 1
+#define NUM_OUTPUT_FIELDS (0 GALAXY_OUTPUT_FIELDS(SAGE_FIELD_COUNT))
 
 #define NUM_GALS_PER_BUFFER 8192
 
@@ -385,89 +387,10 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
     // Now we need to malloc all the arrays **inside** the GALAXY_OUTPUT struct.
     for(int32_t snap_idx = 0; snap_idx < run_params->NumSnapOutputs; snap_idx++) {
 
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SnapNum);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Type);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, GalaxyIndex);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, CentralGalaxyIndex);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SAGEHaloIndex);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SAGETreeIndex);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SimulationHaloIndex);
+#define SAGE_FIELD_MALLOC(dset, field, ctype, h5t, desc, unit) MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, field);
+        GALAXY_OUTPUT_FIELDS(SAGE_FIELD_MALLOC)
+#undef SAGE_FIELD_MALLOC
         MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TaskForestNr);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, mergeType);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, mergeIntoID);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, mergeIntoSnapNum);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, dT);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Posx);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Posy);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Posz);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Velx);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Vely);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Velz);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Spinx);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Spiny);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Spinz);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Len);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Mvir);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, CentralMvir);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Rvir);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Vvir);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Vmax);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, VelDisp);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ColdGas);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, StellarMass);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, BulgeMass);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, HotGas);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, EjectedMass);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, BlackHoleMass);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ICS);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsColdGas);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsStellarMass);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsBulgeMass);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsHotGas);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsEjectedMass);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsICS);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SfrDisk);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SfrBulge);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SfrDiskZ);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SfrBulgeZ);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, DiskScaleRadius);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, BulgeRadius);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MergerBulgeRadius);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, InstabilityBulgeRadius);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MergerBulgeMass);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, InstabilityBulgeMass);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Cooling);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Heating);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, QuasarModeBHaccretionMass);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TimeOfLastMajorMerger);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TimeOfLastMinorMerger);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, OutflowRate);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallMvir);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallVvir);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallVmax);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallStellarMass);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Regime);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, CGMgas);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsCGMgas);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MassLoading);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, H2gas);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, H1gas);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, tcool);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, tff);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, tcool_over_tff);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, tdeplete);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, H2DepletionTime_Gyr);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, RcoolToRvir);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TimeOfInfall);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, FFBRegime);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Concentration);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, mdot_cool);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, mdot_stream);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ICS_disrupt);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ICS_accrete);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ICS_sum_mt);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, g_max);
-        MALLOC_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, r_heat);
         
         /* Conditionally allocate cumulative SFH arrays if SaveFullSFH is enabled */
         if(run_params->SaveFullSFH) {
@@ -727,89 +650,10 @@ int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct
 
     for(int32_t snap_idx = 0; snap_idx < run_params->NumSnapOutputs; snap_idx++) {
 
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SnapNum);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Type);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, GalaxyIndex);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, CentralGalaxyIndex);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SAGEHaloIndex);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SAGETreeIndex);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SimulationHaloIndex);
+#define SAGE_FIELD_FREE(dset, field, ctype, h5t, desc, unit) FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, field);
+        GALAXY_OUTPUT_FIELDS(SAGE_FIELD_FREE)
+#undef SAGE_FIELD_FREE
         FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TaskForestNr);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, mergeType);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, mergeIntoID);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, mergeIntoSnapNum);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, dT);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Posx);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Posy);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Posz);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Velx);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Vely);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Velz);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Spinx);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Spiny);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Spinz);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Len);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Mvir);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, CentralMvir);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Rvir);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Vvir);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Vmax);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, VelDisp);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ColdGas);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, StellarMass);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, BulgeMass);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, HotGas);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, EjectedMass);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, BlackHoleMass);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ICS);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsColdGas);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsStellarMass);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsBulgeMass);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsHotGas);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsEjectedMass);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsICS);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SfrDisk);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SfrBulge);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SfrDiskZ);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, SfrBulgeZ);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, DiskScaleRadius);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, BulgeRadius);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MergerBulgeRadius);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, InstabilityBulgeRadius);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MergerBulgeMass);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, InstabilityBulgeMass);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Cooling);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Heating);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, QuasarModeBHaccretionMass);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TimeOfLastMajorMerger);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TimeOfLastMinorMerger);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, OutflowRate);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallMvir);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallVvir);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallVmax);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, infallStellarMass);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Regime);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, CGMgas);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MetalsCGMgas);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, MassLoading);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, H2gas);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, H1gas);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, tcool);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, tff);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, tcool_over_tff);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, tdeplete);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, H2DepletionTime_Gyr);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, RcoolToRvir);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, TimeOfInfall);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, FFBRegime);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, Concentration);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, mdot_cool);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, mdot_stream);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ICS_disrupt);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ICS_accrete);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, ICS_sum_mt);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, g_max);
-        FREE_GALAXY_OUTPUT_INNER_ARRAY(snap_idx, r_heat);
         
         /* Conditionally free full SFH arrays if they were allocated */
         /* Conditionally free SFH arrays if they were allocated */
@@ -943,102 +787,30 @@ static int32_t generate_field_metadata(char (*field_names)[MAX_STRING_LEN], char
                                 char (*field_units)[MAX_STRING_LEN], hsize_t *field_dtypes)
 {
 
-    char tmp_names[NUM_OUTPUT_FIELDS][MAX_STRING_LEN] = {"SnapNum", "Type", "GalaxyIndex", "CentralGalaxyIndex", "SAGEHaloIndex",
-                                                         "SAGETreeIndex", "SimulationHaloIndex", "mergeType", "mergeIntoID",
-                                                         "mergeIntoSnapNum", "dT", "Posx", "Posy", "Posz", "Velx", "Vely", "Velz",
-                                                         "Spinx", "Spiny", "Spinz", "Len", "Mvir", "CentralMvir", "Rvir", "Vvir",
-                                                         "Vmax", "VelDisp", "ColdGas", "StellarMass", "BulgeMass", "HotGas", "EjectedMass",
-                                                         "BlackHoleMass", "IntraClusterStars", "MetalsColdGas", "MetalsStellarMass", "MetalsBulgeMass",
-                                                         "MetalsHotGas", "MetalsEjectedMass", "MetalsIntraClusterStars", "SfrDisk", "SfrBulge", "SfrDiskZ",
-                                                         "SfrBulgeZ", "DiskRadius", "BulgeRadius", "MergerBulgeRadius", "InstabilityBulgeRadius", "MergerBulgeMass", "InstabilityBulgeMass", "Cooling", "Heating", "QuasarModeBHaccretionMass",
-                                                         "TimeOfLastMajorMerger", "TimeOfLastMinorMerger", "OutflowRate", "infallMvir",
-                                                         "infallVvir", "infallVmax", "infallStellarMass", "Regime", "CGMgas", "MetalsCGMgas", "MassLoading", "H2gas", "H1gas",
-                                                         "tcool", "tff", "tcool_over_tff", "tdeplete", "H2DepletionTime_Gyr", "RcoolToRvir", "TimeOfInfall", "FFBRegime", "Concentration", "mdot_cool", "mdot_stream",
-                                                         "ICS_disrupt", "ICS_accrete", "ICS_sum_mt", "g_max", "r_heat"};
+    /* All four tables generated in output order from GALAXY_OUTPUT_FIELDS. */
+    char tmp_names[NUM_OUTPUT_FIELDS][MAX_STRING_LEN] = {
+#define SAGE_FIELD_NAME(dset, field, ctype, h5t, desc, unit) #dset,
+        GALAXY_OUTPUT_FIELDS(SAGE_FIELD_NAME)
+#undef SAGE_FIELD_NAME
+    };
 
-    // Must accurately describe what exactly each field is and any special considerations.
-    char tmp_descriptions[NUM_OUTPUT_FIELDS][MAX_STRING_LEN] = {"Snapshot the galaxy is located at.",
-                                                                "0: Central galaxy of the main FoF halo. 1: Central of a sub-halo. 2: Orphan galaxy that will merge within the current timestep.",
-                                                                "Galaxy ID, unique across all trees and files. Calculated as local galaxy number + tree number * factor + file number * factor ",
-                                                                "GalaxyIndex of the central galaxy within this galaxy's FoF group.  Calculated the same as 'GalaxyIndex'.",
-                                                                "Halo number from the restructured trees. This is different to the tree file because we order the trees. Note: This is the host halo, not necessarily the main FoF halo.",
-                                                                "Tree number this galaxy belongs to.", "Most bound particle ID from the tree files.",
-                                                                "Denotes how this galaxy underwent a merger. 0: None. 1: Minor merger. 2: Major merger. 3: Disk instability. 4: Disrupt to intra-cluster stars.",
-                                                                "Galaxy ID this galaxy is merging into.",
-                                                                "Snapshot number of the galaxy this galaxy is merging into.",
-                                                                "Time between this snapshot and when the galaxy was last evolved.",
-                                                                "Galaxy spatial x position.", "Galaxy spatial y position.",
-                                                                "Galaxy spatial z position.", "Galaxy velocity in x direction.",
-                                                                "Galaxy velocity in y direction.", "Galaxy velocity in z direction.",
-                                                                "Halo spin in the x direction.", "Halo spin in the y direction.",
-                                                                "Halo spin in the z direction.", "Number of particles in this galaxy's halo.",
-                                                                "Virial mass of this galaxy's halo.", "Virial mass of the main FoF halo.",
-                                                                "Virial radius of this galaxy's halo.", "Virial velocity of this galaxy's halo.",
-                                                                "Maximum circular speed for this galaxy's halo.", "Velocity dispersion for this galaxy's halo.",
-                                                                "Mass of gas in the cold reseroivr.", "Mass of stars.",
-                                                                "Mass of stars in the bulge. Bulge stars are added either through disk instabilities or mergers.",
-                                                                "Mass of gas in the hot reservoir.", "Mass of gass in the ejected reseroivr.",
-                                                                "Mass of this galaxy's black hole.", "Mass of intra-cluster stars.", "Mass of metals in the cold reseroivr.",
-                                                                "Mass of metals in stars.", "Mass of metals in the bulge.",
-                                                                "Mass of metals in the hot reservoir.", "Mass of metals in the ejected reseroivr.",
-                                                                "Mass of metals in intra-cluster stars.", "Star formation rate within the disk.",
-                                                                "Star formation rate within the bulge.", "Average metallicity of star-forming disk gas.",
-                                                                "Average metallicity of star-forming bulge gas.", "Disk scale radius based on Mo, Shude & White (1998)", "Bulge scale radius based on Lange et al. (2015), Shen et al. (2003)",
-                                                                "Bulge radius formed from mergers (classical bulge).", "Bulge radius formed from disk instabilities (pseudo-bulge).",
-                                                                "Mass of stars in the bulge formed from mergers.", "Mass of stars in the bulge formed from disk instabilities.",
-                                                                "Energy rate for gas cooling in the galaxy.", "Energy rate for gas heating in the galaxy.",
-                                                                "Mass that this galaxy's black hole accreted during the last time step.",
-                                                                "Time since this galaxy had a major merger.", "Time since this galaxy had a minor merger.",
-                                                                "Rate at which cold gas is reheated to hot gas.",
-                                                                "Virial mass of this galaxy's halo at the previous timestep.",
-                                                                "Virial velocity of this galaxy's halo at the previous timestep.",
-                                                                "Maximum circular speed of this galaxy's halo at the previous timestep.",
-                                                                "Stellar mass of this galaxy at the time it became a satellite.",
-                                                                "Regime of gas accretion onto this galaxy's halo: 0 = CGM-regime 1 = ICM-regime.",
-                                                                "Mass of gas in the circum-galactic medium (CGM).",
-                                                                "Mass of metals in the circum-galactic medium (CGM).",
-                                                                "Mass loading factor defined as the ratio of outflow rate to star formation rate.",
-                                                                "Mass of molecular hydrogen (H2) in the cold gas reservoir.",
-                                                                "Mass of atomic hydrogen (HI) in the cold gas reservoir.",
-                                                                "Cooling time of the CGM gas in the halo.",
-                                                                "Free-fall time of the CGM gas in the halo.",
-                                                                "Ratio of cooling time to free-fall time of the CGM gas in the halo.",
-                                                                "Depletion time of the CGM gas reservoir.",
-                                                                "H2 depletion time from the K13 prescription. -1 if not applicable.",
-                                                                "Ratio of the cooling radius to the virial radius of the halo.",
-                                                                "Time when the galaxy last became a satellite galaxy.",
-                                                                "FFB Regime of this galaxy's halo: 0 = Normal halo 1 = FFB halo.", "NFW halo concentration parameter from Ishiyama+21 c-M relation.", "Cooling rate of hot halo gas.", "Cooling rate of cold streams.",
-                                                                "Cumulative stellar mass disrupted to ICS (tracks assembly).", "Cumulative ICS accreted from satellites (tracks assembly).",
-                                                                "Mass-weighted sum m*t (code time) at ICS deposition; divide by (ICS_disrupt+ICS_accrete) for mean assembly lookback.",
-                                                                "Maximum g value for this galaxy's halo across all snapshots.",
-                                                                "AGN radio-mode heating radius (ratchet, capped at Rvir in the CGM regime). Cooling is suppressed at r < r_heat."};
+    char tmp_descriptions[NUM_OUTPUT_FIELDS][MAX_STRING_LEN] = {
+#define SAGE_FIELD_DESC(dset, field, ctype, h5t, desc, unit) desc,
+        GALAXY_OUTPUT_FIELDS(SAGE_FIELD_DESC)
+#undef SAGE_FIELD_DESC
+    };
 
-    char tmp_units[NUM_OUTPUT_FIELDS][MAX_STRING_LEN] = {"Unitless", "Unitless", "Unitless", "Unitless", "Unitless",
-                                                         "Unitless", "Unitless", "Unitless", "Unitless",
-                                                         "Unitless", "Myr", "Mpc/h", "Mpc/h", "Mpc/h", "km/s", "km/s", "km/s",
-                                                         "Mpc * km/s", "Mpc * km/s", "Mpc * km/s", "Unitless", "1.0e10 Msun/h", "1.0e10 Msun/h",
-                                                         "Mpc/h", "km/s",
-                                                         "km/s", "km/s", "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h",
-                                                         "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h",
-                                                         "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "Msun/yr", "Msun/yr", "Msun/yr",
-                                                         "Msun/yr", "Mpc/h", "Mpc/h", "Mpc/h", "Mpc/h", "1.0e10 Msun/h", "1.0e10 Msun/h", "erg/s", "erg/s", "1.0e10 Msun/h",
-                                                         "Myr", "Myr", "Msun/yr", "1.0e10 Msun/yr", "km/s", "km/s", "1.0e10 Msun/h", "Unitless", "1.0e10 Msun/h", "1.0e10 Msun/h", "Unitless", "1.0e10 Msun/h", "1.0e10 Msun/h",
-                                                         "Myr", "Myr", "Unitless", "Myr", "Gyr", "Unitless", "Myr", "Unitless", "Unitless", "1.0e10 Msun/yr", "1.0e10 Msun/yr",
-                                                         "1.0e10 Msun/h", "1.0e10 Msun/h", "1.0e10 Msun/h * code_time", "1.0e10 Msun/h", "Mpc/h"};
+    char tmp_units[NUM_OUTPUT_FIELDS][MAX_STRING_LEN] = {
+#define SAGE_FIELD_UNIT(dset, field, ctype, h5t, desc, unit) unit,
+        GALAXY_OUTPUT_FIELDS(SAGE_FIELD_UNIT)
+#undef SAGE_FIELD_UNIT
+    };
 
-    // These are the HDF5 datatypes for each field.
-    hsize_t tmp_dtype[NUM_OUTPUT_FIELDS] = {H5T_NATIVE_INT, H5T_NATIVE_INT, H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, H5T_NATIVE_INT,
-                                            H5T_NATIVE_INT, H5T_NATIVE_LLONG, H5T_NATIVE_INT, H5T_NATIVE_INT,
-                                            H5T_NATIVE_INT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
-                                            H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_INT, H5T_NATIVE_FLOAT,
-                                            H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
-                                            H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
-                                            H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
-                                            H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
-                                            H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
-                                            H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_INT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
-                                            H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_INT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT,
-                                            H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_FLOAT, H5T_NATIVE_DOUBLE, H5T_NATIVE_FLOAT};
+    hsize_t tmp_dtype[NUM_OUTPUT_FIELDS] = {
+#define SAGE_FIELD_DTYPE(dset, field, ctype, h5t, desc, unit) h5t,
+        GALAXY_OUTPUT_FIELDS(SAGE_FIELD_DTYPE)
+#undef SAGE_FIELD_DTYPE
+    };
     for(int32_t i = 0; i < NUM_OUTPUT_FIELDS; i++) {
         memcpy(field_names[i], tmp_names[i], MAX_STRING_LEN);
         memcpy(field_descriptions[i], tmp_descriptions[i], MAX_STRING_LEN);
@@ -1361,88 +1133,9 @@ static int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to
 
     // We now need to write each property to file.  This is performed in a stack of macros because
     // it's not possible to loop through the members of a struct.
-    EXTEND_AND_WRITE_GALAXY_DATASET(SnapNum);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Type);
-    EXTEND_AND_WRITE_GALAXY_DATASET(GalaxyIndex);
-    EXTEND_AND_WRITE_GALAXY_DATASET(CentralGalaxyIndex);
-    EXTEND_AND_WRITE_GALAXY_DATASET(SAGEHaloIndex);
-    EXTEND_AND_WRITE_GALAXY_DATASET(SAGETreeIndex);
-    EXTEND_AND_WRITE_GALAXY_DATASET(SimulationHaloIndex);
-    EXTEND_AND_WRITE_GALAXY_DATASET(mergeType);
-    EXTEND_AND_WRITE_GALAXY_DATASET(mergeIntoID);
-    EXTEND_AND_WRITE_GALAXY_DATASET(mergeIntoSnapNum);
-    EXTEND_AND_WRITE_GALAXY_DATASET(dT);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Posx);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Posy);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Posz);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Velx);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Vely);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Velz);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Spinx);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Spiny);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Spinz);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Len);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Mvir);
-    EXTEND_AND_WRITE_GALAXY_DATASET(CentralMvir);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Rvir);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Vvir);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Vmax);
-    EXTEND_AND_WRITE_GALAXY_DATASET(VelDisp);
-    EXTEND_AND_WRITE_GALAXY_DATASET(ColdGas);
-    EXTEND_AND_WRITE_GALAXY_DATASET(StellarMass);
-    EXTEND_AND_WRITE_GALAXY_DATASET(BulgeMass);
-    EXTEND_AND_WRITE_GALAXY_DATASET(HotGas);
-    EXTEND_AND_WRITE_GALAXY_DATASET(EjectedMass);
-    EXTEND_AND_WRITE_GALAXY_DATASET(BlackHoleMass);
-    EXTEND_AND_WRITE_GALAXY_DATASET(ICS);
-    EXTEND_AND_WRITE_GALAXY_DATASET(MetalsColdGas);
-    EXTEND_AND_WRITE_GALAXY_DATASET(MetalsStellarMass);
-    EXTEND_AND_WRITE_GALAXY_DATASET(MetalsBulgeMass);
-    EXTEND_AND_WRITE_GALAXY_DATASET(MetalsHotGas);
-    EXTEND_AND_WRITE_GALAXY_DATASET(MetalsEjectedMass);
-    EXTEND_AND_WRITE_GALAXY_DATASET(MetalsICS);
-    EXTEND_AND_WRITE_GALAXY_DATASET(SfrDisk);
-    EXTEND_AND_WRITE_GALAXY_DATASET(SfrBulge);
-    EXTEND_AND_WRITE_GALAXY_DATASET(SfrDiskZ);
-    EXTEND_AND_WRITE_GALAXY_DATASET(SfrBulgeZ);
-    EXTEND_AND_WRITE_GALAXY_DATASET(DiskScaleRadius);
-    EXTEND_AND_WRITE_GALAXY_DATASET(BulgeRadius);
-    EXTEND_AND_WRITE_GALAXY_DATASET(MergerBulgeRadius);
-    EXTEND_AND_WRITE_GALAXY_DATASET(InstabilityBulgeRadius);
-    EXTEND_AND_WRITE_GALAXY_DATASET(MergerBulgeMass);
-    EXTEND_AND_WRITE_GALAXY_DATASET(InstabilityBulgeMass);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Cooling);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Heating);
-    EXTEND_AND_WRITE_GALAXY_DATASET(QuasarModeBHaccretionMass);
-    EXTEND_AND_WRITE_GALAXY_DATASET(TimeOfLastMajorMerger);
-    EXTEND_AND_WRITE_GALAXY_DATASET(TimeOfLastMinorMerger);
-    EXTEND_AND_WRITE_GALAXY_DATASET(OutflowRate);
-    EXTEND_AND_WRITE_GALAXY_DATASET(infallMvir);
-    EXTEND_AND_WRITE_GALAXY_DATASET(infallVvir);
-    EXTEND_AND_WRITE_GALAXY_DATASET(infallVmax);
-    EXTEND_AND_WRITE_GALAXY_DATASET(infallStellarMass);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Regime);
-    EXTEND_AND_WRITE_GALAXY_DATASET(CGMgas);
-    EXTEND_AND_WRITE_GALAXY_DATASET(MetalsCGMgas);
-    EXTEND_AND_WRITE_GALAXY_DATASET(MassLoading);
-    EXTEND_AND_WRITE_GALAXY_DATASET(H2gas);
-    EXTEND_AND_WRITE_GALAXY_DATASET(H1gas);
-    EXTEND_AND_WRITE_GALAXY_DATASET(tcool);
-    EXTEND_AND_WRITE_GALAXY_DATASET(tff);
-    EXTEND_AND_WRITE_GALAXY_DATASET(tcool_over_tff);
-    EXTEND_AND_WRITE_GALAXY_DATASET(tdeplete);
-    EXTEND_AND_WRITE_GALAXY_DATASET(H2DepletionTime_Gyr);
-    EXTEND_AND_WRITE_GALAXY_DATASET(RcoolToRvir);
-    EXTEND_AND_WRITE_GALAXY_DATASET(TimeOfInfall);
-    EXTEND_AND_WRITE_GALAXY_DATASET(FFBRegime);
-    EXTEND_AND_WRITE_GALAXY_DATASET(Concentration);
-    EXTEND_AND_WRITE_GALAXY_DATASET(mdot_cool);
-    EXTEND_AND_WRITE_GALAXY_DATASET(mdot_stream);
-    EXTEND_AND_WRITE_GALAXY_DATASET(ICS_disrupt);
-    EXTEND_AND_WRITE_GALAXY_DATASET(ICS_accrete);
-    EXTEND_AND_WRITE_GALAXY_DATASET(ICS_sum_mt);
-    EXTEND_AND_WRITE_GALAXY_DATASET(g_max);
-    EXTEND_AND_WRITE_GALAXY_DATASET(r_heat);
+#define SAGE_FIELD_WRITE(dset, field, ctype, h5t, desc, unit) EXTEND_AND_WRITE_GALAXY_DATASET(field);
+    GALAXY_OUTPUT_FIELDS(SAGE_FIELD_WRITE)
+#undef SAGE_FIELD_WRITE
 
 
     // Conditionally write cumulative SFH datasets if SaveFullSFH is enabled
