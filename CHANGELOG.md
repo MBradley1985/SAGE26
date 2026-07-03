@@ -1,5 +1,33 @@
 # Changelog
 
+## Pre-release code review and cleanup (July 2026)
+
+A full review of `src/` ahead of public release. No physics changes: every
+commit in this pass was gated on the regression baseline (all 5444 HDF5
+datasets bit-identical) plus the binary-output benchmark and the 559-test
+unit suite.
+
+- Removed dead code: the unfinished LHVT processing scaffolding
+  (`core_tree_utils.c`, `PROCESS_LHVT_STYLE`), the never-enabled MCMC-mode
+  paths, `#if 0` blocks, commented-out debug prints, and unused fields
+  (`GALAXY.CentralMvir`, `GALAXY.TotalSatelliteBaryons`, `CGMrecipeSAGEOn`).
+- Encapsulation and consistency: file-local functions made `static`, magic
+  numbers replaced by the existing named constants, tabs/spaces normalized,
+  stale comments corrected.
+- Simplification: shared regime-routed deposit helpers
+  (`add_metals_to_hot_reservoir` / `add_gas_to_hot_reservoir`), named SF
+  prescription predicates (`sf_prescription_tracks_h2` /
+  `sf_prescription_is_br06`), single FIRE-scaling computation in the FFB
+  path, de-duplicated galaxy-index error guidance. `SFprescription` is now
+  validated to [0, 7] at startup.
+- Performance: radius-independent quantities hoisted out of the H2 radial
+  integration hot loop (~4% faster mini-Millennium run, output identical).
+- Infrastructure: fixed the broken root `make tests` target, added
+  `make regression`, added a GitHub Actions CI workflow (build + unit tests
+  + MPI compile check + mini-Millennium smoke run), untracked generated
+  documentation, and documented the regression-baseline policy
+  (`docs/developer/REGRESSION_BASELINE.md`).
+
 ## SAGE26 (2026) — Major release
 
 Built on [Croton et al. (2016)](https://arxiv.org/abs/1601.04709).
