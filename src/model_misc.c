@@ -175,7 +175,6 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].TimeOfLastMajorMerger = -1.0;
     galaxies[p].TimeOfLastMinorMerger = -1.0;
     galaxies[p].OutflowRate = 0.0;
-	galaxies[p].TotalSatelliteBaryons = 0.0;
     galaxies[p].RcoolToRvir = -1.0;
     galaxies[p].MassLoading = 0.0;
     galaxies[p].tcool = -1.0;
@@ -476,7 +475,6 @@ double get_virial_velocity(const int halonr, const struct halo_data *halos, cons
  */
 double get_virial_radius(const int halonr, const struct halo_data *halos, const struct params *run_params)
 {
-  // return halos[halonr].Rvir;  // Used for Bolshoi
   const int snapnum = halos[halonr].SnapNum;
   const double zplus1 = 1.0 + run_params->ZZ[snapnum];
   const double hubble_of_z_sq =

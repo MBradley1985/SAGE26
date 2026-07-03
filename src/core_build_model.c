@@ -549,7 +549,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
     } // Go on to the next STEPS substep
 
     // Extra miscellaneous stuff before finishing this halo
-    galaxies[centralgal].TotalSatelliteBaryons = 0.0;
     const double deltaT = run_params->Age[galaxies[0].SnapNum] - halo_age;
     const double inv_deltaT = 1.0/deltaT;
 
@@ -563,11 +562,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         galaxies[p].Cooling *= inv_deltaT;
         galaxies[p].Heating *= inv_deltaT;
         galaxies[p].OutflowRate *= inv_deltaT;
-
-        if(p != centralgal) {
-            galaxies[centralgal].TotalSatelliteBaryons +=
-                (galaxies[p].StellarMass + galaxies[p].BlackHoleMass + galaxies[p].ColdGas + galaxies[p].HotGas + galaxies[p].CGMgas);
-        }
     }
 
 
