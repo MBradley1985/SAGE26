@@ -693,7 +693,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
     // check for disk instability
     if(run_params->DiskInstabilityOn) {
-        check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
+        check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, run_params);
     }
 
     // formation of new metals - instantaneous recycling approximation - only SNII

@@ -57,7 +57,7 @@ static int compare_ints_descending (const void* p1, const void* p2)
 int read_parameter_file(const char *fname, struct params *run_params)
 {
     int errorFlag = 0;
-    int *used_tag = 0;
+    int *used_tag = NULL;
     char my_treetype[MAX_STRING_LEN], my_outputformat[MAX_STRING_LEN], my_forest_dist_scheme[MAX_STRING_LEN];
     int NParam = 0;
     char ParamTag[MAXTAGS][MAXTAGLEN + 1];

@@ -45,7 +45,7 @@ static const double TOOMRE_DISK_FACTOR = 3.0;
  * transfer so the Tonini formula uses the pre-instability disc scale.
  */
 void check_disk_instability(const int p, const int centralgal, const int halonr, const double time, const double dt, const int step,
-                            struct GALAXY *galaxies, struct params *run_params)
+                            struct GALAXY *galaxies, const struct params *run_params)
 {
     // Here we calculate the stability of the stellar and gaseous disk as discussed in Mo, Mao & White (1998).
     // For unstable stars and gas, we transfer the required amount to the bulge to make the disk stable again
@@ -91,7 +91,10 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
 #ifdef VERBOSE
             if(unstable_gas > 1.0001 * galaxies[p].ColdGas ) {
                 fprintf(stdout, "unstable_gas > galaxies[p].ColdGas\t%e\t%e\n", unstable_gas, galaxies[p].ColdGas);
-                run_params->interrupted = 1;
+                /* progressbar redraw flag -- the only mutation of run_params in the
+                   physics modules, so the const is cast away here rather than
+                   forcing a non-const signature onto every caller. */
+                ((struct params *) run_params)->interrupted = 1;
             }
 #endif
 
