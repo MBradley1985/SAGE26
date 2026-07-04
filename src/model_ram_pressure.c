@@ -138,15 +138,26 @@ void ram_pressure_strip_satellite(const int centralgal, const int gal,
     if(r_orb < RPS_MIN_RADIUS_FRAC * Rvir) r_orb = RPS_MIN_RADIUS_FRAC * Rvir;
 
     /* Orbital velocity: peculiar-velocity difference vs the central; fall
-     * back to the host Vvir when the difference is degenerate. */
-    double v2 = 0.0;
-    for(int i = 0; i < 3; i++) {
-        const double dv = (double)galaxies[gal].Vel[i] - (double)galaxies[centralgal].Vel[i];
-        v2 += dv * dv;
-    }
-    double v_kms = sqrt(v2);
-    if(v_kms <= 0.0) {
+     * back to the host Vvir when the difference is degenerate.  Orphans
+     * (Type 2) always use the host Vvir: their stored velocity is frozen at
+     * the snapshot the subhalo was lost, and its offset from the CURRENT
+     * central velocity is not a meaningful orbital speed.  (Their frozen
+     * position is still used above -- it marks where the subhalo disrupted,
+     * and since the true orbit only decays further in, it underestimates
+     * rho_host and therefore errs on the side of less stripping.) */
+    double v_kms;
+    if(galaxies[gal].Type == 2) {
         v_kms = galaxies[centralgal].Vvir;
+    } else {
+        double v2 = 0.0;
+        for(int i = 0; i < 3; i++) {
+            const double dv = (double)galaxies[gal].Vel[i] - (double)galaxies[centralgal].Vel[i];
+            v2 += dv * dv;
+        }
+        v_kms = sqrt(v2);
+        if(v_kms <= 0.0) {
+            v_kms = galaxies[centralgal].Vvir;
+        }
     }
 
     /* Host ambient density at the orbital radius [g/cm^3].  CGM-regime hosts

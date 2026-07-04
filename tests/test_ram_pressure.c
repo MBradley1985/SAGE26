@@ -245,6 +245,30 @@ void test_strip_degenerate_velocity_fallback() {
                 "ColdGas stays finite and non-negative");
 }
 
+void test_orphan_uses_host_vvir() {
+    BEGIN_TEST("Driver: Type 2 orphans ignore their frozen velocity and use host Vvir");
+
+    /* an orphan with an absurd frozen velocity must strip exactly like a
+     * Type 1 satellite moving at the host Vvir from the same position */
+    struct GALAXY orphan[2], reference[2];
+    struct params run_params;
+    setup_host_and_satellite(orphan, &run_params);
+    setup_host_and_satellite(reference, &run_params);
+
+    orphan[1].Type = 2;
+    orphan[1].Vel[0] = 9999.0;          /* stale junk: must not be used */
+
+    reference[1].Type = 1;
+    reference[1].Vel[0] = reference[0].Vvir;   /* moving at exactly Vvir */
+
+    ram_pressure_strip_satellite(0, 1, 0.0, 1.0, 0.0, orphan, &run_params);
+    ram_pressure_strip_satellite(0, 1, 0.0, 1.0, 0.0, reference, &run_params);
+
+    ASSERT_LESS_THAN(orphan[1].ColdGas, 0.1, "Orphan is stripped");
+    ASSERT_CLOSE(reference[1].ColdGas, orphan[1].ColdGas, 1e-6,
+                 "Orphan strip equals Type 1 at v = Vvir (frozen velocity ignored)");
+}
+
 void test_strip_weaker_at_larger_radius() {
     BEGIN_TEST("Driver: satellite further out in the isothermal host strips less");
 
@@ -278,6 +302,7 @@ int main() {
     test_strip_gradual_timescale();
     test_strip_guards();
     test_strip_degenerate_velocity_fallback();
+    test_orphan_uses_host_vvir();
     test_strip_weaker_at_larger_radius();
 
     END_TEST_SUITE();

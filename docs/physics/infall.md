@@ -153,8 +153,11 @@ Implementation (`model_ram_pressure.c`, called once per snapshot from
 - **Orbit**: R_orb from the comoving position offset to the central
   (minimum image, converted to physical), clamped to (0, Rvir]; v_sat from
   the peculiar-velocity difference, falling back to the host `Vvir` when
-  degenerate. Restricted to Type 1 satellites -- orphan positions are not
-  reliable orbit estimates.
+  degenerate. Type 2 orphans are included with a frozen-orbit
+  approximation: their position is frozen at the snapshot the subhalo was
+  lost (the true orbit only decays further in, so the ambient density --
+  and hence the stripping -- is underestimated) and their stale stored
+  velocity is replaced by the host `Vvir`.
 - **Ambient density**: CGM-regime hosts use the same uniform/NFW/beta
   profile the CGM cooling recipe integrates (`cgm_density_at_radius()`);
   hot-regime hosts use the isothermal `M_hot / (4 pi Rvir r^2)` the
