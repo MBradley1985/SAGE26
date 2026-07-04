@@ -21,6 +21,7 @@ Source code and issue tracker: https://github.com/MBradley1985/SAGE26
    :caption: Physics
 
    core_build_model
+   physics/units
    physics/infall
    physics/cooling_and_heating
    physics/starformation_and_feedback
