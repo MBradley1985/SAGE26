@@ -32,6 +32,7 @@
 #include "core_io_tree.h"
 #include "core_mymalloc.h"
 #include "core_build_model.h"
+#include "model_starformation_and_feedback.h"
 #include "core_save.h"
 #include "core_utils.h"
 #include "progressbar.h"
@@ -286,6 +287,10 @@ int32_t finalize_sage(void *params)
                 break;
             }
         }
+
+#ifdef VERBOSE
+    report_sf_clamp_counts();
+#endif
 
     free(run_params);
 

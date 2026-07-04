@@ -584,8 +584,8 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         const int cgal = merger_centralgal;
         double h2gas_fresh = 0.0;
         if(galaxies[cgal].ColdGas > 0.0 && galaxies[cgal].DiskScaleRadius > 0.0) {
-            const float h     = run_params->Hubble_h;
-            const float rs_pc = (float)(galaxies[cgal].DiskScaleRadius * 1.0e6 / h);
+            const float h     = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
+            const float rs_pc = (float)(CODE_LENGTH_TO_PC(galaxies[cgal].DiskScaleRadius, h));
             if(rs_pc > 0.0f) {
                 if(run_params->H2RadialIntegrationOn) {
                     // Radial integration stores result in galaxies[cgal].H2gas
@@ -600,12 +600,11 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                     else
                         disk_area_pc2 = 2.0f * (float)M_PI * rs_pc * rs_pc;
 
-                    const float Sigma_gas = (float)(galaxies[cgal].ColdGas * 1.0e10 / h) / disk_area_pc2;
+                    const float Sigma_gas = (float)(CODE_MASS_TO_MSUN(galaxies[cgal].ColdGas, h)) / disk_area_pc2;
 
                     if(sf_prescription_is_br06(run_params->SFprescription)) {
                         // BR06 / Somerville+H2
-                        const float Sigma_star = (float)((galaxies[cgal].StellarMass - galaxies[cgal].BulgeMass)
-                                                 * 1.0e10 / h) / disk_area_pc2;
+                        const float Sigma_star = (float)(CODE_MASS_TO_MSUN(galaxies[cgal].StellarMass - galaxies[cgal].BulgeMass, h)) / disk_area_pc2;
                         h2gas_fresh = calculate_molecular_fraction_BR06(Sigma_gas, Sigma_star, rs_pc)
                                       * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
                     } else if(run_params->SFprescription == 4) {
@@ -762,6 +761,9 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
 
     // Clamp H2/H1 after gas has been consumed and ejected, so any chained merger
     // or disk-instability check that reads H2gas gets a physically consistent value.
+    // Note: this quick refresh skips the HIIonizationOn cut (H1 here is the full
+    // atomic remainder); the next SF substep recomputes H1 with the ionisation
+    // correction applied.
     if (sf_prescription_tracks_h2(run_params->SFprescription)) {
         if(galaxies[merger_centralgal].H2gas > galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC)
             galaxies[merger_centralgal].H2gas = galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC;

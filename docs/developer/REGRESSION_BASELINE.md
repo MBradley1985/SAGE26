@@ -51,6 +51,26 @@ compared dataset by dataset.
   Slow optional configs (e.g. microUchuu, ~17 GB output) are captured
   locally on demand and gitignored.
 
+## Option-combination coverage
+
+The physics option matrix (8 SF prescriptions x FIRE x FFB x CGM x AGN x
+H2 options x ...) is far larger than what any baseline can cover.
+Out-of-range flag values and physically meaningless combinations are
+rejected at startup by `read_parameter_file()`; everything else runs, but
+**only the combinations exercised by a baseline carry a bit-identical
+guarantee**:
+
+| Config | Exercises |
+|---|---|
+| `input/millennium.par` (default sweep) | SFprescription=1 (BR06), AGNrecipeOn=2 (Bondi), CGMrecipeOn=1, FIREmodeOn=1, FeedbackFreeModeOn=1 (Li+24 sigmoid), HDF5 output |
+| `input/microuchuu.par` (release spot check) | same physics on Uchuu100 trees: CGM + FFB + FIRE at higher resolution |
+| `input/millennium_all.par` (`tests/baseline/millennium_all/`) | extended output-field coverage |
+| `tests/benchmark/benchmark.par` | `sage_binary` output writer, MPI build |
+
+Changes to code paths outside this coverage (other SF prescriptions, AGN
+recipes 0/1/3, FFB modes 2-7, ...) are guarded only by the unit tests in
+`tests/`; treat them with proportionally more suspicion during review.
+
 ## Determinism
 
 Two consecutive serial runs of the same binary on the same machine produce

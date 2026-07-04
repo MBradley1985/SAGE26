@@ -26,6 +26,15 @@ Physics
 .. doxygenfile:: model_reincorporation.c
    :project: SAGE26
 
+.. doxygenfile:: model_h2_chemistry.c
+   :project: SAGE26
+
+.. doxygenfile:: model_halo_properties.c
+   :project: SAGE26
+
+.. doxygenfile:: model_regimes.c
+   :project: SAGE26
+
 .. doxygenfile:: model_misc.c
    :project: SAGE26
 

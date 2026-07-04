@@ -18,6 +18,7 @@
 
 #include "core_allvars.h"
 #include "core_mymalloc.h"
+#include "model_misc.h" /* sf_prescription_tracks_h2() for option-combination checks */
 
 enum datatypes {
     DOUBLE = 1,
@@ -534,6 +535,82 @@ int read_parameter_file(const char *fname, struct params *run_params)
     if(run_params->SFprescription < 0 || run_params->SFprescription > 7) {
         fprintf(stderr,"Error: SFprescription = %d is not valid; it must be in [0, 7].\n", run_params->SFprescription);
         fprintf(stderr,"Please change the value for the parameter 'SFprescription' in the parameter file (%s)\n", fname);
+        ABORT(EXIT_FAILURE);
+    }
+
+    /* Physics option flags: reject out-of-range values at startup rather than
+       running silently with untested behaviour.  Valid ranges follow the
+       dispatch chains in the physics modules (see docs/parameters.md). */
+    {
+        const struct { const char *name; int32_t value; int32_t min; int32_t max; } option_ranges[] = {
+            {"AGNrecipeOn",            run_params->AGNrecipeOn,            0, 3},
+            {"SupernovaRecipeOn",      run_params->SupernovaRecipeOn,      0, 1},
+            {"ReionizationOn",         run_params->ReionizationOn,         0, 1},
+            {"DiskInstabilityOn",      run_params->DiskInstabilityOn,      0, 1},
+            {"CGMrecipeOn",            run_params->CGMrecipeOn,            0, 1},
+            {"HIIonizationOn",         run_params->HIIonizationOn,         0, 1},
+            {"CGMDensityProfile",      run_params->CGMDensityProfile,      0, 2},
+            {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
+            {"CGMAGNOn",               run_params->CGMAGNOn,               0, 1},
+            {"RegimeRandomMode",       run_params->RegimeRandomMode,       0, 1},
+            {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
+            {"FeedbackFreeModeOn",     run_params->FeedbackFreeModeOn,     0, 7},
+            {"FFBIgnoreRegime",        run_params->FFBIgnoreRegime,        0, 1},
+            {"FFBRandomMode",          run_params->FFBRandomMode,          0, 1},
+            {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 3},
+            {"H2DiskAreaOption",       run_params->H2DiskAreaOption,       0, 2},
+            {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
+            {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
+            {"TrackICSAssembly",       run_params->TrackICSAssembly,       0, 1},
+            {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
+            {"DynamicDisruptionSplit", run_params->DynamicDisruptionSplit, 0, 2},
+            {"PhysicalStrippingOn",    run_params->PhysicalStrippingOn,    0, 2},
+        };
+        for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
+            if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {
+                fprintf(stderr, "Error: %s = %d is not valid; it must be in [%d, %d].\n",
+                        option_ranges[i].name, option_ranges[i].value, option_ranges[i].min, option_ranges[i].max);
+                fprintf(stderr, "Please change the value for the parameter '%s' in the parameter file (%s)\n",
+                        option_ranges[i].name, fname);
+                ABORT(EXIT_FAILURE);
+            }
+        }
+    }
+
+    /* Numeric parameters that must be strictly positive for the physics to
+       be well-defined. */
+    if(run_params->H2RadialIntegrationOn && run_params->H2RadialNBins < 1) {
+        fprintf(stderr, "Error: H2RadialNBins = %d is not valid; the radial integration needs at least 1 bin.\n",
+                run_params->H2RadialNBins);
+        ABORT(EXIT_FAILURE);
+    }
+    if(run_params->H2RadialIntegrationOn && run_params->H2RadialRMaxFactor <= 0.0) {
+        fprintf(stderr, "Error: H2RadialRMaxFactor = %g is not valid; it must be > 0.\n",
+                run_params->H2RadialRMaxFactor);
+        ABORT(EXIT_FAILURE);
+    }
+    if(run_params->SubstepResolution <= 0.0) {
+        fprintf(stderr, "Error: SubstepResolution = %g is not valid; it must be > 0.\n",
+                run_params->SubstepResolution);
+        ABORT(EXIT_FAILURE);
+    }
+
+    /* Option combinations that would run but produce physically meaningless
+       output are rejected here instead of failing silently mid-run. */
+    if((run_params->FeedbackFreeModeOn == 6 || run_params->FeedbackFreeModeOn == 7)
+       && !sf_prescription_tracks_h2(run_params->SFprescription)) {
+        fprintf(stderr, "Error: FeedbackFreeModeOn = %d selects H2-based FFB star formation, but\n"
+                        "SFprescription = %d does not track H2 (only prescriptions other than 0 and 2 do).\n"
+                        "FFB bursts would form zero stars. Choose an H2-tracking SFprescription or an\n"
+                        "FFB mode in [1, 5].\n",
+                run_params->FeedbackFreeModeOn, run_params->SFprescription);
+        ABORT(EXIT_FAILURE);
+    }
+    if((run_params->FeedbackFreeModeOn == 4 || run_params->FeedbackFreeModeOn == 7)
+       && run_params->FFBConcSigma <= 0.0) {
+        fprintf(stderr, "Error: FeedbackFreeModeOn = %d uses log-normal concentration scatter, but\n"
+                        "FFBConcSigma = %g; the scatter width must be > 0 (typical ~0.2).\n",
+                run_params->FeedbackFreeModeOn, run_params->FFBConcSigma);
         ABORT(EXIT_FAILURE);
     }
 

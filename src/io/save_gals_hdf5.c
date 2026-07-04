@@ -205,10 +205,17 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
     save_info->file_id = file_id;
 
     // Generate the names, description and HDF5 data types for each of the output fields.
+    // Zero the string buffers first: the Description/Units attributes are written
+    // with the full MAX_STRING_LEN datatype, so any bytes beyond the snprintf'd
+    // text end up in the file -- they must be defined (zero), not stack garbage.
     char field_names[NUM_OUTPUT_FIELDS][MAX_STRING_LEN];
     char field_descriptions[NUM_OUTPUT_FIELDS][MAX_STRING_LEN];
     char field_units[NUM_OUTPUT_FIELDS][MAX_STRING_LEN];
     hsize_t field_dtypes[NUM_OUTPUT_FIELDS];
+
+    memset(field_names, 0, sizeof(field_names));
+    memset(field_descriptions, 0, sizeof(field_descriptions));
+    memset(field_units, 0, sizeof(field_units));
 
     generate_field_metadata(field_names, field_descriptions, field_units, field_dtypes);
 
@@ -348,9 +355,17 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
                 CHECK_STATUS_AND_RETURN_ON_FAIL(dataset_cum, (int32_t) dataset_cum,
                                                 "Could not create cumulative SFH dataset %s", cum_sfh_names[cum_idx]);
                 
-                // Set metadata attributes
-                CREATE_STRING_ATTRIBUTE(dataset_cum, "Description", cum_sfh_descriptions[cum_idx], MAX_STRING_LEN);
-                CREATE_STRING_ATTRIBUTE(dataset_cum, "Units", cum_sfh_units[cum_idx], MAX_STRING_LEN);
+                // Set metadata attributes. The attribute datatype is MAX_STRING_LEN
+                // wide and H5Awrite reads that many bytes from the source, so the
+                // string literals must be staged in a zeroed buffer of that size --
+                // passing them directly reads past the end of the literal.
+                char cum_attr_buf[MAX_STRING_LEN];
+                memset(cum_attr_buf, 0, sizeof(cum_attr_buf));
+                snprintf(cum_attr_buf, sizeof(cum_attr_buf), "%s", cum_sfh_descriptions[cum_idx]);
+                CREATE_STRING_ATTRIBUTE(dataset_cum, "Description", cum_attr_buf, MAX_STRING_LEN);
+                memset(cum_attr_buf, 0, sizeof(cum_attr_buf));
+                snprintf(cum_attr_buf, sizeof(cum_attr_buf), "%s", cum_sfh_units[cum_idx]);
+                CREATE_STRING_ATTRIBUTE(dataset_cum, "Units", cum_attr_buf, MAX_STRING_LEN);
                 CREATE_SINGLE_ATTRIBUTE(dataset_cum, "NumSnapshots", run_params->SimMaxSnaps, H5T_NATIVE_INT);
                 
                 sfh_status = H5Dclose(dataset_cum);
