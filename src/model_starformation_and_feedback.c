@@ -93,6 +93,564 @@ static double ionized_gas_fraction(const double coldgas_code, const double rs_co
 }
 
 /*
+ * SFprescription == 0 -- Croton et al. (2006): stars form from cold gas
+ * above the Kauffmann (1996) eq. 7 critical mass.  Does not touch H2gas.
+ *
+ * Returns the instantaneous SFR strdot [10^10 Msun/h / code time].
+ */
+static double sfr_croton06(const int p, const struct GALAXY *galaxies, const struct params *run_params)
+{
+    double reff, tdyn, strdot;
+
+    strdot = 0.0;
+    tdyn = 0.0;
+
+    // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
+    reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
+
+    if(galaxies[p].Vvir <= 0.0) {
+        strdot = 0.0;
+    } else {
+        tdyn = reff / galaxies[p].Vvir;
+
+        // from Kauffmann (1996) eq7 x piR^2, (Vvir in km/s, reff in Mpc/h) in units of 10^10Msun/h
+        const double cold_crit = KAUFFMANN96_SF_THRESHOLD * galaxies[p].Vvir * reff;
+        if(galaxies[p].ColdGas > cold_crit && tdyn > 0.0) {
+            strdot = run_params->SfrEfficiency * (galaxies[p].ColdGas - cold_crit) / tdyn;
+        } else {
+            strdot = 0.0;
+        }
+    }
+
+    return strdot;
+}
+
+/*
+ * SFprescription == 1 -- Blitz & Rosolowsky (2006) pressure-based H2
+ * fraction; SF follows the molecular gas.  Sets galaxies[p].H2gas.
+ *
+ * Returns the instantaneous SFR strdot [10^10 Msun/h / code time].
+ */
+static double sfr_br06(const int p, struct GALAXY *galaxies, const struct params *run_params)
+{
+    double reff, tdyn, strdot;
+
+    strdot = 0.0;
+    tdyn = 0.0;
+
+
+    // ========================================================================
+    // Blitz and Rosolowsky (2006) - BR06 Model
+    // ========================================================================
+
+    // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
+    reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
+
+    if(galaxies[p].Vvir <= 0.0) {
+        galaxies[p].H2gas = 0.0;
+        strdot = 0.0;
+    } else {
+        tdyn = reff / galaxies[p].Vvir;
+        // BR06 model
+        const float h = run_params->Hubble_h;
+        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+        if (rs_pc <= 0.0) {
+            galaxies[p].H2gas = 0.0;
+            strdot = 0.0;
+        } else {
+            // H2 mass via BR06: radial integration or single-slab
+            if(run_params->H2RadialIntegrationOn) {
+                calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
+                // result already stored in galaxies[p].H2gas by the function
+            } else {
+                float disk_area_pc2;
+                if (run_params->H2DiskAreaOption == 0) {
+                    disk_area_pc2 = M_PI * pow(rs_pc, 2);
+                } else if (run_params->H2DiskAreaOption == 1) {
+                    disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+                } else {
+                    disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
+                }
+                const float gas_surface_density  = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
+                const float star_surface_density = (galaxies[p].StellarMass - galaxies[p].BulgeMass)
+                                                   * 1.0e10 / h / disk_area_pc2;
+                galaxies[p].H2gas = calculate_molecular_fraction_BR06(gas_surface_density, star_surface_density,
+                                                                       rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+            }
+
+            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
+                galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+
+            if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
+                strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
+            } else {
+                strdot = 0.0;
+            }
+        }
+    }
+
+    return strdot;
+}
+
+/*
+ * SFprescription == 2 -- Somerville et al. (2025) density-modulated
+ * efficiency (their eqs. 2, 3, 8) applied to total cold gas; H2gas is
+ * forced to zero (no H2 tracking in this prescription).
+ *
+ * Returns the instantaneous SFR strdot [10^10 Msun/h / code time].
+ */
+static double sfr_somerville25_coldgas(const int p, struct GALAXY *galaxies, const struct params *run_params)
+{
+    double reff, tdyn, strdot;
+
+    strdot = 0.0;
+    tdyn = 0.0;
+
+
+    // =======================================================================
+    // Somerville et al. 2025: Density Modulated Star Formation Efficiency
+    // Using Equation 3 for efficiency: epsilon = (Sigma/Sigma_crit)/(1 + Sigma/Sigma_crit)
+    // =======================================================================
+
+    // No H2 tracking in this prescription
+    galaxies[p].H2gas = 0.0;
+
+    // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
+    reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
+
+    if(galaxies[p].Vvir <= 0.0) {
+        strdot = 0.0;
+    } else {
+        tdyn = reff / galaxies[p].Vvir;
+        const float h = run_params->Hubble_h;
+        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+        float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2); // pc^2
+        float gas_surface_density = (disk_area_pc2 > 0.0) ?
+            (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2 : 0.0; // Msun/pc^2
+
+        // Critical surface density from Equation 2
+        const double Sigma_crit = SOMERVILLE25_SIGMA_CRIT;
+
+        // Cloud-scale star formation efficiency from Equation 3
+        double epsilon_cl = (gas_surface_density / Sigma_crit) / (1.0 + gas_surface_density / Sigma_crit);
+
+        // Fraction of gas in dense clouds (f_dense from Equation 8)
+        const double f_dense = SOMERVILLE25_F_DENSE;
+
+        // Star formation rate: SFR ~ epsilon_cl * f_dense * m_gas / tdyn
+        if(tdyn > 0.0 && gas_surface_density > 0.0) {
+            strdot = epsilon_cl * f_dense * galaxies[p].ColdGas / tdyn;
+        } else {
+            strdot = 0.0;
+        }
+    }
+
+    return strdot;
+}
+
+/*
+ * SFprescription == 3 -- Somerville et al. (2025) efficiency applied to
+ * BR06 molecular gas.  Sets galaxies[p].H2gas.
+ *
+ * Returns the instantaneous SFR strdot [10^10 Msun/h / code time].
+ */
+static double sfr_somerville25_h2(const int p, struct GALAXY *galaxies, const struct params *run_params)
+{
+    double reff, tdyn, strdot;
+
+    strdot = 0.0;
+    tdyn = 0.0;
+    double total_molecular_gas;
+
+
+    // =======================================================================
+    // Somerville et al. 2025: Density Modulated Star Formation Efficiency with H2
+    // Using Equation 3 for efficiency: epsilon = (Sigma/Sigma_crit)/(1 + Sigma/Sigma_crit)
+    // But replacing cold gas with H2 gas using Blitz & Rosolowsky 2006
+    // =======================================================================
+
+    // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
+    reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
+
+    if(galaxies[p].Vvir <= 0.0) {
+        galaxies[p].H2gas = 0.0;
+        strdot = 0.0;
+    } else {
+        tdyn = reff / galaxies[p].Vvir;
+        const float h = run_params->Hubble_h;
+        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+
+        if (rs_pc <= 0.0) {
+            galaxies[p].H2gas = 0.0;
+            strdot = 0.0;
+        } else {
+            // H2 mass via BR06: radial integration or single-slab
+            float gas_surface_density = 0.0f;
+            if(run_params->H2RadialIntegrationOn) {
+                calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
+                // result already stored in galaxies[p].H2gas by the function
+                // compute gas_surface_density for epsilon_cl below using pi*(3*r_s)^2 as reference
+                const float ref_area = (float)(M_PI * pow(3.0 * rs_pc, 2));
+                gas_surface_density = (ref_area > 0.0f) ? (galaxies[p].ColdGas * 1.0e10f / h) / ref_area : 0.0f;
+            } else {
+                float disk_area_pc2;
+                if (run_params->H2DiskAreaOption == 0) {
+                    disk_area_pc2 = M_PI * pow(rs_pc, 2);
+                } else if (run_params->H2DiskAreaOption == 1) {
+                    disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+                } else {
+                    disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
+                }
+                gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
+                const float stellar_surface_density = ((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h) / disk_area_pc2;
+                total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
+                                                                        rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                galaxies[p].H2gas = total_molecular_gas;
+            }
+
+            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
+                galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+
+            // Critical surface density from Equation 2
+            const double Sigma_crit = SOMERVILLE25_SIGMA_CRIT;
+
+            // Cloud-scale star formation efficiency from Equation 3
+            double epsilon_cl = (gas_surface_density / Sigma_crit) / (1.0 + gas_surface_density / Sigma_crit);
+
+            // Fraction of gas in dense clouds (f_dense from Equation 8)
+            const double f_dense = SOMERVILLE25_F_DENSE;
+
+            // Star formation rate using H2 gas instead of total cold gas
+            if(tdyn > 0.0 && gas_surface_density > 0.0 && galaxies[p].H2gas > 0.0) {
+                strdot = epsilon_cl * f_dense * galaxies[p].H2gas / tdyn;
+            } else {
+                strdot = 0.0;
+            }
+        }
+    }
+
+    return strdot;
+}
+
+/*
+ * SFprescription == 4 -- Krumholz & Dekel (2012) H2 fraction.
+ * Sets galaxies[p].H2gas.
+ *
+ * Returns the instantaneous SFR strdot [10^10 Msun/h / code time].
+ */
+static double sfr_kd12(const int p, struct GALAXY *galaxies, const struct params *run_params)
+{
+    double reff, tdyn, strdot;
+
+    strdot = 0.0;
+    tdyn = 0.0;
+    double metallicity, total_molecular_gas;
+    metallicity = 0.0;
+
+
+    // ========================================================================
+    // Krumholz and Dekel (2012) - KD12 Model
+    // ========================================================================
+
+    if(galaxies[p].Vvir <= 0.0) {
+        galaxies[p].H2gas = 0.0;
+        strdot = 0.0;
+    } else {
+        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
+        tdyn = reff / galaxies[p].Vvir;
+        const float h = run_params->Hubble_h;
+        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+        if (rs_pc <= 0.0) {
+            galaxies[p].H2gas = 0.0;
+            strdot = 0.0;
+        } else {
+            if(run_params->H2RadialIntegrationOn) {
+                calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
+            } else {
+                // Choose disk area based on H2DiskAreaOption
+                float disk_area;
+                if (run_params->H2DiskAreaOption == 0) {
+                    disk_area = M_PI * pow(rs_pc, 2);
+                } else if (run_params->H2DiskAreaOption == 1) {
+                    disk_area = M_PI * pow(3.0 * rs_pc, 2);
+                } else {
+                    disk_area = 2.0 * M_PI * pow(rs_pc, 2);
+                }
+                if(disk_area <= 0.0) {
+                    galaxies[p].H2gas = 0.0;
+                } else {
+                    float surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area;
+                    if(galaxies[p].ColdGas > 0.0) {
+                        metallicity = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
+                    }
+                    float clumping_factor = 5.0;
+                    total_molecular_gas = calculate_H2_fraction_KD12(surface_density, metallicity, clumping_factor) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                    galaxies[p].H2gas = total_molecular_gas;
+                }
+            }
+            // Safety check: H2 fraction cannot exceed 1.0
+            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
+                galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+            }
+
+            if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
+                strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
+            } else {
+                strdot = 0.0;
+            }
+        }
+    }
+
+    return strdot;
+}
+
+/*
+ * SFprescription == 5 -- Krumholz, McKee & Tumlinson (2009) H2 fraction
+ * (inline two-phase fit).  Sets galaxies[p].H2gas.
+ *
+ * Returns the instantaneous SFR strdot [10^10 Msun/h / code time].
+ */
+static double sfr_kmt09(const int p, struct GALAXY *galaxies, const struct params *run_params)
+{
+    double reff, tdyn, strdot;
+
+    strdot = 0.0;
+    tdyn = 0.0;
+
+
+    // ========================================================================
+    // Krumholz, McKee, & Tumlinson (2009) - KMT09 Model
+    // ========================================================================
+
+    
+    // 1. Geometry and Units
+    reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
+    tdyn = reff / galaxies[p].Vvir;
+    
+    // Check for physical validity
+    if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
+        galaxies[p].H2gas = 0.0;
+        strdot = 0.0;
+    } else {
+        const float h = run_params->Hubble_h;
+        // Scale radius in pc
+        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+
+        if(run_params->H2RadialIntegrationOn) {
+            calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
+        } else {
+            // Choose disk area based on H2DiskAreaOption
+            float disk_area_pc2;
+            if (run_params->H2DiskAreaOption == 0) {
+                disk_area_pc2 = M_PI * pow(rs_pc, 2);
+            } else if (run_params->H2DiskAreaOption == 1) {
+                disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+            } else {
+                disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
+            }
+
+            // Gas Surface Density (Msun/pc^2) - Sigma_g
+            float gas_surface_density = (disk_area_pc2 > 0.0) ?
+                (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2 : 0.0;
+
+            float metallicity_abs = 0.0;
+            if(galaxies[p].ColdGas > 0.0) {
+                metallicity_abs = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
+            }
+            float Z_prime = (metallicity_abs > 0.0) ? metallicity_abs / 0.02 : 0.0;
+
+            const float clumping_factor = 3.0;
+            float Sigma_comp = clumping_factor * gas_surface_density;
+            double tau_c = 0.066 * clumping_factor * Z_prime * gas_surface_density;
+            float chi = 0.77 * (1.0 + 3.1 * pow(Z_prime, 0.365));
+            float s = 0.0;
+            if (Sigma_comp > 0.0 && tau_c > 1e-10) {
+                s = log(1.0 + 0.6 * chi + 0.01 * chi * chi) / (0.6 * tau_c);
+            } else {
+                s = 100.0;
+            }
+
+            float f_H2 = 0.0;
+            if (s < 2.0) {
+                f_H2 = 1.0 - (3.0 * s) / (4.0 + s);
+            }
+            if (f_H2 < 0.0) f_H2 = 0.0;
+            if (f_H2 > 1.0) f_H2 = 1.0;
+
+            galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+        }
+
+        // Can't create more H2 than total cold gas
+        if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
+            galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+        }
+
+        if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
+            strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
+        } else {
+            strdot = 0.0;
+        }
+    }
+
+    return strdot;
+}
+
+/*
+ * SFprescription == 6 -- Krumholz (2013) molecule-poor SF law using the
+ * eq. 28 depletion time.  Sets galaxies[p].H2gas and H2DepletionTime_Gyr.
+ *
+ * Returns the instantaneous SFR strdot [10^10 Msun/h / code time].
+ */
+static double sfr_k13(const int p, struct GALAXY *galaxies, const struct params *run_params)
+{
+    double reff, tdyn, strdot;
+
+    strdot = 0.0;
+    tdyn = 0.0;
+
+
+    // ========================================================================
+    // Krumholz 2013 (KMT+) Model
+    // "The star formation law in molecule-poor galaxies"
+    // Uses the analytic approximation for depletion time (Equation 28)
+    // ========================================================================
+
+    reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
+    tdyn = reff / galaxies[p].Vvir;
+
+    // Basic safety checks
+    if(galaxies[p].Vvir <= 0.0 || galaxies[p].ColdGas <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
+        strdot = 0.0;
+        galaxies[p].H2gas = 0.0;
+    } else {
+        tdyn = reff / galaxies[p].Vvir; // Code units
+
+        const float h = run_params->Hubble_h;
+        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+
+        if(run_params->H2RadialIntegrationOn) {
+            // Radially integrate both H2 mass and K13 SFR consistently.
+            // Sigma(r)/t_dep(r) is summed over the disk using the local f_H2(r) at each annulus,
+            // avoiding the single-slab Sigma = M/(pi r_s^2) = 2Sigma0 overestimate.
+            double strdot_k13 = 0.0;
+            calculate_molecular_fraction_radial_integration(p, galaxies, run_params, &strdot_k13);
+            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
+                galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+            // H2DepletionTime_Gyr = M_gas / SFR_K13_integrated, set inside function
+            strdot = strdot_k13;
+        } else {
+            // Slab path: single representative surface density from H2DiskAreaOption
+            double Sigma_gas_k13 = 0.0, Sigma_star_k13 = 0.0, Z_prime_k13 = 0.01, f_H2_2p_k13 = 0.0;
+            float area_pc2;
+            if (run_params->H2DiskAreaOption == 0) {
+                area_pc2 = M_PI * pow(rs_pc, 2);
+            } else if (run_params->H2DiskAreaOption == 1) {
+                area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+            } else {
+                area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
+            }
+
+            if(area_pc2 > 0.0) {
+                Sigma_gas_k13  = (galaxies[p].ColdGas * 1.0e10 / h) / area_pc2;
+                Sigma_star_k13 = ((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h) / area_pc2;
+                const double Z_gas = (galaxies[p].ColdGas > 0.0) ? (galaxies[p].MetalsColdGas / galaxies[p].ColdGas) : 0.0;
+                f_H2_2p_k13 = calculate_H2_fraction_K13(Sigma_gas_k13, Z_gas, 5.0);
+                Z_prime_k13 = (Z_gas > 0.0) ? Z_gas / Z_SOLAR_ASPLUND09 : 0.0;
+                if(Z_prime_k13 < 0.01) Z_prime_k13 = 0.01;
+                galaxies[p].H2gas = f_H2_2p_k13 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+            } else {
+                galaxies[p].H2gas = 0.0;
+            }
+
+            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
+                galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+
+            const double t_dep_Gyr = calculate_tdep_K13_Gyr((float)Sigma_gas_k13, (float)Sigma_star_k13,
+                                                               rs_pc, (float)Z_prime_k13, (float)f_H2_2p_k13);
+            galaxies[p].H2DepletionTime_Gyr = (t_dep_Gyr > 0.0) ? (float)t_dep_Gyr : -1.0f;
+
+            strdot = (galaxies[p].H2gas > 0.0 && tdyn > 0.0)
+                     ? run_params->SfrEfficiency * galaxies[p].H2gas / tdyn : 0.0;
+        }
+    }
+
+    return strdot;
+}
+
+/*
+ * SFprescription == 7 -- Gnedin & Draine (2014; 2016 erratum fit) H2
+ * fraction.  Sets galaxies[p].H2gas.
+ *
+ * Returns the instantaneous SFR strdot [10^10 Msun/h / code time].
+ */
+static double sfr_gd14(const int p, struct GALAXY *galaxies, const struct params *run_params)
+{
+    double reff, tdyn, strdot;
+
+    strdot = 0.0;
+    tdyn = 0.0;
+
+    
+    // ========================================================================
+    // Gnedin & Draine (2014) - GD14 Model
+    // Implemented using the "more accurate and simpler fit" from the 
+    // 2016 Erratum (ApJ, 830, 54)
+    // ========================================================================
+
+    // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
+    reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
+
+    // Basic safety checks
+    if(galaxies[p].Vvir <= 0.0 || galaxies[p].ColdGas <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
+        strdot = 0.0;
+        galaxies[p].H2gas = 0.0;
+    } else {
+        tdyn = reff / galaxies[p].Vvir; // Code units
+        
+        const float h = run_params->Hubble_h;
+        // Scale radius in pc
+        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+
+        if(run_params->H2RadialIntegrationOn) {
+            calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
+        } else {
+            // Choose disk area based on H2DiskAreaOption
+            float disk_area_pc2;
+            if (run_params->H2DiskAreaOption == 0) {
+                disk_area_pc2 = M_PI * pow(rs_pc, 2);
+            } else if (run_params->H2DiskAreaOption == 1) {
+                disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
+            } else {
+                disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
+            }
+
+            double Sigma_gas = 0.0;
+            if(disk_area_pc2 > 0.0) {
+                Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
+            }
+
+            const double metallicity_abs = (galaxies[p].ColdGas > 0.0) ?
+                galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
+            const double f_H2 = calculate_H2_fraction_GD14(Sigma_gas, metallicity_abs, rs_pc);
+            galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+        }
+
+        // Can't create more H2 than total cold gas
+        if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
+            galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+        }
+
+        if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
+            strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
+        } else {
+            strdot = 0.0;
+        }
+    }
+
+    return strdot;
+}
+
+/*
  * Main star formation and feedback driver for one galaxy per substep.
  *
  * Selects the active SF prescription (run_params->SFprescription):
@@ -128,444 +686,22 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         return;  // Exit early - FFB path complete
     }
 
-    double reff, tdyn, strdot, stars, ejected_mass, metallicity, total_molecular_gas;
+    double stars, ejected_mass, metallicity;
 
-    // Initialise variables
-    strdot = 0.0;
-    tdyn = 0.0;
-    metallicity = 0.0;
-
-    // star formation recipes
-    if(run_params->SFprescription == 0) {
-        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
-        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
-
-        if(galaxies[p].Vvir <= 0.0) {
-            strdot = 0.0;
-        } else {
-            tdyn = reff / galaxies[p].Vvir;
-
-            // from Kauffmann (1996) eq7 x piR^2, (Vvir in km/s, reff in Mpc/h) in units of 10^10Msun/h
-            const double cold_crit = KAUFFMANN96_SF_THRESHOLD * galaxies[p].Vvir * reff;
-            if(galaxies[p].ColdGas > cold_crit && tdyn > 0.0) {
-                strdot = run_params->SfrEfficiency * (galaxies[p].ColdGas - cold_crit) / tdyn;
-            } else {
-                strdot = 0.0;
-            }
-        }
-    } else if(run_params->SFprescription == 1) {
-
-        // ========================================================================
-        // Blitz and Rosolowsky (2006) - BR06 Model
-        // ========================================================================
-
-        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
-        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
-
-        if(galaxies[p].Vvir <= 0.0) {
-            galaxies[p].H2gas = 0.0;
-            strdot = 0.0;
-        } else {
-            tdyn = reff / galaxies[p].Vvir;
-            // BR06 model
-            const float h = run_params->Hubble_h;
-            const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-            if (rs_pc <= 0.0) {
-                galaxies[p].H2gas = 0.0;
-                strdot = 0.0;
-            } else {
-                // H2 mass via BR06: radial integration or single-slab
-                if(run_params->H2RadialIntegrationOn) {
-                    calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
-                    // result already stored in galaxies[p].H2gas by the function
-                } else {
-                    float disk_area_pc2;
-                    if (run_params->H2DiskAreaOption == 0) {
-                        disk_area_pc2 = M_PI * pow(rs_pc, 2);
-                    } else if (run_params->H2DiskAreaOption == 1) {
-                        disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
-                    } else {
-                        disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
-                    }
-                    const float gas_surface_density  = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
-                    const float star_surface_density = (galaxies[p].StellarMass - galaxies[p].BulgeMass)
-                                                       * 1.0e10 / h / disk_area_pc2;
-                    galaxies[p].H2gas = calculate_molecular_fraction_BR06(gas_surface_density, star_surface_density,
-                                                                           rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-                }
-
-                if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
-                    galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-
-                if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
-                    strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
-                } else {
-                    strdot = 0.0;
-                }
-            }
-        }
-    } else if(run_params->SFprescription == 2) {
-
-        // =======================================================================
-        // Somerville et al. 2025: Density Modulated Star Formation Efficiency
-        // Using Equation 3 for efficiency: epsilon = (Sigma/Sigma_crit)/(1 + Sigma/Sigma_crit)
-        // =======================================================================
-
-        // No H2 tracking in this prescription
-        galaxies[p].H2gas = 0.0;
-
-        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
-        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
-
-        if(galaxies[p].Vvir <= 0.0) {
-            strdot = 0.0;
-        } else {
-            tdyn = reff / galaxies[p].Vvir;
-            const float h = run_params->Hubble_h;
-            const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-            float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2); // pc^2
-            float gas_surface_density = (disk_area_pc2 > 0.0) ?
-                (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2 : 0.0; // Msun/pc^2
-
-            // Critical surface density from Equation 2
-            const double Sigma_crit = SOMERVILLE25_SIGMA_CRIT;
-
-            // Cloud-scale star formation efficiency from Equation 3
-            double epsilon_cl = (gas_surface_density / Sigma_crit) / (1.0 + gas_surface_density / Sigma_crit);
-
-            // Fraction of gas in dense clouds (f_dense from Equation 8)
-            const double f_dense = SOMERVILLE25_F_DENSE;
-
-            // Star formation rate: SFR ~ epsilon_cl * f_dense * m_gas / tdyn
-            if(tdyn > 0.0 && gas_surface_density > 0.0) {
-                strdot = epsilon_cl * f_dense * galaxies[p].ColdGas / tdyn;
-            } else {
-                strdot = 0.0;
-            }
-        }
-    } else if(run_params->SFprescription == 3) {
-
-        // =======================================================================
-        // Somerville et al. 2025: Density Modulated Star Formation Efficiency with H2
-        // Using Equation 3 for efficiency: epsilon = (Sigma/Sigma_crit)/(1 + Sigma/Sigma_crit)
-        // But replacing cold gas with H2 gas using Blitz & Rosolowsky 2006
-        // =======================================================================
-
-        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
-        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
-
-        if(galaxies[p].Vvir <= 0.0) {
-            galaxies[p].H2gas = 0.0;
-            strdot = 0.0;
-        } else {
-            tdyn = reff / galaxies[p].Vvir;
-            const float h = run_params->Hubble_h;
-            const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-
-            if (rs_pc <= 0.0) {
-                galaxies[p].H2gas = 0.0;
-                strdot = 0.0;
-            } else {
-                // H2 mass via BR06: radial integration or single-slab
-                float gas_surface_density = 0.0f;
-                if(run_params->H2RadialIntegrationOn) {
-                    calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
-                    // result already stored in galaxies[p].H2gas by the function
-                    // compute gas_surface_density for epsilon_cl below using pi*(3*r_s)^2 as reference
-                    const float ref_area = (float)(M_PI * pow(3.0 * rs_pc, 2));
-                    gas_surface_density = (ref_area > 0.0f) ? (galaxies[p].ColdGas * 1.0e10f / h) / ref_area : 0.0f;
-                } else {
-                    float disk_area_pc2;
-                    if (run_params->H2DiskAreaOption == 0) {
-                        disk_area_pc2 = M_PI * pow(rs_pc, 2);
-                    } else if (run_params->H2DiskAreaOption == 1) {
-                        disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
-                    } else {
-                        disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
-                    }
-                    gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
-                    const float stellar_surface_density = ((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h) / disk_area_pc2;
-                    total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
-                                                                            rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-                    galaxies[p].H2gas = total_molecular_gas;
-                }
-
-                if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
-                    galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-
-                // Critical surface density from Equation 2
-                const double Sigma_crit = SOMERVILLE25_SIGMA_CRIT;
-
-                // Cloud-scale star formation efficiency from Equation 3
-                double epsilon_cl = (gas_surface_density / Sigma_crit) / (1.0 + gas_surface_density / Sigma_crit);
-
-                // Fraction of gas in dense clouds (f_dense from Equation 8)
-                const double f_dense = SOMERVILLE25_F_DENSE;
-
-                // Star formation rate using H2 gas instead of total cold gas
-                if(tdyn > 0.0 && gas_surface_density > 0.0 && galaxies[p].H2gas > 0.0) {
-                    strdot = epsilon_cl * f_dense * galaxies[p].H2gas / tdyn;
-                } else {
-                    strdot = 0.0;
-                }
-            }
-        }
-
-    } else if(run_params->SFprescription == 4) {
-
-        // ========================================================================
-        // Krumholz and Dekel (2012) - KD12 Model
-        // ========================================================================
-
-        if(galaxies[p].Vvir <= 0.0) {
-            galaxies[p].H2gas = 0.0;
-            strdot = 0.0;
-        } else {
-            reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
-            tdyn = reff / galaxies[p].Vvir;
-            const float h = run_params->Hubble_h;
-            const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-            if (rs_pc <= 0.0) {
-                galaxies[p].H2gas = 0.0;
-                strdot = 0.0;
-            } else {
-                if(run_params->H2RadialIntegrationOn) {
-                    calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
-                } else {
-                    // Choose disk area based on H2DiskAreaOption
-                    float disk_area;
-                    if (run_params->H2DiskAreaOption == 0) {
-                        disk_area = M_PI * pow(rs_pc, 2);
-                    } else if (run_params->H2DiskAreaOption == 1) {
-                        disk_area = M_PI * pow(3.0 * rs_pc, 2);
-                    } else {
-                        disk_area = 2.0 * M_PI * pow(rs_pc, 2);
-                    }
-                    if(disk_area <= 0.0) {
-                        galaxies[p].H2gas = 0.0;
-                    } else {
-                        float surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area;
-                        if(galaxies[p].ColdGas > 0.0) {
-                            metallicity = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
-                        }
-                        float clumping_factor = 5.0;
-                        total_molecular_gas = calculate_H2_fraction_KD12(surface_density, metallicity, clumping_factor) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-                        galaxies[p].H2gas = total_molecular_gas;
-                    }
-                }
-                // Safety check: H2 fraction cannot exceed 1.0
-                if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
-                    galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-                }
-
-                if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
-                    strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
-                } else {
-                    strdot = 0.0;
-                }
-            }
-        }
-    } else if(run_params->SFprescription == 5) {
-
-        // ========================================================================
-        // Krumholz, McKee, & Tumlinson (2009) - KMT09 Model
-        // ========================================================================
-
-        
-        // 1. Geometry and Units
-        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
-        tdyn = reff / galaxies[p].Vvir;
-        
-        // Check for physical validity
-        if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
-            galaxies[p].H2gas = 0.0;
-            strdot = 0.0;
-        } else {
-            const float h = run_params->Hubble_h;
-            // Scale radius in pc
-            const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-
-            if(run_params->H2RadialIntegrationOn) {
-                calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
-            } else {
-                // Choose disk area based on H2DiskAreaOption
-                float disk_area_pc2;
-                if (run_params->H2DiskAreaOption == 0) {
-                    disk_area_pc2 = M_PI * pow(rs_pc, 2);
-                } else if (run_params->H2DiskAreaOption == 1) {
-                    disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
-                } else {
-                    disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
-                }
-
-                // Gas Surface Density (Msun/pc^2) - Sigma_g
-                float gas_surface_density = (disk_area_pc2 > 0.0) ?
-                    (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2 : 0.0;
-
-                float metallicity_abs = 0.0;
-                if(galaxies[p].ColdGas > 0.0) {
-                    metallicity_abs = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
-                }
-                float Z_prime = (metallicity_abs > 0.0) ? metallicity_abs / 0.02 : 0.0;
-
-                const float clumping_factor = 3.0;
-                float Sigma_comp = clumping_factor * gas_surface_density;
-                double tau_c = 0.066 * clumping_factor * Z_prime * gas_surface_density;
-                float chi = 0.77 * (1.0 + 3.1 * pow(Z_prime, 0.365));
-                float s = 0.0;
-                if (Sigma_comp > 0.0 && tau_c > 1e-10) {
-                    s = log(1.0 + 0.6 * chi + 0.01 * chi * chi) / (0.6 * tau_c);
-                } else {
-                    s = 100.0;
-                }
-
-                float f_H2 = 0.0;
-                if (s < 2.0) {
-                    f_H2 = 1.0 - (3.0 * s) / (4.0 + s);
-                }
-                if (f_H2 < 0.0) f_H2 = 0.0;
-                if (f_H2 > 1.0) f_H2 = 1.0;
-
-                galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-            }
-
-            // Can't create more H2 than total cold gas
-            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
-                galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-            }
-
-            if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
-                strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
-            } else {
-                strdot = 0.0;
-            }
-        }
-    } else if(run_params->SFprescription == 6) {
-
-        // ========================================================================
-        // Krumholz 2013 (KMT+) Model
-        // "The star formation law in molecule-poor galaxies"
-        // Uses the analytic approximation for depletion time (Equation 28)
-        // ========================================================================
-
-        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
-        tdyn = reff / galaxies[p].Vvir;
-
-        // Basic safety checks
-        if(galaxies[p].Vvir <= 0.0 || galaxies[p].ColdGas <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
-            strdot = 0.0;
-            galaxies[p].H2gas = 0.0;
-        } else {
-            tdyn = reff / galaxies[p].Vvir; // Code units
-
-            const float h = run_params->Hubble_h;
-            const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-
-            if(run_params->H2RadialIntegrationOn) {
-                // Radially integrate both H2 mass and K13 SFR consistently.
-                // Sigma(r)/t_dep(r) is summed over the disk using the local f_H2(r) at each annulus,
-                // avoiding the single-slab Sigma = M/(pi r_s^2) = 2Sigma0 overestimate.
-                double strdot_k13 = 0.0;
-                calculate_molecular_fraction_radial_integration(p, galaxies, run_params, &strdot_k13);
-                if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
-                    galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-                // H2DepletionTime_Gyr = M_gas / SFR_K13_integrated, set inside function
-                strdot = strdot_k13;
-            } else {
-                // Slab path: single representative surface density from H2DiskAreaOption
-                double Sigma_gas_k13 = 0.0, Sigma_star_k13 = 0.0, Z_prime_k13 = 0.01, f_H2_2p_k13 = 0.0;
-                float area_pc2;
-                if (run_params->H2DiskAreaOption == 0) {
-                    area_pc2 = M_PI * pow(rs_pc, 2);
-                } else if (run_params->H2DiskAreaOption == 1) {
-                    area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
-                } else {
-                    area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
-                }
-
-                if(area_pc2 > 0.0) {
-                    Sigma_gas_k13  = (galaxies[p].ColdGas * 1.0e10 / h) / area_pc2;
-                    Sigma_star_k13 = ((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h) / area_pc2;
-                    const double Z_gas = (galaxies[p].ColdGas > 0.0) ? (galaxies[p].MetalsColdGas / galaxies[p].ColdGas) : 0.0;
-                    f_H2_2p_k13 = calculate_H2_fraction_K13(Sigma_gas_k13, Z_gas, 5.0);
-                    Z_prime_k13 = (Z_gas > 0.0) ? Z_gas / Z_SOLAR_ASPLUND09 : 0.0;
-                    if(Z_prime_k13 < 0.01) Z_prime_k13 = 0.01;
-                    galaxies[p].H2gas = f_H2_2p_k13 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-                } else {
-                    galaxies[p].H2gas = 0.0;
-                }
-
-                if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
-                    galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-
-                const double t_dep_Gyr = calculate_tdep_K13_Gyr((float)Sigma_gas_k13, (float)Sigma_star_k13,
-                                                                   rs_pc, (float)Z_prime_k13, (float)f_H2_2p_k13);
-                galaxies[p].H2DepletionTime_Gyr = (t_dep_Gyr > 0.0) ? (float)t_dep_Gyr : -1.0f;
-
-                strdot = (galaxies[p].H2gas > 0.0 && tdyn > 0.0)
-                         ? run_params->SfrEfficiency * galaxies[p].H2gas / tdyn : 0.0;
-            }
-        }
-    } else if(run_params->SFprescription == 7) {
-        
-        // ========================================================================
-        // Gnedin & Draine (2014) - GD14 Model
-        // Implemented using the "more accurate and simpler fit" from the 
-        // 2016 Erratum (ApJ, 830, 54)
-        // ========================================================================
-
-        // we take the typical star forming region as 3.0*r_s using the Milky Way as a guide
-        reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
-
-        // Basic safety checks
-        if(galaxies[p].Vvir <= 0.0 || galaxies[p].ColdGas <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
-            strdot = 0.0;
-            galaxies[p].H2gas = 0.0;
-        } else {
-            tdyn = reff / galaxies[p].Vvir; // Code units
-            
-            const float h = run_params->Hubble_h;
-            // Scale radius in pc
-            const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
-
-            if(run_params->H2RadialIntegrationOn) {
-                calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
-            } else {
-                // Choose disk area based on H2DiskAreaOption
-                float disk_area_pc2;
-                if (run_params->H2DiskAreaOption == 0) {
-                    disk_area_pc2 = M_PI * pow(rs_pc, 2);
-                } else if (run_params->H2DiskAreaOption == 1) {
-                    disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
-                } else {
-                    disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
-                }
-
-                double Sigma_gas = 0.0;
-                if(disk_area_pc2 > 0.0) {
-                    Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
-                }
-
-                const double metallicity_abs = (galaxies[p].ColdGas > 0.0) ?
-                    galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
-                const double f_H2 = calculate_H2_fraction_GD14(Sigma_gas, metallicity_abs, rs_pc);
-                galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-            }
-
-            // Can't create more H2 than total cold gas
-            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
-                galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-            }
-
-            if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
-                strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
-            } else {
-                strdot = 0.0;
-            }
-        }
-    } else {
-        fprintf(stderr, "No star formation prescription selected!\n");
-        ABORT(0);
+    // star formation recipes: one prescription, one function (see sfr_* above)
+    double strdot = 0.0;
+    switch(run_params->SFprescription) {
+        case 0: strdot = sfr_croton06(p, galaxies, run_params); break;
+        case 1: strdot = sfr_br06(p, galaxies, run_params); break;
+        case 2: strdot = sfr_somerville25_coldgas(p, galaxies, run_params); break;
+        case 3: strdot = sfr_somerville25_h2(p, galaxies, run_params); break;
+        case 4: strdot = sfr_kd12(p, galaxies, run_params); break;
+        case 5: strdot = sfr_kmt09(p, galaxies, run_params); break;
+        case 6: strdot = sfr_k13(p, galaxies, run_params); break;
+        case 7: strdot = sfr_gd14(p, galaxies, run_params); break;
+        default:
+            fprintf(stderr, "No star formation prescription selected!\n");
+            ABORT(0);
     }
 
     // Calculate HI (atomic hydrogen) as the remainder of hydrogen after H2.
