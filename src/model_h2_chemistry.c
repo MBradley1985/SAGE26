@@ -60,29 +60,24 @@ static float calculate_stellar_scale_height_BR06(float disk_scale_length_pc)
 }
 
 /*
- * H2 molecular fraction from the Blitz & Rosolowsky (2006) midplane pressure relation.
- *
- * Computes the ratio R_mol = (P_ext/P_0)^alpha and returns f_H2 = R_mol/(1+R_mol).
- */
-/*
  * Core of the BR06 molecular fraction with the stellar scale height already
  * computed. The scale height depends only on the disk scale length, so the
  * radial-integration loop hoists it out and calls this variant per bin;
  * results are bit-identical to computing it in place.
  */
-static float calculate_molecular_fraction_BR06_from_hstar(float gas_surface_density, float stellar_surface_density,
+static float calculate_molecular_fraction_BR06_from_hstar(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
                                                           float h_star_pc)
 {
     float pressure = 0.0;
-    if (gas_surface_density > 0.0 && h_star_pc > 0.0) {
-        float effective_sigma_stars = stellar_surface_density;
-        if (stellar_surface_density < 0.1) {
+    if (gas_surface_density_msun_pc2 > 0.0 && h_star_pc > 0.0) {
+        float effective_sigma_stars = stellar_surface_density_msun_pc2;
+        if (stellar_surface_density_msun_pc2 < 0.1) {
             effective_sigma_stars = 0.1;
         }
         const float v_g = 8.0;  // km/s, gas velocity dispersion (BR06)
         // BR06 Equation (5) - stellar-dominated approximation:
         // P_ext/k = 272 * Sigma_gas * sqrt(Sigma_*) * v_g * h_*^(-0.5)
-        pressure = 272.0 * gas_surface_density * sqrt(effective_sigma_stars) * v_g / sqrt(h_star_pc);
+        pressure = 272.0 * gas_surface_density_msun_pc2 * sqrt(effective_sigma_stars) * v_g / sqrt(h_star_pc);
     }
     
     if (pressure <= 0.0) {
@@ -105,14 +100,28 @@ static float calculate_molecular_fraction_BR06_from_hstar(float gas_surface_dens
     return f_mol;
 }
 
-float calculate_molecular_fraction_BR06(float gas_surface_density, float stellar_surface_density,
+/*
+ * H2 molecular fraction from the Blitz & Rosolowsky (2006) midplane pressure
+ * relation.
+ *
+ * Computes the midplane pressure from their eq. 5 (stellar-dominated
+ * approximation, gas velocity dispersion 8 km/s), forms
+ * R_mol = (P_ext/P_0)^alpha with P_0 = 4.54e4 K cm^-3 and alpha = 0.92
+ * (their eq. 11 with the eq. 13 non-interacting fit), and returns
+ * f_H2 = R_mol / (1 + R_mol) in [0, 1].
+ *
+ * gas_surface_density_msun_pc2     : Sigma_gas  [Msun/pc^2]
+ * stellar_surface_density_msun_pc2 : Sigma_star [Msun/pc^2]
+ * disk_scale_length_pc             : r_s [pc]; sets the stellar scale height
+ */
+float calculate_molecular_fraction_BR06(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
                                         float disk_scale_length_pc)
 {
     if (disk_scale_length_pc <= 0.0) {
         return 0.0;
     }
     const float h_star_pc = calculate_stellar_scale_height_BR06(disk_scale_length_pc);
-    return calculate_molecular_fraction_BR06_from_hstar(gas_surface_density, stellar_surface_density, h_star_pc);
+    return calculate_molecular_fraction_BR06_from_hstar(gas_surface_density_msun_pc2, stellar_surface_density_msun_pc2, h_star_pc);
 }
 
 /*
@@ -286,26 +295,26 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
  * Returns tau_dep = min(tau_2phase, tau_hydro_star, tau_hydro_gas) from K13 eq. 28.
  * Pass f_H2 from BR06 for the BR06+K13 hybrid, or K13's own f_H2 for pure K13.
  */
-double calculate_tdep_K13_Gyr(float Sigma_gas, float Sigma_star, float rs_pc, float Z_prime, float f_H2)
+double calculate_tdep_K13_Gyr(float Sigma_gas_msun_pc2, float Sigma_star_msun_pc2, float rs_pc, float Z_prime, float f_H2)
 {
     const double fc = 5.0;  // clumping factor for ~kpc scales (K13 Section 3.1)
 
     // Molecule-rich depletion time: t_dep_2p = 3.1 Gyr / (f_H2 * Sigma^0.25)
-    double t_dep_2p = (f_H2 > 1e-6 && Sigma_gas > 1e-10)
-                      ? 3.1 / (f_H2 * pow(Sigma_gas, 0.25)) : 1.0e5;
+    double t_dep_2p = (f_H2 > 1e-6 && Sigma_gas_msun_pc2 > 1e-10)
+                      ? 3.1 / (f_H2 * pow(Sigma_gas_msun_pc2, 0.25)) : 1.0e5;
 
     // Hydrostatic limits (K13 Eqs 21-22)
     double t_hydro_star = 1.0e10, t_hydro_gas = 1.0e10;
-    if(Sigma_gas > 1e-10) {
+    if(Sigma_gas_msun_pc2 > 1e-10) {
         double h_z       = calculate_stellar_scale_height_BR06(rs_pc);
-        double rho_sd_2  = (h_z > 0.0 && Sigma_star > 0.0)
-                           ? (Sigma_star / (2.0 * h_z)) / 0.01 : 1e-4;
+        double rho_sd_2  = (h_z > 0.0 && Sigma_star_msun_pc2 > 0.0)
+                           ? (Sigma_star_msun_pc2 / (2.0 * h_z)) / 0.01 : 1e-4;
         if(rho_sd_2 < 1e-4) rho_sd_2 = 1e-4;
         if(Z_prime  < 0.01) Z_prime   = 0.01;
-        t_hydro_star = 3.1 / pow(Sigma_gas, 0.25)
-                       + 100.0 / ((fc/5.0) * Z_prime * sqrt(rho_sd_2) * Sigma_gas);
-        t_hydro_gas  = 3.1 / pow(Sigma_gas, 0.25)
-                       + 360.0 / ((fc/5.0) * Z_prime * pow(Sigma_gas, 2.0));
+        t_hydro_star = 3.1 / pow(Sigma_gas_msun_pc2, 0.25)
+                       + 100.0 / ((fc/5.0) * Z_prime * sqrt(rho_sd_2) * Sigma_gas_msun_pc2);
+        t_hydro_gas  = 3.1 / pow(Sigma_gas_msun_pc2, 0.25)
+                       + 360.0 / ((fc/5.0) * Z_prime * pow(Sigma_gas_msun_pc2, 2.0));
     }
 
     double t_dep = t_dep_2p;
@@ -320,9 +329,9 @@ double calculate_tdep_K13_Gyr(float Sigma_gas, float Sigma_star, float rs_pc, fl
  * Solves the non-linear s-function from KD12 eqs. 14-17 given the gas surface
  * density, metallicity (in Z/Z_sun), and a clumping factor. Returns f_H2 in [0, 1].
  */
-float calculate_H2_fraction_KD12(const float surface_density, const float metallicity, const float clumping_factor)
+float calculate_H2_fraction_KD12(const float surface_density_msun_pc2, const float metallicity, const float clumping_factor)
 {
-    if (surface_density <= 0.0) {
+    if (surface_density_msun_pc2 <= 0.0) {
         return 0.0;
     }
     
@@ -334,7 +343,7 @@ float calculate_H2_fraction_KD12(const float surface_density, const float metall
     
     // Convert surface density from M_sun/pc^2 to g/cm^2
     // Conversion: 1 M_sun/pc^2 = 2.088 * 10^-4 g/cm^2
-    float Sigma_gcm2 = surface_density * 2.088e-4;
+    float Sigma_gcm2 = surface_density_msun_pc2 * 2.088e-4;
     
     // Surface density normalized to 1 g/cm^2 (as defined after KD12 Eq. 16)
     // Sigma_0 = Sigma / (1 g cm^-2)

@@ -40,6 +40,8 @@ static int64_t clamp_count_h2_cap = 0;         /* H2 fit exceeded ColdGas * HYDR
 static int64_t clamp_count_h1_negative = 0;    /* HI went negative after ionisation/H2 subtraction */
 static int64_t clamp_count_reheat_coldgas = 0; /* reheated mass exceeded available ColdGas */
 
+/* Print the silent-clamp totals accumulated over the run (VERBOSE builds
+ * call this from finalize_sage()). */
 void report_sf_clamp_counts(void)
 {
     printf("SF/feedback clamp totals: H2 capped to hydrogen budget = %" PRId64
