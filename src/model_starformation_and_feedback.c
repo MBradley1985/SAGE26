@@ -41,9 +41,13 @@ static int64_t clamp_count_h1_negative = 0;    /* HI went negative after ionisat
 static int64_t clamp_count_reheat_coldgas = 0; /* reheated mass exceeded available ColdGas */
 
 /* Print the silent-clamp totals accumulated over the run (VERBOSE builds
- * call this from finalize_sage()). */
+ * call this from finalize_sage()). Quiet when nothing fired -- the report
+ * exists to flag anomalies, and all-zero is the expected healthy state. */
 void report_sf_clamp_counts(void)
 {
+    if(clamp_count_h2_cap == 0 && clamp_count_h1_negative == 0 && clamp_count_reheat_coldgas == 0) {
+        return;
+    }
     printf("SF/feedback clamp totals: H2 capped to hydrogen budget = %" PRId64
            ", negative HI zeroed = %" PRId64
            ", reheated mass capped to ColdGas = %" PRId64 "\n",
