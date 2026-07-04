@@ -485,7 +485,7 @@ struct params
     int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
     int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too
     int32_t    FFBRandomMode;       // 0: draw a fresh random each snapshot; 1: use persistent FFBRandom assigned at galaxy creation
-    int32_t    BulgeSizeOn;
+    int32_t    BulgeSizeOn;   // 0: off; 1: Shen+03 eq. 33; 2: Shen+03 eq. 32 two-regime; 3: Tonini+16 separate merger/instability bulges
     int32_t    H2DiskAreaOption;          // 0 = pi*r_s^2, 1 = pi*(3*r_s)^2, 2 = 2*pi*r_s^2 (central Sigma_0)
     int32_t    H2RadialIntegrationOn;     // 0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk
     int32_t    H2RadialNBins;             // radial bins for integration (default 25)
