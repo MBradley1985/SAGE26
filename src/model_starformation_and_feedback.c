@@ -152,7 +152,7 @@ static double sfr_br06(const int p, struct GALAXY *galaxies, const struct params
     } else {
         tdyn = reff / galaxies[p].Vvir;
         // BR06 model
-        const float h = run_params->Hubble_h;
+        const float h = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
         const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
         if (rs_pc <= 0.0) {
             galaxies[p].H2gas = 0.0;
@@ -221,7 +221,7 @@ static double sfr_somerville25_coldgas(const int p, struct GALAXY *galaxies, con
         strdot = 0.0;
     } else {
         tdyn = reff / galaxies[p].Vvir;
-        const float h = run_params->Hubble_h;
+        const float h = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
         const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
         float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2); // pc^2
         float gas_surface_density = (disk_area_pc2 > 0.0) ?
@@ -276,7 +276,7 @@ static double sfr_somerville25_h2(const int p, struct GALAXY *galaxies, const st
         strdot = 0.0;
     } else {
         tdyn = reff / galaxies[p].Vvir;
-        const float h = run_params->Hubble_h;
+        const float h = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
         const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
 
         if (rs_pc <= 0.0) {
@@ -290,7 +290,7 @@ static double sfr_somerville25_h2(const int p, struct GALAXY *galaxies, const st
                 // result already stored in galaxies[p].H2gas by the function
                 // compute gas_surface_density for epsilon_cl below using pi*(3*r_s)^2 as reference
                 const float ref_area = (float)(M_PI * pow(3.0 * rs_pc, 2));
-                gas_surface_density = (ref_area > 0.0f) ? (galaxies[p].ColdGas * 1.0e10f / h) / ref_area : 0.0f;
+                gas_surface_density = (ref_area > 0.0f) ? (galaxies[p].ColdGas * 1.0e10f / h) /* 1.0e10f float literal on purpose: frozen single-precision behaviour */ / ref_area : 0.0f;
             } else {
                 float disk_area_pc2;
                 if (run_params->H2DiskAreaOption == 0) {
@@ -357,7 +357,7 @@ static double sfr_kd12(const int p, struct GALAXY *galaxies, const struct params
     } else {
         reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
         tdyn = reff / galaxies[p].Vvir;
-        const float h = run_params->Hubble_h;
+        const float h = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
         const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
         if (rs_pc <= 0.0) {
             galaxies[p].H2gas = 0.0;
@@ -431,7 +431,7 @@ static double sfr_kmt09(const int p, struct GALAXY *galaxies, const struct param
         galaxies[p].H2gas = 0.0;
         strdot = 0.0;
     } else {
-        const float h = run_params->Hubble_h;
+        const float h = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
         // Scale radius in pc
         const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
 
@@ -524,7 +524,7 @@ static double sfr_k13(const int p, struct GALAXY *galaxies, const struct params 
     } else {
         tdyn = reff / galaxies[p].Vvir; // Code units
 
-        const float h = run_params->Hubble_h;
+        const float h = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
         const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
 
         if(run_params->H2RadialIntegrationOn) {
@@ -606,7 +606,7 @@ static double sfr_gd14(const int p, struct GALAXY *galaxies, const struct params
     } else {
         tdyn = reff / galaxies[p].Vvir; // Code units
         
-        const float h = run_params->Hubble_h;
+        const float h = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
         // Scale radius in pc
         const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
 
@@ -1130,7 +1130,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     galaxies[p].H2gas = 0.0;
 
     if(uses_h2 && galaxies[p].ColdGas > 0.0 && galaxies[p].DiskScaleRadius > 0.0) {
-        const float h     = run_params->Hubble_h;
+        const float h     = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
         const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
         const int sfpres  = run_params->SFprescription;
         const int has_h2  = sf_prescription_tracks_h2(sfpres);

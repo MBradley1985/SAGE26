@@ -584,7 +584,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         const int cgal = merger_centralgal;
         double h2gas_fresh = 0.0;
         if(galaxies[cgal].ColdGas > 0.0 && galaxies[cgal].DiskScaleRadius > 0.0) {
-            const float h     = run_params->Hubble_h;
+            const float h     = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
             const float rs_pc = (float)(CODE_LENGTH_TO_PC(galaxies[cgal].DiskScaleRadius, h));
             if(rs_pc > 0.0f) {
                 if(run_params->H2RadialIntegrationOn) {

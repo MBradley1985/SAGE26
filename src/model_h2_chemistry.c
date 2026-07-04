@@ -7,6 +7,10 @@
  * integration over the exponential disk.  Surface densities in Msun/pc^2,
  * radii in pc; H2 masses returned in code units via the callers.
  *
+ * Note: the BR06/KD12/KMT09 fit internals use float on purpose -- this is
+ * frozen single-precision behaviour and part of the calibrated model output.
+ * Do not promote to double (see docs/physics/units.md).
+ *
  * SAGE26 -- released under MIT (see LICENSE).
  */
 
@@ -122,7 +126,7 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
                                                       const struct params *run_params,
                                                       double *strdot_code_out)
 {
-    const float h = run_params->Hubble_h;
+    const float h = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
     const float rs_pc = CODE_LENGTH_TO_PC(galaxies[gal].DiskScaleRadius, h);  // Scale radius in pc
 
     if (rs_pc <= 0.0 || galaxies[gal].ColdGas <= 0.0) {

@@ -59,6 +59,18 @@ only other place unit conversions happen: SFRs to Msun/yr, times to Myr,
 cooling/heating to erg/s. Everything between input and output stays in code
 units.
 
+## Frozen single-precision sites
+
+Several calculations deliberately drop to single precision mid-stream:
+`const float h = run_params->Hubble_h` in the SF prescriptions, one
+`1.0e10f` float literal in `sfr_somerville25_h2()`, and the float
+internals of the H2 fraction fits in `model_h2_chemistry.c`. In ordinary
+code review these would be defects; here they are **calibrated, frozen
+numerical behaviour** -- promoting them to double changes the model
+output. Each site carries a `float on purpose` comment. Do not "fix"
+them; if a future recalibration intentionally changes precision, all
+regression baselines must be re-captured at the same time.
+
 ## Naming convention
 
 A physical-quantity variable with **no unit suffix is in code units**. Any
