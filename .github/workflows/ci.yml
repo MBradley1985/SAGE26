@@ -4,6 +4,7 @@ on:
   push:
     branches: [main, dev]
   pull_request:
+  workflow_dispatch:
 
 # The Makefile's CI path (CI=true) assumes GSL and HDF5 live in one conda
 # prefix (HDF5_DIR is derived from `gsl-config --prefix`), so dependencies
@@ -46,7 +47,9 @@ jobs:
         uses: mamba-org/setup-micromamba@v2
         with:
           environment-name: sage-ci
-          create-args: gsl hdf5 openmpi make
+          # conda-forge ships the MPI compiler wrappers separately from the
+          # openmpi runtime: without openmpi-mpicc there is no mpicc at all.
+          create-args: gsl hdf5 openmpi openmpi-mpicc compilers make
           init-shell: bash
 
       - name: Build (MPI, HDF5)
@@ -76,14 +79,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: input/millennium
-          key: mini-millennium-treefiles-v1
+          key: mini-millennium-treefiles-v2
 
       - name: Download mini-Millennium trees
         if: steps.cache-trees.outputs.cache-hit != 'true'
         run: |
           wget -q "https://www.dropbox.com/s/l5ukpo7ar3rgxo4/mini-millennium-treefiles.tar?dl=1" -O mini-millennium-treefiles.tar
-          tar -xf mini-millennium-treefiles.tar   # unpacks into input/millennium/trees/
+          # The tarball contains trees/... relative paths; unpack it inside
+          # input/millennium (same as first_run.sh) so the trees land at
+          # input/millennium/trees/.
+          mkdir -p input/millennium
+          tar -xf mini-millennium-treefiles.tar -C input/millennium
           rm mini-millennium-treefiles.tar
+          test -s input/millennium/trees/trees_063.0
 
       - name: Build (serial, HDF5)
         run: make USE-MPI=
@@ -127,14 +135,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: input/millennium
-          key: mini-millennium-treefiles-v1
+          key: mini-millennium-treefiles-v2
 
       - name: Download mini-Millennium trees
         if: steps.cache-trees.outputs.cache-hit != 'true'
         run: |
           wget -q "https://www.dropbox.com/s/l5ukpo7ar3rgxo4/mini-millennium-treefiles.tar?dl=1" -O mini-millennium-treefiles.tar
-          tar -xf mini-millennium-treefiles.tar   # unpacks into input/millennium/trees/
+          # The tarball contains trees/... relative paths; unpack it inside
+          # input/millennium (same as first_run.sh) so the trees land at
+          # input/millennium/trees/.
+          mkdir -p input/millennium
+          tar -xf mini-millennium-treefiles.tar -C input/millennium
           rm mini-millennium-treefiles.tar
+          test -s input/millennium/trees/trees_063.0
 
       - name: Build (serial, HDF5, ASan + UBSan via MEM-CHECK)
         run: make USE-MPI= MEM-CHECK=yes
