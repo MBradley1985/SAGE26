@@ -24,6 +24,9 @@ OUTPUT_DIR = ./test_build
 PROJECT_SOURCES = \
 	$(SRC_DIR)/core_utils.c \
 	$(SRC_DIR)/model_misc.c \
+	$(SRC_DIR)/model_h2_chemistry.c \
+	$(SRC_DIR)/model_halo_properties.c \
+	$(SRC_DIR)/model_regimes.c \
 	$(SRC_DIR)/model_starformation_and_feedback.c \
 	$(SRC_DIR)/model_cooling_heating.c \
 	$(SRC_DIR)/model_reincorporation.c \
