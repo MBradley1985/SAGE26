@@ -651,6 +651,181 @@ static double sfr_gd14(const int p, struct GALAXY *galaxies, const struct params
 }
 
 /*
+ * SN feedback masses for one SF event (main, non-FFB path).
+ *
+ * Given the stellar mass formed this substep (*stars_inout), computes the
+ * reheated and ejected gas masses: FIRE scalings (Muratov+15 reheating,
+ * Hirschmann+16 energy-based ejection) when FIREmodeOn == 1, otherwise the
+ * fixed-epsilon Croton+06 forms.  Rescales *stars_inout and the reheated
+ * mass together when their sum exceeds the available cold gas.  Sets
+ * galaxies[p].MassLoading in FIRE mode.  All masses [10^10 Msun/h].
+ */
+static void compute_sn_feedback(const int p, double *stars_inout, double *reheated_out,
+                                double *ejected_out, struct GALAXY *galaxies,
+                                const struct params *run_params)
+{
+    double stars = *stars_inout;
+    double ejected_mass;
+
+// FIRE velocity/redshift scaling (Muratov et al. 2015, eq. 9/11).
+// Pre-computed once and reused for both reheating and ejection to avoid
+// duplication. scaling = (1+z)^alpha * (V/V_crit)^beta, where beta has two
+// slopes: -3.2 below FIRE_V_CRIT_KMS and -1.0 above.  Zero when FIRE is off.
+double fire_scaling = 0.0;
+if(run_params->FIREmodeOn == 1 && run_params->SupernovaRecipeOn == 1) {
+    const double z_fire = run_params->ZZ[galaxies[p].SnapNum];
+    const double vc_fire = galaxies[p].Vvir;
+    if(vc_fire > 0.0 && z_fire >= 0.0) {
+        const double vc_floored = (vc_fire < 1.0) ? 1.0 : vc_fire;
+        const double v_term = (vc_floored < FIRE_V_CRIT_KMS)
+            ? pow(vc_floored / FIRE_V_CRIT_KMS, -3.2)
+            : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
+        fire_scaling = pow(1.0 + z_fire, run_params->RedshiftPowerLawExponent) * v_term;
+    }
+}
+
+// Calculate reheated mass - use FIRE model if enabled, otherwise use original feedback
+double reheated_mass = 0.0;
+
+if(run_params->SupernovaRecipeOn == 1) {
+    if(run_params->FIREmodeOn == 1) {
+        // FIRE: eta = FeedbackReheatingEpsilon * fire_scaling (Muratov+2015)
+        const double eta_reheat = run_params->FeedbackReheatingEpsilon * fire_scaling;
+        galaxies[p].MassLoading = (float)eta_reheat;
+        reheated_mass = eta_reheat * stars;
+    } else {
+        reheated_mass = run_params->FeedbackReheatingEpsilon * stars;
+    }
+}
+
+XASSERT(reheated_mass >= 0.0, -1,
+        "Error: Expected reheated gas-mass = %g to be >=0.0\n", reheated_mass);
+
+// cant use more cold gas than is available! so balance SF and feedback
+if((stars + reheated_mass) > galaxies[p].ColdGas && (stars + reheated_mass) > 0.0) {
+    const double fac = galaxies[p].ColdGas / (stars + reheated_mass);
+    stars *= fac;
+    reheated_mass *= fac;
+}
+
+// determine ejection
+if(run_params->SupernovaRecipeOn == 1) {
+    if(galaxies[p].Vvir > 0.0) {
+        if(run_params->FIREmodeOn == 1) {
+            // FIRE: energy-based ejection (Hirschmann+2016).
+            // E_FB = epsilon_eject * fire_scaling * 0.5 * M_* * (eta_SN * E_SN)
+            // Eject whatever energy remains after lifting the reheated gas.
+            const double vc = galaxies[p].Vvir;
+            const double E_FB = run_params->FeedbackEjectionEfficiency * fire_scaling *
+                                0.5 * stars * (run_params->EtaSNcode * run_params->EnergySNcode);
+            const double E_lift = 0.5 * reheated_mass * vc * vc;
+            ejected_mass = (E_FB > E_lift) ? (E_FB - E_lift) / (0.5 * vc * vc) : 0.0;
+        } else {
+            // Original non-FIRE calculation
+            ejected_mass = (run_params->FeedbackEjectionEfficiency * 
+                           (run_params->EtaSNcode * run_params->EnergySNcode) / 
+                           (galaxies[p].Vvir * galaxies[p].Vvir) -
+                           run_params->FeedbackReheatingEpsilon) * stars;
+        }
+    } else {
+        ejected_mass = 0.0;
+    }
+    
+    if(ejected_mass < 0.0) {
+        ejected_mass = 0.0;
+    }
+} else {
+    ejected_mass = 0.0;
+}
+
+    *stars_inout  = stars;
+    *reheated_out = reheated_mass;
+    *ejected_out  = ejected_mass;
+}
+
+/*
+ * SN feedback masses for one FFB star formation event.
+ *
+ * Same scalings as compute_sn_feedback(), but kept as a separate function
+ * because the FFB path deliberately differs: the FIRE branch guards on a
+ * validity flag and leaves the reheated mass at zero when the FIRE scaling
+ * is undefined (Vvir <= 0 or z < 0) instead of falling through.
+ * All masses [10^10 Msun/h].
+ */
+static void compute_sn_feedback_ffb(const int p, double *stars_inout, double *reheated_out,
+                                    double *ejected_out, struct GALAXY *galaxies,
+                                    const struct params *run_params)
+{
+    double stars = *stars_inout;
+    double reheated_mass = 0.0;
+    double ejected_mass  = 0.0;
+
+// FIRE velocity/redshift scaling (Muratov et al. 2015), computed once and
+// reused for both reheating and ejection: z and Vvir do not change between
+// the two blocks, so the value is identical. Mirrors the main SF path.
+double fire_scaling = 0.0;
+int fire_scaling_valid = 0;
+if(run_params->SupernovaRecipeOn == 1 && run_params->FIREmodeOn == 1) {
+    const double z  = run_params->ZZ[galaxies[p].SnapNum];
+    const double vc = galaxies[p].Vvir;
+    if(vc > 0.0 && z >= 0.0) {
+        const double vc_floored = (vc < 1.0) ? 1.0 : vc;
+        const double z_term     = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
+        const double v_term     = (vc_floored < FIRE_V_CRIT_KMS) ?
+            pow(vc_floored / FIRE_V_CRIT_KMS, -3.2) : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
+        fire_scaling = z_term * v_term;
+        fire_scaling_valid = 1;
+    }
+}
+
+if(run_params->SupernovaRecipeOn == 1) {
+    if(run_params->FIREmodeOn == 1) {
+        if(fire_scaling_valid) {
+            const double eta_reheat  = run_params->FeedbackReheatingEpsilon * fire_scaling;
+            galaxies[p].MassLoading  = (float)eta_reheat;
+            reheated_mass            = eta_reheat * stars;
+        }
+    } else {
+        reheated_mass = run_params->FeedbackReheatingEpsilon * stars;
+    }
+}
+
+XASSERT(reheated_mass >= 0.0, -1,
+        "Error: Expected reheated gas-mass = %g to be >=0.0\n", reheated_mass);
+
+if((stars + reheated_mass) > galaxies[p].ColdGas && (stars + reheated_mass) > 0.0) {
+    const double fac = galaxies[p].ColdGas / (stars + reheated_mass);
+    stars         *= fac;
+    reheated_mass *= fac;
+}
+
+if(run_params->SupernovaRecipeOn == 1) {
+    if(galaxies[p].Vvir > 0.0) {
+        if(run_params->FIREmodeOn == 1) {
+            if(fire_scaling_valid) {
+                const double vc         = galaxies[p].Vvir;
+                const double E_FB       = run_params->FeedbackEjectionEfficiency * fire_scaling
+                                          * 0.5 * stars
+                                          * (run_params->EtaSNcode * run_params->EnergySNcode);
+                const double E_lift     = 0.5 * reheated_mass * vc * vc;
+                ejected_mass = (E_FB > E_lift) ? (E_FB - E_lift) / (0.5 * vc * vc) : 0.0;
+            }
+        } else {
+            ejected_mass = (run_params->FeedbackEjectionEfficiency
+                            * (run_params->EtaSNcode * run_params->EnergySNcode)
+                            / (galaxies[p].Vvir * galaxies[p].Vvir)
+                            - run_params->FeedbackReheatingEpsilon) * stars;
+        }
+    }
+    if(ejected_mass < 0.0) ejected_mass = 0.0;
+}
+
+    *stars_inout  = stars;
+    *reheated_out = reheated_mass;
+    *ejected_out  = ejected_mass;
+}
+
+/*
  * Main star formation and feedback driver for one galaxy per substep.
  *
  * Selects the active SF prescription (run_params->SFprescription):
@@ -726,76 +901,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         stars = 0.0;
     }
 
-    // FIRE velocity/redshift scaling (Muratov et al. 2015, eq. 9/11).
-    // Pre-computed once and reused for both reheating and ejection to avoid
-    // duplication. scaling = (1+z)^alpha * (V/V_crit)^beta, where beta has two
-    // slopes: -3.2 below FIRE_V_CRIT_KMS and -1.0 above.  Zero when FIRE is off.
-    double fire_scaling = 0.0;
-    if(run_params->FIREmodeOn == 1 && run_params->SupernovaRecipeOn == 1) {
-        const double z_fire = run_params->ZZ[galaxies[p].SnapNum];
-        const double vc_fire = galaxies[p].Vvir;
-        if(vc_fire > 0.0 && z_fire >= 0.0) {
-            const double vc_floored = (vc_fire < 1.0) ? 1.0 : vc_fire;
-            const double v_term = (vc_floored < FIRE_V_CRIT_KMS)
-                ? pow(vc_floored / FIRE_V_CRIT_KMS, -3.2)
-                : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
-            fire_scaling = pow(1.0 + z_fire, run_params->RedshiftPowerLawExponent) * v_term;
-        }
-    }
-
-    // Calculate reheated mass - use FIRE model if enabled, otherwise use original feedback
-    double reheated_mass = 0.0;
-
-    if(run_params->SupernovaRecipeOn == 1) {
-        if(run_params->FIREmodeOn == 1) {
-            // FIRE: eta = FeedbackReheatingEpsilon * fire_scaling (Muratov+2015)
-            const double eta_reheat = run_params->FeedbackReheatingEpsilon * fire_scaling;
-            galaxies[p].MassLoading = (float)eta_reheat;
-            reheated_mass = eta_reheat * stars;
-        } else {
-            reheated_mass = run_params->FeedbackReheatingEpsilon * stars;
-        }
-    }
-
-    XASSERT(reheated_mass >= 0.0, -1,
-            "Error: Expected reheated gas-mass = %g to be >=0.0\n", reheated_mass);
-
-    // cant use more cold gas than is available! so balance SF and feedback
-    if((stars + reheated_mass) > galaxies[p].ColdGas && (stars + reheated_mass) > 0.0) {
-        const double fac = galaxies[p].ColdGas / (stars + reheated_mass);
-        stars *= fac;
-        reheated_mass *= fac;
-    }
-
-    // determine ejection
-    if(run_params->SupernovaRecipeOn == 1) {
-        if(galaxies[p].Vvir > 0.0) {
-            if(run_params->FIREmodeOn == 1) {
-                // FIRE: energy-based ejection (Hirschmann+2016).
-                // E_FB = epsilon_eject * fire_scaling * 0.5 * M_* * (eta_SN * E_SN)
-                // Eject whatever energy remains after lifting the reheated gas.
-                const double vc = galaxies[p].Vvir;
-                const double E_FB = run_params->FeedbackEjectionEfficiency * fire_scaling *
-                                    0.5 * stars * (run_params->EtaSNcode * run_params->EnergySNcode);
-                const double E_lift = 0.5 * reheated_mass * vc * vc;
-                ejected_mass = (E_FB > E_lift) ? (E_FB - E_lift) / (0.5 * vc * vc) : 0.0;
-            } else {
-                // Original non-FIRE calculation
-                ejected_mass = (run_params->FeedbackEjectionEfficiency * 
-                               (run_params->EtaSNcode * run_params->EnergySNcode) / 
-                               (galaxies[p].Vvir * galaxies[p].Vvir) -
-                               run_params->FeedbackReheatingEpsilon) * stars;
-            }
-        } else {
-            ejected_mass = 0.0;
-        }
-        
-        if(ejected_mass < 0.0) {
-            ejected_mass = 0.0;
-        }
-    } else {
-        ejected_mass = 0.0;
-    }
+    double reheated_mass;
+    compute_sn_feedback(p, &stars, &reheated_mass, &ejected_mass, galaxies, run_params);
 
 
     // update the star formation rate
@@ -1157,66 +1264,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     // ========================================================================
     double reheated_mass = 0.0;
     double ejected_mass  = 0.0;
-
-    // FIRE velocity/redshift scaling (Muratov et al. 2015), computed once and
-    // reused for both reheating and ejection: z and Vvir do not change between
-    // the two blocks, so the value is identical. Mirrors the main SF path.
-    double fire_scaling = 0.0;
-    int fire_scaling_valid = 0;
-    if(run_params->SupernovaRecipeOn == 1 && run_params->FIREmodeOn == 1) {
-        const double z  = run_params->ZZ[galaxies[p].SnapNum];
-        const double vc = galaxies[p].Vvir;
-        if(vc > 0.0 && z >= 0.0) {
-            const double vc_floored = (vc < 1.0) ? 1.0 : vc;
-            const double z_term     = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
-            const double v_term     = (vc_floored < FIRE_V_CRIT_KMS) ?
-                pow(vc_floored / FIRE_V_CRIT_KMS, -3.2) : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
-            fire_scaling = z_term * v_term;
-            fire_scaling_valid = 1;
-        }
-    }
-
-    if(run_params->SupernovaRecipeOn == 1) {
-        if(run_params->FIREmodeOn == 1) {
-            if(fire_scaling_valid) {
-                const double eta_reheat  = run_params->FeedbackReheatingEpsilon * fire_scaling;
-                galaxies[p].MassLoading  = (float)eta_reheat;
-                reheated_mass            = eta_reheat * stars;
-            }
-        } else {
-            reheated_mass = run_params->FeedbackReheatingEpsilon * stars;
-        }
-    }
-
-    XASSERT(reheated_mass >= 0.0, -1,
-            "Error: Expected reheated gas-mass = %g to be >=0.0\n", reheated_mass);
-
-    if((stars + reheated_mass) > galaxies[p].ColdGas && (stars + reheated_mass) > 0.0) {
-        const double fac = galaxies[p].ColdGas / (stars + reheated_mass);
-        stars         *= fac;
-        reheated_mass *= fac;
-    }
-
-    if(run_params->SupernovaRecipeOn == 1) {
-        if(galaxies[p].Vvir > 0.0) {
-            if(run_params->FIREmodeOn == 1) {
-                if(fire_scaling_valid) {
-                    const double vc         = galaxies[p].Vvir;
-                    const double E_FB       = run_params->FeedbackEjectionEfficiency * fire_scaling
-                                              * 0.5 * stars
-                                              * (run_params->EtaSNcode * run_params->EnergySNcode);
-                    const double E_lift     = 0.5 * reheated_mass * vc * vc;
-                    ejected_mass = (E_FB > E_lift) ? (E_FB - E_lift) / (0.5 * vc * vc) : 0.0;
-                }
-            } else {
-                ejected_mass = (run_params->FeedbackEjectionEfficiency
-                                * (run_params->EtaSNcode * run_params->EnergySNcode)
-                                / (galaxies[p].Vvir * galaxies[p].Vvir)
-                                - run_params->FeedbackReheatingEpsilon) * stars;
-            }
-        }
-        if(ejected_mass < 0.0) ejected_mass = 0.0;
-    }
+    compute_sn_feedback_ffb(p, &stars, &reheated_mass, &ejected_mass, galaxies, run_params);
 
     if(reheated_mass > galaxies[p].ColdGas) reheated_mass = galaxies[p].ColdGas;
 
