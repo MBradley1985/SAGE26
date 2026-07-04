@@ -157,7 +157,10 @@ Implementation (`model_ram_pressure.c`, called once per snapshot from
   approximation: their position is frozen at the snapshot the subhalo was
   lost (the true orbit only decays further in, so the ambient density --
   and hence the stripping -- is underestimated) and their stale stored
-  velocity is replaced by the host `Vvir`.
+  velocity is replaced by the host `Vvir`. Note that in the default
+  configuration orphans are transient (they merge or disrupt within a
+  snapshot of losing their subhalo), so this path is rarely exercised;
+  it matters only for configurations with long-lived orphans.
 - **Ambient density**: CGM-regime hosts use the same uniform/NFW/beta
   profile the CGM cooling recipe integrates (`cgm_density_at_radius()`);
   hot-regime hosts use the isothermal `M_hot / (4 pi Rvir r^2)` the
