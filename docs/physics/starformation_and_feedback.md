@@ -20,7 +20,11 @@ The function executes the following block once per galaxy per substep:
 2. **Compute the SFR** via the prescription selected by `SFprescription`
    (see below). Returns a star formation rate `strdot` in code units.
 3. **Compute H1/H2 split** for H2-tracking prescriptions (1, 3, 4, 5, 6, 7),
-   storing `H2gas` and `H1gas` on the galaxy.
+   storing `H2gas` and `H1gas` on the galaxy. `H1gas` is the atomic remainder
+   `X_H * ColdGas - H2gas`; with `HIIonizationOn`, the Shark-style
+   ionised-outer-disk fraction is removed from that *remainder* (H2 is central
+   and shielded), so the molecular and ionised components cannot overdraw the
+   hydrogen budget and HI is non-negative by construction.
 4. **Compute reheated and ejected masses.** Standard Croton+06 budget, or
    the FIRE-scaling alternative (Muratov+15) when `FIREmodeOn = 1`.
 5. **Apply mass and metal updates** via `update_from_star_formation()` and

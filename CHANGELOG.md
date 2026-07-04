@@ -1,5 +1,24 @@
 # Changelog
 
+## HI bookkeeping fix (July 2026) — intentional output change
+
+The `HIIonizationOn` correction and the H2 prescriptions previously claimed
+their hydrogen shares independently: the ionised fraction was removed from
+the *total* hydrogen budget while H2 was capped against that same total, so
+`H1 = (1 - f_ion) X_H ColdGas - H2` went negative and was silently zeroed
+(~615k clamp events per mini-Millennium run, dominated by fully-ionised
+low-surface-density dwarfs; at z ~ 2-3 molecule-rich galaxies overdrew up to
+~80% of their hydrogen). The ionisation cut now applies to the *atomic
+remainder* only — `H1 = (1 - f_ion)(X_H ColdGas - H2)` — treating H2 as
+central and shielded, which makes HI non-negative by construction.
+
+`H1gas` is a pure diagnostic (no physics rate reads it), and the regression
+audit confirms the blast radius: of 5,444 datasets, **only the 55 `H1gas`
+datasets changed**; every other dataset is bit-identical. Total z=0 HI rises
+0.4%. All baselines (mini-Millennium, millennium_all, microUchuu, binary
+benchmark) re-captured in the same commit per the regression policy. The
+negative-HI clamp counter now reads zero and remains as a guard.
+
 ## Physics-code readability pass (July 2026)
 
 A restructuring pass over the physics modules. No physics changes: every

@@ -916,21 +916,23 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     }
 
     // Calculate HI (atomic hydrogen) as the remainder of hydrogen after H2.
-    // Total hydrogen = ColdGas * HYDROGEN_MASS_FRAC (0.74). Optionally remove the
-    // ionised outer-disk component first (HIIonizationOn; see ionized_gas_fraction).
-    // Only HI is debited -- H2 is central and unaffected -- so SF/ColdGas are untouched.
+    // Total hydrogen = ColdGas * HYDROGEN_MASS_FRAC (0.74). The ionisation cut
+    // (HIIonizationOn; see ionized_gas_fraction) applies to the *atomic remainder*
+    // only -- H2 is central and shielded -- so the molecular and ionised claims
+    // can no longer overdraw the hydrogen budget and HI is non-negative by
+    // construction. Only HI is debited; SF/ColdGas are untouched.
     {
-        double neutralH = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+        double atomicH = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC - galaxies[p].H2gas;
+        if(atomicH < 0.0) {
+            atomicH = 0.0;  // H2 is capped at the budget; this guards float rounding only
+            clamp_count_h1_negative++;
+        }
         if(run_params->HIIonizationOn) {
             const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas, galaxies[p].DiskScaleRadius,
                                                       run_params->Hubble_h, run_params->SigmaHIcrit);
-            neutralH *= (1.0 - f_ion);
+            atomicH *= (1.0 - f_ion);
         }
-        galaxies[p].H1gas = neutralH - galaxies[p].H2gas;
-        if(galaxies[p].H1gas < 0.0) {
-            galaxies[p].H1gas = 0.0;  // Safety check
-            clamp_count_h1_negative++;
-        }
+        galaxies[p].H1gas = atomicH;
     }
 
     stars = strdot * dt;
@@ -1240,16 +1242,17 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
 
     if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) { galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC; clamp_count_h2_cap++; }
 
-    // HI = total hydrogen - H2, matching non-FFB path (with optional ionisation cut)
+    // HI = atomic remainder after H2, with the ionisation cut applied to the
+    // remainder only -- matching the non-FFB path.
     {
-        double neutralH = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+        double atomicH = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC - galaxies[p].H2gas;
+        if(atomicH < 0.0) { atomicH = 0.0; clamp_count_h1_negative++; }  // float-rounding guard only
         if(run_params->HIIonizationOn) {
             const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas, galaxies[p].DiskScaleRadius,
                                                       run_params->Hubble_h, run_params->SigmaHIcrit);
-            neutralH *= (1.0 - f_ion);
+            atomicH *= (1.0 - f_ion);
         }
-        galaxies[p].H1gas = neutralH - galaxies[p].H2gas;
-        if(galaxies[p].H1gas < 0.0) { galaxies[p].H1gas = 0.0; clamp_count_h1_negative++; }
+        galaxies[p].H1gas = atomicH;
     }
 
     // ========================================================================

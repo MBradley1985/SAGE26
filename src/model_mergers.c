@@ -761,6 +761,9 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
 
     // Clamp H2/H1 after gas has been consumed and ejected, so any chained merger
     // or disk-instability check that reads H2gas gets a physically consistent value.
+    // Note: this quick refresh skips the HIIonizationOn cut (H1 here is the full
+    // atomic remainder); the next SF substep recomputes H1 with the ionisation
+    // correction applied.
     if (sf_prescription_tracks_h2(run_params->SFprescription)) {
         if(galaxies[merger_centralgal].H2gas > galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC)
             galaxies[merger_centralgal].H2gas = galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC;
