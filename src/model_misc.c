@@ -219,7 +219,7 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
         }
         
         // Convert bulge mass from 10^10 M_sun/h to M_sun
-        const double M_bulge_sun = galaxies[p].BulgeMass * 1.0e10 / h;
+        const double M_bulge_sun = CODE_MASS_TO_MSUN(galaxies[p].BulgeMass, h);
         
         // Shen+2003 equation (33): log(R/kpc) = 0.56 log(M/Msun) - 5.54
         const double log_R_kpc = SHEN03_SLOPE_HIGH * log10(M_bulge_sun) + SHEN03_INTERCEPT_HIGH;
@@ -245,7 +245,7 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
         }
         
         // Convert bulge mass from 10^10 M_sun/h to M_sun
-        const double M_bulge_sun = galaxies[p].BulgeMass * 1.0e10 / h;
+        const double M_bulge_sun = CODE_MASS_TO_MSUN(galaxies[p].BulgeMass, h);
         
         // Transition mass from Shen et al. (2003) equation (32)
         const double M_transition = SHEN03_M_TRANSITION;  // M_sun
@@ -302,7 +302,7 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
         // use Shen as fallback.
         double R_merger = galaxies[p].MergerBulgeRadius;
         if(M_merger > 0.0 && R_merger <= 0.0) {
-             const double M_merger_sun = M_merger * 1.0e10 / h;
+             const double M_merger_sun = CODE_MASS_TO_MSUN(M_merger, h);
              const double log_R_kpc = SHEN03_SLOPE_HIGH * log10(M_merger_sun) + SHEN03_INTERCEPT_HIGH;
              R_merger = pow(10.0, log_R_kpc) * 1.0e-3 * h;
              galaxies[p].MergerBulgeRadius = R_merger;
@@ -316,7 +316,7 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
                 R_instability = TONINI16_DISK_FRAC * R_disc;
             } else {
                 // No disk (post-major-merger or orphan): use Shen power-law fallback
-                const double M_inst_sun = M_instability * 1.0e10 / h;
+                const double M_inst_sun = CODE_MASS_TO_MSUN(M_instability, h);
                 const double log_R_kpc = SHEN03_SLOPE_HIGH * log10(M_inst_sun) + SHEN03_INTERCEPT_HIGH;
                 R_instability = pow(10.0, log_R_kpc) * 1.0e-3 * h;
             }

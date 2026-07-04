@@ -53,7 +53,7 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
 
         // Convert Mvir to physical units (Msun)
         // Mvir is stored in units of 10^10 Msun/h
-        const double Mvir_physical = galaxies[p].Mvir * 1.0e10 / run_params->Hubble_h;
+        const double Mvir_physical = CODE_MASS_TO_MSUN(galaxies[p].Mvir, run_params->Hubble_h);
 
         // Shock mass threshold (Dekel & Birnboim 2006)
         const double Mshock = DEKEL06_M_SHOCK_MSUN;  // Msun

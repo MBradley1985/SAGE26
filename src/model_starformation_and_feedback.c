@@ -79,8 +79,8 @@ static double ionized_gas_fraction(const double coldgas_code, const double rs_co
     if(coldgas_code <= 0.0 || rs_code <= 0.0 || sigma_hi_crit <= 0.0 || h <= 0.0) {
         return 0.0;
     }
-    const double mgas   = coldgas_code * 1.0e10 / h;                 /* Msun */
-    const double rs_pc  = rs_code * 1.0e6 / h;                       /* pc */
+    const double mgas   = CODE_MASS_TO_MSUN(coldgas_code, h);                 /* Msun */
+    const double rs_pc  = CODE_LENGTH_TO_PC(rs_code, h);                       /* pc */
     const double sigma0 = mgas / (2.0 * M_PI * rs_pc * rs_pc);       /* Msun/pc^2 */
     if(sigma0 <= sigma_hi_crit) {
         return 1.0;   /* entire disk below the neutral threshold -> fully ionised */
@@ -153,7 +153,7 @@ static double sfr_br06(const int p, struct GALAXY *galaxies, const struct params
         tdyn = reff / galaxies[p].Vvir;
         // BR06 model
         const float h = run_params->Hubble_h;
-        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+        const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
         if (rs_pc <= 0.0) {
             galaxies[p].H2gas = 0.0;
             strdot = 0.0;
@@ -171,9 +171,8 @@ static double sfr_br06(const int p, struct GALAXY *galaxies, const struct params
                 } else {
                     disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
                 }
-                const float gas_surface_density  = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
-                const float star_surface_density = (galaxies[p].StellarMass - galaxies[p].BulgeMass)
-                                                   * 1.0e10 / h / disk_area_pc2;
+                const float gas_surface_density  = (CODE_MASS_TO_MSUN(galaxies[p].ColdGas, h)) / disk_area_pc2;
+                const float star_surface_density = CODE_MASS_TO_MSUN(galaxies[p].StellarMass - galaxies[p].BulgeMass, h) / disk_area_pc2;
                 galaxies[p].H2gas = calculate_molecular_fraction_BR06(gas_surface_density, star_surface_density,
                                                                        rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
             }
@@ -223,10 +222,10 @@ static double sfr_somerville25_coldgas(const int p, struct GALAXY *galaxies, con
     } else {
         tdyn = reff / galaxies[p].Vvir;
         const float h = run_params->Hubble_h;
-        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+        const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
         float disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2); // pc^2
         float gas_surface_density = (disk_area_pc2 > 0.0) ?
-            (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2 : 0.0; // Msun/pc^2
+            (CODE_MASS_TO_MSUN(galaxies[p].ColdGas, h)) / disk_area_pc2 : 0.0; // Msun/pc^2
 
         // Critical surface density from Equation 2
         const double Sigma_crit = SOMERVILLE25_SIGMA_CRIT;
@@ -278,7 +277,7 @@ static double sfr_somerville25_h2(const int p, struct GALAXY *galaxies, const st
     } else {
         tdyn = reff / galaxies[p].Vvir;
         const float h = run_params->Hubble_h;
-        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+        const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
 
         if (rs_pc <= 0.0) {
             galaxies[p].H2gas = 0.0;
@@ -301,8 +300,8 @@ static double sfr_somerville25_h2(const int p, struct GALAXY *galaxies, const st
                 } else {
                     disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
                 }
-                gas_surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
-                const float stellar_surface_density = ((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h) / disk_area_pc2;
+                gas_surface_density = (CODE_MASS_TO_MSUN(galaxies[p].ColdGas, h)) / disk_area_pc2;
+                const float stellar_surface_density = (CODE_MASS_TO_MSUN(galaxies[p].StellarMass - galaxies[p].BulgeMass, h)) / disk_area_pc2;
                 total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
                                                                         rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
                 galaxies[p].H2gas = total_molecular_gas;
@@ -359,7 +358,7 @@ static double sfr_kd12(const int p, struct GALAXY *galaxies, const struct params
         reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
         tdyn = reff / galaxies[p].Vvir;
         const float h = run_params->Hubble_h;
-        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+        const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
         if (rs_pc <= 0.0) {
             galaxies[p].H2gas = 0.0;
             strdot = 0.0;
@@ -379,7 +378,7 @@ static double sfr_kd12(const int p, struct GALAXY *galaxies, const struct params
                 if(disk_area <= 0.0) {
                     galaxies[p].H2gas = 0.0;
                 } else {
-                    float surface_density = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area;
+                    float surface_density = (CODE_MASS_TO_MSUN(galaxies[p].ColdGas, h)) / disk_area;
                     if(galaxies[p].ColdGas > 0.0) {
                         metallicity = galaxies[p].MetalsColdGas / galaxies[p].ColdGas;
                     }
@@ -434,7 +433,7 @@ static double sfr_kmt09(const int p, struct GALAXY *galaxies, const struct param
     } else {
         const float h = run_params->Hubble_h;
         // Scale radius in pc
-        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+        const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
 
         if(run_params->H2RadialIntegrationOn) {
             calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
@@ -451,7 +450,7 @@ static double sfr_kmt09(const int p, struct GALAXY *galaxies, const struct param
 
             // Gas Surface Density (Msun/pc^2) - Sigma_g
             float gas_surface_density = (disk_area_pc2 > 0.0) ?
-                (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2 : 0.0;
+                (CODE_MASS_TO_MSUN(galaxies[p].ColdGas, h)) / disk_area_pc2 : 0.0;
 
             float metallicity_abs = 0.0;
             if(galaxies[p].ColdGas > 0.0) {
@@ -526,7 +525,7 @@ static double sfr_k13(const int p, struct GALAXY *galaxies, const struct params 
         tdyn = reff / galaxies[p].Vvir; // Code units
 
         const float h = run_params->Hubble_h;
-        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+        const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
 
         if(run_params->H2RadialIntegrationOn) {
             // Radially integrate both H2 mass and K13 SFR consistently.
@@ -551,8 +550,8 @@ static double sfr_k13(const int p, struct GALAXY *galaxies, const struct params 
             }
 
             if(area_pc2 > 0.0) {
-                Sigma_gas_k13  = (galaxies[p].ColdGas * 1.0e10 / h) / area_pc2;
-                Sigma_star_k13 = ((galaxies[p].StellarMass - galaxies[p].BulgeMass) * 1.0e10 / h) / area_pc2;
+                Sigma_gas_k13  = (CODE_MASS_TO_MSUN(galaxies[p].ColdGas, h)) / area_pc2;
+                Sigma_star_k13 = (CODE_MASS_TO_MSUN(galaxies[p].StellarMass - galaxies[p].BulgeMass, h)) / area_pc2;
                 const double Z_gas = (galaxies[p].ColdGas > 0.0) ? (galaxies[p].MetalsColdGas / galaxies[p].ColdGas) : 0.0;
                 f_H2_2p_k13 = calculate_H2_fraction_K13(Sigma_gas_k13, Z_gas, 5.0);
                 Z_prime_k13 = (Z_gas > 0.0) ? Z_gas / Z_SOLAR_ASPLUND09 : 0.0;
@@ -609,7 +608,7 @@ static double sfr_gd14(const int p, struct GALAXY *galaxies, const struct params
         
         const float h = run_params->Hubble_h;
         // Scale radius in pc
-        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+        const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
 
         if(run_params->H2RadialIntegrationOn) {
             calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
@@ -626,7 +625,7 @@ static double sfr_gd14(const int p, struct GALAXY *galaxies, const struct params
 
             double Sigma_gas = 0.0;
             if(disk_area_pc2 > 0.0) {
-                Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
+                Sigma_gas = (CODE_MASS_TO_MSUN(galaxies[p].ColdGas, h)) / disk_area_pc2;
             }
 
             const double metallicity_abs = (galaxies[p].ColdGas > 0.0) ?
@@ -1132,7 +1131,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
 
     if(uses_h2 && galaxies[p].ColdGas > 0.0 && galaxies[p].DiskScaleRadius > 0.0) {
         const float h     = run_params->Hubble_h;
-        const float rs_pc = galaxies[p].DiskScaleRadius * 1.0e6 / h;
+        const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
         const int sfpres  = run_params->SFprescription;
         const int has_h2  = sf_prescription_tracks_h2(sfpres);
 
@@ -1151,12 +1150,11 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
                     disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
 
                 if(disk_area_pc2 > 0.0) {
-                    const float Sigma_gas = (galaxies[p].ColdGas * 1.0e10 / h) / disk_area_pc2;
+                    const float Sigma_gas = (CODE_MASS_TO_MSUN(galaxies[p].ColdGas, h)) / disk_area_pc2;
 
                     if(sf_prescription_is_br06(sfpres)) {
                         // BR06
-                        const float Sigma_star = (galaxies[p].StellarMass - galaxies[p].BulgeMass)
-                                                 * 1.0e10 / h / disk_area_pc2;
+                        const float Sigma_star = CODE_MASS_TO_MSUN(galaxies[p].StellarMass - galaxies[p].BulgeMass, h) / disk_area_pc2;
                         galaxies[p].H2gas = calculate_molecular_fraction_BR06(Sigma_gas, Sigma_star, rs_pc)
                                             * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
 

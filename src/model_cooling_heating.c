@@ -469,7 +469,7 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             // Mass suppression (M/Mshock)^(-4/3) -- halos well above the shock
             // threshold host weaker cold streams. Redshift factor (1+z)/(1+1)
             // enhances streams at high-z where cooling is more efficient.
-            const double Mvir_physical = galaxies[gal].Mvir * 1.0e10 / run_params->Hubble_h;
+            const double Mvir_physical = CODE_MASS_TO_MSUN(galaxies[gal].Mvir, run_params->Hubble_h);
             const double mass_ratio = Mvir_physical / MSHOCK_DB06_MSUN;
 
             // Redshift enhancement: normalized to z=1 following D&B06 eq 40
@@ -586,7 +586,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     const double CGMgas_cgs = galaxies[gal].CGMgas * 1e10 * SOLAR_MASS / run_params->Hubble_h; // g
     const double Rvir_cgs = galaxies[gal].Rvir * CM_PER_MPC / run_params->Hubble_h; // cm
     const double Mvir_cgs = galaxies[gal].Mvir * 1e10 * SOLAR_MASS / run_params->Hubble_h; // g
-    const double Mvir_Msun = galaxies[gal].Mvir * 1e10 / run_params->Hubble_h; // Msun
+    const double Mvir_Msun = CODE_MASS_TO_MSUN(galaxies[gal].Mvir, run_params->Hubble_h); // Msun
     const double z = run_params->ZZ[galaxies[gal].SnapNum];
 
     // Get density profile type (0: uniform, 1: NFW, 2: beta)

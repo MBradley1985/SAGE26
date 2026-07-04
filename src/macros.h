@@ -36,6 +36,15 @@
 #define  SEC_PER_MEGAYEAR   3.155e13 /* [s per Myr] */
 #define  SEC_PER_YEAR       3.155e7  /* [s per yr] */
 
+/* Code-unit conversions (see docs/physics/units.md): mass 10^10 Msun/h,
+ * length Mpc/h.  These expand to the literal expression shapes used
+ * throughout the physics -- (x)*1e10/(h), (x)*1e6/(h) -- so floating-point
+ * evaluation order, and therefore the output, is unchanged.  Do not
+ * "optimise" by precomputing 1e10/h or reassociating the operations. */
+#define  CODE_MASS_TO_MSUN(x, h)   ((x) * 1.0e10 / (h))  /* [10^10 Msun/h] -> [Msun] */
+#define  CODE_LENGTH_TO_PC(x, h)   ((x) * 1.0e6 / (h))   /* [Mpc/h] -> [pc] */
+#define  MSUN_TO_CODE_MASS(x, h)   ((x) * (h) / 1.0e10)  /* [Msun] -> [10^10 Msun/h] */
+
 #define  MAX_STRING_LEN     1024 /* Max length of a string containing a name */
 /* End of Macro Constants */
 

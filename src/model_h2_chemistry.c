@@ -123,15 +123,15 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
                                                       double *strdot_code_out)
 {
     const float h = run_params->Hubble_h;
-    const float rs_pc = galaxies[gal].DiskScaleRadius * 1.0e6 / h;  // Scale radius in pc
+    const float rs_pc = CODE_LENGTH_TO_PC(galaxies[gal].DiskScaleRadius, h);  // Scale radius in pc
 
     if (rs_pc <= 0.0 || galaxies[gal].ColdGas <= 0.0) {
         return 0.0;
     }
 
     // Total masses in physical units (M_sun); stellar uses disk-only (no bulge)
-    const float M_gas_total  = galaxies[gal].ColdGas * 1.0e10 / h;
-    const float M_disk_star  = (galaxies[gal].StellarMass - galaxies[gal].BulgeMass) * 1.0e10 / h;
+    const float M_gas_total  = CODE_MASS_TO_MSUN(galaxies[gal].ColdGas, h);
+    const float M_disk_star  = CODE_MASS_TO_MSUN(galaxies[gal].StellarMass - galaxies[gal].BulgeMass, h);
 
     // Central surface densities for exponential profiles: Sigma0 = M_total / (2pi r_s^2)
     const float sigma_gas_0  = M_gas_total / (2.0 * M_PI * rs_pc * rs_pc);
@@ -260,12 +260,12 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
     }
 
     // Convert back to code units (10^10 M_sun/h)
-    const float H2_code_units = M_H2_total * h / 1.0e10;
+    const float H2_code_units = MSUN_TO_CODE_MASS(M_H2_total, h);
 
     // Write K13 SFR and effective depletion time when requested
     if(strdot_code_out != NULL) {
         // SFR_K13_total [Msun/Gyr] -> code units [(10^10 Msun/h) / (UnitTime_in_Megayears Myr)]
-        *strdot_code_out = SFR_K13_total * h / 1.0e10 * run_params->UnitTime_in_Megayears / 1000.0;
+        *strdot_code_out = MSUN_TO_CODE_MASS(SFR_K13_total, h) * run_params->UnitTime_in_Megayears / 1000.0;
         // Effective global depletion time [Gyr] = M_gas / SFR_K13
         galaxies[gal].H2DepletionTime_Gyr = (SFR_K13_total > 0.0)
                                             ? (float)(M_gas_total / SFR_K13_total) : -1.0f;
