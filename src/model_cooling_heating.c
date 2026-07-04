@@ -991,6 +991,16 @@ static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const 
 
         if(AGNheating > 0.0)
             galaxies[centralgal].Heating += 0.5 * AGNheating * galaxies[centralgal].Vvir * galaxies[centralgal].Vvir;
+
+        /* The BH accretion above drew AGNaccreted out of CGMgas, but any
+         * earlier clamp of coolingGas used the pre-accretion reservoir.
+         * Re-cap so the caller cannot overdraw the CGM by up to AGNaccreted
+         * (manifested as an XASSERT abort when cooling was reservoir-limited
+         * and Bondi accretion nonzero in the same call, e.g. with
+         * CGMDensityProfile = 1). */
+        if(coolingGas > galaxies[centralgal].CGMgas) {
+            coolingGas = galaxies[centralgal].CGMgas;
+        }
     }
     return coolingGas;
 }
