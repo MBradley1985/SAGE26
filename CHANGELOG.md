@@ -1,5 +1,34 @@
 # Changelog
 
+## Physics-code readability pass (July 2026)
+
+A restructuring pass over the physics modules. No physics changes: every
+commit was gated on the mini-Millennium regression baseline (5444 HDF5
+datasets bit-identical), with the microUchuu baseline (4254 datasets)
+additionally verified for every structural change.
+
+- Units: every struct field, parameter, and physical constant now carries a
+  units comment; `docs/physics/units.md` defines the code-unit system, the
+  h-factor conventions, and the unit-suffix naming rule. Inline conversions
+  replaced by order-preserving macros (`CODE_MASS_TO_MSUN`,
+  `CODE_LENGTH_TO_PC`, `MSUN_TO_CODE_MASS`); the H2 chemistry API parameters
+  carry explicit unit suffixes.
+- Structure: each of the eight SF prescriptions is its own function
+  (`sfr_croton06` ... `sfr_gd14`) behind a switch dispatch; SN feedback mass
+  computation extracted to `compute_sn_feedback()` (+ FFB variant);
+  `model_misc.c` split into `model_h2_chemistry.c`,
+  `model_halo_properties.c`, and `model_regimes.c` (near-duplicate branches
+  were extracted, never merged — their differences are intentional).
+- Frozen behaviour made explicit: deliberate single-precision sites are
+  marked `float on purpose` and documented; promoting them to double changes
+  the calibrated output.
+- Guard rails: all 22 physics option flags are range-validated at startup
+  and two silently-meaningless combinations (H2-based FFB modes with a
+  non-H2 SF prescription; log-normal FFB modes with zero scatter) are
+  rejected with clear messages. The silent physics clamps are now counted
+  and reported at finalisation in VERBOSE builds. Baseline option-matrix
+  coverage is documented in `docs/developer/REGRESSION_BASELINE.md`.
+
 ## Pre-release code review and cleanup (July 2026)
 
 A full review of `src/` ahead of public release. No physics changes: every
