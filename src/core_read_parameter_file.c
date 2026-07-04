@@ -123,6 +123,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->StrippingTimescaleFactor   = 1.0; /* default: t_strip = 1 * t_dyn(host) for physical stripping schemes */
     run_params->RamPressureStrippingOn     = 0;   /* default: off, so the calibrated baseline output is unchanged. Set 1 for Gunn & Gott (1972) ISM stripping of satellites. */
     run_params->RamPressureEpsilon         = 1.0; /* default: unscaled ram pressure P_ram = rho_host * v_sat^2 */
+    run_params->PrecipRegulationOn         = 0;   /* default: off (free-fall CGM drain when unstable, calibrated baseline). Set 1 for self-regulating precipitation that shuts off at the tcool/tff equilibrium. */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
     run_params->ReIncorporationFactor      = 0.15;
@@ -209,6 +210,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("StrippingTimescaleFactor", &(run_params->StrippingTimescaleFactor), DOUBLE, 0);
     REG("RamPressureStrippingOn",   &(run_params->RamPressureStrippingOn),   INT, 0);
     REG("RamPressureEpsilon",       &(run_params->RamPressureEpsilon),       DOUBLE, 0);
+    REG("PrecipRegulationOn",       &(run_params->PrecipRegulationOn),       INT, 0);
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
     REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
     REG("H2RadialNBins",         &(run_params->H2RadialNBins),        INT, 0);
@@ -570,6 +572,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"DynamicDisruptionSplit", run_params->DynamicDisruptionSplit, 0, 2},
             {"PhysicalStrippingOn",    run_params->PhysicalStrippingOn,    0, 2},
             {"RamPressureStrippingOn", run_params->RamPressureStrippingOn, 0, 1},
+            {"PrecipRegulationOn",     run_params->PrecipRegulationOn,     0, 1},
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {

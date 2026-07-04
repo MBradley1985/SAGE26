@@ -695,9 +695,32 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     if(precipitation_fraction > 0.0) {
         // Gas precipitates on the free-fall timescale when thermally unstable
         // This is the key physical insight: dM/dt = f_precip * M_CGM / t_ff
-        const double precip_rate = precipitation_fraction * galaxies[gal].CGMgas / tff_char;
+        //
+        // PrecipRegulationOn == 1 makes the flow self-regulating: only the CGM
+        // above the tcool/tff = PRECIP_THRESHOLD equilibrium condenses. At
+        // fixed profile shape and temperature t_cool scales as 1/rho, i.e. as
+        // 1/M_CGM, while t_ff is set by the (DM-dominated) potential -- so the
+        // reservoir the halo can stably hold is
+        //     M_eq = M_CGM * (tcool/tff) / PRECIP_THRESHOLD
+        // and dM/dt = f_precip * (M_CGM - M_eq) / t_ff relaxes toward the Voit
+        // equilibrium instead of emptying the reservoir: as the CGM drains,
+        // tcool/tff rises, M_eq -> M_CGM, and the flow shuts off. Late-time
+        // inflow is then limited to the rate at which infall and SN-reheated
+        // gas push the CGM back over the equilibrium mass, rather than the
+        // free-fall dump of the entire stored reservoir (which produces the
+        // terminal tcool/tff << 1, disk-dominated cold-gas states the
+        // unregulated law converges to).
+        double condensing_mass = galaxies[gal].CGMgas;
+        if(run_params->PrecipRegulationOn) {
+            const double m_eq = galaxies[gal].CGMgas * (tcool_over_tff_char / PRECIP_THRESHOLD);
+            condensing_mass = galaxies[gal].CGMgas - m_eq;
+            if(condensing_mass < 0.0) {
+                condensing_mass = 0.0;   /* sigmoid tail above threshold: stable, no condensation */
+            }
+        }
+        const double precip_rate = precipitation_fraction * condensing_mass / tff_char;
         coolingGas = precip_rate * dt;
-        
+
         // Physical limits
         if(coolingGas > galaxies[gal].CGMgas) {
             coolingGas = galaxies[gal].CGMgas;
