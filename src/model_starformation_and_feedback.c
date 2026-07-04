@@ -24,6 +24,30 @@
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
  * -------------------------------------------------------------------------*/
 
+/* -------------------------------------------------------------------------
+ * Silent-clamp diagnostics.
+ *
+ * The physics deliberately clamps in a few places (H2 capped at the cold-gas
+ * hydrogen budget, negative HI zeroed, reheated mass capped at the available
+ * cold gas).  The clamps are part of the calibrated behaviour and must stay;
+ * these counters only make them observable, so an upstream bug that floods a
+ * clamp cannot hide.  Totals are printed by report_sf_clamp_counts() from
+ * finalize_sage() in VERBOSE builds.  The post-depletion H2/H1 resync clamps
+ * in update_from_star_formation()/update_from_feedback() fire routinely by
+ * construction (H2 is computed before SF debits ColdGas) and are not counted.
+ * -------------------------------------------------------------------------*/
+static int64_t clamp_count_h2_cap = 0;         /* H2 fit exceeded ColdGas * HYDROGEN_MASS_FRAC */
+static int64_t clamp_count_h1_negative = 0;    /* HI went negative after ionisation/H2 subtraction */
+static int64_t clamp_count_reheat_coldgas = 0; /* reheated mass exceeded available ColdGas */
+
+void report_sf_clamp_counts(void)
+{
+    printf("SF/feedback clamp totals: H2 capped to hydrogen budget = %" PRId64
+           ", negative HI zeroed = %" PRId64
+           ", reheated mass capped to ColdGas = %" PRId64 "\n",
+           clamp_count_h2_cap, clamp_count_h1_negative, clamp_count_reheat_coldgas);
+}
+
 /* SF disk effective radius: reff = SF_DISK_RADIUS_FRAC * r_s, calibrated to
  * the Milky Way disk.  Used for both the dynamical time and disk area in all
  * SF prescriptions. */
@@ -177,8 +201,10 @@ static double sfr_br06(const int p, struct GALAXY *galaxies, const struct params
                                                                        rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
             }
 
-            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
+            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
                 galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+                clamp_count_h2_cap++;
+            }
 
             if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
                 strdot = run_params->SfrEfficiency * galaxies[p].H2gas / tdyn;
@@ -307,8 +333,10 @@ static double sfr_somerville25_h2(const int p, struct GALAXY *galaxies, const st
                 galaxies[p].H2gas = total_molecular_gas;
             }
 
-            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
+            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
                 galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+                clamp_count_h2_cap++;
+            }
 
             // Critical surface density from Equation 2
             const double Sigma_crit = SOMERVILLE25_SIGMA_CRIT;
@@ -390,6 +418,7 @@ static double sfr_kd12(const int p, struct GALAXY *galaxies, const struct params
             // Safety check: H2 fraction cannot exceed 1.0
             if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
                 galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+                clamp_count_h2_cap++;
             }
 
             if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
@@ -482,6 +511,7 @@ static double sfr_kmt09(const int p, struct GALAXY *galaxies, const struct param
         // Can't create more H2 than total cold gas
         if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
             galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+            clamp_count_h2_cap++;
         }
 
         if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
@@ -533,8 +563,10 @@ static double sfr_k13(const int p, struct GALAXY *galaxies, const struct params 
             // avoiding the single-slab Sigma = M/(pi r_s^2) = 2Sigma0 overestimate.
             double strdot_k13 = 0.0;
             calculate_molecular_fraction_radial_integration(p, galaxies, run_params, &strdot_k13);
-            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
+            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
                 galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+                clamp_count_h2_cap++;
+            }
             // H2DepletionTime_Gyr = M_gas / SFR_K13_integrated, set inside function
             strdot = strdot_k13;
         } else {
@@ -561,8 +593,10 @@ static double sfr_k13(const int p, struct GALAXY *galaxies, const struct params 
                 galaxies[p].H2gas = 0.0;
             }
 
-            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC)
+            if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
                 galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+                clamp_count_h2_cap++;
+            }
 
             const double t_dep_Gyr = calculate_tdep_K13_Gyr((float)Sigma_gas_k13, (float)Sigma_star_k13,
                                                                rs_pc, (float)Z_prime_k13, (float)f_H2_2p_k13);
@@ -637,6 +671,7 @@ static double sfr_gd14(const int p, struct GALAXY *galaxies, const struct params
         // Can't create more H2 than total cold gas
         if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
             galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+            clamp_count_h2_cap++;
         }
 
         if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
@@ -892,6 +927,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         galaxies[p].H1gas = neutralH - galaxies[p].H2gas;
         if(galaxies[p].H1gas < 0.0) {
             galaxies[p].H1gas = 0.0;  // Safety check
+            clamp_count_h1_negative++;
         }
     }
 
@@ -928,6 +964,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // Safety check: ensure reheated_mass doesn't exceed remaining ColdGas (floating-point precision)
     if(reheated_mass > galaxies[p].ColdGas) {
         reheated_mass = galaxies[p].ColdGas;
+        clamp_count_reheat_coldgas++;
     }
 
     // update from SN feedback
@@ -1001,6 +1038,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
 
     if(reheated_mass > galaxies[p].ColdGas) {
         reheated_mass = galaxies[p].ColdGas;
+        clamp_count_reheat_coldgas++;
     }
 
     XASSERT(reheated_mass >= 0.0, -1,
@@ -1198,7 +1236,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         }
     }
 
-    if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
+    if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) { galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC; clamp_count_h2_cap++; }
 
     // HI = total hydrogen - H2, matching non-FFB path (with optional ionisation cut)
     {
@@ -1209,7 +1247,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
             neutralH *= (1.0 - f_ion);
         }
         galaxies[p].H1gas = neutralH - galaxies[p].H2gas;
-        if(galaxies[p].H1gas < 0.0) galaxies[p].H1gas = 0.0;
+        if(galaxies[p].H1gas < 0.0) { galaxies[p].H1gas = 0.0; clamp_count_h1_negative++; }
     }
 
     // ========================================================================
@@ -1264,7 +1302,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     double ejected_mass  = 0.0;
     compute_sn_feedback_ffb(p, &stars, &reheated_mass, &ejected_mass, galaxies, run_params);
 
-    if(reheated_mass > galaxies[p].ColdGas) reheated_mass = galaxies[p].ColdGas;
+    if(reheated_mass > galaxies[p].ColdGas) { reheated_mass = galaxies[p].ColdGas; clamp_count_reheat_coldgas++; }
 
     update_from_feedback(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 

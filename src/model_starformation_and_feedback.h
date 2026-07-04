@@ -29,6 +29,10 @@ extern "C" {
     extern void starformation_ffb(const int p, const int centralgal, const double dt, const int step,
                                   struct GALAXY *galaxies, const struct params *run_params);
 
+    /* Print totals of the silent physics clamps (H2 cap, negative HI,
+       reheated-mass cap); called from finalize_sage() in VERBOSE builds. */
+    extern void report_sf_clamp_counts(void);
+
 #ifdef __cplusplus
 }
 #endif
