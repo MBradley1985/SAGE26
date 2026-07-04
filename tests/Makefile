@@ -49,6 +49,7 @@ TEST_SOURCES = \
 	test_stripping.c \
 	test_multi_satellite.c \
 	test_star_formation_recipes.c \
+	test_h2_chemistry.c \
 	test_reincorporation.c \
 	test_cooling_heating.c \
 	test_halo_mergers.c \
