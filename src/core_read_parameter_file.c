@@ -121,6 +121,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->PhysicalStrippingOn        = 2;   /* default: analytic once-per-snapshot physical stripping, 1-exp(-dT/t_dyn) (cadence-invariant). Set 0 for legacy geometric, 1 for per-substep physical. */
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
     run_params->StrippingTimescaleFactor   = 1.0; /* default: t_strip = 1 * t_dyn(host) for physical stripping schemes */
+    run_params->RamPressureStrippingOn     = 0;   /* default: off, so the calibrated baseline output is unchanged. Set 1 for Gunn & Gott (1972) ISM stripping of satellites. */
+    run_params->RamPressureEpsilon         = 1.0; /* default: unscaled ram pressure P_ram = rho_host * v_sat^2 */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
     run_params->ReIncorporationFactor      = 0.15;
@@ -205,6 +207,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("PhysicalStrippingOn",   &(run_params->PhysicalStrippingOn),   INT, 0);
     REG("SubstepResolution",     &(run_params->SubstepResolution),     DOUBLE, 0);
     REG("StrippingTimescaleFactor", &(run_params->StrippingTimescaleFactor), DOUBLE, 0);
+    REG("RamPressureStrippingOn",   &(run_params->RamPressureStrippingOn),   INT, 0);
+    REG("RamPressureEpsilon",       &(run_params->RamPressureEpsilon),       DOUBLE, 0);
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
     REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
     REG("H2RadialNBins",         &(run_params->H2RadialNBins),        INT, 0);
@@ -565,6 +569,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"DynamicDisruptionSplit", run_params->DynamicDisruptionSplit, 0, 2},
             {"PhysicalStrippingOn",    run_params->PhysicalStrippingOn,    0, 2},
+            {"RamPressureStrippingOn", run_params->RamPressureStrippingOn, 0, 1},
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {
@@ -587,6 +592,11 @@ int read_parameter_file(const char *fname, struct params *run_params)
     if(run_params->H2RadialIntegrationOn && run_params->H2RadialRMaxFactor <= 0.0) {
         fprintf(stderr, "Error: H2RadialRMaxFactor = %g is not valid; it must be > 0.\n",
                 run_params->H2RadialRMaxFactor);
+        ABORT(EXIT_FAILURE);
+    }
+    if(run_params->RamPressureStrippingOn && run_params->RamPressureEpsilon <= 0.0) {
+        fprintf(stderr, "Error: RamPressureEpsilon = %g is not valid; it must be > 0 when RamPressureStrippingOn = 1.\n",
+                run_params->RamPressureEpsilon);
         ABORT(EXIT_FAILURE);
     }
     if(run_params->SubstepResolution <= 0.0) {

@@ -267,9 +267,11 @@ static double cgm_enclosed_mass(const double r, const double M_total, const doub
  *
  * Dispatches to the selected profile model (profile_type: 0=uniform, 1=NFW, 2=beta).
  * Falls back to uniform for unrecognised profile_type values.
+ * External so the ram-pressure stripping module can evaluate the same ambient
+ * profile the cooling recipe assumes (see model_ram_pressure.c).
  */
-static double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const double Rvir_cgs,
-                                    const double Mvir_Msun, const double z, const int profile_type)
+double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const double Rvir_cgs,
+                             const double Mvir_Msun, const double z, const int profile_type)
 {
     if(profile_type == 0) {
         // Uniform density
