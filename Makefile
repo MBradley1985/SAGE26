@@ -2,7 +2,9 @@ USE-MPI := yes # set this if you want to run in embarrassingly parallel (automat
 USE-HDF5 := yes # set this if you want to read in hdf5 trees (requires hdf5 libraries)
 
 #MEM-CHECK = yes # Set this if you want to check sanitize pointers/memory addresses. Slowdown of ~2x is expected.
-				 # Note: This only works with gcc
+				 # Note: works with gcc on Linux (exercised by the sanitized CI lane).
+				 # Apple clang's ASan runtime can be broken on macOS releases newer
+				 # than the installed Xcode Command Line Tools.
 
 USE-BUFFERED-WRITE := yes # Set this to create binary output in chunks (typically has better performance)
 
@@ -100,7 +102,14 @@ ifeq ($(DO_CHECKS), 1)
   ## Check if CC is clang under the hood
   CC_VERSION := $(shell $(CC) --version 2>/dev/null)
   ifndef CC_VERSION
-    $(info Error: Could find compiler = ${CC})
+    $(info Error: Could not find compiler = ${CC})
+    ifdef USE-MPI
+      $(info )
+      $(info MPI is enabled by default (USE-MPI at the top of the Makefile) and needs "mpicc".)
+      $(info If you do not need MPI, build the serial version instead with "make USE-MPI=")
+      $(info Otherwise install an MPI stack (e.g. OpenMPI) so that "mpicc" is in your PATH.)
+      $(info )
+    endif
     $(info Please either set "CC" in "Makefile" or via the command-line "make CC=yourcompiler")
     $(info And please check that the specified compiler is in your "$$PATH" variables)
     $(error )
