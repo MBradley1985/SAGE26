@@ -267,9 +267,11 @@ static double cgm_enclosed_mass(const double r, const double M_total, const doub
  *
  * Dispatches to the selected profile model (profile_type: 0=uniform, 1=NFW, 2=beta).
  * Falls back to uniform for unrecognised profile_type values.
+ * External so the ram-pressure stripping module can evaluate the same ambient
+ * profile the cooling recipe assumes (see model_ram_pressure.c).
  */
-static double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const double Rvir_cgs,
-                                    const double Mvir_Msun, const double z, const int profile_type)
+double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const double Rvir_cgs,
+                             const double Mvir_Msun, const double z, const int profile_type)
 {
     if(profile_type == 0) {
         // Uniform density
@@ -693,9 +695,32 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     if(precipitation_fraction > 0.0) {
         // Gas precipitates on the free-fall timescale when thermally unstable
         // This is the key physical insight: dM/dt = f_precip * M_CGM / t_ff
-        const double precip_rate = precipitation_fraction * galaxies[gal].CGMgas / tff_char;
+        //
+        // PrecipRegulationOn == 1 makes the flow self-regulating: only the CGM
+        // above the tcool/tff = PRECIP_THRESHOLD equilibrium condenses. At
+        // fixed profile shape and temperature t_cool scales as 1/rho, i.e. as
+        // 1/M_CGM, while t_ff is set by the (DM-dominated) potential -- so the
+        // reservoir the halo can stably hold is
+        //     M_eq = M_CGM * (tcool/tff) / PRECIP_THRESHOLD
+        // and dM/dt = f_precip * (M_CGM - M_eq) / t_ff relaxes toward the Voit
+        // equilibrium instead of emptying the reservoir: as the CGM drains,
+        // tcool/tff rises, M_eq -> M_CGM, and the flow shuts off. Late-time
+        // inflow is then limited to the rate at which infall and SN-reheated
+        // gas push the CGM back over the equilibrium mass, rather than the
+        // free-fall dump of the entire stored reservoir (which produces the
+        // terminal tcool/tff << 1, disk-dominated cold-gas states the
+        // unregulated law converges to).
+        double condensing_mass = galaxies[gal].CGMgas;
+        if(run_params->PrecipRegulationOn) {
+            const double m_eq = galaxies[gal].CGMgas * (tcool_over_tff_char / PRECIP_THRESHOLD);
+            condensing_mass = galaxies[gal].CGMgas - m_eq;
+            if(condensing_mass < 0.0) {
+                condensing_mass = 0.0;   /* sigmoid tail above threshold: stable, no condensation */
+            }
+        }
+        const double precip_rate = precipitation_fraction * condensing_mass / tff_char;
         coolingGas = precip_rate * dt;
-        
+
         // Physical limits
         if(coolingGas > galaxies[gal].CGMgas) {
             coolingGas = galaxies[gal].CGMgas;
@@ -989,6 +1014,16 @@ static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const 
 
         if(AGNheating > 0.0)
             galaxies[centralgal].Heating += 0.5 * AGNheating * galaxies[centralgal].Vvir * galaxies[centralgal].Vvir;
+
+        /* The BH accretion above drew AGNaccreted out of CGMgas, but any
+         * earlier clamp of coolingGas used the pre-accretion reservoir.
+         * Re-cap so the caller cannot overdraw the CGM by up to AGNaccreted
+         * (manifested as an XASSERT abort when cooling was reservoir-limited
+         * and Bondi accretion nonzero in the same call, e.g. with
+         * CGMDensityProfile = 1). */
+        if(coolingGas > galaxies[centralgal].CGMgas) {
+            coolingGas = galaxies[centralgal].CGMgas;
+        }
     }
     return coolingGas;
 }

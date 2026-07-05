@@ -24,6 +24,8 @@ extern "C" {
     extern void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct GALAXY *galaxies);
     extern double do_AGN_heating(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
                                  struct GALAXY *galaxies, const struct params *run_params);
+    extern double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const double Rvir_cgs,
+                                        const double Mvir_Msun, const double z, const int profile_type);
 
 #ifdef __cplusplus
 }

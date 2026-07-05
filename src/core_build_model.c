@@ -35,6 +35,7 @@
 #include "model_misc.h"
 #include "model_mergers.h"
 #include "model_infall.h"
+#include "model_ram_pressure.h"
 #include "model_reincorporation.h"
 #include "model_starformation_and_feedback.h"
 #include "model_cooling_heating.h"
@@ -448,6 +449,26 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
             if(galaxies[p].Type == 1 && (galaxies[p].HotGas > 0.0 || galaxies[p].CGMgas > 0.0)) {
                 const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
                 strip_from_satellite(centralgal, p, Zcurr, effective_steps, deltaT, t_strip, galaxies, run_params);
+            }
+        }
+    }
+
+    // RamPressureStrippingOn == 1: Gunn & Gott (1972) ram-pressure stripping of
+    // satellite ISM (ColdGas), applied once per snapshot outside the substep
+    // loop with the same analytic 1-exp(-dT/t_strip) cadence as scheme 2 above.
+    // Complementary to and independent of PhysicalStrippingOn, which strips the
+    // hot/CGM phase (starvation). Covers Type 1 satellites and Type 2 orphans;
+    // orphans use a frozen-orbit approximation (position frozen at subhalo
+    // loss, velocity replaced by the host Vvir -- see
+    // ram_pressure_strip_satellite).
+    if(run_params->RamPressureStrippingOn == 1) {
+        for(int p = 0; p < ngal; p++) {
+            if(p == centralgal || galaxies[p].mergeType > 0) {
+                continue;
+            }
+            if((galaxies[p].Type == 1 || galaxies[p].Type == 2) && galaxies[p].ColdGas > 0.0) {
+                const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
+                ram_pressure_strip_satellite(centralgal, p, Zcurr, deltaT, t_strip, galaxies, run_params);
             }
         }
     }

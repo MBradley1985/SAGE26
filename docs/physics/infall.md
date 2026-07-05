@@ -131,6 +131,58 @@ hot gas is not stranded.
 Type 2 satellites (orphan satellites with no remaining subhalo) have no
 hot reservoir and are skipped.
 
+## `ram_pressure_strip_satellite()` -- ram-pressure stripping of the ISM
+
+Enabled by `RamPressureStrippingOn = 1` (default 0, which leaves the
+calibrated baseline output byte-identical). Where `strip_from_satellite()`
+removes a satellite's *hot-phase* gas (starvation), this channel removes the
+*ISM* (`ColdGas`) directly, following Gunn & Gott (1972): disk gas at radius
+r is stripped where the ram pressure of the host's ambient medium exceeds
+the disk's gravitational restoring force per unit area,
+
+    rho_host(R_orb) * v_sat^2  >  2 pi G * Sigma_disk(r) * Sigma_gas(r).
+
+The two channels are independent and complementary (the same split Shark
+makes between halo and ISM stripping); they share only the stripping
+timescale `t_strip = StrippingTimescaleFactor * Rvir/Vvir` of the host.
+
+Implementation (`model_ram_pressure.c`, called once per snapshot from
+`evolve_galaxies()` outside the substep loop, like the
+`PhysicalStrippingOn = 2` scheme):
+
+- **Orbit**: R_orb from the comoving position offset to the central
+  (minimum image, converted to physical), clamped to (0, Rvir]; v_sat from
+  the peculiar-velocity difference, falling back to the host `Vvir` when
+  degenerate. Type 2 orphans are included with a frozen-orbit
+  approximation: their position is frozen at the snapshot the subhalo was
+  lost (the true orbit only decays further in, so the ambient density --
+  and hence the stripping -- is underestimated) and their stale stored
+  velocity is replaced by the host `Vvir`. Note that in the default
+  configuration orphans are transient (they merge or disrupt within a
+  snapshot of losing their subhalo), so this path is rarely exercised;
+  it matters only for configurations with long-lived orphans.
+- **Ambient density**: CGM-regime hosts use the same uniform/NFW/beta
+  profile the CGM cooling recipe integrates (`cgm_density_at_radius()`);
+  hot-regime hosts use the isothermal `M_hot / (4 pi Rvir r^2)` the
+  hot-mode cooling assumes.
+- **Stripped fraction**: with the gas and stellar disks exponential in the
+  same scale radius (the H2 machinery's assumption), the criterion has the
+  analytic solution `r_strip = (r_s/2) ln(2 pi G Sigma_gas0 Sigma_disk0 /
+  P_ram)` and the stripped mass fraction `f_strip = (1 + r_strip/r_s)
+  exp(-r_strip/r_s)`; ram pressure above the central restoring force strips
+  the whole disk.
+- **Removal**: `M_strip = ColdGas * f_strip * (1 - exp(-dT/t_strip))`, with
+  metals in proportion, donated to the central's hot/CGM reservoir by
+  regime. Because SAGE stores only `(ColdGas, DiskScaleRadius)`, removal
+  lowers the surface density everywhere at fixed r_s rather than truncating
+  the disk -- the standard SAM compromise. H2/HI are re-partitioned from
+  the reduced `ColdGas` at the next substep, and since the outer disk is
+  HI-dominated, stripping preferentially removes HI.
+
+Enabling this toggle shifts satellite gas fractions and quenching, so any
+science run with it on needs at least an SMF / HI-mass-function check
+against the calibration.
+
 ## Switches and parameters
 
 | Parameter | Effect |
@@ -142,11 +194,14 @@ hot reservoir and are skipped.
 | `ReIncorporationFactor` | Sets `Vcrit` for the reincorporation cutoff. Larger values delay reincorporation in low-mass halos. |
 | `CGMrecipeOn` | Routes infall, reincorporation, and satellite CGM by regime when set. |
 | `TrackICSAssembly` | Records satellite-derived ICS mass into `ICS_accrete` for the central. |
+| `RamPressureStrippingOn` | 1 enables Gunn & Gott (1972) ram-pressure stripping of satellite `ColdGas`; 0 (default) leaves the baseline unchanged. |
+| `RamPressureEpsilon` | Order-unity prefactor on `P_ram = eps * rho_host * v_sat^2` (disk-orientation geometry uncertainty); default 1.0. |
 
 See [`parameters.md`](../parameters.md) for full descriptions and defaults.
 
 ## References
 
+- Gunn & Gott (1972), ApJ 176, 1 -- ram-pressure stripping criterion.
 - Gnedin (2000), ApJ 542, 535 -- reionization filtering mass.
 - Kravtsov, Gnedin & Klypin (2004), ApJ 609, 482 -- Appendix B fitting
   formulae for the filtering mass.
