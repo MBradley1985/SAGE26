@@ -155,6 +155,30 @@ frozen-orbit treatment of orphans.
 | `RamPressureStrippingOn` | 0/1 | **default 1.** 1=on (Gunn & Gott 1972 ISM stripping); 0=off |
 | `RamPressureEpsilon` | double | Order-unity prefactor on `P_ram = eps * rho_host * v_sat^2` (disk-orientation geometry); default 1.0 |
 
+### Satellite hot-gas stripping (`PhysicalStrippingOn`)
+
+Strips a satellite's excess hot/CGM gas (starvation), complementary to the
+ISM ram-pressure channel above. The stock scheme removes a fixed `1/N` of the
+excess each of the `N` substeps, so the fraction stripped over a snapshot
+depends on the substep count rather than elapsed time; the physical schemes
+strip `1 - exp(-dT/t_strip)` on the host dynamical time instead.
+
+| Parameter | Values | Effect |
+|-----------|--------|--------|
+| `PhysicalStrippingOn` | 0–2 | **default 2.** 0=legacy geometric (`excess/N` per substep, stock SAGE); 1=physical timescale, per-substep; 2=analytic once-per-snapshot `1-exp(-dT/t_strip)`, no substep-count dependence |
+| `StrippingTimescaleFactor` | double | Prefactor on the stripping timescale `t_strip = factor * t_dyn(host)`; default 1.0. Used by schemes 1 and 2 |
+
+### Adaptive time integration (`SubstepResolution`)
+
+The snapshot interval is integrated with a substep count that scales with
+`deltaT / t_dyn`, so high-redshift snapshots spanning several dynamical times
+are resolved with more substeps (bounded by a `STEPS` floor and `MAX_STEPS`
+cap) rather than a fixed count.
+
+| Parameter | Values | Effect |
+|-----------|--------|--------|
+| `SubstepResolution` | double | Runtime multiplier on both the adaptive-substep floor and cap; default 1.0. Sweep for convergence / N-invariance testing without recompiling |
+
 ### FIRE stellar feedback (`FIREmodeOn`)
 
 | Value | Mode |
