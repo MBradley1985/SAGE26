@@ -24,6 +24,8 @@ of halo properties. Test trees for the
 | Feature | Parameter | Reference |
 |---------|-----------|-----------|
 | Two-regime CGM model | `CGMrecipeOn` | Dekel & Birnboim (2006), Voit (2015) |
+| Self-regulating precipitation | `PrecipRegulationOn` | Voit (2015) |
+| Ram-pressure ISM stripping of satellites | `RamPressureStrippingOn` | Gunn & Gott (1972) |
 | FIRE stellar feedback | `FIREmodeOn` | Muratov et al. (2015) |
 | Feedback-free burst galaxies | `FeedbackFreeModeOn` | Li et al. (2024), Boylan-Kolchin (2025) |
 | NFW/beta CGM density profiles | `CGMDensityProfile` | — |
@@ -136,6 +138,22 @@ Each regime uses a dedicated cooling recipe.
 |-----------|--------|--------|
 | `CGMrecipeOn` | 0/1 | 0=off (classical C16 cooling only); 1=on |
 | `CGMDensityProfile` | 0–2 | 0=uniform; 1=NFW; 2=beta-profile (β=2/3) |
+| `PrecipRegulationOn` | 0/1 | **default 1.** Self-regulating precipitation: condenses only the CGM above the `t_cool/t_ff = 10` Voit equilibrium so the flow relaxes to equilibrium instead of draining the reservoir at the free-fall rate. 0=legacy free-fall drain. |
+
+### Satellite ram-pressure ISM stripping (`RamPressureStrippingOn`)
+
+Gunn & Gott (1972): cold disk gas in a satellite is stripped where the ram
+pressure of the host's ambient medium exceeds the disk's gravitational
+restoring force per unit area. Applied once per snapshot, this removes the
+ISM (`ColdGas`) directly — complementary to and independent of the hot/CGM
+starvation stripping in `PhysicalStrippingOn`. See
+[`docs/physics/infall.md`](docs/physics/infall.md) for the criterion and the
+frozen-orbit treatment of orphans.
+
+| Parameter | Values | Effect |
+|-----------|--------|--------|
+| `RamPressureStrippingOn` | 0/1 | **default 1.** 1=on (Gunn & Gott 1972 ISM stripping); 0=off |
+| `RamPressureEpsilon` | double | Order-unity prefactor on `P_ram = eps * rho_host * v_sat^2` (disk-orientation geometry); default 1.0 |
 
 ### FIRE stellar feedback (`FIREmodeOn`)
 

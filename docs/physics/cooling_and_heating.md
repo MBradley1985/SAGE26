@@ -111,6 +111,26 @@ slowly on the cooling timescale: `dM/dt = CGMgas / t_cool`. When it is
 "unstable" (below threshold), it precipitates on the free-fall timescale:
 `dM/dt = f_precip * CGMgas / t_ff`.
 
+**Self-regulation (`PrecipRegulationOn`, default 1).** The bare law above
+condenses the *entire* reservoir when unstable, so its only stable end
+state is an empty CGM -- a cooling catastrophe rather than the
+self-regulating equilibrium Voit's picture describes. With
+`PrecipRegulationOn = 1` only the gas *above* the `t_cool / t_ff = 10`
+equilibrium condenses. At fixed profile shape and temperature `t_cool`
+scales as `1/rho ~ 1/M_CGM` while `t_ff` is set by the (dark-matter
+dominated) potential, so the reservoir the halo can stably hold is
+`M_eq = M_CGM * (t_cool/t_ff) / 10` and
+
+```
+dM/dt = f_precip * (M_CGM - M_eq) / t_ff.
+```
+
+As the CGM drains, `t_cool/t_ff` rises, `M_eq -> M_CGM`, and the flow
+shuts off at the equilibrium instead of emptying the reservoir. Late-time
+inflow is then limited to the rate at which infall and SN-reheated gas
+push the CGM back over `M_eq`. Setting `PrecipRegulationOn = 0` restores
+the legacy free-fall drain of the whole reservoir.
+
 ### Step 5 -- AGN heating (Regime 0 only)
 
 The CGM cooling is passed to the standard `r_heat` ratchet, identical to
@@ -171,6 +191,11 @@ Differences from the hot-halo path:
 - Accretion draws from `CGMgas`, not `HotGas`.
 - After the ratchet updates `r_heat`, the value is capped at `R_vir` so
   the heating radius cannot grow past the halo boundary.
+- The returned `coolingGas` is re-capped against the post-accretion
+  `CGMgas`: the Bondi draw reduces the reservoir, and without the re-cap a
+  cooling flow that was already reservoir-limited could be handed back to
+  the caller exceeding the remaining CGM (a bug that was dormant with the
+  uniform profile but aborted immediately under `CGMDensityProfile = 1`).
 
 ## `cool_gas_onto_galaxy()`
 
@@ -185,6 +210,7 @@ dispatcher does the transfer itself.
 |-----------|--------|
 | `CGMrecipeOn` | 0 disables the two-regime split entirely; 1 enables it. |
 | `CGMDensityProfile` | CGM density profile: 0 uniform, 1 NFW, 2 beta. |
+| `PrecipRegulationOn` | 1 (default) self-regulating precipitation that shuts off at the `t_cool/t_ff = 10` equilibrium; 0 legacy free-fall drain of the whole reservoir. |
 | `CGMAGNOn` | Enables AGN heating coupling in the CGM regime. |
 | `AGNrecipeOn` | Radio-mode BH accretion recipe: 0 off, 1 empirical, 2 Bondi-Hoyle, 3 cold-cloud. |
 | `RadioModeEfficiency` | Overall scaling on radio-mode accretion. |

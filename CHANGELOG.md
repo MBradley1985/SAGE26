@@ -1,5 +1,54 @@
 # Changelog
 
+## Ram-pressure stripping and self-regulating precipitation, now default-on (July 2026) — intentional output change
+
+Two physics channels were added and then enabled by default after validation
+against the microUchuu simulation. This **changes the default output**; the
+mini-Millennium, `millennium_all`, microUchuu, and binary-benchmark baselines
+were all regenerated in the same commit to bless the new physics as canonical.
+Classic-SAGE output remains reproducible via the vanilla configs, which pin the
+new toggles off.
+
+- **Ram-pressure ISM stripping** (`RamPressureStrippingOn`, default 1). New
+  module `src/model_ram_pressure.c` implements the Gunn & Gott (1972)
+  criterion: satellite cold disk gas at radius *r* is stripped where
+  `eps * rho_host(R_orb) * v_sat^2 > 2*pi*G * Sigma_disk(r) * Sigma_gas(r)`.
+  With exponential gas and stellar disks sharing the scale radius the stripped
+  mass fraction is analytic, `(1 + r_strip/r_s) * exp(-r_strip/r_s)`, applied
+  once per snapshot with the same `1 - exp(-dT/t_strip)` cadence as the
+  analytic hot-gas scheme. The ambient density uses the same profiles the
+  cooling recipes assume; stripped gas and metals route to the central's
+  hot/CGM reservoir. This channel removes the ISM (`ColdGas`) and is
+  complementary to and independent of `PhysicalStrippingOn`, which strips the
+  hot/CGM phase (starvation). Type 1 satellites and Type 2 orphans are covered
+  (orphans via a frozen-orbit approximation, dormant in the default config).
+  `RamPressureEpsilon` (default 1.0) is the order-unity geometry prefactor.
+  Validation reproduces the satellite HI-deficiency-vs-host-mass trend and
+  lifts the cluster-scale quenched-satellite fraction toward Wetzel et al.
+  (2012).
+
+- **Self-regulating precipitation** (`PrecipRegulationOn`, default 1). The
+  CGM precipitation flow (`cooling_recipe_cgm`) now condenses only the gas
+  above the `t_cool/t_ff = 10` Voit (2015) equilibrium — `M_eq = M_CGM *
+  (t_cool/t_ff) / 10`, so `dM/dt = f_precip * (M_CGM - M_eq) / t_ff` — instead
+  of draining the whole reservoir at the free-fall rate. The flow relaxes to
+  the equilibrium and shuts off rather than emptying the CGM. Setting the
+  toggle to 0 restores the legacy free-fall drain.
+
+- **Bugfix: CGM overdraw in AGN heating.** `do_AGN_heating_cgm()` clamped the
+  cooling flow against the pre-accretion `CGMgas`, then let the Bondi draw
+  reduce the reservoir, so the returned `coolingGas` could exceed the
+  remaining CGM by the accreted amount. Latent with the default uniform
+  profile (the overlap stayed below the assertion tolerance); it aborted
+  immediately under `CGMDensityProfile = 1`. The cooling flow is now re-capped
+  after accretion.
+
+Both toggles are exposed in the parameter file and documented in
+`docs/parameters.md`, `docs/physics/infall.md` (stripping), and
+`docs/physics/cooling_and_heating.md` (precipitation regulation). Unit
+coverage: `tests/test_ram_pressure.c` and new precipitation-regulation cases
+in `tests/test_cooling_heating.c`.
+
 ## HI bookkeeping fix (July 2026) — intentional output change
 
 The `HIIonizationOn` correction and the H2 prescriptions previously claimed
