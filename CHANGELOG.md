@@ -125,6 +125,43 @@ unit suite.
   documentation, and documented the regression-baseline policy
   (`docs/developer/REGRESSION_BASELINE.md`).
 
+## Physical satellite stripping and adaptive substeps (July 2026)
+
+Two coupled changes to how satellites are stripped and how the per-snapshot
+physics loop is integrated in time.
+
+- **Physical satellite stripping** (`PhysicalStrippingOn`, `StrippingTimescaleFactor`).
+  The stock SAGE scheme strips a fixed `1/N` of a satellite's baryon excess
+  each of the `N` substeps, so the fraction removed over a snapshot is
+  `1 - (1 - 1/N)^N` -- it depends on the substep count, not on the elapsed
+  time or any physical timescale, converging to a discretization artifact
+  (~`1 - 1/e`) as `N` grows. Three schemes are now selectable:
+  - `0` -- legacy geometric (`excess / N` per substep), an exact reproduction
+    of the stock behaviour, kept for reference.
+  - `1` -- physical timescale, per-substep forward-Euler of
+    `d(excess)/dt = -excess / t_strip`; telescopes to `1 - exp(-dT/t_strip)`
+    over a snapshot (N-invariant in the limit, with an O(1/N) residual).
+  - `2` -- **default**: the analytic `1 - exp(-dT/t_strip)` applied once per
+    snapshot outside the substep loop, exactly the N→∞ limit of scheme 1 --
+    no substep-count dependence and invariant to how the interval is split
+    into snapshots. `t_strip = StrippingTimescaleFactor * t_dyn(host)`
+    (default factor 1.0). This is the stripping timescale and cadence the
+    ram-pressure ISM stripping channel reuses.
+
+- **Adaptive substeps** (`SubstepResolution`). The snapshot interval is now
+  integrated with a substep count that scales with `deltaT / t_dyn`, so
+  high-redshift snapshots spanning several dynamical times are resolved with
+  more substeps (bounded by a `STEPS` floor and a `MAX_STEPS` cap) instead of
+  a fixed count. The compile-time `STEPS`-length SFR history arrays are
+  unchanged; adaptive substeps map back into those bins. `SubstepResolution`
+  (default 1.0) is a runtime multiplier on both the floor and the cap, so the
+  substep count can be swept from the parameter file for convergence /
+  N-invariance testing without recompiling.
+
+Startup validation for the physics option flags (including
+`PhysicalStrippingOn`, valid range [0, 2]) and their combinations was added
+in the same period, rejecting out-of-range values before a run begins.
+
 ## SAGE26 (2026) — Major release
 
 Built on [Croton et al. (2016)](https://arxiv.org/abs/1601.04709).
@@ -147,6 +184,12 @@ Built on [Croton et al. (2016)](https://arxiv.org/abs/1601.04709).
   `MergerBulgeRadius`, `InstabilityBulgeRadius`). Radii follow Tonini+2016 eq. 15.
 - **ICS assembly tracking** (`TrackICSAssembly`): records satellite disruption
   contributions to intracluster stars.
+- **Satellite-disruption mass split** (`DynamicDisruptionSplit`,
+  `DisruptionSplitAlpha`, `DisruptionSplitCref`): controls how disrupted
+  satellite stellar mass is partitioned between the intracluster stars and
+  the central. Modes: `0` fixed fraction (`FractionDisruptedToICS`); `1`
+  mass-ratio split `f_ICS = 1 - (M_sub/M_host)^alpha`; `2` mass-ratio split
+  with concentration weighting.
 
 ### New SF prescriptions (`SFprescription`)
 
