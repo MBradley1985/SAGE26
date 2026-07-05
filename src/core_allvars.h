@@ -520,8 +520,6 @@ struct params
     int32_t RamPressureStrippingOn;  // 0 = off (DEFAULT; baseline output unchanged); 1 = Gunn & Gott (1972) ram-pressure stripping of satellite ColdGas, applied once per snapshot (see model_ram_pressure.c). Independent of PhysicalStrippingOn, which strips the hot/CGM phase.
     double RamPressureEpsilon;       // order-unity prefactor on the ram pressure P_ram = eps * rho_host * v_sat^2; default 1.0. Absorbs the disk-orientation geometry uncertainty (face-on vs edge-on infall). Only used when RamPressureStrippingOn == 1.
     int32_t PrecipRegulationOn;      // 0 = off (DEFAULT; baseline unchanged): precipitation drains the whole CGM at the free-fall rate once tcool/tff < threshold. 1 = self-regulating: only the CGM above the tcool/tff = PRECIP_THRESHOLD equilibrium mass condenses, so the flow shuts off at the Voit equilibrium instead of emptying the reservoir (see cooling_recipe_cgm).
-    int32_t BlackHoleSeedOn;         // EXPERIMENTAL. 0 = off (DEFAULT; BHs bootstrap via mergers/instabilities only). 1 = every new galaxy is born with BlackHoleSeedMass, so merger-poor halos still have a radio-mode anchor when they cross into the hot regime.
-    double BlackHoleSeedMass;        // seed BH mass [10^10 Msun/h]; default 1e-5 (= 10^5 Msun/h). Only used when BlackHoleSeedOn == 1.
     double DisruptionSplitAlpha;     // Base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
     double DisruptionSplitCref;      // Reference concentration for concentration weighting (DynamicDisruptionSplit=2)
     double RedshiftPowerLawExponent; /* exponent of the (1+z) term in the FIRE mass-loading scaling (Muratov+15); default 1.25 */

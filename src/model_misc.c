@@ -96,12 +96,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].InstabilityBulgeMass = 0.0; 
     galaxies[p].HotGas = 0.0;
     galaxies[p].EjectedMass = 0.0;
-    /* BlackHoleSeedOn plants a seed BH in every new galaxy so quiet
-     * (merger-poor) halos still carry a radio-mode anchor when they reach
-     * the hot regime; without it BHs bootstrap only through mergers and
-     * instabilities. EXPERIMENTAL: placeholder for the dedicated seeding
-     * work; default off leaves BlackHoleMass = 0 as before. */
-    galaxies[p].BlackHoleMass = run_params->BlackHoleSeedOn ? run_params->BlackHoleSeedMass : 0.0;
+    galaxies[p].BlackHoleMass = 0.0;
     
     galaxies[p].ICS = 0.0;
     galaxies[p].CGMgas = 0.0;

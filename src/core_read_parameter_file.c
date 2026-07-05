@@ -124,8 +124,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->RamPressureStrippingOn     = 0;   /* default: off, so the calibrated baseline output is unchanged. Set 1 for Gunn & Gott (1972) ISM stripping of satellites. */
     run_params->RamPressureEpsilon         = 1.0; /* default: unscaled ram pressure P_ram = rho_host * v_sat^2 */
     run_params->PrecipRegulationOn         = 0;   /* default: off (free-fall CGM drain when unstable, calibrated baseline). Set 1 for self-regulating precipitation that shuts off at the tcool/tff equilibrium. */
-    run_params->BlackHoleSeedOn            = 0;   /* default: off (BHs bootstrap via mergers only). EXPERIMENTAL: 1 seeds every new galaxy with BlackHoleSeedMass. */
-    run_params->BlackHoleSeedMass          = 1.0e-5; /* 10^5 Msun/h seed; only used when BlackHoleSeedOn = 1 */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
     run_params->ReIncorporationFactor      = 0.15;
@@ -213,8 +211,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("RamPressureStrippingOn",   &(run_params->RamPressureStrippingOn),   INT, 0);
     REG("RamPressureEpsilon",       &(run_params->RamPressureEpsilon),       DOUBLE, 0);
     REG("PrecipRegulationOn",       &(run_params->PrecipRegulationOn),       INT, 0);
-    REG("BlackHoleSeedOn",          &(run_params->BlackHoleSeedOn),          INT, 0);
-    REG("BlackHoleSeedMass",        &(run_params->BlackHoleSeedMass),        DOUBLE, 0);
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
     REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
     REG("H2RadialNBins",         &(run_params->H2RadialNBins),        INT, 0);
@@ -577,7 +573,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"PhysicalStrippingOn",    run_params->PhysicalStrippingOn,    0, 2},
             {"RamPressureStrippingOn", run_params->RamPressureStrippingOn, 0, 1},
             {"PrecipRegulationOn",     run_params->PrecipRegulationOn,     0, 1},
-            {"BlackHoleSeedOn",        run_params->BlackHoleSeedOn,        0, 1},
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {
@@ -600,11 +595,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     if(run_params->H2RadialIntegrationOn && run_params->H2RadialRMaxFactor <= 0.0) {
         fprintf(stderr, "Error: H2RadialRMaxFactor = %g is not valid; it must be > 0.\n",
                 run_params->H2RadialRMaxFactor);
-        ABORT(EXIT_FAILURE);
-    }
-    if(run_params->BlackHoleSeedOn && run_params->BlackHoleSeedMass <= 0.0) {
-        fprintf(stderr, "Error: BlackHoleSeedMass = %g is not valid; it must be > 0 when BlackHoleSeedOn = 1.\n",
-                run_params->BlackHoleSeedMass);
         ABORT(EXIT_FAILURE);
     }
     if(run_params->RamPressureStrippingOn && run_params->RamPressureEpsilon <= 0.0) {
