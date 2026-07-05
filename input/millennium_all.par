@@ -71,8 +71,9 @@ DynamicDisruptionSplit      2   %0: fixed fraction; 1: mass-ratio only; 2: conce
 PhysicalStrippingOn         2     %0: legacy geometric (excess/N per substep); 1: physical timescale per substep; 2: analytic once-per-snapshot 1-exp(-dT/t_strip) (default)
 SubstepResolution           1.0   %multiplier on the adaptive substep count (scales the STEPS floor and MAX_STEPS cap); 1.0 = unscaled
 StrippingTimescaleFactor    1.0   %t_strip = factor * t_dyn(host); used by physical stripping schemes 1 and 2 only
-RamPressureStrippingOn      0     %0: off (default; baseline unchanged); 1: Gunn & Gott (1972) ram-pressure stripping of satellite ColdGas, once per snapshot; independent of PhysicalStrippingOn (hot/CGM starvation)
+RamPressureStrippingOn      1     %1: on (default): Gunn & Gott (1972) ram-pressure stripping of satellite ColdGas, once per snapshot; independent of PhysicalStrippingOn (hot/CGM starvation). 0: off
 RamPressureEpsilon          1.0   %order-unity prefactor on P_ram = eps * rho_host * v_sat^2 (disk-orientation geometry); used when RamPressureStrippingOn=1
+PrecipRegulationOn          1     %1: on (default): self-regulating precipitation that shuts off at the tcool/tff equilibrium. 0: legacy free-fall CGM drain
 
 H2DiskAreaOption            1   %0: pi*r_s^2 (default); 1: pi*(3*r_s)^2 (thrice); 2: 2*pi*r_s^2 (central Sigma_0); ignored when H2RadialIntegrationOn=1
 H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk (H2DiskAreaOption unused)

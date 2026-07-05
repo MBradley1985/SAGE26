@@ -121,9 +121,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->PhysicalStrippingOn        = 2;   /* default: analytic once-per-snapshot physical stripping, 1-exp(-dT/t_dyn) (cadence-invariant). Set 0 for legacy geometric, 1 for per-substep physical. */
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
     run_params->StrippingTimescaleFactor   = 1.0; /* default: t_strip = 1 * t_dyn(host) for physical stripping schemes */
-    run_params->RamPressureStrippingOn     = 0;   /* default: off, so the calibrated baseline output is unchanged. Set 1 for Gunn & Gott (1972) ISM stripping of satellites. */
+    run_params->RamPressureStrippingOn     = 1;   /* default: on -- Gunn & Gott (1972) ISM stripping of satellites. Set 0 for the legacy no-ISM-stripping behaviour. */
     run_params->RamPressureEpsilon         = 1.0; /* default: unscaled ram pressure P_ram = rho_host * v_sat^2 */
-    run_params->PrecipRegulationOn         = 0;   /* default: off (free-fall CGM drain when unstable, calibrated baseline). Set 1 for self-regulating precipitation that shuts off at the tcool/tff equilibrium. */
+    run_params->PrecipRegulationOn         = 1;   /* default: on -- self-regulating precipitation that shuts off at the tcool/tff equilibrium. Set 0 for the legacy free-fall CGM drain. */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
     run_params->ReIncorporationFactor      = 0.15;
