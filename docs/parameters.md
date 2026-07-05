@@ -71,7 +71,7 @@ optional parameters take the listed default if omitted.
 | `BulgeSizeOn` | int | no | `3` | Bulge radius model: 0=off; 1=Shen+2003 eq.33; 2=Shen+2003 eq.32; 3=Tonini+2016 (separate merger and instability channels, mass-weighted average). |
 | `StarburstColdGasOn` | 0/1 | no | `1` | Include cold gas contribution during merger starbursts. |
 | `DynamicDisruptionSplit` | int | no | `2` | ICS-vs-BCG split for disrupted satellite stellar mass: 0=fixed fraction `FractionDisruptedToICS`; 1=mass-ratio split `f_ICS = 1 - (infallMvir / Mhost)^DisruptionSplitAlpha`; 2=mass-ratio split with concentration weighting (`alpha_eff = DisruptionSplitAlpha * DisruptionSplitCref / c_sat`). |
-| `RamPressureStrippingOn` | 0/1 | no | `0` | Gunn & Gott (1972) ram-pressure stripping of satellite cold gas (ISM): 0=off (baseline unchanged); 1=on. Independent of the hot-gas (starvation) stripping controlled by `PhysicalStrippingOn`; see `docs/physics/infall.md`. |
+| `RamPressureStrippingOn` | 0/1 | no | `1` | Gunn & Gott (1972) ram-pressure stripping of satellite cold gas (ISM): 1=on (default); 0=off. Independent of the hot-gas (starvation) stripping controlled by `PhysicalStrippingOn`; see `docs/physics/infall.md`. |
 | `RamPressureEpsilon` | double | no | `1.0` | Order-unity prefactor on the ram pressure `P_ram = eps * rho_host * v_sat^2`, absorbing the disk-orientation geometry uncertainty. Used only when `RamPressureStrippingOn=1`. |
 
 ---
@@ -82,6 +82,7 @@ optional parameters take the listed default if omitted.
 |-----------|------|----------|---------|-------------|
 | `CGMDensityProfile` | int | no | `0` | CGM gas density profile for precipitation: 0=uniform; 1=NFW; 2=beta (β=2/3). |
 | `CGMAGNOn` | 0/1 | no | `1` | Enable AGN heating coupling to the CGM-regime cooling path. |
+| `PrecipRegulationOn` | 0/1 | no | `1` | Self-regulating precipitation: 1=on (default) condenses only the CGM above the `tcool/tff = 10` Voit equilibrium, so the flow relaxes to equilibrium instead of draining the reservoir at the free-fall rate; 0=off (legacy free-fall drain). See `cooling_recipe_cgm` in `src/model_cooling_heating.c`. |
 
 ---
 

@@ -24,7 +24,7 @@
  * M_strip = ColdGas * f_strip * (1 - exp(-dt/t_strip)) on the host stripping
  * timescale, and donates the gas and its metals to the central's hot/CGM
  * reservoir.  It runs once per snapshot from evolve_galaxies() when
- * RamPressureStrippingOn == 1 (default 0: no effect on the baseline).
+ * RamPressureStrippingOn == 1 (the default; set 0 to disable).
  *
  * This channel strips the ISM (ColdGas) and is complementary to and
  * independent of PhysicalStrippingOn, which strips the satellite's hot/CGM

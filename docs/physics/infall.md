@@ -133,8 +133,8 @@ hot reservoir and are skipped.
 
 ## `ram_pressure_strip_satellite()` -- ram-pressure stripping of the ISM
 
-Enabled by `RamPressureStrippingOn = 1` (default 0, which leaves the
-calibrated baseline output byte-identical). Where `strip_from_satellite()`
+Controlled by `RamPressureStrippingOn` (default 1, on); set 0 for the
+legacy no-ISM-stripping behaviour. Where `strip_from_satellite()`
 removes a satellite's *hot-phase* gas (starvation), this channel removes the
 *ISM* (`ColdGas`) directly, following Gunn & Gott (1972): disk gas at radius
 r is stripped where the ram pressure of the host's ambient medium exceeds
@@ -194,7 +194,7 @@ against the calibration.
 | `ReIncorporationFactor` | Sets `Vcrit` for the reincorporation cutoff. Larger values delay reincorporation in low-mass halos. |
 | `CGMrecipeOn` | Routes infall, reincorporation, and satellite CGM by regime when set. |
 | `TrackICSAssembly` | Records satellite-derived ICS mass into `ICS_accrete` for the central. |
-| `RamPressureStrippingOn` | 1 enables Gunn & Gott (1972) ram-pressure stripping of satellite `ColdGas`; 0 (default) leaves the baseline unchanged. |
+| `RamPressureStrippingOn` | 1 (default) enables Gunn & Gott (1972) ram-pressure stripping of satellite `ColdGas`; 0 disables it. |
 | `RamPressureEpsilon` | Order-unity prefactor on `P_ram = eps * rho_host * v_sat^2` (disk-orientation geometry uncertainty); default 1.0. |
 
 See [`parameters.md`](../parameters.md) for full descriptions and defaults.
