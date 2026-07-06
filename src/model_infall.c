@@ -7,7 +7,7 @@
  *                         migrates the central's gas between the HotGas and
  *                         CGMgas reservoirs according to its regime.
  *   strip_from_satellite -- removes part of a satellite's baryon excess
- *                           (scheme-dependent, see PhysicalStrippingOn) and
+ *                           (analytic 1-exp(-dT/t_strip), once per snapshot) and
  *                           adds it to the central's hot/CGM reservoir;
  *                           called from evolve_galaxies().
  *   do_reionization    -- computes the reionisation suppression factor for
@@ -218,47 +218,22 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
 
 /*
  * strip_from_satellite -- remove excess gas from a satellite and donate it to
- * the central galaxy's hot/CGM reservoir, one effective substep at a time.
+ * the central galaxy's hot/CGM reservoir.
  *
- * Three schemes are available, selected by run_params->PhysicalStrippingOn.
- * In every case `dt` is the time over which this single call acts and `t_strip`
- * is the physical stripping timescale (the host dynamical time Rvir/Vvir of the
- * central, supplied by the caller):
- *
- *   0 (legacy, default): strip 1/effective_steps of the satellite's *current*
- *      baryon excess (baryons above BF*Mvir_sat) each substep. This is stock
- *      SAGE behaviour. Because the excess is recomputed every substep, the
- *      fraction stripped over a full snapshot is 1-(1-1/N)^N -- it depends on
- *      the substep count N, NOT on the elapsed time dT or any physical
- *      timescale, and converges to a discretization artifact (~1-1/e) as N
- *      grows. Kept as the default so the calibrated baseline is unchanged.
- *      Called once per substep from inside the substep loop; here dt=dT/N.
- *
- *   1 (physical timescale, per-substep): strip excess*(dt/t_strip) each
- *      substep, i.e. a forward-Euler step of d(excess)/dt = -excess/t_strip.
- *      Iterated over the N substeps of a snapshot this telescopes to a fraction
- *      1-exp(-dT/t_strip) -- N-invariant in the limit, but carries an O(1/N)
- *      discretization residual. Called once per substep (dt=dT/N); the
- *      per-substep fraction is capped at 1 so dt >= t_strip strips everything.
- *
- *   2 (physical timescale, analytic once-per-snapshot): strip exactly
- *      excess*(1-exp(-dT/t_strip)) in a single call OUTSIDE the substep loop
- *      (dt=dT, the full snapshot interval). This is the exact N->inf limit of
- *      scheme 1: zero dependence on the substep count, and because exp
- *      composes it is also invariant to how the interval is split into
- *      snapshots (cadence-invariant). This is the Option-1 (evaluate once per
- *      interval) + Option-2 (physical exponential) hybrid.
- *
- * Schemes 0 and 1 recompute the excess from the satellite's current state each
- * substep, so intervening cooling/star formation is accounted for; scheme 2
- * evaluates the excess once per snapshot (operator-split before the substeps).
+ * `dt` is the full snapshot interval dT and `t_strip` the physical stripping
+ * timescale (the host dynamical time Rvir/Vvir of the central, supplied by the
+ * caller). The satellite loses exactly a fraction 1-exp(-dT/t_strip) of its
+ * *current* baryon excess (baryons above BF*Mvir_sat) in this single call,
+ * evaluated once per snapshot OUTSIDE the substep loop (operator-split before
+ * the substeps, like the infalling gas). Because exp composes, the stripped
+ * fraction is independent of the substep count and invariant to how the
+ * interval is split into snapshots (cadence-invariant).
  *
  * CGM-regime satellites retain CGMgas across snapshots; the CGM branch
- * below strips it gradually using the same baryon-excess rule used for
- * HotGas. Hot- and CGM-regime satellites are therefore handled by
- * structurally identical rules.
+ * below strips it using the same baryon-excess rule used for HotGas, so hot-
+ * and CGM-regime satellites are handled by structurally identical rules.
  */
-void strip_from_satellite(const int centralgal, const int gal, const double Zcurr, const int effective_steps, const double dt, const double t_strip, struct GALAXY *galaxies, const struct params *run_params)
+void strip_from_satellite(const int centralgal, const int gal, const double Zcurr, const double dt, const double t_strip, struct GALAXY *galaxies, const struct params *run_params)
 {
     double reionization_modifier;
 
@@ -282,24 +257,10 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
         return;
     }
 
-    /* Amount of the current excess to strip this call (see scheme notes above). */
-    double remainingToStrip;
-    if(run_params->PhysicalStrippingOn == 2) {
-        /* Analytic once-per-snapshot: dt is the full interval dT. Exact
-         * 1-exp(-dT/t_strip); no substep-count dependence. */
-        double strip_frac = (t_strip > 0.0) ? (1.0 - exp(-dt / t_strip)) : 1.0;
-        remainingToStrip = excess * strip_frac;
-    } else if(run_params->PhysicalStrippingOn == 1) {
-        /* Per-substep forward-Euler physical: dt = dT/effective_steps. */
-        double strip_frac = (t_strip > 0.0) ? (dt / t_strip) : 1.0;
-        if(strip_frac > 1.0) strip_frac = 1.0;
-        remainingToStrip = excess * strip_frac;
-    } else {
-        /* Legacy geometric path: kept as an exact (bit-for-bit) reproduction of
-         * the original excess/effective_steps so the calibrated baseline is
-         * unchanged when PhysicalStrippingOn == 0. */
-        remainingToStrip = excess / effective_steps;
-    }
+    /* Analytic once-per-snapshot fraction: exactly 1-exp(-dT/t_strip) of the
+     * current excess, with no dependence on the substep count. */
+    const double strip_frac = (t_strip > 0.0) ? (1.0 - exp(-dt / t_strip)) : 1.0;
+    double remainingToStrip = excess * strip_frac;
 
     if(remainingToStrip <= 0.0) {
         return;

@@ -86,8 +86,13 @@ static const double SOMERVILLE25_F_DENSE = 0.5;
  * Also the canonical definition in model_misc.c (calculate_H2_fraction_K13). */
 static const double Z_SOLAR_ASPLUND09 = 0.014;
 
+/* Critical neutral surface density for the HI ionisation cut [Msun/pc^2]
+ * (Shark sigma_hi_crit): cold disk gas below this column is kept ionised by
+ * the UV background and removed from the atomic (HI) remainder. */
+static const double SIGMA_HI_CRIT = 0.5;
+
 /*
- * Ionised-gas fraction of the cold disk (HIIonizationOn).
+ * Ionised-gas fraction of the cold disk.
  *
  * SAGE assigns all non-molecular cold hydrogen to HI, with no allowance for the
  * diffuse low-column outer disk that is kept ionised by the UV background and is
@@ -921,21 +926,19 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
     // Calculate HI (atomic hydrogen) as the remainder of hydrogen after H2.
     // Total hydrogen = ColdGas * HYDROGEN_MASS_FRAC (0.74). The ionisation cut
-    // (HIIonizationOn; see ionized_gas_fraction) applies to the *atomic remainder*
-    // only -- H2 is central and shielded -- so the molecular and ionised claims
-    // can no longer overdraw the hydrogen budget and HI is non-negative by
-    // construction. Only HI is debited; SF/ColdGas are untouched.
+    // (see ionized_gas_fraction) applies to the *atomic remainder* only -- H2 is
+    // central and shielded -- so the molecular and ionised claims can no longer
+    // overdraw the hydrogen budget and HI is non-negative by construction. Only
+    // HI is debited; SF/ColdGas are untouched.
     {
         double atomicH = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC - galaxies[p].H2gas;
         if(atomicH < 0.0) {
             atomicH = 0.0;  // H2 is capped at the budget; this guards float rounding only
             clamp_count_h1_negative++;
         }
-        if(run_params->HIIonizationOn) {
-            const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas, galaxies[p].DiskScaleRadius,
-                                                      run_params->Hubble_h, run_params->SigmaHIcrit);
-            atomicH *= (1.0 - f_ion);
-        }
+        const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas, galaxies[p].DiskScaleRadius,
+                                                  run_params->Hubble_h, SIGMA_HI_CRIT);
+        atomicH *= (1.0 - f_ion);
         galaxies[p].H1gas = atomicH;
     }
 
@@ -1251,11 +1254,9 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     {
         double atomicH = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC - galaxies[p].H2gas;
         if(atomicH < 0.0) { atomicH = 0.0; clamp_count_h1_negative++; }  // float-rounding guard only
-        if(run_params->HIIonizationOn) {
-            const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas, galaxies[p].DiskScaleRadius,
-                                                      run_params->Hubble_h, run_params->SigmaHIcrit);
-            atomicH *= (1.0 - f_ion);
-        }
+        const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas, galaxies[p].DiskScaleRadius,
+                                                  run_params->Hubble_h, SIGMA_HI_CRIT);
+        atomicH *= (1.0 - f_ion);
         galaxies[p].H1gas = atomicH;
     }
 

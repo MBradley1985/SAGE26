@@ -170,7 +170,6 @@ static void setup_br06_radial_params(struct params *rp) {
     rp->H2RadialIntegrationOn = 1;
     rp->H2RadialNBins = 25;
     rp->H2RadialRMaxFactor = 5.0;
-    rp->SigmaHIcrit = 0.5;       /* Msun/pc^2 */
     rp->SfrEfficiency = 0.05;
     rp->RecycleFraction = 0.43;
 }
@@ -247,63 +246,51 @@ static void run_sf_driver(struct GALAXY *gal, const struct params *rp,
                                gal, rp);
 }
 
-void test_hi_partition_no_ionization() {
-    BEGIN_TEST("HI partition: H1 = X_H * ColdGas - H2 when ionisation is off");
+void test_hi_partition_atomic_remainder() {
+    BEGIN_TEST("HI partition: H1 is the atomic remainder reduced by the (always-on) ionisation cut");
 
     struct params rp;
     setup_br06_radial_params(&rp);
-    rp.HIIonizationOn = 0;
 
     struct GALAXY gal[2];
     const double coldgas_pre = 1.0;
     run_sf_driver(gal, &rp, coldgas_pre, 0.003, 2.0);
 
-    /* H1 is set from the pre-SF ColdGas, before update_from_star_formation;
-     * H1gas is stored as float, so match to single-precision accuracy */
-    double expected = coldgas_pre * HYDROGEN_MASS_FRAC - gal[0].H2gas;
-    ASSERT_CLOSE(expected, gal[0].H1gas, 1e-6, "H1 is the exact atomic remainder");
+    /* H1 is set from the pre-SF ColdGas, before update_from_star_formation.
+     * The ionisation cut removes the diffuse low-column part, so H1 lies
+     * strictly between 0 and the full atomic remainder X_H*ColdGas - H2. */
+    const double atomic = coldgas_pre * HYDROGEN_MASS_FRAC - gal[0].H2gas;
+    ASSERT_GREATER_THAN(gal[0].H1gas, 0.0, "Disk retains some neutral HI");
+    ASSERT_LESS_THAN(gal[0].H1gas, atomic, "Ionisation reduces HI below the atomic remainder");
+    ASSERT_TRUE(gal[0].H1gas + gal[0].H2gas <= coldgas_pre * HYDROGEN_MASS_FRAC + 1e-12,
+                "H1 + H2 <= X_H * ColdGas (no overdraw)");
     ASSERT_GREATER_THAN(gal[0].H2gas, 0.0, "Gas-rich disk forms H2");
     ASSERT_GREATER_THAN(gal[0].SfrDisk[0], 0.0, "Gas-rich disk forms stars");
     ASSERT_LESS_THAN(gal[0].ColdGas, coldgas_pre, "SF consumed cold gas");
 }
 
-void test_hi_partition_budget_with_ionization() {
-    BEGIN_TEST("HI partition: budget respected with ionisation on");
+void test_hi_partition_density_dependence() {
+    BEGIN_TEST("HI partition: denser disk keeps a larger neutral fraction");
 
     struct params rp;
     setup_br06_radial_params(&rp);
-    rp.HIIonizationOn = 1;
 
-    struct GALAXY gal_on[2], gal_off[2];
-    const double coldgas_pre = 1.0;
-    run_sf_driver(gal_on, &rp, coldgas_pre, 0.003, 2.0);
-    rp.HIIonizationOn = 0;
-    run_sf_driver(gal_off, &rp, coldgas_pre, 0.003, 2.0);
+    /* Same disk size, more gas => higher surface density => less of it below
+     * Sigma_crit => smaller ionised fraction. The neutral fraction
+     * (1 - f_ion) = H1 / (X_H*ColdGas - H2) is compared directly. */
+    struct GALAXY sparse[2], dense[2];
+    run_sf_driver(sparse, &rp, 1.0, 0.003, 2.0);
+    run_sf_driver(dense,  &rp, 4.0, 0.003, 2.0);
 
-    /* identical inputs, so H2 must not depend on the ionisation flag */
-    ASSERT_CLOSE(gal_off[0].H2gas, gal_on[0].H2gas, 1e-12,
-                 "H2 is independent of HIIonizationOn");
+    const double neutral_sparse = sparse[0].H1gas / (1.0 * HYDROGEN_MASS_FRAC - sparse[0].H2gas);
+    const double neutral_dense  = dense[0].H1gas  / (4.0 * HYDROGEN_MASS_FRAC - dense[0].H2gas);
 
-    ASSERT_GREATER_THAN(gal_on[0].H1gas, 0.0, "Partially ionised disk keeps some HI");
-    ASSERT_LESS_THAN(gal_on[0].H1gas, gal_off[0].H1gas,
-                     "Ionisation strictly reduces HI");
-    ASSERT_TRUE(gal_on[0].H1gas + gal_on[0].H2gas
-                <= coldgas_pre * HYDROGEN_MASS_FRAC + 1e-12,
+    ASSERT_IN_RANGE(neutral_sparse, 0.0, 1.0, "Sparse neutral fraction in [0,1]");
+    ASSERT_IN_RANGE(neutral_dense, 0.0, 1.0, "Dense neutral fraction in [0,1]");
+    ASSERT_GREATER_THAN(neutral_dense, neutral_sparse,
+                        "Denser disk is less ionised (larger neutral fraction)");
+    ASSERT_TRUE(dense[0].H1gas + dense[0].H2gas <= 4.0 * HYDROGEN_MASS_FRAC + 1e-12,
                 "H1 + H2 <= X_H * ColdGas (no overdraw)");
-
-    /* implied f_ion = 1 - H1_on/H1_off must be a fraction, and must shrink
-     * for a higher-surface-density disk (more of it above Sigma_crit) */
-    double f_ion_1 = 1.0 - gal_on[0].H1gas / gal_off[0].H1gas;
-    ASSERT_IN_RANGE(f_ion_1, 0.0, 1.0, "Implied f_ion in [0,1]");
-
-    rp.HIIonizationOn = 1;
-    struct GALAXY dense_on[2], dense_off[2];
-    run_sf_driver(dense_on, &rp, 4.0, 0.003, 2.0);
-    rp.HIIonizationOn = 0;
-    run_sf_driver(dense_off, &rp, 4.0, 0.003, 2.0);
-    double f_ion_2 = 1.0 - dense_on[0].H1gas / dense_off[0].H1gas;
-    ASSERT_LESS_THAN(f_ion_2, f_ion_1,
-                     "Denser disk has a smaller ionised fraction");
 }
 
 void test_hi_partition_fully_ionized_dwarf() {
@@ -311,7 +298,6 @@ void test_hi_partition_fully_ionized_dwarf() {
 
     struct params rp;
     setup_br06_radial_params(&rp);
-    rp.HIIonizationOn = 1;
 
     /* central surface density well below SigmaHIcrit = 0.5 Msun/pc^2:
      * f_ion = 1, so all atomic hydrogen is ionised. Under the pre-fix
@@ -339,8 +325,8 @@ int main() {
     test_tdep_k13();
     test_radial_integration_budget();
     test_radial_integration_reference();
-    test_hi_partition_no_ionization();
-    test_hi_partition_budget_with_ionization();
+    test_hi_partition_atomic_remainder();
+    test_hi_partition_density_dependence();
     test_hi_partition_fully_ionized_dwarf();
 
     END_TEST_SUITE();

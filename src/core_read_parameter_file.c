@@ -100,10 +100,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->H2RadialNBins              = 25;
     run_params->H2RadialRMaxFactor         = 5.0;
     run_params->CGMrecipeOn                = 1;
-    run_params->HIIonizationOn             = 1;
-    run_params->SigmaHIcrit                = 0.5;   /* Msun/pc^2 (Shark sigma_hi_crit) */
     run_params->CGMDensityProfile          = 0;
-    run_params->CGMAGNOn                   = 1;
     run_params->RegimeRandomMode           = 0;
     run_params->FIREmodeOn                 = 1;
     run_params->RedshiftPowerLawExponent   = 1.25;
@@ -118,12 +115,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->TrackICSAssembly           = 1;
     run_params->StarburstColdGasOn         = 1;
     run_params->DynamicDisruptionSplit     = 2;
-    run_params->PhysicalStrippingOn        = 2;   /* default: analytic once-per-snapshot physical stripping, 1-exp(-dT/t_dyn) (cadence-invariant). Set 0 for legacy geometric, 1 for per-substep physical. */
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
-    run_params->StrippingTimescaleFactor   = 1.0; /* default: t_strip = 1 * t_dyn(host) for physical stripping schemes */
     run_params->RamPressureStrippingOn     = 1;   /* default: on -- Gunn & Gott (1972) ISM stripping of satellites. Set 0 for the legacy no-ISM-stripping behaviour. */
     run_params->RamPressureEpsilon         = 1.0; /* default: unscaled ram pressure P_ram = rho_host * v_sat^2 */
-    run_params->PrecipRegulationOn         = 1;   /* default: on -- self-regulating precipitation that shuts off at the tcool/tff equilibrium. Set 0 for the legacy free-fall CGM drain. */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
     run_params->ReIncorporationFactor      = 0.15;
@@ -190,10 +184,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("SFprescription",        &(run_params->SFprescription),       INT, 0);
     REG("AGNrecipeOn",           &(run_params->AGNrecipeOn),          INT, 0);
     REG("CGMrecipeOn",           &(run_params->CGMrecipeOn),          INT, 0);
-    REG("HIIonizationOn",        &(run_params->HIIonizationOn),       INT, 0);
-    REG("SigmaHIcrit",           &(run_params->SigmaHIcrit),          DOUBLE, 0);
     REG("CGMDensityProfile",     &(run_params->CGMDensityProfile),    INT, 0);
-    REG("CGMAGNOn",              &(run_params->CGMAGNOn),              INT, 0);
     REG("RegimeRandomMode",      &(run_params->RegimeRandomMode),     INT, 0);
     REG("FIREmodeOn",            &(run_params->FIREmodeOn),           INT, 0);
     REG("ConcentrationOn",       &(run_params->ConcentrationOn),      INT, 0);
@@ -205,12 +196,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("TrackICSAssembly",      &(run_params->TrackICSAssembly),     INT, 0);
     REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
     REG("DynamicDisruptionSplit",&(run_params->DynamicDisruptionSplit),INT, 0);
-    REG("PhysicalStrippingOn",   &(run_params->PhysicalStrippingOn),   INT, 0);
     REG("SubstepResolution",     &(run_params->SubstepResolution),     DOUBLE, 0);
-    REG("StrippingTimescaleFactor", &(run_params->StrippingTimescaleFactor), DOUBLE, 0);
     REG("RamPressureStrippingOn",   &(run_params->RamPressureStrippingOn),   INT, 0);
     REG("RamPressureEpsilon",       &(run_params->RamPressureEpsilon),       DOUBLE, 0);
-    REG("PrecipRegulationOn",       &(run_params->PrecipRegulationOn),       INT, 0);
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
     REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
     REG("H2RadialNBins",         &(run_params->H2RadialNBins),        INT, 0);
@@ -554,10 +542,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"ReionizationOn",         run_params->ReionizationOn,         0, 1},
             {"DiskInstabilityOn",      run_params->DiskInstabilityOn,      0, 1},
             {"CGMrecipeOn",            run_params->CGMrecipeOn,            0, 1},
-            {"HIIonizationOn",         run_params->HIIonizationOn,         0, 1},
             {"CGMDensityProfile",      run_params->CGMDensityProfile,      0, 2},
             {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
-            {"CGMAGNOn",               run_params->CGMAGNOn,               0, 1},
             {"RegimeRandomMode",       run_params->RegimeRandomMode,       0, 1},
             {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
             {"FeedbackFreeModeOn",     run_params->FeedbackFreeModeOn,     0, 7},
@@ -570,9 +556,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"TrackICSAssembly",       run_params->TrackICSAssembly,       0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"DynamicDisruptionSplit", run_params->DynamicDisruptionSplit, 0, 2},
-            {"PhysicalStrippingOn",    run_params->PhysicalStrippingOn,    0, 2},
             {"RamPressureStrippingOn", run_params->RamPressureStrippingOn, 0, 1},
-            {"PrecipRegulationOn",     run_params->PrecipRegulationOn,     0, 1},
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {

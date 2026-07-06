@@ -475,11 +475,8 @@ struct params
     int32_t    ReionizationOn;
     int32_t    DiskInstabilityOn;
     int32_t    CGMrecipeOn;
-    int32_t    HIIonizationOn;     // 0: off (all non-H2 cold H -> HI); 1: remove ionised low-column outer disk (Shark-style)
-    double     SigmaHIcrit;        // critical neutral surface density [Msun/pc^2] for HIIonizationOn (Shark sigma_hi_crit, ~0.5)
     int32_t    CGMDensityProfile;  // 0: uniform, 1: NFW, 2: beta-profile
     int32_t    FIREmodeOn;
-    int32_t    CGMAGNOn;              // 0: disable AGN heating in CGM-regime entirely; 1: enable (default)
     int32_t    RegimeRandomMode;     // 0: fresh random draw each snapshot (default, original behaviour); 1: use the persistent RegimeRandom assigned at galaxy creation (deterministic regime evolution driven by mass)
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation, 3: hybrid (Vmax/Vvir, infall-frozen for satellites)
     int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
@@ -514,12 +511,9 @@ struct params
     double ThresholdSatDisruption;/* satellite disrupted when Mvir/(baryonic mass) drops below this [dimensionless] */
     double FractionDisruptedToICS;  // Fraction of disrupted satellite stellar mass that goes to ICS (rest goes to BCG)
     int32_t DynamicDisruptionSplit;  // 0: fixed fraction; 1: mass-ratio f_ICL = 1-(Msub/Mhost)^alpha; 2: concentration-weighted
-    int32_t PhysicalStrippingOn;     // satellite stripping scheme: 0 = legacy geometric (excess/N per substep, stock-SAGE); 1 = physical timescale, per-substep forward-Euler -> 1-exp(-dT/t_dyn) in the limit; 2 = analytic once-per-snapshot, strips exactly 1-exp(-dT/t_dyn) outside the substep loop, no substep-count dependence (DEFAULT)
     double SubstepResolution;        // global multiplier on the adaptive substep count (floor STEPS and cap MAX_STEPS both scale by this); default 1.0. Runtime knob for convergence / N-invariance testing without recompiling.
-    double StrippingTimescaleFactor; // calibration prefactor on the satellite-stripping timescale: t_strip = factor * t_dyn(host); default 1.0. Only used by physical schemes (PhysicalStrippingOn 1/2). Larger = slower stripping.
-    int32_t RamPressureStrippingOn;  // 1 = on (DEFAULT): Gunn & Gott (1972) ram-pressure stripping of satellite ColdGas, applied once per snapshot (see model_ram_pressure.c). 0 = off. Independent of PhysicalStrippingOn, which strips the hot/CGM phase.
+    int32_t RamPressureStrippingOn;  // 1 = on (DEFAULT): Gunn & Gott (1972) ram-pressure stripping of satellite ColdGas, applied once per snapshot (see model_ram_pressure.c). 0 = off. Independent of the (always-on) analytic hot/CGM-phase stripping.
     double RamPressureEpsilon;       // order-unity prefactor on the ram pressure P_ram = eps * rho_host * v_sat^2; default 1.0. Absorbs the disk-orientation geometry uncertainty (face-on vs edge-on infall). Only used when RamPressureStrippingOn == 1.
-    int32_t PrecipRegulationOn;      // 1 = on (DEFAULT): self-regulating precipitation -- only the CGM above the tcool/tff = PRECIP_THRESHOLD equilibrium mass condenses, so the flow shuts off at the Voit equilibrium instead of emptying the reservoir (see cooling_recipe_cgm). 0 = off: precipitation drains the whole CGM at the free-fall rate once tcool/tff < threshold.
     double DisruptionSplitAlpha;     // Base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
     double DisruptionSplitCref;      // Reference concentration for concentration weighting (DynamicDisruptionSplit=2)
     double RedshiftPowerLawExponent; /* exponent of the (1+z) term in the FIRE mass-loading scaling (Muratov+15); default 1.25 */

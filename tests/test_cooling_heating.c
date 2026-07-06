@@ -247,10 +247,10 @@ void test_cgm_precipitation() {
 }
 
 // ============================================================================
-// TEST 6b: Precipitation regulation (PrecipRegulationOn)
+// TEST 6b: Self-regulating precipitation (always on)
 // ============================================================================
 void test_precipitation_regulation() {
-    BEGIN_TEST("Precipitation Regulation: throttled drain, self-quenching at the threshold");
+    BEGIN_TEST("Precipitation Regulation: self-quenching drain relaxes to the threshold");
 
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
@@ -261,7 +261,7 @@ void test_precipitation_regulation() {
     run_params.G = 43007.1;
 
     struct GALAXY gal[1];
-    /* same thermally unstable state as test_cgm_precipitation */
+    /* thermally unstable state (same as test_cgm_precipitation) */
 #define SETUP_PRECIP_GAL() do { \
         memset(gal, 0, sizeof(struct GALAXY)); \
         gal[0].CGMgas = 20.0; gal[0].MetalsCGMgas = 0.4; \
@@ -269,38 +269,24 @@ void test_precipitation_regulation() {
         gal[0].Regime = 0; \
     } while(0)
 
-    const double dt = 0.01;
-
     SETUP_PRECIP_GAL();
-    run_params.PrecipRegulationOn = 0;
-    const double cooled_free = cooling_recipe_cgm(0, dt, gal, &run_params);
+    const double cooled = cooling_recipe_cgm(0, 0.01, gal, &run_params);
     const double ratio0 = gal[0].tcool_over_tff;
     const double tff0 = gal[0].tff;
+    ASSERT_GREATER_THAN(cooled, 0.0, "Unstable CGM precipitates");
+    ASSERT_LESS_THAN(ratio0, 10.0, "Initial state is below the precipitation threshold");
 
+    /* Iterative drain on the free-fall timescale: self-regulating precipitation
+     * must relax tcool/tff toward the threshold and keep a finite reservoir,
+     * instead of emptying the CGM as the free-fall dump would. */
     SETUP_PRECIP_GAL();
-    run_params.PrecipRegulationOn = 1;
-    const double cooled_reg = cooling_recipe_cgm(0, dt, gal, &run_params);
-
-    ASSERT_GREATER_THAN(cooled_free, 0.0, "Unregulated precipitation cools");
-    ASSERT_TRUE(cooled_reg <= cooled_free, "Regulated cooling never exceeds unregulated");
-    if(ratio0 < 10.0) {
-        /* the throttle removes exactly the equilibrium share of the reservoir */
-        ASSERT_CLOSE(cooled_free * (1.0 - ratio0 / 10.0), cooled_reg, 1e-6,
-                     "Regulated flow = unregulated * (1 - (tcool/tff)/threshold)");
-    }
-
-    /* Iterative drain on the free-fall timescale: with regulation the CGM
-     * must relax toward the tcool/tff = threshold equilibrium and keep a
-     * finite reservoir, instead of emptying. */
-    SETUP_PRECIP_GAL();
-    run_params.PrecipRegulationOn = 1;
     double ratio_last = ratio0;
     for(int i = 0; i < 400 && gal[0].CGMgas > 0.0; i++) {
         const double step_dt = 0.5 * (gal[0].tff > 0.0 ? gal[0].tff : tff0);
-        const double cooled = cooling_recipe_cgm(0, step_dt, gal, &run_params);
+        const double c = cooling_recipe_cgm(0, step_dt, gal, &run_params);
         const double metallicity = (gal[0].CGMgas > 0.0) ? gal[0].MetalsCGMgas / gal[0].CGMgas : 0.0;
-        gal[0].CGMgas -= cooled;
-        gal[0].MetalsCGMgas -= metallicity * cooled;
+        gal[0].CGMgas -= c;
+        gal[0].MetalsCGMgas -= metallicity * c;
         ratio_last = gal[0].tcool_over_tff;
     }
     ASSERT_GREATER_THAN(gal[0].CGMgas, 0.0, "Regulated drain keeps a finite CGM reservoir");
