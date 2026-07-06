@@ -50,4 +50,8 @@ _doxygen/
 # not committed. Only the default-sweep configs in tests/regression_baseline.sh are tracked.
 tests/baseline/microuchuu/
 
+# Claude Code local files
+.claude/
+CLAUDE.md
+
 plotting/random_plotting_scripts/
