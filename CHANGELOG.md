@@ -1,5 +1,34 @@
 # Changelog
 
+## Locked-in physics: six validated toggles removed (July 2026) — byte-identical
+
+After the toggle sweep confirmed the new default-on physics, six parameters
+were removed and their calibrated behaviour hardcoded. Each was fixed at its
+former default, so output is byte-for-byte identical (mini-Millennium,
+`millennium_all`, microUchuu, and the binary benchmark all verify unchanged;
+the full unit suite passes).
+
+- **`PhysicalStrippingOn`** — satellite hot-gas stripping is always the
+  analytic once-per-snapshot scheme (`1-exp(-dT/t_strip)`, substep-invariant;
+  former default 2). The legacy geometric and per-substep schemes and the
+  in-loop strip call are gone; `strip_from_satellite()` no longer takes an
+  `effective_steps` argument.
+- **`StrippingTimescaleFactor`** — the stripping timescale is `t_strip =
+  t_dyn(host) = Rvir/Vvir` (former factor 1.0).
+- **`PrecipRegulationOn`** — CGM precipitation is always self-regulating,
+  condensing only the gas above the `t_cool/t_ff = 10` Voit equilibrium
+  (former default 1); the free-fall-drain branch is gone.
+- **`HIIonizationOn`** — the Shark-style HI ionisation cut is always applied
+  to the atomic remainder (former default 1).
+- **`SigmaHIcrit`** — fixed at `SIGMA_HI_CRIT = 0.5` Msun/pc^2.
+- **`CGMAGNOn`** — CGM-regime AGN heating fires whenever `AGNrecipeOn > 0`
+  (former default 1).
+
+Struct fields, parameter registrations, defaults, range-checks, and the
+`millennium_all.par` tags were removed; the docs and unit tests were updated
+to the single behaviour. `SubstepResolution` and `RamPressureStrippingOn` /
+`RamPressureEpsilon` remain as live parameters.
+
 ## Ram-pressure stripping and self-regulating precipitation, now default-on (July 2026) — intentional output change
 
 Two physics channels were added and then enabled by default after validation

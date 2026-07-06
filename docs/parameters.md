@@ -71,8 +71,7 @@ optional parameters take the listed default if omitted.
 | `BulgeSizeOn` | int | no | `3` | Bulge radius model: 0=off; 1=Shen+2003 eq.33; 2=Shen+2003 eq.32; 3=Tonini+2016 (separate merger and instability channels, mass-weighted average). |
 | `StarburstColdGasOn` | 0/1 | no | `1` | Include cold gas contribution during merger starbursts. |
 | `DynamicDisruptionSplit` | int | no | `2` | ICS-vs-BCG split for disrupted satellite stellar mass: 0=fixed fraction `FractionDisruptedToICS`; 1=mass-ratio split `f_ICS = 1 - (infallMvir / Mhost)^DisruptionSplitAlpha`; 2=mass-ratio split with concentration weighting (`alpha_eff = DisruptionSplitAlpha * DisruptionSplitCref / c_sat`). |
-| `PhysicalStrippingOn` | int | no | `2` | Satellite **hot-gas** stripping scheme (starvation): 0=legacy geometric (`excess/N` per substep, stock SAGE, substep-count dependent); 1=physical timescale, per-substep; 2=analytic once-per-snapshot `1-exp(-dT/t_strip)` (default), substep-invariant. Timescale set by `StrippingTimescaleFactor`. Complementary to `RamPressureStrippingOn` (ISM stripping). |
-| `RamPressureStrippingOn` | 0/1 | no | `1` | Gunn & Gott (1972) ram-pressure stripping of satellite cold gas (ISM): 1=on (default); 0=off. Independent of the hot-gas (starvation) stripping controlled by `PhysicalStrippingOn`; see `docs/physics/infall.md`. |
+| `RamPressureStrippingOn` | 0/1 | no | `1` | Gunn & Gott (1972) ram-pressure stripping of satellite cold gas (ISM): 1=on (default); 0=off. Independent of the always-on hot-gas (starvation) stripping; see `docs/physics/infall.md`. |
 | `RamPressureEpsilon` | double | no | `1.0` | Order-unity prefactor on the ram pressure `P_ram = eps * rho_host * v_sat^2`, absorbing the disk-orientation geometry uncertainty. Used only when `RamPressureStrippingOn=1`. |
 
 ---
@@ -82,8 +81,6 @@ optional parameters take the listed default if omitted.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `CGMDensityProfile` | int | no | `0` | CGM gas density profile for precipitation: 0=uniform; 1=NFW; 2=beta (β=2/3). |
-| `CGMAGNOn` | 0/1 | no | `1` | Enable AGN heating coupling to the CGM-regime cooling path. |
-| `PrecipRegulationOn` | 0/1 | no | `1` | Self-regulating precipitation: 1=on (default) condenses only the CGM above the `tcool/tff = 10` Voit equilibrium, so the flow relaxes to equilibrium instead of draining the reservoir at the free-fall rate; 0=off (legacy free-fall drain). See `cooling_recipe_cgm` in `src/model_cooling_heating.c`. |
 
 ---
 
@@ -178,7 +175,6 @@ calibration transfer across simulations with different output spacing.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `SubstepResolution` | double | `1.0` | Runtime multiplier on the adaptive-substep floor **and** cap. **Calibration-locked numerical knob, not a physics choice** — the model is calibrated at `1.0`; do not change it for science runs without recalibrating. Coarse steps over-cool (cooling outruns the AGN `r_heat` response before it can react), so raising the resolution lowers the massive-end SMF and total stellar mass. The shift from `1.0` to fully converged is only **~0.1 dex** at the massive end (within typical observational SMF scatter), but runtime grows **~linearly** with the substep count. Use higher values only for deliberate convergence / resolution studies. |
-| `StrippingTimescaleFactor` | double | `1.0` | Prefactor on the satellite hot-gas stripping timescale `t_strip = factor * t_dyn(host)`; used by the physical stripping schemes (`PhysicalStrippingOn` 1 and 2). Larger = slower stripping. |
 
 **Convergence note.** The substep dependence is a long-standing property of SAGE's
 cooling/feedback operator-splitting (it is present, and slightly *stronger*, with

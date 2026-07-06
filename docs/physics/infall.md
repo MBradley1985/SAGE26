@@ -111,15 +111,17 @@ The reincorporated gas inherits the metallicity of the ejected reservoir
 and is routed by regime: `CGMgas` if Regime 0, `HotGas` if Regime 1
 (or always `HotGas` when `CGMrecipeOn = 0`).
 
-## `strip_from_satellite()` -- per-substep satellite stripping
+## `strip_from_satellite()` -- satellite hot-gas stripping
 
 For Type 1 satellites (those with their own dark matter subhalo) the
-function transfers excess gas from the satellite to the central, one
-substep at a time. The "excess" is defined as the satellite's current
-baryons above `BaryonFrac * Mvir_sat * reionization_modifier`. A fraction
-`1 / effective_steps` of the excess is stripped per call, so the total
-per-snapshot stripping fraction is independent of the adaptive substep
-count.
+function transfers excess hot-phase gas from the satellite to the central,
+once per snapshot, outside the substep loop. The "excess" is the
+satellite's current baryons above `BaryonFrac * Mvir_sat *
+reionization_modifier`. The stripped fraction is analytic --
+`1 - exp(-dT/t_strip)`, where `t_strip = Rvir/Vvir` is the host dynamical
+time -- so it is exactly the physical (cadence- and substep-invariant)
+amount: no dependence on the adaptive substep count or on how the interval
+is split into snapshots.
 
 For CGM-regime satellites the bulk transfer has already happened in
 `infall_recipe()` (CGMgas was zeroed and merged into the central's
@@ -144,11 +146,10 @@ the disk's gravitational restoring force per unit area,
 
 The two channels are independent and complementary (the same split Shark
 makes between halo and ISM stripping); they share only the stripping
-timescale `t_strip = StrippingTimescaleFactor * Rvir/Vvir` of the host.
+timescale `t_strip = Rvir/Vvir` of the host.
 
 Implementation (`model_ram_pressure.c`, called once per snapshot from
-`evolve_galaxies()` outside the substep loop, like the
-`PhysicalStrippingOn = 2` scheme):
+`evolve_galaxies()` outside the substep loop, like the hot-gas stripping):
 
 - **Orbit**: R_orb from the comoving position offset to the central
   (minimum image, converted to physical), clamped to (0, Rvir]; v_sat from
