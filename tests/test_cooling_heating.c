@@ -247,6 +247,55 @@ void test_cgm_precipitation() {
 }
 
 // ============================================================================
+// TEST 6b: Self-regulating precipitation (always on)
+// ============================================================================
+void test_precipitation_regulation() {
+    BEGIN_TEST("Precipitation Regulation: self-quenching drain relaxes to the threshold");
+
+    struct params run_params;
+    memset(&run_params, 0, sizeof(struct params));
+    run_params.CGMrecipeOn = 1;
+    run_params.UnitTime_in_s = 3.08568e+16;
+    run_params.UnitDensity_in_cgs = 6.76991e-31;
+    run_params.Hubble_h = 0.7;
+    run_params.G = 43007.1;
+
+    struct GALAXY gal[1];
+    /* thermally unstable state (same as test_cgm_precipitation) */
+#define SETUP_PRECIP_GAL() do { \
+        memset(gal, 0, sizeof(struct GALAXY)); \
+        gal[0].CGMgas = 20.0; gal[0].MetalsCGMgas = 0.4; \
+        gal[0].Vvir = 100.0; gal[0].Rvir = 100.0; gal[0].Mvir = 50.0; \
+        gal[0].Regime = 0; \
+    } while(0)
+
+    SETUP_PRECIP_GAL();
+    const double cooled = cooling_recipe_cgm(0, 0.01, gal, &run_params);
+    const double ratio0 = gal[0].tcool_over_tff;
+    const double tff0 = gal[0].tff;
+    ASSERT_GREATER_THAN(cooled, 0.0, "Unstable CGM precipitates");
+    ASSERT_LESS_THAN(ratio0, 10.0, "Initial state is below the precipitation threshold");
+
+    /* Iterative drain on the free-fall timescale: self-regulating precipitation
+     * must relax tcool/tff toward the threshold and keep a finite reservoir,
+     * instead of emptying the CGM as the free-fall dump would. */
+    SETUP_PRECIP_GAL();
+    double ratio_last = ratio0;
+    for(int i = 0; i < 400 && gal[0].CGMgas > 0.0; i++) {
+        const double step_dt = 0.5 * (gal[0].tff > 0.0 ? gal[0].tff : tff0);
+        const double c = cooling_recipe_cgm(0, step_dt, gal, &run_params);
+        const double metallicity = (gal[0].CGMgas > 0.0) ? gal[0].MetalsCGMgas / gal[0].CGMgas : 0.0;
+        gal[0].CGMgas -= c;
+        gal[0].MetalsCGMgas -= metallicity * c;
+        ratio_last = gal[0].tcool_over_tff;
+    }
+    ASSERT_GREATER_THAN(gal[0].CGMgas, 0.0, "Regulated drain keeps a finite CGM reservoir");
+    ASSERT_GREATER_THAN(ratio_last, ratio0, "tcool/tff rises as the CGM drains");
+    ASSERT_GREATER_THAN(ratio_last, 5.0, "Reservoir relaxes toward the threshold equilibrium");
+#undef SETUP_PRECIP_GAL
+}
+
+// ============================================================================
 // TEST 7: Cooling Cannot Exceed Available Gas
 // ============================================================================
 void test_cooling_mass_conservation() {
@@ -420,6 +469,7 @@ int main(void) {
     test_cooling_radius();
     test_cooling_mass_dependence();
     test_cgm_precipitation();
+    test_precipitation_regulation();
     test_cooling_mass_conservation();
     test_regime_aware_cooling();
     test_cooling_time_scaling();

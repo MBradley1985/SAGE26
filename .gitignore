@@ -41,8 +41,10 @@ yy*
 
 # Documentation with Sphinx / Doxygen #
 docs/build
+docs/_build/
 docs/make.bat
 docs/_doxygen/
+_doxygen/
 
 # Regression baseline — manifests for slow optional configs are captured locally on demand,
 # not committed. Only the default-sweep configs in tests/regression_baseline.sh are tracked.

@@ -2,12 +2,14 @@
  * model_infall.c -- baryon infall, satellite stripping, and reionisation.
  *
  * Implements four routines called from evolve_galaxies() each timestep:
- *   infall_recipe      -- computes the net infalling mass for a central halo
- *                         and routes it to the correct reservoir (HotGas or
- *                         CGMgas) via add_infall_to_hot(); calls
- *                         strip_from_satellite() for each satellite.
- *   strip_from_satellite -- removes all remaining gas from a satellite galaxy
- *                           and adds it to the central's hot/CGM reservoir.
+ *   infall_recipe      -- computes the net infalling mass for a central halo,
+ *                         pools satellite ejecta/ICS into the central, and
+ *                         migrates the central's gas between the HotGas and
+ *                         CGMgas reservoirs according to its regime.
+ *   strip_from_satellite -- removes part of a satellite's baryon excess
+ *                           (analytic 1-exp(-dT/t_strip), once per snapshot) and
+ *                           adds it to the central's hot/CGM reservoir;
+ *                           called from evolve_galaxies().
  *   do_reionization    -- computes the reionisation suppression factor for
  *                         low-mass haloes using the Gnedin (2000) model.
  *   add_infall_to_hot  -- adds (or subtracts) infallingGas to the appropriate
@@ -216,19 +218,22 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
 
 /*
  * strip_from_satellite -- remove excess gas from a satellite and donate it to
- * the central galaxy's hot/CGM reservoir, one effective substep at a time.
+ * the central galaxy's hot/CGM reservoir.
  *
- * The stripped fraction per call is 1/effective_steps of the satellite's
- * current baryon excess (baryons above BF*Mvir_sat).  Calling this once per
- * substep over effective_steps substeps yields a consistent per-snapshot
- * stripping fraction regardless of the adaptive timestep count.
+ * `dt` is the full snapshot interval dT and `t_strip` the physical stripping
+ * timescale (the host dynamical time Rvir/Vvir of the central, supplied by the
+ * caller). The satellite loses exactly a fraction 1-exp(-dT/t_strip) of its
+ * *current* baryon excess (baryons above BF*Mvir_sat) in this single call,
+ * evaluated once per snapshot OUTSIDE the substep loop (operator-split before
+ * the substeps, like the infalling gas). Because exp composes, the stripped
+ * fraction is independent of the substep count and invariant to how the
+ * interval is split into snapshots (cadence-invariant).
  *
  * CGM-regime satellites retain CGMgas across snapshots; the CGM branch
- * below strips it gradually using the same baryon-excess rule used for
- * HotGas. Hot- and CGM-regime satellites are therefore handled by
- * structurally identical rules.
+ * below strips it using the same baryon-excess rule used for HotGas, so hot-
+ * and CGM-regime satellites are handled by structurally identical rules.
  */
-void strip_from_satellite(const int centralgal, const int gal, const double Zcurr, const int effective_steps, struct GALAXY *galaxies, const struct params *run_params)
+void strip_from_satellite(const int centralgal, const int gal, const double Zcurr, const double dt, const double t_strip, struct GALAXY *galaxies, const struct params *run_params)
 {
     double reionization_modifier;
 
@@ -238,16 +243,24 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
         reionization_modifier = 1.0;
     }
 
-    /* Excess baryons over BF*Mvir, divided across the substeps so that a full
-     * snapshot of substeps yields a consistent fraction stripped regardless of
-     * effective_steps. By this point infall_recipe has already zeroed satellite
-     * EjectedMass and ICS (and CGMgas when CGMrecipeOn != 1), so these
-     * reservoirs do not double-count gas already pooled into the central. */
+    /* Excess baryons over BF*Mvir. By this point infall_recipe has already
+     * zeroed satellite EjectedMass and ICS (and CGMgas when CGMrecipeOn != 1),
+     * so these reservoirs do not double-count gas already pooled into the
+     * central. */
     const double satBaryons = galaxies[gal].StellarMass + galaxies[gal].ColdGas
                             + galaxies[gal].HotGas      + galaxies[gal].CGMgas
                             + galaxies[gal].BlackHoleMass + galaxies[gal].ICS
                             + galaxies[gal].EjectedMass;
-    double remainingToStrip = (satBaryons - reionization_modifier * run_params->BaryonFrac * galaxies[gal].Mvir) / effective_steps;
+    const double excess = satBaryons - reionization_modifier * run_params->BaryonFrac * galaxies[gal].Mvir;
+
+    if(excess <= 0.0) {
+        return;
+    }
+
+    /* Analytic once-per-snapshot fraction: exactly 1-exp(-dT/t_strip) of the
+     * current excess, with no dependence on the substep count. */
+    const double strip_frac = (t_strip > 0.0) ? (1.0 - exp(-dt / t_strip)) : 1.0;
+    double remainingToStrip = excess * strip_frac;
 
     if(remainingToStrip <= 0.0) {
         return;

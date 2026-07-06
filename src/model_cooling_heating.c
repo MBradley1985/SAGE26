@@ -115,6 +115,10 @@ static const double Z_CRIT_DB06 = 1.5;
  * fraction of the current cooling rate. Croton et al. (2006), AGN appendix. */
 static const double AGN_COLD_CLOUD_FRAC = 1.0e-4;
 
+/* File-private: AGN radio-mode heating for CGM-regime galaxies (defined below). */
+static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
+                                 struct GALAXY *galaxies, const struct params *run_params);
+
 // ============================================================================
 // CGM Density Profile Helper Functions (file-private)
 // ============================================================================
@@ -263,9 +267,11 @@ static double cgm_enclosed_mass(const double r, const double M_total, const doub
  *
  * Dispatches to the selected profile model (profile_type: 0=uniform, 1=NFW, 2=beta).
  * Falls back to uniform for unrecognised profile_type values.
+ * External so the ram-pressure stripping module can evaluate the same ambient
+ * profile the cooling recipe assumes (see model_ram_pressure.c).
  */
-static double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const double Rvir_cgs,
-                                    const double Mvir_Msun, const double z, const int profile_type)
+double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const double Rvir_cgs,
+                             const double Mvir_Msun, const double z, const int profile_type)
 {
     if(profile_type == 0) {
         // Uniform density
@@ -450,16 +456,12 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
         if(rcool > galaxies[gal].Rvir) rcool = galaxies[gal].Rvir;
 
         coolingGas = 0.0;
-        
+
         if(run_params->CGMrecipeOn == 0) {
-            // Original behavior: SAGE C16 cooling recipe
-            if(rcool > galaxies[gal].Rvir) {
-                // "cold accretion" regime
-                coolingGas = galaxies[gal].HotGas / (galaxies[gal].Rvir / galaxies[gal].Vvir) * dt;
-            } else {
-                // "hot halo cooling" regime
-                coolingGas = (galaxies[gal].HotGas / galaxies[gal].Rvir) * (rcool / (2.0 * tcool)) * dt;
-            }
+            // SAGE C16 hot-halo cooling. rcool was capped at Rvir above, so the
+            // historical rcool > Rvir "cold accretion" branch is unreachable:
+            // cooling saturates at 0.5 * m_hot / t_cool instead of jumping.
+            coolingGas = (galaxies[gal].HotGas / galaxies[gal].Rvir) * (rcool / (2.0 * tcool)) * dt;
         } else {
             // CGMrecipeOn == 1: D&B06 cold streams for hot-regime halos
             // All halos here are in the hot regime (have virial shocks)
@@ -469,7 +471,7 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             // Mass suppression (M/Mshock)^(-4/3) -- halos well above the shock
             // threshold host weaker cold streams. Redshift factor (1+z)/(1+1)
             // enhances streams at high-z where cooling is more efficient.
-            const double Mvir_physical = galaxies[gal].Mvir * 1.0e10 / run_params->Hubble_h;
+            const double Mvir_physical = CODE_MASS_TO_MSUN(galaxies[gal].Mvir, run_params->Hubble_h);
             const double mass_ratio = Mvir_physical / MSHOCK_DB06_MSUN;
 
             // Redshift enhancement: normalized to z=1 following D&B06 eq 40
@@ -523,21 +525,21 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             if(coolingGas < 0.0) coolingGas = 0.0;
         }
 
-		// at this point we have calculated the maximal cooling rate
-		// if AGNrecipeOn we now reduce it in line with past heating before proceeding
+        // at this point we have calculated the maximal cooling rate
+        // if AGNrecipeOn we now reduce it in line with past heating before proceeding
 
-		if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
-			coolingGas = do_AGN_heating(coolingGas, gal, dt, x, rcool, galaxies, run_params);
+        if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
+            coolingGas = do_AGN_heating(coolingGas, gal, dt, x, rcool, galaxies, run_params);
         }
 
-		if (coolingGas > 0.0) {
-			galaxies[gal].Cooling += 0.5 * coolingGas * galaxies[gal].Vvir * galaxies[gal].Vvir;
+        if (coolingGas > 0.0) {
+            galaxies[gal].Cooling += 0.5 * coolingGas * galaxies[gal].Vvir * galaxies[gal].Vvir;
         }
-	} else {
-		coolingGas = 0.0;
+    } else {
+        coolingGas = 0.0;
     }
 
-	XASSERT(coolingGas >= 0.0, -1,
+    XASSERT(coolingGas >= 0.0, -1,
             "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
     return coolingGas;
 }
@@ -586,7 +588,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     const double CGMgas_cgs = galaxies[gal].CGMgas * 1e10 * SOLAR_MASS / run_params->Hubble_h; // g
     const double Rvir_cgs = galaxies[gal].Rvir * CM_PER_MPC / run_params->Hubble_h; // cm
     const double Mvir_cgs = galaxies[gal].Mvir * 1e10 * SOLAR_MASS / run_params->Hubble_h; // g
-    const double Mvir_Msun = galaxies[gal].Mvir * 1e10 / run_params->Hubble_h; // Msun
+    const double Mvir_Msun = CODE_MASS_TO_MSUN(galaxies[gal].Mvir, run_params->Hubble_h); // Msun
     const double z = run_params->ZZ[galaxies[gal].SnapNum];
 
     // Get density profile type (0: uniform, 1: NFW, 2: beta)
@@ -691,11 +693,27 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // ========================================================================
 
     if(precipitation_fraction > 0.0) {
-        // Gas precipitates on the free-fall timescale when thermally unstable
-        // This is the key physical insight: dM/dt = f_precip * M_CGM / t_ff
-        const double precip_rate = precipitation_fraction * galaxies[gal].CGMgas / tff_char;
+        // Self-regulating precipitation: gas precipitates on the free-fall
+        // timescale, but only the CGM *above* the tcool/tff = PRECIP_THRESHOLD
+        // equilibrium condenses. At fixed profile shape and temperature t_cool
+        // scales as 1/rho, i.e. as 1/M_CGM, while t_ff is set by the
+        // (DM-dominated) potential -- so the reservoir the halo can stably hold
+        // is
+        //     M_eq = M_CGM * (tcool/tff) / PRECIP_THRESHOLD
+        // and dM/dt = f_precip * (M_CGM - M_eq) / t_ff relaxes toward the Voit
+        // equilibrium instead of emptying the reservoir: as the CGM drains,
+        // tcool/tff rises, M_eq -> M_CGM, and the flow shuts off. Late-time
+        // inflow is then limited to the rate at which infall and SN-reheated
+        // gas push the CGM back over the equilibrium mass, rather than the
+        // free-fall dump of the entire stored reservoir.
+        const double m_eq = galaxies[gal].CGMgas * (tcool_over_tff_char / PRECIP_THRESHOLD);
+        double condensing_mass = galaxies[gal].CGMgas - m_eq;
+        if(condensing_mass < 0.0) {
+            condensing_mass = 0.0;   /* sigmoid tail above threshold: stable, no condensation */
+        }
+        const double precip_rate = precipitation_fraction * condensing_mass / tff_char;
         coolingGas = precip_rate * dt;
-        
+
         // Physical limits
         if(coolingGas > galaxies[gal].CGMgas) {
             coolingGas = galaxies[gal].CGMgas;
@@ -716,7 +734,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
 
         // r_heat ratchet, no decay, capped at Rvir (suppression and ratchet
         // update handled inside do_AGN_heating_cgm when AGN is active).
-        if(run_params->AGNrecipeOn > 0 && run_params->CGMAGNOn > 0) {
+        if(run_params->AGNrecipeOn > 0) {
             coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
         } else {
             // No AGN: still apply r_heat suppression so quenching persists
@@ -957,8 +975,8 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
  * Applies the same r_heat/rcool suppression and ratchet as the hot-halo
  * path, then caps r_heat at Rvir. Accretion draws from CGMgas.
  */
-double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
-                          struct GALAXY *galaxies, const struct params *run_params)
+static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
+                                 struct GALAXY *galaxies, const struct params *run_params)
 {
     if(galaxies[centralgal].r_heat < rcool) {
         coolingGas = (1.0 - galaxies[centralgal].r_heat / rcool) * coolingGas;
@@ -989,6 +1007,16 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
 
         if(AGNheating > 0.0)
             galaxies[centralgal].Heating += 0.5 * AGNheating * galaxies[centralgal].Vvir * galaxies[centralgal].Vvir;
+
+        /* The BH accretion above drew AGNaccreted out of CGMgas, but any
+         * earlier clamp of coolingGas used the pre-accretion reservoir.
+         * Re-cap so the caller cannot overdraw the CGM by up to AGNaccreted
+         * (manifested as an XASSERT abort when cooling was reservoir-limited
+         * and Bondi accretion nonzero in the same call, e.g. with
+         * CGMDensityProfile = 1). */
+        if(coolingGas > galaxies[centralgal].CGMgas) {
+            coolingGas = galaxies[centralgal].CGMgas;
+        }
     }
     return coolingGas;
 }

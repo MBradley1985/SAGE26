@@ -35,6 +35,7 @@
 #include "model_misc.h"
 #include "model_mergers.h"
 #include "model_infall.h"
+#include "model_ram_pressure.h"
 #include "model_reincorporation.h"
 #include "model_starformation_and_feedback.h"
 #include "model_cooling_heating.h"
@@ -105,19 +106,7 @@ int construct_galaxies(const int halonr, int *numgals, int *galaxycounter, int *
   // evolve them in time.
 
   fofhalo = halos[halonr].FirstHaloInFOFgroup;
-#ifdef USE_SAGE_IN_MCMC_MODE
-  /* The extra condition stops sage from evolving any galaxies beyond the final output snapshot.
-     This optimised processing reduces the values GalaxyIndex and CentralGalaxyIndex (since fewer galaxies are
-     now processed). The values of mergetype, mergeintosnapnum and mergeintoid are all different that what
-     would be the case if *all* snapshots were processed. This will lead to different SEDs compared to the
-     fiducial runs -> however, for MCMC cases, presumably we are not interested in SED. This extra flag
-     improves runtime *significantly* if only processing up to high-z (say for targeting JWST-like observations).
-     - MS, DC: 25th Oct, 2023
-  */
-  if(haloaux[fofhalo].HaloFlag == 1 && halos[fofhalo].SnapNum <= run_params->ListOutputSnaps[0]) {
-#else
   if(haloaux[fofhalo].HaloFlag == 1 ) {
-#endif
       int ngal = 0;
       haloaux[fofhalo].HaloFlag = 2;
 
@@ -352,7 +341,8 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
  * Drives STEPS (or up to MAX_STEPS adaptively) sub-steps.  Each sub-step
  * calls: infall_recipe, cooling_recipe, starformation_and_feedback,
  * check_disk_instability, and reincorporate_gas.  After the sub-steps,
- * handles any remaining mergers and calls save_galaxies() for this forest.
+ * handles any remaining mergers; save_galaxies() is called afterwards by
+ * sage_per_forest().
  * Returns EXIT_SUCCESS or a negative SAGE error code.
  */
 static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals, struct halo_data *halos,
@@ -409,17 +399,71 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
     // Scale steps proportionally: ensure we resolve evolution within each dynamical time
     // If deltaT/t_dyn > 1, the snapshot spans multiple dynamical times and we need finer resolution
-    // (minimum STEPS, maximum MAX_STEPS)
-    int effective_steps = STEPS;
+    // (minimum STEPS, maximum MAX_STEPS).
+    //
+    // SubstepResolution (default 1.0) is a runtime multiplier that scales both the floor
+    // and the cap, so the integration substep count N can be swept from the parameter file
+    // for convergence / N-invariance testing without recompiling. It does NOT resize the
+    // compile-time SFR history arrays (still STEPS long); adaptive substeps map back into
+    // those STEPS bins as before. The -1e-9 guards against float rounding pushing an exact
+    // integer product up to the next ceil.
+    const double res = (run_params->SubstepResolution > 0.0) ? run_params->SubstepResolution : 1.0;
+    int floor_steps = (int)ceil(STEPS * res - 1e-9);
+    if(floor_steps < 1) floor_steps = 1;
+    int cap_steps = (int)ceil(MAX_STEPS * res - 1e-9);
+    if(cap_steps < floor_steps) cap_steps = floor_steps;
+
+    int effective_steps = floor_steps;
     if(t_dyn > 0.0) {
         double ratio = deltaT_total / t_dyn;
-        int needed = (int)ceil(STEPS * ratio);
-        if(needed > STEPS) {
+        int needed = (int)ceil(floor_steps * ratio);
+        if(needed > floor_steps) {
             effective_steps = needed;
         }
     }
-    if(effective_steps > MAX_STEPS) {
-        effective_steps = MAX_STEPS;
+    if(effective_steps > cap_steps) {
+        effective_steps = cap_steps;
+    }
+
+    // Satellite hot-gas stripping timescale: t_strip = t_dyn(host) = Rvir/Vvir.
+    const double t_strip = t_dyn;
+
+    // Analytic satellite hot-gas stripping applied ONCE per snapshot, outside
+    // the substep loop, fully decoupled from the substep count. Each satellite
+    // loses exactly a fraction 1-exp(-dT/t_dyn) of its baryon excess (computed
+    // inside strip_from_satellite from dt=deltaT). This is operator-split before
+    // the substeps, mirroring how infallingGas is computed once up front.
+    for(int p = 0; p < ngal; p++) {
+        if(p == centralgal || galaxies[p].mergeType > 0) {
+            continue;
+        }
+        // Strip satellites holding hot-phase gas in either reservoir: Hot-regime
+        // in HotGas, CGM-regime in CGMgas (CGMgas is zeroed for satellites when
+        // CGMrecipeOn != 1, so legacy runs are unchanged).
+        if(galaxies[p].Type == 1 && (galaxies[p].HotGas > 0.0 || galaxies[p].CGMgas > 0.0)) {
+            const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
+            strip_from_satellite(centralgal, p, Zcurr, deltaT, t_strip, galaxies, run_params);
+        }
+    }
+
+    // RamPressureStrippingOn == 1: Gunn & Gott (1972) ram-pressure stripping of
+    // satellite ISM (ColdGas), applied once per snapshot outside the substep
+    // loop with the same analytic 1-exp(-dT/t_strip) cadence as scheme 2 above.
+    // Complementary to and independent of PhysicalStrippingOn, which strips the
+    // hot/CGM phase (starvation). Covers Type 1 satellites and Type 2 orphans;
+    // orphans use a frozen-orbit approximation (position frozen at subhalo
+    // loss, velocity replaced by the host Vvir -- see
+    // ram_pressure_strip_satellite).
+    if(run_params->RamPressureStrippingOn == 1) {
+        for(int p = 0; p < ngal; p++) {
+            if(p == centralgal || galaxies[p].mergeType > 0) {
+                continue;
+            }
+            if((galaxies[p].Type == 1 || galaxies[p].Type == 2) && galaxies[p].ColdGas > 0.0) {
+                const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
+                ram_pressure_strip_satellite(centralgal, p, Zcurr, deltaT, t_strip, galaxies, run_params);
+            }
+        }
     }
 
     for(int step = 0; step < effective_steps; step++) {
@@ -444,15 +488,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
                 if(run_params->ReIncorporationFactor > 0.0) {
                     reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
-                }
-            } else {
-                // Strip satellites that hold hot-phase gas in either reservoir:
-                // Hot-regime satellites keep it in HotGas, CGM-regime satellites
-                // in CGMgas. Gating on HotGas alone excluded CGM-regime
-                // satellites from stripping entirely (CGMgas is zeroed for
-                // satellites when CGMrecipeOn != 1, so legacy runs are unchanged).
-                if(galaxies[p].Type == 1 && (galaxies[p].HotGas > 0.0 || galaxies[p].CGMgas > 0.0)) {
-                    strip_from_satellite(centralgal, p, Zcurr, effective_steps, galaxies, run_params);
                 }
             }
 
@@ -522,7 +557,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
     } // Go on to the next STEPS substep
 
     // Extra miscellaneous stuff before finishing this halo
-    galaxies[centralgal].TotalSatelliteBaryons = 0.0;
     const double deltaT = run_params->Age[galaxies[0].SnapNum] - halo_age;
     const double inv_deltaT = 1.0/deltaT;
 
@@ -536,11 +570,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         galaxies[p].Cooling *= inv_deltaT;
         galaxies[p].Heating *= inv_deltaT;
         galaxies[p].OutflowRate *= inv_deltaT;
-
-        if(p != centralgal) {
-            galaxies[centralgal].TotalSatelliteBaryons +=
-                (galaxies[p].StellarMass + galaxies[p].BlackHoleMass + galaxies[p].ColdGas + galaxies[p].HotGas + galaxies[p].CGMgas);
-        }
     }
 
 

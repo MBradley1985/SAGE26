@@ -160,7 +160,6 @@ int distribute_weighted_forests_over_ntasks(const int64_t totnforests, const int
     }
 
     if(forest_weighting == uniform_in_forests || nhalos_per_forest == NULL) {
-        // fprintf(stderr,"Warning: Based on the inputs, switching to the assigning forests *without* weights (might indicate bug in code, only affects load-balancing and the actual results)\n");
         return distribute_forests_over_ntasks(totnforests, NTasks, ThisTask, nforests_thistask, start_forestnum_thistask);
     }
 
@@ -204,8 +203,10 @@ int distribute_weighted_forests_over_ntasks(const int64_t totnforests, const int
              The +1 is because the ThisTask needs to process this i'th
              forest (i.e., inclusive range of [start_forestnum, i])
             */
+#ifdef VERBOSE
             fprintf(stderr,"[LOG]: Assigning forest-range = [%"PRId64", %"PRId64"] (containing %"PRId64" halos) to ThisTask = %d\n",
                     start_forestnum, i, nhalos_curr_task, ThisTask);
+#endif
             nforests_this_task = i - start_forestnum + 1;
             break;
         }
@@ -222,10 +223,12 @@ int distribute_weighted_forests_over_ntasks(const int64_t totnforests, const int
             /* There is no '+1' here because the last forest index is (totnforests - 1)
                MS: 15/01/2020 */
             nhalos_curr_task = totnhalos - nhalos_so_far;
+#ifdef VERBOSE
             fprintf(stderr,"[LOG]: Assigning all remaining forests to last task. Remaining cost = %g (ideal target cost = %g)\n",
                     total_cost_across_all_forests - cost_so_far, target_cost_per_task);
             fprintf(stderr,"[LOG]: Assigning forest-range = [%"PRId64", %"PRId64"] (containing %"PRId64" halos) to ThisTask = %d\n",
                     start_forestnum, totnforests - 1, nhalos_curr_task, ThisTask);
+#endif
             nforests_this_task = totnforests - start_forestnum;
             break;
         }
@@ -284,7 +287,6 @@ int find_start_and_end_filenum(const int64_t start_forestnum, const int64_t end_
         if(nforests_this_file == 0) continue;
 
         const int64_t end_forestnum_this_file = nforests_so_far + nforests_this_file;
-        // fprintf(stderr,"filenr = %d end_forestnum_this_file = %"PRId64"\n", filenr, end_forestnum_this_file);
         start_forestnum_to_process_per_file[filenr] = 0;
         num_forests_to_process_per_file[filenr] = nforests_this_file;
 

@@ -61,7 +61,7 @@ void test_multi_satellite_mass_conservation() {
     
     // Apply stripping to all satellites
     for(int i = 1; i <= 4; i++) {
-        strip_from_satellite(0, i, 0.0, STEPS, galaxies, &run_params);
+        strip_from_satellite(0, i, 0.0, 0.0, 0.0, galaxies, &run_params);
     }
     
     // Check total mass conservation
@@ -111,7 +111,7 @@ void test_satellite_gas_transfer_to_central() {
     
     // Strip from all satellites
     for(int i = 1; i <= 3; i++) {
-        strip_from_satellite(0, i, 0.0, STEPS, galaxies, &run_params);
+        strip_from_satellite(0, i, 0.0, 0.0, 0.0, galaxies, &run_params);
     }
     
     // Central should have gained gas
@@ -170,7 +170,7 @@ void test_group_scale_metal_budget() {
     
     // Strip from all satellites
     for(int i = 1; i <= 5; i++) {
-        strip_from_satellite(0, i, 0.0, STEPS, galaxies, &run_params);
+        strip_from_satellite(0, i, 0.0, 0.0, 0.0, galaxies, &run_params);
     }
     
     double final_total_metals = 0.0;
@@ -226,8 +226,8 @@ void test_differential_stripping_by_mass() {
     double light_hot_before = galaxies[1].HotGas;
     double heavy_hot_before = galaxies[2].HotGas;
     
-    strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
-    strip_from_satellite(0, 2, 0.0, STEPS, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, 0.0, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 2, 0.0, 0.0, 0.0, galaxies, &run_params);
     
     double light_frac_lost = (light_hot_before - galaxies[1].HotGas) / light_hot_before;
     double heavy_frac_lost = (heavy_hot_before - galaxies[2].HotGas) / heavy_hot_before;
@@ -270,7 +270,7 @@ void test_cumulative_stripping_over_time() {
     
     // Apply stripping multiple times (simulating orbit)
     for(int step = 0; step < 10; step++) {
-        strip_from_satellite(0, 1, 0.0, STEPS, galaxies, &run_params);
+        strip_from_satellite(0, 1, 0.0, 0.0, 0.0, galaxies, &run_params);
     }
     
     // Should have progressively stripped gas
@@ -278,46 +278,6 @@ void test_cumulative_stripping_over_time() {
                     "Cumulative stripping reduces satellite gas");
     ASSERT_GREATER_THAN(galaxies[1].HotGas, 0.0,
                        "Some gas remains after multiple strips");
-}
-
-void test_satellite_total_baryon_tracking() {
-    BEGIN_TEST("TotalSatelliteBaryons Tracks All Satellite Mass");
-    
-    struct GALAXY galaxies[5];
-    memset(galaxies, 0, sizeof(struct GALAXY) * 5);
-    
-    // Central
-    galaxies[0].ColdGas = 2.0;
-    galaxies[0].HotGas = 10.0;
-    galaxies[0].StellarMass = 5.0;
-    galaxies[0].TotalSatelliteBaryons = 0.0;
-    
-    // Satellites
-    double expected_sat_total = 0.0;
-    for(int i = 1; i <= 4; i++) {
-        galaxies[i].ColdGas = 0.5 + i * 0.1;
-        galaxies[i].HotGas = 1.0 + i * 0.3;
-        galaxies[i].StellarMass = 1.0 + i * 0.2;
-        galaxies[i].EjectedMass = 0.1;
-        galaxies[i].CGMgas = 0.2;
-        galaxies[i].ICS = 0.05;
-        
-        double sat_baryons = galaxies[i].ColdGas + galaxies[i].HotGas + 
-                            galaxies[i].StellarMass + galaxies[i].EjectedMass +
-                            galaxies[i].CGMgas + galaxies[i].ICS;
-        expected_sat_total += sat_baryons;
-    }
-    
-    // Simulate tracking (manual for this test)
-    galaxies[0].TotalSatelliteBaryons = 0.0;
-    for(int i = 1; i <= 4; i++) {
-        galaxies[0].TotalSatelliteBaryons += 
-            galaxies[i].ColdGas + galaxies[i].HotGas + galaxies[i].StellarMass +
-            galaxies[i].EjectedMass + galaxies[i].CGMgas + galaxies[i].ICS;
-    }
-    
-    ASSERT_CLOSE(galaxies[0].TotalSatelliteBaryons, expected_sat_total, 1e-5,
-                "TotalSatelliteBaryons correctly sums all satellite mass");
 }
 
 void test_no_self_stripping() {
@@ -346,7 +306,7 @@ void test_no_self_stripping() {
     double initial_hot = galaxies[0].HotGas;
     
     // Try to strip from itself (should be no-op or minimal)
-    strip_from_satellite(0, 0, 0.0, STEPS, galaxies, &run_params);
+    strip_from_satellite(0, 0, 0.0, 0.0, 0.0, galaxies, &run_params);
     
     // Should not significantly change
     ASSERT_CLOSE(galaxies[0].HotGas, initial_hot, 0.1,
@@ -361,7 +321,6 @@ int main() {
     test_group_scale_metal_budget();
     test_differential_stripping_by_mass();
     test_cumulative_stripping_over_time();
-    test_satellite_total_baryon_tracking();
     test_no_self_stripping();
     
     END_TEST_SUITE();

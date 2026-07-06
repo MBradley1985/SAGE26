@@ -10,7 +10,6 @@ abstract: >
 authors:
   - family-names: Bradley
     given-names: Michael
-    orcid: "https://orcid.org/0000-0000-0000-0000"
     affiliation: "Swinburne University of Technology"
   - family-names: Croton
     given-names: Darren J.

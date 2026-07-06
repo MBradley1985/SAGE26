@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+# The Makefile's CI path (CI=true) assumes GSL and HDF5 live in one conda
+# prefix (HDF5_DIR is derived from `gsl-config --prefix`), so dependencies
+# are installed with micromamba rather than apt (Debian's split hdf5/serial
+# layout is not compatible with -I$(HDF5_DIR)/include).
+
+jobs:
+  build-and-unit-tests:
+    name: Serial build + unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GSL + HDF5 (conda prefix)
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: sage-ci
+          create-args: gsl hdf5 make
+          init-shell: bash
+
+      - name: Build (serial, HDF5, -Werror via CI=true)
+        run: make USE-MPI=
+
+      - name: Run unit tests
+        run: make -C tests test
+
+  mpi-build:
+    name: MPI build check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GSL + HDF5 + OpenMPI (conda prefix)
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: sage-ci
+          # conda-forge ships the MPI compiler wrappers separately from the
+          # openmpi runtime: without openmpi-mpicc there is no mpicc at all.
+          create-args: gsl hdf5 openmpi openmpi-mpicc compilers make
+          init-shell: bash
+
+      - name: Build (MPI, HDF5)
+        run: make

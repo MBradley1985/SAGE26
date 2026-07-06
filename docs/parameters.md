@@ -71,6 +71,8 @@ optional parameters take the listed default if omitted.
 | `BulgeSizeOn` | int | no | `3` | Bulge radius model: 0=off; 1=Shen+2003 eq.33; 2=Shen+2003 eq.32; 3=Tonini+2016 (separate merger and instability channels, mass-weighted average). |
 | `StarburstColdGasOn` | 0/1 | no | `1` | Include cold gas contribution during merger starbursts. |
 | `DynamicDisruptionSplit` | int | no | `2` | ICS-vs-BCG split for disrupted satellite stellar mass: 0=fixed fraction `FractionDisruptedToICS`; 1=mass-ratio split `f_ICS = 1 - (infallMvir / Mhost)^DisruptionSplitAlpha`; 2=mass-ratio split with concentration weighting (`alpha_eff = DisruptionSplitAlpha * DisruptionSplitCref / c_sat`). |
+| `RamPressureStrippingOn` | 0/1 | no | `1` | Gunn & Gott (1972) ram-pressure stripping of satellite cold gas (ISM): 1=on (default); 0=off. Independent of the always-on hot-gas (starvation) stripping; see `docs/physics/infall.md`. |
+| `RamPressureEpsilon` | double | no | `1.0` | Order-unity prefactor on the ram pressure `P_ram = eps * rho_host * v_sat^2`, absorbing the disk-orientation geometry uncertainty. Used only when `RamPressureStrippingOn=1`. |
 
 ---
 
@@ -79,7 +81,6 @@ optional parameters take the listed default if omitted.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `CGMDensityProfile` | int | no | `0` | CGM gas density profile for precipitation: 0=uniform; 1=NFW; 2=beta (β=2/3). |
-| `CGMAGNOn` | 0/1 | no | `1` | Enable AGN heating coupling to the CGM-regime cooling path. |
 
 ---
 
@@ -159,6 +160,28 @@ optional parameters take the listed default if omitted.
 
 See the **FFB parameters** section above for `FFBMaxEfficiency`,
 `FFBConcSigma`, and `RedshiftPowerLawExponent`.
+
+---
+
+## Numerical time resolution
+
+The per-snapshot physics loop (cooling, star formation, feedback) is integrated
+with an *adaptive* number of sub-timesteps: the count scales with `deltaT / t_dyn`,
+so a snapshot interval spanning several halo dynamical times is resolved with more
+substeps (bounded by a `STEPS` floor and a `MAX_STEPS` cap). Tying the effective
+resolution to `t_dyn` rather than the raw snapshot cadence is what lets one
+calibration transfer across simulations with different output spacing.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `SubstepResolution` | double | `1.0` | Runtime multiplier on the adaptive-substep floor **and** cap. **Calibration-locked numerical knob, not a physics choice** — the model is calibrated at `1.0`; do not change it for science runs without recalibrating. Coarse steps over-cool (cooling outruns the AGN `r_heat` response before it can react), so raising the resolution lowers the massive-end SMF and total stellar mass. The shift from `1.0` to fully converged is only **~0.1 dex** at the massive end (within typical observational SMF scatter), but runtime grows **~linearly** with the substep count. Use higher values only for deliberate convergence / resolution studies. |
+
+**Convergence note.** The substep dependence is a long-standing property of SAGE's
+cooling/feedback operator-splitting (it is present, and slightly *stronger*, with
+the classic `CGMrecipeOn=0` cooling), not something introduced by the CGM/precipitation
+physics. Because the effect is only ~0.1 dex on the SMF, the calibrated `1.0` model
+sits within observational constraints; a converged model would need at most a light
+retune and would show more simulation-consistent behaviour, at higher compute cost.
 
 ---
 

@@ -18,6 +18,7 @@
 
 #include "core_allvars.h"
 #include "core_mymalloc.h"
+#include "model_misc.h" /* sf_prescription_tracks_h2() for option-combination checks */
 
 enum datatypes {
     DOUBLE = 1,
@@ -57,7 +58,7 @@ static int compare_ints_descending (const void* p1, const void* p2)
 int read_parameter_file(const char *fname, struct params *run_params)
 {
     int errorFlag = 0;
-    int *used_tag = 0;
+    int *used_tag = NULL;
     char my_treetype[MAX_STRING_LEN], my_outputformat[MAX_STRING_LEN], my_forest_dist_scheme[MAX_STRING_LEN];
     int NParam = 0;
     char ParamTag[MAXTAGS][MAXTAGLEN + 1];
@@ -99,10 +100,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->H2RadialNBins              = 25;
     run_params->H2RadialRMaxFactor         = 5.0;
     run_params->CGMrecipeOn                = 1;
-    run_params->HIIonizationOn             = 1;
-    run_params->SigmaHIcrit                = 0.5;   /* Msun/pc^2 (Shark sigma_hi_crit) */
     run_params->CGMDensityProfile          = 0;
-    run_params->CGMAGNOn                   = 1;
     run_params->RegimeRandomMode           = 0;
     run_params->FIREmodeOn                 = 1;
     run_params->RedshiftPowerLawExponent   = 1.25;
@@ -117,6 +115,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->TrackICSAssembly           = 1;
     run_params->StarburstColdGasOn         = 1;
     run_params->DynamicDisruptionSplit     = 2;
+    run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
+    run_params->RamPressureStrippingOn     = 1;   /* default: on -- Gunn & Gott (1972) ISM stripping of satellites. Set 0 for the legacy no-ISM-stripping behaviour. */
+    run_params->RamPressureEpsilon         = 1.0; /* default: unscaled ram pressure P_ram = rho_host * v_sat^2 */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
     run_params->ReIncorporationFactor      = 0.15;
@@ -183,10 +184,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("SFprescription",        &(run_params->SFprescription),       INT, 0);
     REG("AGNrecipeOn",           &(run_params->AGNrecipeOn),          INT, 0);
     REG("CGMrecipeOn",           &(run_params->CGMrecipeOn),          INT, 0);
-    REG("HIIonizationOn",        &(run_params->HIIonizationOn),       INT, 0);
-    REG("SigmaHIcrit",           &(run_params->SigmaHIcrit),          DOUBLE, 0);
     REG("CGMDensityProfile",     &(run_params->CGMDensityProfile),    INT, 0);
-    REG("CGMAGNOn",              &(run_params->CGMAGNOn),              INT, 0);
     REG("RegimeRandomMode",      &(run_params->RegimeRandomMode),     INT, 0);
     REG("FIREmodeOn",            &(run_params->FIREmodeOn),           INT, 0);
     REG("ConcentrationOn",       &(run_params->ConcentrationOn),      INT, 0);
@@ -198,6 +196,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("TrackICSAssembly",      &(run_params->TrackICSAssembly),     INT, 0);
     REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
     REG("DynamicDisruptionSplit",&(run_params->DynamicDisruptionSplit),INT, 0);
+    REG("SubstepResolution",     &(run_params->SubstepResolution),     DOUBLE, 0);
+    REG("RamPressureStrippingOn",   &(run_params->RamPressureStrippingOn),   INT, 0);
+    REG("RamPressureEpsilon",       &(run_params->RamPressureEpsilon),       DOUBLE, 0);
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
     REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
     REG("H2RadialNBins",         &(run_params->H2RadialNBins),        INT, 0);
@@ -229,9 +230,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
 #undef REG
 
-    /* Save original tag names before the parse loop zeroes them out for duplicate detection */
+    /* Save original tag names before the parse loop zeroes them out for duplicate detection.
+       Both arrays are MAXTAGLEN+1 with index MAXTAGLEN pre-set to '\0'. */
     for(int i = 0; i < NParam; i++) {
-        strncpy(OrigParamTag[i], ParamTag[i], MAXTAGLEN);
+        memcpy(OrigParamTag[i], ParamTag[i], MAXTAGLEN + 1);
     }
 
     used_tag = mymalloc(sizeof(int) * NParam);
@@ -288,16 +290,29 @@ int read_parameter_file(const char *fname, struct params *run_params)
         }
 
         if(j >= 0) {
+            /* strtod/strtol instead of atof/atoi: a malformed numeric value
+               (e.g. a typo like "O.05") must be a startup error, not a silent 0. */
+            char *endptr = NULL;
             switch (ParamID[j])
                 {
                 case DOUBLE:
-                    *((double *) ParamAddr[j]) = atof(buf2);
+                    *((double *) ParamAddr[j]) = strtod(buf2, &endptr);
+                    if(endptr == buf2 || *endptr != '\0') {
+                        fprintf(stderr, "Error in file %s:   Value '%s' for parameter '%s' is not a valid number.\n",
+                                fname, buf2, buf1);
+                        errorFlag = 1;
+                    }
                     break;
                 case STRING:
                     snprintf(ParamAddr[j], MAX_STRING_LEN, "%s", buf2);
                     break;
                 case INT:
-                    *((int *) ParamAddr[j]) = atoi(buf2);
+                    *((int *) ParamAddr[j]) = (int) strtol(buf2, &endptr, 10);
+                    if(endptr == buf2 || *endptr != '\0') {
+                        fprintf(stderr, "Error in file %s:   Value '%s' for parameter '%s' is not a valid integer.\n",
+                                fname, buf2, buf1);
+                        errorFlag = 1;
+                    }
                     break;
                 }
         } else {
@@ -439,9 +454,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->TreeExtension[0] = '\0';
 
     // Check tree type is valid.
-    if (strncmp(my_treetype, "lhalo_hdf5", 511)   == 0 ||
-        strncmp(my_treetype, "genesis_hdf5", 511) == 0 ||
-        strncmp(my_treetype, "gadget4_hdf5", 511) == 0
+    if (strncmp(my_treetype, "lhalo_hdf5", MAX_STRING_LEN - 1)   == 0 ||
+        strncmp(my_treetype, "genesis_hdf5", MAX_STRING_LEN - 1) == 0 ||
+        strncmp(my_treetype, "gadget4_hdf5", MAX_STRING_LEN - 1) == 0
         ) {
 #ifndef HDF5
         fprintf(stderr, "You have specified to use a HDF5 file but have not compiled with the HDF5 option enabled.\n");
@@ -450,7 +465,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
 #endif
         // strncmp returns 0 if the two strings are equal.
         // only relevant options are HDF5 or binary files. Consistent-trees is *always* ascii (with different filename extensions)
-        snprintf(run_params->TreeExtension, 511, ".hdf5");
+        snprintf(run_params->TreeExtension, MAX_STRING_LEN - 1, ".hdf5");
     }
 
 #define CHECK_VALID_ENUM_IN_PARAM_FILE(paramname, num_enum_types, enum_names, enum_values, string_value) { \
@@ -508,6 +523,93 @@ int read_parameter_file(const char *fname, struct params *run_params)
     CHECK_VALID_ENUM_IN_PARAM_FILE(ForestDistributionScheme, nvalid_scheme_types, scheme_names, scheme_enums, my_forest_dist_scheme);
 #undef CHECK_VALID_ENUM_IN_PARAM_FILE
 
+
+    /* SF prescription must be one of the eight implemented recipes; the
+       H2-tracking predicate (sf_prescription_tracks_h2) relies on this range. */
+    if(run_params->SFprescription < 0 || run_params->SFprescription > 7) {
+        fprintf(stderr,"Error: SFprescription = %d is not valid; it must be in [0, 7].\n", run_params->SFprescription);
+        fprintf(stderr,"Please change the value for the parameter 'SFprescription' in the parameter file (%s)\n", fname);
+        ABORT(EXIT_FAILURE);
+    }
+
+    /* Physics option flags: reject out-of-range values at startup rather than
+       running silently with untested behaviour.  Valid ranges follow the
+       dispatch chains in the physics modules (see docs/parameters.md). */
+    {
+        const struct { const char *name; int32_t value; int32_t min; int32_t max; } option_ranges[] = {
+            {"AGNrecipeOn",            run_params->AGNrecipeOn,            0, 3},
+            {"SupernovaRecipeOn",      run_params->SupernovaRecipeOn,      0, 1},
+            {"ReionizationOn",         run_params->ReionizationOn,         0, 1},
+            {"DiskInstabilityOn",      run_params->DiskInstabilityOn,      0, 1},
+            {"CGMrecipeOn",            run_params->CGMrecipeOn,            0, 1},
+            {"CGMDensityProfile",      run_params->CGMDensityProfile,      0, 2},
+            {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
+            {"RegimeRandomMode",       run_params->RegimeRandomMode,       0, 1},
+            {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
+            {"FeedbackFreeModeOn",     run_params->FeedbackFreeModeOn,     0, 7},
+            {"FFBIgnoreRegime",        run_params->FFBIgnoreRegime,        0, 1},
+            {"FFBRandomMode",          run_params->FFBRandomMode,          0, 1},
+            {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 3},
+            {"H2DiskAreaOption",       run_params->H2DiskAreaOption,       0, 2},
+            {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
+            {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
+            {"TrackICSAssembly",       run_params->TrackICSAssembly,       0, 1},
+            {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
+            {"DynamicDisruptionSplit", run_params->DynamicDisruptionSplit, 0, 2},
+            {"RamPressureStrippingOn", run_params->RamPressureStrippingOn, 0, 1},
+        };
+        for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
+            if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {
+                fprintf(stderr, "Error: %s = %d is not valid; it must be in [%d, %d].\n",
+                        option_ranges[i].name, option_ranges[i].value, option_ranges[i].min, option_ranges[i].max);
+                fprintf(stderr, "Please change the value for the parameter '%s' in the parameter file (%s)\n",
+                        option_ranges[i].name, fname);
+                ABORT(EXIT_FAILURE);
+            }
+        }
+    }
+
+    /* Numeric parameters that must be strictly positive for the physics to
+       be well-defined. */
+    if(run_params->H2RadialIntegrationOn && run_params->H2RadialNBins < 1) {
+        fprintf(stderr, "Error: H2RadialNBins = %d is not valid; the radial integration needs at least 1 bin.\n",
+                run_params->H2RadialNBins);
+        ABORT(EXIT_FAILURE);
+    }
+    if(run_params->H2RadialIntegrationOn && run_params->H2RadialRMaxFactor <= 0.0) {
+        fprintf(stderr, "Error: H2RadialRMaxFactor = %g is not valid; it must be > 0.\n",
+                run_params->H2RadialRMaxFactor);
+        ABORT(EXIT_FAILURE);
+    }
+    if(run_params->RamPressureStrippingOn && run_params->RamPressureEpsilon <= 0.0) {
+        fprintf(stderr, "Error: RamPressureEpsilon = %g is not valid; it must be > 0 when RamPressureStrippingOn = 1.\n",
+                run_params->RamPressureEpsilon);
+        ABORT(EXIT_FAILURE);
+    }
+    if(run_params->SubstepResolution <= 0.0) {
+        fprintf(stderr, "Error: SubstepResolution = %g is not valid; it must be > 0.\n",
+                run_params->SubstepResolution);
+        ABORT(EXIT_FAILURE);
+    }
+
+    /* Option combinations that would run but produce physically meaningless
+       output are rejected here instead of failing silently mid-run. */
+    if((run_params->FeedbackFreeModeOn == 6 || run_params->FeedbackFreeModeOn == 7)
+       && !sf_prescription_tracks_h2(run_params->SFprescription)) {
+        fprintf(stderr, "Error: FeedbackFreeModeOn = %d selects H2-based FFB star formation, but\n"
+                        "SFprescription = %d does not track H2 (only prescriptions other than 0 and 2 do).\n"
+                        "FFB bursts would form zero stars. Choose an H2-tracking SFprescription or an\n"
+                        "FFB mode in [1, 5].\n",
+                run_params->FeedbackFreeModeOn, run_params->SFprescription);
+        ABORT(EXIT_FAILURE);
+    }
+    if((run_params->FeedbackFreeModeOn == 4 || run_params->FeedbackFreeModeOn == 7)
+       && run_params->FFBConcSigma <= 0.0) {
+        fprintf(stderr, "Error: FeedbackFreeModeOn = %d uses log-normal concentration scatter, but\n"
+                        "FFBConcSigma = %g; the scatter width must be > 0 (typical ~0.2).\n",
+                run_params->FeedbackFreeModeOn, run_params->FFBConcSigma);
+        ABORT(EXIT_FAILURE);
+    }
 
     /* Check that exponent supplied is non-negative (for cases where the exponent will be used) */
     if((run_params->ForestDistributionScheme == exponent_in_nhalos || run_params->ForestDistributionScheme == generic_power_in_nhalos)

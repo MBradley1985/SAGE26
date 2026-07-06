@@ -111,15 +111,17 @@ The reincorporated gas inherits the metallicity of the ejected reservoir
 and is routed by regime: `CGMgas` if Regime 0, `HotGas` if Regime 1
 (or always `HotGas` when `CGMrecipeOn = 0`).
 
-## `strip_from_satellite()` -- per-substep satellite stripping
+## `strip_from_satellite()` -- satellite hot-gas stripping
 
 For Type 1 satellites (those with their own dark matter subhalo) the
-function transfers excess gas from the satellite to the central, one
-substep at a time. The "excess" is defined as the satellite's current
-baryons above `BaryonFrac * Mvir_sat * reionization_modifier`. A fraction
-`1 / effective_steps` of the excess is stripped per call, so the total
-per-snapshot stripping fraction is independent of the adaptive substep
-count.
+function transfers excess hot-phase gas from the satellite to the central,
+once per snapshot, outside the substep loop. The "excess" is the
+satellite's current baryons above `BaryonFrac * Mvir_sat *
+reionization_modifier`. The stripped fraction is analytic --
+`1 - exp(-dT/t_strip)`, where `t_strip = Rvir/Vvir` is the host dynamical
+time -- so it is exactly the physical (cadence- and substep-invariant)
+amount: no dependence on the adaptive substep count or on how the interval
+is split into snapshots.
 
 For CGM-regime satellites the bulk transfer has already happened in
 `infall_recipe()` (CGMgas was zeroed and merged into the central's
@@ -130,6 +132,57 @@ hot gas is not stranded.
 
 Type 2 satellites (orphan satellites with no remaining subhalo) have no
 hot reservoir and are skipped.
+
+## `ram_pressure_strip_satellite()` -- ram-pressure stripping of the ISM
+
+Controlled by `RamPressureStrippingOn` (default 1, on); set 0 for the
+legacy no-ISM-stripping behaviour. Where `strip_from_satellite()`
+removes a satellite's *hot-phase* gas (starvation), this channel removes the
+*ISM* (`ColdGas`) directly, following Gunn & Gott (1972): disk gas at radius
+r is stripped where the ram pressure of the host's ambient medium exceeds
+the disk's gravitational restoring force per unit area,
+
+    rho_host(R_orb) * v_sat^2  >  2 pi G * Sigma_disk(r) * Sigma_gas(r).
+
+The two channels are independent and complementary (the same split Shark
+makes between halo and ISM stripping); they share only the stripping
+timescale `t_strip = Rvir/Vvir` of the host.
+
+Implementation (`model_ram_pressure.c`, called once per snapshot from
+`evolve_galaxies()` outside the substep loop, like the hot-gas stripping):
+
+- **Orbit**: R_orb from the comoving position offset to the central
+  (minimum image, converted to physical), clamped to (0, Rvir]; v_sat from
+  the peculiar-velocity difference, falling back to the host `Vvir` when
+  degenerate. Type 2 orphans are included with a frozen-orbit
+  approximation: their position is frozen at the snapshot the subhalo was
+  lost (the true orbit only decays further in, so the ambient density --
+  and hence the stripping -- is underestimated) and their stale stored
+  velocity is replaced by the host `Vvir`. Note that in the default
+  configuration orphans are transient (they merge or disrupt within a
+  snapshot of losing their subhalo), so this path is rarely exercised;
+  it matters only for configurations with long-lived orphans.
+- **Ambient density**: CGM-regime hosts use the same uniform/NFW/beta
+  profile the CGM cooling recipe integrates (`cgm_density_at_radius()`);
+  hot-regime hosts use the isothermal `M_hot / (4 pi Rvir r^2)` the
+  hot-mode cooling assumes.
+- **Stripped fraction**: with the gas and stellar disks exponential in the
+  same scale radius (the H2 machinery's assumption), the criterion has the
+  analytic solution `r_strip = (r_s/2) ln(2 pi G Sigma_gas0 Sigma_disk0 /
+  P_ram)` and the stripped mass fraction `f_strip = (1 + r_strip/r_s)
+  exp(-r_strip/r_s)`; ram pressure above the central restoring force strips
+  the whole disk.
+- **Removal**: `M_strip = ColdGas * f_strip * (1 - exp(-dT/t_strip))`, with
+  metals in proportion, donated to the central's hot/CGM reservoir by
+  regime. Because SAGE stores only `(ColdGas, DiskScaleRadius)`, removal
+  lowers the surface density everywhere at fixed r_s rather than truncating
+  the disk -- the standard SAM compromise. H2/HI are re-partitioned from
+  the reduced `ColdGas` at the next substep, and since the outer disk is
+  HI-dominated, stripping preferentially removes HI.
+
+Enabling this toggle shifts satellite gas fractions and quenching, so any
+science run with it on needs at least an SMF / HI-mass-function check
+against the calibration.
 
 ## Switches and parameters
 
@@ -142,11 +195,14 @@ hot reservoir and are skipped.
 | `ReIncorporationFactor` | Sets `Vcrit` for the reincorporation cutoff. Larger values delay reincorporation in low-mass halos. |
 | `CGMrecipeOn` | Routes infall, reincorporation, and satellite CGM by regime when set. |
 | `TrackICSAssembly` | Records satellite-derived ICS mass into `ICS_accrete` for the central. |
+| `RamPressureStrippingOn` | 1 (default) enables Gunn & Gott (1972) ram-pressure stripping of satellite `ColdGas`; 0 disables it. |
+| `RamPressureEpsilon` | Order-unity prefactor on `P_ram = eps * rho_host * v_sat^2` (disk-orientation geometry uncertainty); default 1.0. |
 
 See [`parameters.md`](../parameters.md) for full descriptions and defaults.
 
 ## References
 
+- Gunn & Gott (1972), ApJ 176, 1 -- ram-pressure stripping criterion.
 - Gnedin (2000), ApJ 542, 535 -- reionization filtering mass.
 - Kravtsov, Gnedin & Klypin (2004), ApJ 609, 482 -- Appendix B fitting
   formulae for the filtering mass.

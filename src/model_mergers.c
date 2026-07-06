@@ -462,9 +462,7 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].CGMgas += galaxies[p].CGMgas;
     galaxies[t].MetalsCGMgas += galaxies[p].MetalsCGMgas;
 
-    if (run_params->SFprescription == 1 || run_params->SFprescription == 3 ||
-        run_params->SFprescription == 4 || run_params->SFprescription == 5 ||
-        run_params->SFprescription == 6 || run_params->SFprescription == 7) {
+    if (sf_prescription_tracks_h2(run_params->SFprescription)) {
         galaxies[t].H2gas += galaxies[p].H2gas;
         galaxies[t].H1gas += galaxies[p].H1gas;
     }
@@ -577,9 +575,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     }
 
     if (run_params->StarburstColdGasOn == 0 &&
-        (run_params->SFprescription == 1 || run_params->SFprescription == 3 || run_params->SFprescription == 4 ||
-         run_params->SFprescription == 5 || run_params->SFprescription == 6 ||
-         run_params->SFprescription == 7)) {
+        sf_prescription_tracks_h2(run_params->SFprescription)) {
         // Recompute H2gas from the current ColdGas rather than using the stored value.
         // The stored H2gas was set during disk SF earlier in this timestep, but ColdGas has
         // since been depleted by SF, feedback, and satellite stripping, making the stored
@@ -588,8 +584,8 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         const int cgal = merger_centralgal;
         double h2gas_fresh = 0.0;
         if(galaxies[cgal].ColdGas > 0.0 && galaxies[cgal].DiskScaleRadius > 0.0) {
-            const float h     = run_params->Hubble_h;
-            const float rs_pc = (float)(galaxies[cgal].DiskScaleRadius * 1.0e6 / h);
+            const float h     = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
+            const float rs_pc = (float)(CODE_LENGTH_TO_PC(galaxies[cgal].DiskScaleRadius, h));
             if(rs_pc > 0.0f) {
                 if(run_params->H2RadialIntegrationOn) {
                     // Radial integration stores result in galaxies[cgal].H2gas
@@ -604,12 +600,11 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                     else
                         disk_area_pc2 = 2.0f * (float)M_PI * rs_pc * rs_pc;
 
-                    const float Sigma_gas = (float)(galaxies[cgal].ColdGas * 1.0e10 / h) / disk_area_pc2;
+                    const float Sigma_gas = (float)(CODE_MASS_TO_MSUN(galaxies[cgal].ColdGas, h)) / disk_area_pc2;
 
-                    if(run_params->SFprescription == 1 || run_params->SFprescription == 3) {
+                    if(sf_prescription_is_br06(run_params->SFprescription)) {
                         // BR06 / Somerville+H2
-                        const float Sigma_star = (float)((galaxies[cgal].StellarMass - galaxies[cgal].BulgeMass)
-                                                 * 1.0e10 / h) / disk_area_pc2;
+                        const float Sigma_star = (float)(CODE_MASS_TO_MSUN(galaxies[cgal].StellarMass - galaxies[cgal].BulgeMass, h)) / disk_area_pc2;
                         h2gas_fresh = calculate_molecular_fraction_BR06(Sigma_gas, Sigma_star, rs_pc)
                                       * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
                     } else if(run_params->SFprescription == 4) {
@@ -766,9 +761,10 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
 
     // Clamp H2/H1 after gas has been consumed and ejected, so any chained merger
     // or disk-instability check that reads H2gas gets a physically consistent value.
-    if (run_params->SFprescription == 1 || run_params->SFprescription == 3 ||
-        run_params->SFprescription == 4 || run_params->SFprescription == 5 ||
-        run_params->SFprescription == 6 || run_params->SFprescription == 7) {
+    // Note: this quick refresh skips the HIIonizationOn cut (H1 here is the full
+    // atomic remainder); the next SF substep recomputes H1 with the ionisation
+    // correction applied.
+    if (sf_prescription_tracks_h2(run_params->SFprescription)) {
         if(galaxies[merger_centralgal].H2gas > galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC)
             galaxies[merger_centralgal].H2gas = galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC;
         galaxies[merger_centralgal].H1gas = (galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC)
@@ -779,7 +775,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     // check for disk instability
     if(run_params->DiskInstabilityOn && mode == 0) {
         if(mass_ratio < run_params->ThreshMajorMerger) {
-            check_disk_instability(merger_centralgal, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
+            check_disk_instability(merger_centralgal, centralgal, halonr, time, dt, step, galaxies, run_params);
         }
     }
 
@@ -794,35 +790,13 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         // Metals that leave disk - regime dependent
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
         
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0) {
-                // CGM-regime: metals go to CGM
-                galaxies[centralgal].MetalsCGMgas += metals_leaving_disk;
-            } else {
-                // Hot-ICM-regime: metals go to HotGas
-                galaxies[centralgal].MetalsHotGas += metals_leaving_disk;
-            }
-        } else {
-            // Original SAGE behavior: metals go to HotGas
-            galaxies[centralgal].MetalsHotGas += metals_leaving_disk;
-        }
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, metals_leaving_disk);
     } else {
         // MAJOR MERGER or very low cold gas: ALL metals leave disk
         // No functional disk left, so all metals go directly to CGM/HotGas
         const double all_metals = run_params->Yield * stars;
         
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0) {
-                // CGM-regime: metals go to CGM
-                galaxies[centralgal].MetalsCGMgas += all_metals;
-            } else {
-                // Hot-ICM-regime: metals go to HotGas
-                galaxies[centralgal].MetalsHotGas += all_metals;
-            }
-        } else {
-            // Original SAGE behavior: metals go to HotGas
-            galaxies[centralgal].MetalsHotGas += all_metals;
-        }
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }
 }
 
@@ -844,21 +818,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     const double total_gas = galaxies[gal].ColdGas + galaxies[gal].HotGas + galaxies[gal].CGMgas;
     const double total_metals_gas = galaxies[gal].MetalsColdGas + galaxies[gal].MetalsHotGas + galaxies[gal].MetalsCGMgas;
     
-    if(run_params->CGMrecipeOn == 1) {
-        if(galaxies[centralgal].Regime == 0) {
-            // CGM-regime: disrupted gas goes to CGM
-            galaxies[centralgal].CGMgas += total_gas;
-            galaxies[centralgal].MetalsCGMgas += total_metals_gas;
-        } else {
-            // Hot-ICM-regime: disrupted gas goes to HotGas
-            galaxies[centralgal].HotGas += total_gas;
-            galaxies[centralgal].MetalsHotGas += total_metals_gas;
-        }
-    } else {
-        // Original SAGE behavior: disrupted gas goes to HotGas
-        galaxies[centralgal].HotGas += total_gas;
-        galaxies[centralgal].MetalsHotGas += total_metals_gas;
-    }
+    add_gas_to_hot_reservoir(&galaxies[centralgal], run_params, total_gas, total_metals_gas);
 
     // Transfer ejected mass (same for all regimes)
     galaxies[centralgal].EjectedMass += galaxies[gal].EjectedMass;

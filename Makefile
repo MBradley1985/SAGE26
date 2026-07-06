@@ -2,7 +2,9 @@ USE-MPI := yes # set this if you want to run in embarrassingly parallel (automat
 USE-HDF5 := yes # set this if you want to read in hdf5 trees (requires hdf5 libraries)
 
 #MEM-CHECK = yes # Set this if you want to check sanitize pointers/memory addresses. Slowdown of ~2x is expected.
-				 # Note: This only works with gcc
+				 # Note: works with gcc on Linux. Apple clang's ASan runtime can be
+				 # broken on macOS releases newer than the installed Xcode Command
+				 # Line Tools.
 
 USE-BUFFERED-WRITE := yes # Set this to create binary output in chunks (typically has better performance)
 
@@ -16,7 +18,7 @@ ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 ROOT_DIR := $(if $(ROOT_DIR),$(ROOT_DIR),.)
 
 
-CCFLAGS += -DGNU_SOURCE -std=gnu99 -fPIC
+CCFLAGS += -std=gnu99 -fPIC
 LIBFLAGS :=
 
 OPTS := -DROOT_DIR='"${ROOT_DIR}"'
@@ -25,8 +27,9 @@ SRC_PREFIX := src
 LIBNAME := sage
 LIBSRC :=  sage.c core_read_parameter_file.c core_init.c core_io_tree.c \
            core_cool_func.c core_build_model.c core_save.c core_mymalloc.c core_utils.c progressbar.c \
-           core_tree_utils.c model_infall.c model_cooling_heating.c model_starformation_and_feedback.c \
+           model_infall.c model_cooling_heating.c model_starformation_and_feedback.c \
            model_disk_instability.c model_reincorporation.c model_mergers.c model_misc.c \
+           model_h2_chemistry.c model_halo_properties.c model_regimes.c model_ram_pressure.c \
            io/read_tree_lhalo_binary.c io/read_tree_consistentrees_ascii.c io/ctrees_utils.c \
 	       io/save_gals_binary.c io/forest_utils.c io/buffered_io.c
 
@@ -99,7 +102,14 @@ ifeq ($(DO_CHECKS), 1)
   ## Check if CC is clang under the hood
   CC_VERSION := $(shell $(CC) --version 2>/dev/null)
   ifndef CC_VERSION
-    $(info Error: Could find compiler = ${CC})
+    $(info Error: Could not find compiler = ${CC})
+    ifdef USE-MPI
+      $(info )
+      $(info MPI is enabled by default (USE-MPI at the top of the Makefile) and needs "mpicc".)
+      $(info If you do not need MPI, build the serial version instead with "make USE-MPI=")
+      $(info Otherwise install an MPI stack (e.g. OpenMPI) so that "mpicc" is in your PATH.)
+      $(info )
+    endif
     $(info Please either set "CC" in "Makefile" or via the command-line "make CC=yourcompiler")
     $(info And please check that the specified compiler is in your "$$PATH" variables)
     $(error )
@@ -259,7 +269,7 @@ else
 
 endif # End of DO_CHECKS if condition -> i.e., we do need to care about paths and such
 
-.PHONY: clean celan celna clena tests all
+.PHONY: clean celan celna clena tests regression all
 
 all:  $(SAGELIB) $(EXEC)
 
@@ -292,7 +302,12 @@ clean:
 
 tests: $(EXEC)
 ifdef GSL_FOUND
-	./tests/test_sage.sh
+	$(MAKE) -C tests test
 else
 	$(error GSL is required to run the tests)
 endif
+
+# Byte-for-byte output regression against the committed baseline manifests.
+# Requires a serial (non-MPI) build: make clean && make USE-MPI=
+regression: $(EXEC)
+	./tests/regression_baseline.sh

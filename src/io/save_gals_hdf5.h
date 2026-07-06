@@ -20,122 +20,23 @@ extern "C" {
 
 #include "../core_allvars.h"
 
+#include "save_gals_hdf5_fields.h"
+
+/* One heap array per output field per output snapshot (the write buffers).
+ * The per-dataset fields are generated from GALAXY_OUTPUT_FIELDS (see
+ * save_gals_hdf5_fields.h); TaskForestNr and the 2-D SFH arrays are the
+ * only members handled outside that list. */
 struct HDF5_GALAXY_OUTPUT
 {
-    int32_t   *SnapNum;
+#define SAGE_FIELD_STRUCT_MEMBER(dset, field, ctype, h5t, desc, unit) ctype *field;
+    GALAXY_OUTPUT_FIELDS(SAGE_FIELD_STRUCT_MEMBER)
+#undef SAGE_FIELD_STRUCT_MEMBER
 
-#if 0
-    short Type;
-    short isFlyby;
-#else
-    int32_t *Type;
-#endif
-    
-    long long   *GalaxyIndex;
-    long long   *CentralGalaxyIndex;
+    int64_t *TaskForestNr;   /* cpu-local forest number; internal bookkeeping, never written */
 
-    int32_t   *SAGEHaloIndex;
-    int32_t   *SAGETreeIndex;
-    
-    long long   *SimulationHaloIndex;
-    int64_t *TaskForestNr; /* MS: 17/9/2019 -- Tracks the cpu-local forest number */
-
-    int32_t  *mergeType;  /* 0=none; 1=minor merger; 2=major merger; 3=disk instability; 4=disrupt to ICS */
-    int32_t   *mergeIntoID;
-    int32_t   *mergeIntoSnapNum;
-    float *dT;
-
-    /* (sub)halo properties */
-    float *Posx;
-    float *Posy;
-    float *Posz;
-    float *Velx;
-    float *Vely;
-    float *Velz;
-    float *Spinx;
-    float *Spiny;
-    float *Spinz;
-    int32_t   *Len;
-    float *Mvir;
-    float *CentralMvir;
-    float *Rvir;
-    float *Vvir;
-    float *Vmax;
-    float *VelDisp;
-    
-    /* baryonic reservoirs */
-    float *ColdGas;
-    float *StellarMass;
-    float *BulgeMass;
-    float *HotGas;
-    float *EjectedMass;
-    float *BlackHoleMass;
-    float *ICS;
-    float *H2gas;
-    float *H1gas;
-
-    /* metals */
-    float *MetalsColdGas;
-    float *MetalsStellarMass;
-    float *MetalsBulgeMass;
-    float *MetalsHotGas;
-    float *MetalsEjectedMass;
-    float *MetalsICS;
-    float *MassLoading;
-    
-    /* to calculate magnitudes */
-    float *SfrDisk;
-    float *SfrBulge;
-    float *SfrDiskZ;
-    float *SfrBulgeZ;
-    
     /* cumulative star formation history - tracks stellar mass formed at each snapshot (controlled by SaveFullSFH) */
     float *SFHMassDisk;      /* Shape: [ngalaxies, SimMaxSnaps] - mass formed in disk at each snapshot */
     float *SFHMassBulge;     /* Shape: [ngalaxies, SimMaxSnaps] - mass formed in bulge at each snapshot */
-    
-    /* ICS assembly tracking - cumulative mass through each channel */
-    float *ICS_disrupt;      /* cumulative stellar mass disrupted to ICS */
-    float *ICS_accrete;      /* cumulative ICS accreted from satellites */
-    float *ICS_sum_mt;       /* mass-weighted sum m*t at deposition (code time); mean assembly time = ICS_sum_mt / (ICS_disrupt + ICS_accrete) */
-    
-    /* misc */
-    float *DiskScaleRadius;
-    float *BulgeRadius;
-    float *MergerBulgeRadius;
-    float *InstabilityBulgeRadius;
-    float *MergerBulgeMass;
-    float *InstabilityBulgeMass;
-    float *Cooling;
-    float *Heating;
-    float *QuasarModeBHaccretionMass;
-    float *TimeOfLastMajorMerger;
-    float *TimeOfLastMinorMerger;
-    float *OutflowRate;
-    
-    /* infall properties */
-    float *infallMvir;
-    float *infallVvir;
-    float *infallVmax;
-    float *infallStellarMass;
-    float *TimeOfInfall;
-
-    /* CGM properties */
-    int32_t *Regime;  /* 0 = CGM-regime 1 = ICM-regime */
-    float *CGMgas;
-    float *MetalsCGMgas;
-    float *tcool;
-    float *tff;
-    float *tcool_over_tff;
-    float *tdeplete;
-    float *H2DepletionTime_Gyr;
-    float *RcoolToRvir;
-
-    int32_t *FFBRegime;
-    float *Concentration;
-    float *mdot_cool;
-    float *mdot_stream;
-    double *g_max;
-    float *r_heat;          /* AGN radio-mode heating radius [Mpc/h], capped at Rvir in the CGM regime */
 };
     
     // Proto-Types //
