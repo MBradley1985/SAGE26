@@ -362,11 +362,17 @@ static double starburst_gas_reservoir(const int cgal, struct GALAXY *galaxies, c
  * starburst and BH growth, updates bulge mass and merger-origin bulge radius,
  * and finalises the remnant radius.
  *
+ * The BH demand is Eddington-capped HERE, at budget time, so the joint scale
+ * factor never reserves ColdGas the BH cannot accrete.  The accretion time
+ * used for that cap is passed through to grow_black_hole(), which re-uses it
+ * instead of recomputing (the starburst changes BulgeMass in between, so a
+ * recomputation would not match the budget).
+ *
  * Allocation order: the starburst is applied BEFORE grow_black_hole().  This is
- * deliberate -- grow_black_hole() runs quasar_mode_wind(), which can eject the
- * remaining ColdGas; applying the pre-sized burst first prevents the wind from
- * retroactively starving it.  The joint budget guarantees that enough ColdGas
- * remains for the BH after the burst.
+ * deliberate -- grow_black_hole() runs quasar_mode_wind(), the one consumer the
+ * budget does not size, and the wind can eject ALL remaining ColdGas.  Running
+ * the budgeted consumers first guarantees each collects its allocation; the
+ * wind then acts only on gas that is genuinely left over.
  */
 void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int centralgal,
                              const double time, const double dt, const int halonr, const int step,
@@ -395,7 +401,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     // This determines where burst stars will go
     double central_disk_mass = galaxies[merger_centralgal].StellarMass - galaxies[merger_centralgal].BulgeMass;
     int is_disk_dominated = (central_disk_mass > 0.5 * galaxies[merger_centralgal].StellarMass);
-    
+
     // Save disc radius BEFORE merger for instability bulge radius update
     const double old_disk_radius = galaxies[merger_centralgal].DiskScaleRadius;
 
@@ -404,7 +410,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     // Determine which bulge component will receive burst stars
     // This must be decided BEFORE the starburst
     int burst_to_merger_bulge = 0;  // 0 = instability, 1 = merger
-    
+
     if(mass_ratio > run_params->ThreshMajorMerger) {
         // Major merger: all stars go to merger-driven bulge
         burst_to_merger_bulge = 1;
@@ -449,12 +455,46 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         reheated_demanded *= h2fac;
     }
 
-    // (c) BH accretion demand (Kauffmann & Haehnelt cold-gas accretion)
+    // (c) BH accretion demand (Kauffmann & Haehnelt cold-gas accretion),
+    //     Eddington-capped at budget time so the joint scaling below never
+    //     reserves gas the BH cannot accrete.  The accretion time computed
+    //     here is passed through to grow_black_hole() -- it must NOT be
+    //     recomputed there, because the starburst (applied first) changes
+    //     BulgeMass and would shift the recomputed value.
     double BHaccrete_demanded = 0.0;
+    double bh_accretiontime = dt;
     if(run_params->AGNrecipeOn && cold_gas > 0.0) {
         BHaccrete_demanded = run_params->BlackHoleGrowthRate * mass_ratio /
             (1.0 + SQR(BH_GROWTH_V_KMS / galaxies[merger_centralgal].Vvir)) * cold_gas;
         if(BHaccrete_demanded < 0.0) BHaccrete_demanded = 0.0;
+
+        // Accretion time from the CURRENT (post-add, pre-burst) bulge state.
+        if(run_params->AGNDynamicAccretionOn &&
+           galaxies[merger_centralgal].BulgeMass > 0.0 &&
+           galaxies[merger_centralgal].BlackHoleMass > 0.0) {
+            const struct GALAXY *cg = &galaxies[merger_centralgal];
+            const double tdyn = dynamical_time(cg->BulgeRadius, cg->BulgeMass, run_params);
+            bh_accretiontime = run_params->BHAccretionNorm * tdyn *
+                               pow(cg->BulgeMass / cg->BlackHoleMass, run_params->BHMassScalingIndex);
+        }
+        if(bh_accretiontime <= 0.0) bh_accretiontime = dt;
+
+        // Eddington cap on the demand.  NOTE: this is the single call site for
+        // eddington_limited_accretion_rate on the merger channel; grow_black_hole
+        // does not re-apply it in the joint path (see there).
+        if(run_params->EddingtonLimitOn && BHaccrete_demanded > 0.0) {
+            double bh_rate = BHaccrete_demanded / bh_accretiontime;
+            bh_rate = eddington_limited_accretion_rate(
+                          bh_rate, run_params->EddingtonLimitOn,
+                          galaxies[merger_centralgal].BlackHoleMass,
+                          galaxies[merger_centralgal].SnapNum,
+                          1 /* merger EddType */, run_params,
+                          galaxies[merger_centralgal].BHAccretionType,
+                          galaxies[merger_centralgal].BHMaxaccretionRate,
+                          galaxies[merger_centralgal].BHEddingtonRateLimit);
+            BHaccrete_demanded = bh_rate * bh_accretiontime;
+            if(BHaccrete_demanded < 0.0) BHaccrete_demanded = 0.0;
+        }
     }
 
     // Joint balance: if the combined demand exceeds ColdGas, scale all three
@@ -474,18 +514,19 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     // END JOINT COLD-GAS BUDGET
     // ========================================================================
 
-    
-
-    // grow black hole through accretion from cold disk during mergers (pre-scaled)
-    if(run_params->AGNrecipeOn) {
-        grow_black_hole(merger_centralgal, mass_ratio, 0, dt, BHaccrete_scaled, galaxies, run_params);
-    }
-
-    // starburst recipe (pre-scaled) -- applied first; see function header note.
+    // starburst recipe (pre-scaled) -- applied FIRST, before grow_black_hole,
+    // so quasar_mode_wind cannot eject the burst's budgeted gas.
     collisional_starburst_recipe(mass_ratio, merger_centralgal, centralgal, time, dt, halonr,
                                  0, step, burst_to_merger_bulge, old_disk_radius,
                                  stars_scaled, reheated_scaled,
                                  galaxies, run_params);
+
+    // grow black hole through accretion from cold disk during mergers
+    // (pre-scaled and pre-Eddington-capped; budget accretion time passed through)
+    if(run_params->AGNrecipeOn) {
+        grow_black_hole(merger_centralgal, mass_ratio, 0, dt, BHaccrete_scaled,
+                        bh_accretiontime, galaxies, run_params);
+    }
 
     // Sync the central's BulgeRadius after add_galaxies_together + starburst have
     // modified bulge mass.  calculate_merger_remnant_radius reads BulgeRadius for
@@ -501,7 +542,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         // CASE 1: MAJOR MERGER (Section 5.2.3)
         // Destroys disc, creates pure merger-driven bulge
         make_bulge_from_burst(merger_centralgal, galaxies);
-        
+
         // Apply the Energy Conservation Radius; then call get_bulge_radius so
         // the Shen fallsafe fires immediately if new_merger_radius == 0 (edge
         // case: both progenitors were orphan satellites with DiskScaleRadius==0).
@@ -509,7 +550,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         get_bulge_radius(merger_centralgal, galaxies, run_params);
 
         galaxies[merger_centralgal].TimeOfLastMajorMerger = time;
-        galaxies[p].mergeType = 2; 
+        galaxies[p].mergeType = 2;
 
     } else {
         // CASE 2: MINOR MERGER
@@ -540,22 +581,37 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
 /*
  * grow_black_hole -- accrete cold gas onto the central black hole.
  *
- * New parameter BHaccrete_in:
- *     >= 0 -> joint-budget path: use this pre-scaled accretion mass directly.
+ * Parameter BHaccrete_in:
+ *     >= 0 -> joint-budget path: use this pre-scaled, pre-Eddington-capped
+ *             accretion mass directly.
  *     <  0 -> legacy path: compute the demand internally from the
- *             BlackHoleGrowthRate formula.
+ *             BlackHoleGrowthRate formula and apply the Eddington limit here.
+ *
+ * Parameter accretiontime_in (paired with the joint path):
+ *     >  0 -> use this accretion time (the one the budget's Eddington cap
+ *             used).  Do NOT recompute: the starburst runs before this
+ *             function and changes BulgeMass, so a recomputed dynamical
+ *             time would not match the budget and could re-throttle the
+ *             already-balanced allocation.
+ *     <= 0 -> legacy path: compute the accretion time internally.
+ * Legacy callers pass -1.0, -1.0.
+ *
  * In both paths the accreted mass is capped to the available ColdGas, removed
  * from the cold reservoir, and fed to quasar_mode_wind().
  */
-void grow_black_hole(const int merger_centralgal, const double mass_ratio, const int from_instability, const double dt, const double BHaccrete_in, struct GALAXY *galaxies, const struct params *run_params)
+void grow_black_hole(const int merger_centralgal, const double mass_ratio, const int from_instability,
+                     const double dt, const double BHaccrete_in, const double accretiontime_in,
+                     struct GALAXY *galaxies, const struct params *run_params)
 {
     double BHaccrete, metallicity;
     const int snap = galaxies[merger_centralgal].SnapNum;
 
-
     if(galaxies[merger_centralgal].ColdGas > 0.0) {
-        if(BHaccrete_in >= 0.0) {
-            // Joint-budget path: use the pre-scaled demand.
+
+        const int joint_budget = (BHaccrete_in >= 0.0);
+
+        if(joint_budget) {
+            // Joint-budget path: use the pre-scaled, pre-capped demand.
             BHaccrete = BHaccrete_in;
         } else {
             // Legacy path: compute the demand internally.
@@ -563,7 +619,10 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
                 (1.0 + SQR(BH_GROWTH_V_KMS / galaxies[merger_centralgal].Vvir)) * galaxies[merger_centralgal].ColdGas;
         }
 
-        // cannot accrete more gas than is available! (defensive in the joint path)
+        // cannot accrete more gas than is available!  In the joint path this is
+        // the defensive backstop for anything unbudgeted that consumed ColdGas
+        // between the budget and this call (e.g. a chained disk-instability
+        // burst inside collisional_starburst_recipe).
         if(BHaccrete > galaxies[merger_centralgal].ColdGas) {
             BHaccrete = galaxies[merger_centralgal].ColdGas;
         }
@@ -572,7 +631,10 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
         /* ---- ACCRETION TIME ---- */
         double accretiontime;
 
-        if(run_params->AGNDynamicAccretionOn) {
+        if(joint_budget && accretiontime_in > 0.0) {
+            // Use the budget's accretion time (see header note).
+            accretiontime = accretiontime_in;
+        } else if(run_params->AGNDynamicAccretionOn) {
             const struct GALAXY *cg = &galaxies[merger_centralgal];
 
             if(cg->BulgeMass <= 0.0 || cg->BlackHoleMass <= 0.0) {
@@ -591,24 +653,31 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
 
         galaxies[merger_centralgal].tacc[snap] = (float)accretiontime;
 
-        double BHaccreterate = BHaccrete / accretiontime;
-    
         /* ---- EDDINGTON LIMITING ---- */
-        int EddFlag = run_params->EddingtonLimitOn;
-        int EddType  = from_instability ? 2 : 1;
-    
-        BHaccreterate = eddington_limited_accretion_rate(
-                            BHaccreterate, EddFlag,
-                            galaxies[merger_centralgal].BlackHoleMass,
-                            galaxies[merger_centralgal].SnapNum,
-                            EddType, run_params,
-                            galaxies[merger_centralgal].BHAccretionType,
-                            galaxies[merger_centralgal].BHMaxaccretionRate,
-                            galaxies[merger_centralgal].BHEddingtonRateLimit);
-    
-        BHaccrete = BHaccreterate * accretiontime;
-    
-        /* Re-cap to ColdGas in case Eddington limiting didn't already do it */
+        // Joint path: the Eddington cap was already applied to the demand at
+        // budget time (single call site, so tracking fields are written once).
+        // Re-applying it here on the same rate with the same accretiontime
+        // would be a no-op at best and a double-record at worst, so skip it.
+        // Legacy path: apply it here as before.
+        if(!joint_budget) {
+            double BHaccreterate = BHaccrete / accretiontime;
+
+            int EddFlag = run_params->EddingtonLimitOn;
+            int EddType = from_instability ? 2 : 1;
+
+            BHaccreterate = eddington_limited_accretion_rate(
+                                BHaccreterate, EddFlag,
+                                galaxies[merger_centralgal].BlackHoleMass,
+                                galaxies[merger_centralgal].SnapNum,
+                                EddType, run_params,
+                                galaxies[merger_centralgal].BHAccretionType,
+                                galaxies[merger_centralgal].BHMaxaccretionRate,
+                                galaxies[merger_centralgal].BHEddingtonRateLimit);
+
+            BHaccrete = BHaccreterate * accretiontime;
+        }
+
+        /* Re-cap to ColdGas (Eddington limiting / joint scaling don't guarantee it) */
         if(BHaccrete > galaxies[merger_centralgal].ColdGas)
             BHaccrete = galaxies[merger_centralgal].ColdGas;
 
@@ -635,12 +704,12 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
         quasar_mode_wind(merger_centralgal, BHaccrete, galaxies, run_params);
 
         /* ---- PER-CHANNEL TRACKING ---- */
-    if(from_instability)
-        galaxies[merger_centralgal].InstabilityDrivenBHaccretionMass[snap] += BHaccrete;
-    else
-        galaxies[merger_centralgal].MergerDrivenBHaccretionMass[snap]      += BHaccrete;
-  
-    galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
+        if(from_instability)
+            galaxies[merger_centralgal].InstabilityDrivenBHaccretionMass[snap] += BHaccrete;
+        else
+            galaxies[merger_centralgal].MergerDrivenBHaccretionMass[snap]      += BHaccrete;
+
+        galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
     }
 }
 
