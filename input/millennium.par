@@ -63,7 +63,7 @@ TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_acc
 EddingtonLimitOn            1   %0: No forced limit; 1: All accretion EddLimited
 AGNDynamicAccretionOn       1   %0: default to dt; 1: Use tdyn 
 BHExsituGrowthOn            0   %0: default to no exsitu growth; 1:Consider Exsitu growth
-BlackHoleSeedingOn          0   %0: No forced seeding; 1: Light Seeding; 2: Heavy Seeding
+BlackHoleSeedingOn          2   %0: No forced seeding; 1: Light Seeding; 2: Heavy Seeding
 
 %------------------------------------------
 %----- SAGE model parameters --------------

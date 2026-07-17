@@ -446,6 +446,7 @@ def plot_bh_growth_channels(file_list, snap_num, hubble_h, redshifts,
                 ax.fill_between(zarr[ok], np.log10(p16[ok]), np.log10(p84[ok]),
                                 color=color, alpha=0.15)
         ax.set_xlim(max(zarr.min(), 0), 7.0)
+        ax.set_ylim(-2.5, 10)
         ax.grid(True, alpha=0.3)
     handles = [plt.Line2D([0], [0], color=c, lw=2) for _, _, c in channels]
     axes[-1].legend(handles, [l for l, _, _ in channels], fontsize=10)
@@ -519,9 +520,9 @@ def _draw_rate_function(ax, accr, edd, acc_type, volume_h3, edd_limited,
         allv.extend(logy[pos & pmask])
 
     ax.axvline(0.0, color='k', ls='--', lw=1.3, alpha=0.7)
-    ax.set_xlim(lo, 0.2 if edd_limited else bins[-1])
+    #ax.set_xlim(lo, 0.2 if edd_limited else bins[-1])
     ax.set_xlim(-10, 5)
-    ax.set_ylim(0,-7)
+    #ax.set_ylim(-7,0)
     if allv:
         ax.set_ylim(floor + 1.0, np.nanmax(allv) + 0.8)
     ax.xaxis.set_minor_locator(AutoMinorLocator(5))

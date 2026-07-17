@@ -639,9 +639,7 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
         galaxies[merger_centralgal].InstabilityDrivenBHaccretionMass[snap] += BHaccrete;
     else
         galaxies[merger_centralgal].MergerDrivenBHaccretionMass[snap]      += BHaccrete;
- 
-    quasar_mode_wind(merger_centralgal, BHaccrete, galaxies, run_params);
- 
+  
     galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
     }
 }
