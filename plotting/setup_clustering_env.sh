@@ -3,12 +3,15 @@
 # One-time Python venv setup for plotting/mqg_clustering_bias.py on
 # Ngarrgu Tindebeek (tooarrana) -- Lmod hierarchical modules, NO conda.
 #
-#   RUN INSIDE AN INTERACTIVE JOB so Corrfunc compiles on a compute node
-#   (its SIMD is baked in at build time; login-node builds can throw
-#   "illegal instruction" on the compute nodes):
-#       sinteractive            # or salloc / srun --pty bash
+#   RUN ON THE LOGIN NODE. Compute nodes here are air-gapped (no DNS/internet),
+#   so pip cannot reach PyPI from inside a job. On the login node:
+#       cd SAGE26
 #       bash plotting/setup_clustering_env.sh
 #       source $HOME/envs/sage-clustering/bin/activate
+#   Then TEST on a compute node:
+#       python -c "from Corrfunc.theory import xi; print('ok')"
+#   If that throws "Illegal instruction" (login built a newer SIMD than the
+#   compute CPU), use the OFFLINE rebuild at the very bottom of this file.
 #
 # Modules below are the gcc/12.3.0 (2023a) toolchain on this cluster. If they
 # ever change, rerun `module load gcc/<ver>` then
@@ -45,3 +48,20 @@ PY
 echo
 echo "Done. Activate with:  source $VENV/bin/activate"
 echo "Then run e.g.:        sbatch plotting/run_clustering_ozstar.sh"
+
+# =============================================================================
+# OFFLINE Corrfunc rebuild -- ONLY if the login-built Corrfunc throws
+# "Illegal instruction" on a compute node (SIMD mismatch). Splits download
+# (needs internet, login node) from build (needs the compute CPU, no internet).
+#
+#   # 1) LOGIN node (internet): fetch the Corrfunc source tarball
+#   source $HOME/envs/sage-clustering/bin/activate
+#   pip download Corrfunc --no-deps --no-binary :all: -d $HOME/pip_offline
+#
+#   # 2) COMPUTE node (interactive job; modules loaded + venv active): build here
+#   module load gcc/12.3.0 gsl/2.7 python/3.11.3 scipy-bundle/2023.07 matplotlib/3.7.2 astropy/5.3.3
+#   source $HOME/envs/sage-clustering/bin/activate
+#   pip uninstall -y Corrfunc
+#   CC=gcc pip install --no-index --no-build-isolation $HOME/pip_offline/[Cc]orrfunc-*.tar.gz
+#   python -c "from Corrfunc.theory import xi; print('rebuilt ok')"
+# =============================================================================
