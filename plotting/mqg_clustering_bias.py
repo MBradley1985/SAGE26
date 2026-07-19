@@ -120,6 +120,7 @@ DEFAULT_NBINS       = 16
 DEFAULT_RMIN_FIT    = 5.0
 DEFAULT_RMAX_FIT    = 25.0
 DEFAULT_NJACK       = 3               # njack^3 sub-cubes
+DEFAULT_SCAN_NLIST  = [50, 100, 200, 500, 1000, 5000]   # top-N values for the number scan
 
 PROPS_TO_LOAD = ['StellarMass', 'Mvir', 'CentralMvir', 'SfrDisk', 'SfrBulge',
                  'Posx', 'Posy', 'Posz', 'Type']
@@ -438,8 +439,8 @@ def plot_bias_vs_mvir(results, tinker_zs, obs, cosmo, args, out_path):
     cmap = plt.get_cmap('viridis')
     refidx = _obs_refidx(obs)
 
-    fig, axes = plt.subplots(1, 2, figsize=(15.0, 6.8), sharey=True)
-    fig.subplots_adjust(left=0.07, right=0.90, bottom=0.15, top=0.88, wspace=0.05)
+    fig, axes = plt.subplots(1, 2, figsize=(15.5, 6.8), sharey=True,
+                             constrained_layout=True)
 
     sc = _bias_mvir_panel(
         axes[0], results, tinker_zs, obs, cosmo, args, 'logmv_cen',
@@ -451,8 +452,9 @@ def plot_bias_vs_mvir(results, tinker_zs, obs, cosmo, args, out_path):
         r'(b) subhalo mass  $M_\mathrm{vir}$ (stripped for satellites)', refidx)
     axes[0].set_ylabel(r'large-scale bias $b$')
 
-    cax = fig.add_axes([0.915, 0.15, 0.015, 0.73])
-    fig.colorbar(sc, cax=cax).set_label(r'redshift $z$')
+    # colorbar to the RIGHT of both panels (constrained_layout keeps it off the axes)
+    cb = fig.colorbar(sc, ax=axes, location='right', pad=0.02, shrink=0.9)
+    cb.set_label(r'redshift $z$')
 
     meas_handle = Line2D([0], [0], marker='o', color='0.6', markeredgecolor='black',
                          markersize=11, lw=0, label='Measured MQG (this work)')
@@ -543,6 +545,81 @@ def plot_xi_diagnostic(results, cosmo, out_path):
     print(f'  Saved: {out_path}')
 
 
+# ----- Number scan (default plot) ---------------------------------------------
+
+def accumulate_number_scan(scan_results, d, z, hdr, cosmo, args, r_edges):
+    """For the snapshot in `d`, measure bias + median host/subhalo mass of the
+    top-N most massive quiescent for each N in args.scan_n_list, appending to
+    scan_results[N].  The quiescent list is sorted once and sliced per N."""
+    hub = hdr['hubble_h']
+    sm = d['StellarMass']
+    ssfr = np.where(sm > 0, (d['SfrDisk'] + d['SfrBulge']) / np.maximum(sm, 1e-30), np.inf)
+    floor = ssfr_floor(z, hdr['omega_m'], hdr['omega_l'], args.ssfr0)
+    order = np.where((ssfr < floor) & (sm > 0))[0]
+    order = order[np.argsort(-sm[order])]
+    pos_all = np.column_stack([d['Posx'], d['Posy'], d['Posz']])
+    cmv = d['CentralMvir'] * hub
+    mv = d['Mvir'] * hub
+    _lm = lambda x: float(np.log10(np.median(x[x > 0]))) if np.any(x > 0) else np.nan
+    for N in args.scan_n_list:
+        sel = order[:N]
+        n = int(sel.size)
+        row = {'z': z, 'n': n, 'host': np.nan, 'sub': np.nan, 'b': np.nan}
+        if n >= 2:
+            xg, rm, _ = xi_gg(pos_all[sel], hdr['box'], r_edges, args.nthreads)
+            b, _, _ = bias_from_ratio(xg, rm, z, cosmo, args.rmin_fit, args.rmax_fit)
+            row.update(host=_lm(cmv[sel]), sub=_lm(mv[sel]), b=float(b))
+        scan_results.setdefault(int(N), []).append(row)
+
+
+def plot_number_scan(scan_results, tinker_zs, cosmo, args, out_path):
+    """Bias vs host | subhalo mass, one track per top-N, colour-coded by N."""
+    from matplotlib.colors import LogNorm
+    from matplotlib.cm import ScalarMappable
+    n_list = sorted(scan_results)
+    if not n_list:
+        return
+    norm = LogNorm(vmin=min(n_list), vmax=max(n_list))
+    cmap = plt.get_cmap('plasma')
+    mgrid = np.logspace(11, 15, 200)
+    fig, axes = plt.subplots(1, 2, figsize=(15.0, 6.6), sharey=True,
+                             constrained_layout=True)
+
+    def panel(ax, key, title):
+        for zl in sorted(tinker_zs):
+            ax.plot(np.log10(mgrid), tinker_bias(mgrid, zl, cosmo, args.mdef),
+                    color='0.85', lw=1.0, zorder=1)
+        for N in n_list:
+            rows = [r for r in scan_results[N]
+                    if np.isfinite(r['b']) and np.isfinite(r[key])]
+            if not rows:
+                continue
+            o = np.argsort([r['z'] for r in rows])
+            x = np.array([rows[i][key] for i in o])
+            b = np.array([rows[i]['b'] for i in o])
+            ax.plot(x, b, '-', color=cmap(norm(N)), lw=1.8, marker='o', ms=6,
+                    mec='black', mew=0.5, zorder=4)
+        ax.set_xlim(11.0, 15.0)
+        ax.set_ylim(0.0, 8.0)
+        ax.set_xlabel(r'$\log_{10}(M\,/\,M_\odot)$  (sample median)')
+        ax.tick_params(which='both', direction='in', top=True, right=True)
+        ax.set_title(title, fontsize=12)
+
+    panel(axes[0], 'host', r'(a) host halo mass $M_\mathrm{vir}^\mathrm{host}$ (CentralMvir)')
+    panel(axes[1], 'sub', r'(b) subhalo mass $M_\mathrm{vir}$ (plain)')
+    axes[0].set_ylabel(r'measured large-scale bias $b$')
+    sm_ = ScalarMappable(norm=norm, cmap=cmap)
+    sm_.set_array([])
+    cb = fig.colorbar(sm_, ax=axes, location='right', pad=0.02, shrink=0.9)
+    cb.set_label(r'$N$ (top-$N$ most massive quiescent)')
+    fig.suptitle('MQG bias vs halo mass: number scan (each track a fixed top-N; '
+                 'grey=Tinker+10). Small N: massive, declining L;  large N: flat J.',
+                 fontsize=12)
+    fig.savefig(out_path, bbox_inches='tight')
+    plt.close(fig)
+    print(f'  Saved: {out_path}')
+
+
 # ----- Driver -----------------------------------------------------------------
 
 def main(argv=None):
@@ -580,6 +657,10 @@ def main(argv=None):
     p.add_argument('--rmin-fit', type=float, default=DEFAULT_RMIN_FIT)
     p.add_argument('--rmax-fit', type=float, default=DEFAULT_RMAX_FIT)
     p.add_argument('--njack', type=int, default=DEFAULT_NJACK)
+    p.add_argument('--scan-n-list', type=int, nargs='+', default=DEFAULT_SCAN_NLIST,
+                   help='top-N values for the default number-scan plot.')
+    p.add_argument('--no-number-scan', action='store_true',
+                   help='skip the default number-scan plot.')
     p.add_argument('--nthreads', type=int, default=2)
     p.add_argument('--mvir-lim', type=float, nargs=2, default=[11.0, 15.0],
                    metavar=('LOGMIN', 'LOGMAX'),
@@ -651,6 +732,7 @@ def main(argv=None):
 
     results = []
     tinker_zs = []
+    scan_results = {}
     for z_req in args.redshifts:
         snap = snap_nearest_z(redshifts, z_req, hdr['output_snaps'])
         z = float(redshifts[snap])
@@ -661,6 +743,9 @@ def main(argv=None):
         if not d:
             print('  no data; skipping.')
             continue
+
+        if not args.no_number_scan:
+            accumulate_number_scan(scan_results, d, z, hdr, cosmo, args, r_edges)
 
         mask, floor = select_mqg(d, z, hdr, args.ssfr0,
                                  min_logmstar=args.min_logmstar,
@@ -727,6 +812,9 @@ def main(argv=None):
                    os.path.join(args.output_dir, f'mqg_bias_vs_z{fmt}'))
     plot_xi_diagnostic(results, cosmo,
                        os.path.join(args.output_dir, f'mqg_xi_diagnostic{fmt}'))
+    if not args.no_number_scan and scan_results:
+        plot_number_scan(scan_results, tinker_zs, cosmo, args,
+                         os.path.join(args.output_dir, f'mqg_number_scan{fmt}'))
     print('\nDone.')
 
 
