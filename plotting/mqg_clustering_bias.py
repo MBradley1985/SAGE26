@@ -473,15 +473,17 @@ def plot_bias_vs_mvir(results, tinker_zs, obs, cosmo, args, out_path,
         ax.plot(np.log10(mgrid), tinker_bias(mgrid, zl, cosmo, args.mdef),
                 color=cmap(z_norm(zl)), lw=1.6, alpha=0.9)
     if mass_bin_rows:
-        for zl in sorted(set(r['z'] for r in mass_bin_rows)):
-            rr = sorted((r for r in mass_bin_rows
-                         if r['z'] == zl and np.isfinite(r['b'])),
-                        key=lambda x: x['med'])
-            if rr:
-                ax.errorbar([r['med'] for r in rr], [r['b'] for r in rr],
-                            yerr=[r['be'] for r in rr], fmt='o-',
-                            color=cmap(z_norm(zl)), ms=7, lw=1.6, mec='black',
-                            mew=0.7, capsize=3, zorder=5)
+        rr = [r for r in mass_bin_rows
+              if np.isfinite(r['b']) and np.isfinite(r['med'])]
+        if rr:
+            xm = np.array([r['med'] for r in rr])
+            bm = np.array([r['b'] for r in rr])
+            be = np.array([r['be'] for r in rr])
+            zc = np.array([r['z'] for r in rr])
+            ax.errorbar(xm, bm, yerr=be, fmt='none', ecolor='0.35',
+                        elinewidth=1.3, capsize=3, zorder=4)
+            ax.scatter(xm, bm, c=zc, cmap=cmap, norm=z_norm, s=140, marker='o',
+                       edgecolors='black', linewidths=1.2, zorder=5)
     ax.set_xlim(xlo, xhi)
     ax.set_ylim(*args.bias_lim)
     ax.set_xlabel(r'$\log_{10}(M_\mathrm{vir}\,/\,M_\odot)$  (bin median)')
