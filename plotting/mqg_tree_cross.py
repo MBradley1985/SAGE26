@@ -76,6 +76,9 @@ MDEFS = [('vir', 'M_TopHat', r'$M_\mathrm{vir}$ (tophat)'),
          ('200c', 'M200c', r'$M_\mathrm{200c}$'),
          ('200m', 'M_Mean200', r'$M_\mathrm{200m}$')]
 
+# Default host-halo-mass bin edges (log10 Msun/h) for the --mass-bins mode.
+DEFAULT_MASS_BINS = [12.0, 12.5, 13.0, 13.5, 14.0, 14.5]
+
 
 # ----- Tree halo field --------------------------------------------------------
 
@@ -279,6 +282,141 @@ def plot_massdef(results, tinker_zs, cosmo, args, out_path):
     print(f'  Saved: {out_path}')
 
 
+# ----- Halo-mass-binned mode (no number/density knob) -------------------------
+
+def galaxy_jackknife_cross(pos_g, pos_h, xi_hh, box, r_edges, z, cosmo,
+                           rmin_fit, rmax_fit, njack, nthreads):
+    """Error on b_g by jackknifing the GALAXY sample only, holding the (dense)
+    halo field fixed -- its variance is negligible, and the galaxy side
+    dominates the error for a sparse bin.  Cheap: no halo autocorr recompute."""
+    if njack < 2 or len(pos_g) < njack:
+        return np.nan
+    cg = np.clip(np.floor(np.mod(pos_g, box) / box * njack).astype(int), 0, njack - 1)
+    idg = (cg[:, 0] * njack + cg[:, 1]) * njack + cg[:, 2]
+    samples = []
+    for k in range(njack ** 3):
+        kb = pos_g[idg != k]
+        if len(kb) < 3:
+            continue
+        xgh, rm = xi_cross(kb, pos_h, box, r_edges, nthreads)
+        b_g, _ = cross_bias(xgh, xi_hh, rm, z, cosmo, rmin_fit, rmax_fit)
+        if np.isfinite(b_g):
+            samples.append(b_g)
+    s = np.array(samples)
+    if s.size < 2:
+        return np.nan
+    n = s.size
+    return float(np.sqrt((n - 1) / n * np.sum((s - s.mean()) ** 2)))
+
+
+def run_binned(args, hdr, cosmo, redshifts, r_edges):
+    """Bin the quiescent galaxies by HOST halo mass and measure the cross-
+    correlation bias per bin -- the mass scale is set by the bin, not by a
+    chosen count/density.  Quiescence is the only selection (Donnari floor)."""
+    hub = hdr['hubble_h']
+    edges = np.array(sorted(args.mass_bins) if args.mass_bins else DEFAULT_MASS_BINS,
+                     dtype=float)
+    print('  mass-bins mode: host-mass edges (log10 Msun/h) = '
+          + ', '.join(f'{e:.2f}' for e in edges))
+    need = ['StellarMass', 'CentralMvir', 'SfrDisk', 'SfrBulge',
+            'Type', 'Posx', 'Posy', 'Posz']
+    tinker_zs, rows = [], []
+    for z_req in args.redshifts:
+        snap = m.snap_nearest_z(redshifts, z_req, hdr['output_snaps'])
+        z = float(redshifts[snap])
+        if z not in tinker_zs:
+            tinker_zs.append(z)
+        print(f'\n--- z_req={z_req} -> Snap_{snap} (z={z:.3f}) ---')
+        d = m.load_snap(hdr['files'], snap, need, hdr['mass_conv'])
+        if not d:
+            print('  no galaxy data; skipping.')
+            continue
+        sm = d['StellarMass']
+        ssfr = np.where(sm > 0, (d['SfrDisk'] + d['SfrBulge']) / np.maximum(sm, 1e-30), np.inf)
+        floor = m.ssfr_floor(z, hdr['omega_m'], hdr['omega_l'], args.ssfr0)
+        q = (ssfr < floor) & (sm > 0)
+        pos_q = np.column_stack([d['Posx'][q], d['Posy'][q], d['Posz'][q]])
+        host_q = d['CentralMvir'][q] * hub                    # Msun/h
+        loghost = np.log10(np.where(host_q > 0, host_q, np.nan))
+
+        halos = read_tree_halos(args.tree_dir, args.tree_name, args.tree_nfiles,
+                                snap, args.min_len)
+        if halos is None or halos['Pos'].shape[0] < 100:
+            print('  no/too-few tree halos; skipping.')
+            continue
+        n_h_total = halos['Pos'].shape[0]
+        if 0 < args.halo_subsample < n_h_total:
+            rng = np.random.default_rng(12345 + snap)
+            pick = rng.choice(n_h_total, args.halo_subsample, replace=False)
+            halos['Pos'] = halos['Pos'][pick]
+        pos_h = halos['Pos']
+        xi_hh, rm, _ = m.xi_gg(pos_h, hdr['box'], r_edges, args.nthreads)
+        _, b_h = cross_bias(np.zeros_like(xi_hh), xi_hh, rm, z, cosmo,
+                            args.rmin_fit, args.rmax_fit)
+        print(f'  quiescent={int(q.sum())}  N_halo={pos_h.shape[0]} (of {n_h_total})  b_h={b_h:.2f}')
+
+        for i in range(edges.size - 1):
+            lo, hi = edges[i], edges[i + 1]
+            inbin = (loghost >= lo) & (loghost < hi)
+            n = int(inbin.sum())
+            if n < args.min_per_bin:
+                print(f'    [{lo:.1f},{hi:.1f})  n={n:<5d}  (below --min-per-bin; skipped)')
+                continue
+            pos_b = pos_q[inbin]
+            xgh, _ = xi_cross(pos_b, pos_h, hdr['box'], r_edges, args.nthreads)
+            b_g, _ = cross_bias(xgh, xi_hh, rm, z, cosmo, args.rmin_fit, args.rmax_fit)
+            be = galaxy_jackknife_cross(pos_b, pos_h, xi_hh, hdr['box'], r_edges, z,
+                                        cosmo, args.rmin_fit, args.rmax_fit,
+                                        args.njack, args.nthreads)
+            med = float(np.median(loghost[inbin]))
+            rows.append(dict(z=z, lo=lo, hi=hi, med=med, n=n, b=b_g, be=be, b_h=b_h))
+            print(f'    [{lo:.1f},{hi:.1f})  n={n:<5d}  med={med:.2f}  '
+                  f'b_g={b_g:.2f}+/-{be:.2f}')
+
+    if not rows:
+        sys.exit('No usable bins.')
+    os.makedirs(args.output_dir, exist_ok=True)
+    out = os.path.join(args.output_dir, f'mqg_tree_cross_massbins{args.format}')
+    plot_binned(rows, tinker_zs, cosmo, args, out)
+    print('\nDone.')
+
+
+def plot_binned(rows, tinker_zs, cosmo, args, out_path):
+    """Cross-correlation bias vs host halo mass, binned; one track per z."""
+    from matplotlib import cm
+    from matplotlib.colors import Normalize
+    from matplotlib.cm import ScalarMappable
+    znorm = Normalize(vmin=float(min(tinker_zs)), vmax=float(max(tinker_zs)))
+    cmap = cm.get_cmap('viridis')
+    mgrid = np.logspace(11, 15, 200)
+    fig, ax = plt.subplots(figsize=(9.5, 7.0), constrained_layout=True)
+    for zl in sorted(tinker_zs):
+        ax.plot(np.log10(mgrid), m.tinker_bias(mgrid / cosmo.h, zl, cosmo, 'vir'),
+                color=cmap(znorm(zl)), lw=1.4, alpha=0.85, zorder=1)
+    for zl in sorted(set(r['z'] for r in rows)):
+        rr = sorted((r for r in rows if r['z'] == zl and np.isfinite(r['b'])),
+                    key=lambda x: x['med'])
+        if not rr:
+            continue
+        x = [r['med'] for r in rr]
+        y = [r['b'] for r in rr]
+        ye = [r['be'] for r in rr]
+        ax.errorbar(x, y, yerr=ye, fmt='o-', color=cmap(znorm(zl)),
+                    ms=8, lw=1.6, mec='black', mew=0.8, capsize=3, zorder=5)
+    ax.set_xlim(11.5, 15.0)
+    ax.set_ylim(*args.bias_lim)
+    ax.set_xlabel(r'$\log_{10}(M_\mathrm{vir}^\mathrm{host}\,/\,[M_\odot/h])$  (bin median)')
+    ax.set_ylabel(r'MQG cross-correlation bias $b_g$')
+    ax.tick_params(which='both', direction='in', top=True, right=True)
+    cb = fig.colorbar(ScalarMappable(norm=znorm, cmap=cmap), ax=ax, pad=0.02)
+    cb.set_label('redshift $z$')
+    ax.set_title('Quiescent-galaxy bias binned by host halo mass '
+                 '(no count/density; curves = Tinker+10)', fontsize=11.5)
+    fig.savefig(out_path, bbox_inches='tight')
+    plt.close(fig)
+    print(f'  Saved: {out_path}')
+
+
 # ----- Driver -----------------------------------------------------------------
 
 def main(argv=None):
@@ -298,6 +436,14 @@ def main(argv=None):
                         'for the correlation measurements (0 = use all). A dense '
                         'subsample still vastly outnumbers the MQGs, so it beats '
                         'their shot noise while keeping pair counts tractable.')
+    p.add_argument('--mass-bins', type=float, nargs='*', default=None,
+                   metavar='LOGM',
+                   help='HALO-MASS-BINNED mode: bin ALL quiescent galaxies by host '
+                        'halo mass (log10 Msun/h edges) and measure the cross bias '
+                        'per bin -- NO count/density needed. Pass edges, or give the '
+                        f'flag alone for defaults {DEFAULT_MASS_BINS}.')
+    p.add_argument('--min-per-bin', type=int, default=5,
+                   help='skip a host-mass bin with fewer quiescent galaxies than this.')
     # selection (mirrors mqg_clustering_bias)
     p.add_argument('--top-percent', type=float, default=None)
     p.add_argument('--min-logmstar', type=float, default=None)
@@ -318,8 +464,9 @@ def main(argv=None):
     p.add_argument('--output-dir', default=m.DEFAULT_OUTPUT_DIR)
     p.add_argument('--format', default='.png')
     args = p.parse_args(argv)
-    if (args.number_density is None and args.min_logmstar is None
-            and args.top_percent is None and not args.match_highz_count):
+    if (args.mass_bins is None and args.number_density is None
+            and args.min_logmstar is None and args.top_percent is None
+            and not args.match_highz_count):
         args.number_density = m.DEFAULT_NUMBER_DENSITY
 
     print('=' * 72)
@@ -337,6 +484,10 @@ def main(argv=None):
         'Ob0': omega_b, 'sigma8': args.sigma_8, 'ns': args.n_s})
     hub = hdr['hubble_h']
     r_edges = np.logspace(np.log10(args.rmin), np.log10(args.rmax), args.nbins + 1)
+
+    if args.mass_bins is not None:
+        run_binned(args, hdr, cosmo, redshifts, r_edges)
+        return
 
     match_n = None
     if args.match_highz_count:

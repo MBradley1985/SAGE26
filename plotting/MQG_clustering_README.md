@@ -116,10 +116,30 @@ Run (needs the trees SAGE was run on; same `TreeName.n` binary files):
         --tree-dir <SimulationDir> --tree-name miniUchuu_STC --tree-nfiles 8 \
         --redshifts 0 0.99 1.91 2.83 3.87 --number-density 1e-5 --nthreads 8
 Selection flags mirror `mqg_clustering_bias.py`. `--min-len` (default 20) sets the
-halo resolution cut for the field. The binary struct layout (104 B) is taken from
+halo resolution cut for the field; `--halo-subsample` (default 100000) caps the
+field size so the jackknife stays tractable (a dense subsample still vastly
+outnumbers the MQGs). The binary struct layout (104 B) is taken from
 `src/core_simulation.h` (`struct halo_data`); masses are 10^10 Msun/h, Pos Mpc/h.
 This does NOT remove the volume/supply limit — it makes the measurement of the
 objects that DO exist far less noisy. Still needs a big box for high z.
+
+### Halo-mass-binned mode (`--mass-bins`) -- NO count/density knob
+The number/density selection sets the sample's mass scale through a chosen count,
+which over-reaches the massive-quiescent supply at high z. `--mass-bins` removes
+that knob entirely: it selects ALL quiescent galaxies (Donnari floor only) and
+bins them by HOST halo mass (`CentralMvir`), measuring the cross-correlation bias
+per bin. The count per bin then falls out of the halo mass function -- it is not
+chosen -- and a bin that runs out of quiescent galaxies at high z is simply
+skipped (`--min-per-bin`, default 5), not padded with satellites.
+
+    python plotting/mqg_tree_cross.py --model output/miniuchuu \
+        --tree-dir <SimulationDir> --tree-name miniUchuu_STC --tree-nfiles 8 \
+        --redshifts 0 0.99 1.91 2.83 --mass-bins --nthreads 8
+Pass edges (log10 Msun/h) after `--mass-bins`, or the flag alone for the defaults
+(12.0 12.5 13.0 13.5 14.0 14.5). Output: `mqg_tree_cross_massbins.<fmt>` -- one
+b(M_host) track per redshift vs Tinker+10. This is the recommended way to present
+the result: a physical bias-vs-halo-mass relation with no arbitrary abundance.
+Errors jackknife the galaxy sample only (dense halo field held fixed).
 
 ## Physics toggle sweep recipe
 Base `input/<sim>_vanilla.par` (physics off); enable one toggle at a time to a
