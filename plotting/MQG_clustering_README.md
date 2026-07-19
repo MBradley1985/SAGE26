@@ -94,6 +94,33 @@ If plain `Mvir` reaches ~14 -> sample is massive-central-dominated and `Mvir` ca
 be an L. If plain `Mvir` stays ~12–13 (J) while `CentralMvir` ~14 (L), then any
 "declining trend in Mvir" at ~14 was actually host mass (`CentralMvir`).
 
+## Robust bias: cross-correlation with the halo trees (`mqg_tree_cross.py`)
+The MQG *autocorrelation* is shot-noise limited when the sample is sparse — the
+high-z / rare-selection regime where a fixed count over-reaches the massive-
+quiescent supply. `mqg_tree_cross.py` cross-correlates the sparse MQG sample
+against the *dense* halo field read straight from the LHaloTree **binary** files:
+
+    b_g = xi_gh / sqrt(xi_hh * xi_mm)     (averaged over the linear fit range)
+
+The cross term pairs the few MQGs against ~10^6 halos, so its noise is set by the
+dense sample, not the MQG count. It also produces:
+- a **measured halo-bias baseline** `b_h = sqrt(xi_hh/xi_mm)` — an apples-to-apples
+  check on the analytic Tinker+10 curve (same box, cosmology, estimator, mdef);
+- a **mass-definition comparison** — MQG bias vs halo mass in `M_vir` (tophat),
+  `M_200c`, `M_200m`. The trees carry all three (`Group_M_TopHat200/Crit200/Mean200`);
+  the MQG sample's mass is converted `M_vir -> 200c/200m` with colossus using the
+  SAGE per-galaxy `Concentration`. Shows the Tinker mdef systematic (~0.1 dex).
+
+Run (needs the trees SAGE was run on; same `TreeName.n` binary files):
+    python plotting/mqg_tree_cross.py --model output/miniuchuu \
+        --tree-dir <SimulationDir> --tree-name miniUchuu_STC --tree-nfiles 8 \
+        --redshifts 0 0.99 1.91 2.83 3.87 --number-density 1e-5 --nthreads 8
+Selection flags mirror `mqg_clustering_bias.py`. `--min-len` (default 20) sets the
+halo resolution cut for the field. The binary struct layout (104 B) is taken from
+`src/core_simulation.h` (`struct halo_data`); masses are 10^10 Msun/h, Pos Mpc/h.
+This does NOT remove the volume/supply limit — it makes the measurement of the
+objects that DO exist far less noisy. Still needs a big box for high z.
+
 ## Physics toggle sweep recipe
 Base `input/<sim>_vanilla.par` (physics off); enable one toggle at a time to a
 separate output folder; measure. No source changes needed — all par-driven.
