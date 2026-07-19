@@ -129,6 +129,7 @@ DEFAULT_RMIN_FIT    = 5.0
 DEFAULT_RMAX_FIT    = 25.0
 DEFAULT_NJACK       = 3               # njack^3 sub-cubes
 DEFAULT_SCAN_NLIST  = [50, 100, 200, 500, 1000, 5000]   # top-N values for the number scan
+DEFAULT_MASS_BINS   = [10.5, 11.0, 11.5, 12.0, 12.5, 13.0, 13.5, 14.0, 14.5]   # log10 Msun (physical) bin edges
 
 PROPS_TO_LOAD = ['StellarMass', 'Mvir', 'CentralMvir', 'SfrDisk', 'SfrBulge',
                  'Posx', 'Posy', 'Posz', 'Type']
@@ -589,7 +590,7 @@ def plot_number_scan(scan_results, tinker_zs, cosmo, args, out_path):
         return
     norm = LogNorm(vmin=min(n_list), vmax=max(n_list))
     cmap = plt.get_cmap('plasma')
-    mgrid = np.logspace(11, 15, 200)
+    mgrid = np.logspace(10, 15, 200)
     fig, axes = plt.subplots(1, 2, figsize=(15.0, 6.6), sharey=True,
                              constrained_layout=True)
 
@@ -607,7 +608,7 @@ def plot_number_scan(scan_results, tinker_zs, cosmo, args, out_path):
             b = np.array([rows[i]['b'] for i in o])
             ax.plot(x, b, '-', color=cmap(norm(N)), lw=1.8, marker='o', ms=6,
                     mec='black', mew=0.5, zorder=4)
-        ax.set_xlim(11.0, 15.0)
+        ax.set_xlim(10.0, 15.0)
         ax.set_ylim(0.0, 8.0)
         ax.set_xlabel(r'$\log_{10}(M\,/\,M_\odot)$  (sample median)')
         ax.tick_params(which='both', direction='in', top=True, right=True)
@@ -623,6 +624,94 @@ def plot_number_scan(scan_results, tinker_zs, cosmo, args, out_path):
     fig.suptitle('MQG bias vs halo mass: number scan (each track a fixed top-N; '
                  'grey=Tinker+10). Small N: massive, declining L;  large N: flat J.',
                  fontsize=12)
+    fig.savefig(out_path, bbox_inches='tight')
+    plt.close(fig)
+    print(f'  Saved: {out_path}')
+
+
+# ----- Mass-binned validation mode (trees-free) -------------------------------
+
+def accumulate_mass_bins(rows, d, z, hdr, cosmo, args, r_edges, edges):
+    """For the loaded snapshot, bin quiescent galaxies by their own Mvir and
+    measure each bin's autocorrelation bias, appending (z, bin) rows.  Feeds the
+    default b(Mvir,z) validation figure -- no count/density, no trees."""
+    sm = d['StellarMass']
+    ssfr = np.where(sm > 0, (d['SfrDisk'] + d['SfrBulge']) / np.maximum(sm, 1e-30), np.inf)
+    floor = ssfr_floor(z, hdr['omega_m'], hdr['omega_l'], args.ssfr0)
+    q = (ssfr < floor) & (sm > 0)
+    mv = d['Mvir']                                        # physical Msun
+    pos_all = np.column_stack([d['Posx'], d['Posy'], d['Posz']])
+    logmv = np.log10(np.where(mv > 0, mv, np.nan))
+    print(f'  mass-bins: {int(q.sum())} quiescent')
+    for i in range(edges.size - 1):
+        lo, hi = edges[i], edges[i + 1]
+        inbin = q & (logmv >= lo) & (logmv < hi)
+        n = int(inbin.sum())
+        if n < args.min_per_bin:
+            print(f'    [{lo:.1f},{hi:.1f})  n={n:<5d}  (below --min-per-bin; skipped)')
+            continue
+        pos = pos_all[inbin]
+        xi_g, rm, _ = xi_gg(pos, hdr['box'], r_edges, args.nthreads)
+        b, _, _ = bias_from_ratio(xi_g, rm, z, cosmo, args.rmin_fit, args.rmax_fit)
+        be = jackknife_bias(pos, hdr['box'], r_edges, z, cosmo,
+                            args.rmin_fit, args.rmax_fit, args.njack, args.nthreads)
+        med = float(np.median(logmv[inbin]))
+        rows.append(dict(z=z, lo=lo, hi=hi, med=med, n=n, b=b, be=be))
+        print(f'    [{lo:.1f},{hi:.1f})  n={n:<5d}  med={med:.2f}  b={b:.2f}+/-{be:.2f}')
+
+
+def plot_binned_auto(rows, tinker_zs, obs, cosmo, args, out_path):
+    """b(Mvir,z) binned (one track per z) vs Tinker+10 and observations.
+    Axis is physical Msun (matches the obs file); no h-shift needed."""
+    from matplotlib.colors import Normalize
+    from matplotlib.cm import ScalarMappable
+    zmodel = list(tinker_zs)
+    zall = zmodel + ([float(zz) for zz in obs['z'] if np.isfinite(zz)]
+                     if obs is not None else [])
+    znorm = Normalize(vmin=min(zall), vmax=max(zall))
+    cmap = plt.get_cmap('viridis')
+    xlo, xhi = args.mvir_lim
+    mgrid = np.logspace(xlo, xhi, 200)
+    fig, ax = plt.subplots(figsize=(10.0, 7.2), constrained_layout=True)
+    for zl in sorted(tinker_zs):
+        ax.plot(np.log10(mgrid), tinker_bias(mgrid, zl, cosmo, args.mdef),
+                color=cmap(znorm(zl)), lw=1.4, alpha=0.85, zorder=1)
+    for zl in sorted(set(r['z'] for r in rows)):
+        rr = sorted((r for r in rows if r['z'] == zl and np.isfinite(r['b'])),
+                    key=lambda x: x['med'])
+        if not rr:
+            continue
+        ax.errorbar([r['med'] for r in rr], [r['b'] for r in rr],
+                    yerr=[r['be'] for r in rr], fmt='o-', color=cmap(znorm(zl)),
+                    ms=8, lw=1.6, mec='black', mew=0.8, capsize=3, zorder=5,
+                    label=f'model $z={zl:.2f}$')
+    if obs is not None and np.isfinite(obs['bias']).any():
+        refidx = _obs_refidx(obs)
+        xerr = np.where(np.isfinite(obs['logMhalo_err']) & (obs['logMhalo_err'] > 0),
+                        obs['logMhalo_err'], np.nan)
+        yerr = np.where(np.isfinite(obs['bias_err']) & (obs['bias_err'] > 0),
+                        obs['bias_err'], np.nan)
+        ax.errorbar(obs['logMhalo'], obs['bias'], xerr=xerr, yerr=yerr, fmt='none',
+                    ecolor='0.5', elinewidth=1.0, capsize=2, zorder=6)
+        ax.scatter(obs['logMhalo'], obs['bias'], c=obs['z'], cmap=cmap, norm=znorm,
+                   s=180, marker='*', edgecolors='black', linewidths=1.0, zorder=7)
+        for xi, yi, rf in zip(obs['logMhalo'], obs['bias'], obs['ref']):
+            if np.isfinite(xi) and np.isfinite(yi):
+                ax.annotate(f'[{refidx[rf]}]', (xi, yi), textcoords='offset points',
+                            xytext=(5, 4), fontsize=7, zorder=8)
+        cap = '  '.join(f'[{i}] {r}' for r, i in refidx.items())
+        fig.text(0.01, -0.02, 'obs: ' + cap, fontsize=7, ha='left', va='top')
+    ax.set_xlim(xlo, xhi)
+    ax.set_ylim(*args.bias_lim)
+    ax.set_xlabel(r'$\log_{10}(M_\mathrm{vir}\,/\,M_\odot)$  (bin median)')
+    ax.set_ylabel(r'large-scale bias $b$')
+    ax.tick_params(which='both', direction='in', top=True, right=True)
+    ax.legend(loc='upper left', frameon=False, fontsize=8, ncol=2)
+    cb = fig.colorbar(ScalarMappable(norm=znorm, cmap=cmap), ax=ax, pad=0.02)
+    cb.set_label(r'redshift $z$')
+    ax.set_title('Model validation: quiescent-galaxy bias vs Mvir '
+                 '(lines=Tinker+10, circles=model binned by Mvir, stars=obs)',
+                 fontsize=11)
     fig.savefig(out_path, bbox_inches='tight')
     plt.close(fig)
     print(f'  Saved: {out_path}')
@@ -684,6 +773,16 @@ def main(argv=None):
                    help='Observational bias compilation to overlay '
                         '(z logMhalo logMhalo_err bias bias_err reference). '
                         'Pass "none" to disable.')
+    p.add_argument('--mass-bins', type=float, nargs='+', default=DEFAULT_MASS_BINS,
+                   metavar='LOGM',
+                   help='Mvir bin edges (log10 Msun, physical) for the DEFAULT '
+                        'b(Mvir,z) validation figure -- ALL quiescent galaxies '
+                        'binned by their own Mvir, per-bin autocorrelation bias, '
+                        'no count/density. Override the edges here.')
+    p.add_argument('--no-mass-bins', action='store_true',
+                   help='skip the default b(Mvir,z) mass-binned validation figure.')
+    p.add_argument('--min-per-bin', type=int, default=5,
+                   help='skip an Mvir bin with fewer quiescent galaxies than this.')
     args = p.parse_args(argv)
 
     # Recommended default: constant-abundance selection.  Only applied when the
@@ -745,10 +844,12 @@ def main(argv=None):
 
     r_edges = np.logspace(np.log10(args.rmin), np.log10(args.rmax),
                           args.nbins + 1)
+    mass_edges = np.array(sorted(args.mass_bins), dtype=float)
 
     results = []
     tinker_zs = []
     scan_results = {}
+    mass_bin_rows = []
     for z_req in args.redshifts:
         snap = snap_nearest_z(redshifts, z_req, hdr['output_snaps'])
         z = float(redshifts[snap])
@@ -762,6 +863,8 @@ def main(argv=None):
 
         if not args.no_number_scan:
             accumulate_number_scan(scan_results, d, z, hdr, cosmo, args, r_edges)
+        if not args.no_mass_bins:
+            accumulate_mass_bins(mass_bin_rows, d, z, hdr, cosmo, args, r_edges, mass_edges)
 
         mask, floor = select_mqg(d, z, hdr, args.ssfr0,
                                  min_logmstar=args.min_logmstar,
@@ -831,6 +934,9 @@ def main(argv=None):
     if not args.no_number_scan and scan_results:
         plot_number_scan(scan_results, tinker_zs, cosmo, args,
                          os.path.join(args.output_dir, f'mqg_number_scan{fmt}'))
+    if not args.no_mass_bins and mass_bin_rows:
+        plot_binned_auto(mass_bin_rows, tinker_zs, obs, cosmo, args,
+                         os.path.join(args.output_dir, f'mqg_bias_massbins{fmt}'))
     print('\nDone.')
 
 

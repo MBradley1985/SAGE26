@@ -94,6 +94,25 @@ If plain `Mvir` reaches ~14 -> sample is massive-central-dominated and `Mvir` ca
 be an L. If plain `Mvir` stays ~12–13 (J) while `CentralMvir` ~14 (L), then any
 "declining trend in Mvir" at ~14 was actually host mass (`CentralMvir`).
 
+## Validation figure, trees-free (default: `mqg_bias_massbins`)
+The recommended way to present the result and to validate the model needs NO trees
+and NO count/density knob, and it is produced BY DEFAULT on every run. The script
+selects ALL quiescent galaxies (Donnari floor only), bins them by their own
+`Mvir`, and measures each bin's autocorrelation bias -- producing `b(Mvir, z)`
+(one track per redshift) overlaid on Tinker+10 AND the observational compilation
+(`mqg_bias_massbins.<fmt>`). The count per bin falls out of the mass function; a
+bin that runs out of quiescent galaxies is skipped (`--min-per-bin`), not padded.
+
+    python plotting/mqg_clustering_bias.py --model output/miniuchuu \
+        --redshifts 0 0.99 1.91 2.83 --mvir-lim 11 15
+
+`--mass-bins <edges>` overrides the bin edges (log10 Msun, physical; default
+11.0 11.5 ... 14.5); `--no-mass-bins` skips the figure. This is the figure to show
+for "is the model right": it tests `b(Mvir,z)` against theory and data (the
+external benchmark), not against any prior figure. Well-populated bins (low-z,
+~<10^13.5) are robust from autocorrelation alone; the sparse massive/high-z bins
+are noisy -- that is exactly what the cross-correlation upgrade below fixes.
+
 ## Robust bias: cross-correlation with the halo trees (`mqg_tree_cross.py`)
 The MQG *autocorrelation* is shot-noise limited when the sample is sparse — the
 high-z / rare-selection regime where a fixed count over-reaches the massive-
