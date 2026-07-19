@@ -251,15 +251,32 @@ def ssfr_floor(z, omega_m, omega_l, ssfr0):
     return ssfr0 * e_z
 
 
-def select_mqg(d, z, hdr, min_logmstar, ssfr0):
-    """Boolean mask of massive quiescent galaxies; also returns the floor used."""
+def select_mqg(d, z, hdr, min_logmstar, ssfr0, number_density=None):
+    """Boolean mask of massive quiescent galaxies; also returns the floor used.
+
+    Quiescence is always the Donnari-style evolving sSFR floor.  "Massive" is
+    defined one of two ways:
+      * fixed stellar-mass cut  log10(M*) > min_logmstar   (default), or
+      * constant comoving number density (if number_density is not None): take
+        the N most massive quiescent galaxies with N = number_density * box^3
+        (box in Mpc/h, number_density in (Mpc/h)^-3).  This abundance-matched
+        selection yields BCG-scale hosts at z=0 that decline with redshift, and
+        keeps a sample at every snapshot -- the way to reach ~10^14 hosts.
+    """
     sm = d['StellarMass']
     sfr = d['SfrDisk'] + d['SfrBulge']
     ssfr = np.where(sm > 0, sfr / np.maximum(sm, 1e-30), np.inf)
     floor = ssfr_floor(z, hdr['omega_m'], hdr['omega_l'], ssfr0)
-    massive = sm > 10.0 ** min_logmstar
-    quiescent = ssfr < floor
-    return (massive & quiescent & (sm > 0)), floor
+    quiescent = (ssfr < floor) & (sm > 0)
+    if number_density is not None:
+        n_target = int(round(number_density * hdr['box'] ** 3))
+        qidx = np.where(quiescent)[0]
+        mask = np.zeros(sm.shape, dtype=bool)
+        if qidx.size and n_target > 0:
+            top = qidx[np.argsort(-sm[qidx])[:n_target]]   # N most massive quiescent
+            mask[top] = True
+        return mask, floor
+    return ((sm > 10.0 ** min_logmstar) & quiescent), floor
 
 
 # ----- Correlation function ---------------------------------------------------
@@ -513,6 +530,12 @@ def main(argv=None):
     p.add_argument('--model', default=DEFAULT_MODEL)
     p.add_argument('--redshifts', type=float, nargs='+', default=DEFAULT_REDSHIFTS)
     p.add_argument('--min-logmstar', type=float, default=DEFAULT_MIN_LOGMSTAR)
+    p.add_argument('--number-density', type=float, default=None,
+                   help='Constant comoving number density (Mpc/h)^-3: instead of a '
+                        'fixed --min-logmstar cut, select the N most massive quiescent '
+                        'galaxies with N = n * box^3. Abundance-matched, BCG-scale '
+                        'sample that reaches ~10^14 hosts (try 1e-5 to 1e-4). '
+                        'Assumes the full box volume.')
     p.add_argument('--ssfr0', type=float, default=DEFAULT_SSFR0,
                    help='z=0 sSFR quiescence boundary in 1/yr (evolves as E(z)).')
     p.add_argument('--sigma-8', type=float, default=DEFAULT_SIGMA_8)
@@ -558,8 +581,13 @@ def main(argv=None):
           f'box = {hdr["box"]:.1f} Mpc/h)')
     print(f'  cosmo: Om={hdr["omega_m"]}, OL={hdr["omega_l"]}, h={hdr["hubble_h"]}, '
           f'Ob={omega_b:.4f}, sigma8={args.sigma_8}, ns={args.n_s}')
-    print(f'  MQG: log10(M*/Msun) > {args.min_logmstar}, '
-          f'sSFR < {args.ssfr0:.2e} * E(z) /yr')
+    if args.number_density is not None:
+        n_box = int(round(args.number_density * hdr['box'] ** 3))
+        print(f'  MQG: top-{n_box} most massive quiescent (n={args.number_density:.1e} '
+              f'(Mpc/h)^-3), sSFR < {args.ssfr0:.2e} * E(z) /yr')
+    else:
+        print(f'  MQG: log10(M*/Msun) > {args.min_logmstar}, '
+              f'sSFR < {args.ssfr0:.2e} * E(z) /yr')
 
     cosmo = cosmology.setCosmology('sage', {
         'flat': True, 'H0': hdr['hubble_h'] * 100.0, 'Om0': hdr['omega_m'],
@@ -587,7 +615,8 @@ def main(argv=None):
             print('  no data; skipping.')
             continue
 
-        mask, floor = select_mqg(d, z, hdr, args.min_logmstar, args.ssfr0)
+        mask, floor = select_mqg(d, z, hdr, args.min_logmstar, args.ssfr0,
+                                 args.number_density)
         n_mqg = int(mask.sum())
         print(f'  sSFR floor = {floor:.3e} /yr;  N_MQG = {n_mqg}')
         if n_mqg < 50:

@@ -44,6 +44,17 @@ Cosmology (Om, OL, h, box) is read from the SAGE header; pass `--sigma-8`/`--n-s
 to match the simulation (defaults are Uchuu/Planck-15). Observational overlay:
 `data/clustering/quiescent_bias_obs.dat` (edit or `--obs-file none`).
 
+Sample selection -- "massive" is defined one of two ways:
+- `--min-logmstar 10.5` (default): fixed stellar-mass cut. Number-dominated by
+  L* quiescents -> median host ~10^12.8, plain Mvir a "J" (see below).
+- `--number-density 1e-5` [(Mpc/h)^-3]: take the N = n*box^3 most massive
+  quiescent galaxies per snapshot (constant comoving abundance). This is how you
+  reach BCG-scale hosts (~10^14) that decline with z, matching an abundance-
+  matched reference sample. It is central-dominated, so plain `Mvir` ~=
+  `CentralMvir` (the J collapses toward the L). Dial n: ~1e-4 -> ~10^13.7 hosts,
+  ~1e-5 -> ~10^14. (Assumes the full box; needs >=N quiescent galaxies per snap,
+  so the highest-z bins may drop out on smaller boxes.)
+
 ## Key result (established on microUchuu; structural, so volume-independent)
 - **bias vs plain `Mvir` is a "J"**: the z=0 median `Mvir` hooks back to LOW mass,
   because at z=0 the quenched sample is flooded by stripped satellites (low
