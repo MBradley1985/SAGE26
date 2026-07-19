@@ -440,30 +440,95 @@ def _bias_mvir_panel(ax, results, tinker_zs, obs, cosmo, args, mkey,
     return sc
 
 
-def plot_bias_vs_mvir(results, tinker_zs, obs, cosmo, args, out_path):
+def plot_bias_vs_mvir(results, tinker_zs, obs, cosmo, args, out_path,
+                      scan_results=None, mass_bin_rows=None):
+    """2x2: (a) host CentralMvir, (b) subhalo Mvir, (c) Mvir-binned median,
+    (d) number-of-galaxies scan.  Panels a/b/c are z-coloured; d is N-coloured."""
+    from matplotlib.colors import LogNorm
+    from matplotlib.cm import ScalarMappable
     obs_zmax = float(np.nanmax(obs['z'])) if obs is not None else 0.0
     z_max = max(max(tinker_zs, default=0.0),
                 max((r['z'] for r in results), default=0.0), obs_zmax, 1e-3)
     z_norm = plt.Normalize(vmin=0.0, vmax=z_max)
     cmap = plt.get_cmap('viridis')
     refidx = _obs_refidx(obs)
+    xlo, xhi = args.mvir_lim
+    mgrid = np.logspace(xlo, xhi, 200)
 
-    fig, axes = plt.subplots(1, 2, figsize=(15.5, 6.8), sharey=True,
+    fig, axes = plt.subplots(2, 2, figsize=(16.0, 13.0), sharey=True,
                              constrained_layout=True)
 
     sc = _bias_mvir_panel(
-        axes[0], results, tinker_zs, obs, cosmo, args, 'logmv_cen',
+        axes[0, 0], results, tinker_zs, obs, cosmo, args, 'logmv_cen',
         z_norm, cmap,
         r'(a) host halo mass  $M_\mathrm{vir}^\mathrm{host}$ (CentralMvir)', refidx)
     _bias_mvir_panel(
-        axes[1], results, tinker_zs, obs, cosmo, args, 'logmv_sub',
+        axes[0, 1], results, tinker_zs, obs, cosmo, args, 'logmv_sub',
         z_norm, cmap,
         r'(b) subhalo mass  $M_\mathrm{vir}$ (stripped for satellites)', refidx)
-    axes[0].set_ylabel(r'large-scale bias $b$')
 
-    # colorbar to the RIGHT of both panels (constrained_layout keeps it off the axes)
-    cb = fig.colorbar(sc, ax=axes, location='right', pad=0.02, shrink=0.9)
+    # (c) binned by Mvir: one median track per redshift (no count/density knob)
+    ax = axes[1, 0]
+    for zl in sorted(tinker_zs):
+        ax.plot(np.log10(mgrid), tinker_bias(mgrid, zl, cosmo, args.mdef),
+                color=cmap(z_norm(zl)), lw=1.6, alpha=0.9)
+    if mass_bin_rows:
+        for zl in sorted(set(r['z'] for r in mass_bin_rows)):
+            rr = sorted((r for r in mass_bin_rows
+                         if r['z'] == zl and np.isfinite(r['b'])),
+                        key=lambda x: x['med'])
+            if rr:
+                ax.errorbar([r['med'] for r in rr], [r['b'] for r in rr],
+                            yerr=[r['be'] for r in rr], fmt='o-',
+                            color=cmap(z_norm(zl)), ms=7, lw=1.6, mec='black',
+                            mew=0.7, capsize=3, zorder=5)
+    ax.set_xlim(xlo, xhi)
+    ax.set_ylim(*args.bias_lim)
+    ax.set_xlabel(r'$\log_{10}(M_\mathrm{vir}\,/\,M_\odot)$  (bin median)')
+    ax.tick_params(which='both', direction='in', top=True, right=True)
+    ax.set_title(r'(c) binned by $M_\mathrm{vir}$ (median per bin; no count/density)',
+                 fontsize=12)
+
+    # (d) number scan: one track per top-N (subhalo Mvir), coloured by N
+    ax = axes[1, 1]
+    for zl in sorted(tinker_zs):
+        ax.plot(np.log10(mgrid), tinker_bias(mgrid, zl, cosmo, args.mdef),
+                color='0.85', lw=1.0, zorder=1)
+    smN = None
+    n_list = sorted(scan_results) if scan_results else []
+    if n_list:
+        nnorm = LogNorm(vmin=min(n_list), vmax=max(n_list))
+        pcmap = plt.get_cmap('plasma')
+        for N in n_list:
+            rows = [r for r in scan_results[N]
+                    if np.isfinite(r['b']) and np.isfinite(r['sub'])]
+            if not rows:
+                continue
+            o = np.argsort([r['z'] for r in rows])
+            ax.plot(np.array([rows[i]['sub'] for i in o]),
+                    np.array([rows[i]['b'] for i in o]), '-',
+                    color=pcmap(nnorm(N)), lw=1.8, marker='o', ms=6,
+                    mec='black', mew=0.5, zorder=4)
+        smN = ScalarMappable(norm=nnorm, cmap=pcmap)
+        smN.set_array([])
+    ax.set_xlim(xlo, xhi)
+    ax.set_ylim(*args.bias_lim)
+    ax.set_xlabel(r'$\log_{10}(M_\mathrm{vir}\,/\,M_\odot)$  (sample median)')
+    ax.tick_params(which='both', direction='in', top=True, right=True)
+    ax.set_title(r'(d) subhalo $M_\mathrm{vir}$ vs number of galaxies (top-$N$)',
+                 fontsize=12)
+
+    axes[0, 0].set_ylabel(r'large-scale bias $b$')
+    axes[1, 0].set_ylabel(r'large-scale bias $b$')
+
+    # z colorbar for the top row (a, b; also the scheme for c); N colorbar bottom
+    cb = fig.colorbar(sc, ax=[axes[0, 0], axes[0, 1]], location='right',
+                      pad=0.02, shrink=0.9)
     cb.set_label(r'redshift $z$')
+    if smN is not None:
+        cbN = fig.colorbar(smN, ax=[axes[1, 0], axes[1, 1]], location='right',
+                           pad=0.02, shrink=0.9)
+        cbN.set_label(r'$N$ (top-$N$ most massive quiescent)')
 
     meas_handle = Line2D([0], [0], marker='o', color='0.6', markeredgecolor='black',
                          markersize=11, lw=0, label='Measured MQG (this work)')
@@ -475,13 +540,13 @@ def plot_bias_vs_mvir(results, tinker_zs, obs, cosmo, args, out_path):
                               markeredgecolor='black', markersize=15, lw=0,
                               label='Observed quiescent/passive'))
     handles.append(tinker_handle)
-    axes[0].legend(handles=handles, loc='upper left', frameon=False, fontsize=9)
+    axes[0, 0].legend(handles=handles, loc='upper left', frameon=False, fontsize=9)
 
     if refidx is not None:
         caption = 'Obs: ' + ';  '.join(f'[{i}] {r}' for r, i in refidx.items())
-        fig.text(0.5, 0.02, caption, ha='center', va='bottom', fontsize=7.5)
-    fig.suptitle('MQG clustering bias vs halo mass through time — '
-                 'host (CentralMvir) vs subhalo (Mvir) definition', fontsize=13)
+        fig.text(0.5, -0.03, caption, ha='center', va='top', fontsize=7.5)
+    fig.suptitle('MQG clustering bias vs halo mass — (a) host, (b) subhalo, '
+                 '(c) Mvir-binned median, (d) vs number of galaxies', fontsize=13)
     fig.savefig(out_path, bbox_inches='tight')
     plt.close(fig)
     print(f'  Saved: {out_path}')
@@ -560,15 +625,14 @@ def accumulate_number_scan(scan_results, d, z, hdr, cosmo, args, r_edges):
     """For the snapshot in `d`, measure bias + median host/subhalo mass of the
     top-N most massive quiescent for each N in args.scan_n_list, appending to
     scan_results[N].  The quiescent list is sorted once and sliced per N."""
-    hub = hdr['hubble_h']
     sm = d['StellarMass']
     ssfr = np.where(sm > 0, (d['SfrDisk'] + d['SfrBulge']) / np.maximum(sm, 1e-30), np.inf)
     floor = ssfr_floor(z, hdr['omega_m'], hdr['omega_l'], args.ssfr0)
     order = np.where((ssfr < floor) & (sm > 0))[0]
     order = order[np.argsort(-sm[order])]
     pos_all = np.column_stack([d['Posx'], d['Posy'], d['Posz']])
-    cmv = d['CentralMvir'] * hub
-    mv = d['Mvir'] * hub
+    cmv = d['CentralMvir']                                # physical Msun
+    mv = d['Mvir']
     _lm = lambda x: float(np.log10(np.median(x[x > 0]))) if np.any(x > 0) else np.nan
     for N in args.scan_n_list:
         sel = order[:N]
@@ -926,7 +990,8 @@ def main(argv=None):
     os.makedirs(args.output_dir, exist_ok=True)
     fmt = args.format
     plot_bias_vs_mvir(results, tinker_zs, obs, cosmo, args,
-                      os.path.join(args.output_dir, f'mqg_bias_vs_mvir{fmt}'))
+                      os.path.join(args.output_dir, f'mqg_bias_vs_mvir{fmt}'),
+                      scan_results=scan_results, mass_bin_rows=mass_bin_rows)
     plot_bias_vs_z(results, obs,
                    os.path.join(args.output_dir, f'mqg_bias_vs_z{fmt}'))
     plot_xi_diagnostic(results, cosmo,
