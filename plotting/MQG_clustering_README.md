@@ -15,8 +15,18 @@ Tinker et al. (2010) halo bias.
    masses. Plots bias vs both `CentralMvir` (host) and `Mvir` (subhalo).
 
 ## Dependencies
-`Corrfunc`, `colossus`, `numpy`, `h5py`, `matplotlib`, `scipy`.
-(On a new machine: `pip install Corrfunc colossus`.)
+`Corrfunc`, `colossus`, `numpy`, `scipy`, `h5py`, `matplotlib`, `astropy`.
+Corrfunc is the only one that compiles (needs a C compiler + GSL).
+
+On an Lmod (module) cluster -- no conda:
+    bash plotting/setup_clustering_env.sh          # builds venv on top of modules
+    source $HOME/envs/sage-clustering/bin/activate
+    sbatch plotting/run_clustering_ozstar.sh        # SLURM run template
+Edit the `ml load gcc gsl python hdf5` line in those two scripts to your site's
+module names (`module spider gcc gsl python hdf5`). Build Corrfunc on a COMPUTE
+node (interactive job) so its SIMD matches the run nodes. Deps are pinned in
+`plotting/requirements-clustering.txt`. The script forces the Agg backend and
+drops LaTeX text automatically when no `latex` is on PATH, so it runs headless.
 
 ## Run
     python plotting/mqg_clustering_bias.py \

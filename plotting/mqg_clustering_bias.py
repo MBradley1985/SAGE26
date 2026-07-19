@@ -59,11 +59,14 @@ Notes
 import argparse
 import glob
 import os
+import shutil
 import sys
 import warnings
 
 import numpy as np
 import h5py as h5
+import matplotlib
+matplotlib.use('Agg')          # headless: write figures without a display (HPC-safe)
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
@@ -84,6 +87,10 @@ except Exception:
 _STYLE = './plotting/kieren_cohare_palatino_sty.mplstyle'
 if os.path.exists(_STYLE):
     plt.style.use(_STYLE)
+# The style enables LaTeX text; fall back to mathtext on nodes without a TeX
+# install (compute nodes usually lack one) so figures render instead of crashing.
+if shutil.which('latex') is None:
+    plt.rcParams['text.usetex'] = False
 plt.rcParams['figure.facecolor'] = 'white'
 plt.rcParams['axes.facecolor'] = 'white'
 plt.rcParams['axes.edgecolor'] = 'black'
