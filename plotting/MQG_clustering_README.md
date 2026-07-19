@@ -45,16 +45,22 @@ to match the simulation (defaults are Uchuu/Planck-15). Observational overlay:
 `data/clustering/quiescent_bias_obs.dat` (edit or `--obs-file none`).
 
 Sample selection -- quiescence is always the Donnari sSFR floor; "massive" is
-defined by ONE of these (later flags override earlier ones):
-- `--top-percent P` (DEFAULT): the most massive P%% of ALL galaxies per snapshot
+defined by ONE of these (an explicit flag always overrides the default):
+- `--number-density n` [(Mpc/h)^-3] (**RECOMMENDED DEFAULT**, n = 1e-4): the
+  N = n*box^3 most massive quiescent galaxies -- a constant comoving abundance.
+  This picks the massive, central-dominated host population (plain `Mvir` ~=
+  `CentralMvir`) that traces the clean declining bias-vs-mass trend, with plenty
+  of objects for a robust `xi_gg` on a big box. On miniUchuu (400 Mpc/h) this is
+  N ~ 6400; on Uchuu it scales with the volume. Go lower (~1.5e-5, N ~ 1000 on
+  miniUchuu) for the most extreme massive-central trend (the number-scan sweet
+  spot); below ~1e-5 the sample becomes shot-noise limited and the trend breaks
+  down. A value >=1 is instead read as a plain COUNT (e.g. `--number-density
+  500`). Applied automatically when no other selection flag is passed.
+- `--top-percent P`: the most massive P%% of ALL galaxies per snapshot
   (per-snapshot M* percentile), then quiescent. Broad, tends satellite-heavy ->
   plain `Mvir` a "J". Note P is of the whole galaxy population, so even a small P
   is not necessarily BCG-scale.
 - `--min-logmstar X`: fixed stellar-mass cut log10(M*) > X.
-- `--number-density n` [(Mpc/h)^-3]: the N = n*box^3 most massive quiescent
-  galaxies (constant comoving abundance). Reaches BCG-scale hosts (~10^14) that
-  decline with z; central-dominated, so plain `Mvir` ~= `CentralMvir` (J -> L).
-  Try n ~ 1e-4 (~10^13.7) to 1e-5 (~10^14). Assumes the full box.
 - `--match-highz-count`: count the quiescent galaxies at the HIGHEST requested
   redshift and select that same number (most massive quiescent) at every z --
   abundance-matched to the high-z quiescent count. The sample's mass scale is set

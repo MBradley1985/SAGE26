@@ -99,8 +99,16 @@ plt.rcParams['axes.edgecolor'] = 'black'
 # ----- Defaults ---------------------------------------------------------------
 
 DEFAULT_MODEL       = './output/microuchuu/'
-DEFAULT_REDSHIFTS   = [0.0, 0.5, 1.0, 2.0, 3.0]
+DEFAULT_REDSHIFTS   = [0.0, 0.99, 1.91, 2.83, 3.87, 4.89]
 DEFAULT_MIN_LOGMSTAR = 10.5
+# Recommended default selection: a constant comoving abundance of the most
+# massive quiescent galaxies.  This picks the massive, central-dominated host
+# population (host Mvir ~= CentralMvir) that traces the clean declining
+# bias-vs-mass trend, with enough objects for a robust xi_gg on a big box.
+# On miniUchuu (400 Mpc/h) 1e-4 is N ~ 6400; on Uchuu it scales with the
+# volume.  Go lower (~1.5e-5, N ~ 1000 on miniUchuu) for the most extreme
+# massive-central trend; below ~1e-5 the sample becomes shot-noise limited.
+DEFAULT_NUMBER_DENSITY = 1.0e-4      # (Mpc/h)^-3
 DEFAULT_SSFR0       = 1.0e-11        # z=0 quiescence boundary (Donnari fixed cut)
 DEFAULT_OUTPUT_DIR  = './output/mqg_clustering/'
 DEFAULT_FORMAT      = '.pdf'
@@ -627,17 +635,19 @@ def main(argv=None):
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--model', default=DEFAULT_MODEL)
     p.add_argument('--redshifts', type=float, nargs='+', default=DEFAULT_REDSHIFTS)
-    p.add_argument('--top-percent', type=float, default=0.5,
-                   help='DEFAULT selection: keep the most massive TOP-PERCENT%% of all '
-                        'galaxies at each snapshot (per-snapshot M* percentile), then '
-                        'quiescent. Overridden by --min-logmstar or --number-density.')
+    p.add_argument('--top-percent', type=float, default=None,
+                   help='Alternative selection: keep the most massive TOP-PERCENT%% of '
+                        'all galaxies at each snapshot (per-snapshot M* percentile), '
+                        'then quiescent. Overrides the default number density.')
     p.add_argument('--min-logmstar', type=float, default=None,
-                   help='Fixed stellar-mass cut log10(M*/Msun); overrides --top-percent.')
+                   help='Alternative selection: fixed stellar-mass cut log10(M*/Msun). '
+                        'Overrides the default number density.')
     p.add_argument('--number-density', type=float, default=None,
-                   help='Select the N most massive quiescent galaxies. A value >=1 is '
-                        'a plain COUNT (e.g. 100, 500); a value <1 is a comoving number '
-                        'density (Mpc/h)^-3, N=n*box^3 (e.g. 1e-5 -> ~10^14 hosts). '
-                        'Overrides --top-percent/--min-logmstar.')
+                   help=f'Select the N most massive quiescent galaxies at a constant '
+                        f'comoving abundance. A value >=1 is a plain COUNT (e.g. 100, '
+                        f'500); a value <1 is a density (Mpc/h)^-3, N=n*box^3 '
+                        f'(e.g. 1e-5 -> ~10^14 hosts). RECOMMENDED DEFAULT when no '
+                        f'selection flag is given: {DEFAULT_NUMBER_DENSITY:.1e} (Mpc/h)^-3.')
     p.add_argument('--match-highz-count', action='store_true',
                    help='Count the quiescent galaxies at the HIGHEST requested redshift '
                         'and select that same number (most massive quiescent) at every '
@@ -662,7 +672,7 @@ def main(argv=None):
     p.add_argument('--no-number-scan', action='store_true',
                    help='skip the default number-scan plot.')
     p.add_argument('--nthreads', type=int, default=2)
-    p.add_argument('--mvir-lim', type=float, nargs=2, default=[11.0, 15.0],
+    p.add_argument('--mvir-lim', type=float, nargs=2, default=[10.0, 15.0],
                    metavar=('LOGMIN', 'LOGMAX'),
                    help='x-axis range for the bias-vs-Mvir figure (log10 Msun).')
     p.add_argument('--bias-lim', type=float, nargs=2, default=[0.0, 8.5],
@@ -675,6 +685,12 @@ def main(argv=None):
                         '(z logMhalo logMhalo_err bias bias_err reference). '
                         'Pass "none" to disable.')
     args = p.parse_args(argv)
+
+    # Recommended default: constant-abundance selection.  Only applied when the
+    # user gave no explicit selection flag (an explicit flag always wins).
+    if (args.number_density is None and args.min_logmstar is None
+            and args.top_percent is None and not args.match_highz_count):
+        args.number_density = DEFAULT_NUMBER_DENSITY
 
     print('=' * 72)
     print('MQG clustering bias through time (measured xi_gg/xi_mm vs Tinker+10)')
