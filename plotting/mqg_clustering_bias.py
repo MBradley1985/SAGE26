@@ -275,7 +275,9 @@ def select_mqg(d, z, hdr, ssfr0, min_logmstar=None, number_density=None,
     if top_n is not None:
         n_target = int(top_n)
     elif number_density is not None:
-        n_target = int(round(number_density * hdr['box'] ** 3))
+        # value >= 1 is treated as a plain count N; < 1 as a density (Mpc/h)^-3.
+        n_target = (int(round(number_density)) if number_density >= 1.0
+                    else int(round(number_density * hdr['box'] ** 3)))
     if n_target is not None:
         qidx = np.where(quiescent)[0]
         mask = np.zeros(sm.shape, dtype=bool)
@@ -555,10 +557,10 @@ def main(argv=None):
     p.add_argument('--min-logmstar', type=float, default=None,
                    help='Fixed stellar-mass cut log10(M*/Msun); overrides --top-percent.')
     p.add_argument('--number-density', type=float, default=None,
-                   help='Constant comoving number density (Mpc/h)^-3: select the N = '
-                        'n*box^3 most massive quiescent galaxies. Abundance-matched, '
-                        'BCG-scale hosts (~10^14; try 1e-5 to 1e-4). Overrides the '
-                        'others. Assumes the full box volume.')
+                   help='Select the N most massive quiescent galaxies. A value >=1 is '
+                        'a plain COUNT (e.g. 100, 500); a value <1 is a comoving number '
+                        'density (Mpc/h)^-3, N=n*box^3 (e.g. 1e-5 -> ~10^14 hosts). '
+                        'Overrides --top-percent/--min-logmstar.')
     p.add_argument('--match-highz-count', action='store_true',
                    help='Count the quiescent galaxies at the HIGHEST requested redshift '
                         'and select that same number (most massive quiescent) at every '
@@ -623,8 +625,11 @@ def main(argv=None):
     if match_n is not None:
         sel = f'top-{match_n} most massive quiescent (matched to z={z_top:.2f} count)'
     elif args.number_density is not None:
-        n_box = int(round(args.number_density * hdr['box'] ** 3))
-        sel = (f'top-{n_box} most massive quiescent (n={args.number_density:.1e} (Mpc/h)^-3)')
+        if args.number_density >= 1.0:
+            sel = f'top-{int(round(args.number_density))} most massive quiescent (fixed count)'
+        else:
+            n_box = int(round(args.number_density * hdr['box'] ** 3))
+            sel = f'top-{n_box} most massive quiescent (n={args.number_density:.1e} (Mpc/h)^-3)'
     elif args.min_logmstar is not None:
         sel = f'log10(M*/Msun) > {args.min_logmstar}'
     else:
