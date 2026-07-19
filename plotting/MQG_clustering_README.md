@@ -20,10 +20,13 @@ Corrfunc is the only one that compiles (needs a C compiler + GSL).
 
 On an Lmod (module) cluster -- no conda (module lines pinned for Ngarrgu
 Tindebeek / tooarrana, gcc/12.3.0 toolchain):
-    sinteractive                                    # build Corrfunc on a compute node
+    # setup on the LOGIN node -- compute nodes are air-gapped (no internet for pip):
     bash plotting/setup_clustering_env.sh           # venv on modules; pip adds Corrfunc+colossus+h5py
-    source $HOME/envs/sage-clustering/bin/activate
-    sbatch plotting/run_clustering_ozstar.sh        # SLURM run template
+    # run the analysis as a batch job (handles resources/modules/venv itself):
+    sbatch plotting/run_clustering_ozstar.sh
+    # OPTIONAL pre-flight only: check the login-built Corrfunc runs on a compute node
+    #   sinteractive ... ; source $HOME/envs/sage-clustering/bin/activate
+    #   python -c "from Corrfunc.theory import xi; print('ok')"
 numpy/scipy/matplotlib/astropy come from modules (`scipy-bundle`, `matplotlib`,
 `astropy`); `gsl` is loaded so Corrfunc compiles; only Corrfunc, colossus, h5py
 are pip-installed. If the toolchain versions change, `module load gcc/<ver>` then
