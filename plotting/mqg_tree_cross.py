@@ -309,7 +309,7 @@ def galaxy_jackknife_cross(pos_g, pos_h, xi_hh, box, r_edges, z, cosmo,
     return float(np.sqrt((n - 1) / n * np.sum((s - s.mean()) ** 2)))
 
 
-def run_binned(args, hdr, cosmo, redshifts, r_edges):
+def run_binned(args, hdr, cosmo, redshifts, r_edges, obs=None):
     """Bin the quiescent galaxies by their own Mvir and measure the cross-
     correlation bias per bin -- the mass scale is set by the bin, not by a
     chosen count/density.  Quiescence is the only selection (Donnari floor)."""
@@ -377,19 +377,25 @@ def run_binned(args, hdr, cosmo, redshifts, r_edges):
         sys.exit('No usable bins.')
     os.makedirs(args.output_dir, exist_ok=True)
     out = os.path.join(args.output_dir, f'mqg_tree_cross_massbins{args.format}')
-    plot_binned(rows, tinker_zs, cosmo, args, out)
+    plot_binned(rows, tinker_zs, cosmo, args, out, obs=obs)
     print('\nDone.')
 
 
-def plot_binned(rows, tinker_zs, cosmo, args, out_path):
-    """Cross-correlation bias vs host halo mass, binned; one track per z."""
+def plot_binned(rows, tinker_zs, cosmo, args, out_path, obs=None):
+    """Cross-correlation bias vs Mvir, binned; one track per z, vs Tinker+10 and
+    (optionally) the observational compilation.  The model axis is Msun/h; the
+    obs file is physical Msun, so it is shifted by +log10(h) on overlay."""
     from matplotlib import cm
     from matplotlib.colors import Normalize
     from matplotlib.cm import ScalarMappable
-    znorm = Normalize(vmin=float(min(tinker_zs)), vmax=float(max(tinker_zs)))
+    logh = float(np.log10(cosmo.h))
+    zmodel = list(tinker_zs)
+    zall = zmodel + ([float(zz) for zz in obs['z']
+                      if np.isfinite(zz)] if obs is not None else [])
+    znorm = Normalize(vmin=min(zall), vmax=max(zall))
     cmap = cm.get_cmap('viridis')
     mgrid = np.logspace(11, 15, 200)
-    fig, ax = plt.subplots(figsize=(9.5, 7.0), constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(10.0, 7.2), constrained_layout=True)
     for zl in sorted(tinker_zs):
         ax.plot(np.log10(mgrid), m.tinker_bias(mgrid / cosmo.h, zl, cosmo, 'vir'),
                 color=cmap(znorm(zl)), lw=1.4, alpha=0.85, zorder=1)
@@ -402,16 +408,43 @@ def plot_binned(rows, tinker_zs, cosmo, args, out_path):
         y = [r['b'] for r in rr]
         ye = [r['be'] for r in rr]
         ax.errorbar(x, y, yerr=ye, fmt='o-', color=cmap(znorm(zl)),
-                    ms=8, lw=1.6, mec='black', mew=0.8, capsize=3, zorder=5)
+                    ms=8, lw=1.6, mec='black', mew=0.8, capsize=3, zorder=5,
+                    label=f'model $z={zl:.2f}$')
+
+    # observations (physical Msun -> Msun/h): stars, coloured by z, ref-indexed
+    if obs is not None and np.isfinite(obs['bias']).any():
+        refidx, uniq = {}, []
+        for r in obs['ref']:
+            if r not in uniq:
+                uniq.append(r)
+        refidx = {r: i + 1 for i, r in enumerate(uniq)}
+        ox = obs['logMhalo'] + logh
+        xerr = np.where(np.isfinite(obs['logMhalo_err']) & (obs['logMhalo_err'] > 0),
+                        obs['logMhalo_err'], np.nan)
+        yerr = np.where(np.isfinite(obs['bias_err']) & (obs['bias_err'] > 0),
+                        obs['bias_err'], np.nan)
+        ax.errorbar(ox, obs['bias'], xerr=xerr, yerr=yerr, fmt='none',
+                    ecolor='0.5', elinewidth=1.0, capsize=2, zorder=6)
+        ax.scatter(ox, obs['bias'], c=obs['z'], cmap=cmap, norm=znorm, s=180,
+                   marker='*', edgecolors='black', linewidths=1.0, zorder=7)
+        for xi, yi, rf in zip(ox, obs['bias'], obs['ref']):
+            if np.isfinite(xi) and np.isfinite(yi):
+                ax.annotate(f'[{refidx[rf]}]', (xi, yi), textcoords='offset points',
+                            xytext=(5, 4), fontsize=7, zorder=8)
+        cap = '  '.join(f'[{i}] {r}' for r, i in refidx.items())
+        fig.text(0.01, -0.02, 'obs: ' + cap, fontsize=7, ha='left', va='top')
+
     ax.set_xlim(11.5, 15.0)
     ax.set_ylim(*args.bias_lim)
     ax.set_xlabel(r'$\log_{10}(M_\mathrm{vir}\,/\,[M_\odot/h])$  (bin median)')
-    ax.set_ylabel(r'MQG cross-correlation bias $b_g$')
+    ax.set_ylabel(r'large-scale bias $b$')
     ax.tick_params(which='both', direction='in', top=True, right=True)
+    ax.legend(loc='upper left', frameon=False, fontsize=8, ncol=2)
     cb = fig.colorbar(ScalarMappable(norm=znorm, cmap=cmap), ax=ax, pad=0.02)
     cb.set_label('redshift $z$')
-    ax.set_title('Quiescent-galaxy bias binned by Mvir '
-                 '(no count/density; curves = Tinker+10)', fontsize=11.5)
+    ax.set_title('Model validation: quiescent-galaxy bias vs Mvir '
+                 '(lines=Tinker+10, circles=model binned by Mvir, stars=obs)',
+                 fontsize=11)
     fig.savefig(out_path, bbox_inches='tight')
     plt.close(fig)
     print(f'  Saved: {out_path}')
@@ -463,6 +496,9 @@ def main(argv=None):
     p.add_argument('--bias-lim', type=float, nargs=2, default=[0.0, 8.5])
     p.add_argument('--output-dir', default=m.DEFAULT_OUTPUT_DIR)
     p.add_argument('--format', default='.png')
+    p.add_argument('--obs-file', default=m.DEFAULT_OBS_FILE,
+                   help='observational bias compilation to overlay on the binned '
+                        'validation plot (physical Msun); "none" to disable.')
     args = p.parse_args(argv)
     if (args.mass_bins is None and args.number_density is None
             and args.min_logmstar is None and args.top_percent is None
@@ -485,8 +521,13 @@ def main(argv=None):
     hub = hdr['hubble_h']
     r_edges = np.logspace(np.log10(args.rmin), np.log10(args.rmax), args.nbins + 1)
 
+    obs = (None if str(args.obs_file).lower() == 'none'
+           else m.load_obs_bias(args.obs_file))
+    if obs is not None:
+        print(f'  obs overlay: {len(obs["z"])} points from {args.obs_file}')
+
     if args.mass_bins is not None:
-        run_binned(args, hdr, cosmo, redshifts, r_edges)
+        run_binned(args, hdr, cosmo, redshifts, r_edges, obs=obs)
         return
 
     match_n = None

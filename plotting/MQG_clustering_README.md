@@ -137,9 +137,14 @@ a bin that runs out of quiescent galaxies at high z is simply skipped
         --redshifts 0 0.99 1.91 2.83 --mass-bins --nthreads 8
 Pass edges (log10 Msun/h) after `--mass-bins`, or the flag alone for the defaults
 (12.0 12.5 13.0 13.5 14.0 14.5). Output: `mqg_tree_cross_massbins.<fmt>` -- one
-b(Mvir) track per redshift vs Tinker+10. This is the recommended way to present
-the result: a physical bias-vs-Mvir relation with no arbitrary abundance.
-Errors jackknife the galaxy sample only (dense halo field held fixed).
+b(Mvir) track per redshift vs Tinker+10, with the observational compilation
+(`--obs-file`, default `data/clustering/quiescent_bias_obs.dat`) overlaid as
+z-coloured stars. This is the MODEL-VALIDATION figure: it tests b(Mvir,z) against
+theory (Tinker) AND data, the correct external benchmark -- not against any prior
+figure. (Obs is physical Msun; the plot shifts it by +log10(h) onto the Msun/h
+axis.) This is the recommended way to present the result: a physical bias-vs-Mvir
+relation with no arbitrary abundance. Errors jackknife the galaxy sample only
+(dense halo field held fixed).
 
 ## Physics toggle sweep recipe
 Base `input/<sim>_vanilla.par` (physics off); enable one toggle at a time to a
