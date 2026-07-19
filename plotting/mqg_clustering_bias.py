@@ -251,32 +251,51 @@ def ssfr_floor(z, omega_m, omega_l, ssfr0):
     return ssfr0 * e_z
 
 
-def select_mqg(d, z, hdr, min_logmstar, ssfr0, number_density=None):
+def select_mqg(d, z, hdr, ssfr0, min_logmstar=None, number_density=None,
+               top_percent=None, top_n=None):
     """Boolean mask of massive quiescent galaxies; also returns the floor used.
 
     Quiescence is always the Donnari-style evolving sSFR floor.  "Massive" is
-    defined one of two ways:
-      * fixed stellar-mass cut  log10(M*) > min_logmstar   (default), or
-      * constant comoving number density (if number_density is not None): take
-        the N most massive quiescent galaxies with N = number_density * box^3
-        (box in Mpc/h, number_density in (Mpc/h)^-3).  This abundance-matched
-        selection yields BCG-scale hosts at z=0 that decline with redshift, and
-        keeps a sample at every snapshot -- the way to reach ~10^14 hosts.
+    defined by exactly one of the following (checked in this order):
+      * top_n (explicit count)    : the top_n most massive quiescent galaxies
+        (used by --match-highz-count: same count at every redshift).
+      * number_density (Mpc/h)^-3 : the N = n*box^3 most massive quiescent galaxies.
+      * min_logmstar              : fixed cut, log10(M*) > min_logmstar.
+      * top_percent               : the most massive top_percent% of ALL galaxies
+        at this snapshot (per-snapshot M* percentile threshold), then quiescent.
+    Default (all None) is top_percent = 10.
     """
     sm = d['StellarMass']
     sfr = d['SfrDisk'] + d['SfrBulge']
     ssfr = np.where(sm > 0, sfr / np.maximum(sm, 1e-30), np.inf)
     floor = ssfr_floor(z, hdr['omega_m'], hdr['omega_l'], ssfr0)
     quiescent = (ssfr < floor) & (sm > 0)
-    if number_density is not None:
+    # count-based selection (explicit top_n takes priority over number_density)
+    n_target = None
+    if top_n is not None:
+        n_target = int(top_n)
+    elif number_density is not None:
         n_target = int(round(number_density * hdr['box'] ** 3))
+    if n_target is not None:
         qidx = np.where(quiescent)[0]
         mask = np.zeros(sm.shape, dtype=bool)
         if qidx.size and n_target > 0:
-            top = qidx[np.argsort(-sm[qidx])[:n_target]]   # N most massive quiescent
-            mask[top] = True
+            mask[qidx[np.argsort(-sm[qidx])[:n_target]]] = True
         return mask, floor
-    return ((sm > 10.0 ** min_logmstar) & quiescent), floor
+    if min_logmstar is not None:
+        return ((sm > 10.0 ** min_logmstar) & quiescent), floor
+    pct = 10.0 if top_percent is None else top_percent
+    pos = sm[sm > 0]
+    thresh = np.percentile(pos, 100.0 - pct) if pos.size else np.inf
+    return ((sm >= thresh) & quiescent), floor
+
+
+def count_quiescent(d, z, hdr, ssfr0):
+    """Number of Donnari-quiescent galaxies (M* > 0) at this snapshot."""
+    sm = d['StellarMass']
+    ssfr = np.where(sm > 0, (d['SfrDisk'] + d['SfrBulge']) / np.maximum(sm, 1e-30), np.inf)
+    floor = ssfr_floor(z, hdr['omega_m'], hdr['omega_l'], ssfr0)
+    return int(np.sum((ssfr < floor) & (sm > 0)))
 
 
 # ----- Correlation function ---------------------------------------------------
@@ -529,13 +548,22 @@ def main(argv=None):
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--model', default=DEFAULT_MODEL)
     p.add_argument('--redshifts', type=float, nargs='+', default=DEFAULT_REDSHIFTS)
-    p.add_argument('--min-logmstar', type=float, default=DEFAULT_MIN_LOGMSTAR)
+    p.add_argument('--top-percent', type=float, default=0.5,
+                   help='DEFAULT selection: keep the most massive TOP-PERCENT%% of all '
+                        'galaxies at each snapshot (per-snapshot M* percentile), then '
+                        'quiescent. Overridden by --min-logmstar or --number-density.')
+    p.add_argument('--min-logmstar', type=float, default=None,
+                   help='Fixed stellar-mass cut log10(M*/Msun); overrides --top-percent.')
     p.add_argument('--number-density', type=float, default=None,
-                   help='Constant comoving number density (Mpc/h)^-3: instead of a '
-                        'fixed --min-logmstar cut, select the N most massive quiescent '
-                        'galaxies with N = n * box^3. Abundance-matched, BCG-scale '
-                        'sample that reaches ~10^14 hosts (try 1e-5 to 1e-4). '
-                        'Assumes the full box volume.')
+                   help='Constant comoving number density (Mpc/h)^-3: select the N = '
+                        'n*box^3 most massive quiescent galaxies. Abundance-matched, '
+                        'BCG-scale hosts (~10^14; try 1e-5 to 1e-4). Overrides the '
+                        'others. Assumes the full box volume.')
+    p.add_argument('--match-highz-count', action='store_true',
+                   help='Count the quiescent galaxies at the HIGHEST requested redshift '
+                        'and select that same number (most massive quiescent) at every '
+                        'redshift -- abundance-matched to the high-z quiescent count. '
+                        'Overrides all other selection options.')
     p.add_argument('--ssfr0', type=float, default=DEFAULT_SSFR0,
                    help='z=0 sSFR quiescence boundary in 1/yr (evolves as E(z)).')
     p.add_argument('--sigma-8', type=float, default=DEFAULT_SIGMA_8)
@@ -581,13 +609,27 @@ def main(argv=None):
           f'box = {hdr["box"]:.1f} Mpc/h)')
     print(f'  cosmo: Om={hdr["omega_m"]}, OL={hdr["omega_l"]}, h={hdr["hubble_h"]}, '
           f'Ob={omega_b:.4f}, sigma8={args.sigma_8}, ns={args.n_s}')
-    if args.number_density is not None:
+    match_n = None
+    if args.match_highz_count:
+        z_top_req = max(args.redshifts)
+        snap_top = snap_nearest_z(redshifts, z_top_req, hdr['output_snaps'])
+        z_top = float(redshifts[snap_top])
+        d_top = load_snap(hdr['files'], snap_top,
+                          ['StellarMass', 'SfrDisk', 'SfrBulge'], hdr['mass_conv'])
+        match_n = count_quiescent(d_top, z_top, hdr, args.ssfr0) if d_top else 0
+        print(f'  match-highz-count: {match_n} quiescent at z={z_top:.2f} '
+              f'(snap {snap_top}); using top-{match_n} most massive quiescent at every z')
+
+    if match_n is not None:
+        sel = f'top-{match_n} most massive quiescent (matched to z={z_top:.2f} count)'
+    elif args.number_density is not None:
         n_box = int(round(args.number_density * hdr['box'] ** 3))
-        print(f'  MQG: top-{n_box} most massive quiescent (n={args.number_density:.1e} '
-              f'(Mpc/h)^-3), sSFR < {args.ssfr0:.2e} * E(z) /yr')
+        sel = (f'top-{n_box} most massive quiescent (n={args.number_density:.1e} (Mpc/h)^-3)')
+    elif args.min_logmstar is not None:
+        sel = f'log10(M*/Msun) > {args.min_logmstar}'
     else:
-        print(f'  MQG: log10(M*/Msun) > {args.min_logmstar}, '
-              f'sSFR < {args.ssfr0:.2e} * E(z) /yr')
+        sel = f'most massive {args.top_percent:g}% by M* per snapshot'
+    print(f'  MQG: {sel}, sSFR < {args.ssfr0:.2e} * E(z) /yr')
 
     cosmo = cosmology.setCosmology('sage', {
         'flat': True, 'H0': hdr['hubble_h'] * 100.0, 'Om0': hdr['omega_m'],
@@ -615,13 +657,18 @@ def main(argv=None):
             print('  no data; skipping.')
             continue
 
-        mask, floor = select_mqg(d, z, hdr, args.min_logmstar, args.ssfr0,
-                                 args.number_density)
+        mask, floor = select_mqg(d, z, hdr, args.ssfr0,
+                                 min_logmstar=args.min_logmstar,
+                                 number_density=args.number_density,
+                                 top_percent=args.top_percent,
+                                 top_n=match_n)
         n_mqg = int(mask.sum())
         print(f'  sSFR floor = {floor:.3e} /yr;  N_MQG = {n_mqg}')
-        if n_mqg < 50:
-            print('  fewer than 50 MQGs; clustering unreliable, skipping.')
+        if n_mqg < 2:
+            print(f'  only {n_mqg} MQGs -- cannot measure clustering; skipping.')
             continue
+        if n_mqg < 50:
+            print(f'  WARNING: only {n_mqg} MQGs -- clustering/jackknife will be noisy.')
 
         pos = np.column_stack([d['Posx'][mask], d['Posy'][mask], d['Posz'][mask]])
         cen = d['CentralMvir'][mask]
