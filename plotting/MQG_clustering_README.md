@@ -18,15 +18,20 @@ Tinker et al. (2010) halo bias.
 `Corrfunc`, `colossus`, `numpy`, `scipy`, `h5py`, `matplotlib`, `astropy`.
 Corrfunc is the only one that compiles (needs a C compiler + GSL).
 
-On an Lmod (module) cluster -- no conda:
-    bash plotting/setup_clustering_env.sh          # builds venv on top of modules
+On an Lmod (module) cluster -- no conda (module lines pinned for Ngarrgu
+Tindebeek / tooarrana, gcc/12.3.0 toolchain):
+    sinteractive                                    # build Corrfunc on a compute node
+    bash plotting/setup_clustering_env.sh           # venv on modules; pip adds Corrfunc+colossus+h5py
     source $HOME/envs/sage-clustering/bin/activate
     sbatch plotting/run_clustering_ozstar.sh        # SLURM run template
-Edit the `ml load gcc gsl python hdf5` line in those two scripts to your site's
-module names (`module spider gcc gsl python hdf5`). Build Corrfunc on a COMPUTE
-node (interactive job) so its SIMD matches the run nodes. Deps are pinned in
-`plotting/requirements-clustering.txt`. The script forces the Agg backend and
-drops LaTeX text automatically when no `latex` is on PATH, so it runs headless.
+numpy/scipy/matplotlib/astropy come from modules (`scipy-bundle`, `matplotlib`,
+`astropy`); `gsl` is loaded so Corrfunc compiles; only Corrfunc, colossus, h5py
+are pip-installed. If the toolchain versions change, `module load gcc/<ver>` then
+`module avail | grep -iE 'gsl/|python/|scipy-bundle/|matplotlib/|astropy/'` and
+update the load line in both scripts. Build Corrfunc on a COMPUTE node so its
+SIMD matches the run nodes. `requirements-clustering.txt` is the full portable
+list for non-module machines. The script forces the Agg backend and drops LaTeX
+text when no `latex` is on PATH, so it runs headless.
 
 ## Run
     python plotting/mqg_clustering_bias.py \

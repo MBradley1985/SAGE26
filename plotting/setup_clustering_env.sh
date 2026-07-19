@@ -1,51 +1,45 @@
 #!/bin/bash -l
 # =============================================================================
-# One-time setup of a Python venv for plotting/mqg_clustering_bias.py on an
-# Lmod (module) cluster -- NO conda. Mirrors the run_sage_ozstar.sh pattern
-# (`ml purge; ml restore basic`), then adds the compilers/libraries Corrfunc
-# needs and builds a venv on top.
+# One-time Python venv setup for plotting/mqg_clustering_bias.py on
+# Ngarrgu Tindebeek (tooarrana) -- Lmod hierarchical modules, NO conda.
 #
-#   Usage:   bash plotting/setup_clustering_env.sh
-#   Then:    source $HOME/envs/sage-clustering/bin/activate
+#   RUN INSIDE AN INTERACTIVE JOB so Corrfunc compiles on a compute node
+#   (its SIMD is baked in at build time; login-node builds can throw
+#   "illegal instruction" on the compute nodes):
+#       sinteractive            # or salloc / srun --pty bash
+#       bash plotting/setup_clustering_env.sh
+#       source $HOME/envs/sage-clustering/bin/activate
 #
-# IMPORTANT: module names/versions are site-specific. Find yours with:
-#   module spider gcc ; module spider gsl ; module spider python ; module spider hdf5
-# and edit the `ml load` line below to match. Corrfunc needs gcc + GSL
-# (with `gsl-config` on PATH) to compile.
+# Modules below are the gcc/12.3.0 (2023a) toolchain on this cluster. If they
+# ever change, rerun `module load gcc/<ver>` then
+#   `module avail 2>&1 | grep -iE 'gsl/|python/|scipy-bundle/|matplotlib/|astropy/'`
+# and update the load line.
 # =============================================================================
 set -e
-
 VENV="$HOME/envs/sage-clustering"
 
-# --- modules -----------------------------------------------------------------
-ml purge
-ml restore basic                     # your saved base collection (as in run_sage_ozstar.sh)
-# Edit these to the exact module names on your cluster (see `module spider`):
-ml load gcc gsl python hdf5          # gcc+gsl -> Corrfunc build; python -> venv; hdf5 -> h5py
+ml purge                         # (nvidia/slurm are sticky and stay loaded -- fine)
+# numpy/scipy/pandas via scipy-bundle; matplotlib + astropy as modules;
+# gsl -> Corrfunc build; python -> the venv interpreter.
+module load gcc/12.3.0 gsl/2.7 python/3.11.3 scipy-bundle/2023.07 matplotlib/3.7.2 astropy/5.3.3
 
-echo "Using: $(which python)  |  gcc: $(gcc --version | head -1)  |  gsl: $(gsl-config --version 2>/dev/null || echo 'NOT FOUND')"
-[ -z "$(command -v gsl-config)" ] && { echo "ERROR: gsl-config not on PATH -- load a gsl module before Corrfunc will build."; exit 1; }
+command -v gsl-config >/dev/null || { echo "ERROR: gsl-config not on PATH after 'module load gsl/2.7'"; exit 1; }
+echo "python: $(which python)  |  gcc: $(gcc -dumpversion)  |  gsl: $(gsl-config --version)"
 
-# --- venv --------------------------------------------------------------------
-# --system-site-packages lets you reuse module-provided numpy/scipy/h5py/matplotlib
-# if the python module ships them; pip then only adds what's missing (Corrfunc, colossus).
+# --system-site-packages: reuse the module numpy/scipy/matplotlib/astropy so pip
+# doesn't rebuild them; pip only adds what the modules don't provide.
 python -m venv --system-site-packages "$VENV"
 source "$VENV/bin/activate"
 python -m pip install --upgrade pip wheel
 
-# --- python deps -------------------------------------------------------------
-# NOTE on Corrfunc + AVX: it compiles for the CPU it is BUILT on. If your login
-# node is a different/older CPU than the compute nodes you may hit "illegal
-# instruction" at runtime. Safest: run THIS SCRIPT inside an interactive job on a
-# compute node (e.g. `salloc`/`srun --pty bash`), so Corrfunc matches the target.
-CC=gcc python -m pip install -r "$(dirname "$0")/requirements-clustering.txt"
+# h5py: no module on this cluster -> pip wheel (bundles its own HDF5).
+# Corrfunc: compiles against gcc/12.3.0 + gsl/2.7.  colossus: pure python.
+CC=gcc python -m pip install Corrfunc colossus h5py
 
-# --- verify ------------------------------------------------------------------
 python - <<'PY'
-from Corrfunc.theory import xi          # noqa
-from colossus.cosmology import cosmology
-import h5py, numpy, scipy, matplotlib   # noqa
-print("OK: Corrfunc + colossus + stack import cleanly")
+import numpy, scipy, matplotlib, astropy, h5py, colossus       # noqa
+from Corrfunc.theory import xi                                   # noqa
+print(f"OK: numpy {numpy.__version__} | h5py {h5py.__version__} | Corrfunc + colossus + astropy import cleanly")
 PY
 
 echo

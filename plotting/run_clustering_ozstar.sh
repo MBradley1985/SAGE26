@@ -5,14 +5,14 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem-per-cpu=8GB
 # =============================================================================
-# Run plotting/mqg_clustering_bias.py on an Lmod cluster (no conda).
-# Prereq: run plotting/setup_clustering_env.sh once to build the venv.
-# Adjust --mem-per-cpu to the box: the loader holds one snapshot's galaxy
+# Run plotting/mqg_clustering_bias.py on Ngarrgu Tindebeek (tooarrana).
+# Prereq: run plotting/setup_clustering_env.sh once (in an interactive job).
+# Bump --mem-per-cpu for bigger boxes: the loader holds one snapshot's galaxy
 # arrays in RAM (tens of GB for miniUchuu; more for full Uchuu).
 # =============================================================================
 ml purge
-ml restore basic
-ml load gcc gsl python hdf5          # SAME modules used in setup (edit to your site)
+# SAME modules as setup (gcc/12.3.0 toolchain):
+module load gcc/12.3.0 gsl/2.7 python/3.11.3 scipy-bundle/2023.07 matplotlib/3.7.2 astropy/5.3.3
 
 source "$HOME/envs/sage-clustering/bin/activate"
 
