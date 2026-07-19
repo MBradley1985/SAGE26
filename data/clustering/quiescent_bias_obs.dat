@@ -1,0 +1,43 @@
+# Observational large-scale bias of quiescent / passive (and quiescent-dominated
+# massive) galaxies, compiled for overlay on b vs log10(M_halo) coloured by z.
+#
+# Columns:  z   logMhalo   logMhalo_err   bias   bias_err   reference
+#   - logMhalo is log10(M_halo / Msun) in PHYSICAL solar masses.  Values quoted
+#     in the literature as h^-1 Msun have been converted with h = 0.70
+#     (log10 M_phys = log10 M[h^-1 Msun] + 0.155).  Rows already in physical
+#     Msun (Hartley, McCracken) are used as-is.
+#   - 'nan' = not reported by the source (that quantity/error is not plotted).
+#   - Bias values depend on the assumed sigma_8 (~10% level); not renormalised
+#     to the model sigma_8 = 0.816.  Treat cross-sample comparisons accordingly.
+#
+# PROVENANCE  (R = value reported in paper; D = derived/inferred):
+#   Coil+2017  (ApJ 838, 87)   quiescent, 10.5<logM*<11; b R; NO halo mass.
+#   Coil+2008  (ApJ 672,153)   DEEP2 red sequence, z~0.9; b R (sigma_8=0.9).
+#   Mostek+2013(ApJ 767, 89)   DEEP2 red, logM*>10.5; b R, M_halo D (h^-1).
+#   CMASS      (White+2011 mass R; Nuza+2013 b R) massive, quiescent-dominated.
+#   Hartley+2013(MNRAS431,3045) UVJ-passive z~2-3.4; b R, M_halo D (physical).
+#   McCracken+2015(MNRAS449,901) quiescent z~2; b and M_peak APPROX (from fig).
+#   Zehavi+2011(deriv): NO absolute red bias exists at z~0; b~1.7 is DERIVED
+#     from relative red/blue bias ~1.5-1.6 -- order-of-magnitude anchor only.
+#
+# Mass-selected (NOT quiescent-split) measurements (Wake+2011, Durkalec+2015)
+# are deliberately EXCLUDED to keep this a quiescent/passive compilation.
+#
+# z      logMhalo  logMhalo_err  bias   bias_err  reference
+0.10     nan       nan           1.70   nan       Zehavi+2011(deriv)
+0.51     nan       nan           1.75   0.04      Coil+2017
+0.55     13.59     0.05          2.00   0.07      CMASS(White+Nuza)
+0.87     nan       nan           2.04   0.08      Coil+2017
+0.88     13.18     nan           1.84   0.05      Mostek+2013
+0.90     nan       nan           1.65   0.15      Coil+2008
+2.25     12.20     nan           3.50   nan       McCracken+2015
+2.50     13.23     nan           5.23   0.44      Hartley+2013
+# --- additional entries (with halo masses, for the b-vs-Mvir panels) ---
+#   Parejko+2013 : BOSS LOWZ, massive quiescent-dominated LRGs (like CMASS).
+#                  b~2.0 (HOD, no formal err); M_halo 5.2e13 h^-1 Msun -> 13.87 phys.
+#   Wake+2011    : MASS-SELECTED (NOT quiescent-split) NEWFIRM sample -- included
+#                  only as labelled context; b and M_halo are mid-range values.
+0.32     13.87     0.10          2.00   nan       Parejko+2013(LOWZ)
+1.10     13.20     0.10          2.38   0.20      Wake+2011(m-sel)
+1.50     13.20     0.10          3.30   0.50      Wake+2011(m-sel)
+1.90     13.25     0.10          4.20   0.80      Wake+2011(m-sel)
