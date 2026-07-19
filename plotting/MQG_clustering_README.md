@@ -127,18 +127,18 @@ objects that DO exist far less noisy. Still needs a big box for high z.
 The number/density selection sets the sample's mass scale through a chosen count,
 which over-reaches the massive-quiescent supply at high z. `--mass-bins` removes
 that knob entirely: it selects ALL quiescent galaxies (Donnari floor only) and
-bins them by HOST halo mass (`CentralMvir`), measuring the cross-correlation bias
-per bin. The count per bin then falls out of the halo mass function -- it is not
-chosen -- and a bin that runs out of quiescent galaxies at high z is simply
-skipped (`--min-per-bin`, default 5), not padded with satellites.
+bins them by their own `Mvir`, measuring the cross-correlation bias per bin. The
+count per bin then falls out of the halo mass function -- it is not chosen -- and
+a bin that runs out of quiescent galaxies at high z is simply skipped
+(`--min-per-bin`, default 5), not padded with satellites.
 
     python plotting/mqg_tree_cross.py --model output/miniuchuu \
         --tree-dir <SimulationDir> --tree-name miniUchuu_STC --tree-nfiles 8 \
         --redshifts 0 0.99 1.91 2.83 --mass-bins --nthreads 8
 Pass edges (log10 Msun/h) after `--mass-bins`, or the flag alone for the defaults
 (12.0 12.5 13.0 13.5 14.0 14.5). Output: `mqg_tree_cross_massbins.<fmt>` -- one
-b(M_host) track per redshift vs Tinker+10. This is the recommended way to present
-the result: a physical bias-vs-halo-mass relation with no arbitrary abundance.
+b(Mvir) track per redshift vs Tinker+10. This is the recommended way to present
+the result: a physical bias-vs-Mvir relation with no arbitrary abundance.
 Errors jackknife the galaxy sample only (dense halo field held fixed).
 
 ## Physics toggle sweep recipe

@@ -310,15 +310,15 @@ def galaxy_jackknife_cross(pos_g, pos_h, xi_hh, box, r_edges, z, cosmo,
 
 
 def run_binned(args, hdr, cosmo, redshifts, r_edges):
-    """Bin the quiescent galaxies by HOST halo mass and measure the cross-
+    """Bin the quiescent galaxies by their own Mvir and measure the cross-
     correlation bias per bin -- the mass scale is set by the bin, not by a
     chosen count/density.  Quiescence is the only selection (Donnari floor)."""
     hub = hdr['hubble_h']
     edges = np.array(sorted(args.mass_bins) if args.mass_bins else DEFAULT_MASS_BINS,
                      dtype=float)
-    print('  mass-bins mode: host-mass edges (log10 Msun/h) = '
+    print('  mass-bins mode: Mvir edges (log10 Msun/h) = '
           + ', '.join(f'{e:.2f}' for e in edges))
-    need = ['StellarMass', 'CentralMvir', 'SfrDisk', 'SfrBulge',
+    need = ['StellarMass', 'Mvir', 'SfrDisk', 'SfrBulge',
             'Type', 'Posx', 'Posy', 'Posz']
     tinker_zs, rows = [], []
     for z_req in args.redshifts:
@@ -336,7 +336,7 @@ def run_binned(args, hdr, cosmo, redshifts, r_edges):
         floor = m.ssfr_floor(z, hdr['omega_m'], hdr['omega_l'], args.ssfr0)
         q = (ssfr < floor) & (sm > 0)
         pos_q = np.column_stack([d['Posx'][q], d['Posy'][q], d['Posz'][q]])
-        host_q = d['CentralMvir'][q] * hub                    # Msun/h
+        host_q = d['Mvir'][q] * hub                           # Msun/h (own Mvir)
         loghost = np.log10(np.where(host_q > 0, host_q, np.nan))
 
         halos = read_tree_halos(args.tree_dir, args.tree_name, args.tree_nfiles,
@@ -405,12 +405,12 @@ def plot_binned(rows, tinker_zs, cosmo, args, out_path):
                     ms=8, lw=1.6, mec='black', mew=0.8, capsize=3, zorder=5)
     ax.set_xlim(11.5, 15.0)
     ax.set_ylim(*args.bias_lim)
-    ax.set_xlabel(r'$\log_{10}(M_\mathrm{vir}^\mathrm{host}\,/\,[M_\odot/h])$  (bin median)')
+    ax.set_xlabel(r'$\log_{10}(M_\mathrm{vir}\,/\,[M_\odot/h])$  (bin median)')
     ax.set_ylabel(r'MQG cross-correlation bias $b_g$')
     ax.tick_params(which='both', direction='in', top=True, right=True)
     cb = fig.colorbar(ScalarMappable(norm=znorm, cmap=cmap), ax=ax, pad=0.02)
     cb.set_label('redshift $z$')
-    ax.set_title('Quiescent-galaxy bias binned by host halo mass '
+    ax.set_title('Quiescent-galaxy bias binned by Mvir '
                  '(no count/density; curves = Tinker+10)', fontsize=11.5)
     fig.savefig(out_path, bbox_inches='tight')
     plt.close(fig)
@@ -438,12 +438,12 @@ def main(argv=None):
                         'their shot noise while keeping pair counts tractable.')
     p.add_argument('--mass-bins', type=float, nargs='*', default=None,
                    metavar='LOGM',
-                   help='HALO-MASS-BINNED mode: bin ALL quiescent galaxies by host '
-                        'halo mass (log10 Msun/h edges) and measure the cross bias '
-                        'per bin -- NO count/density needed. Pass edges, or give the '
+                   help='MASS-BINNED mode: bin ALL quiescent galaxies by their own '
+                        'Mvir (log10 Msun/h edges) and measure the cross bias per '
+                        'bin -- NO count/density needed. Pass edges, or give the '
                         f'flag alone for defaults {DEFAULT_MASS_BINS}.')
     p.add_argument('--min-per-bin', type=int, default=5,
-                   help='skip a host-mass bin with fewer quiescent galaxies than this.')
+                   help='skip an Mvir bin with fewer quiescent galaxies than this.')
     # selection (mirrors mqg_clustering_bias)
     p.add_argument('--top-percent', type=float, default=None)
     p.add_argument('--min-logmstar', type=float, default=None)
