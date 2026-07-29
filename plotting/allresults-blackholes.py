@@ -14,6 +14,11 @@ streamlined script, the diagnostics that previously lived in separate files:
                                              timescale_hists.py)
   5. Black-hole - bulge mass relation       (from allresults-local.py)
   6. Black-hole mass function at fixed z     (from allresults-history.py)
+  7. BH seed formation redshift density function -- for every galaxy ID that
+     ever exists, find the first snapshot at which BlackHoleMass > 0 (i.e.
+     the seeding event) by scanning all snapshots in ascending order; bin
+     the resulting redshifts into dN_seed/dz / Volume, split by seeding
+     method (light/heavy/other, reusing classify_seeding_method()).
 
 Design notes
 ------------
@@ -701,6 +706,138 @@ def plot_seed_histogram(file_list, snap_num, hubble_h, output_dir):
 
 
 # ============================================================================
+# 3b. BH SEED FORMATION REDSHIFT DENSITY FUNCTION
+# ============================================================================
+def find_seed_events(file_list, hubble_h, redshifts, id_field, available_snaps):
+    """
+    For every unique galaxy ID that ever exists in the simulation, find the
+    earliest snapshot at which BlackHoleMass > 0 -- the seeding event -- by
+    scanning all available snapshots in ascending order and tracking which
+    IDs have already been seen with a positive BH mass. This only needs the
+    plain per-snapshot BlackHoleMass catalogue field (present in every
+    SAGE26 output, old or new), so it works without re-running the sim.
+
+    Returns (z_seed, seed_mass) arrays, one entry per newly-seeded BH.
+    seed_mass is BlackHoleMass at the snapshot of first detection, which --
+    since no accretion has happened yet -- equals the seed mass.
+    """
+    mass_conv = 1.0e10 / hubble_h
+    seen = np.array([], dtype=np.int64)
+    z_seed_list, mass_seed_list = [], []
+
+    for sn in sorted(available_snaps):
+        key = f"Snap_{sn}"
+        ids_parts, bh_parts = [], []
+        for fpath in file_list:
+            with h5py.File(fpath, 'r') as hf:
+                if key in hf and id_field in hf[key] and 'BlackHoleMass' in hf[key]:
+                    ids_parts.append(np.array(hf[key][id_field]))
+                    bh_parts.append(np.array(hf[key]['BlackHoleMass']))
+        if not ids_parts:
+            continue
+        ids = np.concatenate(ids_parts).astype(np.int64)
+        bh = np.concatenate(bh_parts) * mass_conv
+
+        mask = bh > 0
+        if not np.any(mask):
+            continue
+        cand_ids, cand_bh = ids[mask], bh[mask]
+
+        # de-duplicate within this snapshot (defensive; shouldn't normally happen)
+        cand_ids, first_idx = np.unique(cand_ids, return_index=True)
+        cand_bh = cand_bh[first_idx]
+
+        is_new = ~np.isin(cand_ids, seen)
+        if np.any(is_new):
+            z_here = get_redshift_from_snapshot(sn, redshifts)
+            n_new = int(np.sum(is_new))
+            z_seed_list.extend([z_here] * n_new)
+            mass_seed_list.extend(cand_bh[is_new].tolist())
+            seen = np.union1d(seen, cand_ids[is_new])
+
+    return np.array(z_seed_list), np.array(mass_seed_list)
+
+
+def plot_bh_seed_density(file_list, hubble_h, redshifts, available, volume_h3,
+                         output_dir, zmax=None):
+    """dN_seed/dz / Volume vs redshift, split by seeding method."""
+    name = "BH seed density function"
+    if not available:
+        print(f"[skip] {name}: no available snapshots.")
+        return
+    id_field = find_id_field(file_list, available[-1])
+    if id_field is None:
+        print(f"[skip] {name}: no galaxy-ID field found for cross-snapshot tracking.")
+        return
+
+    print(f"  ({name}: scanning {len(available)} snapshots for first BH "
+          f"appearance by '{id_field}' -- reads BlackHoleMass at every "
+          f"snapshot, can take a while on large outputs.)")
+
+    z_seed, seed_mass = find_seed_events(file_list, hubble_h, redshifts,
+                                         id_field, available)
+    if len(z_seed) == 0:
+        print(f"[skip] {name}: no seeded black holes found.")
+        return
+
+    if zmax is not None:
+        keep = z_seed <= zmax
+        z_seed, seed_mass = z_seed[keep], seed_mass[keep]
+    if len(z_seed) == 0:
+        print(f"[skip] {name}: no seeded black holes within zmax={zmax}.")
+        return
+
+    cls = classify_seeding_method(seed_mass)
+    light, heavy, other = z_seed[cls == 1], z_seed[cls == 2], z_seed[cls == 0]
+
+    print(f"  Total seeded BHs found: {len(z_seed):,} "
+          f"({len(light):,} light / {len(heavy):,} heavy / {len(other):,} other)")
+
+    binwidth = 0.25
+    hi = max(binwidth, np.ceil(z_seed.max() / binwidth) * binwidth)
+    bins = np.arange(0.0, hi + binwidth, binwidth)
+    centres = 0.5 * (bins[:-1] + bins[1:])
+
+    fig, ax = plt.subplots(figsize=(8.34, 6.25))
+    ax.minorticks_on()
+
+    cats = [(z_seed, 'All seeded BHs', 'k', 2.4),
+            (light, r'Light seeds (30-100 $M_\odot$)', '#2196F3', 1.8),
+            (heavy, r'Heavy seeds ($\geq 10^4\,M_\odot$)', '#FF9800', 1.8)]
+    if len(other):
+        cats.append((other, 'Other', '#9E9E9E', 1.4))
+
+    for values, label, color, lw in cats:
+        if len(values) == 0:
+            continue
+        counts, _ = np.histogram(values, bins=bins)
+        y = counts / (binwidth * volume_h3) if volume_h3 else counts / binwidth
+        pos = y > 0
+        if not np.any(pos):
+            continue
+        logy = np.full_like(y, np.nan, dtype=float)
+        logy[pos] = np.log10(y[pos])
+        ax.step(centres[pos], logy[pos], where='mid', lw=lw, color=color, label=label)
+
+    ax.set_xlabel(r'$z_{\rm seed}$ (redshift of first BH appearance)', fontsize=14)
+    ylabel = (r'$\log_{10}(\mathrm{d}N_{\rm seed}/\mathrm{d}z\,/\,'
+              r'\mathrm{Mpc}^{-3}h^{3})$') if volume_h3 else \
+             r'$\log_{10}(\mathrm{d}N_{\rm seed}/\mathrm{d}z)$'
+    ax.set_ylabel(ylabel, fontsize=13)
+    ax.set_title("BH seed formation redshift density", fontsize=13)
+    ax.xaxis.set_minor_locator(AutoMinorLocator(5))
+    ax.yaxis.set_minor_locator(AutoMinorLocator(5))
+    ax.legend(loc='upper right', fontsize=11)
+    ax.grid(True, alpha=0.25, ls=':', lw=0.6)
+
+    plt.tight_layout()
+    out = os.path.join(output_dir, f"bh_seed_density_function{OutputFormat}")
+    fig.savefig(out, dpi=140, bbox_inches='tight')
+    plt.close(fig)
+    print(f"[ok]   {name} -> {out}")
+
+
+# ============================================================================
 # 4. SIMPLIFIED TIMESCALE OVERLAY
 # ============================================================================
 TS_KEYS    = ["dt", "tdyn_B_end", "tdyn_disk", "hubbletime", "halotime"]
@@ -976,10 +1113,14 @@ def main():
                    help='Override comoving volume in (Mpc/h)^3 for the rate function.')
     p.add_argument('--no-cuts', action='store_true',
                    help='Use all galaxies with BH>0 (skip mass cuts).')
+    p.add_argument('--seed-density-zmax', type=float, default=None,
+                   help='Max redshift to include in the seed density function '
+                        '(default: all available).')
     # per-plot switches
     p.add_argument('--no-growth', action='store_true')
     p.add_argument('--no-ratefunc', action='store_true')
     p.add_argument('--no-seeds', action='store_true')
+    p.add_argument('--no-seed-density', action='store_true')
     p.add_argument('--no-timescales', action='store_true')
     p.add_argument('--no-bhbulge', action='store_true')
     p.add_argument('--no-bhmf', action='store_true')
@@ -1049,6 +1190,9 @@ def main():
                                      volume_h3, args.no_cuts)
     if not args.no_seeds:
         plot_seed_histogram(file_list, snap_num, hubble_h, output_dir)
+    if not args.no_seed_density:
+        plot_bh_seed_density(file_list, hubble_h, redshifts, available,
+                             volume_h3, output_dir, zmax=args.seed_density_zmax)
     if not args.no_timescales:
         plot_timescales_overlay(file_list, snap_num, ts_dir, args.units, output_dir)
     if not args.no_bhbulge:

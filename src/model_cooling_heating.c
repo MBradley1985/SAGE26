@@ -871,7 +871,8 @@ static void agn_accretion_compute(const int centralgal, const double dt, const d
 
     AGNrate = eddington_limited_accretion_rate(AGNrate, 1, galaxies[centralgal].BlackHoleMass,
                                                        galaxies[centralgal].SnapNum, 0, run_params,
-                                                       galaxies[centralgal].BHAccretionType, galaxies[centralgal].BHMaxaccretionRate, galaxies[centralgal].BHEddingtonRateLimit);
+                                                       galaxies[centralgal].BHAccretionType, galaxies[centralgal].BHMaxaccretionRate,
+                                                       galaxies[centralgal].BHEddingtonRateLimit, galaxies[centralgal].BHMassatAccretion);
         
 
     double AGNaccreted = AGNrate * dt;

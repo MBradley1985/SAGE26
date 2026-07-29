@@ -491,7 +491,8 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
                           1 /* merger EddType */, run_params,
                           galaxies[merger_centralgal].BHAccretionType,
                           galaxies[merger_centralgal].BHMaxaccretionRate,
-                          galaxies[merger_centralgal].BHEddingtonRateLimit);
+                          galaxies[merger_centralgal].BHEddingtonRateLimit,
+                          galaxies[merger_centralgal].BHMassatAccretion);
             BHaccrete_demanded = bh_rate * bh_accretiontime;
             if(BHaccrete_demanded < 0.0) BHaccrete_demanded = 0.0;
         }
@@ -672,7 +673,8 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
                                 EddType, run_params,
                                 galaxies[merger_centralgal].BHAccretionType,
                                 galaxies[merger_centralgal].BHMaxaccretionRate,
-                                galaxies[merger_centralgal].BHEddingtonRateLimit);
+                                galaxies[merger_centralgal].BHEddingtonRateLimit,
+                                galaxies[merger_centralgal].BHMassatAccretion);
 
             BHaccrete = BHaccreterate * accretiontime;
         }

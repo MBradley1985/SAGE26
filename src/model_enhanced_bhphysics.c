@@ -134,7 +134,8 @@ double eddington_accretion_rate(const double black_hole_mass, const struct param
 // Accretion rate limiter by Eddington limit
 double eddington_limited_accretion_rate(double accretion_rate, int eddington_flag, double black_hole_mass,
                                         int snapnum, int bh_accretion_type, const struct params *run_params,
-                                        float BHAccretionType[ABSOLUTEMAXSNAPS], float BHMaxaccretionRate[ABSOLUTEMAXSNAPS], float BHEddingtonRateLimit[ABSOLUTEMAXSNAPS])
+                                        float BHAccretionType[ABSOLUTEMAXSNAPS], float BHMaxaccretionRate[ABSOLUTEMAXSNAPS],
+                                        float BHEddingtonRateLimit[ABSOLUTEMAXSNAPS], float BHMassatAccretion[ABSOLUTEMAXSNAPS])
 {
     double edd_rate = 0.0;
     double return_rate = accretion_rate;
@@ -152,6 +153,7 @@ double eddington_limited_accretion_rate(double accretion_rate, int eddington_fla
         BHMaxaccretionRate[snapnum]    = (float)accretion_rate;
         BHEddingtonRateLimit[snapnum]  = is_seed_bh ? 0.0f
                                         : (float)eddington_accretion_rate(black_hole_mass, run_params);
+        BHMassatAccretion[snapnum]     = (float)black_hole_mass;
     }
 
     if(is_seed_bh) return accretion_rate;

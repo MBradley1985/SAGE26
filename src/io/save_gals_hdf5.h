@@ -121,6 +121,7 @@ struct HDF5_GALAXY_OUTPUT
     float *BHEddingtonRateLimit;
     float *tacc;
     float *BHAccretionType; // 0=radio-mode, 1=quasar-mode,
+    float *BHMassatAccretion; // M_BH just before each accretion episode (10^10 Msun/h)
     float *BHSeedMass; // Mass of the black hole seed when it was seeded (10^10 Msun/h)
     
     /* infall properties */

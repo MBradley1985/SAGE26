@@ -194,9 +194,10 @@ struct GALAXY
     float BHMergerMass[ABSOLUTEMAXSNAPS];
 
     /* bh accretion*/
-    float BHMaxaccretionRate[ABSOLUTEMAXSNAPS]; 
+    float BHMaxaccretionRate[ABSOLUTEMAXSNAPS];
     float BHEddingtonRateLimit[ABSOLUTEMAXSNAPS];
     float BHAccretionType[ABSOLUTEMAXSNAPS];
+    float BHMassatAccretion[ABSOLUTEMAXSNAPS]; /* M_BH immediately before each accretion episode [10^10 Msun/h] */
     float tacc[ABSOLUTEMAXSNAPS];
 
     float BHSeedMass;
