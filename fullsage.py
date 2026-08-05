@@ -42,6 +42,15 @@ def main():
             "--i", f"./output/{args.sim}/model_*.hdf5",
         ])
 
+        run([
+            "python3",
+            "plotting/bh_lrd_analysis.py",
+            "-i", f"./output/{args.sim}/model_*.hdf5",
+            "-s", "40",
+        ])
+
+        
+
     print("\nDone.")
 
 

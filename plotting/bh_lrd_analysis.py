@@ -83,6 +83,11 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from scipy.stats import gaussian_kde
 
+from lrd_literature_data import (
+    PANG26, MATHEE24, LABBE25, FURTAK23, LIN25, LIT_STYLE,
+    SHEN20_ZREF, SHEN20_GAMMA1_A, SHEN20_GAMMA2_A, SHEN20_LSTAR_A, SHEN20_PHISTAR_A,
+)
+
 # ============================================================================
 # MATPLOTLIB STYLE  (matching bh_eddington_analysis.py)
 # ============================================================================
@@ -111,6 +116,7 @@ UNIT_TIME_IN_S = 3.086e19              # SAGE Millennium code time unit (~1 Gyr)
 # ── Fundamental constants (cgs) ────────────────────────────────────────────
 C_LIGHT_CGS = 2.99792458e10    # cm / s
 SOLAR_MASS_G = 1.989e33        # g
+SOLAR_LUM_ERG_S = 3.828e33     # erg / s (IAU nominal value)
 PC_TO_CM     = 3.0856775814913673e18   # cm
 
 # Eddington luminosity per unit mass (Rybicki & Lightman 1979, eq. 1.4.9) and
@@ -132,6 +138,14 @@ T_SALPETER_YR = (AGN_RADIATIVE_EFFICIENCY * SOLAR_MASS_G * C_LIGHT_CGS**2
 LRD_BHAR_DEFAULT = 0.1     # M_sun/yr  (red dashed line)
 LRD_BHAR_ALT     = 0.05    # M_sun/yr  (red dotted line)
 LRD_FBHM_THRESH  = 0.03    # M_BH / M_star >= 3% -> red, else blue
+
+# BH must exceed its own BHSeedMass by at least this fraction to count as
+# "grown" -- see mask_ungrown_seeds(). Below this, BHMassatAccretion is
+# essentially still the seed value (a few x 1e-3 relative growth is within
+# float/timestep noise of zero), and these events pile up as a spurious
+# cluster at log M_BH ~ 2 (the ~100 Msun light-seed mass) in every panel
+# plotting M_BH, rather than reflecting any real accretion history.
+SEED_GROWTH_THRESHOLD = 0.01
 
 # ── M_BH-M_star relation (Kormendy & Ho 2013, ARA&A 51, 511, eq. 10) ──────
 # log(M_BH/Msun) = alpha + beta * log(M_bulge / 1e11 Msun), intrinsic scatter eps (dex)
@@ -158,6 +172,30 @@ AB_ZEROPOINT = 48.60
 # (matches allresults-blackholes.py's MILLENNIUM_BOX_MPC_H).
 MILLENNIUM_BOX_MPC_H = 62.5
 
+# ── Fixed axis ranges ───────────────────────────────────────────────────────
+# Every panel plots these ranges by default (NOT derived from the current
+# run's own percentiles), so different model runs/parameter choices land on
+# an identical grid and can be compared side by side. A panel only widens
+# past its default if an LRD-selected or literature point would otherwise be
+# clipped off-axis -- and prints a NOTE when that happens, since it means
+# that particular run's plot is no longer on the standard shared scale.
+PANEL_A_XLIM = (2.0, 10.5)     # log M_BH
+PANEL_A_YLIM = (-13.5, 3.0)    # log Mdot_BH
+PANEL_B_XLIM = (3.0, 10.0)     # log M_BH
+PANEL_B_YLIM = (-9.0, 0.5)     # log f_BH
+PANEL_C_XLIM = (6.0, 11.0)     # log M_star
+PANEL_C_YLIM = (3.0, 9.0)      # log M_BH
+PANEL_D_XLIM = (3.0, 9.0)      # log M_BH
+PANEL_D_YLIM = (35.0, 47.0)    # log L_bol
+PANEL_E_XLIM = (-5.0, -25.0)   # M_UV,1450 (faint -> bright, deliberately reversed)
+PANEL_E_YLIM = (3.0, 10.0)     # log M_BH
+PANEL_F_XLIM = (30.0, 48.0)    # log L_bol
+PANEL_F_YLIM = (-8.0, 0.0)     # log(dN/dlogL / Volume)
+
+# Lower log L_bol bound for the Shen+20 QLF model overlay on panel f -- see
+# shen20_bolometric_qlf_logphi and its call site for why this is needed.
+SHEN20_MODEL_LOGLBOL_MIN = 42.0
+
 # ── Millennium snapshot -> redshift ────────────────────────────────────────
 MILLENNIUM_SNAP_TO_Z = {
     0: 127.0, 1: 65.74, 2: 40.0,  3: 26.66, 4: 19.36, 5: 14.78, 6: 11.66,
@@ -171,7 +209,15 @@ MILLENNIUM_SNAP_TO_Z = {
     56: 0.25, 57: 0.24, 58: 0.23, 59: 0.21, 60: 0.20, 61: 0.18, 62: 0.0,
 }
 
-def snap_to_z(snap):
+def snap_to_z(snap, redshifts=None):
+    """Redshift for a given snapshot. Prefers the file's own
+    Header/snapshot_redshifts table (`redshifts`, from read_actual_redshifts)
+    since MILLENNIUM_SNAP_TO_Z assumes the stock Millennium snapshot spacing
+    and silently gives the wrong z for any run whose output snapshots don't
+    follow that exact spacing.
+    """
+    if redshifts is not None and 0 <= snap < len(redshifts):
+        return float(redshifts[snap])
     return MILLENNIUM_SNAP_TO_Z.get(snap, 0.0)
 
 # ============================================================================
@@ -191,6 +237,17 @@ def read_sim_params(filepath):
     except Exception:
         pass
     return 0.73   # Millennium default
+
+
+def read_actual_redshifts(filepath):
+    """Header/snapshot_redshifts array, or None if the file doesn't have one."""
+    try:
+        with h5py.File(filepath, 'r') as hf:
+            if 'Header/snapshot_redshifts' in hf:
+                return np.array(hf['Header/snapshot_redshifts'])
+    except Exception:
+        pass
+    return None
 
 
 def read_box_volume_h3(file_list):
@@ -267,12 +324,13 @@ def read_epoch(file_list, snap_col, h_h, catalogue=None, window=0):
         mdot_edd       [M_sun/yr]
         acc_type       {0,1,2,-1}
         stellar_mass   [M_sun]   (catalogue-level; see f_BH caveat)
+        seed_mass      [M_sun]   (catalogue-level BHSeedMass, for mask_ungrown_seeds())
         cat_group      str       (which group was read)
     """
     mass_conv = 1e10 / h_h
     rate_conv = mass_conv / (UNIT_TIME_IN_S / SEC_PER_YEAR)
 
-    out_bh, out_mdot, out_edd, out_type, out_star = [], [], [], [], []
+    out_bh, out_mdot, out_edd, out_type, out_star, out_seed = [], [], [], [], [], []
     cat_used = None
     cols = list(range(snap_col - window, snap_col + window + 1))
 
@@ -289,6 +347,8 @@ def read_epoch(file_list, snap_col, h_h, catalogue=None, window=0):
             type_h = (grp['BHAccretionType'][:]
                       if 'BHAccretionType' in grp else None)
             star   = grp['StellarMass'][:]              # [Ngal] catalogue-level
+            seed   = (grp['BHSeedMass'][:] if 'BHSeedMass' in grp
+                      else np.zeros(star.shape[0]))       # [Ngal] catalogue-level
 
             for c in cols:
                 if c < 0 or c >= mdot_h.shape[1]:
@@ -316,12 +376,14 @@ def read_epoch(file_list, snap_col, h_h, catalogue=None, window=0):
                 out_edd.append(edd_c[ev]  * rate_conv)
                 out_type.append(type_c[ev])
                 out_star.append(star[ev]  * mass_conv)
+                out_seed.append(seed[ev]  * mass_conv)
 
     if not out_bh:
         return {
             'bh_mass': np.array([]), 'mdot_msun_yr': np.array([]),
             'mdot_edd': np.array([]), 'acc_type': np.array([]),
-            'stellar_mass': np.array([]), 'cat_group': cat_used,
+            'stellar_mass': np.array([]), 'seed_mass': np.array([]),
+            'cat_group': cat_used,
         }
 
     return {
@@ -330,6 +392,7 @@ def read_epoch(file_list, snap_col, h_h, catalogue=None, window=0):
         'mdot_edd'     : np.concatenate(out_edd),
         'acc_type'     : np.concatenate(out_type),
         'stellar_mass' : np.concatenate(out_star),
+        'seed_mass'    : np.concatenate(out_seed),
         'cat_group'    : cat_used,
     }
 
@@ -340,6 +403,36 @@ def read_epoch(file_list, snap_col, h_h, catalogue=None, window=0):
 def eddington_mdot(log_mbh):
     """log10(Mdot_Edd [M_sun/yr]) from log10(M_BH [M_sun])  (eta=0.1)."""
     return log_mbh - np.log10(T_SALPETER_YR)
+
+
+def lock_axis_range(default_lo, default_hi, must_include=(), axis_name='axis', pad=0.3):
+    """
+    Returns (lo, hi) for a panel's axis. Normally just default_lo/default_hi,
+    unchanged, so different runs share an identical fixed scale. Only widens
+    past the default if a value in must_include (LRD-selected or literature
+    points -- data that must stay visible) would otherwise be clipped off,
+    printing a NOTE so it's clear this run's axis is non-standard.
+    Handles both ascending (lo < hi) and reversed (lo > hi, e.g. panel e's
+    magnitude axis) defaults.
+    """
+    lo, hi = default_lo, default_hi
+    vals = [np.atleast_1d(v) for v in must_include if v is not None]
+    vals = [v[np.isfinite(v)] for v in vals if len(v)]
+    if not vals:
+        return lo, hi
+    data_min = min(v.min() for v in vals) - pad
+    data_max = max(v.max() for v in vals) + pad
+
+    axis_min, axis_max = min(lo, hi), max(lo, hi)
+    new_min = min(axis_min, np.floor(data_min))
+    new_max = max(axis_max, np.ceil(data_max))
+    if new_min == axis_min and new_max == axis_max:
+        return lo, hi
+
+    print(f'  NOTE: widened {axis_name} from ({axis_min:g}, {axis_max:g}) to '
+          f'({new_min:g}, {new_max:g}) to keep all plotted points visible '
+          f'(this run is off the standard shared scale).')
+    return (new_min, new_max) if lo < hi else (new_max, new_min)
 
 
 def compute_selection(bh_mass, mdot, medd, star, bhar_floor):
@@ -357,6 +450,18 @@ def compute_selection(bh_mass, mdot, medd, star, bhar_floor):
     lrd_red   = bhar_pass & edd_pass & fbh_pass
     lrd_blue  = bhar_pass & edd_pass & ~fbh_pass
     return f_bh, lrd_red, lrd_blue
+
+
+def mask_ungrown_seeds(bh_mass, seed_mass, growth_threshold=SEED_GROWTH_THRESHOLD):
+    """
+    True where a BH has grown at least `growth_threshold` beyond its own
+    BHSeedMass; False for accretion "events" recorded while the BH is still
+    essentially at its seed value. Those show up as a spurious pileup at
+    log M_BH ~ 2 in every M_BH panel (see SEED_GROWTH_THRESHOLD) rather than
+    reflecting real accretion, so they're masked out by default everywhere
+    (toggle with --no-mask-seeds).
+    """
+    return bh_mass > seed_mass * (1.0 + growth_threshold)
 
 
 def kormendy_ho_mbh(log_mstar):
@@ -381,6 +486,66 @@ def lbol_from_mdot(mdot_msun_yr):
     return np.log10(l_bol)
 
 
+def mdot_from_lbol(log_lbol):
+    """
+    Inverse of lbol_from_mdot(): Mdot_BH [M_sun/yr] from log10(L_bol [erg/s]),
+    for converting literature L_bol measurements onto the same Mdot_BH axis
+    as panel a, under the same eta=0.1 assumption.
+    """
+    l_bol = 10.0**np.asarray(log_lbol, dtype=np.float64)
+    mdot_g_s = l_bol / (AGN_RADIATIVE_EFFICIENCY * C_LIGHT_CGS**2)
+    return mdot_g_s * SEC_PER_YEAR / SOLAR_MASS_G
+
+
+def bh_mass_min_from_lbol(log_lbol):
+    """
+    Minimum M_BH [M_sun] implied by L_bol under an Eddington-limited
+    (lambda_Edd <= 1) assumption: M_BH >= L_bol / L_Edd_per_Msun. Used only
+    for literature sources that give L_bol but no direct M_BH measurement.
+    """
+    log_l_edd_per_msun = np.log10(EDDINGTON_LUM_PER_MSUN_CGS)
+    return 10.0**(np.asarray(log_lbol, dtype=np.float64) - log_l_edd_per_msun)
+
+
+def shen20_bolometric_qlf_logphi(log_lbol, z, h_h=None):
+    """
+    log10(phi_bol [dex^-1 (Mpc/h)^-3]) from Shen et al. (2020, MNRAS 495,
+    3252) global fit A -- their Eq. 11 (double power-law dn/dlogL) with the
+    redshift-dependent parameters of their Eq. 14 (Table 4), evaluated at
+    bolometric luminosity log_lbol [log10(erg/s)] and redshift z.
+
+    Shen+20 tabulate log L_star in L_sun, so log_lbol is converted from
+    erg/s before forming the L/L_star ratio. Their phi_star is in
+    dex^-1 cMpc^-3 for their fixed H0 = 70 km/s/Mpc cosmology (NOT h-scaled
+    like this module's own panel f, which bins into dex^-1 (Mpc/h)^-3 for
+    whatever h the simulation being plotted actually used) -- so if h_h is
+    given, the result is converted via phi[(Mpc/h)^-3] = phi[Mpc^-3] / h_h^3
+    to sit on the same axis as this module's own luminosity function.
+    """
+    zp1 = 1.0 + z
+    x = zp1 / (1.0 + SHEN20_ZREF)
+
+    a0, a1, a2 = SHEN20_GAMMA1_A
+    gamma1 = a0 + a1 * zp1 + a2 * (2.0 * zp1**2 - 1.0)
+
+    b0, b1, b2 = SHEN20_GAMMA2_A
+    gamma2 = 2.0 * b0 / (x**b1 + x**b2)
+
+    c0, c1, c2 = SHEN20_LSTAR_A
+    log_lstar_lsun = 2.0 * c0 / (x**c1 + x**c2)
+
+    d0, d1 = SHEN20_PHISTAR_A
+    log_phistar = d0 + d1 * zp1
+
+    log_lbol_lsun = np.asarray(log_lbol, dtype=np.float64) - np.log10(SOLAR_LUM_ERG_S)
+    ratio = 10.0**(log_lbol_lsun - log_lstar_lsun)
+    log_phi = log_phistar - np.log10(ratio**gamma1 + ratio**gamma2)
+
+    if h_h:
+        log_phi = log_phi - 3.0 * np.log10(h_h)
+    return log_phi
+
+
 def m1450_from_lbol(log_lbol):
     """
     M_1450 (rest-frame AB absolute magnitude) from log10(L_bol [erg/s]).
@@ -396,18 +561,40 @@ def m1450_from_lbol(log_lbol):
     f_nu = l_nu / (4.0 * np.pi * d_10pc_cm**2)            # erg/s/cm^2/Hz
     return -2.5 * np.log10(f_nu) - AB_ZEROPOINT
 
+
+def plot_lit_points(ax, label, x, y, xerr=None, yerr=None,
+                    xlolims=False, xuplims=False, lolims=False, uplims=False):
+    """Overlay one literature source's points with its shared marker/colour
+    (see LIT_STYLE in lrd_literature_data.py), adding a single legend entry."""
+    style = LIT_STYLE[label]
+    ax.errorbar(x, y, xerr=xerr, yerr=yerr, fmt=style['marker'],
+                color=style['color'], mec='black', mew=0.6, ms=style['ms'],
+                capsize=3, elinewidth=1.0, zorder=8, ls='none', label=label,
+                xlolims=xlolims, xuplims=xuplims, lolims=lolims, uplims=uplims)
+
+
+def lit_legend_handles(labels):
+    """Legend proxies for plot_lit_points() sources (errorbar handles don't
+    reproduce cleanly when a legend is built from an explicit handles list)."""
+    return [Line2D([0], [0], marker=LIT_STYLE[l]['marker'], color='w',
+                   markerfacecolor=LIT_STYLE[l]['color'], markeredgecolor='black',
+                   markersize=LIT_STYLE[l]['ms'] - 1, linestyle='none', label=l)
+            for l in labels]
+
 # ============================================================================
 # MAIN PLOT
 # ============================================================================
 
 def plot_panel_a(data, snap_col, output_file,
                  show_lrd=True, use_fbh=True,
-                 bhar_floor=LRD_BHAR_DEFAULT, z_override=None):
+                 bhar_floor=LRD_BHAR_DEFAULT, z_override=None, show_lit=True,
+                 mask_seeds=True):
 
     bh_mass = data['bh_mass']
     mdot    = data['mdot_msun_yr']
     medd    = data['mdot_edd']
     star    = data['stellar_mass']
+    seed    = data['seed_mass']
 
     if len(bh_mass) == 0:
         print('  ERROR: no accretion events found in the selected column(s).')
@@ -419,6 +606,8 @@ def plot_panel_a(data, snap_col, output_file,
     valid = (
         (bh_mass > 0) & (mdot > 0) & np.isfinite(bh_mass) & np.isfinite(mdot)
     )
+    if mask_seeds:
+        valid &= mask_ungrown_seeds(bh_mass, seed)
     bh_mass = bh_mass[valid]; mdot = mdot[valid]
     medd    = medd[valid];    star = star[valid]
 
@@ -440,20 +629,28 @@ def plot_panel_a(data, snap_col, output_file,
     if use_fbh:
         print(f'  LRD blue (f_BH<3%): {lrd_blue.sum():,}')
 
+    # literature Mdot_BH, derived once and reused for both the axis lock and
+    # the overlay further down
+    lit_log_mbh, lit_log_mdot = [], []
+    if show_lit:
+        t_mdot = PANG26['lambda_edd'] * 10**eddington_mdot(PANG26['log_mbh'])
+        lit_log_mbh.append(PANG26['log_mbh']); lit_log_mdot.append(np.log10(t_mdot))
+        m_mdot = mdot_from_lbol(np.log10(MATHEE24['lbol_1e44']) + 44.0)
+        lit_log_mbh.append(MATHEE24['log_mbh']); lit_log_mdot.append(np.log10(m_mdot))
+        l_mdot = mdot_from_lbol(LIN25['log_lbol'])
+        lit_log_mbh.append(LIN25['log_mbh']); lit_log_mdot.append(np.log10(l_mdot))
+
     # ── figure ────────────────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(7.5, 7.5))
     ax.minorticks_on()
 
-    x_lo, x_hi = 2.0, 10.5
-
-    # safe y-limits (guard against tiny samples)
-    if len(log_mdot) >= 5:
-        y_lo = max(-13.5, np.percentile(log_mdot, 0.5) - 0.3)
-        y_hi = max(2.5,   np.percentile(log_mdot, 99.5) + 0.5)
-    else:
-        y_lo, y_hi = log_mdot.min() - 0.5, log_mdot.max() + 0.5
-    y_lo = np.floor(y_lo * 2) / 2
-    y_hi = np.ceil(y_hi  * 2) / 2
+    selected = (lrd_red | lrd_blue) if show_lrd else np.zeros(len(log_mbh), dtype=bool)
+    x_lo, x_hi = lock_axis_range(*PANEL_A_XLIM,
+                                 must_include=[log_mbh[selected], *lit_log_mbh],
+                                 axis_name='panel a x-axis')
+    y_lo, y_hi = lock_axis_range(*PANEL_A_YLIM,
+                                 must_include=[log_mdot[selected], *lit_log_mdot],
+                                 axis_name='panel a y-axis')
 
     # ── LRD shaded region ─────────────────────────────────────────────────
     if show_lrd:
@@ -540,6 +737,25 @@ def plot_panel_a(data, snap_col, output_file,
         ax.text(x_lo + 3.3, y_hi - 1.45, 'LRD selection',
                 fontsize=13, color='#C62828')
 
+    # ── literature overlay (Mdot_BH derived from L_bol or lambda_Edd) ──────
+    if show_lit:
+        t_mdot = PANG26['lambda_edd'] * 10**eddington_mdot(PANG26['log_mbh'])
+        t_mdot_lo = (PANG26['lambda_edd'] - PANG26['lambda_edd_err']) * \
+            10**eddington_mdot(PANG26['log_mbh'])
+        plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'], np.log10(t_mdot),
+                        xerr=PANG26['log_mbh_err'],
+                        yerr=[np.log10(t_mdot) - np.log10(np.maximum(t_mdot_lo, t_mdot * 1e-3)),
+                              np.full_like(t_mdot, 0.15)])
+
+        m_log_mdot = np.log10(mdot_from_lbol(np.log10(MATHEE24['lbol_1e44']) + 44.0))
+        plot_lit_points(ax, 'Mathee+24', MATHEE24['log_mbh'], m_log_mdot,
+                        xerr=MATHEE24['log_mbh_err'],
+                        yerr=MATHEE24['lbol_1e44_err'] / (MATHEE24['lbol_1e44'] * np.log(10)))
+
+        l_log_mdot = np.log10(mdot_from_lbol(LIN25['log_lbol']))
+        plot_lit_points(ax, 'Lin+25', LIN25['log_mbh'], l_log_mdot,
+                        xerr=LIN25['log_mbh_err'], yerr=LIN25['log_lbol_err'])
+
     # ── axes & decorations ────────────────────────────────────────────────
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
@@ -570,6 +786,8 @@ def plot_panel_a(data, snap_col, output_file,
                 Line2D([0], [0], marker='o', color='w',
                        markerfacecolor='#1565C0', markersize=7,
                        label=r'LRD ($f_{\rm BH}<3\%$)'))
+    if show_lit:
+        handles += lit_legend_handles(['Pang+26', 'Mathee+24', 'Lin+25'])
     ax.legend(handles=handles, loc='upper left', fontsize=12,
               handlelength=1.6, handletextpad=0.5)
 
@@ -580,7 +798,8 @@ def plot_panel_a(data, snap_col, output_file,
 
 
 def plot_panel_b(data, snap_col, output_file,
-                 show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT, z_override=None):
+                 show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT, z_override=None,
+                 show_lit=True, mask_seeds=True):
     """
     Panel (b): f_BH = log10(M_BH / M_star)  vs  log10(M_BH [M_sun]).
     Always splits the LRD selection by f_BH (that split is the entire point
@@ -590,6 +809,7 @@ def plot_panel_b(data, snap_col, output_file,
     mdot    = data['mdot_msun_yr']
     medd    = data['mdot_edd']
     star    = data['stellar_mass']
+    seed    = data['seed_mass']
 
     if len(bh_mass) == 0:
         print('  ERROR: no accretion events found in the selected column(s).')
@@ -600,6 +820,8 @@ def plot_panel_b(data, snap_col, output_file,
         (bh_mass > 0) & (mdot > 0) & (star > 0) &
         np.isfinite(bh_mass) & np.isfinite(mdot) & np.isfinite(star)
     )
+    if mask_seeds:
+        valid &= mask_ungrown_seeds(bh_mass, seed)
     bh_mass = bh_mass[valid]; mdot = mdot[valid]
     medd    = medd[valid];    star = star[valid]
 
@@ -612,19 +834,20 @@ def plot_panel_b(data, snap_col, output_file,
     print(f'  LRD red  (full):    {lrd_red.sum():,}')
     print(f'  LRD blue (f_BH<3%): {lrd_blue.sum():,}')
 
+    lit_log_fbh = PANG26['log_mbh'] - PANG26['log_mstar'] if show_lit else []
+
     # ── figure ────────────────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(7.5, 7.5))
     ax.minorticks_on()
 
-    x_lo, x_hi = 2.0, 10.5
-
-    if len(log_fbh) >= 5:
-        y_lo = min(-3.5, np.percentile(log_fbh, 0.5) - 0.3)
-        y_hi = max(0.5,  np.percentile(log_fbh, 99.5) + 0.3)
-    else:
-        y_lo, y_hi = log_fbh.min() - 0.5, log_fbh.max() + 0.5
-    y_lo = np.floor(y_lo * 2) / 2
-    y_hi = np.ceil(y_hi  * 2) / 2
+    selected = (lrd_red | lrd_blue) if show_lrd else np.zeros(len(log_mbh), dtype=bool)
+    x_lo, x_hi = lock_axis_range(*PANEL_B_XLIM,
+                                 must_include=[log_mbh[selected],
+                                               PANG26['log_mbh'] if show_lit else []],
+                                 axis_name='panel b x-axis')
+    y_lo, y_hi = lock_axis_range(*PANEL_B_YLIM,
+                                 must_include=[log_fbh[selected], lit_log_fbh],
+                                 axis_name='panel b y-axis')
 
     log_fbh_thresh = np.log10(LRD_FBHM_THRESH)
 
@@ -707,6 +930,15 @@ def plot_panel_b(data, snap_col, output_file,
         ax.text(x_hi - 3.3, y_hi - 0.5, 'LRD selection',
                 fontsize=13, color='#C62828')
 
+    # ── literature overlay (only Pang+26 gives both M_BH and M_star) ────
+    if show_lit:
+        t_log_fbh = PANG26['log_mbh'] - PANG26['log_mstar']
+        t_fbh_err = np.sqrt(PANG26['log_mbh_err']**2 + PANG26['log_mstar_err']**2)
+        plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'], t_log_fbh,
+                        xerr=PANG26['log_mbh_err'], yerr=t_fbh_err)
+        ax.legend(handles=lit_legend_handles(['Pang+26']),
+                  loc='upper left', fontsize=12)
+
     # ── axes & decorations ────────────────────────────────────────────────
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
@@ -731,7 +963,8 @@ def _line_rotation_deg(slope, x_lo, x_hi, y_lo, y_hi):
 
 
 def plot_panel_c(data, snap_col, output_file,
-                 show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT, z_override=None):
+                 show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT, z_override=None,
+                 show_lit=True, mask_seeds=True):
     """
     Panel (c): log10(M_BH)  vs  log10(M_star), styled after Fig. 7 of
     Kocevski et al. (2023).  Shows the Kormendy & Ho (2013) M_BH-M_star
@@ -743,6 +976,7 @@ def plot_panel_c(data, snap_col, output_file,
     mdot    = data['mdot_msun_yr']
     medd    = data['mdot_edd']
     star    = data['stellar_mass']
+    seed    = data['seed_mass']
 
     if len(bh_mass) == 0:
         print('  ERROR: no accretion events found in the selected column(s).')
@@ -752,6 +986,8 @@ def plot_panel_c(data, snap_col, output_file,
         (bh_mass > 0) & (mdot > 0) & (star > 0) &
         np.isfinite(bh_mass) & np.isfinite(mdot) & np.isfinite(star)
     )
+    if mask_seeds:
+        valid &= mask_ungrown_seeds(bh_mass, seed)
     bh_mass = bh_mass[valid]; mdot = mdot[valid]
     medd    = medd[valid];    star = star[valid]
 
@@ -768,10 +1004,15 @@ def plot_panel_c(data, snap_col, output_file,
     fig, ax = plt.subplots(figsize=(7.5, 7.5))
     ax.minorticks_on()
 
-    x_lo = np.floor(max(0.0, np.percentile(log_mstar, 0.5) - 0.3))
-    x_hi = np.ceil(np.percentile(log_mstar, 99.5) + 0.3)
-    y_lo = np.floor(max(0.0, np.percentile(log_mbh, 0.5) - 0.3))
-    y_hi = np.ceil(np.percentile(log_mbh, 99.5) + 0.3)
+    selected = (lrd_red | lrd_blue) if show_lrd else np.zeros(len(log_mbh), dtype=bool)
+    lit_mstar = [PANG26['log_mstar'], [FURTAK23['log_mstar_upper_limit']]] if show_lit else []
+    lit_mbh   = [PANG26['log_mbh'], [FURTAK23['log_mbh']]] if show_lit else []
+    x_lo, x_hi = lock_axis_range(*PANEL_C_XLIM,
+                                 must_include=[log_mstar[selected], *lit_mstar],
+                                 axis_name='panel c x-axis')
+    y_lo, y_hi = lock_axis_range(*PANEL_C_YLIM,
+                                 must_include=[log_mbh[selected], *lit_mbh],
+                                 axis_name='panel c y-axis')
 
     x_ref = np.linspace(x_lo, x_hi, 400)
 
@@ -850,6 +1091,21 @@ def plot_panel_c(data, snap_col, output_file,
                        s=35, color='#C62828', edgecolors='white',
                        linewidths=0.3, zorder=6)
 
+    # ── literature overlay ─────────────────────────────────────────────────
+    lit_labels = []
+    if show_lit:
+        plot_lit_points(ax, 'Pang+26', PANG26['log_mstar'], PANG26['log_mbh'],
+                        xerr=PANG26['log_mstar_err'], yerr=PANG26['log_mbh_err'])
+        lit_labels.append('Pang+26')
+
+        # Furtak+23: single lensed z=7.04 point; M_star is an upper limit (left arrow)
+        plot_lit_points(ax, 'Furtak+23', [FURTAK23['log_mstar_upper_limit']],
+                        [FURTAK23['log_mbh']],
+                        xerr=[[0.4], [0.0]],
+                        yerr=[[FURTAK23['log_mbh_err_lo']], [FURTAK23['log_mbh_err_hi']]],
+                        xuplims=True)
+        lit_labels.append('Furtak+23')
+
     # ── axes & decorations ────────────────────────────────────────────────
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
@@ -869,6 +1125,7 @@ def plot_panel_c(data, snap_col, output_file,
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#1565C0',
                    markersize=7, label=r'LRD ($f_{\rm BH}<3\%$)'),
         ]
+    handles += lit_legend_handles(lit_labels)
     ax.legend(handles=handles, loc='upper left', fontsize=12,
               handlelength=1.6, handletextpad=0.5)
 
@@ -879,7 +1136,8 @@ def plot_panel_c(data, snap_col, output_file,
 
 
 def plot_panel_d(data, snap_col, output_file,
-                 show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT, z_override=None):
+                 show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT, z_override=None,
+                 show_lit=True, mask_seeds=True):
     """
     Panel (d): log10(L_bol [erg/s])  vs  log10(M_BH [M_sun]), styled after
     Fig. 6 of Kocevski et al. (2023).  L_bol is derived from Mdot_BH assuming
@@ -891,6 +1149,7 @@ def plot_panel_d(data, snap_col, output_file,
     mdot    = data['mdot_msun_yr']
     medd    = data['mdot_edd']
     star    = data['stellar_mass']
+    seed    = data['seed_mass']
 
     if len(bh_mass) == 0:
         print('  ERROR: no accretion events found in the selected column(s).')
@@ -900,6 +1159,8 @@ def plot_panel_d(data, snap_col, output_file,
         (bh_mass > 0) & (mdot > 0) & (star > 0) &
         np.isfinite(bh_mass) & np.isfinite(mdot) & np.isfinite(star)
     )
+    if mask_seeds:
+        valid &= mask_ungrown_seeds(bh_mass, seed)
     bh_mass = bh_mass[valid]; mdot = mdot[valid]
     medd    = medd[valid];    star = star[valid]
 
@@ -912,21 +1173,28 @@ def plot_panel_d(data, snap_col, output_file,
     print(f'  LRD red  (full):    {lrd_red.sum():,}')
     print(f'  LRD blue (f_BH<3%): {lrd_blue.sum():,}')
 
+    lit_log_mbh, lit_log_lbol = [], []
+    if show_lit:
+        lit_log_mbh.append(PANG26['log_mbh'])
+        lit_log_lbol.append(np.log10(PANG26['lambda_edd']) + eddington_luminosity(PANG26['log_mbh']))
+        lit_log_mbh.append(MATHEE24['log_mbh'])
+        lit_log_lbol.append(np.log10(MATHEE24['lbol_1e44']) + 44.0)
+        lit_log_mbh.append(LIN25['log_mbh'])
+        lit_log_lbol.append(LIN25['log_lbol'])
+        lit_log_mbh.append([FURTAK23['log_mbh']])
+        lit_log_lbol.append([FURTAK23['log_lbol']])
+
     # ── figure ────────────────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(7.5, 7.5))
     ax.minorticks_on()
 
-    x_lo = np.floor(max(0.0, np.percentile(log_mbh, 0.5) - 0.3))
-    x_hi = np.ceil(np.percentile(log_mbh, 99.5) + 0.3)
-    y_lo = np.floor(np.percentile(log_lbol, 0.5) - 0.3)
-    y_hi = np.ceil(np.percentile(log_lbol, 99.5) + 0.3)
-
-    # the LRD/partial-LRD points are rare, extreme outliers by construction --
-    # widen the range if needed so the percentile cut never clips them out of view
-    if show_lrd and (lrd_red.sum() > 0 or lrd_blue.sum() > 0):
-        selected = lrd_red | lrd_blue
-        x_hi = max(x_hi, np.ceil(log_mbh[selected].max() + 0.3))
-        y_hi = max(y_hi, np.ceil(log_lbol[selected].max() + 0.3))
+    selected = (lrd_red | lrd_blue) if show_lrd else np.zeros(len(log_mbh), dtype=bool)
+    x_lo, x_hi = lock_axis_range(*PANEL_D_XLIM,
+                                 must_include=[log_mbh[selected], *lit_log_mbh],
+                                 axis_name='panel d x-axis')
+    y_lo, y_hi = lock_axis_range(*PANEL_D_YLIM,
+                                 must_include=[log_lbol[selected], *lit_log_lbol],
+                                 axis_name='panel d y-axis')
 
     x_ref = np.linspace(x_lo, x_hi, 400)
 
@@ -998,6 +1266,30 @@ def plot_panel_d(data, snap_col, output_file,
                        s=35, color='#C62828', edgecolors='white',
                        linewidths=0.3, zorder=6)
 
+    # ── literature overlay ─────────────────────────────────────────────────
+    lit_labels = []
+    if show_lit:
+        t_log_lbol = np.log10(PANG26['lambda_edd']) + eddington_luminosity(PANG26['log_mbh'])
+        t_lbol_err = PANG26['lambda_edd_err'] / (PANG26['lambda_edd'] * np.log(10))
+        plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'], t_log_lbol,
+                        xerr=PANG26['log_mbh_err'], yerr=t_lbol_err)
+        lit_labels.append('Pang+26')
+
+        m_log_lbol = np.log10(MATHEE24['lbol_1e44']) + 44.0
+        m_lbol_err = MATHEE24['lbol_1e44_err'] / (MATHEE24['lbol_1e44'] * np.log(10))
+        plot_lit_points(ax, 'Mathee+24', MATHEE24['log_mbh'], m_log_lbol,
+                        xerr=MATHEE24['log_mbh_err'], yerr=m_lbol_err)
+        lit_labels.append('Mathee+24')
+
+        plot_lit_points(ax, 'Lin+25', LIN25['log_mbh'], LIN25['log_lbol'],
+                        xerr=LIN25['log_mbh_err'], yerr=LIN25['log_lbol_err'])
+        lit_labels.append('Lin+25')
+
+        plot_lit_points(ax, 'Furtak+23', [FURTAK23['log_mbh']], [FURTAK23['log_lbol']],
+                        xerr=[[FURTAK23['log_mbh_err_lo']], [FURTAK23['log_mbh_err_hi']]],
+                        yerr=[[FURTAK23['log_lbol_err']], [FURTAK23['log_lbol_err']]])
+        lit_labels.append('Furtak+23')
+
     # ── axes & decorations ────────────────────────────────────────────────
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
@@ -1008,13 +1300,16 @@ def plot_panel_d(data, snap_col, output_file,
     ax.text(0.97, 0.04, rf'$z = {redshift:.1f}$',
             transform=ax.transAxes, ha='right', va='bottom', fontsize=16)
 
+    handles = []
     if show_lrd:
-        handles = [
+        handles += [
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#C62828',
                    markersize=7, label=r'LRD ($f_{\rm BH}\geq 3\%$)'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#1565C0',
                    markersize=7, label=r'LRD ($f_{\rm BH}<3\%$)'),
         ]
+    handles += lit_legend_handles(lit_labels)
+    if handles:
         ax.legend(handles=handles, loc='upper left', fontsize=12,
                   handlelength=1.6, handletextpad=0.5)
 
@@ -1025,7 +1320,8 @@ def plot_panel_d(data, snap_col, output_file,
 
 
 def plot_panel_e(data, snap_col, output_file,
-                 show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT, z_override=None):
+                 show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT, z_override=None,
+                 show_lit=True, mask_seeds=True):
     """
     Panel (e): M_1450 (rest-frame UV absolute magnitude)  vs  log10(M_BH),
     styled after the M_UV-M_BH comparison plots common in the JWST LRD
@@ -1037,6 +1333,7 @@ def plot_panel_e(data, snap_col, output_file,
     mdot    = data['mdot_msun_yr']
     medd    = data['mdot_edd']
     star    = data['stellar_mass']
+    seed    = data['seed_mass']
 
     if len(bh_mass) == 0:
         print('  ERROR: no accretion events found in the selected column(s).')
@@ -1046,6 +1343,8 @@ def plot_panel_e(data, snap_col, output_file,
         (bh_mass > 0) & (mdot > 0) & (star > 0) &
         np.isfinite(bh_mass) & np.isfinite(mdot) & np.isfinite(star)
     )
+    if mask_seeds:
+        valid &= mask_ungrown_seeds(bh_mass, seed)
     bh_mass = bh_mass[valid]; mdot = mdot[valid]
     medd    = medd[valid];    star = star[valid]
 
@@ -1062,17 +1361,20 @@ def plot_panel_e(data, snap_col, output_file,
     fig, ax = plt.subplots(figsize=(7.5, 7.5))
     ax.minorticks_on()
 
-    y_lo = np.floor(max(0.0, np.percentile(log_mbh, 0.5) - 0.3))
-    y_hi = np.ceil(np.percentile(log_mbh, 99.5) + 0.3)
-    x_faint  = np.ceil(np.percentile(m1450, 99.5) + 0.5)   # least negative (faint)
-    x_bright = np.floor(np.percentile(m1450, 0.5) - 0.5)   # most negative (bright)
+    selected = (lrd_red | lrd_blue) if show_lrd else np.zeros(len(log_mbh), dtype=bool)
 
-    # the LRD/partial-LRD points are rare, extreme outliers by construction --
-    # widen the range if needed so the percentile cut never clips them out of view
-    if show_lrd and (lrd_red.sum() > 0 or lrd_blue.sum() > 0):
-        selected = lrd_red | lrd_blue
-        x_bright = min(x_bright, np.floor(m1450[selected].min() - 0.5))
-        y_hi     = max(y_hi, np.ceil(log_mbh[selected].max() + 0.3))
+    lit_muv, lit_mbh = [], []
+    if show_lit:
+        labbe_mbh_min = bh_mass_min_from_lbol(LABBE25['log_lbol'])
+        lit_muv += [LABBE25['m1450'], MATHEE24['muv'], [FURTAK23['muv']]]
+        lit_mbh += [np.log10(labbe_mbh_min), MATHEE24['log_mbh'], [FURTAK23['log_mbh']]]
+
+    x_faint, x_bright = lock_axis_range(*PANEL_E_XLIM,
+                                       must_include=[m1450[selected], *lit_muv],
+                                       axis_name='panel e x-axis')
+    y_lo, y_hi = lock_axis_range(*PANEL_E_YLIM,
+                                 must_include=[log_mbh[selected], *lit_mbh],
+                                 axis_name='panel e y-axis')
 
     # ── grey background scatter + KDE contours ────────────────────────────
     bg = ~(lrd_red | lrd_blue) if show_lrd else np.ones(len(log_mbh), dtype=bool)
@@ -1130,6 +1432,24 @@ def plot_panel_e(data, snap_col, output_file,
                        s=35, color='#C62828', edgecolors='white',
                        linewidths=0.3, zorder=6)
 
+    # ── literature overlay ─────────────────────────────────────────────────
+    lit_labels = []
+    if show_lit:
+        plot_lit_points(ax, 'Mathee+24', MATHEE24['muv'], MATHEE24['log_mbh'],
+                        xerr=MATHEE24['muv_err'], yerr=MATHEE24['log_mbh_err'])
+        lit_labels.append('Mathee+24')
+
+        plot_lit_points(ax, 'Furtak+23', [FURTAK23['muv']], [FURTAK23['log_mbh']],
+                        xerr=FURTAK23['muv_err'],
+                        yerr=[[FURTAK23['log_mbh_err_lo']], [FURTAK23['log_mbh_err_hi']]])
+        lit_labels.append('Furtak+23')
+
+        # Labbe+25 has no M_BH -- plot as an Eddington-limited LOWER LIMIT
+        # (upward arrow) derived from L_bol, for their SED-classified AGN rows only.
+        plot_lit_points(ax, 'Labbe+25', LABBE25['m1450'], np.log10(labbe_mbh_min),
+                        yerr=0.3, lolims=True)
+        lit_labels.append('Labbe+25')
+
     # ── axes & decorations (x-axis runs faint -> bright, left to right) ────
     ax.set_xlim(x_faint, x_bright)
     ax.set_ylim(y_lo, y_hi)
@@ -1140,13 +1460,16 @@ def plot_panel_e(data, snap_col, output_file,
     ax.text(0.97, 0.04, rf'$z = {redshift:.1f}$',
             transform=ax.transAxes, ha='right', va='bottom', fontsize=16)
 
+    handles = []
     if show_lrd:
-        handles = [
+        handles += [
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#C62828',
                    markersize=7, label=r'LRD ($f_{\rm BH}\geq 3\%$)'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#1565C0',
                    markersize=7, label=r'LRD ($f_{\rm BH}<3\%$)'),
         ]
+    handles += lit_legend_handles(lit_labels)
+    if handles:
         ax.legend(handles=handles, loc='upper left', fontsize=12,
                   handlelength=1.6, handletextpad=0.5)
 
@@ -1158,7 +1481,7 @@ def plot_panel_e(data, snap_col, output_file,
 
 def plot_panel_f(data, snap_col, output_file, volume_h3,
                  show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT, z_override=None,
-                 n_bins=40):
+                 n_bins=40, h_h=None, show_lit=True, mask_seeds=True):
     """
     Panel (f): bolometric AGN luminosity function at the chosen redshift,
 
@@ -1167,12 +1490,13 @@ def plot_panel_f(data, snap_col, output_file, volume_h3,
     using the same comoving-volume convention (box_size^3 * frac_volume_
     processed, in (Mpc/h)^3) as the accretion rate function in
     allresults-blackholes.py.  L_bol is derived from Mdot_BH via
-    lbol_from_mdot() -- see BH_LUMINOSITY_CONVERSIONS.md.
+    lbol_from_mdot().
     """
     bh_mass = data['bh_mass']
     mdot    = data['mdot_msun_yr']
     medd    = data['mdot_edd']
     star    = data['stellar_mass']
+    seed    = data['seed_mass']
 
     if len(bh_mass) == 0:
         print('  ERROR: no accretion events found in the selected column(s).')
@@ -1182,6 +1506,8 @@ def plot_panel_f(data, snap_col, output_file, volume_h3,
         (bh_mass > 0) & (mdot > 0) & (star > 0) &
         np.isfinite(bh_mass) & np.isfinite(mdot) & np.isfinite(star)
     )
+    if mask_seeds:
+        valid &= mask_ungrown_seeds(bh_mass, seed)
     bh_mass = bh_mass[valid]; mdot = mdot[valid]
     medd    = medd[valid];    star = star[valid]
 
@@ -1195,57 +1521,68 @@ def plot_panel_f(data, snap_col, output_file, volume_h3,
         print('  WARNING: no simulation volume available; plotting raw counts, not phi.')
 
     # ── binning ─────────────────────────────────────────────────────────
-    lo = np.floor(np.percentile(log_lbol, 0.5) * 2) / 2
-    hi = np.ceil(np.percentile(log_lbol, 99.5) * 2) / 2
-
-    # the LRD/partial-LRD events are rare, extreme outliers by construction --
-    # widen the bin range if needed so np.histogram never silently drops them
-    if show_lrd and (lrd_red.sum() > 0 or lrd_blue.sum() > 0):
-        selected = lrd_red | lrd_blue
-        lo = min(lo, np.floor(log_lbol[selected].min() * 2) / 2)
-        hi = max(hi, np.ceil(log_lbol[selected].max() * 2) / 2)
+    selected = (lrd_red | lrd_blue) if show_lrd else np.zeros(len(log_lbol), dtype=bool)
+    lo, hi = lock_axis_range(*PANEL_F_XLIM, must_include=[log_lbol[selected]],
+                             axis_name='panel f x-axis')
 
     bins = np.linspace(lo, hi, n_bins + 1)
     bw = bins[1] - bins[0]
     centres = 0.5 * (bins[:-1] + bins[1:])
 
-    cats = [(log_lbol, 'Total', 'k', 2.4, 0.10)]
+    cats = [(log_lbol, 'Total', 'k', 'o')]
     if show_lrd:
-        cats.append((log_lbol[lrd_red],  r'LRD ($f_{\rm BH}\geq 3\%$)', '#C62828', 1.9, 0.15))
-        cats.append((log_lbol[lrd_blue], r'LRD ($f_{\rm BH}<3\%$)',     '#1565C0', 1.9, 0.15))
+        cats.append((log_lbol[lrd_red],  r'LRD ($f_{\rm BH}\geq 3\%$)', '#C62828', 'D'))
+        cats.append((log_lbol[lrd_blue], r'LRD ($f_{\rm BH}<3\%$)',     '#1565C0', 's'))
 
-    gmin = np.inf
-    store = []
-    for values, *_ in cats:
-        counts, _ = np.histogram(values, bins=bins)
-        y = counts / (bw * volume_h3) if volume_h3 else counts / bw
-        pos = y > 0
-        logy = np.full_like(y, np.nan, dtype=float)
-        logy[pos] = np.log10(y[pos])
-        if np.any(pos):
-            gmin = min(gmin, np.nanmin(logy[pos]))
-        store.append((logy, pos))
-    floor = gmin - 1.5 if np.isfinite(gmin) else -10.0
+    redshift = z_override if z_override is not None else snap_to_z(snap_col)
 
     # ── figure ────────────────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(7.5, 7.5))
     ax.minorticks_on()
 
     allv = []
-    for (values, label, color, lw, alpha), (logy, pos) in zip(cats, store):
-        ax.step(centres, logy, where='mid', lw=lw, color=color, label=label)
-        ax.fill_between(centres, logy, floor, step='mid', alpha=alpha, color=color)
-        allv.extend(logy[pos])
+    for values, label, color, marker in cats:
+        counts, _ = np.histogram(values, bins=bins)
+        pos = counts > 0
+        y = counts / (bw * volume_h3) if volume_h3 else counts / bw
+        logy = np.log10(y[pos])
+        # Poisson counting error, propagated into log10 space:
+        # sigma_log10(N) = sigma_N / (N * ln10) = 1 / (sqrt(N) * ln10)
+        logy_err = 1.0 / (np.sqrt(counts[pos]) * np.log(10))
+
+        ax.errorbar(centres[pos], logy, yerr=logy_err, fmt=marker, color=color,
+                    mec='black', mew=0.5, ms=6, capsize=2.5, elinewidth=1.0,
+                    ls='none', label=label, zorder=5)
+        allv.extend(logy)
+
+    # ── Shen et al. (2020) bolometric QLF model (global fit A) ─────────────
+    # Only valid/requested for z = 1-7; the fit is unconstrained/extrapolated
+    # below that range (see shen20_bolometric_qlf_logphi docstring). The
+    # faint-end slope also makes phi formally diverge as L -> 0 (worse at
+    # higher z -- an actual property of their double power-law fit, not a
+    # bug here), so the curve is only drawn from SHEN20_MODEL_LOGLBOL_MIN
+    # up -- roughly where Shen+20 themselves plot it (their Fig. 5 starts
+    # at log L_bol ~ 43) -- and is kept OUT of the axis-lock's must_include
+    # so that divergent tail can't blow up this panel's y-range.
+    show_shen20 = show_lit and (1.0 <= redshift <= 7.0)
+    if show_shen20:
+        l_ref = np.linspace(max(lo, SHEN20_MODEL_LOGLBOL_MIN), hi, 200)
+        shen20_logphi = shen20_bolometric_qlf_logphi(l_ref, redshift, h_h=h_h)
+
+    y_lo, y_hi = lock_axis_range(*PANEL_F_YLIM, must_include=[np.array(allv)],
+                                 axis_name='panel f y-axis')
+
+    if show_shen20:
+        ax.plot(l_ref, shen20_logphi, color='#000000', lw=1.6, ls='--',
+                zorder=4, label='Shen+20')
 
     ax.set_xlim(lo, hi)
-    if allv:
-        ax.set_ylim(floor + 1.0, np.nanmax(allv) + 0.8)
+    ax.set_ylim(y_lo, y_hi)
     ax.set_xlabel(r'$\log\,L_{\rm bol}\ [{\rm erg\,s^{-1}}]$', fontsize=18)
     ylabel = (r'$\log\,({\rm d}N/{\rm d}\log L_{\rm bol}\ /\ {\rm Mpc^{-3}}\,h^3)$'
               if volume_h3 else r'$\log\,({\rm d}N/{\rm d}\log L_{\rm bol})$')
     ax.set_ylabel(ylabel, fontsize=16)
 
-    redshift = z_override if z_override is not None else snap_to_z(snap_col)
     ax.text(0.97, 0.04, rf'$z = {redshift:.1f}$',
             transform=ax.transAxes, ha='right', va='bottom', fontsize=16)
     ax.legend(loc='upper right', fontsize=12)
@@ -1281,6 +1618,14 @@ def main():
                    help='Disable the f_BH red/blue split (all selected = red). '
                         'Use if mixing the per-epoch M_BH with catalogue-level '
                         'M_star is a concern.')
+    p.add_argument('--no-lit', action='store_true',
+                   help='Skip the literature overlay (Pang+26, Mathee+24, '
+                        'Labbe+25, Furtak+23, Lin+25) on panels a-e.')
+    p.add_argument('--no-mask-seeds', action='store_true',
+                   help='Do not mask BH accretion events still essentially at '
+                        f'their own BHSeedMass (< {SEED_GROWTH_THRESHOLD:.0%} grown); '
+                        'by default these are excluded everywhere since they '
+                        'pile up as a spurious cluster at log M_BH ~ 2.')
     p.add_argument('--bhar-floor', type=float, default=LRD_BHAR_DEFAULT,
                    help=f'BHAR floor in M_sun/yr (default {LRD_BHAR_DEFAULT}; '
                         f'paper alternative {LRD_BHAR_ALT}).')
@@ -1322,13 +1667,15 @@ def main():
         print(f'ERROR: no files matched "{args.input_pattern}"'); sys.exit(1)
 
     h_h  = read_sim_params(files[0])
-    z    = args.z if args.z is not None else snap_to_z(args.snapshot)
+    redshifts = read_actual_redshifts(files[0])
+    z    = args.z if args.z is not None else snap_to_z(args.snapshot, redshifts)
 
     print(f'Files:       {len(files)}')
     print(f'History col: {args.snapshot}  ->  z ~ {z:.3f}'
           + (f'  (+/- {args.window})' if args.window else ''))
     print(f'Hubble_h:    {h_h}')
     print(f'BHAR floor:  {args.bhar_floor} M_sun/yr')
+    print(f'Mask seeds:  {not args.no_mask_seeds}')
     print('Reading data...')
 
     data = read_epoch(files, args.snapshot, h_h,
@@ -1346,7 +1693,9 @@ def main():
                      show_lrd=(not args.no_lrd),
                      use_fbh=(not args.no_fbh),
                      bhar_floor=args.bhar_floor,
-                     z_override=args.z)
+                     z_override=z,
+                     show_lit=(not args.no_lit),
+                     mask_seeds=(not args.no_mask_seeds))
 
     if not args.no_panel_b:
         out_b = Path(args.output_b) if args.output_b else \
@@ -1355,7 +1704,9 @@ def main():
         plot_panel_b(data, args.snapshot, out_b,
                      show_lrd=(not args.no_lrd),
                      bhar_floor=args.bhar_floor,
-                     z_override=args.z)
+                     z_override=z,
+                     show_lit=(not args.no_lit),
+                     mask_seeds=(not args.no_mask_seeds))
 
     if not args.no_panel_c:
         out_c = Path(args.output_c) if args.output_c else \
@@ -1364,7 +1715,9 @@ def main():
         plot_panel_c(data, args.snapshot, out_c,
                      show_lrd=(not args.no_lrd),
                      bhar_floor=args.bhar_floor,
-                     z_override=args.z)
+                     z_override=z,
+                     show_lit=(not args.no_lit),
+                     mask_seeds=(not args.no_mask_seeds))
 
     if not args.no_panel_d:
         out_d = Path(args.output_d) if args.output_d else \
@@ -1373,7 +1726,9 @@ def main():
         plot_panel_d(data, args.snapshot, out_d,
                      show_lrd=(not args.no_lrd),
                      bhar_floor=args.bhar_floor,
-                     z_override=args.z)
+                     z_override=z,
+                     show_lit=(not args.no_lit),
+                     mask_seeds=(not args.no_mask_seeds))
 
     if not args.no_panel_e:
         out_e = Path(args.output_e) if args.output_e else \
@@ -1382,7 +1737,9 @@ def main():
         plot_panel_e(data, args.snapshot, out_e,
                      show_lrd=(not args.no_lrd),
                      bhar_floor=args.bhar_floor,
-                     z_override=args.z)
+                     z_override=z,
+                     show_lit=(not args.no_lit),
+                     mask_seeds=(not args.no_mask_seeds))
 
     if not args.no_panel_f:
         volume_h3 = args.sim_volume if args.sim_volume is not None \
@@ -1394,8 +1751,11 @@ def main():
         plot_panel_f(data, args.snapshot, out_f, volume_h3,
                      show_lrd=(not args.no_lrd),
                      bhar_floor=args.bhar_floor,
-                     z_override=args.z,
-                     n_bins=args.lf_bins)
+                     z_override=z,
+                     n_bins=args.lf_bins,
+                     h_h=h_h,
+                     show_lit=(not args.no_lit),
+                     mask_seeds=(not args.no_mask_seeds))
 
 
 if __name__ == '__main__':

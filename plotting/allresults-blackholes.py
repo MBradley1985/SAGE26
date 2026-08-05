@@ -8,17 +8,13 @@ streamlined script, the diagnostics that previously lived in separate files:
   1. BH growth tracking per channel        (from bh_growth_median_halos_ID.py)
   2. Accretion rate function dN/dlog10(lambda) split by channel
                                             (from bh_eddington_analysis.py)
-  3. BH seed-mass histogram by method       (from bh_seed_distribution.py /
-                                             bh_init_mass_cont.py)
-  4. Simplified timescale overlay           (from plot_timescales.py /
-                                             timescale_hists.py)
-  5. Black-hole - bulge mass relation       (from allresults-local.py)
-  6. Black-hole mass function at fixed z     (from allresults-history.py)
-  7. BH seed formation redshift density function -- for every galaxy ID that
+  3. BH seed formation redshift density function -- for every galaxy ID that
      ever exists, find the first snapshot at which BlackHoleMass > 0 (i.e.
      the seeding event) by scanning all snapshots in ascending order; bin
      the resulting redshifts into dN_seed/dz / Volume, split by seeding
      method (light/heavy/other, reusing classify_seeding_method()).
+  4. Black-hole - bulge mass relation       (from allresults-local.py)
+  5. Black-hole mass function at fixed z     (from allresults-history.py)
 
 Design notes
 ------------
@@ -61,7 +57,9 @@ import h5py
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.ticker import AutoMinorLocator, ScalarFormatter
+from matplotlib.ticker import AutoMinorLocator
+
+from lrd_literature_data import FURTAK23
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -103,12 +101,6 @@ MILLENNIUM_BOX_MPC_H = 62.5            # comoving box side (Mpc/h); override w/ 
 MIN_STELLAR_MASS_LOG = 8.5
 MIN_HALO_MASS_LOG    = 11.0
 MIN_Z0_BH_MASS       = 1.0e4           # Msun, for accretion-rate selection
-
-# Unit-time conversion for timescale dumps (code units -> Myr)
-UNIT_LENGTH_CM     = 3.08568e24
-UNIT_VELOCITY_CM_S = 1.0e5
-SEC_PER_MYR        = 3.155e13
-UNIT_TIME_IN_MYR   = (UNIT_LENGTH_CM / UNIT_VELOCITY_CM_S) / SEC_PER_MYR  # ~978029
 
 # Accretion channel codes
 ACC_RADIO, ACC_MERGER, ACC_INSTAB = 0, 1, 2
@@ -655,7 +647,7 @@ def plot_accretion_rate_function(file_list, snap_num, hubble_h, redshifts,
 
 
 # ============================================================================
-# 3. SEED-MASS HISTOGRAM BY METHOD
+# 3. BH SEED FORMATION REDSHIFT DENSITY FUNCTION
 # ============================================================================
 def classify_seeding_method(seed_mass, heavy_threshold=1.0e4):
     """0 = other/intermediate, 1 = light (30-100), 2 = heavy (>= 1e4)."""
@@ -665,49 +657,7 @@ def classify_seeding_method(seed_mass, heavy_threshold=1.0e4):
     return c
 
 
-def plot_seed_histogram(file_list, snap_num, hubble_h, output_dir):
-    name = "seed-mass histogram"
-    if not field_present(file_list, snap_num, 'BHSeedMass'):
-        print(f"[skip] {name}: missing BHSeedMass.")
-        return
-    seeds = read_hdf(file_list, snap_num, 'BHSeedMass', 1.0e10 / hubble_h)
-    seeds = seeds[seeds > 0]
-    if len(seeds) == 0:
-        print(f"[skip] {name}: no positive seed masses.")
-        return
 
-    cls = classify_seeding_method(seeds)
-    light, heavy, other = seeds[cls == 1], seeds[cls == 2], seeds[cls == 0]
-    bins = np.logspace(np.log10(seeds.min()), np.log10(seeds.max()), 50)
-
-    fig, ax = plt.subplots(figsize=(10, 7))
-    ax.minorticks_on()
-    ax.hist(light, bins=bins, color='#2196F3', alpha=0.7, edgecolor='black',
-            linewidth=0.5, label=fr'Light seeds (30-100 $M_\odot$, n={len(light)})')
-    ax.hist(heavy, bins=bins, color='#FF9800', alpha=0.7, edgecolor='black',
-            linewidth=0.5, label=fr'Heavy seeds ($\geq 10^4\,M_\odot$, n={len(heavy)})')
-    if len(other):
-        ax.hist(other, bins=bins, color='#9E9E9E', alpha=0.5, histtype='step',
-                linewidth=1.5, label=f'Other (n={len(other)})')
-    ax.set_xscale('log')
-    ax.set_xlabel(r'Seed Mass ($M_\odot$)', fontsize=14)
-    ax.set_ylabel('Count', fontsize=13)
-    ax.legend(loc='upper left', fontsize=11)
-    ax.grid(True, alpha=0.3, which='both')
-
-    z = get_redshift_from_snapshot(snap_num)
-    ax.set_title(f"BH seed mass by method (snap {snap_num})", fontsize=13)
-    plt.tight_layout()
-    out = os.path.join(output_dir, f"bh_seed_by_method{OutputFormat}")
-    fig.savefig(out, dpi=140, bbox_inches='tight')
-    plt.close(fig)
-    print(f"[ok]   {name} ({len(seeds):,} seeds: "
-          f"{len(light)} light / {len(heavy)} heavy / {len(other)} other) -> {out}")
-
-
-# ============================================================================
-# 3b. BH SEED FORMATION REDSHIFT DENSITY FUNCTION
-# ============================================================================
 def find_seed_events(file_list, hubble_h, redshifts, id_field, available_snaps):
     """
     For every unique galaxy ID that ever exists in the simulation, find the
@@ -838,80 +788,7 @@ def plot_bh_seed_density(file_list, hubble_h, redshifts, available, volume_h3,
 
 
 # ============================================================================
-# 4. SIMPLIFIED TIMESCALE OVERLAY
-# ============================================================================
-TS_KEYS    = ["dt", "tdyn_B_end", "tdyn_disk", "hubbletime", "halotime"]
-TS_COLOURS = {"dt": "#4477AA", "tdyn_B_end": "#EE6677", "tdyn_disk": "#AA3377",
-              "hubbletime": "#228833", "halotime": "#CCBB44"}
-TS_LABELS  = {"dt": r"$\Delta t$ (snapshot step)",
-              "tdyn_B_end": r"$t_{\rm dyn}$ (bulge)",
-              "tdyn_disk": r"$t_{\rm dyn}$ (disk)",
-              "hubbletime": r"$0.1\,t_H(z)=1/H(z)$",
-              "halotime": r"$t_{\rm halo}=R_{\rm vir}/V_{\rm vir}$"}
-
-
-def load_dt_from_hdf(file_list, snap_num):
-    dt = read_hdf(file_list, snap_num, 'dt')
-
-    if len(dt) == 0:
-        return None
-
-    dt = dt[np.isfinite(dt) & (dt > 0)]
-
-    # convert code units if necessary
-    dt *= UNIT_TIME_IN_MYR
-
-    return dt if len(dt) else None
-
-
-def plot_timescales_overlay(file_list, snap_num,
-                            ts_dir, units, output_dir):
-    name = "timescale overlay"
-
-    datasets = {}
-
-    dt = read_hdf(file_list, snap_num, 'tacc')
-    dt = dt[np.isfinite(dt) & (dt > 0)]
-
-    # convert code units → Myr
-    dt = dt * UNIT_TIME_IN_MYR
-
-    present = {'dt': dt}
-
-    if dt is None or len(dt) == 0:
-        print(f"[skip] {name}: no valid dt data in HDF5.")
-        return
-
-    allv = dt
-    bins = np.logspace(np.log10(allv.min()), np.log10(allv.max()), 80)
-
-    fig, ax = plt.subplots(figsize=(9, 5.5))
-
-    c = TS_COLOURS.get('dt', 'black')
-    label = TS_LABELS.get('dt', 'dt')
-
-    ax.hist(dt, bins=bins, color=c, alpha=0.45, histtype='stepfilled',
-            label=label + rf"  (med {np.median(dt):.2g} Myr)")
-    ax.hist(dt, bins=bins, color=c, histtype='step', linewidth=1.5)
-    ax.axvline(np.median(dt), color=c, ls=':', lw=1.4, alpha=0.9)
-
-    ax.set_xscale('log')
-    ax.xaxis.set_major_formatter(ScalarFormatter())
-    ax.xaxis.get_major_formatter().set_scientific(False)
-    ax.set_xlabel("Time (Myr)")
-    ax.set_ylabel("Count")
-    ax.legend(loc='upper right', fontsize=9)
-
-    plt.tight_layout()
-    out = os.path.join(output_dir, f"bh_timescales_overlay{OutputFormat}")
-    fig.savefig(out, bbox_inches='tight')
-    plt.close(fig)
-
-    print(f"[ok]   {name} -> {out}")
-
-
-# ============================================================================
-# 5. BLACK HOLE - BULGE MASS RELATION   (matches allresults-local.py styling)
+# 4. BLACK HOLE - BULGE MASS RELATION   (matches allresults-local.py styling)
 # ============================================================================
 def plot_bh_bulge_relation(file_list, snap_num, hubble_h, output_dir, dilute=7500):
     from random import sample, seed as rseed
@@ -986,7 +863,7 @@ def plot_bh_bulge_relation(file_list, snap_num, hubble_h, output_dir, dilute=750
 
 
 # ============================================================================
-# 6. BLACK HOLE MASS FUNCTION   (matches allresults-history.py styling)
+# 5. BLACK HOLE MASS FUNCTION   (matches allresults-history.py styling)
 # ============================================================================
 def plot_bh_mass_function(file_list, hubble_h, volume_phys, redshifts,
                           available, output_dir, data_dir):
@@ -1053,6 +930,12 @@ def plot_bh_mass_function(file_list, hubble_h, volume_phys, redshifts,
             except Exception as e:
                 print(f"  (could not load {obs_files[tz]}: {e})")
 
+    # Furtak et al. (2023): single lensed z=7.04 AGN, read off Fig. panel (d)
+    # (no tabulated value available -- approximate, see lrd_literature_data.py)
+    ax.plot(FURTAK23['log_mbh'], 10**FURTAK23['log_phi_bhmf'], marker='*',
+           color='#FB8C00', mec='black', mew=0.6, ms=15, ls='none',
+           zorder=8, label=f"Furtak+23 (z={FURTAK23['z']:.2f})")
+
     ax.set_yscale('log')
     ax.set_xlim(6.0, 11.0)
     ax.set_ylim(1e-5, 1e-1)
@@ -1095,11 +978,6 @@ def main():
                    help='Output directory (default: <input_dir>/plots).')
     p.add_argument('--data-dir', default='./data/bh/',
                    help='Directory with BHMF observational fig4_bhmf_z*.txt files.')
-    p.add_argument('--timescale-dir', default=None,
-                   help='Directory with timescale .txt dumps '
-                        '(default: <input_dir>/timescales then ./timescales).')
-    p.add_argument('--units', choices=['code', 'myr'], default='code',
-                   help='Units of the timescale dumps (default: code -> Myr).')
     p.add_argument('--bin-mode', choices=['none', 'stellar', 'redshift'],
                    default='none',
                    help='Accretion rate function panelling (default: none).')
@@ -1119,9 +997,7 @@ def main():
     # per-plot switches
     p.add_argument('--no-growth', action='store_true')
     p.add_argument('--no-ratefunc', action='store_true')
-    p.add_argument('--no-seeds', action='store_true')
     p.add_argument('--no-seed-density', action='store_true')
-    p.add_argument('--no-timescales', action='store_true')
     p.add_argument('--no-bhbulge', action='store_true')
     p.add_argument('--no-bhmf', action='store_true')
     args = p.parse_args()
@@ -1156,13 +1032,6 @@ def main():
     output_dir = args.output_dir or os.path.join(input_dir, 'plots')
     os.makedirs(output_dir, exist_ok=True)
 
-    # timescale dir resolution
-    if args.timescale_dir:
-        ts_dir = args.timescale_dir
-    else:
-        cand = os.path.join(input_dir, 'timescales')
-        ts_dir = cand if os.path.isdir(cand) else './timescales'
-
     stellar_edges = _parse_edges(args.stellar_bin_edges, DEFAULT_STELLAR_EDGES)
     panel_z = _parse_edges(args.panel_redshifts, DEFAULT_PANEL_Z)
 
@@ -1188,13 +1057,9 @@ def main():
                                      available, output_dir, args.bin_mode,
                                      stellar_edges, panel_z, args.edd_limited,
                                      volume_h3, args.no_cuts)
-    if not args.no_seeds:
-        plot_seed_histogram(file_list, snap_num, hubble_h, output_dir)
     if not args.no_seed_density:
         plot_bh_seed_density(file_list, hubble_h, redshifts, available,
                              volume_h3, output_dir, zmax=args.seed_density_zmax)
-    if not args.no_timescales:
-        plot_timescales_overlay(file_list, snap_num, ts_dir, args.units, output_dir)
     if not args.no_bhbulge:
         plot_bh_bulge_relation(file_list, snap_num, hubble_h, output_dir)
     if not args.no_bhmf:
