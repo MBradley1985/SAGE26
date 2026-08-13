@@ -461,9 +461,19 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     //     here is passed through to grow_black_hole() -- it must NOT be
     //     recomputed there, because the starburst (applied first) changes
     //     BulgeMass and would shift the recomputed value.
+    //
+    //     Gated on the same seeding condition grow_black_hole() checks before
+    //     applying anything: BHaccrete_demanded has no BlackHoleMass term, so
+    //     without this guard an unseeded merger remnant would still get a
+    //     demand computed, Eddington-capped, and recorded into
+    //     BHMaxaccretionRate/BHAccretionType here, only for grow_black_hole()
+    //     to discard it via its seeding gate -- leaving a non-zero "attempted"
+    //     rate on record with zero mass ever landing in MergerDrivenBHaccretionMass.
+    const int bh_can_grow = (run_params->BlackHoleSeedingOn == 0 ||
+                             galaxies[merger_centralgal].BlackHoleMass > 0.0);
     double BHaccrete_demanded = 0.0;
     double bh_accretiontime = dt;
-    if(run_params->AGNrecipeOn && cold_gas > 0.0) {
+    if(run_params->AGNrecipeOn && cold_gas > 0.0 && bh_can_grow) {
         BHaccrete_demanded = run_params->BlackHoleGrowthRate * mass_ratio /
             (1.0 + SQR(BH_GROWTH_V_KMS / galaxies[merger_centralgal].Vvir)) * cold_gas;
         if(BHaccrete_demanded < 0.0) BHaccrete_demanded = 0.0;
@@ -483,7 +493,12 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         // eddington_limited_accretion_rate on the merger channel; grow_black_hole
         // does not re-apply it in the joint path (see there).
         if(run_params->EddingtonLimitOn && BHaccrete_demanded > 0.0) {
-            double bh_rate = BHaccrete_demanded / bh_accretiontime;
+        double bh_rate = BHaccrete_demanded / bh_accretiontime;
+        int eddflag = accretion_scenario(run_params->AGNAccretionScheme,
+                                        &galaxies[merger_centralgal],
+                                        1 /* merger EddType */,
+                                        mass_ratio,
+                                        run_params);
             bh_rate = eddington_limited_accretion_rate(
                           bh_rate, run_params->EddingtonLimitOn,
                           galaxies[merger_centralgal].BlackHoleMass,
@@ -607,6 +622,14 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
     double BHaccrete, metallicity;
     const int snap = galaxies[merger_centralgal].SnapNum;
 
+    // When the seeding model is enabled, a BH must be seeded (seed_black_hole(),
+    // gated on BHSeedMinHaloMass) before it can grow. Without this guard, a galaxy
+    // whose halo hasn't cleared BHSeedMinHaloMass yet could still get a first,
+    // unseeded BlackHoleMass here from ordinary merger/instability accretion.
+    if(run_params->BlackHoleSeedingOn != 0 && galaxies[merger_centralgal].BlackHoleMass <= 0.0) {
+        return;
+    }
+
     if(galaxies[merger_centralgal].ColdGas > 0.0) {
 
         const int joint_budget = (BHaccrete_in >= 0.0);
@@ -660,11 +683,24 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
         // Re-applying it here on the same rate with the same accretiontime
         // would be a no-op at best and a double-record at worst, so skip it.
         // Legacy path: apply it here as before.
+        // proposed
         if(!joint_budget) {
             double BHaccreterate = BHaccrete / accretiontime;
 
-            int EddFlag = run_params->EddingtonLimitOn;
             int EddType = from_instability ? 2 : 1;
+            double merger_mass_ratio = from_instability ? -1.0 : mass_ratio;
+
+            // Master switch still wins: EddingtonLimitOn==0 means never cap,
+            // regardless of scenario. Scenario only gets a vote when the master
+            // switch is on -- mirrors how the merger channel's block in
+            // deal_with_galaxy_merger is already gated on EddingtonLimitOn.
+            int EddFlag = run_params->EddingtonLimitOn
+                        ? accretion_scenario(run_params->AGNAccretionScheme,
+                                                &galaxies[merger_centralgal],
+                                                EddType,
+                                                merger_mass_ratio,
+                                                run_params)
+                        : 0;
 
             BHaccreterate = eddington_limited_accretion_rate(
                                 BHaccreterate, EddFlag,

@@ -1806,6 +1806,7 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BlackHoleSeedingOn", run_params->BlackHoleSeedingOn, H5T_NATIVE_INT32);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "EddingtonLimitOn", run_params->EddingtonLimitOn, H5T_NATIVE_INT32);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "AGNDynamicAccretionOn", run_params->AGNDynamicAccretionOn, H5T_NATIVE_INT32);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "AGNAccretionScheme", run_params->AGNAccretionScheme, H5T_NATIVE_INT32);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BHExsituGrowthOn", run_params->BHExsituGrowthOn, H5T_NATIVE_INT32);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BHSeedMinHaloMass", run_params->BHSeedMinHaloMass, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BHAccretionNorm", run_params->BHAccretionNorm, H5T_NATIVE_DOUBLE);

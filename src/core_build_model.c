@@ -38,6 +38,7 @@
 #include "model_reincorporation.h"
 #include "model_starformation_and_feedback.h"
 #include "model_cooling_heating.h"
+#include "model_enhanced_bhphysics.h"
 
 
 static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals, struct halo_data *halos,
@@ -393,6 +394,18 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
     
     if (run_params->FeedbackFreeModeOn >= 1) {
         determine_and_store_ffb_regime(ngal, Zcurr, galaxies, run_params);
+    }
+
+    // Re-check BH seeding every snapshot, not just at galaxy creation: a halo
+    // below BHSeedMinHaloMass when init_galaxy() ran can still grow past the
+    // threshold later, and init_galaxy() is never called again for it.
+    if(run_params->BlackHoleSeedingOn != 0) {
+        for(int p = 0; p < ngal; p++) {
+            if(galaxies[p].BlackHoleMass <= 0.0 && galaxies[p].Mvir > run_params->BHSeedMinHaloMass) {
+                galaxies[p].BlackHoleMass = seed_black_hole(p, galaxies, run_params);
+                galaxies[p].BHSeedMass = galaxies[p].BlackHoleMass;
+            }
+        }
     }
 
     const double halo_age = run_params->Age[halo_snapnum];

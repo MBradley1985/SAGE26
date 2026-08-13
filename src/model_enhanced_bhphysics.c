@@ -142,14 +142,8 @@ double eddington_limited_accretion_rate(double accretion_rate, int eddington_fla
     const int valid_snap = (snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS);
     const int is_seed_bh = (black_hole_mass <= 0.0);
 
-    // Store the accretion type for diagnostics
     if(valid_snap) {
         BHAccretionType[snapnum] = (float)bh_accretion_type;
-        //printf("DEBUG: Snapnum = %d, BH Accretion Type = %d\n", snapnum, bh_accretion_type);
-    }
-
-    // always write both fields before any early returns
-    if(valid_snap) {
         BHMaxaccretionRate[snapnum]    = (float)accretion_rate;
         BHEddingtonRateLimit[snapnum]  = is_seed_bh ? 0.0f
                                         : (float)eddington_accretion_rate(black_hole_mass, run_params);
@@ -167,3 +161,76 @@ double eddington_limited_accretion_rate(double accretion_rate, int eddington_fla
 
     return return_rate;
 }
+
+
+static int scenario_disk_only_unlimited(const struct GALAXY *gal, int eddtype,
+                                         const struct params *run_params)
+{
+    // Instability channel runs free; merger channel stays capped.
+    return (eddtype == 2) ? 0 : 1;
+}
+
+static int scenario_merger_only_unlimited(const struct GALAXY *gal, int eddtype,
+                                           const struct params *run_params)
+{
+    // Merger channel runs free; instability channel stays capped.
+    return (eddtype == 1) ? 0 : 1;
+}
+
+static int scenario_first_event_unlimited(const struct GALAXY *gal, int eddtype,
+                                           const struct params *run_params)
+{
+    // i.e. the growth episode right after seeding.
+    return (gal->BlackHoleMass <= gal->BHSeedMass) ? 0 : 1;
+}
+
+static int scenario_small_halo_unlimited(const struct GALAXY *gal, int eddtype,
+                                          const struct params *run_params)
+{
+    return (gal->Mvir < 10) ? 0 : 1;  //1.4×10^11 Msun
+}
+
+static int scenario_massive_halo_unlimited(const struct GALAXY *gal, int eddtype,
+                                            const struct params *run_params)
+{
+    return (gal->Mvir > 10) ? 0 : 1; //1.4×10^11 Msun
+}
+
+static int scenario_conc_bulge_unlimited(const struct GALAXY *gal, int eddtype,
+                                          const struct params *run_params)
+{
+    // Bulge-to-total stellar mass ratio above a cut -> unlimited.
+    if (gal->StellarMass <= 0.0) return 1;
+    const double bulge_frac = gal->BulgeMass / gal->StellarMass;
+    return (bulge_frac > 0.5) ? 0 : 1;
+}
+
+static int scenario_minor_merger_unlimited(const struct GALAXY *gal, double mass_ratio,
+                                            const struct params *run_params)
+{
+    return (mass_ratio <= run_params->ThreshMajorMerger) ? 0 : 1;
+}
+
+static int scenario_major_merger_unlimited(const struct GALAXY *gal, double mass_ratio,
+                                            const struct params *run_params)
+{
+    return (mass_ratio > run_params->ThreshMajorMerger) ? 0 : 1;
+}
+
+int accretion_scenario(int scenario_id, const struct GALAXY *gal,
+                        int eddtype, double mass_ratio, const struct params *run_params)
+{
+    switch (scenario_id) {
+        case 0: return run_params->EddingtonLimitOn;          // current global behaviour: capped everywhere
+        case 1: return scenario_disk_only_unlimited(gal, eddtype, run_params);
+        case 2: return scenario_merger_only_unlimited(gal, eddtype, run_params);
+        case 3: return scenario_first_event_unlimited(gal, eddtype, run_params);
+        case 4: return scenario_small_halo_unlimited(gal, eddtype, run_params);
+        case 5: return scenario_massive_halo_unlimited(gal, eddtype, run_params);
+        case 6: return scenario_conc_bulge_unlimited(gal, eddtype, run_params);
+        case 7: return scenario_minor_merger_unlimited(gal, mass_ratio, run_params);
+        case 8: return scenario_major_merger_unlimited(gal, mass_ratio, run_params);
+        default: return run_params->EddingtonLimitOn;         // safe fallback
+    }
+}
+

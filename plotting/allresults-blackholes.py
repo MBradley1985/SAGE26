@@ -9,10 +9,14 @@ streamlined script, the diagnostics that previously lived in separate files:
   2. Accretion rate function dN/dlog10(lambda) split by channel
                                             (from bh_eddington_analysis.py)
   3. BH seed formation redshift density function -- for every galaxy ID that
-     ever exists, find the first snapshot at which BlackHoleMass > 0 (i.e.
-     the seeding event) by scanning all snapshots in ascending order; bin
-     the resulting redshifts into dN_seed/dz / Volume, split by seeding
-     method (light/heavy/other, reusing classify_seeding_method()).
+     ever exists, find the first snapshot at which BHSeedMass > 0 (i.e. the
+     seeding/first-accretion event for that galaxy's own BH lineage) by
+     scanning all snapshots in ascending order; bin the resulting redshifts
+     into dN_seed/dz / Volume, split by seeding method (light/heavy/other,
+     reusing classify_seeding_method()). BHSeedMass is used instead of
+     BlackHoleMass because BlackHoleMass absorbs a satellite's
+     already-grown BH mass on merger/disruption -- keying on BHSeedMass
+     avoids mistaking merger-inherited BH mass for a fresh seeding event.
   4. Black-hole - bulge mass relation       (from allresults-local.py)
   5. Black-hole mass function at fixed z     (from allresults-history.py)
 
@@ -661,48 +665,71 @@ def classify_seeding_method(seed_mass, heavy_threshold=1.0e4):
 def find_seed_events(file_list, hubble_h, redshifts, id_field, available_snaps):
     """
     For every unique galaxy ID that ever exists in the simulation, find the
-    earliest snapshot at which BlackHoleMass > 0 -- the seeding event -- by
-    scanning all available snapshots in ascending order and tracking which
-    IDs have already been seen with a positive BH mass. This only needs the
-    plain per-snapshot BlackHoleMass catalogue field (present in every
-    SAGE26 output, old or new), so it works without re-running the sim.
+    earliest snapshot at which BHSeedMass > 0 -- the seeding/first-accretion
+    event for that galaxy's own BH lineage -- by scanning all available
+    snapshots in ascending order and tracking which IDs have already been
+    seen with a positive seed mass.
+
+    BHSeedMass is set once, at the snapshot a galaxy's own BlackHoleMass
+    first goes nonzero (via the seeding model or first accretion episode),
+    and is never touched again afterwards. Critically, it is *not* touched
+    by mergers or tidal disruption, which only add a satellite's BlackHoleMass
+    (already grown, possibly far past any seed mass) onto the central's --
+    so a central that inherits a large BH via merger will still show
+    BHSeedMass == 0 unless it was independently seeded/accreted itself.
+    Using BlackHoleMass here instead would misattribute that merger-inherited
+    mass to a fresh, heavy-looking "seeding" event. Falls back to
+    BlackHoleMass (with a one-time warning) for older outputs that predate
+    the BHSeedMass field.
 
     Returns (z_seed, seed_mass) arrays, one entry per newly-seeded BH.
-    seed_mass is BlackHoleMass at the snapshot of first detection, which --
-    since no accretion has happened yet -- equals the seed mass.
     """
     mass_conv = 1.0e10 / hubble_h
     seen = np.array([], dtype=np.int64)
     z_seed_list, mass_seed_list = [], []
+    warned_fallback = False
 
     for sn in sorted(available_snaps):
         key = f"Snap_{sn}"
-        ids_parts, bh_parts = [], []
+        ids_parts, seed_parts = [], []
         for fpath in file_list:
             with h5py.File(fpath, 'r') as hf:
-                if key in hf and id_field in hf[key] and 'BlackHoleMass' in hf[key]:
-                    ids_parts.append(np.array(hf[key][id_field]))
-                    bh_parts.append(np.array(hf[key]['BlackHoleMass']))
+                if key not in hf or id_field not in hf[key]:
+                    continue
+                grp = hf[key]
+                if 'BHSeedMass' in grp:
+                    field = 'BHSeedMass'
+                elif 'BlackHoleMass' in grp:
+                    field = 'BlackHoleMass'
+                    if not warned_fallback:
+                        print("  [warn] BHSeedMass not found in output -- falling back to "
+                              "BlackHoleMass for seed detection (merger-inherited BH mass "
+                              "may be misclassified as a seeding event).")
+                        warned_fallback = True
+                else:
+                    continue
+                ids_parts.append(np.array(grp[id_field]))
+                seed_parts.append(np.array(grp[field]))
         if not ids_parts:
             continue
         ids = np.concatenate(ids_parts).astype(np.int64)
-        bh = np.concatenate(bh_parts) * mass_conv
+        seed_mass = np.concatenate(seed_parts) * mass_conv
 
-        mask = bh > 0
+        mask = seed_mass > 0
         if not np.any(mask):
             continue
-        cand_ids, cand_bh = ids[mask], bh[mask]
+        cand_ids, cand_mass = ids[mask], seed_mass[mask]
 
         # de-duplicate within this snapshot (defensive; shouldn't normally happen)
         cand_ids, first_idx = np.unique(cand_ids, return_index=True)
-        cand_bh = cand_bh[first_idx]
+        cand_mass = cand_mass[first_idx]
 
         is_new = ~np.isin(cand_ids, seen)
         if np.any(is_new):
             z_here = get_redshift_from_snapshot(sn, redshifts)
             n_new = int(np.sum(is_new))
             z_seed_list.extend([z_here] * n_new)
-            mass_seed_list.extend(cand_bh[is_new].tolist())
+            mass_seed_list.extend(cand_mass[is_new].tolist())
             seen = np.union1d(seen, cand_ids[is_new])
 
     return np.array(z_seed_list), np.array(mass_seed_list)
@@ -720,9 +747,9 @@ def plot_bh_seed_density(file_list, hubble_h, redshifts, available, volume_h3,
         print(f"[skip] {name}: no galaxy-ID field found for cross-snapshot tracking.")
         return
 
-    print(f"  ({name}: scanning {len(available)} snapshots for first BH "
-          f"appearance by '{id_field}' -- reads BlackHoleMass at every "
-          f"snapshot, can take a while on large outputs.)")
+    print(f"  ({name}: scanning {len(available)} snapshots for first "
+          f"nonzero BHSeedMass by '{id_field}' -- can take a while on "
+          f"large outputs.)")
 
     z_seed, seed_mass = find_seed_events(file_list, hubble_h, redshifts,
                                          id_field, available)
@@ -769,7 +796,7 @@ def plot_bh_seed_density(file_list, hubble_h, redshifts, available, volume_h3,
         logy[pos] = np.log10(y[pos])
         ax.step(centres[pos], logy[pos], where='mid', lw=lw, color=color, label=label)
 
-    ax.set_xlabel(r'$z_{\rm seed}$ (redshift of first BH appearance)', fontsize=14)
+    ax.set_xlabel(r'$z_{\rm seed}$ (redshift of first nonzero BHSeedMass)', fontsize=14)
     ylabel = (r'$\log_{10}(\mathrm{d}N_{\rm seed}/\mathrm{d}z\,/\,'
               r'\mathrm{Mpc}^{-3}h^{3})$') if volume_h3 else \
              r'$\log_{10}(\mathrm{d}N_{\rm seed}/\mathrm{d}z)$'

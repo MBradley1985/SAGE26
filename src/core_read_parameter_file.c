@@ -143,6 +143,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->BHSeedMinHaloMass = 1.0; 
     run_params->BHAccretionNorm = 1.0;
     run_params->BHMassScalingIndex = 0.5;
+    run_params->AGNAccretionScheme = 0; // Default to no change in Accretion Scheme
 
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
 #define REG(tag, addr, type, req) do {         \
@@ -213,6 +214,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("BHSeedMinHaloMass",     &(run_params->BHSeedMinHaloMass),    DOUBLE, 0);
     REG("BHAccretionNorm",       &(run_params->BHAccretionNorm),      DOUBLE, 0);
     REG("BHMassScalingIndex",    &(run_params->BHMassScalingIndex),   DOUBLE, 0);
+    REG("AGNAccretionScheme",    &(run_params->AGNAccretionScheme),   INT, 0);
 
 
     /* ---- Optional: model parameters ---- */

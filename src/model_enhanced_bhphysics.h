@@ -24,6 +24,8 @@ extern "C" {
                                             int snapnum, int bh_accretion_type, const struct params *run_params,
                                             float BHAccretionType[ABSOLUTEMAXSNAPS], float BHMaxaccretionRate[ABSOLUTEMAXSNAPS],
                                             float BHEddingtonRateLimit[ABSOLUTEMAXSNAPS], float BHMassatAccretion[ABSOLUTEMAXSNAPS]);
+    
+    int accretion_scenario(int scenario_id, const struct GALAXY *gal, int eddtype, double mass_ratio, const struct params *run_params);
 
 #ifdef __cplusplus
 }

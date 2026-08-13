@@ -60,10 +60,12 @@ FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
 
-EddingtonLimitOn            0   %0: No forced limit; 1: All accretion EddLimited
+EddingtonLimitOn            1   %0: No forced limit; 1: All accretion EddLimited
 AGNDynamicAccretionOn       1   %0: default to dt; 1: Use tdyn 
 BHExsituGrowthOn            0   %0: default to no exsitu growth; 1:Consider Exsitu growth
 BlackHoleSeedingOn          1   %0: No forced seeding; 1: Light Seeding; 2: Heavy Seeding
+AGNAccretionScheme          1   %0: default (global EddingtonLimitOn); 1: disk only; 2: merger only; 3: first event; 4: small halo; 5: massive halo; 6: conc/bulge; 7: minor merger; 8: major merger
+     
 
 %------------------------------------------
 %----- SAGE model parameters --------------
@@ -82,7 +84,7 @@ QuasarModeEfficiency        0.005   %AGN quasar mode wind heating efficiency (AG
 BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during mergers (AGNrecipeOn>0)
 
 BHSeedMinHaloMass           1.0     %Minimum halo mass for seeding in 10^10 Msun/h (1.0 = 10^10 Msun/h)
-BHAccretionNorm             1.0    %The normalisation factor in front of BH Quasar Mode Accretion timescale (default =10)
+BHAccretionNorm             10.0    %The normalisation factor in front of BH Quasar Mode Accretion timescale (default =10)
 BHMassScalingIndex          0.5    %Scaling factor for the BH-Bulge Mass relation, used in the BH Quasar Mode Accretion timescale
 
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this

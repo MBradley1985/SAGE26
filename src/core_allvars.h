@@ -539,6 +539,7 @@ struct params
     int32_t BHExsituGrowthOn; // 0: off, 1: on
     int32_t EddingtonLimitOn; // 0: off, 1: on
     int32_t AGNDynamicAccretionOn; // 0: off, 1: on
+    int32_t AGNAccretionScheme; // 0: default (global EddingtonLimitOn); 1: disk only; 2: merger only; 3: first event; 4: small halo; 5: massive halo; 6: conc/bulge; 7: minor merger; 8: major merger
     
     
     double Reionization_z0;

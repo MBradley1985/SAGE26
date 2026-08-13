@@ -5,13 +5,18 @@ bh_lrd_analysis_multiz.py
 Multi-redshift companion to bh_lrd_analysis.py.
 
 Instead of one output file per panel per redshift, this script makes ONE
-3x3 grid figure PER PANEL (a-f), with each of the 9 subplots showing that
-panel at a different redshift:
+grid figure PER PANEL (a-f), with each subplot showing that panel at a
+different redshift BIN:
 
-    z ~ 0, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0
+    z = [0-0.5], [0.5-1], [1-2], [2-4], [4-6], [6-8]     (2 rows x 3 cols)
 
-(each mapped to the closest available Millennium snapshot column -- see
-nearest_snap_for_z()). All data reading, unit conversions, LRD selection,
+Each bin is a RANGE, stacking every snapshot whose redshift falls inside it
+(see snaps_in_range()) -- this both fights the sparsity of LRD events at
+high z and gives every subplot a consistent amount of cosmic time/volume
+rather than a single instantaneous snapshot. A single scalar target (mapped
+to its closest available Millennium snapshot column via nearest_snap_for_z())
+is also supported -- see --redshifts. All data reading, unit conversions,
+LRD selection,
 axis locking, and physical relations are imported unchanged from
 bh_lrd_analysis.py so the two scripts can never drift out of sync; only the
 per-panel drawing (onto a supplied `ax` instead of a standalone figure) and
@@ -80,7 +85,7 @@ plt.rcParams.update({
     'legend.frameon': False, 'legend.fontsize': 8,
 })
 
-DEFAULT_REDSHIFTS = [0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]
+DEFAULT_REDSHIFT_BINS = [(0.0, 0.5), (0.5, 1.0), (1.0, 2.0), (2.0, 4.0), (4.0, 6.0), (6.0, 8.0)]
 
 # ── Per-panel fixed axis ranges for the multi-z GRID (separate from the
 # single-panel PANEL_*_XLIM/YLIM imported above, since a shared 3x3 grid
@@ -122,6 +127,34 @@ def nearest_snap_for_z(z_target, redshifts=None):
     if redshifts is not None and len(redshifts):
         return int(np.argmin(np.abs(np.asarray(redshifts) - z_target)))
     return min(MILLENNIUM_SNAP_TO_Z, key=lambda s: abs(MILLENNIUM_SNAP_TO_Z[s] - z_target))
+
+
+def snaps_in_range(z_lo, z_hi, redshifts=None):
+    """Snapshot indices whose redshift falls in [z_lo, z_hi] (inclusive),
+    for stacking into one RANGE bin (e.g. z = 2-4) -- the range analogue of
+    nearest_snap_for_z(), preferring the file's own snapshot_redshifts table
+    over MILLENNIUM_SNAP_TO_Z for the same reason (see nearest_snap_for_z).
+    """
+    if redshifts is not None and len(redshifts):
+        idx = np.where((np.asarray(redshifts) >= z_lo) & (np.asarray(redshifts) <= z_hi))[0]
+        return sorted(int(i) for i in idx)
+    return sorted(s for s, z in MILLENNIUM_SNAP_TO_Z.items() if z_lo <= z <= z_hi)
+
+
+def _z_numeric(z_target):
+    """Single representative redshift for a bin -- itself for a scalar
+    target, the midpoint for a (lo, hi) range bin -- for use anywhere a
+    single number is needed (e.g. the Shen+20 model curve in panel f)."""
+    return 0.5 * (z_target[0] + z_target[1]) if isinstance(z_target, tuple) else z_target
+
+
+def _fmt_z(z_target):
+    """Display label for a redshift bin: '$z \\approx 0.5$' for a scalar
+    target, '$z = 2-4$' for a (lo, hi) range bin."""
+    if isinstance(z_target, tuple):
+        lo, hi = z_target
+        return rf'$z = {lo:g}-{hi:g}$'
+    return rf'$z \approx {z_target:g}$'
 
 
 def _bg_scatter_and_contours(ax, x_bg, y_bg, x_lo, x_hi, y_lo, y_hi,
@@ -173,7 +206,7 @@ def _no_data_panel(ax, xlim, ylim, z_target):
     ax.set_ylim(*ylim)
     ax.text(0.5, 0.5, 'no data', transform=ax.transAxes,
             ha='center', va='center', fontsize=10, color='#999999')
-    ax.text(0.95, 0.05, rf'$z \approx {z_target:g}$', transform=ax.transAxes,
+    ax.text(0.95, 0.05, _fmt_z(z_target), transform=ax.transAxes,
             ha='right', va='bottom', fontsize=10)
 
 
@@ -277,7 +310,7 @@ def draw_panel_a(ax, data, z_target, show_lrd=True, use_fbh=True,
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
     ax.set_xticks(np.arange(int(np.ceil(x_lo)), int(np.floor(x_hi)) + 1, 2))
-    ax.text(0.95, 0.05, rf'$z \approx {z_target:g}$', transform=ax.transAxes,
+    ax.text(0.95, 0.05, _fmt_z(z_target), transform=ax.transAxes,
             ha='right', va='bottom', fontsize=10)
 
     handles = [
@@ -359,7 +392,7 @@ def draw_panel_b(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
     ax.set_xticks(np.arange(int(np.ceil(x_lo)), int(np.floor(x_hi)) + 1, 2))
-    ax.text(0.95, 0.05, rf'$z \approx {z_target:g}$', transform=ax.transAxes,
+    ax.text(0.95, 0.05, _fmt_z(z_target), transform=ax.transAxes,
             ha='right', va='bottom', fontsize=10)
     return handles, (x_lo, x_hi), (y_lo, y_hi)
 
@@ -439,7 +472,7 @@ def draw_panel_c(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
 
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
-    ax.text(0.95, 0.05, rf'$z \approx {z_target:g}$', transform=ax.transAxes,
+    ax.text(0.95, 0.05, _fmt_z(z_target), transform=ax.transAxes,
             ha='right', va='bottom', fontsize=10)
 
     handles = [kh_line]
@@ -546,7 +579,7 @@ def draw_panel_d(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
 
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
-    ax.text(0.95, 0.05, rf'$z \approx {z_target:g}$', transform=ax.transAxes,
+    ax.text(0.95, 0.05, _fmt_z(z_target), transform=ax.transAxes,
             ha='right', va='bottom', fontsize=10)
 
     handles = []
@@ -630,7 +663,7 @@ def draw_panel_e(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
 
     ax.set_xlim(x_faint, x_bright)
     ax.set_ylim(y_lo, y_hi)
-    ax.text(0.95, 0.05, rf'$z \approx {z_target:g}$', transform=ax.transAxes,
+    ax.text(0.95, 0.05, _fmt_z(z_target), transform=ax.transAxes,
             ha='right', va='bottom', fontsize=10)
 
     handles = []
@@ -704,15 +737,16 @@ def draw_panel_f(ax, data, z_target, volume_h3, show_lrd=True,
     # Shen et al. (2020) bolometric QLF model (global fit A), z = 1-7 only
     # -- see the single-panel plot_panel_f() for why the curve is clipped
     # to SHEN20_MODEL_LOGLBOL_MIN and kept out of the axis-lock above.
-    show_shen20 = show_lit and (1.0 <= z_target <= 7.0)
+    z_num = _z_numeric(z_target)
+    show_shen20 = show_lit and (1.0 <= z_num <= 7.0)
     if show_shen20:
         l_ref = np.linspace(max(lo, SHEN20_MODEL_LOGLBOL_MIN), hi, 200)
-        shen20_logphi = shen20_bolometric_qlf_logphi(l_ref, z_target, h_h=h_h)
+        shen20_logphi = shen20_bolometric_qlf_logphi(l_ref, z_num, h_h=h_h)
         ax.plot(l_ref, shen20_logphi, color='#000000', lw=1.2, ls='--', zorder=4)
 
     ax.set_xlim(lo, hi)
     ax.set_ylim(y_lo, y_hi)
-    ax.text(0.95, 0.90, rf'$z \approx {z_target:g}$', transform=ax.transAxes,
+    ax.text(0.95, 0.90, _fmt_z(z_target), transform=ax.transAxes,
             ha='right', va='top', fontsize=10)
 
     handles = [Line2D([0], [0], marker=m, color='w', markerfacecolor=c,
@@ -792,22 +826,24 @@ def _union_lim(ranges, reversed_axis=False):
 
 def make_grid(panel_key, redshifts, snap_data, output_file, draw_fn,
               x_reversed=False, **draw_kwargs):
-    """Assemble one 3x3 grid figure for a given panel, one subplot per
-    redshift in `redshifts` (any length -- laid out row-major, not forced
-    to exactly 9), using pre-loaded `snap_data[z]` catalogues.
+    """Assemble one grid figure for a given panel, one subplot per bin in
+    `redshifts` (any length -- laid out row-major, 3 columns wide, e.g. 6
+    bins give 2 rows x 3 cols), using pre-loaded `snap_data[z]` catalogues.
+    Each bin is either a scalar target z or a (lo, hi) range (see
+    DEFAULT_REDSHIFT_BINS / snaps_in_range()) and is used verbatim as the
+    `snap_data` key and as the `z_target` passed to `draw_fn`.
 
     Subplots are touching (no gaps) with tick labels shown only on the
     outer left column / bottom row of the grid, like a standard corner plot.
     For that to look right every subplot must share the SAME x/y range, but
-    a given redshift's own data (its LRD selection) can force
-    lock_axis_range() to widen past the MULTIZ_PANEL_*_XLIM/YLIM default.
-    So before drawing anything for real, every redshift is run once in
-    `range_only` mode (cheap -- stops right after computing its natural
-    range, before any scatter/KDE work) to find the union range needed
-    across all 9, and every subplot is then drawn on that identical union
-    range -- this is also why panel f's y-range pass reruns with the x
-    union already applied, since its bins (and therefore its y-range)
-    depend on the x-range.
+    a given bin's own data (its LRD selection) can force lock_axis_range()
+    to widen past the MULTIZ_PANEL_*_XLIM/YLIM default. So before drawing
+    anything for real, every bin is run once in `range_only` mode (cheap --
+    stops right after computing its natural range, before any scatter/KDE
+    work) to find the union range needed across all of them, and every
+    subplot is then drawn on that identical union range -- this is also why
+    panel f's y-range pass reruns with the x union already applied, since
+    its bins (and therefore its y-range) depend on the x-range.
     """
     spec = PANEL_SPECS[panel_key]
     n = len(redshifts)
@@ -926,12 +962,15 @@ def make_grid(panel_key, redshifts, snap_data, output_file, draw_fn,
 
 def main():
     p = argparse.ArgumentParser(
-        description='Multi-redshift 3x3-grid version of bh_lrd_analysis.py: '
-                    'one figure per panel (a-f), 9 redshift subplots each.'
+        description='Multi-redshift grid version of bh_lrd_analysis.py: '
+                    'one figure per panel (a-f), one redshift-bin subplot each.'
     )
     p.add_argument('-i', '--input-pattern', default='./output/millennium/model_*.hdf5')
-    p.add_argument('--redshifts', type=float, nargs='+', default=DEFAULT_REDSHIFTS,
-                   help=f'Target redshifts, one subplot each (default: {DEFAULT_REDSHIFTS}).')
+    p.add_argument('--redshifts', type=float, nargs='+', default=None,
+                   help='Target redshifts, one subplot each, single values only '
+                        '(default: the mixed scalar/range bins '
+                        f'{DEFAULT_REDSHIFT_BINS} -- pass this flag to override '
+                        'with plain single-snapshot targets instead).')
     p.add_argument('--window', type=int, default=0,
                    help='Stack columns [s-window, s+window] per redshift to fight sparsity at high z.')
     p.add_argument('--catalogue', default=None,
@@ -968,58 +1007,74 @@ def main():
 
     h_h = read_sim_params(files[0])
     redshifts = read_actual_redshifts(files[0])
+    redshift_bins = args.redshifts if args.redshifts is not None else DEFAULT_REDSHIFT_BINS
     print(f'Files:        {len(files)}')
     print(f'Hubble_h:     {h_h}')
     print(f'BHAR floor:   {args.bhar_floor} M_sun/yr')
-    print(f'Redshifts:    {args.redshifts}')
+    print(f'Redshifts:    {redshift_bins}')
 
-    # ── resolve each target z to a snapshot column, then read once and reuse
-    # across every panel (a-f all draw from the same 9 catalogues) ─────────
+    # ── resolve each bin to one or more snapshot columns, then read once and
+    # reuse across every panel (a-f all draw from the same catalogues). A
+    # scalar bin maps to its nearest single snapshot (+/- --window); a
+    # (lo, hi) range bin stacks every snapshot whose redshift falls inside
+    # it, to fight LRD sparsity at high z. ─────────────────────────────────
     snap_data = {}
-    for z in args.redshifts:
-        snap_col = nearest_snap_for_z(z, redshifts)
-        actual_z = snap_to_z(snap_col, redshifts)
-        print(f'  z ~ {z:g}  ->  snapshot {snap_col} (z = {actual_z:.3f})'
-              + (f'  +/- {args.window}' if args.window else ''))
-        data = read_epoch(files, snap_col, h_h, catalogue=args.catalogue, window=args.window)
+    for zb in redshift_bins:
+        if isinstance(zb, tuple):
+            lo, hi = zb
+            cols = snaps_in_range(lo, hi, redshifts)
+            if not cols:
+                cols = [nearest_snap_for_z(0.5 * (lo + hi), redshifts)]
+                print(f'  z ~ {lo:g}-{hi:g}  ->  no snapshots in range, '
+                      f'falling back to nearest single snapshot {cols[0]}')
+            else:
+                z_list = ', '.join(f'{snap_to_z(c, redshifts):.2f}' for c in cols)
+                print(f'  z ~ {lo:g}-{hi:g}  ->  snapshots {cols} (z = {z_list})')
+            data = read_epoch(files, cols[0], h_h, catalogue=args.catalogue, cols=cols)
+        else:
+            snap_col = nearest_snap_for_z(zb, redshifts)
+            actual_z = snap_to_z(snap_col, redshifts)
+            print(f'  z ~ {zb:g}  ->  snapshot {snap_col} (z = {actual_z:.3f})'
+                  + (f'  +/- {args.window}' if args.window else ''))
+            data = read_epoch(files, snap_col, h_h, catalogue=args.catalogue, window=args.window)
         n_events = len(data['bh_mass'])
         print(f'    catalogue={data["cat_group"]}  events={n_events:,}')
-        snap_data[z] = data
+        snap_data[zb] = data
 
     outdir = Path(args.outdir) if args.outdir else Path(files[0]).parent / 'plots'
     outdir.mkdir(exist_ok=True, parents=True)
 
     if not args.no_panel_a:
         print('Building panel a grid...')
-        make_grid('a', args.redshifts, snap_data, outdir / PANEL_SPECS['a']['fname'],
+        make_grid('a', redshift_bins, snap_data, outdir / PANEL_SPECS['a']['fname'],
                   draw_panel_a, show_lrd=(not args.no_lrd), use_fbh=(not args.no_fbh),
                   bhar_floor=args.bhar_floor, show_lit=(not args.no_lit),
                   mask_seeds=(not args.no_mask_seeds))
 
     if not args.no_panel_b:
         print('Building panel b grid...')
-        make_grid('b', args.redshifts, snap_data, outdir / PANEL_SPECS['b']['fname'],
+        make_grid('b', redshift_bins, snap_data, outdir / PANEL_SPECS['b']['fname'],
                   draw_panel_b, show_lrd=(not args.no_lrd),
                   bhar_floor=args.bhar_floor, show_lit=(not args.no_lit),
                   mask_seeds=(not args.no_mask_seeds))
 
     if not args.no_panel_c:
         print('Building panel c grid...')
-        make_grid('c', args.redshifts, snap_data, outdir / PANEL_SPECS['c']['fname'],
+        make_grid('c', redshift_bins, snap_data, outdir / PANEL_SPECS['c']['fname'],
                   draw_panel_c, show_lrd=(not args.no_lrd),
                   bhar_floor=args.bhar_floor, show_lit=(not args.no_lit),
                   mask_seeds=(not args.no_mask_seeds))
 
     if not args.no_panel_d:
         print('Building panel d grid...')
-        make_grid('d', args.redshifts, snap_data, outdir / PANEL_SPECS['d']['fname'],
+        make_grid('d', redshift_bins, snap_data, outdir / PANEL_SPECS['d']['fname'],
                   draw_panel_d, show_lrd=(not args.no_lrd),
                   bhar_floor=args.bhar_floor, show_lit=(not args.no_lit),
                   mask_seeds=(not args.no_mask_seeds))
 
     if not args.no_panel_e:
         print('Building panel e grid...')
-        make_grid('e', args.redshifts, snap_data, outdir / PANEL_SPECS['e']['fname'],
+        make_grid('e', redshift_bins, snap_data, outdir / PANEL_SPECS['e']['fname'],
                   draw_panel_e, x_reversed=True, show_lrd=(not args.no_lrd),
                   bhar_floor=args.bhar_floor, show_lit=(not args.no_lit),
                   mask_seeds=(not args.no_mask_seeds))
@@ -1028,7 +1083,7 @@ def main():
         volume_h3 = args.sim_volume if args.sim_volume is not None else read_box_volume_h3(files)
         print(f'Volume (panel f): {volume_h3:.4e} (Mpc/h)^3')
         print('Building panel f grid...')
-        make_grid('f', args.redshifts, snap_data, outdir / PANEL_SPECS['f']['fname'],
+        make_grid('f', redshift_bins, snap_data, outdir / PANEL_SPECS['f']['fname'],
                   draw_panel_f, volume_h3=volume_h3, show_lrd=(not args.no_lrd),
                   bhar_floor=args.bhar_floor, n_bins=args.lf_bins, h_h=h_h,
                   show_lit=(not args.no_lit),

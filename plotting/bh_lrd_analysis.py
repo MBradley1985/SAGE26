@@ -159,6 +159,15 @@ MASS_RATIO_LINES = [0.1, 0.01, 1.0e-3]
 # Eddington ratio lines shown in panel d (Kocevski et al. 2023, Fig. 6)
 EDDINGTON_RATIO_LINES = [1.0, 0.1, 0.01]
 
+# ── BHAccretionType coding (see module docstring) and the colour scheme used
+# to split the panel-a background scatter by accretion channel; matches the
+# convention in allresults-blackholes.py (ACC_RADIO/ACC_MERGER/ACC_INSTAB). ──
+ACC_RADIO, ACC_MERGER, ACC_INSTAB = 0, 1, 2
+ACC_TYPE_COLORS = {
+    ACC_MERGER: ('#1976D2', 'Merger-driven'),
+    ACC_INSTAB: ('#FBC02D', 'Disk instability'),
+}
+
 # ── Bolometric-to-UV correction (Runnoe, Brotherton & Shang 2012, MNRAS 422,
 # 478; coefficients from the Dec 2012 erratum, MNRAS 427, 1800) ───────────
 # L_iso = BC_1450 * lambda*L_lambda(1450 Angstrom), constant-ratio form.
@@ -310,13 +319,18 @@ def _history_column(arr2d, col):
     return arr2d[:, c]
 
 
-def read_epoch(file_list, snap_col, h_h, catalogue=None, window=0):
+def read_epoch(file_list, snap_col, h_h, catalogue=None, window=0, cols=None):
     """
     Read the (M_BH, Mdot_BH) plane at the history column `snap_col`
     (= Millennium snapshot index) from the most complete catalogue group.
 
     window > 0 stacks columns [snap_col-window, snap_col+window] to fight
     sparsity at very high z (each event still becomes its own point).
+
+    cols, if given, overrides both snap_col and window with an explicit list
+    of history columns to stack -- used for a redshift RANGE bin (e.g.
+    z = 2-4) where the columns to stack aren't a symmetric window around one
+    snapshot; see bh_lrd_analysis_multiz.py's range bins.
 
     Returns dict of physical-unit arrays:
         bh_mass        [M_sun]   (M_BH at the accretion epoch)
@@ -332,7 +346,7 @@ def read_epoch(file_list, snap_col, h_h, catalogue=None, window=0):
 
     out_bh, out_mdot, out_edd, out_type, out_star, out_seed = [], [], [], [], [], []
     cat_used = None
-    cols = list(range(snap_col - window, snap_col + window + 1))
+    cols = cols if cols is not None else list(range(snap_col - window, snap_col + window + 1))
 
     for fpath in file_list:
         with h5py.File(fpath, 'r') as hf:
@@ -403,6 +417,43 @@ def read_epoch(file_list, snap_col, h_h, catalogue=None, window=0):
 def eddington_mdot(log_mbh):
     """log10(Mdot_Edd [M_sun/yr]) from log10(M_BH [M_sun])  (eta=0.1)."""
     return log_mbh - np.log10(T_SALPETER_YR)
+
+
+def kde_contour(ax, x, y, x_lo, x_hi, y_lo, y_hi, color,
+                 linewidths=(0.9, 1.2, 1.6), linestyles=(':', '--', '-'),
+                 n_kde=60_000, seed=77, zorder=2, min_points=50):
+    """
+    Overlay 68/95/99.7% KDE contours of (x, y) in a single colour.
+    Returns False (no-op) if there are too few points to fit a KDE.
+    """
+    if len(x) < min_points:
+        return False
+    try:
+        if len(x) > n_kde:
+            rng = np.random.default_rng(seed)
+            idx = rng.choice(len(x), n_kde, replace=False)
+            xk, yk = x[idx], y[idx]
+        else:
+            xk, yk = x, y
+
+        kde = gaussian_kde(np.vstack([xk, yk]), bw_method='scott')
+        xi = np.linspace(x_lo, x_hi, 250)
+        yi = np.linspace(y_lo, y_hi, 250)
+        Xi, Yi = np.meshgrid(xi, yi)
+        Zi = kde(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+
+        z_sort = np.sort(Zi.ravel())[::-1]
+        z_cum = np.cumsum(z_sort) / z_sort.sum()
+        def lvl(frac):
+            return z_sort[min(np.searchsorted(z_cum, frac), len(z_sort) - 1)]
+        levels = sorted([lvl(0.683), lvl(0.954), lvl(0.997)])
+
+        ax.contour(Xi, Yi, Zi, levels=levels, colors=color,
+                   linewidths=linewidths, linestyles=linestyles, zorder=zorder)
+        return True
+    except Exception as e:
+        print(f'  WARNING: KDE contours skipped ({e})')
+        return False
 
 
 def lock_axis_range(default_lo, default_hi, must_include=(), axis_name='axis', pad=0.3):
@@ -588,13 +639,14 @@ def lit_legend_handles(labels):
 def plot_panel_a(data, snap_col, output_file,
                  show_lrd=True, use_fbh=True,
                  bhar_floor=LRD_BHAR_DEFAULT, z_override=None, show_lit=True,
-                 mask_seeds=True):
+                 mask_seeds=True, color_by_acctype=False):
 
     bh_mass = data['bh_mass']
     mdot    = data['mdot_msun_yr']
     medd    = data['mdot_edd']
     star    = data['stellar_mass']
     seed    = data['seed_mass']
+    acc_type = data.get('acc_type', np.array([]))
 
     if len(bh_mass) == 0:
         print('  ERROR: no accretion events found in the selected column(s).')
@@ -610,6 +662,8 @@ def plot_panel_a(data, snap_col, output_file,
         valid &= mask_ungrown_seeds(bh_mass, seed)
     bh_mass = bh_mass[valid]; mdot = mdot[valid]
     medd    = medd[valid];    star = star[valid]
+    acc_type = acc_type[valid] if len(acc_type) == len(valid) else \
+        np.full(valid.sum(), -1.0)
 
     log_mbh  = np.log10(bh_mass)
     log_mdot = np.log10(mdot)
@@ -659,57 +713,54 @@ def plot_panel_a(data, snap_col, output_file,
         ax.fill_between(x_fill, y_lower, y_hi,
                         color='#D32F2F', alpha=0.08, zorder=0)
 
-    # ── grey background scatter ───────────────────────────────────────────
+    # ── grey/coloured background scatter ────────────────────────────────────
     bg = ~(lrd_red | lrd_blue) if show_lrd else np.ones(len(log_mbh), dtype=bool)
-    x_bg, y_bg = log_mbh[bg], log_mdot[bg]
+    x_bg, y_bg, type_bg = log_mbh[bg], log_mdot[bg], acc_type[bg]
 
     N_SCATTER = 30_000
     if len(x_bg) > N_SCATTER:
         rng = np.random.default_rng(42)
         idx = rng.choice(len(x_bg), N_SCATTER, replace=False)
-        x_sc, y_sc = x_bg[idx], y_bg[idx]
+        x_sc, y_sc, type_sc = x_bg[idx], y_bg[idx], type_bg[idx]
     else:
-        x_sc, y_sc = x_bg, y_bg
-    ax.scatter(x_sc, y_sc, s=4, color='#999999', alpha=0.20,
-               linewidths=0, rasterized=True, zorder=1)
+        x_sc, y_sc, type_sc = x_bg, y_bg, type_bg
+
+    if color_by_acctype:
+        is_other = np.ones(len(x_sc), dtype=bool)
+        for t, (color, _label) in ACC_TYPE_COLORS.items():
+            m = type_sc == t
+            is_other &= ~m
+            ax.scatter(x_sc[m], y_sc[m], s=4, color=color, alpha=0.35,
+                       linewidths=0, rasterized=True, zorder=1.1)
+        ax.scatter(x_sc[is_other], y_sc[is_other], s=4, color='#999999',
+                   alpha=0.20, linewidths=0, rasterized=True, zorder=1)
+    else:
+        ax.scatter(x_sc, y_sc, s=4, color='#999999', alpha=0.20,
+                   linewidths=0, rasterized=True, zorder=1)
 
     # ── KDE contours (68/95/99.7%) ────────────────────────────────────────
-    if len(x_bg) >= 50:
-        try:
-            N_KDE = 60_000
-            if len(x_bg) > N_KDE:
-                rng = np.random.default_rng(77)
-                idx = rng.choice(len(x_bg), N_KDE, replace=False)
-                xk, yk = x_bg[idx], y_bg[idx]
-            else:
-                xk, yk = x_bg, y_bg
-
-            kde  = gaussian_kde(np.vstack([xk, yk]), bw_method='scott')
-            xi   = np.linspace(x_lo, x_hi, 250)
-            yi   = np.linspace(y_lo, y_hi, 250)
-            Xi, Yi = np.meshgrid(xi, yi)
-            Zi   = kde(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
-
-            z_sort = np.sort(Zi.ravel())[::-1]
-            z_cum  = np.cumsum(z_sort) / z_sort.sum()
-            def lvl(frac):
-                return z_sort[min(np.searchsorted(z_cum, frac), len(z_sort) - 1)]
-            levels = sorted([lvl(0.683), lvl(0.954), lvl(0.997)])
-
-            ax.contour(Xi, Yi, Zi, levels=levels,
-                       colors='#333333',
-                       linewidths=[0.9, 1.2, 1.6],
-                       linestyles=[':', '--', '-'], zorder=2)
-        except Exception as e:
-            print(f'  WARNING: KDE contours skipped ({e})')
+    if color_by_acctype:
+        any_contour = False
+        matched = np.zeros(len(x_bg), dtype=bool)
+        for t, (color, _label) in ACC_TYPE_COLORS.items():
+            m = type_bg == t
+            matched |= m
+            if kde_contour(ax, x_bg[m], y_bg[m], x_lo, x_hi, y_lo, y_hi, color):
+                any_contour = True
+        if kde_contour(ax, x_bg[~matched], y_bg[~matched], x_lo, x_hi, y_lo, y_hi,
+                       '#333333'):
+            any_contour = True
+        if not any_contour:
+            print('  (too few background points for KDE contours)')
     else:
-        print('  (too few background points for KDE contours)')
+        if not kde_contour(ax, x_bg, y_bg, x_lo, x_hi, y_lo, y_hi, '#333333'):
+            print('  (too few background points for KDE contours)')
 
     # ── LRD coloured dots ─────────────────────────────────────────────────
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(log_mbh[lrd_blue], log_mdot[lrd_blue],
-                       s=35, color='#1565C0', edgecolors='white',
+                       s=35, color='#F57C00', edgecolors='white',
                        linewidths=0.3, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(log_mbh[lrd_red], log_mdot[lrd_red],
@@ -776,6 +827,14 @@ def plot_panel_a(data, snap_col, output_file,
         Line2D([0], [0], color='#E65100', lw=1.8,
                label=r'$\dot{M}_{\rm BH} = 10\,\dot{M}_{\rm Edd}$'),
     ]
+    if color_by_acctype:
+        for _t, (color, label) in ACC_TYPE_COLORS.items():
+            handles.append(
+                Line2D([0], [0], marker='o', color='w', markerfacecolor=color,
+                       markersize=7, label=label))
+        handles.append(
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#999999',
+                   markersize=7, label='Radio mode / unknown'))
     if show_lrd:
         handles.append(
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#C62828',
@@ -784,7 +843,7 @@ def plot_panel_a(data, snap_col, output_file,
         if use_fbh:
             handles.append(
                 Line2D([0], [0], marker='o', color='w',
-                       markerfacecolor='#1565C0', markersize=7,
+                       markerfacecolor='#F57C00', markersize=7,
                        label=r'LRD ($f_{\rm BH}<3\%$)'))
     if show_lit:
         handles += lit_legend_handles(['Pang+26', 'Mathee+24', 'Lin+25'])
@@ -906,7 +965,7 @@ def plot_panel_b(data, snap_col, output_file,
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(log_mbh[lrd_blue], log_fbh[lrd_blue],
-                       s=35, color='#1565C0', edgecolors='white',
+                       s=35, color='#F57C00', edgecolors='white',
                        linewidths=0.3, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(log_mbh[lrd_red], log_fbh[lrd_red],
@@ -1084,7 +1143,7 @@ def plot_panel_c(data, snap_col, output_file,
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(log_mstar[lrd_blue], log_mbh[lrd_blue],
-                       s=35, color='#1565C0', edgecolors='white',
+                       s=35, color='#F57C00', edgecolors='white',
                        linewidths=0.3, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(log_mstar[lrd_red], log_mbh[lrd_red],
@@ -1122,7 +1181,7 @@ def plot_panel_c(data, snap_col, output_file,
         handles += [
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#C62828',
                    markersize=7, label=r'LRD ($f_{\rm BH}\geq 3\%$)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#1565C0',
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#F57C00',
                    markersize=7, label=r'LRD ($f_{\rm BH}<3\%$)'),
         ]
     handles += lit_legend_handles(lit_labels)
@@ -1259,7 +1318,7 @@ def plot_panel_d(data, snap_col, output_file,
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(log_mbh[lrd_blue], log_lbol[lrd_blue],
-                       s=35, color='#1565C0', edgecolors='white',
+                       s=35, color='#F57C00', edgecolors='white',
                        linewidths=0.3, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(log_mbh[lrd_red], log_lbol[lrd_red],
@@ -1305,7 +1364,7 @@ def plot_panel_d(data, snap_col, output_file,
         handles += [
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#C62828',
                    markersize=7, label=r'LRD ($f_{\rm BH}\geq 3\%$)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#1565C0',
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#F57C00',
                    markersize=7, label=r'LRD ($f_{\rm BH}<3\%$)'),
         ]
     handles += lit_legend_handles(lit_labels)
@@ -1425,7 +1484,7 @@ def plot_panel_e(data, snap_col, output_file,
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(m1450[lrd_blue], log_mbh[lrd_blue],
-                       s=35, color='#1565C0', edgecolors='white',
+                       s=35, color='#F57C00', edgecolors='white',
                        linewidths=0.3, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(m1450[lrd_red], log_mbh[lrd_red],
@@ -1465,7 +1524,7 @@ def plot_panel_e(data, snap_col, output_file,
         handles += [
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#C62828',
                    markersize=7, label=r'LRD ($f_{\rm BH}\geq 3\%$)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#1565C0',
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#F57C00',
                    markersize=7, label=r'LRD ($f_{\rm BH}<3\%$)'),
         ]
     handles += lit_legend_handles(lit_labels)
@@ -1532,7 +1591,7 @@ def plot_panel_f(data, snap_col, output_file, volume_h3,
     cats = [(log_lbol, 'Total', 'k', 'o')]
     if show_lrd:
         cats.append((log_lbol[lrd_red],  r'LRD ($f_{\rm BH}\geq 3\%$)', '#C62828', 'D'))
-        cats.append((log_lbol[lrd_blue], r'LRD ($f_{\rm BH}<3\%$)',     '#1565C0', 's'))
+        cats.append((log_lbol[lrd_blue], r'LRD ($f_{\rm BH}<3\%$)',     '#F57C00', 's'))
 
     redshift = z_override if z_override is not None else snap_to_z(snap_col)
 
@@ -1631,6 +1690,10 @@ def main():
                         f'paper alternative {LRD_BHAR_ALT}).')
     p.add_argument('--output', default=None,
                    help='Output path for panel a (Mdot_BH vs M_BH).')
+    p.add_argument('--output-a-acctype', default=None,
+                   help='Output path for the accretion-type-coloured version '
+                        'of panel a (background BHs split into merger-driven '
+                        '/ disk-instability-driven / radio-mode-or-unknown).')
     p.add_argument('--output-b', default=None,
                    help='Output path for panel b (f_BH vs M_BH).')
     p.add_argument('--output-c', default=None,
@@ -1696,6 +1759,18 @@ def main():
                      z_override=z,
                      show_lit=(not args.no_lit),
                      mask_seeds=(not args.no_mask_seeds))
+
+        out_a_acctype = Path(args.output_a_acctype) if args.output_a_acctype else \
+            d / f'lrd_bh_accretion_scatter_by_acctype_snap{args.snapshot:02d}.png'
+        print('Plotting panel a (coloured by accretion type)...')
+        plot_panel_a(data, args.snapshot, out_a_acctype,
+                     show_lrd=(not args.no_lrd),
+                     use_fbh=(not args.no_fbh),
+                     bhar_floor=args.bhar_floor,
+                     z_override=z,
+                     show_lit=(not args.no_lit),
+                     mask_seeds=(not args.no_mask_seeds),
+                     color_by_acctype=True)
 
     if not args.no_panel_b:
         out_b = Path(args.output_b) if args.output_b else \
