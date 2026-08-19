@@ -500,7 +500,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
                                         mass_ratio,
                                         run_params);
             bh_rate = eddington_limited_accretion_rate(
-                          bh_rate, run_params->EddingtonLimitOn,
+                          bh_rate, eddflag,
                           galaxies[merger_centralgal].BlackHoleMass,
                           galaxies[merger_centralgal].SnapNum,
                           1 /* merger EddType */, run_params,

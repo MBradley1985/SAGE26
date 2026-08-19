@@ -50,9 +50,10 @@ from bh_lrd_analysis import (
     m1450_from_lbol, bh_mass_min_from_lbol, shen20_bolometric_qlf_logphi,
     SHEN20_MODEL_LOGLBOL_MIN,
     # plotting helpers
-    plot_lit_points, lit_legend_handles, _line_rotation_deg,
+    plot_lit_points, lit_legend_handles, lit_z_mask, _line_rotation_deg,
+    draw_contours_multirun,
     # constants
-    snap_to_z, MILLENNIUM_SNAP_TO_Z,
+    snap_to_z, MILLENNIUM_SNAP_TO_Z, LIT_Z_TOL,
     LRD_BHAR_DEFAULT, LRD_BHAR_ALT, LRD_FBHM_THRESH, SEED_GROWTH_THRESHOLD,
     MASS_RATIO_LINES, EDDINGTON_RATIO_LINES, KORMENDY_HO_SCATTER,
     PANEL_A_XLIM, PANEL_A_YLIM, PANEL_B_XLIM, PANEL_B_YLIM,
@@ -61,6 +62,7 @@ from bh_lrd_analysis import (
     # literature tables
     PANG26, MATHEE24, LABBE25, FURTAK23, LIN25,
 )
+from run_style import contour_style_for_index, style_for_index, lighten_color
 
 # ============================================================================
 # MATPLOTLIB STYLE  (compact variant of bh_lrd_analysis.py's style, sized for
@@ -157,6 +159,16 @@ def _fmt_z(z_target):
     return rf'$z \approx {z_target:g}$'
 
 
+def _lit_z_mask(source_z, z_target, tol=LIT_Z_TOL):
+    """lit_z_mask() extended to a (lo, hi) range bin: a point counts if it
+    falls within `tol` of either edge, i.e. anywhere in [lo-tol, hi+tol]."""
+    if isinstance(z_target, tuple):
+        z_lo, z_hi = z_target
+        source_z = np.asarray(source_z, dtype=float)
+        return (source_z >= z_lo - tol) & (source_z <= z_hi + tol)
+    return lit_z_mask(source_z, z_target, tol)
+
+
 def _bg_scatter_and_contours(ax, x_bg, y_bg, x_lo, x_hi, y_lo, y_hi,
                              contour_color='#333333', seed=42):
     """Grey background scatter + 68/95/99.7% KDE contours, shared by every
@@ -245,14 +257,18 @@ def draw_panel_a(ax, data, z_target, show_lrd=True, use_fbh=True,
         lrd_red = bhar_pass & edd_pass
         lrd_blue = np.zeros(len(log_mbh), dtype=bool)
 
+    pang_m   = _lit_z_mask(PANG26['z'], z_target)
+    mathee_m = _lit_z_mask(MATHEE24['z'], z_target)
+    lin_m    = _lit_z_mask(LIN25['z'], z_target)
+
     lit_log_mbh, lit_log_mdot = [], []
     if show_lit:
-        t_mdot = PANG26['lambda_edd'] * 10**eddington_mdot(PANG26['log_mbh'])
-        lit_log_mbh.append(PANG26['log_mbh']); lit_log_mdot.append(np.log10(t_mdot))
-        m_mdot = mdot_from_lbol(np.log10(MATHEE24['lbol_1e44']) + 44.0)
-        lit_log_mbh.append(MATHEE24['log_mbh']); lit_log_mdot.append(np.log10(m_mdot))
-        l_mdot = mdot_from_lbol(LIN25['log_lbol'])
-        lit_log_mbh.append(LIN25['log_mbh']); lit_log_mdot.append(np.log10(l_mdot))
+        t_mdot = PANG26['lambda_edd'][pang_m] * 10**eddington_mdot(PANG26['log_mbh'][pang_m])
+        lit_log_mbh.append(PANG26['log_mbh'][pang_m]); lit_log_mdot.append(np.log10(t_mdot))
+        m_mdot = mdot_from_lbol(np.log10(MATHEE24['lbol_1e44'][mathee_m]) + 44.0)
+        lit_log_mbh.append(MATHEE24['log_mbh'][mathee_m]); lit_log_mdot.append(np.log10(m_mdot))
+        l_mdot = mdot_from_lbol(LIN25['log_lbol'][lin_m])
+        lit_log_mbh.append(LIN25['log_mbh'][lin_m]); lit_log_mdot.append(np.log10(l_mdot))
 
     selected = (lrd_red | lrd_blue) if show_lrd else np.zeros(len(log_mbh), dtype=bool)
     x_lo, x_hi = lock_axis_range(*MULTIZ_PANEL_A_XLIM,
@@ -279,7 +295,7 @@ def draw_panel_a(ax, data, z_target, show_lrd=True, use_fbh=True,
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(log_mbh[lrd_blue], log_mdot[lrd_blue], s=10,
-                       color='#1565C0', edgecolors='white', linewidths=0.2, zorder=5)
+                       color='#F57C00', edgecolors='white', linewidths=0.2, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(log_mbh[lrd_red], log_mdot[lrd_red], s=10,
                        color='#C62828', edgecolors='white', linewidths=0.2, zorder=6)
@@ -291,21 +307,28 @@ def draw_panel_a(ax, data, z_target, show_lrd=True, use_fbh=True,
     ax.axhline(np.log10(LRD_BHAR_DEFAULT), color='#C62828', lw=0.8, ls='--', zorder=3, alpha=0.85)
     ax.axhline(np.log10(LRD_BHAR_ALT), color='#C62828', lw=0.6, ls=':', zorder=3, alpha=0.70)
 
+    lit_labels = []
     if show_lit:
-        t_mdot = PANG26['lambda_edd'] * 10**eddington_mdot(PANG26['log_mbh'])
-        t_mdot_lo = (PANG26['lambda_edd'] - PANG26['lambda_edd_err']) * \
-            10**eddington_mdot(PANG26['log_mbh'])
-        plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'], np.log10(t_mdot),
-                        xerr=PANG26['log_mbh_err'],
-                        yerr=[np.log10(t_mdot) - np.log10(np.maximum(t_mdot_lo, t_mdot * 1e-3)),
-                              np.full_like(t_mdot, 0.15)])
-        m_log_mdot = np.log10(mdot_from_lbol(np.log10(MATHEE24['lbol_1e44']) + 44.0))
-        plot_lit_points(ax, 'Mathee+24', MATHEE24['log_mbh'], m_log_mdot,
-                        xerr=MATHEE24['log_mbh_err'],
-                        yerr=MATHEE24['lbol_1e44_err'] / (MATHEE24['lbol_1e44'] * np.log(10)))
-        l_log_mdot = np.log10(mdot_from_lbol(LIN25['log_lbol']))
-        plot_lit_points(ax, 'Lin+25', LIN25['log_mbh'], l_log_mdot,
-                        xerr=LIN25['log_mbh_err'], yerr=LIN25['log_lbol_err'])
+        if pang_m.any():
+            t_mdot = PANG26['lambda_edd'][pang_m] * 10**eddington_mdot(PANG26['log_mbh'][pang_m])
+            t_mdot_lo = (PANG26['lambda_edd'][pang_m] - PANG26['lambda_edd_err'][pang_m]) * \
+                10**eddington_mdot(PANG26['log_mbh'][pang_m])
+            plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'][pang_m], np.log10(t_mdot),
+                            xerr=PANG26['log_mbh_err'][pang_m],
+                            yerr=[np.log10(t_mdot) - np.log10(np.maximum(t_mdot_lo, t_mdot * 1e-3)),
+                                  np.full_like(t_mdot, 0.15)])
+            lit_labels.append('Pang+26')
+        if mathee_m.any():
+            m_log_mdot = np.log10(mdot_from_lbol(np.log10(MATHEE24['lbol_1e44'][mathee_m]) + 44.0))
+            plot_lit_points(ax, 'Mathee+24', MATHEE24['log_mbh'][mathee_m], m_log_mdot,
+                            xerr=MATHEE24['log_mbh_err'][mathee_m],
+                            yerr=MATHEE24['lbol_1e44_err'][mathee_m] / (MATHEE24['lbol_1e44'][mathee_m] * np.log(10)))
+            lit_labels.append('Mathee+24')
+        if lin_m.any():
+            l_log_mdot = np.log10(mdot_from_lbol(LIN25['log_lbol'][lin_m]))
+            plot_lit_points(ax, 'Lin+25', LIN25['log_mbh'][lin_m], l_log_mdot,
+                            xerr=LIN25['log_mbh_err'][lin_m], yerr=LIN25['log_lbol_err'][lin_m])
+            lit_labels.append('Lin+25')
 
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
@@ -321,10 +344,9 @@ def draw_panel_a(ax, data, z_target, show_lrd=True, use_fbh=True,
         handles.append(Line2D([0], [0], marker='o', color='w', markerfacecolor='#C62828',
                               markersize=7, label=(r'LRD ($f_{\rm BH}\geq 3\%$)' if use_fbh else 'LRD')))
         if use_fbh:
-            handles.append(Line2D([0], [0], marker='o', color='w', markerfacecolor='#1565C0',
+            handles.append(Line2D([0], [0], marker='o', color='w', markerfacecolor='#F57C00',
                                   markersize=7, label=r'LRD ($f_{\rm BH}<3\%$)'))
-    if show_lit:
-        handles += lit_legend_handles(['Pang+26', 'Mathee+24', 'Lin+25'])
+    handles += lit_legend_handles(lit_labels)
     return handles, (x_lo, x_hi), (y_lo, y_hi)
 
 
@@ -347,11 +369,12 @@ def draw_panel_b(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     f_bh, lrd_red, lrd_blue = compute_selection(bh_mass, mdot, medd, star, bhar_floor)
     log_fbh = np.log10(f_bh)
 
-    lit_log_fbh = PANG26['log_mbh'] - PANG26['log_mstar'] if show_lit else []
+    pang_m = _lit_z_mask(PANG26['z'], z_target)
+    lit_log_fbh = (PANG26['log_mbh'][pang_m] - PANG26['log_mstar'][pang_m]) if show_lit else []
 
     selected = (lrd_red | lrd_blue) if show_lrd else np.zeros(len(log_mbh), dtype=bool)
     x_lo, x_hi = lock_axis_range(*MULTIZ_PANEL_B_XLIM,
-                                 must_include=[log_mbh[selected], PANG26['log_mbh'] if show_lit else []],
+                                 must_include=[log_mbh[selected], PANG26['log_mbh'][pang_m] if show_lit else []],
                                  axis_name='panel b x-axis')
     y_lo, y_hi = lock_axis_range(*MULTIZ_PANEL_B_YLIM,
                                  must_include=[log_fbh[selected], lit_log_fbh],
@@ -373,7 +396,7 @@ def draw_panel_b(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(log_mbh[lrd_blue], log_fbh[lrd_blue], s=10,
-                       color='#1565C0', edgecolors='white', linewidths=0.2, zorder=5)
+                       color='#F57C00', edgecolors='white', linewidths=0.2, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(log_mbh[lrd_red], log_fbh[lrd_red], s=10,
                        color='#C62828', edgecolors='white', linewidths=0.2, zorder=6)
@@ -382,11 +405,11 @@ def draw_panel_b(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     ax.axhline(log_fbh_thresh, color='#C62828', lw=1.4, zorder=4)
 
     handles = []
-    if show_lit:
-        t_log_fbh = PANG26['log_mbh'] - PANG26['log_mstar']
-        t_fbh_err = np.sqrt(PANG26['log_mbh_err']**2 + PANG26['log_mstar_err']**2)
-        plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'], t_log_fbh,
-                        xerr=PANG26['log_mbh_err'], yerr=t_fbh_err)
+    if show_lit and pang_m.any():
+        t_log_fbh = PANG26['log_mbh'][pang_m] - PANG26['log_mstar'][pang_m]
+        t_fbh_err = np.sqrt(PANG26['log_mbh_err'][pang_m]**2 + PANG26['log_mstar_err'][pang_m]**2)
+        plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'][pang_m], t_log_fbh,
+                        xerr=PANG26['log_mbh_err'][pang_m], yerr=t_fbh_err)
         handles += lit_legend_handles(['Pang+26'])
 
     ax.set_xlim(x_lo, x_hi)
@@ -416,8 +439,15 @@ def draw_panel_c(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     _, lrd_red, lrd_blue = compute_selection(bh_mass, mdot, medd, star, bhar_floor)
 
     selected = (lrd_red | lrd_blue) if show_lrd else np.zeros(len(log_mbh), dtype=bool)
-    lit_mstar = [PANG26['log_mstar'], [FURTAK23['log_mstar_upper_limit']]] if show_lit else []
-    lit_mbh = [PANG26['log_mbh'], [FURTAK23['log_mbh']]] if show_lit else []
+    pang_m   = _lit_z_mask(PANG26['z'], z_target)
+    furtak_m = _lit_z_mask(FURTAK23['z'], z_target)
+    lit_mstar, lit_mbh = [], []
+    if show_lit:
+        lit_mstar.append(PANG26['log_mstar'][pang_m])
+        lit_mbh.append(PANG26['log_mbh'][pang_m])
+        if furtak_m:
+            lit_mstar.append([FURTAK23['log_mstar_upper_limit']])
+            lit_mbh.append([FURTAK23['log_mbh']])
     x_lo, x_hi = lock_axis_range(*MULTIZ_PANEL_C_XLIM,
                                  must_include=[log_mstar[selected], *lit_mstar],
                                  axis_name='panel c x-axis')
@@ -454,21 +484,23 @@ def draw_panel_c(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(log_mstar[lrd_blue], log_mbh[lrd_blue], s=10,
-                       color='#1565C0', edgecolors='white', linewidths=0.2, zorder=5)
+                       color='#F57C00', edgecolors='white', linewidths=0.2, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(log_mstar[lrd_red], log_mbh[lrd_red], s=10,
                        color='#C62828', edgecolors='white', linewidths=0.2, zorder=6)
 
     lit_labels = []
     if show_lit:
-        plot_lit_points(ax, 'Pang+26', PANG26['log_mstar'], PANG26['log_mbh'],
-                        xerr=PANG26['log_mstar_err'], yerr=PANG26['log_mbh_err'])
-        lit_labels.append('Pang+26')
-        plot_lit_points(ax, 'Furtak+23', [FURTAK23['log_mstar_upper_limit']], [FURTAK23['log_mbh']],
-                        xerr=[[0.4], [0.0]],
-                        yerr=[[FURTAK23['log_mbh_err_lo']], [FURTAK23['log_mbh_err_hi']]],
-                        xuplims=True)
-        lit_labels.append('Furtak+23')
+        if pang_m.any():
+            plot_lit_points(ax, 'Pang+26', PANG26['log_mstar'][pang_m], PANG26['log_mbh'][pang_m],
+                            xerr=PANG26['log_mstar_err'][pang_m], yerr=PANG26['log_mbh_err'][pang_m])
+            lit_labels.append('Pang+26')
+        if furtak_m:
+            plot_lit_points(ax, 'Furtak+23', [FURTAK23['log_mstar_upper_limit']], [FURTAK23['log_mbh']],
+                            xerr=[[0.4], [0.0]],
+                            yerr=[[FURTAK23['log_mbh_err_lo']], [FURTAK23['log_mbh_err_hi']]],
+                            xuplims=True)
+            lit_labels.append('Furtak+23')
 
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
@@ -480,7 +512,7 @@ def draw_panel_c(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
         handles += [
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#C62828',
                    markersize=7, label=r'LRD ($f_{\rm BH}\geq 3\%$)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#1565C0',
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#F57C00',
                    markersize=7, label=r'LRD ($f_{\rm BH}<3\%$)'),
         ]
     handles += lit_legend_handles(lit_labels)
@@ -506,16 +538,22 @@ def draw_panel_d(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
 
     _, lrd_red, lrd_blue = compute_selection(bh_mass, mdot, medd, star, bhar_floor)
 
+    pang_m   = _lit_z_mask(PANG26['z'], z_target)
+    mathee_m = _lit_z_mask(MATHEE24['z'], z_target)
+    lin_m    = _lit_z_mask(LIN25['z'], z_target)
+    furtak_m = _lit_z_mask(FURTAK23['z'], z_target)
+
     lit_log_mbh, lit_log_lbol = [], []
     if show_lit:
-        lit_log_mbh.append(PANG26['log_mbh'])
-        lit_log_lbol.append(np.log10(PANG26['lambda_edd']) + eddington_luminosity(PANG26['log_mbh']))
-        lit_log_mbh.append(MATHEE24['log_mbh'])
-        lit_log_lbol.append(np.log10(MATHEE24['lbol_1e44']) + 44.0)
-        lit_log_mbh.append(LIN25['log_mbh'])
-        lit_log_lbol.append(LIN25['log_lbol'])
-        lit_log_mbh.append([FURTAK23['log_mbh']])
-        lit_log_lbol.append([FURTAK23['log_lbol']])
+        lit_log_mbh.append(PANG26['log_mbh'][pang_m])
+        lit_log_lbol.append(np.log10(PANG26['lambda_edd'][pang_m]) + eddington_luminosity(PANG26['log_mbh'][pang_m]))
+        lit_log_mbh.append(MATHEE24['log_mbh'][mathee_m])
+        lit_log_lbol.append(np.log10(MATHEE24['lbol_1e44'][mathee_m]) + 44.0)
+        lit_log_mbh.append(LIN25['log_mbh'][lin_m])
+        lit_log_lbol.append(LIN25['log_lbol'][lin_m])
+        if furtak_m:
+            lit_log_mbh.append([FURTAK23['log_mbh']])
+            lit_log_lbol.append([FURTAK23['log_lbol']])
 
     selected = (lrd_red | lrd_blue) if show_lrd else np.zeros(len(log_mbh), dtype=bool)
     x_lo, x_hi = lock_axis_range(*MULTIZ_PANEL_D_XLIM,
@@ -549,33 +587,37 @@ def draw_panel_d(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(log_mbh[lrd_blue], log_lbol[lrd_blue], s=10,
-                       color='#1565C0', edgecolors='white', linewidths=0.2, zorder=5)
+                       color='#F57C00', edgecolors='white', linewidths=0.2, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(log_mbh[lrd_red], log_lbol[lrd_red], s=10,
                        color='#C62828', edgecolors='white', linewidths=0.2, zorder=6)
 
     lit_labels = []
     if show_lit:
-        t_log_lbol = np.log10(PANG26['lambda_edd']) + eddington_luminosity(PANG26['log_mbh'])
-        t_lbol_err = PANG26['lambda_edd_err'] / (PANG26['lambda_edd'] * np.log(10))
-        plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'], t_log_lbol,
-                        xerr=PANG26['log_mbh_err'], yerr=t_lbol_err)
-        lit_labels.append('Pang+26')
+        if pang_m.any():
+            t_log_lbol = np.log10(PANG26['lambda_edd'][pang_m]) + eddington_luminosity(PANG26['log_mbh'][pang_m])
+            t_lbol_err = PANG26['lambda_edd_err'][pang_m] / (PANG26['lambda_edd'][pang_m] * np.log(10))
+            plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'][pang_m], t_log_lbol,
+                            xerr=PANG26['log_mbh_err'][pang_m], yerr=t_lbol_err)
+            lit_labels.append('Pang+26')
 
-        m_log_lbol = np.log10(MATHEE24['lbol_1e44']) + 44.0
-        m_lbol_err = MATHEE24['lbol_1e44_err'] / (MATHEE24['lbol_1e44'] * np.log(10))
-        plot_lit_points(ax, 'Mathee+24', MATHEE24['log_mbh'], m_log_lbol,
-                        xerr=MATHEE24['log_mbh_err'], yerr=m_lbol_err)
-        lit_labels.append('Mathee+24')
+        if mathee_m.any():
+            m_log_lbol = np.log10(MATHEE24['lbol_1e44'][mathee_m]) + 44.0
+            m_lbol_err = MATHEE24['lbol_1e44_err'][mathee_m] / (MATHEE24['lbol_1e44'][mathee_m] * np.log(10))
+            plot_lit_points(ax, 'Mathee+24', MATHEE24['log_mbh'][mathee_m], m_log_lbol,
+                            xerr=MATHEE24['log_mbh_err'][mathee_m], yerr=m_lbol_err)
+            lit_labels.append('Mathee+24')
 
-        plot_lit_points(ax, 'Lin+25', LIN25['log_mbh'], LIN25['log_lbol'],
-                        xerr=LIN25['log_mbh_err'], yerr=LIN25['log_lbol_err'])
-        lit_labels.append('Lin+25')
+        if lin_m.any():
+            plot_lit_points(ax, 'Lin+25', LIN25['log_mbh'][lin_m], LIN25['log_lbol'][lin_m],
+                            xerr=LIN25['log_mbh_err'][lin_m], yerr=LIN25['log_lbol_err'][lin_m])
+            lit_labels.append('Lin+25')
 
-        plot_lit_points(ax, 'Furtak+23', [FURTAK23['log_mbh']], [FURTAK23['log_lbol']],
-                        xerr=[[FURTAK23['log_mbh_err_lo']], [FURTAK23['log_mbh_err_hi']]],
-                        yerr=[[FURTAK23['log_lbol_err']], [FURTAK23['log_lbol_err']]])
-        lit_labels.append('Furtak+23')
+        if furtak_m:
+            plot_lit_points(ax, 'Furtak+23', [FURTAK23['log_mbh']], [FURTAK23['log_lbol']],
+                            xerr=[[FURTAK23['log_mbh_err_lo']], [FURTAK23['log_mbh_err_hi']]],
+                            yerr=[[FURTAK23['log_lbol_err']], [FURTAK23['log_lbol_err']]])
+            lit_labels.append('Furtak+23')
 
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
@@ -587,7 +629,7 @@ def draw_panel_d(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
         handles += [
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#C62828',
                    markersize=7, label=r'LRD ($f_{\rm BH}\geq 3\%$)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#1565C0',
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#F57C00',
                    markersize=7, label=r'LRD ($f_{\rm BH}<3\%$)'),
         ]
     handles += lit_legend_handles(lit_labels)
@@ -615,12 +657,19 @@ def draw_panel_e(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
 
     selected = (lrd_red | lrd_blue) if show_lrd else np.zeros(len(log_mbh), dtype=bool)
 
+    mathee_m = _lit_z_mask(MATHEE24['z'], z_target)
+    labbe_m  = _lit_z_mask(LABBE25['z'], z_target)
+    furtak_m = _lit_z_mask(FURTAK23['z'], z_target)
+
     lit_muv, lit_mbh = [], []
     labbe_mbh_min = None
     if show_lit:
-        labbe_mbh_min = bh_mass_min_from_lbol(LABBE25['log_lbol'])
-        lit_muv += [LABBE25['m1450'], MATHEE24['muv'], [FURTAK23['muv']]]
-        lit_mbh += [np.log10(labbe_mbh_min), MATHEE24['log_mbh'], [FURTAK23['log_mbh']]]
+        labbe_mbh_min = bh_mass_min_from_lbol(LABBE25['log_lbol'][labbe_m])
+        lit_muv += [LABBE25['m1450'][labbe_m], MATHEE24['muv'][mathee_m]]
+        lit_mbh += [np.log10(labbe_mbh_min), MATHEE24['log_mbh'][mathee_m]]
+        if furtak_m:
+            lit_muv.append([FURTAK23['muv']])
+            lit_mbh.append([FURTAK23['log_mbh']])
 
     x_faint, x_bright = lock_axis_range(*MULTIZ_PANEL_E_XLIM,
                                        must_include=[m1450[selected], *lit_muv],
@@ -641,25 +690,28 @@ def draw_panel_e(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(m1450[lrd_blue], log_mbh[lrd_blue], s=10,
-                       color='#1565C0', edgecolors='white', linewidths=0.2, zorder=5)
+                       color='#F57C00', edgecolors='white', linewidths=0.2, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(m1450[lrd_red], log_mbh[lrd_red], s=10,
                        color='#C62828', edgecolors='white', linewidths=0.2, zorder=6)
 
     lit_labels = []
     if show_lit:
-        plot_lit_points(ax, 'Mathee+24', MATHEE24['muv'], MATHEE24['log_mbh'],
-                        xerr=MATHEE24['muv_err'], yerr=MATHEE24['log_mbh_err'])
-        lit_labels.append('Mathee+24')
+        if mathee_m.any():
+            plot_lit_points(ax, 'Mathee+24', MATHEE24['muv'][mathee_m], MATHEE24['log_mbh'][mathee_m],
+                            xerr=MATHEE24['muv_err'][mathee_m], yerr=MATHEE24['log_mbh_err'][mathee_m])
+            lit_labels.append('Mathee+24')
 
-        plot_lit_points(ax, 'Furtak+23', [FURTAK23['muv']], [FURTAK23['log_mbh']],
-                        xerr=FURTAK23['muv_err'],
-                        yerr=[[FURTAK23['log_mbh_err_lo']], [FURTAK23['log_mbh_err_hi']]])
-        lit_labels.append('Furtak+23')
+        if furtak_m:
+            plot_lit_points(ax, 'Furtak+23', [FURTAK23['muv']], [FURTAK23['log_mbh']],
+                            xerr=FURTAK23['muv_err'],
+                            yerr=[[FURTAK23['log_mbh_err_lo']], [FURTAK23['log_mbh_err_hi']]])
+            lit_labels.append('Furtak+23')
 
-        plot_lit_points(ax, 'Labbe+25', LABBE25['m1450'], np.log10(labbe_mbh_min),
-                        yerr=0.3, lolims=True)
-        lit_labels.append('Labbe+25')
+        if labbe_m.any():
+            plot_lit_points(ax, 'Labbe+25', LABBE25['m1450'][labbe_m], np.log10(labbe_mbh_min),
+                            yerr=0.3, lolims=True)
+            lit_labels.append('Labbe+25')
 
     ax.set_xlim(x_faint, x_bright)
     ax.set_ylim(y_lo, y_hi)
@@ -671,7 +723,7 @@ def draw_panel_e(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
         handles += [
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#C62828',
                    markersize=7, label=r'LRD ($f_{\rm BH}\geq 3\%$)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#1565C0',
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#F57C00',
                    markersize=7, label=r'LRD ($f_{\rm BH}<3\%$)'),
         ]
     handles += lit_legend_handles(lit_labels)
@@ -709,7 +761,7 @@ def draw_panel_f(ax, data, z_target, volume_h3, show_lrd=True,
     cats = [(log_lbol, 'Total', 'k', 'o')]
     if show_lrd:
         cats.append((log_lbol[lrd_red], r'LRD ($f_{\rm BH}\geq 3\%$)', '#C62828', 'D'))
-        cats.append((log_lbol[lrd_blue], r'LRD ($f_{\rm BH}<3\%$)', '#1565C0', 's'))
+        cats.append((log_lbol[lrd_blue], r'LRD ($f_{\rm BH}<3\%$)', '#F57C00', 's'))
 
     allv = []
     plot_data = []
@@ -756,6 +808,503 @@ def draw_panel_f(ax, data, z_target, volume_h3, show_lrd=True,
         handles.append(Line2D([0], [0], color='#000000', lw=1.2, ls='--', label='Shen+20'))
     return (handles,
             (lo, hi), (y_lo, y_hi))
+
+# ============================================================================
+# PER-PANEL DRAWING -- COMPARE MODE (multi-run overlay)
+# ============================================================================
+# Same contours-only-for-scatter-panels / linestyle-for-panel-f design as
+# bh_lrd_analysis.py's own compare functions (see the comment above those).
+# `datasets` here is a list of {'data', 'style'} dicts -- one read_epoch()
+# catalogue + a run_style style per run, for the SAME redshift bin.
+# make_grid() doesn't care whether snap_data[z] is a single data dict or one
+# of these lists -- it just forwards it to draw_fn -- so these compare
+# functions plug into the existing make_grid() unchanged; no separate grid
+# assembly function is needed.
+
+def draw_panel_a_compare(ax, datasets, z_target, show_lit=True, bhar_floor=LRD_BHAR_DEFAULT,
+                         xlim=None, ylim=None, range_only=False, mask_seeds=True):
+    prepped = []
+    for ds in datasets:
+        data, style = ds['data'], ds['style']
+        bh_mass, mdot, seed = data['bh_mass'], data['mdot_msun_yr'], data['seed_mass']
+        if len(bh_mass) == 0:
+            continue
+        valid = _valid_mask(bh_mass, mdot)
+        if mask_seeds:
+            valid &= mask_ungrown_seeds(bh_mass, seed)
+        if valid.sum() == 0:
+            continue
+        prepped.append((np.log10(bh_mass[valid]), np.log10(mdot[valid]), style))
+
+    pang_m = _lit_z_mask(PANG26['z'], z_target)
+    mathee_m = _lit_z_mask(MATHEE24['z'], z_target)
+    lin_m = _lit_z_mask(LIN25['z'], z_target)
+    lit_log_mbh, lit_log_mdot = [], []
+    if show_lit:
+        t_mdot = PANG26['lambda_edd'][pang_m] * 10**eddington_mdot(PANG26['log_mbh'][pang_m])
+        lit_log_mbh.append(PANG26['log_mbh'][pang_m]); lit_log_mdot.append(np.log10(t_mdot))
+        m_mdot = mdot_from_lbol(np.log10(MATHEE24['lbol_1e44'][mathee_m]) + 44.0)
+        lit_log_mbh.append(MATHEE24['log_mbh'][mathee_m]); lit_log_mdot.append(np.log10(m_mdot))
+        l_mdot = mdot_from_lbol(LIN25['log_lbol'][lin_m])
+        lit_log_mbh.append(LIN25['log_mbh'][lin_m]); lit_log_mdot.append(np.log10(l_mdot))
+
+    x_lo, x_hi = lock_axis_range(*MULTIZ_PANEL_A_XLIM, must_include=lit_log_mbh,
+                                 axis_name='panel a x-axis (compare)')
+    y_lo, y_hi = lock_axis_range(*MULTIZ_PANEL_A_YLIM, must_include=lit_log_mdot,
+                                 axis_name='panel a y-axis (compare)')
+    if xlim is not None:
+        x_lo, x_hi = xlim
+    if ylim is not None:
+        y_lo, y_hi = ylim
+    if range_only:
+        return None, (x_lo, x_hi), (y_lo, y_hi)
+    if not prepped:
+        _no_data_panel(ax, (x_lo, x_hi), (y_lo, y_hi), z_target)
+        return None, (x_lo, x_hi), (y_lo, y_hi)
+
+    x_ref = np.linspace(x_lo, x_hi, 200)
+    y_edd = eddington_mdot(x_ref)
+    ax.plot(x_ref, y_edd, color='#C62828', lw=1.1, zorder=4)
+    ax.plot(x_ref, y_edd + 1.0, color='#E65100', lw=1.1, zorder=4)
+    ax.axhline(np.log10(LRD_BHAR_DEFAULT), color='#C62828', lw=0.8, ls='--', zorder=3, alpha=0.85)
+    ax.axhline(np.log10(LRD_BHAR_ALT), color='#C62828', lw=0.6, ls=':', zorder=3, alpha=0.70)
+
+    run_handles = draw_contours_multirun(ax, prepped, x_lo, x_hi, y_lo, y_hi,
+                                        linewidths=(0.5, 0.8, 1.1), n_kde=N_KDE_GRID)
+
+    lit_labels = []
+    if show_lit:
+        if pang_m.any():
+            t_mdot = PANG26['lambda_edd'][pang_m] * 10**eddington_mdot(PANG26['log_mbh'][pang_m])
+            t_mdot_lo = (PANG26['lambda_edd'][pang_m] - PANG26['lambda_edd_err'][pang_m]) * \
+                10**eddington_mdot(PANG26['log_mbh'][pang_m])
+            plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'][pang_m], np.log10(t_mdot),
+                            xerr=PANG26['log_mbh_err'][pang_m],
+                            yerr=[np.log10(t_mdot) - np.log10(np.maximum(t_mdot_lo, t_mdot * 1e-3)),
+                                  np.full_like(t_mdot, 0.15)])
+            lit_labels.append('Pang+26')
+        if mathee_m.any():
+            m_log_mdot = np.log10(mdot_from_lbol(np.log10(MATHEE24['lbol_1e44'][mathee_m]) + 44.0))
+            plot_lit_points(ax, 'Mathee+24', MATHEE24['log_mbh'][mathee_m], m_log_mdot,
+                            xerr=MATHEE24['log_mbh_err'][mathee_m],
+                            yerr=MATHEE24['lbol_1e44_err'][mathee_m] / (MATHEE24['lbol_1e44'][mathee_m] * np.log(10)))
+            lit_labels.append('Mathee+24')
+        if lin_m.any():
+            l_log_mdot = np.log10(mdot_from_lbol(LIN25['log_lbol'][lin_m]))
+            plot_lit_points(ax, 'Lin+25', LIN25['log_mbh'][lin_m], l_log_mdot,
+                            xerr=LIN25['log_mbh_err'][lin_m], yerr=LIN25['log_lbol_err'][lin_m])
+            lit_labels.append('Lin+25')
+
+    ax.set_xlim(x_lo, x_hi)
+    ax.set_ylim(y_lo, y_hi)
+    ax.set_xticks(np.arange(int(np.ceil(x_lo)), int(np.floor(x_hi)) + 1, 2))
+    ax.text(0.95, 0.05, _fmt_z(z_target), transform=ax.transAxes, ha='right', va='bottom', fontsize=10)
+
+    handles = [
+        Line2D([0], [0], color='#C62828', lw=1.6, label=r'$\dot{M}_{\rm BH} = \dot{M}_{\rm Edd}$'),
+        Line2D([0], [0], color='#E65100', lw=1.6, label=r'$\dot{M}_{\rm BH} = 10\,\dot{M}_{\rm Edd}$'),
+    ] + run_handles + lit_legend_handles(lit_labels)
+    return handles, (x_lo, x_hi), (y_lo, y_hi)
+
+
+def draw_panel_b_compare(ax, datasets, z_target, show_lit=True, bhar_floor=LRD_BHAR_DEFAULT,
+                         xlim=None, ylim=None, range_only=False, mask_seeds=True):
+    prepped = []
+    for ds in datasets:
+        data, style = ds['data'], ds['style']
+        bh_mass, mdot, star, seed = (data['bh_mass'], data['mdot_msun_yr'],
+                                     data['stellar_mass'], data['seed_mass'])
+        if len(bh_mass) == 0:
+            continue
+        valid = _valid_mask(bh_mass, mdot, star)
+        if mask_seeds:
+            valid &= mask_ungrown_seeds(bh_mass, seed)
+        if valid.sum() == 0:
+            continue
+        f_bh = bh_mass[valid] / star[valid]
+        prepped.append((np.log10(bh_mass[valid]), np.log10(f_bh), style))
+
+    pang_m = _lit_z_mask(PANG26['z'], z_target)
+    lit_log_mbh = PANG26['log_mbh'][pang_m] if show_lit else []
+    lit_log_fbh = (PANG26['log_mbh'][pang_m] - PANG26['log_mstar'][pang_m]) if show_lit else []
+
+    x_lo, x_hi = lock_axis_range(*MULTIZ_PANEL_B_XLIM, must_include=[lit_log_mbh],
+                                 axis_name='panel b x-axis (compare)')
+    y_lo, y_hi = lock_axis_range(*MULTIZ_PANEL_B_YLIM, must_include=[lit_log_fbh],
+                                 axis_name='panel b y-axis (compare)')
+    if xlim is not None:
+        x_lo, x_hi = xlim
+    if ylim is not None:
+        y_lo, y_hi = ylim
+    if range_only:
+        return None, (x_lo, x_hi), (y_lo, y_hi)
+    if not prepped:
+        _no_data_panel(ax, (x_lo, x_hi), (y_lo, y_hi), z_target)
+        return None, (x_lo, x_hi), (y_lo, y_hi)
+
+    log_fbh_thresh = np.log10(LRD_FBHM_THRESH)
+    ax.axhline(np.log10(0.1), color='#F57C00', lw=1.4, zorder=4)
+    ax.axhline(log_fbh_thresh, color='#C62828', lw=1.4, zorder=4)
+
+    run_handles = draw_contours_multirun(ax, prepped, x_lo, x_hi, y_lo, y_hi,
+                                        linewidths=(0.5, 0.8, 1.1), n_kde=N_KDE_GRID)
+
+    lit_labels = []
+    if show_lit and pang_m.any():
+        t_log_fbh = PANG26['log_mbh'][pang_m] - PANG26['log_mstar'][pang_m]
+        t_fbh_err = np.sqrt(PANG26['log_mbh_err'][pang_m]**2 + PANG26['log_mstar_err'][pang_m]**2)
+        plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'][pang_m], t_log_fbh,
+                        xerr=PANG26['log_mbh_err'][pang_m], yerr=t_fbh_err)
+        lit_labels.append('Pang+26')
+
+    ax.set_xlim(x_lo, x_hi)
+    ax.set_ylim(y_lo, y_hi)
+    ax.set_xticks(np.arange(int(np.ceil(x_lo)), int(np.floor(x_hi)) + 1, 2))
+    ax.text(0.95, 0.05, _fmt_z(z_target), transform=ax.transAxes, ha='right', va='bottom', fontsize=10)
+    return run_handles + lit_legend_handles(lit_labels), (x_lo, x_hi), (y_lo, y_hi)
+
+
+def draw_panel_c_compare(ax, datasets, z_target, show_lit=True, bhar_floor=LRD_BHAR_DEFAULT,
+                         xlim=None, ylim=None, range_only=False, mask_seeds=True):
+    prepped = []
+    for ds in datasets:
+        data, style = ds['data'], ds['style']
+        bh_mass, mdot, star, seed = (data['bh_mass'], data['mdot_msun_yr'],
+                                     data['stellar_mass'], data['seed_mass'])
+        if len(bh_mass) == 0:
+            continue
+        valid = _valid_mask(bh_mass, mdot, star)
+        if mask_seeds:
+            valid &= mask_ungrown_seeds(bh_mass, seed)
+        if valid.sum() == 0:
+            continue
+        prepped.append((np.log10(star[valid]), np.log10(bh_mass[valid]), style))
+
+    pang_m = _lit_z_mask(PANG26['z'], z_target)
+    furtak_m = _lit_z_mask(FURTAK23['z'], z_target)
+    lit_mstar, lit_mbh = [], []
+    if show_lit:
+        lit_mstar.append(PANG26['log_mstar'][pang_m])
+        lit_mbh.append(PANG26['log_mbh'][pang_m])
+        if furtak_m:
+            lit_mstar.append([FURTAK23['log_mstar_upper_limit']])
+            lit_mbh.append([FURTAK23['log_mbh']])
+
+    x_lo, x_hi = lock_axis_range(*MULTIZ_PANEL_C_XLIM, must_include=lit_mstar,
+                                 axis_name='panel c x-axis (compare)')
+    y_lo, y_hi = lock_axis_range(*MULTIZ_PANEL_C_YLIM, must_include=lit_mbh,
+                                 axis_name='panel c y-axis (compare)')
+    if xlim is not None:
+        x_lo, x_hi = xlim
+    if ylim is not None:
+        y_lo, y_hi = ylim
+    if range_only:
+        return None, (x_lo, x_hi), (y_lo, y_hi)
+    if not prepped:
+        _no_data_panel(ax, (x_lo, x_hi), (y_lo, y_hi), z_target)
+        return None, (x_lo, x_hi), (y_lo, y_hi)
+
+    x_ref = np.linspace(x_lo, x_hi, 200)
+    y_kh = kormendy_ho_mbh(x_ref)
+    ax.fill_between(x_ref, y_kh - KORMENDY_HO_SCATTER, y_kh + KORMENDY_HO_SCATTER,
+                    color='#999999', alpha=0.35, zorder=0)
+    kh_line, = ax.plot(x_ref, y_kh, color='black', lw=1.4, zorder=2, label='Kormendy & Ho 2013')
+
+    ratio_rot = _line_rotation_deg(1.0, x_lo, x_hi, y_lo, y_hi)
+    for ratio in MASS_RATIO_LINES:
+        y_ratio = x_ref + np.log10(ratio)
+        ax.plot(x_ref, y_ratio, color='black', lw=0.8, ls='--', zorder=2)
+        x_lab = x_lo + 0.12 * (x_hi - x_lo)
+        y_lab = x_lab + np.log10(ratio)
+        if y_lo < y_lab < y_hi:
+            ax.text(x_lab, y_lab - 0.12, rf'$M_{{\rm BH}}/M_\star = {ratio:g}$',
+                    fontsize=6.5, color='black', ha='left', va='top',
+                    rotation=ratio_rot, rotation_mode='anchor')
+
+    run_handles = draw_contours_multirun(ax, prepped, x_lo, x_hi, y_lo, y_hi,
+                                        linewidths=(0.5, 0.8, 1.1), n_kde=N_KDE_GRID)
+
+    lit_labels = []
+    if show_lit:
+        if pang_m.any():
+            plot_lit_points(ax, 'Pang+26', PANG26['log_mstar'][pang_m], PANG26['log_mbh'][pang_m],
+                            xerr=PANG26['log_mstar_err'][pang_m], yerr=PANG26['log_mbh_err'][pang_m])
+            lit_labels.append('Pang+26')
+        if furtak_m:
+            plot_lit_points(ax, 'Furtak+23', [FURTAK23['log_mstar_upper_limit']], [FURTAK23['log_mbh']],
+                            xerr=[[0.4], [0.0]],
+                            yerr=[[FURTAK23['log_mbh_err_lo']], [FURTAK23['log_mbh_err_hi']]],
+                            xuplims=True)
+            lit_labels.append('Furtak+23')
+
+    ax.set_xlim(x_lo, x_hi)
+    ax.set_ylim(y_lo, y_hi)
+    ax.text(0.95, 0.05, _fmt_z(z_target), transform=ax.transAxes, ha='right', va='bottom', fontsize=10)
+    handles = [kh_line] + run_handles + lit_legend_handles(lit_labels)
+    return handles, (x_lo, x_hi), (y_lo, y_hi)
+
+
+def draw_panel_d_compare(ax, datasets, z_target, show_lit=True, bhar_floor=LRD_BHAR_DEFAULT,
+                         xlim=None, ylim=None, range_only=False, mask_seeds=True):
+    prepped = []
+    for ds in datasets:
+        data, style = ds['data'], ds['style']
+        bh_mass, mdot, star, seed = (data['bh_mass'], data['mdot_msun_yr'],
+                                     data['stellar_mass'], data['seed_mass'])
+        if len(bh_mass) == 0:
+            continue
+        valid = _valid_mask(bh_mass, mdot, star)
+        if mask_seeds:
+            valid &= mask_ungrown_seeds(bh_mass, seed)
+        if valid.sum() == 0:
+            continue
+        prepped.append((np.log10(bh_mass[valid]), lbol_from_mdot(mdot[valid]), style))
+
+    pang_m = _lit_z_mask(PANG26['z'], z_target)
+    mathee_m = _lit_z_mask(MATHEE24['z'], z_target)
+    lin_m = _lit_z_mask(LIN25['z'], z_target)
+    furtak_m = _lit_z_mask(FURTAK23['z'], z_target)
+    lit_log_mbh, lit_log_lbol = [], []
+    if show_lit:
+        lit_log_mbh.append(PANG26['log_mbh'][pang_m])
+        lit_log_lbol.append(np.log10(PANG26['lambda_edd'][pang_m]) + eddington_luminosity(PANG26['log_mbh'][pang_m]))
+        lit_log_mbh.append(MATHEE24['log_mbh'][mathee_m])
+        lit_log_lbol.append(np.log10(MATHEE24['lbol_1e44'][mathee_m]) + 44.0)
+        lit_log_mbh.append(LIN25['log_mbh'][lin_m])
+        lit_log_lbol.append(LIN25['log_lbol'][lin_m])
+        if furtak_m:
+            lit_log_mbh.append([FURTAK23['log_mbh']])
+            lit_log_lbol.append([FURTAK23['log_lbol']])
+
+    x_lo, x_hi = lock_axis_range(*MULTIZ_PANEL_D_XLIM, must_include=lit_log_mbh,
+                                 axis_name='panel d x-axis (compare)')
+    y_lo, y_hi = lock_axis_range(*MULTIZ_PANEL_D_YLIM, must_include=lit_log_lbol,
+                                 axis_name='panel d y-axis (compare)')
+    if xlim is not None:
+        x_lo, x_hi = xlim
+    if ylim is not None:
+        y_lo, y_hi = ylim
+    if range_only:
+        return None, (x_lo, x_hi), (y_lo, y_hi)
+    if not prepped:
+        _no_data_panel(ax, (x_lo, x_hi), (y_lo, y_hi), z_target)
+        return None, (x_lo, x_hi), (y_lo, y_hi)
+
+    x_ref = np.linspace(x_lo, x_hi, 200)
+    line_rot = _line_rotation_deg(1.0, x_lo, x_hi, y_lo, y_hi)
+    for lam in EDDINGTON_RATIO_LINES:
+        y_line = eddington_luminosity(x_ref) + np.log10(lam)
+        ax.plot(x_ref, y_line, color='#777777', lw=0.9, ls='--', zorder=2)
+        x_lab = x_lo + 0.60 * (x_hi - x_lo)
+        y_lab = eddington_luminosity(x_lab) + np.log10(lam)
+        if y_lo < y_lab < y_hi:
+            ax.text(x_lab, y_lab - 0.12, rf'$\lambda_{{\rm Edd}} = {lam:g}$',
+                    fontsize=6.5, color='#555555', ha='left', va='top',
+                    rotation=line_rot, rotation_mode='anchor')
+
+    run_handles = draw_contours_multirun(ax, prepped, x_lo, x_hi, y_lo, y_hi,
+                                        linewidths=(0.5, 0.8, 1.1), n_kde=N_KDE_GRID)
+
+    lit_labels = []
+    if show_lit:
+        if pang_m.any():
+            t_log_lbol = np.log10(PANG26['lambda_edd'][pang_m]) + eddington_luminosity(PANG26['log_mbh'][pang_m])
+            t_lbol_err = PANG26['lambda_edd_err'][pang_m] / (PANG26['lambda_edd'][pang_m] * np.log(10))
+            plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'][pang_m], t_log_lbol,
+                            xerr=PANG26['log_mbh_err'][pang_m], yerr=t_lbol_err)
+            lit_labels.append('Pang+26')
+        if mathee_m.any():
+            m_log_lbol = np.log10(MATHEE24['lbol_1e44'][mathee_m]) + 44.0
+            m_lbol_err = MATHEE24['lbol_1e44_err'][mathee_m] / (MATHEE24['lbol_1e44'][mathee_m] * np.log(10))
+            plot_lit_points(ax, 'Mathee+24', MATHEE24['log_mbh'][mathee_m], m_log_lbol,
+                            xerr=MATHEE24['log_mbh_err'][mathee_m], yerr=m_lbol_err)
+            lit_labels.append('Mathee+24')
+        if lin_m.any():
+            plot_lit_points(ax, 'Lin+25', LIN25['log_mbh'][lin_m], LIN25['log_lbol'][lin_m],
+                            xerr=LIN25['log_mbh_err'][lin_m], yerr=LIN25['log_lbol_err'][lin_m])
+            lit_labels.append('Lin+25')
+        if furtak_m:
+            plot_lit_points(ax, 'Furtak+23', [FURTAK23['log_mbh']], [FURTAK23['log_lbol']],
+                            xerr=[[FURTAK23['log_mbh_err_lo']], [FURTAK23['log_mbh_err_hi']]],
+                            yerr=[[FURTAK23['log_lbol_err']], [FURTAK23['log_lbol_err']]])
+            lit_labels.append('Furtak+23')
+
+    ax.set_xlim(x_lo, x_hi)
+    ax.set_ylim(y_lo, y_hi)
+    ax.text(0.95, 0.05, _fmt_z(z_target), transform=ax.transAxes, ha='right', va='bottom', fontsize=10)
+    handles = run_handles + lit_legend_handles(lit_labels)
+    return handles, (x_lo, x_hi), (y_lo, y_hi)
+
+
+def draw_panel_e_compare(ax, datasets, z_target, show_lit=True, bhar_floor=LRD_BHAR_DEFAULT,
+                         xlim=None, ylim=None, range_only=False, mask_seeds=True):
+    prepped = []
+    for ds in datasets:
+        data, style = ds['data'], ds['style']
+        bh_mass, mdot, star, seed = (data['bh_mass'], data['mdot_msun_yr'],
+                                     data['stellar_mass'], data['seed_mass'])
+        if len(bh_mass) == 0:
+            continue
+        valid = _valid_mask(bh_mass, mdot, star)
+        if mask_seeds:
+            valid &= mask_ungrown_seeds(bh_mass, seed)
+        if valid.sum() == 0:
+            continue
+        m1450 = m1450_from_lbol(lbol_from_mdot(mdot[valid]))
+        prepped.append((m1450, np.log10(bh_mass[valid]), style))
+
+    mathee_m = _lit_z_mask(MATHEE24['z'], z_target)
+    labbe_m = _lit_z_mask(LABBE25['z'], z_target)
+    furtak_m = _lit_z_mask(FURTAK23['z'], z_target)
+    lit_muv, lit_mbh = [], []
+    labbe_mbh_min = None
+    if show_lit:
+        labbe_mbh_min = bh_mass_min_from_lbol(LABBE25['log_lbol'][labbe_m])
+        lit_muv += [LABBE25['m1450'][labbe_m], MATHEE24['muv'][mathee_m]]
+        lit_mbh += [np.log10(labbe_mbh_min), MATHEE24['log_mbh'][mathee_m]]
+        if furtak_m:
+            lit_muv.append([FURTAK23['muv']])
+            lit_mbh.append([FURTAK23['log_mbh']])
+
+    x_faint, x_bright = lock_axis_range(*MULTIZ_PANEL_E_XLIM, must_include=lit_muv,
+                                        axis_name='panel e x-axis (compare)')
+    y_lo, y_hi = lock_axis_range(*MULTIZ_PANEL_E_YLIM, must_include=lit_mbh,
+                                 axis_name='panel e y-axis (compare)')
+    if xlim is not None:
+        x_faint, x_bright = xlim
+    if ylim is not None:
+        y_lo, y_hi = ylim
+    if range_only:
+        return None, (x_faint, x_bright), (y_lo, y_hi)
+    if not prepped:
+        _no_data_panel(ax, (x_faint, x_bright), (y_lo, y_hi), z_target)
+        return None, (x_faint, x_bright), (y_lo, y_hi)
+
+    run_handles = draw_contours_multirun(ax, prepped, x_faint, x_bright, y_lo, y_hi,
+                                        linewidths=(0.5, 0.8, 1.1), n_kde=N_KDE_GRID)
+
+    lit_labels = []
+    if show_lit:
+        if mathee_m.any():
+            plot_lit_points(ax, 'Mathee+24', MATHEE24['muv'][mathee_m], MATHEE24['log_mbh'][mathee_m],
+                            xerr=MATHEE24['muv_err'][mathee_m], yerr=MATHEE24['log_mbh_err'][mathee_m])
+            lit_labels.append('Mathee+24')
+        if furtak_m:
+            plot_lit_points(ax, 'Furtak+23', [FURTAK23['muv']], [FURTAK23['log_mbh']],
+                            xerr=FURTAK23['muv_err'],
+                            yerr=[[FURTAK23['log_mbh_err_lo']], [FURTAK23['log_mbh_err_hi']]])
+            lit_labels.append('Furtak+23')
+        if labbe_m.any():
+            plot_lit_points(ax, 'Labbe+25', LABBE25['m1450'][labbe_m], np.log10(labbe_mbh_min),
+                            yerr=0.3, lolims=True)
+            lit_labels.append('Labbe+25')
+
+    ax.set_xlim(x_faint, x_bright)
+    ax.set_ylim(y_lo, y_hi)
+    ax.text(0.95, 0.05, _fmt_z(z_target), transform=ax.transAxes, ha='right', va='bottom', fontsize=10)
+    handles = run_handles + lit_legend_handles(lit_labels)
+    return handles, (x_faint, x_bright), (y_lo, y_hi)
+
+
+_PANEL_F_CAT_SPECS = [('Total', 'k', 'o'),
+                     (r'LRD ($f_{\rm BH}\geq 3\%$)', '#C62828', 'D'),
+                     (r'LRD ($f_{\rm BH}<3\%$)', '#F57C00', 's')]
+
+
+def draw_panel_f_compare(ax, datasets, z_target, volume_h3, show_lit=True,
+                         bhar_floor=LRD_BHAR_DEFAULT, n_bins=30, h_h=None,
+                         xlim=None, ylim=None, range_only=False, mask_seeds=True):
+    """Panel f is a luminosity function (histogram/errorbar), not a scatter
+    plot -- unlike panels a-e it keeps its Total/LRD-red/LRD-blue category
+    split in compare mode, distinguished by linestyle per run (like
+    allresults-blackholes.py's compare functions), not by contour color."""
+    per_run = []
+    for ds in datasets:
+        data, style = ds['data'], ds['style']
+        bh_mass, mdot, medd, star, seed = (data['bh_mass'], data['mdot_msun_yr'],
+                                           data['mdot_edd'], data['stellar_mass'],
+                                           data['seed_mass'])
+        if len(bh_mass) == 0:
+            per_run.append((None, style)); continue
+        valid = _valid_mask(bh_mass, mdot, star)
+        if mask_seeds:
+            valid &= mask_ungrown_seeds(bh_mass, seed)
+        if valid.sum() == 0:
+            per_run.append((None, style)); continue
+        bh_mass, mdot, medd, star = bh_mass[valid], mdot[valid], medd[valid], star[valid]
+        log_lbol = lbol_from_mdot(mdot)
+        _, lrd_red, lrd_blue = compute_selection(bh_mass, mdot, medd, star, bhar_floor)
+        per_run.append(({'log_lbol': log_lbol, 'lrd_red': lrd_red, 'lrd_blue': lrd_blue}, style))
+
+    all_selected = [d['log_lbol'][d['lrd_red'] | d['lrd_blue']] for d, _ in per_run if d is not None]
+    lo, hi = lock_axis_range(*MULTIZ_PANEL_F_XLIM, must_include=all_selected,
+                             axis_name='panel f x-axis (compare)')
+    if xlim is not None:
+        lo, hi = xlim
+
+    bins = np.linspace(lo, hi, n_bins + 1)
+    bw = bins[1] - bins[0]
+    centres = 0.5 * (bins[:-1] + bins[1:])
+
+    allv = []
+    plot_data = []
+    for i, (d, style) in enumerate(per_run):
+        if d is None:
+            continue
+        cats = [(d['log_lbol'], *_PANEL_F_CAT_SPECS[0]),
+                (d['log_lbol'][d['lrd_red']],  *_PANEL_F_CAT_SPECS[1]),
+                (d['log_lbol'][d['lrd_blue']], *_PANEL_F_CAT_SPECS[2])]
+        for values, label, color, marker in cats:
+            counts, _ = np.histogram(values, bins=bins)
+            pos = counts > 0
+            if not np.any(pos):
+                continue
+            y = counts / (bw * volume_h3) if volume_h3 else counts / bw
+            logy = np.log10(y[pos])
+            logy_err = 1.0 / (np.sqrt(counts[pos]) * np.log(10))
+            allv.extend(logy)
+            plot_data.append((centres[pos], logy, logy_err, label, color, marker, style, i))
+
+    y_lo, y_hi = lock_axis_range(*MULTIZ_PANEL_F_YLIM,
+                                 must_include=[np.array(allv)] if allv else [],
+                                 axis_name='panel f y-axis (compare)')
+    if ylim is not None:
+        y_lo, y_hi = ylim
+    if range_only:
+        return None, (lo, hi), (y_lo, y_hi)
+    if not plot_data:
+        _no_data_panel(ax, (lo, hi), (y_lo, y_hi), z_target)
+        return None, (lo, hi), (y_lo, y_hi)
+
+    run_handles, seen_runs = [], set()
+    for centres_pos, logy, logy_err, label, color, marker, style, i in plot_data:
+        draw_color = lighten_color(color, style['lighten'])
+        ax.errorbar(centres_pos, logy, yerr=logy_err, fmt=marker, color=draw_color,
+                    mec='black', mew=0.4, ms=4, capsize=1.5, elinewidth=0.7,
+                    ls=style['linestyle'], label=None, zorder=5)
+        if i not in seen_runs:
+            seen_runs.add(i)
+            run_handles.append(Line2D([0], [0], color='black', lw=1.4,
+                                      ls=style['linestyle'], label=style['label']))
+
+    z_num = _z_numeric(z_target)
+    show_shen20 = show_lit and (1.0 <= z_num <= 7.0)
+    if show_shen20:
+        l_ref = np.linspace(max(lo, SHEN20_MODEL_LOGLBOL_MIN), hi, 200)
+        shen20_logphi = shen20_bolometric_qlf_logphi(l_ref, z_num, h_h=h_h)
+        ax.plot(l_ref, shen20_logphi, color='#000000', lw=1.2, ls='--', zorder=4)
+
+    ax.set_xlim(lo, hi)
+    ax.set_ylim(y_lo, y_hi)
+    ax.text(0.95, 0.90, _fmt_z(z_target), transform=ax.transAxes, ha='right', va='top', fontsize=10)
+
+    cat_handles = [Line2D([0], [0], marker=m, color='w', markerfacecolor=c, markeredgecolor='black',
+                          markersize=6, linestyle='none', label=l) for l, c, m in _PANEL_F_CAT_SPECS]
+    handles = cat_handles + run_handles
+    if show_shen20:
+        handles.append(Line2D([0], [0], color='#000000', lw=1.2, ls='--', label='Shen+20'))
+    return handles, (lo, hi), (y_lo, y_hi)
+
 
 # ============================================================================
 # GRID ASSEMBLY

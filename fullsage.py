@@ -53,7 +53,7 @@ def main():
                     "python3",
                     "plotting/bh_lrd_analysis_multiz.py",
                     "-i", f"./output/{args.sim}/model_*.hdf5",
-                    "-s", "40",
+                    #"-s", "40",
                 ])
 
         

@@ -63,8 +63,8 @@ TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_acc
 EddingtonLimitOn            1   %0: No forced limit; 1: All accretion EddLimited
 AGNDynamicAccretionOn       1   %0: default to dt; 1: Use tdyn 
 BHExsituGrowthOn            0   %0: default to no exsitu growth; 1:Consider Exsitu growth
-BlackHoleSeedingOn          1   %0: No forced seeding; 1: Light Seeding; 2: Heavy Seeding
-AGNAccretionScheme          1   %0: default (global EddingtonLimitOn); 1: disk only; 2: merger only; 3: first event; 4: small halo; 5: massive halo; 6: conc/bulge; 7: minor merger; 8: major merger
+BlackHoleSeedingOn          2   %0: No forced seeding; 1: Light Seeding; 2: Heavy Seeding
+AGNAccretionScheme          8   %0: default (global EddingtonLimitOn); 1: disk only; 2: merger only; 3: first event; 4: small halo; 5: massive halo; 6: conc/bulge; 7: minor merger; 8: major merger
      
 
 %------------------------------------------
