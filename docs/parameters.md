@@ -83,9 +83,8 @@ optional parameters take the listed default if omitted.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `CGMDensityProfile` | int | no | `0` | CGM gas density profile for precipitation: 0=uniform; 1=NFW; 2=beta (β=2/3). |
-| `CGMPrecipRadiusMode` | 0/1 | no | `0` | Radius at which the **criterion** ratio t_cool/t_ff is evaluated: 0=r_cool; 1=0.1 R_vir. Inert unless `CGMDensityProfile > 0` **and** `CGMGravityNFW = 1`. |
-| `CGMRateRadiusMode` | 0/1 | no | `0` | Radius at which the **rate** normalisation t_ff in ṁ = f·(M_CGM−M_eq)/t_ff is evaluated: 0=r_cool; 1=0.1 R_vir. Same inertness conditions. The model is far more sensitive to this than to `CGMPrecipRadiusMode`. |
-| `CGMGravityNFW` | 0/1 | no | `0` | Gravitating mass profile used for t_ff: 0=follows the gas profile (legacy; with `CGMDensityProfile=0` this makes t_ff radius-independent); 1=always NFW, Duffy+08 c(M,z). |
+| `CGMPrecipRadiusMode` | 0/1 | no | `0` | Radius at which the **criterion** ratio t_cool/t_ff is evaluated: 0=r_cool; 1=0.1 R_vir. Inert unless `CGMDensityProfile > 0` (with uniform gas, r_cool = R_vir and both timescales are radius-independent). |
+| `CGMRateRadiusMode` | 0/1 | no | `0` | Radius at which the **rate** normalisation t_ff in ṁ = f·(M_CGM−M_eq)/t_ff is evaluated: 0=r_cool; 1=0.1 R_vir. Same inertness condition. The model is far more sensitive to this than to `CGMPrecipRadiusMode`. |
 | `PrecipCriterionOn` | 0/1 | no | `1` | Voit t_cool/t_ff precipitation criterion: 1=on; 0=bypass, giving ṁ = M_CGM/t_ff for every CGM halo (the f_inflow ≡ 1 control). |
 
 ---

@@ -103,7 +103,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->CGMDensityProfile          = 0;
     run_params->CGMPrecipRadiusMode        = 0;
     run_params->CGMRateRadiusMode          = 0;
-    run_params->CGMGravityNFW              = 0;
     run_params->PrecipCriterionOn          = 1;
     run_params->RegimeRandomMode           = 0;
     run_params->FIREmodeOn                 = 1;
@@ -193,7 +192,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("CGMDensityProfile",     &(run_params->CGMDensityProfile),    INT, 0);
     REG("CGMPrecipRadiusMode",   &(run_params->CGMPrecipRadiusMode),  INT, 0);
     REG("CGMRateRadiusMode",     &(run_params->CGMRateRadiusMode),    INT, 0);
-    REG("CGMGravityNFW",         &(run_params->CGMGravityNFW),        INT, 0);
     REG("PrecipCriterionOn",     &(run_params->PrecipCriterionOn),    INT, 0);
     REG("RegimeRandomMode",      &(run_params->RegimeRandomMode),     INT, 0);
     REG("FIREmodeOn",            &(run_params->FIREmodeOn),           INT, 0);
@@ -559,7 +557,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"CGMDensityProfile",      run_params->CGMDensityProfile,      0, 2},
             {"CGMPrecipRadiusMode",    run_params->CGMPrecipRadiusMode,    0, 1},
             {"CGMRateRadiusMode",      run_params->CGMRateRadiusMode,      0, 1},
-            {"CGMGravityNFW",          run_params->CGMGravityNFW,          0, 1},
             {"PrecipCriterionOn",      run_params->PrecipCriterionOn,      0, 1},
             {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
             {"RegimeRandomMode",       run_params->RegimeRandomMode,       0, 1},

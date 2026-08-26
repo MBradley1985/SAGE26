@@ -252,28 +252,25 @@ static double cgm_enclosed_mass(const double r, const double M_total, const doub
 /*
  * Gravitating (total, DM-dominated) mass within radius r.
  *
- * gravity_nfw == 0 (legacy): the total mass is assumed to follow the *gas*
- *   profile shape.  With CGMDensityProfile = 0 this makes the halo uniform
- *   density, so g ~ r and t_ff = sqrt(2 Rvir^3 / G Mvir) at every radius --
- *   the reason t_cool/t_ff collapses to a single global number per halo.
- * gravity_nfw == 1: the total mass follows an NFW profile (Duffy+08 c(M,z))
- *   regardless of the gas profile, which is what a real halo does.  This makes
- *   t_ff genuinely radius-dependent and is required for the precipitation
- *   criterion to mean anything when evaluated away from Rvir.
+ * The total mass follows an NFW profile (Duffy+08 c(M,z)) regardless of the gas
+ * profile, which is what a real halo does.  Using the *gas* profile shape for
+ * the gravitating mass -- as an earlier version did -- makes the halo uniform
+ * density when CGMDensityProfile = 0, so that g ~ r and t_ff is the same at
+ * every radius; that is an artefact, not a modelling choice.
  *
- * Falls back to the legacy behaviour when the concentration is unusable.
+ * Falls back to the gas-profile dispatcher when the concentration is unusable
+ * (Mvir == 0 for a subhalo-less Type-2 satellite).
  */
 static double halo_enclosed_mass(const double r, const double Mvir, const double Rvir,
                                  const double Mvir_Msun, const double z,
-                                 const int profile_type, const int gravity_nfw)
+                                 const int profile_type)
 {
-    if(gravity_nfw == 1) {
-        if(r >= Rvir) return Mvir;
-        if(r <= 0.0) return 0.0;
-        const double c_NFW = nfw_concentration(Mvir_Msun, z);
-        if(c_NFW > 0.0) {
-            return nfw_enclosed_mass(r, Mvir, Rvir, c_NFW);
-        }
+    if(r >= Rvir) return Mvir;
+    if(r <= 0.0) return 0.0;
+
+    const double c_NFW = nfw_concentration(Mvir_Msun, z);
+    if(c_NFW > 0.0) {
+        return nfw_enclosed_mass(r, Mvir, Rvir, c_NFW);
     }
     return cgm_enclosed_mass(r, Mvir, Rvir, Mvir_Msun, z, profile_type);
 }
@@ -361,20 +358,33 @@ double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const 
  */
 static double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, const double Mvir_cgs,
                               const double Mvir_Msun, const double temp, const double lambda,
-                              const double z, const int profile_type, const int gravity_nfw,
-                              __attribute__((unused)) const struct params *run_params)
+                              const double z, const int profile_type)
 {
     const double mu = MU_IONISED;
 
     // ========================================================================
-    // UNIFORM / BETA: Use isothermal r_cool formula (like hot-regime)
+    // UNIFORM: r_cool = R_vir
     // ========================================================================
-    // For uniform density, t_cool and t_ff are both roughly constant with radius,
-    // so the iterative solver doesn't converge meaningfully.
-    // For beta profile (beta=2/3), the profile is too flat and has similar issues.
-    // Instead, use the isothermal approach: assume rho(r) ~ 1/r^2 for r_cool,
-    // which gives r_cool = sqrt(rho0 / rho_cool) where rho_cool is the critical density.
-    if(profile_type == 0 || profile_type == 2) {
+    // With a uniform gas profile both t_cool and t_ff are radius-independent
+    // (rho is constant, and M(<r) ~ r^3 gives g ~ r), so t_cool(r) = t_ff(r)
+    // has no interior solution -- the reservoir either cools everywhere inside
+    // R_vir or nowhere.  r_cool = R_vir states that honestly and retires the
+    // isothermal (rho ~ r^-2) formula below, which is borrowed from the
+    // hot-halo recipe and describes a profile the CGM recipe does not use.
+    // Scoped to profile_type == 0: the beta and NFW profiles do vary with
+    // radius, so a genuine cooling radius exists for them.
+    if(profile_type == 0) {
+        return Rvir_cgs;
+    }
+
+    // ========================================================================
+    // BETA: Use isothermal r_cool formula (like hot-regime)
+    // ========================================================================
+    // For beta = 2/3 the profile is flat enough that the iterative solver does
+    // not converge meaningfully, so use the isothermal approach: assume
+    // rho(r) ~ 1/r^2 for r_cool, giving r_cool = sqrt(rho0 / rho_cool) where
+    // rho_cool is the critical density.
+    if(profile_type == 2) {
         // t_ff at R_vir: t_ff = sqrt(2 R^3 / (G M))
         const double t_ff_Rvir = sqrt(2.0 * Rvir_cgs * Rvir_cgs * Rvir_cgs / (G_CGS * Mvir_cgs));
 
@@ -414,7 +424,7 @@ static double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, co
 
         const double t_cool = prefactor / rho;
 
-        const double M_enclosed = halo_enclosed_mass(r_cool, Mvir_cgs, Rvir_cgs, Mvir_Msun, z, profile_type, gravity_nfw);
+        const double M_enclosed = halo_enclosed_mass(r_cool, Mvir_cgs, Rvir_cgs, Mvir_Msun, z, profile_type);
         const double g_accel = (M_enclosed > 0.0) ? G_CGS * M_enclosed / (r_cool * r_cool) : 0.0;
 
         if(g_accel <= 0.0) {
@@ -654,10 +664,8 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // Find r_cool where t_cool(r_cool) = t_ff(r_cool)
     // This is done iteratively for all profile types
 
-    const int gravity_nfw = run_params->CGMGravityNFW;
-
     const double r_cool_cgs = solve_for_rcool(CGMgas_cgs, Rvir_cgs, Mvir_cgs, Mvir_Msun,
-                                               temp, lambda, z, profile_type, gravity_nfw, run_params);
+                                               temp, lambda, z, profile_type);
 
     // Get density at the cooling radius
     const double mass_density_cgs = cgm_density_at_radius(r_cool_cgs, CGMgas_cgs, Rvir_cgs,
@@ -684,7 +692,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
 
     // Enclosed mass at r_cool (using proper profile)
     const double M_enclosed_rcool = halo_enclosed_mass(r_cool_cgs, Mvir_cgs, Rvir_cgs,
-                                                       Mvir_Msun, z, profile_type, gravity_nfw);
+                                                       Mvir_Msun, z, profile_type);
     // Convert to code units
     const double M_enclosed_code = M_enclosed_rcool / (1e10 * SOLAR_MASS / run_params->Hubble_h);
 
@@ -727,9 +735,8 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // only shifts f_inflow, which is already saturated near 1.
     //
     // NOTE: both modes are inert unless the gas profile is radially varying
-    // (CGMDensityProfile > 0) *and* the gravitating mass is NFW
-    // (CGMGravityNFW = 1); with uniform gas in a uniform potential both
-    // timescales are radius-independent.
+    // (CGMDensityProfile > 0).  With uniform gas, r_cool = R_vir and the
+    // density is constant, so both timescales are radius-independent.
     const int crit_inner = (run_params->CGMPrecipRadiusMode == 1);
     const int rate_inner = (run_params->CGMRateRadiusMode   == 1);
 
@@ -748,7 +755,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         if(rho_char > 0.0) {
             const double tcool_char_cgs = (1.5 * mu * PROTONMASS * BOLTZMANN * temp) / (rho_char * lambda);
             const double M_enc_char = halo_enclosed_mass(r_char_cgs, Mvir_cgs, Rvir_cgs,
-                                                          Mvir_Msun, z, profile_type, gravity_nfw);
+                                                          Mvir_Msun, z, profile_type);
             if(M_enc_char > 0.0) {
                 const double g_char_cgs = G_CGS * M_enc_char / (r_char_cgs * r_char_cgs);
                 if(g_char_cgs > 0.0) {

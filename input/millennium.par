@@ -52,11 +52,11 @@ ReionizationOn              1   %0: switch off
 DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
 
 CGMrecipeOn                 1   %0: switch off
+RegimeRandomMode            1   %0: fresh random draw each snapshot (original; borderline-mass galaxies thrash between regimes); 1: use persistent RegimeRandom assigned at galaxy creation (regime evolves smoothly with Mvir)
 CGMDensityProfile           0   %0: uniform; 1: NFW; 2: beta-profile (beta=2/3)
 PrecipCriterionOn           1   %1: Voit t_cool/t_ff precipitation criterion (default); 0: bypass it -- mdot = M_CGM/t_ff for every CGM-regime halo
-CGMGravityNFW               0   %gravitating mass used for t_ff: 0: follows the gas profile (legacy; uniform gas => t_ff radius-independent); 1: always NFW, Duffy+08 c(M,z)
-CGMPrecipRadiusMode         0   %radius for the CRITERION ratio t_cool/t_ff: 0: r_cool (default); 1: 0.1 Rvir. Inert unless CGMDensityProfile>0 and CGMGravityNFW=1
-CGMRateRadiusMode           0   %radius for the RATE normalisation t_ff in mdot=f*(M_CGM-M_eq)/t_ff: 0: r_cool (default); 1: 0.1 Rvir. Same inertness conditions
+CGMPrecipRadiusMode         0   %radius for the CRITERION ratio t_cool/t_ff: 0: r_cool (default); 1: 0.1 Rvir. Inert unless CGMDensityProfile>0 (uniform gas => r_cool=Rvir, both timescales radius-independent)
+CGMRateRadiusMode           0   %radius for the RATE normalisation t_ff in mdot=f*(M_CGM-M_eq)/t_ff: 0: r_cool (default); 1: 0.1 Rvir. Same inertness condition
 FIREmodeOn                  1   %0: switch off
 SNEnergyConservationOn      1   %1: bound the FIRE ejection energy E_FB by the SN energy actually available (default; FIREmodeOn=1 only); 0: off, unbounded coupling
 
