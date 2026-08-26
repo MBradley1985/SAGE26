@@ -476,6 +476,14 @@ struct params
     int32_t    DiskInstabilityOn;
     int32_t    CGMrecipeOn;
     int32_t    CGMDensityProfile;  // 0: uniform, 1: NFW, 2: beta-profile
+    int32_t    CGMPrecipRadiusMode; // 0: evaluate t_cool/t_ff at r_cool (default);
+                                 // 1: evaluate at 0.1 R_vir (Voit-style inner CGM)
+    int32_t    CGMRateRadiusMode;  // radius for the RATE normalisation t_ff:
+                                 // 0: r_cool (default); 1: 0.1 R_vir
+    int32_t    CGMGravityNFW;     // 0: gravitating mass follows the gas profile (legacy);
+                                 // 1: gravitating mass is always NFW (Duffy+08 c(M,z))
+    int32_t    PrecipCriterionOn; // 1: Voit t_cool/t_ff precipitation criterion (default);
+                                 // 0: bypass it -- mdot = M_CGM / t_ff for every CGM halo
     int32_t    FIREmodeOn;
     int32_t    RegimeRandomMode;     // 0: fresh random draw each snapshot (default, original behaviour); 1: use the persistent RegimeRandom assigned at galaxy creation (deterministic regime evolution driven by mass)
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation, 3: hybrid (Vmax/Vvir, infall-frozen for satellites)
@@ -517,6 +525,8 @@ struct params
     double DisruptionSplitAlpha;     // Base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
     double DisruptionSplitCref;      // Reference concentration for concentration weighting (DynamicDisruptionSplit=2)
     double RedshiftPowerLawExponent; /* exponent of the (1+z) term in the FIRE mass-loading scaling (Muratov+15); default 1.25 */
+    int32_t SNEnergyConservationOn;  // 1 = bound the FIRE ejection energy by the supernova energy actually available (DEFAULT); 0 = off (unbounded coupling, the pre-2026 published behaviour). Only acts when FIREmodeOn == 1.
+    double MaxSNEnergyCoupling;      // cap on the effective coupling eps_eff = FeedbackEjectionEfficiency * f_FIRE when SNEnergyConservationOn == 1; default 2.0, i.e. E_FB <= m_* eta_SN E_SN (all of the SN energy). 1.0 caps at half.
 
     /* code unit definitions (set from parameter file; all other unit fields derived from these) */
     double UnitLength_in_cm;          /* 1 code length = this many cm (default: 1 Mpc/h) */

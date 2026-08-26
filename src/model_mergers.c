@@ -23,6 +23,7 @@
 
 #include "model_mergers.h"
 #include "model_misc.h"
+
 #include "model_starformation_and_feedback.h"
 #include "model_disk_instability.h"
 
@@ -699,7 +700,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
             if(run_params->FIREmodeOn == 1) {
                 // FIRE energy-based ejection; fire_scaling pre-computed above
                 const double vc = galaxies[merger_centralgal].Vvir;
-                const double E_FB = run_params->FeedbackEjectionEfficiency * fire_scaling *
+                const double E_FB = sn_energy_coupling(fire_scaling, run_params) *
                                     0.5 * stars * (run_params->EtaSNcode * run_params->EnergySNcode);
                 const double E_lift = 0.5 * reheated_mass * vc * vc;
                 ejected_mass = (E_FB > E_lift) ? (E_FB - E_lift) / (0.5 * vc * vc) : 0.0;

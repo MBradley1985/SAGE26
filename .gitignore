@@ -3,6 +3,7 @@ tests/test_data/
 input/millennium/
 output/
 input/microuchuu/
+input/300/
 tests/test_build/
 tests/test_output/
 

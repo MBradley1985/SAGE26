@@ -59,6 +59,7 @@ void report_sf_clamp_counts(void)
  * SF prescriptions. */
 static const double SF_DISK_RADIUS_FRAC = 3.0;
 
+
 /* Kauffmann (1996) eq. 7 cold-gas surface density threshold coefficient.
  * cold_crit = KAUFFMANN96_SF_THRESHOLD * Vvir * reff in code units
  * (Vvir in km/s, reff in Mpc/h, cold_crit in 10^10 Msun/h). */
@@ -761,7 +762,7 @@ if(run_params->SupernovaRecipeOn == 1) {
             // E_FB = epsilon_eject * fire_scaling * 0.5 * M_* * (eta_SN * E_SN)
             // Eject whatever energy remains after lifting the reheated gas.
             const double vc = galaxies[p].Vvir;
-            const double E_FB = run_params->FeedbackEjectionEfficiency * fire_scaling *
+            const double E_FB = sn_energy_coupling(fire_scaling, run_params) *
                                 0.5 * stars * (run_params->EtaSNcode * run_params->EnergySNcode);
             const double E_lift = 0.5 * reheated_mass * vc * vc;
             ejected_mass = (E_FB > E_lift) ? (E_FB - E_lift) / (0.5 * vc * vc) : 0.0;
@@ -849,7 +850,7 @@ if(run_params->SupernovaRecipeOn == 1) {
         if(run_params->FIREmodeOn == 1) {
             if(fire_scaling_valid) {
                 const double vc         = galaxies[p].Vvir;
-                const double E_FB       = run_params->FeedbackEjectionEfficiency * fire_scaling
+                const double E_FB       = sn_energy_coupling(fire_scaling, run_params)
                                           * 0.5 * stars
                                           * (run_params->EtaSNcode * run_params->EnergySNcode);
                 const double E_lift     = 0.5 * reheated_mass * vc * vc;

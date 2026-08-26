@@ -1496,29 +1496,34 @@ if __name__ == '__main__':
 
     # -------------------------------------------------------
 
-    print('Plotting outflow vs Vvir')
+    print('Plotting mass loading factor vs Vvir')
 
     plt.figure()
-    w = np.where((StellarMass > 0.0) & (OutflowRate > 0.0))[0]
-    if(len(w) > dilute): w = sample(list(w), dilute)
+    w = np.where((StellarMass > 0.0) & (MassLoading > 0.0))[0]
+    if len(w) == 0:
+        print('  Skipping mass_loading_vs_vvir: no galaxies with MassLoading > 0 '
+              '(FIRE mass-loading mode off).\n')
+        plt.close()
+    else:
+        if(len(w) > dilute): w = sample(list(w), dilute)
 
-    log10_stellar_mass = np.log10(StellarMass[w])
-    mass_loading = OutflowRate[w]
+        log10_stellar_mass = np.log10(StellarMass[w])
+        mass_loading = MassLoading[w]
 
-    plt.scatter(Vvir[w], mass_loading, c='k', marker='x', s=1, alpha=0.9)
+        plt.scatter(Vvir[w], mass_loading, c='k', marker='x', s=1, alpha=0.9)
 
-    plt.xlabel(r'$V_{\mathrm{vir}}\ (\mathrm{km/s})$')
-    plt.ylabel(r'$\dot{M}_{\mathrm{outflow}}\ (M_{\odot}\ \mathrm{yr}^{-1})$')
+        plt.xlabel(r'$V_{\mathrm{vir}}\ (\mathrm{km/s})$')
+        plt.ylabel(r'$\eta_{\mathrm{reheat}} = \dot{M}_{\mathrm{reheat}} / \dot{M}_{\star}$')
 
-    plt.xlim(min(Vvir[w]), 300)
-    plt.ylim(0.01, max(mass_loading)*1.1)
+        plt.xlim(min(Vvir[w]), 300)
+        plt.ylim(0.01, max(mass_loading)*1.1)
 
-    plt.tight_layout()
+        plt.tight_layout()
 
-    outputFile = OutputDir + 'outflow_rate_vs_stellar_mass' + OutputFormat
-    plt.savefig(outputFile)
-    print('Saved file to', outputFile, '\n')
-    plt.close()
+        outputFile = OutputDir + 'mass_loading_vs_vvir' + OutputFormat
+        plt.savefig(outputFile)
+        print('Saved file to', outputFile, '\n')
+        plt.close()
 
     # -------------------------------------------------------
     

@@ -179,7 +179,7 @@ void ram_pressure_strip_satellite(const int centralgal, const int gal,
     } else {
         return;   /* no ambient medium to strip against */
     }
-    if(rho_host <= 0.0) {
+    if(!(rho_host > 0.0)) {   /* also rejects NaN */
         return;
     }
 

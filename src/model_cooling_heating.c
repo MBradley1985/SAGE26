@@ -145,9 +145,18 @@ static double nfw_density(const double r, const double rho_s, const double r_s)
     return rho_s / (x * (1.0 + x) * (1.0 + x));
 }
 
-/* NFW concentration c(M, z) from Duffy et al. (2008): c = 7.85*(M/2e12)^-0.081*(1+z)^-0.71. */
+/* NFW concentration c(M, z) from Duffy et al. (2008): c = 7.85*(M/2e12)^-0.081*(1+z)^-0.71.
+ *
+ * Returns 0 for a non-positive or non-finite mass so callers can fall back to
+ * the uniform profile.  The mass exponent is negative, so pow(0, B) would
+ * otherwise return +inf and poison rho_s (and hence every downstream density)
+ * with a NaN.  Mvir == 0 does occur: Type-2 satellites that have lost their
+ * subhalo keep a CGM reservoir but carry Mvir == 0. */
 static double nfw_concentration(const double Mvir_Msun, const double z)
 {
+    if(!(Mvir_Msun > 0.0)) {
+        return 0.0;
+    }
     // c = A * (M/M_pivot)^B * (1+z)^C  (Duffy et al. 2008)
     return DUFFY08_A * pow(Mvir_Msun / DUFFY08_M_PIVOT, DUFFY08_B) * pow(1.0 + z, DUFFY08_C);
 }
@@ -236,6 +245,39 @@ static double beta_enclosed_mass(const double r, const double M_total, const dou
     return M_total * f_x / f_X;
 }
 
+/* Forward declaration: the gas-profile enclosed-mass dispatcher, defined below. */
+static double cgm_enclosed_mass(const double r, const double M_total, const double Rvir,
+                                 const double Mvir_Msun, const double z, const int profile_type);
+
+/*
+ * Gravitating (total, DM-dominated) mass within radius r.
+ *
+ * gravity_nfw == 0 (legacy): the total mass is assumed to follow the *gas*
+ *   profile shape.  With CGMDensityProfile = 0 this makes the halo uniform
+ *   density, so g ~ r and t_ff = sqrt(2 Rvir^3 / G Mvir) at every radius --
+ *   the reason t_cool/t_ff collapses to a single global number per halo.
+ * gravity_nfw == 1: the total mass follows an NFW profile (Duffy+08 c(M,z))
+ *   regardless of the gas profile, which is what a real halo does.  This makes
+ *   t_ff genuinely radius-dependent and is required for the precipitation
+ *   criterion to mean anything when evaluated away from Rvir.
+ *
+ * Falls back to the legacy behaviour when the concentration is unusable.
+ */
+static double halo_enclosed_mass(const double r, const double Mvir, const double Rvir,
+                                 const double Mvir_Msun, const double z,
+                                 const int profile_type, const int gravity_nfw)
+{
+    if(gravity_nfw == 1) {
+        if(r >= Rvir) return Mvir;
+        if(r <= 0.0) return 0.0;
+        const double c_NFW = nfw_concentration(Mvir_Msun, z);
+        if(c_NFW > 0.0) {
+            return nfw_enclosed_mass(r, Mvir, Rvir, c_NFW);
+        }
+    }
+    return cgm_enclosed_mass(r, Mvir, Rvir, Mvir_Msun, z, profile_type);
+}
+
 /* Dispatch enclosed-mass calculation to the appropriate profile model (0=uniform, 1=NFW, 2=beta). */
 static double cgm_enclosed_mass(const double r, const double M_total, const double Rvir,
                                  const double Mvir_Msun, const double z, const int profile_type)
@@ -248,8 +290,13 @@ static double cgm_enclosed_mass(const double r, const double M_total, const doub
         const double ratio = r / Rvir;
         return M_total * ratio * ratio * ratio;
     } else if(profile_type == 1) {
-        // NFW profile
+        // NFW profile (falls back to uniform when the concentration is unusable,
+        // e.g. Mvir == 0 for a subhalo-less Type-2 satellite)
         const double c_NFW = nfw_concentration(Mvir_Msun, z);
+        if(!(c_NFW > 0.0)) {
+            const double ratio = r / Rvir;
+            return M_total * ratio * ratio * ratio;
+        }
         return nfw_enclosed_mass(r, M_total, Rvir, c_NFW);
     } else if(profile_type == 2) {
         // Beta profile (beta = 2/3, r_c = CGM_BETA_CORE_RADIUS_FRAC * Rvir)
@@ -279,8 +326,13 @@ double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const 
         return CGMgas_cgs / volume_cgs;
 
     } else if(profile_type == 1) {
-        // NFW profile
+        // NFW profile (falls back to uniform when the concentration is unusable,
+        // e.g. Mvir == 0 for a subhalo-less Type-2 satellite)
         const double c_NFW = nfw_concentration(Mvir_Msun, z);
+        if(!(c_NFW > 0.0)) {
+            const double volume_cgs = (4.0 * M_PI / 3.0) * Rvir_cgs * Rvir_cgs * Rvir_cgs;
+            return CGMgas_cgs / volume_cgs;
+        }
         const double r_s_cgs = Rvir_cgs / c_NFW;
         const double rho_s = nfw_rho_s(CGMgas_cgs, Rvir_cgs, c_NFW);
         return nfw_density(r_cgs, rho_s, r_s_cgs);
@@ -309,7 +361,7 @@ double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const 
  */
 static double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, const double Mvir_cgs,
                               const double Mvir_Msun, const double temp, const double lambda,
-                              const double z, const int profile_type,
+                              const double z, const int profile_type, const int gravity_nfw,
                               __attribute__((unused)) const struct params *run_params)
 {
     const double mu = MU_IONISED;
@@ -362,7 +414,7 @@ static double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, co
 
         const double t_cool = prefactor / rho;
 
-        const double M_enclosed = cgm_enclosed_mass(r_cool, Mvir_cgs, Rvir_cgs, Mvir_Msun, z, profile_type);
+        const double M_enclosed = halo_enclosed_mass(r_cool, Mvir_cgs, Rvir_cgs, Mvir_Msun, z, profile_type, gravity_nfw);
         const double g_accel = (M_enclosed > 0.0) ? G_CGS * M_enclosed / (r_cool * r_cool) : 0.0;
 
         if(g_accel <= 0.0) {
@@ -602,14 +654,16 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // Find r_cool where t_cool(r_cool) = t_ff(r_cool)
     // This is done iteratively for all profile types
 
+    const int gravity_nfw = run_params->CGMGravityNFW;
+
     const double r_cool_cgs = solve_for_rcool(CGMgas_cgs, Rvir_cgs, Mvir_cgs, Mvir_Msun,
-                                               temp, lambda, z, profile_type, run_params);
+                                               temp, lambda, z, profile_type, gravity_nfw, run_params);
 
     // Get density at the cooling radius
     const double mass_density_cgs = cgm_density_at_radius(r_cool_cgs, CGMgas_cgs, Rvir_cgs,
                                                            Mvir_Msun, z, profile_type);
 
-    if(mass_density_cgs <= 0.0) {
+    if(!(mass_density_cgs > 0.0)) {   /* also rejects NaN */
         return 0.0;
     }
 
@@ -629,8 +683,8 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // ========================================================================
 
     // Enclosed mass at r_cool (using proper profile)
-    const double M_enclosed_rcool = cgm_enclosed_mass(r_cool_cgs, Mvir_cgs, Rvir_cgs,
-                                                       Mvir_Msun, z, profile_type);
+    const double M_enclosed_rcool = halo_enclosed_mass(r_cool_cgs, Mvir_cgs, Rvir_cgs,
+                                                       Mvir_Msun, z, profile_type, gravity_nfw);
     // Convert to code units
     const double M_enclosed_code = M_enclosed_rcool / (1e10 * SOLAR_MASS / run_params->Hubble_h);
 
@@ -651,16 +705,76 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     const double tff = sqrt(2.0 * r_cool / g_accel); // code units
 
     // ========================================================================
-    // STEP 2b: CHARACTERISTIC RADIUS FOR PRECIPITATION CRITERION
+    // STEP 2b: CHARACTERISTIC RADII
     // ========================================================================
-    // Evaluate t_cool/t_ff at r_cool (traditional Voit-style choice).
-    const double tcool_char = tcool;
-    const double tff_char = tff;
-    const double tcool_over_tff_char = tcool / tff;
+    // The precipitation machinery uses the local timescales in two logically
+    // distinct ways, and they are controlled separately:
+    //
+    //   (a) the CRITERION -- the dimensionless ratio t_cool/t_ff that decides
+    //       *whether* the CGM is thermally unstable (STEP 3).  Voit (2015) /
+    //       McCourt et al. (2012) define this locally, and in real haloes it
+    //       minimises in the inner CGM.  Radius set by CGMPrecipRadiusMode.
+    //
+    //   (b) the RATE normalisation -- the t_ff that sets *how fast* the
+    //       unstable gas condenses, mdot = f * (M_CGM - M_eq) / t_ff (STEP 4).
+    //       Radius set by CGMRateRadiusMode.
+    //
+    // Mode 0 evaluates at r_cool (the traditional choice, and the default);
+    // mode 1 evaluates at 0.1 R_vir.  Keeping these separate matters because
+    // the model turns out to be strongly sensitive to (b) and almost totally
+    // insensitive to (a): moving the rate radius inward shortens t_ff by ~8x
+    // and changes the galaxy population, while moving the criterion radius
+    // only shifts f_inflow, which is already saturated near 1.
+    //
+    // NOTE: both modes are inert unless the gas profile is radially varying
+    // (CGMDensityProfile > 0) *and* the gravitating mass is NFW
+    // (CGMGravityNFW = 1); with uniform gas in a uniform potential both
+    // timescales are radius-independent.
+    const int crit_inner = (run_params->CGMPrecipRadiusMode == 1);
+    const int rate_inner = (run_params->CGMRateRadiusMode   == 1);
 
-    // Store characteristic-radius values for diagnostics/plotting
-    galaxies[gal].tcool = tcool_char;
-    galaxies[gal].tff = tff_char;
+    // Timescales at r_cool (always available).
+    double tcool_rc = tcool;
+    double tff_rc   = tff;
+
+    // Timescales at 0.1 R_vir; fall back to the r_cool values if unavailable.
+    double tcool_in = tcool_rc;
+    double tff_in   = tff_rc;
+
+    if(crit_inner || rate_inner) {
+        const double r_char_cgs = CGM_BETA_CORE_RADIUS_FRAC * Rvir_cgs;
+        const double rho_char = cgm_density_at_radius(r_char_cgs, CGMgas_cgs, Rvir_cgs,
+                                                       Mvir_Msun, z, profile_type);
+        if(rho_char > 0.0) {
+            const double tcool_char_cgs = (1.5 * mu * PROTONMASS * BOLTZMANN * temp) / (rho_char * lambda);
+            const double M_enc_char = halo_enclosed_mass(r_char_cgs, Mvir_cgs, Rvir_cgs,
+                                                          Mvir_Msun, z, profile_type, gravity_nfw);
+            if(M_enc_char > 0.0) {
+                const double g_char_cgs = G_CGS * M_enc_char / (r_char_cgs * r_char_cgs);
+                if(g_char_cgs > 0.0) {
+                    const double tff_char_cgs = sqrt(2.0 * r_char_cgs / g_char_cgs);
+                    tcool_in = tcool_char_cgs / run_params->UnitTime_in_s;
+                    tff_in   = tff_char_cgs / run_params->UnitTime_in_s;
+                }
+            }
+        }
+    }
+
+    // (a) criterion: the dimensionless stability ratio.
+    const double tcool_crit = crit_inner ? tcool_in : tcool_rc;
+    const double tff_crit   = crit_inner ? tff_in   : tff_rc;
+    const double tcool_over_tff_char = tcool_crit / tff_crit;
+
+    // (b) rate normalisation: the timescales the condensation rate divides by.
+    const double tcool_char = rate_inner ? tcool_in : tcool_rc;
+    const double tff_char   = rate_inner ? tff_in   : tff_rc;
+
+    // Store the CRITERION timescales for diagnostics/plotting -- these are the
+    // ones tcool_over_tff refers to.  The rate normalisation (tff_char) is
+    // reported separately through tdeplete below.  Identical when both radius
+    // modes agree, which includes the default configuration.
+    galaxies[gal].tcool = tcool_crit;
+    galaxies[gal].tff = tff_crit;
     galaxies[gal].tcool_over_tff = tcool_over_tff_char;
 
     // ========================================================================
@@ -669,12 +783,29 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
 
     double precipitation_fraction = 0.0;
 
+    // PrecipCriterionOn == 0 bypasses the criterion entirely: every CGM-regime
+    // halo accretes its whole reservoir on a free-fall time, mdot = M_CGM/t_ff.
+    // This is the f_inflow == 1 control experiment -- it isolates how much work
+    // the Voit criterion (the sigmoid *and* the M_eq equilibrium term below)
+    // actually does relative to pure free-fall accretion.
+    const int use_precip = (run_params->PrecipCriterionOn != 0);
+
+    if(!use_precip) {
+        // Free-fall control: mdot = M_CGM / t_ff, no criterion applied.
+        // precipitation_fraction is left at its f_inflow == 1 value so the
+        // tdeplete diagnostic below reports t_ff itself.
+        precipitation_fraction = 1.0;
+        coolingGas = galaxies[gal].CGMgas / tff_char * dt;
+        if(coolingGas > galaxies[gal].CGMgas) coolingGas = galaxies[gal].CGMgas;
+        if(coolingGas < 0.0) coolingGas = 0.0;
+    }
+
     // Logistic sigmoid centred on PRECIP_THRESHOLD, characteristic width = 2.
     // f = 1 / (1 + exp(-(threshold - r) / 2))
     // Smoothly ranges from ~1 (very unstable) through 0.5 at threshold to ~0 (very stable).
     // Falls back to standard cooling once the sigmoid is negligible (< 0.01),
     // which occurs at t_cool/t_ff ~ 19.
-    {
+    if(use_precip) {
         const double x = (PRECIP_THRESHOLD - tcool_over_tff_char) / PRECIP_TRANSITION_WIDTH;
         const double f = 1.0 / (1.0 + exp(-x));
         if(f >= 0.01) {
@@ -692,7 +823,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
     // STEP 4: CALCULATE PRECIPITATION RATE
     // ========================================================================
 
-    if(precipitation_fraction > 0.0) {
+    if(use_precip && precipitation_fraction > 0.0) {
         // Self-regulating precipitation: gas precipitates on the free-fall
         // timescale, but only the CGM *above* the tcool/tff = PRECIP_THRESHOLD
         // equilibrium condenses. At fixed profile shape and temperature t_cool

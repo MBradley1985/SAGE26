@@ -67,6 +67,33 @@ extern "C" {
         return sfprescription == 1 || sfprescription == 3;
     }
 
+    /*
+     * Effective supernova energy coupling for the FIRE ejection term.
+     *
+     * The FIRE branch sets E_FB = eps_halo * f_FIRE * 0.5 * m_* * eta_SN E_SN, so
+     * the coupling eps_eff = FeedbackEjectionEfficiency * f_FIRE inherits the FIRE
+     * redshift and velocity scaling and is unbounded: at low V_vir and high z it
+     * exceeds 2, i.e. the ejection term spends more than the total supernova energy
+     * m_* eta_SN E_SN released by the stars that drive it.
+     *
+     * With SNEnergyConservationOn = 1 the coupling is capped at MaxSNEnergyCoupling
+     * (default 2.0, i.e. E_FB <= the whole SN budget; 1.0 caps it at half).  This is
+     * an energy-conservation bound, not a tuning knob -- it constrains the model to
+     * the energy actually available rather than truncating the empirical FIRE
+     * mass-loading scaling, which is applied unmodified in eta_reheat.
+     *
+     * The bound is on by default.  Setting SNEnergyConservationOn = 0 restores the
+     * unbounded coupling of the earlier published SAGE26 behaviour.
+     */
+    static inline double sn_energy_coupling(const double fire_scaling, const struct params *run_params)
+    {
+        const double eps_eff = run_params->FeedbackEjectionEfficiency * fire_scaling;
+        if(run_params->SNEnergyConservationOn && eps_eff > run_params->MaxSNEnergyCoupling) {
+            return run_params->MaxSNEnergyCoupling;
+        }
+        return eps_eff;
+    }
+
     /* functions in model_misc.c */
     extern void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct halo_data *halos, struct GALAXY *galaxies, const struct params *run_params);
     extern double get_metallicity(const double gas, const double metals);

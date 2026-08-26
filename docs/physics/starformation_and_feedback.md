@@ -99,13 +99,54 @@ mass is computed from the surplus SN energy after lifting the reheated
 gas (Hirschmann+2016 energy budget):
 
 ```
-E_FB = FeedbackEjectionEfficiency * fire_scaling * 0.5 * stars * eta_SN * E_SN
+E_FB = eps_eff * 0.5 * stars * eta_SN * E_SN,  eps_eff = FeedbackEjectionEfficiency * fire_scaling
 E_lift = 0.5 * reheated_mass * V_vir^2
 ejected_mass = max(E_FB - E_lift, 0) / (0.5 * V_vir^2)
 ```
 
 The FIRE coefficient is computed once per call and reused for both reheating
-and ejection.
+and ejection.  `V_vir` is used throughout -- for the FIRE scaling and for the
+lift term -- in the main SF path, the FFB path, and merger starbursts (which
+use the merger central's `V_vir`).  No disk circular velocity enters the
+feedback.  A floor `max(V_vir, 1 km/s)` is applied to the FIRE scaling only.
+
+Two consequences of this form are worth stating explicitly.
+
+**The FIRE scaling cancels in the ejection threshold.** Because `fire_scaling`
+multiplies both `E_FB` (through `eps_eff`) and `E_lift` (through
+`reheated_mass = eta_reheat * stars`), it drops out of the ratio:
+
+```
+E_FB / E_lift = FeedbackEjectionEfficiency * eta_SN E_SN
+                / (FeedbackReheatingEpsilon * V_vir^2)
+ejected_mass / stars = eta_reheat * max(E_FB/E_lift - 1, 0)
+```
+
+The threshold is therefore a function of `V_vir` alone, independent of
+redshift: with the fiducial parameters ejection operates below
+`V_vir = 161 km/s` at every epoch and never above it.  Read physically, FIRE
+sets how much mass is launched out of the ISM and the halo potential alone
+sets what fraction of it escapes the halo.
+
+**The effective coupling is bounded by the SN budget.** `eps_eff =
+FeedbackEjectionEfficiency * fire_scaling` inherits the
+`(1+z)^alpha (V_vir/60)^beta` scaling and is unbounded in itself, so `E_FB`
+would otherwise exceed the total SN energy `stars * eta_SN * E_SN` released by
+the stars driving it (that happens when `eps_eff > 2`).
+`SNEnergyConservationOn`, on by default, caps `eps_eff` at
+`MaxSNEnergyCoupling` (default 2.0 -- the whole SN budget; 1.0 caps it at
+half).  The bound applies to the energy only; the empirical FIRE mass loading
+in `eta_reheat` is left untouched.  Setting `SNEnergyConservationOn = 0`
+restores the unbounded coupling of the earlier published behaviour.
+
+**Neither `eta_reheat` nor `reheated_mass` is capped directly.** What limits
+the reheating is the cold gas balance: if `stars + reheated_mass > ColdGas`
+both are rescaled by `ColdGas / (stars + reheated_mass)`, so the stars formed
+in a substep cannot exceed `ColdGas / (1 + eta_reheat)`.  In practice this
+rescale fires in a few tenths of a per cent of star formation events and
+removes well under 1 per cent of the stars formed.  `ejected_mass` is
+separately capped at the available `HotGas` (or `CGMgas` in Regime 0) inside
+`update_from_feedback()`.
 
 ## `update_from_star_formation()` and `update_from_feedback()`
 

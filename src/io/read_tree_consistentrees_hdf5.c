@@ -332,7 +332,9 @@ int setup_forests_io_ctrees_hdf5(struct forest_info *forests_info, const int Thi
     if(ctr_h5->contig_halo_props[start_filenum]) {
         hid_t h5_forests_group = ctr_h5->h5_forests_group[start_filenum];
         const size_t snap_fieldname_sizeof = sizeof(ctr_h5->snap_field_name);
-        char snap_field_name[snap_fieldname_sizeof];
+        /* sized from sizeof directly rather than from the const above, which C99 would
+           treat as a variable-length array */
+        char snap_field_name[sizeof(ctr_h5->snap_field_name)];
         snprintf(snap_field_name, snap_fieldname_sizeof, "Snap_num");
         if(H5Lexists(h5_forests_group, snap_field_name, H5P_DEFAULT) <= 0) {
             //Snap_num does not exist - lets try the other field name

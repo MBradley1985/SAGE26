@@ -101,9 +101,15 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->H2RadialRMaxFactor         = 5.0;
     run_params->CGMrecipeOn                = 1;
     run_params->CGMDensityProfile          = 0;
+    run_params->CGMPrecipRadiusMode        = 0;
+    run_params->CGMRateRadiusMode          = 0;
+    run_params->CGMGravityNFW              = 0;
+    run_params->PrecipCriterionOn          = 1;
     run_params->RegimeRandomMode           = 0;
     run_params->FIREmodeOn                 = 1;
     run_params->RedshiftPowerLawExponent   = 1.25;
+    run_params->SNEnergyConservationOn     = 1;   /* default: on -- the ejection term may not spend more than the SN energy available */
+    run_params->MaxSNEnergyCoupling        = 2.0; /* cap on eps_halo * f_FIRE: E_FB <= m_* eta_SN E_SN (the whole SN budget) */
     run_params->FFBMaxEfficiency           = 0.2;
     run_params->FFBConcSigma               = 0.2;
     run_params->ConcentrationOn            = 3;
@@ -185,6 +191,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("AGNrecipeOn",           &(run_params->AGNrecipeOn),          INT, 0);
     REG("CGMrecipeOn",           &(run_params->CGMrecipeOn),          INT, 0);
     REG("CGMDensityProfile",     &(run_params->CGMDensityProfile),    INT, 0);
+    REG("CGMPrecipRadiusMode",   &(run_params->CGMPrecipRadiusMode),  INT, 0);
+    REG("CGMRateRadiusMode",     &(run_params->CGMRateRadiusMode),    INT, 0);
+    REG("CGMGravityNFW",         &(run_params->CGMGravityNFW),        INT, 0);
+    REG("PrecipCriterionOn",     &(run_params->PrecipCriterionOn),    INT, 0);
     REG("RegimeRandomMode",      &(run_params->RegimeRandomMode),     INT, 0);
     REG("FIREmodeOn",            &(run_params->FIREmodeOn),           INT, 0);
     REG("ConcentrationOn",       &(run_params->ConcentrationOn),      INT, 0);
@@ -227,6 +237,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("FFBMaxEfficiency",           &(run_params->FFBMaxEfficiency),           DOUBLE, 0);
     REG("FFBConcSigma",               &(run_params->FFBConcSigma),               DOUBLE, 0);
     REG("RedshiftPowerLawExponent",   &(run_params->RedshiftPowerLawExponent),   DOUBLE, 0);
+    REG("SNEnergyConservationOn",     &(run_params->SNEnergyConservationOn),     INT, 0);
+    REG("MaxSNEnergyCoupling",        &(run_params->MaxSNEnergyCoupling),        DOUBLE, 0);
 
 #undef REG
 
@@ -493,7 +505,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     const enum Valid_TreeTypes tree_enums[] = {lhalo_hdf5, lhalo_binary, genesis_hdf5,
                                                consistent_trees_ascii, consistent_trees_hdf5,
                                                gadget4_hdf5};
-    const int nvalid_tree_types  = sizeof(tree_names)/(MAXTAGLEN*sizeof(char));
+    /* enum, not const int: BUILD_BUG_OR_ZERO declares an array of this size, and in C99
+       only an integer constant expression keeps that from being a variable-length array. */
+    enum { nvalid_tree_types = sizeof(tree_names)/(MAXTAGLEN*sizeof(char)) };
     BUILD_BUG_OR_ZERO((nvalid_tree_types == (int) num_tree_types), number_of_tree_types_is_incorrect);
     CHECK_VALID_ENUM_IN_PARAM_FILE(TreeType, nvalid_tree_types, tree_names, tree_enums, my_treetype);
 
@@ -543,6 +557,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"DiskInstabilityOn",      run_params->DiskInstabilityOn,      0, 1},
             {"CGMrecipeOn",            run_params->CGMrecipeOn,            0, 1},
             {"CGMDensityProfile",      run_params->CGMDensityProfile,      0, 2},
+            {"CGMPrecipRadiusMode",    run_params->CGMPrecipRadiusMode,    0, 1},
+            {"CGMRateRadiusMode",      run_params->CGMRateRadiusMode,      0, 1},
+            {"CGMGravityNFW",          run_params->CGMGravityNFW,          0, 1},
+            {"PrecipCriterionOn",      run_params->PrecipCriterionOn,      0, 1},
             {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
             {"RegimeRandomMode",       run_params->RegimeRandomMode,       0, 1},
             {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
@@ -557,6 +575,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"DynamicDisruptionSplit", run_params->DynamicDisruptionSplit, 0, 2},
             {"RamPressureStrippingOn", run_params->RamPressureStrippingOn, 0, 1},
+            {"SNEnergyConservationOn", run_params->SNEnergyConservationOn, 0, 1},
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {
@@ -584,6 +603,11 @@ int read_parameter_file(const char *fname, struct params *run_params)
     if(run_params->RamPressureStrippingOn && run_params->RamPressureEpsilon <= 0.0) {
         fprintf(stderr, "Error: RamPressureEpsilon = %g is not valid; it must be > 0 when RamPressureStrippingOn = 1.\n",
                 run_params->RamPressureEpsilon);
+        ABORT(EXIT_FAILURE);
+    }
+    if(run_params->SNEnergyConservationOn && run_params->MaxSNEnergyCoupling <= 0.0) {
+        fprintf(stderr, "Error: MaxSNEnergyCoupling = %g is not valid; it must be > 0 when SNEnergyConservationOn = 1.\n",
+                run_params->MaxSNEnergyCoupling);
         ABORT(EXIT_FAILURE);
     }
     if(run_params->SubstepResolution <= 0.0) {

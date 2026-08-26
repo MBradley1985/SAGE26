@@ -1299,6 +1299,10 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2RadialNBins", run_params->H2RadialNBins, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2RadialRMaxFactor", run_params->H2RadialRMaxFactor, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "CGMDensityProfile", run_params->CGMDensityProfile, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "CGMPrecipRadiusMode", run_params->CGMPrecipRadiusMode, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "CGMRateRadiusMode", run_params->CGMRateRadiusMode, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "CGMGravityNFW", run_params->CGMGravityNFW, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "PrecipCriterionOn", run_params->PrecipCriterionOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ConcentrationOn", run_params->ConcentrationOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SaveFullSFH", run_params->SaveFullSFH, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "TrackICSAssembly", run_params->TrackICSAssembly, H5T_NATIVE_INT);
@@ -1330,6 +1334,8 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "EnergySN", run_params->EnergySN, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "EtaSN", run_params->EtaSN, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RedshiftPowerLawExponent", run_params->RedshiftPowerLawExponent, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SNEnergyConservationOn", run_params->SNEnergyConservationOn, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "MaxSNEnergyCoupling", run_params->MaxSNEnergyCoupling, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BaryonFrac", run_params->BaryonFrac, H5T_NATIVE_DOUBLE);
 
     // Misc runtime Parameters.
