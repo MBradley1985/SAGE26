@@ -870,16 +870,32 @@ def cosmic_time_gyr(z):
     return t_H * result
 
 
-def precipitation_fraction(tcool_over_tff):
-    """Calculate precipitation fraction from the SAGE26 model.
+PRECIP_THRESHOLD = 10.0     # matches PRECIP_THRESHOLD in model_cooling_heating.c
+PRECIP_WIDTH     = 2.0      # matches PRECIP_TRANSITION_WIDTH
 
-    Sigmoid S(x) = (1 + e^-x)^-1 centred on threshold=10, width=2.
+
+def precipitation_fraction(tcool_over_tff, include_condensation=True):
+    """Effective inflow fraction f_inflow as implemented in SAGE26.
+
+    The model condenses only the CGM mass in excess of the marginally stable
+    reservoir m_eq = m_CGM (t_cool/t_ff) / threshold, so the rate is
+
+        mdot = S((threshold - r)/width) * (m_CGM - m_eq) / t_ff
+             = [ S((threshold - r)/width) * max(0, 1 - r/threshold) ] * m_CGM / t_ff
+
+    and the bracketed quantity is the effective inflow fraction.  It reaches
+    0.9 at r = 0.90 and is identically zero for r >= threshold.
+
+    include_condensation=False returns the bare sigmoid only.  That is the form
+    printed as Eq. 5 in the first submission, which omitted the condensation
+    term; it is retained so the two can be shown side by side.
     """
-    threshold   = 10.0
-    delta_width = 2.0
     ratio = np.atleast_1d(np.array(tcool_over_tff, dtype=float))
-    x_sig = (threshold - ratio) / delta_width
-    return (1.0 / (1.0 + np.exp(-x_sig))).squeeze()
+    x_sig = (PRECIP_THRESHOLD - ratio) / PRECIP_WIDTH
+    f = 1.0 / (1.0 + np.exp(-np.clip(x_sig, -700.0, 700.0)))
+    if include_condensation:
+        f = f * np.clip(1.0 - ratio / PRECIP_THRESHOLD, 0.0, None)
+    return f.squeeze()
 
 
 def ffb_threshold_mass_msun(z):
@@ -2768,6 +2784,112 @@ def plot_7_tcool_tff_distribution(snapdata):
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
                 'TcoolTffDistribution' + OUTPUT_FORMAT))
+
+
+def plot_7b_inflow_transition_fraction(snapdata):
+    """
+    Two-panel figure answering the referee's question on how much work the
+    precipitation criterion actually does.
+
+    Left  -- f_inflow as a function of t_cool/t_ff, for the implemented form
+             and for the bare sigmoid, with the transition band 0.1 < f < 0.9
+             shaded and the z=0 halo distribution overlaid.
+    Right -- fraction of the CGM-regime central population inside that
+             transition band as a function of redshift, weighted by number and
+             by CGM mass, together with the saturated fraction f >= 0.9.
+    """
+    print('Plot 7b: inflow transition fraction')
+
+    def _cgm_selection(d):
+        ratio = d['tcool_over_tff']
+        return np.where(
+            (d['Regime'] == 0) &
+            (d['Type'] == 0) &
+            (ratio > 0) & np.isfinite(ratio) &
+            (d['CGMgas'] > 0) &
+            (d['Mvir'] > 1e10)
+        )[0]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+
+    # ---------------- Panel 1: the inflow fraction curve ----------------
+    r_curve = np.logspace(-2.5, 1.6, 800)
+    f_impl  = precipitation_fraction(r_curve, include_condensation=True)
+    f_sig   = precipitation_fraction(r_curve, include_condensation=False)
+
+    ax1.axhspan(0.1, 0.9, alpha=0.10, color='gray', zorder=0)
+    ax1.plot(r_curve, f_sig, color='0.55', ls='--', lw=2.0,
+             label=r'sigmoid only, $S\left(\frac{10-t_{\rm cool}/t_{\rm ff}}{2}\right)$')
+    ax1.plot(r_curve, f_impl, color='#1f77b4', lw=3.0,
+             label=r'$f_{\rm inflow}$ as implemented')
+    ax1.axvline(PRECIP_THRESHOLD, color='black', ls=':', lw=1.8,
+                label=r'$t_{\rm cool}/t_{\rm ff}=10$')
+
+    # overlay the z=0 population so the reader sees where it sits
+    if SNAP_Z0 in snapdata:
+        d = snapdata[SNAP_Z0]
+        w = _cgm_selection(d)
+        if len(w) > 10:
+            axh = ax1.twinx()
+            axh.hist(d['tcool_over_tff'][w], bins=np.logspace(-2.5, 1.6, 60),
+                     color='#d62728', alpha=0.22, density=True)
+            axh.set_ylabel(r'$z=0$ halo density', color='#d62728')
+            axh.tick_params(axis='y', colors='#d62728')
+            axh.set_zorder(0)
+            ax1.set_zorder(1)
+            ax1.patch.set_visible(False)
+
+    ax1.set_xscale('log')
+    ax1.set_xlabel(r'$t_{\rm cool}/t_{\rm ff}$')
+    ax1.set_ylabel(r'$f_{\rm inflow}$')
+    ax1.set_ylim(-0.02, 1.05)
+    _standard_legend(ax1, loc='lower left')
+
+    # ---------------- Panel 2: transition fraction vs redshift ----------------
+    zs, frac_n, frac_m, frac_sat = [], [], [], []
+    for snap in sorted(snapdata.keys()):
+        d = snapdata[snap]
+        if 'tcool_over_tff' not in d or 'CGMgas' not in d:
+            continue
+        w = _cgm_selection(d)
+        if len(w) < 100:
+            continue
+        r = np.asarray(d['tcool_over_tff'][w], dtype=float)
+        m = np.asarray(d['CGMgas'][w], dtype=float)
+        f = precipitation_fraction(r)
+        band = (f > 0.1) & (f < 0.9)
+        zs.append(REDSHIFTS[snap])
+        frac_n.append(band.mean())
+        frac_m.append(m[band].sum() / m.sum() if m.sum() > 0 else np.nan)
+        frac_sat.append((f >= 0.9).mean())
+
+    if len(zs) == 0:
+        print('  No valid CGM-regime data found. Skipping.')
+        plt.close(fig)
+        return
+
+    order = np.argsort(zs)
+    zs = np.array(zs)[order]
+    frac_n = np.array(frac_n)[order]
+    frac_m = np.array(frac_m)[order]
+    frac_sat = np.array(frac_sat)[order]
+
+    ax2.plot(zs, frac_sat, 'o-', color='#2ca02c', lw=2.5, ms=5,
+             label=r'saturated, $f_{\rm inflow}\geq0.9$')
+    ax2.plot(zs, frac_n, 'o-', color='#1f77b4', lw=2.5, ms=5,
+             label=r'transition, $0.1<f_{\rm inflow}<0.9$ (by number)')
+    ax2.plot(zs, frac_m, 's--', color='#ff7f0e', lw=2.5, ms=5,
+             label=r'transition (weighted by $m_{\rm CGM}$)')
+
+    ax2.set_xlabel(r'$z$')
+    ax2.set_ylabel('fraction of CGM-regime centrals')
+    ax2.set_ylim(0, 1.05)
+    ax2.set_xlim(left=0)
+    _standard_legend(ax2, loc='center right')
+
+    fig.tight_layout()
+    save_figure(fig, os.path.join(OUTPUT_DIR,
+                'InflowTransitionFraction' + OUTPUT_FORMAT))
 
 
 # ========================== PLOT 8: PRECIPITATION FRACTION MODEL ==========================
@@ -9550,84 +9672,187 @@ def plot_23c_ffb_fraction_bk25():
 
 # ========================== PLOT 24: MASS LOADING VS VELOCITY  ==========================
 
+def _feedback_params(directory=PRIMARY_DIR):
+    """Feedback parameters straight from the run header, so the analytic curves
+    cannot drift from the model that produced the points."""
+    fallback = dict(eps_disk=2.9, eps_halo=0.3, alpha_z=1.25, eta_sn=5.0e-3,
+                    energy_sn=1.0e51, eps_max=2.0, sn_bound=1, reheat_bound=0)
+    files = _find_model_files_early(directory)
+    if not files:
+        return fallback
+    with h5.File(files[0], 'r') as f:
+        r = f['Header/Runtime'].attrs
+        get = lambda k, d: (float(r[k]) if k in r else d)
+        return dict(eps_disk=get('FeedbackReheatingEpsilon', 2.9),
+                    eps_halo=get('FeedbackEjectionEfficiency', 0.3),
+                    alpha_z=get('RedshiftPowerLawExponent', 1.25),
+                    eta_sn=get('EtaSN', 5.0e-3),
+                    energy_sn=get('EnergySN', 1.0e51),
+                    eps_max=get('MaxSNEnergyCoupling', 2.0),
+                    sn_bound=int(get('SNEnergyConservationOn', 1)),
+                    reheat_bound=int(get('ReheatEnergyConservationOn', 0)))
+
+
+# FIRE (Muratov et al. 2015) critical circular velocity separating the two
+# power-law slopes of the wind loading factor. Matches FIRE_V_CRIT_KMS in
+# src/model_starformation_and_feedback.c.
+FIRE_V_CRIT = 60.0
+FIRE_BETA_LOW = -3.2
+FIRE_BETA_HIGH = -1.0
+
+
+def _fire_scaling(vvir, z, p):
+    """f(V_vir, z) = (1+z)^alpha (V_vir/60)^beta, the shared factor in both
+    the mass loading and the ejection energy."""
+    v = np.maximum(np.asarray(vvir, dtype=float), 1.0)
+    beta = np.where(v < FIRE_V_CRIT, FIRE_BETA_LOW, FIRE_BETA_HIGH)
+    return (1.0 + z) ** p['alpha_z'] * (v / FIRE_V_CRIT) ** beta
+
+
+def _sn_energy_per_mass_kms2(p):
+    """eta_SN * E_SN in (km/s)^2 per unit mass -- the combination the code
+    carries as EtaSNcode * EnergySNcode (the Hubble_h factors cancel)."""
+    return p['eta_sn'] * p['energy_sn'] / _MSUN_CGS / 1.0e10
+
+
+def _eta_reheat(vvir, z, p):
+    eta = p['eps_disk'] * _fire_scaling(vvir, z, p)
+    if p['reheat_bound']:
+        esn = _sn_energy_per_mass_kms2(p)
+        eta = np.minimum(eta, p['eps_max'] * esn / np.asarray(vvir, float) ** 2)
+    return eta
+
+
+def _eject_per_star(vvir, z, p):
+    """mdot_eject / mdot_*, exactly as compute_sn_feedback() evaluates it."""
+    esn = _sn_energy_per_mass_kms2(p)
+    v = np.asarray(vvir, dtype=float)
+    coupling = p['eps_halo'] * _fire_scaling(v, z, p)
+    if p['sn_bound']:
+        coupling = np.minimum(coupling, p['eps_max'])
+    eta = _eta_reheat(v, z, p)
+    e_fb = coupling * 0.5 * esn
+    e_lift = 0.5 * eta * v ** 2
+    return np.where(e_fb > e_lift, (e_fb - e_lift) / (0.5 * v ** 2), np.nan)
+
+
 def plot_24_mass_loading_vs_velocity(primary, vanilla):
     """
-    Plot: Mass Loading Factor vs Wind Velocity for different feedback models.
+    Supernova feedback scalings against halo virial velocity.
+
+    Panel (a): the mass-loading factor eta_reheat, with the model medians at
+    z = 0 and the observed outflow compilation.
+    Panel (b): the ejected-to-formed mass ratio mdot_eject / mdot_*, which
+    falls to zero above a redshift-independent threshold in V_vir.
+
+    Both panels show the code expressions evaluated at several redshifts, with
+    parameters read from the run header.
     """
-    print('Plot 24: Mass Loading Factor vs Wind Velocity')
+    print('Plot 24: Mass loading and ejection vs virial velocity')
 
-    # --- Primary model ---
+    p = _feedback_params()
+    esn = _sn_energy_per_mass_kms2(p)
+    v_eject = np.sqrt(p['eps_halo'] * esn / p['eps_disk'])
+    redshifts = [0.0, 1.0, 2.0, 4.0, 6.0]
+    vgrid = np.logspace(np.log10(9.0), np.log10(600.0), 500)
+
+    cmap = plt.get_cmap('viridis')
+    colours = [cmap(x) for x in np.linspace(0.05, 0.85, len(redshifts))]
+
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(13.5, 5.4))
+
+    # ---------------- Panel (a): mass loading ----------------
+    for z, c in zip(redshifts, colours):
+        axL.plot(vgrid, _eta_reheat(vgrid, z, p), color=c, lw=2.4,
+                 label=rf'$z = {z:.0f}$', zorder=Z_MODEL_LINE)
+
+    # Lower edge of the measured curves. load_model() already applies the
+    # MIN_PARTICLES cut, but between 20 and ~30 particles the recorded V_vir and
+    # Mvir cease to be mutually consistent and the measured eta falls away from
+    # the scaling by up to an order of magnitude (a factor 17 by V_vir = 12 km/s).
+    # The binned medians are therefore truncated where the measurement is
+    # trustworthy rather than where galaxies merely exist.
+    V_MEASURED_MIN = 24.0
+    vbins = np.logspace(np.log10(V_MEASURED_MIN), np.log10(400.0), 20)
     w = (primary['MassLoading'] > 0) & (primary['Vvir'] > 0)
-    vvir = primary['Vvir'][w]
-    mass_loading = primary['MassLoading'][w]
-
-    # --- Plot ---
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-
-    vvir_bins = np.linspace(0.0, 500.0, 51)
     plot_binned_median_1sigma(
-        ax, vvir, mass_loading, vvir_bins,
-        color='steelblue', label='SAGE26',
-        alpha=0.25, lw=3.5, min_count=50,
-        zorder_fill=2, zorder_line=3,
+        axL, primary['Vvir'][w], primary['MassLoading'][w], vbins,
+        color='steelblue', label='SAGE26, Millennium ($z=0$)',
+        alpha=0.25, lw=3.2, min_count=50,
+        zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE,
     )
 
-    vvir_theory = np.logspace(1, 3, 100)  # 10 to 1000 km/s
-    mass_loading_theory = calculate_muratov_mass_loading(vvir_theory, z=0.0)
-    ax.plot(vvir_theory, mass_loading_theory, color='k', lw=2.5, ls='--',
-            label='Muratov+16 Theory')
+    # microUchuu resolves a decade further down in V_vir than Millennium, so it
+    # shows where the adopted scaling actually operates in the dwarf regime.
+    if model_files_exist(MINIUCHUU_DIR):
+        mu = load_model(MINIUCHUU_DIR, snapshot=f'Snap_{MINIUCHUU_LAST_SNAP}',
+                        properties=['MassLoading', 'Vvir'])
+        if mu:
+            wm = (mu['MassLoading'] > 0) & (mu['Vvir'] > 0)
+            plot_binned_median_1sigma(
+                axL, mu['Vvir'][wm], mu['MassLoading'][wm], vbins,
+                color='firebrick', label=r'SAGE26, microUchuu ($z=0$)', ls='--',
+                alpha=0.20, lw=3.0, min_count=50,
+                zorder_fill=Z_MODEL_BAND_ALT, zorder_line=Z_MODEL_LINE_ALT,
+            )
 
-    chisholm_ml = pd.read_csv('./data/outflows/Chisholm_17_ml.csv', header=None, delimiter='\t')
-    chisholm_x = chisholm_ml[0]  # First column
-    chisholm_y = chisholm_ml[1]  # Second column
+    for fname, marker, lbl in [('Chisholm_17_ml.csv', 'o', 'Chisholm+17'),
+                               ('Heckman_15_ml.csv', 'X', 'Heckman+15'),
+                               ('Rupke_05_ml.csv', 's', 'Rupke+05'),
+                               ('Sugahara_17_ml.csv', 'd', 'Sugahara+17')]:
+        path = os.path.join(OBS_DIR, 'outflows', fname)
+        if not os.path.exists(path):
+            continue
+        d = pd.read_csv(path, header=None, delimiter='\t')
+        axL.scatter(d[0], d[1], marker=marker, s=45, color='k',
+                    edgecolors='k', linewidths=1.0, facecolors='gray',
+                    alpha=0.6, label=lbl, zorder=Z_OBS)
 
-    heckman_ml = pd.read_csv('./data/outflows/Heckman_15_ml.csv', header=None, delimiter='\t')
-    heckman_x = heckman_ml[0]  # First column
-    heckman_y = heckman_ml[1]  # Second column
+    axL.axvline(FIRE_V_CRIT, color='0.55', ls=':', lw=1.4, zorder=1)
+    axL.annotate(r'$V_{\rm crit}$', xy=(FIRE_V_CRIT, 1.6e3), xytext=(3, 0),
+                 textcoords='offset points', color='0.45', fontsize=9.5, va='top')
+    axL.set_xscale('log')
+    axL.set_yscale('log')
+    axL.set_xlim(9, 600)
+    axL.set_ylim(0.05, 3e3)
+    axL.set_xlabel(r'$V_{\mathrm{vir}}\ [\mathrm{km\ s^{-1}}]$')
+    axL.set_ylabel(r'$\eta_{\mathrm{reheat}} = \dot{m}_{\mathrm{reheat}} / \dot{m}_{*}$')
+    axL.set_title('(a) mass loading', loc='left')
 
-    rupke_ml = pd.read_csv('./data/outflows/Rupke_05_ml.csv', header=None, delimiter='\t')
-    rupke_x = rupke_ml[0]  # First column
-    rupke_y = rupke_ml[1]  # Second column
+    handles, labels = axL.get_legend_handles_labels()
+    zset = ({rf'$z = {z:.0f}$' for z in redshifts}
+            | {'SAGE26, Millennium ($z=0$)', r'SAGE26, microUchuu ($z=0$)'})
+    mh = [h for h, l in zip(handles, labels) if l in zset]
+    ml = [l for l in labels if l in zset]
+    oh = [h for h, l in zip(handles, labels) if l not in zset]
+    ol = [l for l in labels if l not in zset]
+    leg = _standard_legend(axL, loc='upper right', handles=mh, labels=ml, fontsize=9)
+    axL.add_artist(leg)
+    _standard_legend(axL, loc='lower left', handles=oh, labels=ol, fontsize=9)
 
-    sugahara_ml = pd.read_csv('./data/outflows/Sugahara_17_ml.csv', header=None, delimiter='\t')
-    sugahara_x = sugahara_ml[0]  # First column
-    sugahara_y = sugahara_ml[1]  # Second column 
+    # ---------------- Panel (b): ejection ----------------
+    for z, c in zip(redshifts, colours):
+        axR.plot(vgrid, _eject_per_star(vgrid, z, p), color=c, lw=2.4,
+                 label=rf'$z = {z:.0f}$', zorder=Z_MODEL_LINE)
 
-    ax.scatter(chisholm_x, chisholm_y, color='k', marker='o', s=50, label='Chisholm+17', edgecolors='k', linewidths=1.0, facecolors='gray', alpha=0.6)
-    ax.scatter(heckman_x, heckman_y, color='k', marker='x', s=50, label='Heckman+15', edgecolors='k', linewidths=1.0, facecolors='gray', alpha=0.6)
-    ax.scatter(rupke_x, rupke_y, color='k', marker='s', s=50, label='Rupke+05', edgecolors='k', linewidths=1.0, facecolors='gray', alpha=0.6)
-    ax.scatter(sugahara_x, sugahara_y, color='k', marker='d', s=50, label='Sugahara+17', edgecolors='k', linewidths=1.0, facecolors='gray', alpha=0.6)
-            
-    ax.set_xlim(0, 500)
-    # ax.set_xscale('log')
-    ax.set_ylim(0, 15.0)
-    # ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
-    # ax.yaxis.set_major_locator(plt.MultipleLocator(5.0))
-    ax.set_xlabel(r'$V_{\mathrm{vir}}\ [\mathrm{km/s}]$')
-    ax.set_ylabel(r'$\eta_{\mathrm{reheat}}$')
-
-    handles, labels = ax.get_legend_handles_labels()
-    sim_set = {'SAGE26', 'Muratov+16 Theory'}
-    sim_h = [h for h, l in zip(handles, labels) if l in sim_set]
-    sim_l = [l for l in labels if l in sim_set]
-    obs_h = [h for h, l in zip(handles, labels) if l not in sim_set]
-    obs_l = [l for l in labels if l not in sim_set]
-    leg1 = _standard_legend(ax, loc='upper right', handles=sim_h, labels=sim_l)
-    ax.add_artist(leg1)
-    _standard_legend(ax, loc='center right', handles=obs_h, labels=obs_l)
-
-    ax.xaxis.set_major_locator(plt.MultipleLocator(100.0))
-    ax.yaxis.set_major_locator(plt.MultipleLocator(2.0))
-    ax.xaxis.set_minor_locator(plt.MultipleLocator(20))
-    ax.yaxis.set_minor_locator(plt.MultipleLocator(1.0))
+    axR.axvline(v_eject, color='crimson', ls='--', lw=1.6, zorder=1)
+    axR.annotate(rf'$\dot{{E}}_{{\rm FB}} = \dot{{E}}_{{\rm lift}}$'
+                 '\n' rf'$V_{{\rm vir}} = {v_eject:.0f}$ km s$^{{-1}}$',
+                 xy=(v_eject, 1.6e3), xytext=(-8, 0), textcoords='offset points',
+                 color='crimson', fontsize=9.5, ha='right', va='top')
+    axR.set_xscale('log')
+    axR.set_yscale('log')
+    axR.set_xlim(9, 600)
+    axR.set_ylim(1e-2, 3e3)
+    axR.set_xlabel(r'$V_{\mathrm{vir}}\ [\mathrm{km\ s^{-1}}]$')
+    axR.set_ylabel(r'$\dot{m}_{\mathrm{eject}} / \dot{m}_{*}$')
+    axR.set_title('(b) ejection', loc='left')
+    _standard_legend(axR, loc='lower left', fontsize=9)
 
     fig.tight_layout()
     outputFile = os.path.join(OUTPUT_DIR, 'MassLoading_vs_Velocity' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
     print(f'Saved file to {outputFile}\n')
-
-    plt.close()
 
 
 # ======================== GAS RATIO PLOTS =========================
@@ -10784,6 +11009,7 @@ Z0_PLOTS = {
 
 EVOLUTION_PLOTS = {
     7: plot_7_tcool_tff_distribution,
+    71: plot_7b_inflow_transition_fraction,
     8: plot_8_precipitation_fraction,
     9: plot_9_cgm_fractions_depletion,
     91: plot_9b_cgm_fractions_grid,

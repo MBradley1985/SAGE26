@@ -525,6 +525,9 @@ struct params
     double RedshiftPowerLawExponent; /* exponent of the (1+z) term in the FIRE mass-loading scaling (Muratov+15); default 1.25 */
     int32_t SNEnergyConservationOn;  // 1 = bound the FIRE ejection energy by the supernova energy actually available (DEFAULT); 0 = off (unbounded coupling, the pre-2026 published behaviour). Only acts when FIREmodeOn == 1.
     double MaxSNEnergyCoupling;      // cap on the effective coupling eps_eff = FeedbackEjectionEfficiency * f_FIRE when SNEnergyConservationOn == 1; default 2.0, i.e. E_FB <= m_* eta_SN E_SN (all of the SN energy). 1.0 caps at half.
+    int32_t ReheatEnergyConservationOn; // 1 = also bound the REHEATING term by the supernova energy available (DEFAULT);
+                                       // 0 = off (unbounded mass loading). Uses the same MaxSNEnergyCoupling budget and the same
+                                       // 0.5*eta*V_vir^2 cost convention as E_lift. Only acts when FIREmodeOn == 1.
 
     /* code unit definitions (set from parameter file; all other unit fields derived from these) */
     double UnitLength_in_cm;          /* 1 code length = this many cm (default: 1 Mpc/h) */

@@ -93,6 +93,12 @@
     X(Vvir, Vvir, float, H5T_NATIVE_FLOAT, \
       "Virial velocity of this galaxy's halo.", \
       "km/s") \
+    X(VvirPeak, VvirPeak, float, H5T_NATIVE_FLOAT, \
+      "Peak virial velocity of this galaxy's halo, updated only when Mvir grows. " \
+      "This is the value the supernova feedback is evaluated with; Vvir above is " \
+      "the instantaneous value recomputed at output time and is smaller for haloes " \
+      "past their peak.", \
+      "km/s") \
     X(Vmax, Vmax, float, H5T_NATIVE_FLOAT, \
       "Maximum circular speed for this galaxy's halo.", \
       "km/s") \

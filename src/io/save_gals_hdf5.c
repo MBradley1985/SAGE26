@@ -898,6 +898,7 @@ static int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct sav
     save_info->buffer_output_gals[output_snap_idx].CentralMvir[gals_in_buffer] = get_virial_mass(halos[g->HaloNr].FirstHaloInFOFgroup, halos, run_params);
     save_info->buffer_output_gals[output_snap_idx].Rvir[gals_in_buffer] = get_virial_radius(g->HaloNr, halos, run_params);  // output the actual Rvir, not the maximum Rvir
     save_info->buffer_output_gals[output_snap_idx].Vvir[gals_in_buffer] = get_virial_velocity(g->HaloNr, halos, run_params);  // output the actual Vvir, not the maximum Vvir
+    save_info->buffer_output_gals[output_snap_idx].VvirPeak[gals_in_buffer] = g->Vvir;  // the peak-retained value the physics uses
     save_info->buffer_output_gals[output_snap_idx].Vmax[gals_in_buffer] = g->Vmax;
     save_info->buffer_output_gals[output_snap_idx].VelDisp[gals_in_buffer] = halos[g->HaloNr].VelDisp;
 
@@ -1302,7 +1303,9 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "CGMPrecipRadiusMode", run_params->CGMPrecipRadiusMode, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "CGMRateRadiusMode", run_params->CGMRateRadiusMode, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "PrecipCriterionOn", run_params->PrecipCriterionOn, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RegimeRandomMode", run_params->RegimeRandomMode, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ConcentrationOn", run_params->ConcentrationOn, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RamPressureStrippingOn", run_params->RamPressureStrippingOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SaveFullSFH", run_params->SaveFullSFH, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "TrackICSAssembly", run_params->TrackICSAssembly, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "StarburstColdGasOn", run_params->StarburstColdGasOn, H5T_NATIVE_INT);
@@ -1335,7 +1338,28 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RedshiftPowerLawExponent", run_params->RedshiftPowerLawExponent, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SNEnergyConservationOn", run_params->SNEnergyConservationOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "MaxSNEnergyCoupling", run_params->MaxSNEnergyCoupling, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ReheatEnergyConservationOn", run_params->ReheatEnergyConservationOn, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RamPressureEpsilon", run_params->RamPressureEpsilon, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BaryonFrac", run_params->BaryonFrac, H5T_NATIVE_DOUBLE);
+
+    /* Numerical resolution and forest decomposition.  Not physics, but the
+       results depend on them: SubstepResolution sets the integration
+       resolution the model is calibrated at, and the decomposition scheme
+       changes how forests are split across ranks, which the regime/FFB draws
+       are sensitive to. */
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SubstepResolution", run_params->SubstepResolution, H5T_NATIVE_DOUBLE);
+    /* The enum-valued parameters need lvalues: CREATE_SINGLE_ATTRIBUTE takes the
+       address of its argument, so a cast expression cannot be passed directly. */
+    const int32_t forest_dist_scheme = (int32_t) run_params->ForestDistributionScheme;
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ForestDistributionScheme", forest_dist_scheme, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ExponentForestDistributionScheme", run_params->Exponent_Forest_Dist_Scheme, H5T_NATIVE_DOUBLE);
+
+    /* Input provenance: which trees produced this file, and in what format. */
+    const int32_t tree_type_id = (int32_t) run_params->TreeType;
+    const int32_t output_format_id = (int32_t) run_params->OutputFormat;
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "TreeType", tree_type_id, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "OutputFormat", output_format_id, H5T_NATIVE_INT);
+    CREATE_STRING_ATTRIBUTE(runtime_group_id, "TreeName", &run_params->TreeName, strlen(run_params->TreeName));
 
     // Misc runtime Parameters.
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "UnitLength_in_cm", run_params->UnitLength_in_cm, H5T_NATIVE_DOUBLE);

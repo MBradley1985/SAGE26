@@ -4,7 +4,7 @@
 
 FileNameGalaxies   model
 %OutputDir         /<absolute>/<root>/<path>/sage-model/output/millennium/
-OutputDir          output/millennium/
+OutputDir          output/millennium_all/
 
 FirstFile         0
 LastFile          7
@@ -54,16 +54,17 @@ DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through i
 CGMrecipeOn                 1   %0: switch off
 CGMDensityProfile           0   %0: uniform; 1: NFW; 2: beta-profile (beta=2/3)
 PrecipCriterionOn           1   %1: Voit t_cool/t_ff precipitation criterion (default); 0: bypass it -- mdot = M_CGM/t_ff for every CGM-regime halo
-CGMPrecipRadiusMode         0   %radius for the CRITERION ratio t_cool/t_ff: 0: r_cool (default); 1: 0.1 Rvir. Inert unless CGMDensityProfile>0 (uniform gas => r_cool=Rvir, both timescales radius-independent)
-CGMRateRadiusMode           0   %radius for the RATE normalisation t_ff in mdot=f*(M_CGM-M_eq)/t_ff: 0: r_cool (default); 1: 0.1 Rvir. Same inertness condition
-RegimeRandomMode            0   %0: fresh random draw each snapshot (original; borderline-mass galaxies thrash between regimes); 1: use persistent RegimeRandom assigned at galaxy creation (regime evolves smoothly with Mvir)
+CGMPrecipRadiusMode         0   %radius for the CRITERION ratio t_cool/t_ff: 0: r_cool (default); 1: 0.1 Rvir. NOT a measure of the radial bias unless CGMDensityProfile>0: with uniform gas t_cool is radius-independent but t_ff is ~8x shorter at 0.1Rvir, so the ratio RISES
+CGMRateRadiusMode           0   %radius for the RATE normalisation t_ff in mdot=f*(M_CGM-M_eq)/t_ff: 0: r_cool (default); 1: 0.1 Rvir. Shortens t_ff ~8x under any gas profile; the more consequential of the two
+RegimeRandomMode            1   %0: fresh random draw each snapshot (original; borderline-mass galaxies thrash between regimes); 1: use persistent RegimeRandom assigned at galaxy creation (regime evolves smoothly with Mvir)
 FIREmodeOn                  1   %0: switch off
 SNEnergyConservationOn      1   %1: bound the FIRE ejection energy E_FB by the SN energy actually available (default; FIREmodeOn=1 only); 0: off, unbounded coupling
+ReheatEnergyConservationOn  1   %1: also bound the reheating term by the SN energy available (same MaxSNEnergyCoupling budget and 0.5*eta*V_vir^2 cost convention as E_lift); 0: off, unbounded mass loading
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
 FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 conc); 3: BK25 (ConcentrationOn method); 4: BK25 + log-normal c scatter; 5: Li+24 sharp; 6: Li+24 sigmoid + H2 SF; 7: BK25 log-normal c scatter + H2 SF
 FFBIgnoreRegime             1   %0: restrict FFB to CGM-regime (Regime=0) halos; 1: apply Li+24/BK25 criteria regardless of halo regime
-FFBRandomMode               0   %0: fresh random draw each snapshot; 1: persistent FFBRandom assigned at galaxy creation
+FFBRandomMode               1   %0: fresh random draw each snapshot; 1: persistent FFBRandom assigned at galaxy creation
 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 SaveFullSFH                 1   %0: switch off

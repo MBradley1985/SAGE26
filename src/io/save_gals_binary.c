@@ -332,6 +332,7 @@ static int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT 
     o->CentralMvir = get_virial_mass(halos[g->HaloNr].FirstHaloInFOFgroup, halos, run_params);
     o->Rvir = get_virial_radius(g->HaloNr, halos, run_params);  // output the actual Rvir, not the maximum Rvir
     o->Vvir = get_virial_velocity(g->HaloNr, halos, run_params);  // output the actual Vvir, not the maximum Vvir
+    o->VvirPeak = g->Vvir;  // the peak-retained value the physics uses
     o->Vmax = g->Vmax;
     o->VelDisp = halos[g->HaloNr].VelDisp;
 

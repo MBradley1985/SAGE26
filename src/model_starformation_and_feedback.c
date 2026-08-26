@@ -736,7 +736,8 @@ double reheated_mass = 0.0;
 if(run_params->SupernovaRecipeOn == 1) {
     if(run_params->FIREmodeOn == 1) {
         // FIRE: eta = FeedbackReheatingEpsilon * fire_scaling (Muratov+2015)
-        const double eta_reheat = run_params->FeedbackReheatingEpsilon * fire_scaling;
+        const double eta_reheat = capped_eta_reheat(
+            run_params->FeedbackReheatingEpsilon * fire_scaling, galaxies[p].Vvir, run_params);
         galaxies[p].MassLoading = (float)eta_reheat;
         reheated_mass = eta_reheat * stars;
     } else {
@@ -827,7 +828,8 @@ if(run_params->SupernovaRecipeOn == 1 && run_params->FIREmodeOn == 1) {
 if(run_params->SupernovaRecipeOn == 1) {
     if(run_params->FIREmodeOn == 1) {
         if(fire_scaling_valid) {
-            const double eta_reheat  = run_params->FeedbackReheatingEpsilon * fire_scaling;
+            const double eta_reheat  = capped_eta_reheat(
+                run_params->FeedbackReheatingEpsilon * fire_scaling, galaxies[p].Vvir, run_params);
             galaxies[p].MassLoading  = (float)eta_reheat;
             reheated_mass            = eta_reheat * stars;
         }

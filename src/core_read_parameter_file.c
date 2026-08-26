@@ -104,17 +104,18 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->CGMPrecipRadiusMode        = 0;
     run_params->CGMRateRadiusMode          = 0;
     run_params->PrecipCriterionOn          = 1;
-    run_params->RegimeRandomMode           = 0;
+    run_params->RegimeRandomMode           = 1;   /* default: persistent per-galaxy draw -- regime evolves smoothly with Mvir instead of thrashing each snapshot */
     run_params->FIREmodeOn                 = 1;
     run_params->RedshiftPowerLawExponent   = 1.25;
     run_params->SNEnergyConservationOn     = 1;   /* default: on -- the ejection term may not spend more than the SN energy available */
     run_params->MaxSNEnergyCoupling        = 2.0; /* cap on eps_halo * f_FIRE: E_FB <= m_* eta_SN E_SN (the whole SN budget) */
+    run_params->ReheatEnergyConservationOn = 1;   /* default: on -- the reheating term may not spend more than the SN energy available */
     run_params->FFBMaxEfficiency           = 0.2;
     run_params->FFBConcSigma               = 0.2;
     run_params->ConcentrationOn            = 3;
     run_params->FeedbackFreeModeOn         = 1;
     run_params->FFBIgnoreRegime            = 1;
-    run_params->FFBRandomMode              = 0;
+    run_params->FFBRandomMode              = 1;   /* default: persistent per-galaxy draw -- FFB status is temporally coherent; the population fraction still follows Li+24 f_ffb */
     run_params->BulgeSizeOn                = 3;
     run_params->SaveFullSFH                = 1;
     run_params->TrackICSAssembly           = 1;
@@ -237,6 +238,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("RedshiftPowerLawExponent",   &(run_params->RedshiftPowerLawExponent),   DOUBLE, 0);
     REG("SNEnergyConservationOn",     &(run_params->SNEnergyConservationOn),     INT, 0);
     REG("MaxSNEnergyCoupling",        &(run_params->MaxSNEnergyCoupling),        DOUBLE, 0);
+    REG("ReheatEnergyConservationOn", &(run_params->ReheatEnergyConservationOn), INT, 0);
 
 #undef REG
 
@@ -573,6 +575,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"DynamicDisruptionSplit", run_params->DynamicDisruptionSplit, 0, 2},
             {"RamPressureStrippingOn", run_params->RamPressureStrippingOn, 0, 1},
             {"SNEnergyConservationOn", run_params->SNEnergyConservationOn, 0, 1},
+            {"ReheatEnergyConservationOn", run_params->ReheatEnergyConservationOn, 0, 1},
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {

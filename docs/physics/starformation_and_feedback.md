@@ -139,6 +139,24 @@ half).  The bound applies to the energy only; the empirical FIRE mass loading
 in `eta_reheat` is left untouched.  Setting `SNEnergyConservationOn = 0`
 restores the unbounded coupling of the earlier published behaviour.
 
+**The reheating term has its own optional bound.** `mdot_reheat = eta_reheat * mdot_*`
+carries no energy check by default. Where the model ejects, the total energy
+spent is exactly `E_FB` and is bounded by `SNEnergyConservationOn`; the residual
+is the non-ejecting regime (`V_vir` above the 161 km/s ejection threshold), where
+the reheating cost `0.5 * eta_reheat * V_vir^2` grows linearly with `V_vir`.
+Setting `ReheatEnergyConservationOn = 1` caps `eta_reheat` so that cost cannot
+exceed the same `MaxSNEnergyCoupling` budget. It uses the `E_lift` cost
+convention, so the two equations agree about what reheating costs. Default on;
+set to 0 to recover the unbounded mass loading.
+
+Note that `Vvir` in the output catalogue is the *instantaneous* virial velocity,
+recomputed at output time, whereas the feedback is evaluated with the
+peak-retained `galaxies[p].Vvir` (updated only when `Mvir` grows). The two
+diverge for haloes past their peak -- by a factor of two at `V_vir ~ 11 km/s`
+in microUchuu, and by under 3 per cent above ~25 km/s. `VvirPeak` in the output
+carries the value the physics used; pair feedback quantities with that, not with
+`Vvir`.
+
 **Neither `eta_reheat` nor `reheated_mass` is capped directly.** What limits
 the reheating is the cold gas balance: if `stars + reheated_mass > ColdGas`
 both are rescaled by `ColdGas / (stars + reheated_mass)`, so the stars formed

@@ -677,7 +677,9 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     // this bursting results in SN feedback on the cold/hot gas
     if(run_params->SupernovaRecipeOn == 1) {
         if(run_params->FIREmodeOn == 1) {
-            reheated_mass = run_params->FeedbackReheatingEpsilon * fire_scaling * stars;
+            reheated_mass = capped_eta_reheat(
+                run_params->FeedbackReheatingEpsilon * fire_scaling,
+                galaxies[merger_centralgal].Vvir, run_params) * stars;
         } else {
             reheated_mass = run_params->FeedbackReheatingEpsilon * stars;
         }

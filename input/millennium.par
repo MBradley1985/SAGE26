@@ -52,13 +52,8 @@ ReionizationOn              1   %0: switch off
 DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
 
 CGMrecipeOn                 1   %0: switch off
-RegimeRandomMode            1   %0: fresh random draw each snapshot (original; borderline-mass galaxies thrash between regimes); 1: use persistent RegimeRandom assigned at galaxy creation (regime evolves smoothly with Mvir)
-CGMDensityProfile           0   %0: uniform; 1: NFW; 2: beta-profile (beta=2/3)
-PrecipCriterionOn           1   %1: Voit t_cool/t_ff precipitation criterion (default); 0: bypass it -- mdot = M_CGM/t_ff for every CGM-regime halo
-CGMPrecipRadiusMode         0   %radius for the CRITERION ratio t_cool/t_ff: 0: r_cool (default); 1: 0.1 Rvir. Inert unless CGMDensityProfile>0 (uniform gas => r_cool=Rvir, both timescales radius-independent)
-CGMRateRadiusMode           0   %radius for the RATE normalisation t_ff in mdot=f*(M_CGM-M_eq)/t_ff: 0: r_cool (default); 1: 0.1 Rvir. Same inertness condition
 FIREmodeOn                  1   %0: switch off
-SNEnergyConservationOn      1   %1: bound the FIRE ejection energy E_FB by the SN energy actually available (default; FIREmodeOn=1 only); 0: off, unbounded coupling
+ReheatEnergyConservationOn  1   %1: also bound the reheating term by the SN energy available (same MaxSNEnergyCoupling budget and 0.5*eta*V_vir^2 cost convention as E_lift); 0: off, unbounded mass loading
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
 FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 conc); 3: BK25 (ConcentrationOn method); 4: BK25 + log-normal c scatter; 5: Li+24 sharp; 6: Li+24 sigmoid + H2 SF; 7: BK25 log-normal c scatter + H2 SF
@@ -75,7 +70,6 @@ FFBMaxEfficiency            0.2     %0.2 fits observations best, 1.0 is theoreti
 
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)
 FeedbackEjectionEfficiency  0.3     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
-MaxSNEnergyCoupling         2.0     %cap on the effective coupling eps_eff = FeedbackEjectionEfficiency * f_FIRE when SNEnergyConservationOn=1; 2.0 = E_FB <= all the SN energy, 1.0 = <= half
 
 ReIncorporationFactor       0.15    %fraction of ejected mass reincorporated per dynamical time to hot
 
@@ -114,18 +108,3 @@ ExponentForestDistributionScheme            0.7 % only relevant for the last two
 UnitLength_in_cm          3.08568e+24 %WATCH OUT: Mpc/h
 UnitMass_in_g             1.989e+43   %WATCH OUT: 10^10Msun
 UnitVelocity_in_cm_per_s  100000      %WATCH OUT: km/s
-
-%------------------------------------------
-%----- Numerical time resolution ----------
-%------------------------------------------
-
-% IMPORTANT: this is a calibration-locked numerical knob, not a physics choice.
-% The per-snapshot physics (cooling, SF, feedback) is integrated with an adaptive
-% number of sub-timesteps; SubstepResolution multiplies that count. The model is
-% CALIBRATED at 1.0 -- do NOT change it for science runs without recalibrating.
-% Higher values converge the time-integration (coarse steps over-cool, so the
-% massive-end SMF drops ~0.1 dex from 1.0 to fully converged -- within the
-% observational scatter) but cost ~linearly more runtime. See the convergence
-% discussion in docs/parameters.md and docs/physics/cooling_and_heating.md.
-
-SubstepResolution           1.0   %multiplier on the adaptive sub-timestep count (scales the STEPS floor and MAX_STEPS cap); 1.0 = calibrated default. Larger = better time-convergence, longer runtime.

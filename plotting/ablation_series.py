@@ -58,7 +58,7 @@ SAGE_BINARY = './sage'
 # 'switch' the single parameter that differs from the fiducial run.
 VARIANTS = [
     {'key': 'full',   'par': 'input/millennium_all.par',
-     'out': './output/millennium/',
+     'out': './output/millennium_all/',
      'label': r'SAGE26 (fiducial)',            'switch': None,
      'color': 'black',   'ls': '-',  'lw': 3.6, 'zorder': 12},
     {'key': 'nofire', 'par': 'input/millennium_nofire.par',
