@@ -144,10 +144,11 @@ carries no energy check by default. Where the model ejects, the total energy
 spent is exactly `E_FB` and is bounded by `SNEnergyConservationOn`; the residual
 is the non-ejecting regime (`V_vir` above the 161 km/s ejection threshold), where
 the reheating cost `0.5 * eta_reheat * V_vir^2` grows linearly with `V_vir`.
-Setting `ReheatEnergyConservationOn = 1` caps `eta_reheat` so that cost cannot
-exceed the same `MaxSNEnergyCoupling` budget. It uses the `E_lift` cost
-convention, so the two equations agree about what reheating costs. Default on;
-set to 0 to recover the unbounded mass loading.
+`SNEnergyConservationOn` governs both terms: it caps `eta_reheat` so that cost
+cannot exceed the same `MaxSNEnergyCoupling` budget used for the ejection
+coupling. It uses the `E_lift` cost convention, so the two equations agree about
+what reheating costs. Default on; set to 0 to recover the unbounded behaviour
+for both terms.
 
 Note that `Vvir` in the output catalogue is the *instantaneous* virial velocity,
 recomputed at output time, whereas the feedback is evaluated with the

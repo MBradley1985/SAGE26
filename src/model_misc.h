@@ -105,15 +105,15 @@ extern "C" {
      * reheating cost 0.5*eta_reheat*V_vir^2 -- the same convention as E_lift --
      * grows linearly with V_vir and is unbounded.
      *
-     * With ReheatEnergyConservationOn = 1 the mass loading is capped so that this
+     * With SNEnergyConservationOn = 1 the mass loading is capped so that this
      * cost cannot exceed the same MaxSNEnergyCoupling budget used for the
      * ejection term.  The bound is on by default; setting
-     * ReheatEnergyConservationOn = 0 restores the unbounded mass loading.
+     * SNEnergyConservationOn = 0 restores the unbounded mass loading.
      */
     static inline double capped_eta_reheat(const double eta_reheat, const double vvir,
                                            const struct params *run_params)
     {
-        if(!run_params->ReheatEnergyConservationOn || vvir <= 0.0) {
+        if(!run_params->SNEnergyConservationOn || vvir <= 0.0) {
             return eta_reheat;
         }
         const double esn_per_mass = run_params->EtaSNcode * run_params->EnergySNcode;

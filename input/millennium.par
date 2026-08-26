@@ -53,7 +53,6 @@ DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through i
 
 CGMrecipeOn                 1   %0: switch off
 FIREmodeOn                  1   %0: switch off
-ReheatEnergyConservationOn  1   %1: also bound the reheating term by the SN energy available (same MaxSNEnergyCoupling budget and 0.5*eta*V_vir^2 cost convention as E_lift); 0: off, unbounded mass loading
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
 FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 conc); 3: BK25 (ConcentrationOn method); 4: BK25 + log-normal c scatter; 5: Li+24 sharp; 6: Li+24 sigmoid + H2 SF; 7: BK25 log-normal c scatter + H2 SF

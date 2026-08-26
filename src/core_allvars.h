@@ -476,10 +476,6 @@ struct params
     int32_t    DiskInstabilityOn;
     int32_t    CGMrecipeOn;
     int32_t    CGMDensityProfile;  // 0: uniform, 1: NFW, 2: beta-profile
-    int32_t    CGMPrecipRadiusMode; // 0: evaluate t_cool/t_ff at r_cool (default);
-                                 // 1: evaluate at 0.1 R_vir (Voit-style inner CGM)
-    int32_t    CGMRateRadiusMode;  // radius for the RATE normalisation t_ff:
-                                 // 0: r_cool (default); 1: 0.1 R_vir
     int32_t    PrecipCriterionOn; // 1: Voit t_cool/t_ff precipitation criterion (default);
                                  // 0: bypass it -- mdot = M_CGM / t_ff for every CGM halo
     int32_t    FIREmodeOn;
@@ -487,7 +483,7 @@ struct params
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation, 3: hybrid (Vmax/Vvir, infall-frozen for satellites)
     int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
     int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too
-    int32_t    FFBRandomMode;       // 0: draw a fresh random each snapshot; 1: use persistent FFBRandom assigned at galaxy creation
+    int32_t    FFBRandomMode;       // 0: draw a fresh random each snapshot (DEFAULT, published behaviour -- galaxies move in and out of FFB); 1: use the persistent FFBRandom assigned at galaxy creation (FFB status fixed per galaxy)
     int32_t    BulgeSizeOn;   // 0: off; 1: Shen+03 eq. 33; 2: Shen+03 eq. 32 two-regime; 3: Tonini+16 separate merger/instability bulges
     int32_t    H2DiskAreaOption;          // 0 = pi*r_s^2, 1 = pi*(3*r_s)^2, 2 = 2*pi*r_s^2 (central Sigma_0)
     int32_t    H2RadialIntegrationOn;     // 0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk
@@ -525,9 +521,6 @@ struct params
     double RedshiftPowerLawExponent; /* exponent of the (1+z) term in the FIRE mass-loading scaling (Muratov+15); default 1.25 */
     int32_t SNEnergyConservationOn;  // 1 = bound the FIRE ejection energy by the supernova energy actually available (DEFAULT); 0 = off (unbounded coupling, the pre-2026 published behaviour). Only acts when FIREmodeOn == 1.
     double MaxSNEnergyCoupling;      // cap on the effective coupling eps_eff = FeedbackEjectionEfficiency * f_FIRE when SNEnergyConservationOn == 1; default 2.0, i.e. E_FB <= m_* eta_SN E_SN (all of the SN energy). 1.0 caps at half.
-    int32_t ReheatEnergyConservationOn; // 1 = also bound the REHEATING term by the supernova energy available (DEFAULT);
-                                       // 0 = off (unbounded mass loading). Uses the same MaxSNEnergyCoupling budget and the same
-                                       // 0.5*eta*V_vir^2 cost convention as E_lift. Only acts when FIREmodeOn == 1.
 
     /* code unit definitions (set from parameter file; all other unit fields derived from these) */
     double UnitLength_in_cm;          /* 1 code length = this many cm (default: 1 Mpc/h) */

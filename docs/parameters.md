@@ -66,9 +66,8 @@ optional parameters take the listed default if omitted.
 | `DiskInstabilityOn` | 0/1 | no | `1` | Disk instability: 0=off; 1=Toomre criterion drives bulge and BH growth. |
 | `CGMrecipeOn` | 0/1 | no | `1` | Two-regime CGM model: 0=off (classical C16 cooling only); 1=on. |
 | `FIREmodeOn` | 0/1 | no | `1` | FIRE stellar feedback: 0=off; 1=on. |
-| `SNEnergyConservationOn` | 0/1 | no | `1` | Bound the FIRE ejection energy by the supernova energy actually available: 1=on (default); 0=off, restoring the unbounded coupling of the earlier published behaviour. The FIRE branch sets `E_FB = eps_halo * f_FIRE * 0.5 * m_* * eta_SN E_SN`, so the effective coupling `eps_eff = FeedbackEjectionEfficiency * f_FIRE` is unbounded and exceeds 2 (the whole SN budget) at low `V_vir` and high `z`. Only acts when `FIREmodeOn=1`. |
+| `SNEnergyConservationOn` | 0/1 | no | `1` | Bound both supernova feedback terms by the energy actually available: 0=off (recovers the unbounded behaviour); 1=on (default). Caps the ejection coupling at `MaxSNEnergyCoupling` and the mass loading at `MaxSNEnergyCoupling * eta_SN E_SN / V_vir^2`, using the same `0.5*eta*V_vir^2` cost convention as `E_lift`, so the model cannot spend more energy than the supernovae release. Only acts when `FIREmodeOn=1`. |
 | `MaxSNEnergyCoupling` | double | no | `2.0` | Cap applied to `eps_eff` when `SNEnergyConservationOn=1`. `2.0` means `E_FB <= m_* eta_SN E_SN` (all of the SN energy); `1.0` caps it at half. Bounds the *energy*, not the empirical FIRE mass loading, which is applied unmodified in `eta_reheat`. |
-| `ReheatEnergyConservationOn` | 0/1 | no | `1` | Also bound the *reheating* term by the supernova energy available: 1=on (default); 0=off, restoring the unbounded mass loading. Where the model ejects, the total energy spent is exactly `E_FB` and is already bounded by `SNEnergyConservationOn`; the residual is the non-ejecting regime (`V_vir` above the ejection threshold), where the reheating cost `0.5*eta_reheat*V_vir^2` -- the same convention as `E_lift` -- grows linearly with `V_vir` and is otherwise unbounded. Caps `eta_reheat` at `MaxSNEnergyCoupling * eta_SN E_SN / V_vir^2`. Only acts when `FIREmodeOn=1`. |
 | `FeedbackFreeModeOn` | int | no | `1` | Feedback-free burst galaxies: 0=off; 1=Li+24 sigmoid; 2=BK25 (Ishiyama+21 c); 3=BK25 (ConcentrationOn method); 4=BK25 + log-normal c scatter; 5=Li+24 sharp; 6=Li+24 sigmoid + H₂ SF; 7=BK25 log-normal c scatter + H₂ SF. |
 | `ConcentrationOn` | int | no | `3` | Halo concentration method: 0=off; 1=Ishiyama+21 table; 2=V_max/V_vir; 3=V_max/V_vir with infall freeze for satellites. |
 | `BulgeSizeOn` | int | no | `3` | Bulge radius model: 0=off; 1=Shen+2003 eq.33; 2=Shen+2003 eq.32; 3=Tonini+2016 (separate merger and instability channels, mass-weighted average). |
@@ -84,9 +83,8 @@ optional parameters take the listed default if omitted.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `CGMDensityProfile` | int | no | `0` | CGM gas density profile for precipitation: 0=uniform; 1=NFW; 2=beta (β=2/3). |
-| `CGMPrecipRadiusMode` | 0/1 | no | `0` | Radius at which the **criterion** ratio t_cool/t_ff is evaluated: 0=r_cool; 1=0.1 R_vir. **Interpretation warning:** with `CGMDensityProfile = 0` the gas density is uniform so t_cool is radius-independent, but the gravitating mass is NFW so t_ff at 0.1 R_vir is ~7-8x shorter — the ratio therefore *rises* by that factor. That is the self-consistent answer for a genuinely uniform CGM, but it is **not** a measure of the radial bias in real haloes, where density rises inward and the ratio falls. To measure that, set `CGMDensityProfile > 0` as well. |
-| `CGMRateRadiusMode` | 0/1 | no | `0` | Radius at which the **rate** normalisation t_ff in ṁ = f·(M_CGM−M_eq)/t_ff is evaluated: 0=r_cool; 1=0.1 R_vir. Shortens t_ff by ~7-8x under any gas profile (t_ff depends only on the NFW gravitating mass), so this is the more consequential of the two: the model is far more sensitive to it than to `CGMPrecipRadiusMode`. |
 | `PrecipCriterionOn` | 0/1 | no | `1` | Voit t_cool/t_ff precipitation criterion: 1=on; 0=bypass, giving ṁ = M_CGM/t_ff for every CGM halo (the f_inflow ≡ 1 control). |
+| `RegimeRandomMode` | 0/1 | no | `0` | Where the CGM/hot regime draw comes from: 0=a fresh uniform draw each snapshot (default); 1=the persistent `RegimeRandom` assigned at galaxy creation. As for `FFBRandomMode`, the difference is temporal rather than statistical: with 0 borderline-mass galaxies switch regime repeatedly, with 1 the regime evolves monotonically with `M_vir`. |
 
 ---
 
@@ -97,7 +95,7 @@ optional parameters take the listed default if omitted.
 | `FFBMaxEfficiency` | double | no | `0.2` | Maximum star formation efficiency during FFB bursts. `0.2` matches observations; `1.0` is the theoretical maximum. |
 | `FFBConcSigma` | double | no | `0.2` | Log-normal scatter in halo concentration used by `FeedbackFreeModeOn=4,7` (dex). |
 | `FFBIgnoreRegime` | 0/1 | no | `1` | Apply FFB criterion regardless of CGM regime classification. |
-| `FFBRandomMode` | 0/1 | no | `0` | Use random number scatter in FFB threshold instead of deterministic sigmoid. |
+| `FFBRandomMode` | 0/1 | no | `0` | Where the FFB draw comes from when it is compared against the Li+24 fraction `f_ffb(M_vir, z)`: 0=a fresh uniform draw each snapshot (default); 1=the persistent `FFBRandom` assigned at galaxy creation. Both compare against the same sigmoid — the difference is temporal. With 0 a galaxy re-enters the lottery every snapshot, so it moves in and out of FFB and a transient low-redshift FFB population persists; with 1 each galaxy holds a fixed quantile, so once `f_ffb` falls below it the galaxy leaves FFB permanently and both the oscillation and the low-z population disappear. |
 | `RedshiftPowerLawExponent` | double | no | `1.25` | Exponent alpha of the `(1+z)^alpha` term in the FIRE mass-loading scaling `eta_reheat = FeedbackReheatingEpsilon * (1+z)^alpha * (V_vir/60 km/s)^beta` (Muratov+15). Used only when `FIREmodeOn=1`. |
 
 ---
