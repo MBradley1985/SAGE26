@@ -11031,6 +11031,434 @@ EVOLUTION_PLOTS = {
 }
 
 # Standalone plots (load their own data)
+# =====================================================================
+# PLOT 99: REFEREE DIAGNOSTICS -- prints numbers, draws nothing
+# =====================================================================
+def plot_99_referee_diagnostics():
+    """Print every number the referee response needs, labelled by comment.
+
+    Masses arrive from load_model() already in Msun (MASS_CONVERT is
+    applied at load time to _MASS_PROPS), so no unit conversion is done
+    here. Draws nothing. Run as `python paper_plots.py 99` and keep the stdout;
+    each block names the referee comment and the manuscript location that
+    needs the value, so the output pastes into docs/referee/ directly.
+    """
+    print()
+    print('#' * 78)
+    print('# REFEREE DIAGNOSTICS')
+    print(f'#   primary  {PRIMARY_DIR}')
+    print(f'#   volume   {VOLUME:.4e} Mpc^3   h = {HUBBLE_H}')
+    # Record the configuration so the output is self-documenting: without this
+    # a saved log cannot be matched to the run that produced it.
+    try:
+        import h5py as _h5
+        with _h5.File(find_model_files(PRIMARY_DIR)[0], 'r') as _f:
+            _rt = dict(_f['Header/Runtime'].attrs)
+        _keys = ('FIREmodeOn', 'SFprescription', 'CGMrecipeOn', 'FeedbackFreeModeOn',
+                 'CGMDensityProfile', 'PrecipCriterionOn', 'RegimeRandomMode',
+                 'FFBRandomMode', 'SNEnergyConservationOn', 'MaxSNEnergyCoupling',
+                 'FeedbackReheatingEpsilon', 'FeedbackEjectionEfficiency',
+                 'EtaSN', 'EnergySN', 'RamPressureStrippingOn')
+        print('#   runtime  ' + ', '.join(f'{k}={_rt[k]}' for k in _keys if k in _rt))
+    except Exception as _exc:                          # noqa: BLE001
+        print(f'#   runtime  (unavailable: {_exc})')
+    print('#' * 78)
+
+    def head(title, comment):
+        print()
+        print('=' * 74)
+        print(title)
+        print(f'  [{comment}]')
+        print('=' * 74)
+
+    # Precipitation coefficients. The paper defines f_inflow as the bare
+    # sigmoid (Eq. 6); the rate of Eq. 5 carries the extra condensation
+    # factor. The two give very different transition fractions, so report both.
+    def f_sig(r):
+        return precipitation_fraction(r, include_condensation=False)
+
+    def f_rate(r):
+        return precipitation_fraction(r, include_condensation=True)
+
+    z_targets = [0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0]
+    snaps = []
+    for zt in z_targets:
+        s = _snap_for_z(REDSHIFTS, zt) if '_snap_for_z' in globals() \
+            else _snap_nearest_z(REDSHIFTS, zt)
+        if s not in snaps:
+            snaps.append(s)
+
+    props = ['StellarMass', 'ColdGas', 'MetalsColdGas', 'SfrDisk', 'SfrBulge',
+             'Mvir', 'Vvir', 'VvirPeak', 'Regime', 'FFBRegime', 'CGMgas',
+             'tcool_over_tff', 'MassLoading', 'mdot_cool', 'mdot_stream', 'Type']
+    data = {}
+    for s in snaps:
+        try:
+            data[s] = load_model(PRIMARY_DIR, snapshot=f'Snap_{s}', properties=props)
+        except Exception as exc:                      # noqa: BLE001
+            print(f'  (Snap_{s} unavailable: {exc})')
+
+    def zof(s):
+        try:
+            return REDSHIFTS[s]
+        except Exception:                             # noqa: BLE001
+            return float('nan')
+
+    g0 = data.get(SNAP_Z0, {})
+
+    # -----------------------------------------------------------------
+    head('1. CGM virial temperature span',
+         'Major 3 / A2 -- fills [GET NUMBERS] on p4')
+    if 'Vvir' in g0:
+        m = (g0['Regime'] == 0) & (g0['Type'] == 0) & (g0['CGMgas'] > 0) & (g0['Vvir'] > 0)
+        T = 35.9 * g0['Vvir'][m] ** 2            # VIRIAL_TEMP_COEFF, mu = 0.59
+        if T.size:
+            print(f'  CGM-regime centrals at z=0: N = {T.size}')
+            print(f'  T_vir   1st pct {np.percentile(T, 1):.2e}   median {np.median(T):.2e}'
+                  f'   99th pct {np.percentile(T, 99):.2e} K')
+            print(f'  min {T.min():.2e}   max {T.max():.2e} K')
+            print(f'  fraction below 1.5e4 K: {100 * np.mean(T < 1.5e4):.2f}%')
+            print('  --> quote the 1st-99th percentile range, rounded.')
+
+    # -----------------------------------------------------------------
+    head('2. Precipitation transition fractions vs redshift',
+         'Major 4(d) -- appendix. BOTH definitions; quoting one invites '
+         'the charge of picking the convenient one')
+    print(f'{"z":>6}{"N":>9}  |{"sigmoid (Eq.6)":^27}|{"rate (Eq.5)":^27}')
+    print(f'{"":>6}{"":>9}  |{"sat>=0.9":>10}{"trans":>9}{"med":>8}'
+          f'|{"sat>=0.9":>10}{"trans":>9}{"med":>8}')
+    for s in snaps:
+        g = data.get(s)
+        if not g or 'tcool_over_tff' not in g:
+            continue
+        # The CGMgas > 0 cut is load-bearing: cooling_recipe_cgm returns early
+        # when CGMgas <= 0, leaving tcool_over_tff stale from a previous step.
+        m = (g['Regime'] == 0) & (g['Type'] == 0) & (g['CGMgas'] > 0) & \
+            (g['tcool_over_tff'] > 0)
+        r = g['tcool_over_tff'][m]
+        if r.size < 10:
+            continue
+        cells = f'{zof(s):6.2f}{r.size:9d}  |'
+        for fn in (f_sig, f_rate):
+            f_ = np.atleast_1d(fn(r))
+            cells += (f'{100 * np.mean(f_ >= 0.9):10.1f}'
+                      f'{100 * np.mean((f_ > 0.1) & (f_ < 0.9)):9.1f}'
+                      f'{np.median(f_):8.3f}|')
+        print(cells)
+    print('  percentages; "trans" = 0.1 < f < 0.9')
+    print('  CGM-mass-weighted transition fraction (rate defn):')
+    for s in snaps[:5]:
+        g = data.get(s)
+        if not g or 'tcool_over_tff' not in g:
+            continue
+        m = (g['Regime'] == 0) & (g['Type'] == 0) & (g['CGMgas'] > 0) & \
+            (g['tcool_over_tff'] > 0)
+        r, w = g['tcool_over_tff'][m], g['CGMgas'][m]
+        if r.size < 10:
+            continue
+        f_ = np.atleast_1d(f_rate(r))
+        tr = (f_ > 0.1) & (f_ < 0.9)
+        print(f'    z={zof(s):5.2f}  {100 * w[tr].sum() / w.sum():5.2f}%'
+              f'   median t_cool/t_ff = {np.median(r):.3f}')
+
+    # -----------------------------------------------------------------
+    head('3. Mass-metallicity offsets',
+         'Major 2(h) -- p7 text and the Fig. 4 caption')
+    if 'MetalsColdGas' in g0:
+        ms = g0['StellarMass']
+        cg = g0['ColdGas']
+        mz = g0['MetalsColdGas']
+        with np.errstate(invalid='ignore', divide='ignore'):
+            sel = (ms > 1e8) & (cg > 0) & (mz > 0) & (cg / (cg + ms) > 0.1)
+        lm = np.log10(ms[sel])
+        oh = 9.0 + np.log10(mz[sel] / cg[sel] / 0.02)
+        print(f'  Figure-4 selection: N = {int(sel.sum())}')
+        for label, fn in (('Andrews & Martini 2013', 'MMAdrews13.dat'),
+                          ('Curti+20', 'Curti2020.dat')):
+            path = os.path.join(OBS_DIR, 'metallicity', fn)
+            if not os.path.exists(path):
+                print(f'  {label}: not found at {path}')
+                continue
+            d = np.loadtxt(path)
+            for lo, hi in ((8.0, 9.0), (10.0, 11.0)):
+                diffs = []
+                for mo, zo in zip(d[:, 0], d[:, 1]):
+                    if not (lo <= mo <= hi):
+                        continue
+                    b = (lm > mo - 0.15) & (lm < mo + 0.15)
+                    if b.sum() > 20:
+                        diffs.append(np.median(oh[b]) - zo)
+                if diffs:
+                    print(f'  {label:24s} {lo:4.1f}-{hi:4.1f}: '
+                          f'mean {np.mean(diffs):+.3f} dex, '
+                          f'median {np.median(diffs):+.3f}, N_pts {len(diffs)}')
+        print('  model median in 0.25-dex bins (gives the crossing point):')
+        for c in np.arange(8.125, 11.6, 0.25):
+            b = (lm > c - 0.125) & (lm < c + 0.125)
+            if b.sum() > 20:
+                print(f'    log m* {c:5.2f}   12+log(O/H) = {np.median(oh[b]):.3f}'
+                      f'   N={int(b.sum())}')
+
+    # -----------------------------------------------------------------
+    head('4. Mass loading and the energy bound',
+         'Major 2(c),(g) and sub-point B1 -- the p17 rewrite')
+    esn = 5.0e-3 * 1.0e51                # eta_SN * E_SN, erg per Msun
+    cap = 2.0                            # MaxSNEnergyCoupling
+    msun_g = 1.989e33
+    for s in snaps:
+        g = data.get(s)
+        if not g or 'MassLoading' not in g:
+            continue
+        sfr = g['SfrDisk'] + g['SfrBulge']
+        m = (sfr > 0) & (g['MassLoading'] > 0)
+        if m.sum() < 10:
+            continue
+        eta, w = g['MassLoading'][m], sfr[m]
+        v = (g['VvirPeak'][m] if 'VvirPeak' in g and g['VvirPeak'].size
+             else g['Vvir'][m]).astype(float)
+        with np.errstate(over='ignore', invalid='ignore', divide='ignore'):
+            eta_max = cap * esn / ((v * 1e5) ** 2 * msun_g)
+        at_cap = np.isfinite(eta_max) & (eta >= 0.999 * eta_max)
+        print(f'  z={zof(s):5.2f} N={int(m.sum()):8d}'
+              f'  <eta>_SFR={np.average(eta, weights=w):7.2f}'
+              f'  median={np.median(eta):6.2f}  max={eta.max():8.1f}'
+              f'  SFR at eta>100: {100 * w[eta > 100].sum() / w.sum():5.2f}%'
+              f'  | bound acts on {100 * w[at_cap].sum() / w.sum():5.2f}% of SFR')
+        if at_cap.sum():
+            print(f'         capped population V_vir: min {v[at_cap].min():.0f}'
+                  f'  median {np.median(v[at_cap]):.0f} km/s')
+
+    # -----------------------------------------------------------------
+    head('5. Dwarf regulation, not shutdown', 'Major 2(g) -- the p17 rewrite')
+    if 'ColdGas' in g0:
+        ms = g0['StellarMass']
+        cg = g0['ColdGas']
+        sfr = g0['SfrDisk'] + g0['SfrBulge']
+        for lo, hi in ((1e7, 1e8), (1e8, 1e9), (1e9, 1e10)):
+            m = (ms > lo) & (ms < hi)
+            if m.sum() < 10:
+                continue
+            with np.errstate(invalid='ignore', divide='ignore'):
+                fg = cg[m] / (cg[m] + ms[m])
+                ss = np.where(sfr[m] > 0,
+                              np.log10(np.maximum(sfr[m], 1e-30) / ms[m]), -99.0)
+            print(f'  m* {lo:.0e}-{hi:.0e}: N={int(m.sum()):8d}'
+                  f'  median f_gas={np.median(fg):.3f}'
+                  f'  median log sSFR={np.median(ss[ss > -90]):.2f}'
+                  f'  quiescent={100 * np.mean(ss < SSFR_CUT):.1f}%')
+
+    # -----------------------------------------------------------------
+    head('6. Quiescent fraction vs stellar mass',
+         'Major 8(a) and p8 RHS -- quantify "qualitative improvement"')
+    if 'StellarMass' in g0:
+        print(f'  quiescent: log10(sSFR/yr^-1) < {SSFR_CUT}')
+        ms = g0['StellarMass']
+        sfr = g0['SfrDisk'] + g0['SfrBulge']
+        lms = np.log10(np.maximum(ms, 1.0))
+        for c in np.arange(8.25, 12.1, 0.5):
+            b = (lms > c - 0.25) & (lms < c + 0.25)
+            if b.sum() < 20:
+                continue
+            with np.errstate(invalid='ignore', divide='ignore'):
+                ss = np.where(sfr[b] > 0,
+                              np.log10(np.maximum(sfr[b], 1e-30) / ms[b]), -99.0)
+            print(f'    log m* {c:5.2f}   quiescent {100 * np.mean(ss < SSFR_CUT):5.1f}%'
+                  f'   N={int(b.sum())}')
+
+    # -----------------------------------------------------------------
+    head('7. Cold stream fraction vs halo mass',
+         'p19 LHS -- the 93% / 56% numbers, which cannot be read off Fig. 13')
+    for s in snaps:
+        g = data.get(s)
+        if not g or 'mdot_stream' not in g or not g['mdot_stream'].size:
+            continue
+        mv = g['Mvir']
+        tot = g['mdot_cool'] + g['mdot_stream']
+        m = (g['Type'] == 0) & (tot > 0)
+        if m.sum() < 10:
+            continue
+        parts = [f'  z={zof(s):5.2f}  (N with accretion = {int(m.sum())})']
+        for lo, hi in ((1e10, 1e11), (1e11, 1e12), (1e12, 1e13), (1e13, 1e15)):
+            b = m & (mv > lo) & (mv < hi)
+            if b.sum() >= 5:
+                parts.append(f'{lo:.0e}-{hi:.0e}: '
+                             f'{100 * g["mdot_stream"][b].sum() / tot[b].sum():5.1f}%'
+                             f' (N={int(b.sum())})')
+        print('   '.join(parts) if len(parts) > 1 else
+              parts[0] + '   no mass bin with >=5 accreting centrals')
+    print('  fraction of total accretion delivered by cold streams')
+
+    # -----------------------------------------------------------------
+    head('8. FFB population fraction',
+         'p15 -- "state what fraction of the z~5 population is in FFB mode"')
+    for s in snaps:
+        g = data.get(s)
+        if not g or 'FFBRegime' not in g:
+            continue
+        m = g['Type'] == 0
+        if m.sum() < 10:
+            continue
+        ms_ = g['StellarMass'][m]
+        ffb = g['FFBRegime'][m] == 1
+        big = ms_ > 1e8
+        frac_big = 100 * np.mean(ffb[big]) if big.sum() else float('nan')
+        print(f'  z={zof(s):5.2f}  N_cen={int(m.sum()):8d}'
+              f'  FFB {100 * np.mean(ffb):5.2f}%'
+              f'  | among m*>1e8: {frac_big:5.2f}% (N={int(big.sum())})')
+
+    # -----------------------------------------------------------------
+    head('9. Is there an M_shock feature in the SMF?',
+         'Major 9 / J2 -- answering the Fig. 13 dips in text rather than by runs')
+    if 'Mvir' in g0:
+        mshock = 6.0e11
+        ms = g0['StellarMass']
+        mv = g0['Mvir']
+        near = (mv > 0.5 * mshock) & (mv < 2.0 * mshock) & (g0['Type'] == 0) & (ms > 0)
+        if near.sum() > 10:
+            lmn = np.log10(ms[near])
+            print(f'  centrals within a factor 2 of M_shock = {mshock:.1e} M_sun:'
+                  f'  N={int(near.sum())}')
+            print(f'  their log m*: 16th {np.percentile(lmn, 16):.2f}'
+                  f'  median {np.median(lmn):.2f}  84th {np.percentile(lmn, 84):.2f}')
+        bw = 0.1
+        edges = np.arange(9.0, 12.0 + bw, bw)
+        n, _ = np.histogram(np.log10(np.maximum(ms[ms > 0], 1.0)), bins=edges)
+        ok = n > 10
+        if ok.sum() > 5:
+            lphi = np.log10(np.maximum(n[ok] / VOLUME / bw, 1e-30))
+            d2 = np.gradient(np.gradient(lphi))
+            cen = (0.5 * (edges[1:] + edges[:-1]))[ok]
+            i = int(np.argmax(np.abs(d2)))
+            print(f'  largest |d2 log phi| over 9 < log m* < 12: {np.abs(d2).max():.3f}'
+                  f'  at log m* = {cen[i]:.2f}')
+            print('  --> a step at M_shock would appear as a localised spike here.')
+
+    # -----------------------------------------------------------------
+    head('10. Stellar mass density',
+         'Major 5(c) -- claimed in the Conclusion, no figure exists')
+    for s in snaps:
+        g = data.get(s)
+        if not g or 'StellarMass' not in g:
+            continue
+        rho = g['StellarMass'].sum() / VOLUME
+        print(f'  z={zof(s):5.2f}  rho_* = {rho:.4e} M_sun/Mpc^3'
+              f'   log10 = {np.log10(max(rho, 1e-30)):.4f}')
+
+    # -----------------------------------------------------------------
+    head('11. Stellar mass function vs observations, per redshift bin',
+         'Major 6(1) -- the Conclusion claims "within ~0.2 dex from z = 0 to 12"')
+    try:
+        obs_smf = _load_smf_grid_observations()
+    except Exception as exc:                          # noqa: BLE001
+        obs_smf = None
+        print(f'  observational compilation unavailable: {exc}')
+    if obs_smf:
+        zbins = [(0, 0.5), (0.5, 0.8), (0.8, 1.1), (1.1, 1.5), (1.5, 2.0),
+                 (2.0, 2.5), (2.5, 3.0), (3.0, 3.5), (3.5, 4.5), (4.5, 5.5),
+                 (5.5, 6.5), (6.5, 7.5), (7.5, 8.5), (8.5, 9.5), (9.5, 12.0)]
+        print(f'  {"z bin":>11}{"N pts":>7}{"med|off|":>10}{"RMS":>7}{"max":>7}'
+              f'{"   obs-obs median":>18}')
+        every, rows = [], []
+        for lo, hi in zbins:
+            s = _snap_for_z(REDSHIFTS, 0.5 * (lo + hi)) if '_snap_for_z' in globals() \
+                else _snap_nearest_z(REDSHIFTS, 0.5 * (lo + hi))
+            try:
+                d = load_model(PRIMARY_DIR, snapshot=f'Snap_{s}',
+                               properties=['StellarMass'])
+            except Exception:                         # noqa: BLE001
+                continue
+            ms = d['StellarMass'][d['StellarMass'] > 0]
+            if ms.size < 50:
+                continue
+            x, phi, _ = mass_function(np.log10(ms), VOLUME, binwidth=0.2,
+                                      mass_range=(7.0, 13.0))
+            offs, sets = [], [o for o in obs_smf if lo <= o['z'] < hi]
+            for o in sets:
+                for lm, lp in zip(o['log_mass'], o['log_phi']):
+                    if not np.isfinite(lp):
+                        continue
+                    j = int(np.argmin(np.abs(x - lm)))
+                    # skip bins below the density floor and unmatched masses
+                    if abs(x[j] - lm) > 0.15 or not np.isfinite(phi[j]) or phi[j] < -6.3:
+                        continue
+                    offs.append(phi[j] - lp)
+            # scatter between the observational determinations themselves, for
+            # context: at high z this exceeds the model-data offset, so the
+            # latter is not a clean measure of model error
+            oo = []
+            for i in range(len(sets)):
+                for k in range(i + 1, len(sets)):
+                    a, b = sets[i], sets[k]
+                    if abs(a['z'] - b['z']) > 0.5:
+                        continue
+                    bm = np.asarray(b['log_mass'])
+                    for lm, lp in zip(a['log_mass'], a['log_phi']):
+                        if not np.isfinite(lp) or bm.size == 0:
+                            continue
+                        q = int(np.argmin(np.abs(bm - lm)))
+                        if abs(bm[q] - lm) > 0.15:
+                            continue
+                        v = b['log_phi'][q]
+                        if np.isfinite(v):
+                            oo.append(abs(lp - v))
+            if len(offs) < 5:
+                continue
+            a_ = np.asarray(offs)
+            every += list(a_)
+            oo_med = np.median(oo) if len(oo) >= 5 else None
+            oo_s = f'{oo_med:18.2f}' if oo_med is not None else f'{"--":>18}'
+            print(f'  {f"{lo}-{hi}":>11}{a_.size:7d}{np.median(np.abs(a_)):10.2f}'
+                  f'{np.sqrt(np.mean(a_ ** 2)):7.2f}{np.max(np.abs(a_)):7.2f}{oo_s}')
+            rows.append((lo, hi, a_.size, np.median(np.abs(a_)),
+                         np.sqrt(np.mean(a_ ** 2)), oo_med))
+        if every:
+            e = np.asarray(every)
+            print(f'\n  all bins: N={e.size}  median|offset|={np.median(np.abs(e)):.2f} dex'
+                  f'  RMS={np.sqrt(np.mean(e ** 2)):.2f} dex')
+            print('  --> quote the median as a median, not as a bound; the RMS is the')
+            print('      larger number and is what "matches within X dex" implies.')
+
+            # LaTeX, ready to paste beneath the stellar mass function grid.
+            # Emitted rather than transcribed so the table cannot drift from
+            # the measurement it reports.
+            print()
+            print('  ---- LaTeX table (paste beneath the SMF grid) ' + '-' * 26)
+            print(r'\begin{table}')
+            print(r'\centering')
+            print(r'\caption{Agreement between the SAGE26 stellar mass function and the '
+                  r'observational compilation of \Fig{fig:smf_grid}, per redshift bin. '
+                  r'$N_{\rm obs}$ is the number of published data points in the bin, '
+                  r'not a galaxy count. '
+                  r'$|\Delta|$ is the median absolute difference in $\log_{10}\phi$ '
+                  r'between the model and every observational point in that bin, and '
+                  r'$\sigma_{\rm obs}$ is the median absolute difference between '
+                  r'independent observational determinations at matched stellar mass. '
+                  r'Above $z\simeq4.5$ the observations differ from one another by as '
+                  r'much as the model differs from them.}')
+            print(r'\label{tab:smf_offsets}')
+            print(r'\begin{tabular}{lrccc}')
+            print(r'\hline')
+            print(r'Redshift & $N_{\rm obs}$ & median $|\Delta|$ & RMS $\Delta$ & '
+                  r'$\sigma_{\rm obs}$ \\')
+            print(r' & & (dex) & (dex) & (dex) \\')
+            print(r'\hline')
+            for lo, hi, n, med, rms, oo in rows:
+                oos = f'{oo:.2f}' if oo is not None else r'\nodata'
+                print(rf'${lo}<z<{hi}$ & {n} & {med:.2f} & {rms:.2f} & {oos} \\')
+            print(r'\hline')
+            print(rf'All & {e.size} & {np.median(np.abs(e)):.2f} & '
+                  rf'{np.sqrt(np.mean(e ** 2)):.2f} & \nodata \\')
+            print(r'\hline')
+            print(r'\end{tabular}')
+            print(r'\end{table}')
+            print('  ' + '-' * 70)
+
+    print()
+    print('=' * 74)
+    print('END REFEREE DIAGNOSTICS')
+    print('=' * 74)
+
+
 STANDALONE_PLOTS = {
     14: plot_14_density_evolution,
     142: plot_14c_density_evolution_mbk25,
@@ -11058,6 +11486,7 @@ STANDALONE_PLOTS = {
     34: plot_34_hi_mass_function_primary_uchuu,
     35: plot_35_h2_mass_function_primary_uchuu,
     36: plot_36_selection_thresholds_mz,
+    99: plot_99_referee_diagnostics,
 }
 
 ALL_PLOTS = {**Z0_PLOTS, **EVOLUTION_PLOTS, **STANDALONE_PLOTS}

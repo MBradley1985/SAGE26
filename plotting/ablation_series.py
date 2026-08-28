@@ -124,13 +124,13 @@ OPTIONAL_VARIANTS = {
 # number density of massive *star-forming* galaxies at z ~ 2.
 SMF_PANELS = [
     {'z': 0.0, 'select': 'all', 'tag': 'z=0',
-     'xlim': (7.6, 12.4), 'ylim': (-6.2, -0.7)},
+     'xlim': (7.6, 12.4), 'ylim': (-5.5, -0.7)},
     {'z': 2.0, 'select': 'all', 'tag': 'z=2',
-     'xlim': (7.6, 12.4), 'ylim': (-6.2, -0.7)},
+     'xlim': (7.6, 12.4), 'ylim': (-5.5, -0.7)},
     {'z': 2.0, 'select': 'sf',  'tag': 'z=2 star-forming',
-     'xlim': (7.6, 12.4), 'ylim': (-6.2, -0.7)},
+     'xlim': (7.6, 12.4), 'ylim': (-5.5, -0.7)},
     {'z': 6.0, 'select': 'all', 'tag': 'z=6',
-     'xlim': (7.6, 12.4), 'ylim': (-6.2, -0.7)},
+     'xlim': (7.6, 12.4), 'ylim': (-5.5, -0.7)},
 ]
 SMF_BINWIDTH = 0.2
 SMF_MASS_RANGE = (6.0, 13.0)    # shared bins so residuals are element-wise
@@ -395,6 +395,37 @@ def csfrd(path, sim):
         return z, np.log10(rho)
 
 
+def integrated_z0(path, sim):
+    """
+    Integrated z = 0 quantities per variant, for numbers the referee asks for
+    that the mass functions do not give directly.
+
+    Returns a dict with the stellar mass density (Major Comment 5(c), claimed
+    in the Conclusion with no figure behind it), the quiescent fraction in
+    stellar-mass bins (Major Comment 8(a) and the p8 request to quantify
+    "qualitative improvement"), and the cold gas density.
+    """
+    snap = pp._snap_nearest_z(sim['redshifts'], 0.0)
+    d = pp.read_snap_from_files(pp.find_model_files(path), f'Snap_{snap}',
+                                ['StellarMass', 'ColdGas', 'SfrDisk', 'SfrBulge'],
+                                mass_convert=sim['mass_convert'])
+    if not d:
+        return None
+    ms = d['StellarMass']
+    good = ms > 0
+    out = {'rho_star': ms[good].sum() / sim['volume'],
+           'rho_cold': d['ColdGas'][good].sum() / sim['volume'],
+           'qfrac': {}}
+    with np.errstate(divide='ignore', invalid='ignore'):
+        ssfr = pp.log_ssfr(d['SfrDisk'], d['SfrBulge'], ms)
+    lm = np.log10(np.maximum(ms, 1.0))
+    for centre in (8.5, 9.5, 10.5, 11.5):
+        b = good & (lm > centre - 0.5) & (lm < centre + 0.5)
+        out['qfrac'][centre] = (float(np.mean(ssfr[b] <= pp.SSFR_CUT)),
+                                int(b.sum())) if b.sum() >= 20 else (np.nan, 0)
+    return out
+
+
 def panel_id(panel):
     """Key for a panel's measurement: two panels may share a redshift."""
     return (panel['z'], panel['select'])
@@ -411,6 +442,7 @@ def measure(variants, sim):
             entry['smf'][panel_id(panel)] = {'snap': snap, 'z': z_snap,
                                              'x': x, 'phi': phi}
         entry['z'], entry['csfrd'] = csfrd(v['out'], sim)
+        entry['z0'] = integrated_z0(v['out'], sim)
         out[v['key']] = entry
     print()
     return out
@@ -491,59 +523,42 @@ def _draw_smf_observations(ax, all_obs, z_panel, seen_labels):
 
 
 def _draw_csfrd_observations(ax):
-    """Somerville+01 compilation and the Madau & Dickinson (2014) fit."""
-    obs = np.array([
-        [0, 0.0158489, 0, 0, 0.0251189, 0.01000000],
-        [0.150000, 0.0173780, 0, 0.300000, 0.0181970, 0.0165959],
-        [0.0425000, 0.0239883, 0.0425000, 0.0425000, 0.0269153, 0.0213796],
-        [0.200000, 0.0295121, 0.100000, 0.300000, 0.0323594, 0.0269154],
-        [0.350000, 0.0147911, 0.200000, 0.500000, 0.0173780, 0.0125893],
-        [0.625000, 0.0275423, 0.500000, 0.750000, 0.0331131, 0.0229087],
-        [0.825000, 0.0549541, 0.750000, 1.00000, 0.0776247, 0.0389045],
-        [0.625000, 0.0794328, 0.500000, 0.750000, 0.0954993, 0.0660693],
-        [0.700000, 0.0323594, 0.575000, 0.825000, 0.0371535, 0.0281838],
-        [1.25000, 0.0467735, 1.50000, 1.00000, 0.0660693, 0.0331131],
-        [0.750000, 0.0549541, 0.500000, 1.00000, 0.0389045, 0.0776247],
-        [1.25000, 0.0741310, 1.00000, 1.50000, 0.0524807, 0.104713],
-        [1.75000, 0.0562341, 1.50000, 2.00000, 0.0398107, 0.0794328],
-        [2.75000, 0.0794328, 2.00000, 3.50000, 0.0562341, 0.112202],
-        [4.00000, 0.0309030, 3.50000, 4.50000, 0.0489779, 0.0194984],
-        [0.250000, 0.0398107, 0.00000, 0.500000, 0.0239883, 0.0812831],
-        [0.750000, 0.0446684, 0.500000, 1.00000, 0.0323594, 0.0776247],
-        [1.25000, 0.0630957, 1.00000, 1.50000, 0.0478630, 0.109648],
-        [1.75000, 0.0645654, 1.50000, 2.00000, 0.0489779, 0.112202],
-        [2.50000, 0.0831764, 2.00000, 3.00000, 0.0512861, 0.158489],
-        [3.50000, 0.0776247, 3.00000, 4.00000, 0.0416869, 0.169824],
-        [4.50000, 0.0977237, 4.00000, 5.00000, 0.0416869, 0.269153],
-        [5.50000, 0.0426580, 5.00000, 6.00000, 0.0177828, 0.165959],
-        [3.00000, 0.120226, 2.00000, 4.00000, 0.173780, 0.0831764],
-        [3.04000, 0.128825, 2.69000, 3.39000, 0.151356, 0.109648],
-        [4.13000, 0.114815, 3.78000, 4.48000, 0.144544, 0.0912011],
-        [0.350000, 0.0346737, 0.200000, 0.500000, 0.0537032, 0.0165959],
-        [0.750000, 0.0512861, 0.500000, 1.00000, 0.0575440, 0.0436516],
-        [1.50000, 0.0691831, 1.00000, 2.00000, 0.0758578, 0.0630957],
-        [2.50000, 0.147911, 2.00000, 3.00000, 0.169824, 0.128825],
-        [3.50000, 0.0645654, 3.00000, 4.00000, 0.0776247, 0.0512861],
-    ], dtype=np.float64)
-    z = obs[:, 0]
-    log_rho = np.log10(obs[:, 1])
-    ax.errorbar(z, log_rho,
-                yerr=[np.abs(log_rho - np.log10(obs[:, 4])),
-                      np.abs(np.log10(obs[:, 5]) - log_rho)],
-                xerr=[np.abs(obs[:, 0] - obs[:, 2]), np.abs(obs[:, 3] - obs[:, 0])],
-                fmt='o', markerfacecolor='gray', markeredgecolor='k',
-                markeredgewidth=1.0, ecolor='k', color='k', ms=7, lw=1.0,
-                alpha=0.55, ls='none', zorder=2, label='observations')
+    """The Madau & Dickinson (2014) fit.
 
-    # Madau & Dickinson (2014), Chabrier -> Salpeter (factor 1/0.63) to match SAGE.
+    Only the fit is drawn. The observational compilation is omitted: this
+    figure compares model variants against each other, and the fit is kept
+    purely as a fixed reference curve to orient the eye.
+    """
+    # Chabrier -> Salpeter (factor 1/0.63) to match SAGE.
     zz = np.linspace(CSFRD_ZLIM[0], CSFRD_ZLIM[1], 300)
     psi = 0.015 * (1 + zz)**2.7 / (1 + ((1 + zz) / 2.9)**5.6) / 0.63
     ax.plot(zz, np.log10(psi), color='gray', lw=1.5, alpha=0.7, zorder=2,
             label=pp._tex_safe(r'Madau \& Dickinson 2014'))
 
 
+def _apply_plasma_colours(variants):
+    """Recolour the ablation variants along the plasma map.
+
+    The fiducial model and SAGE16 keep their fixed colours -- they are the two
+    references the eye returns to -- so only the single-switch runs and the
+    joint run are recoloured. Sampling stops short of the bright yellow end,
+    which is hard to see on white. Linestyles are left alone: they carry the
+    distinction in greyscale and in print.
+    """
+    fixed = {REFERENCE_KEY, 'sage16'}
+    ablations = [v for v in variants if v['key'] not in fixed]
+    if not ablations:
+        return variants
+    cmap = plt.get_cmap('plasma')
+    stops = np.linspace(0.0, 0.82, len(ablations))
+    for v, s in zip(ablations, stops):
+        v['color'] = cmap(s)
+    return variants
+
+
 def make_figure(variants, results, sim, outdir):
     """Two-row figure: absolute measurements on top, residuals below."""
+    variants = _apply_plasma_colours(variants)
     ncols = len(SMF_PANELS) + 1
     fig = plt.figure(figsize=(5.6 * ncols, 9.6))
     fig.set_tight_layout(False)
@@ -551,11 +566,9 @@ def make_figure(variants, results, sim, outdir):
                           hspace=0.06, wspace=0.28)
 
     ref = results[REFERENCE_KEY]
-    all_obs = pp._load_smf_grid_observations()
-    seen_labels = set()
-    obs_used = {}
-
-    panel_letters = 'abcdefgh'
+    # Observations are deliberately not drawn: this figure compares model
+    # variants against each other, and the offsets below each panel are what
+    # carry the result. Data comparisons are made in Figures 3, 6 and 12.
 
     # ---- stellar mass function columns ----
     for col, panel in enumerate(SMF_PANELS):
@@ -563,13 +576,6 @@ def make_figure(variants, results, sim, outdir):
         pid = panel_id(panel)
         ax = fig.add_subplot(gs[0, col])
         axr = fig.add_subplot(gs[1, col], sharex=ax)
-
-        # The all-galaxy compilation does not apply to an sSFR-split panel, so
-        # those panels take only the matching split from Muzzin+13.
-        panel_obs = (all_obs if select == 'all'
-                     else load_muzzin13_split(select, z_panel, sim['hubble_h']))
-        obs_used[panel['tag']] = _draw_smf_observations(
-            ax, panel_obs, z_panel, seen_labels)
 
         ref_phi = ref['smf'][pid]['phi']
         for v in variants:
@@ -588,16 +594,15 @@ def make_figure(variants, results, sim, outdir):
 
         z_snap = ref['smf'][pid]['z']
         sel_label = SELECT_LABEL[select]
-        annotation = rf'$z = {z_snap:.2f}$'
+        ax.text(0.95, 0.94, rf'$z = {z_snap:.2f}$', transform=ax.transAxes,
+                ha='right', va='top')
         if sel_label is not None:
             # Plain text rather than \mathrm{}: the hyphen in "star-forming"
-            # renders as a minus sign in math mode.
-            annotation += '\n' + sel_label
-        ax.text(0.05, 0.06, annotation, transform=ax.transAxes,
-                ha='left', va='bottom')
-        ax.text(0.04, 0.95, rf'$\mathrm{{({panel_letters[col]})}}$',
-                transform=ax.transAxes, ha='left', va='top', fontsize=15)
-
+            # renders as a minus sign in math mode. The bottom-left corner is
+            # free in every panel except the first, which carries the legend --
+            # and no split panel is ever the first.
+            ax.text(0.05, 0.06, sel_label, transform=ax.transAxes,
+                    ha='left', va='bottom')
         ax.set_xlim(*panel['xlim'])
         ax.set_ylim(*panel['ylim'])
         _residual_guides(axr)
@@ -627,8 +632,6 @@ def make_figure(variants, results, sim, outdir):
         axr.plot(r['z'][good], delta[good], color=v['color'], ls=v['ls'],
                  lw=v['lw'], zorder=v['zorder'])
 
-    ax.text(0.04, 0.95, rf'$\mathrm{{({panel_letters[ncols - 1]})}}$',
-            transform=ax.transAxes, ha='left', va='top', fontsize=15)
     ax.set_xlim(*CSFRD_ZLIM)
     ax.set_ylim(*CSFRD_YLIM)
     ax.set_ylabel(r'$\log_{10}\ \rho_{\rm SFR}\ '
@@ -640,18 +643,18 @@ def make_figure(variants, results, sim, outdir):
     _format(ax, xmaj=2.0, xmin=0.5, ymaj=1.0, ymin=0.2, hide_xticklabels=True)
     _format(axr, xmaj=2.0, xmin=0.5, ymaj=0.5, ymin=0.1)
 
-    # ---- legends: models above the figure, observations in the CSFRD panel ----
-    # A figure-level legend keeps the model curves unobscured; with seven
-    # variants no panel has room for it.
+    # ---- legends ----
+    # Models in the first panel: its lower-left corner is empty, since the
+    # mass function rises to the left. Observations stay in the CSFRD panel.
     model_labels = [v['label'] for v in variants]
-    handles, labels = fig.axes[0].get_legend_handles_labels()
+    first_ax = fig.axes[0]
+    handles, labels = first_ax.get_legend_handles_labels()
     keep = [(h, l) for h, l in zip(handles, labels) if l in model_labels]
     order = {v['label']: i for i, v in enumerate(variants)}
     keep.sort(key=lambda hl: order[hl[1]])
-    fig.legend([h for h, _ in keep], [l for _, l in keep],
-               loc='lower center', bbox_to_anchor=(0.5, 0.905),
-               ncol=len(keep), frameon=False, fontsize=15,
-               handlelength=3.0, columnspacing=1.6)
+    first_ax.legend([h for h, _ in keep], [l for _, l in keep],
+                    loc='lower left', frameon=False, fontsize=12,
+                    handlelength=2.6, labelspacing=0.3, borderaxespad=0.8)
 
     handles, labels = ax.get_legend_handles_labels()
     obs_keep = [(h, l) for h, l in zip(handles, labels) if l not in model_labels]
@@ -665,9 +668,6 @@ def make_figure(variants, results, sim, outdir):
     plt.close(fig)
     print(f'  Saved: {path}')
 
-    for tag, used in obs_used.items():
-        print(f'  {tag} observations: '
-              + (', '.join(sorted(set(used))) if used else 'none available'))
     print()
     return path
 
@@ -880,6 +880,42 @@ def write_tables(variants, results, sim, outdir):
             emit(f'  {v["key"]:<26s} {peak:+.2f} dex at z = {z_peak:.2f}'
                  f'   ({dp:+.2f} dex, dz = {dz:+.2f})')
 
+    # ---- integrated z = 0 quantities ----
+    emit()
+    emit('=' * 96)
+    emit('INTEGRATED z = 0 QUANTITIES')
+    emit('   rho_* is Major Comment 5(c): the Conclusion claims the stellar mass')
+    emit('   density now matches observations, but no figure supports it.')
+    emit('   The quiescent fractions answer Major Comment 8(a) and the p8 request')
+    emit('   to quantify "qualitative improvement" over SAGE16.')
+    emit('=' * 96)
+    qcentres = (8.5, 9.5, 10.5, 11.5)
+    emit('  ' + f'{"variant":<26s}' + f'{"log rho_*":>12s}{"log rho_cold":>14s}' +
+         ''.join(f'{f"fq({m:.1f})":>12s}' for m in qcentres))
+    ref_z0 = ref.get('z0')
+    for v in variants:
+        z0 = results[v['key']].get('z0')
+        if not z0:
+            continue
+        cells = (f'{np.log10(max(z0["rho_star"], 1e-30)):12.4f}'
+                 f'{np.log10(max(z0["rho_cold"], 1e-30)):14.4f}')
+        for m in qcentres:
+            f_, n = z0['qfrac'][m]
+            cells += f'{f_:12.3f}' if n else f'{"--":>12s}'
+        emit('  ' + f'{v["key"]:<26s}' + cells)
+    if ref_z0:
+        emit()
+        emit('  relative to the fiducial run:')
+        for v in variants:
+            if v['key'] == REFERENCE_KEY:
+                continue
+            z0 = results[v['key']].get('z0')
+            if not z0:
+                continue
+            r = z0['rho_star'] / ref_z0['rho_star']
+            emit(f'  {v["key"]:<26s} rho_* x{r:6.3f}  '
+                 f'({100 * (r - 1):+6.1f}%, {np.log10(max(r, 1e-30)):+.3f} dex)')
+
     # ---- do the four ingredients act independently? ----
     have = {v['key'] for v in variants}
     if JOINT_KEY in have and set(FOUR_KEYS) <= have:
@@ -889,6 +925,12 @@ def write_tables(variants, results, sim, outdir):
         emit(f'   sum      = {" + ".join(FOUR_KEYS)}, each measured on its own')
         emit(f'   joint    = {JOINT_KEY} (all four off in one run, nothing else changed)')
         emit('   residual = joint - sum. Zero means the ingredients act independently;')
+        emit('   joint - SAGE16 is the separate question of whether SAGE16 is a fair')
+        emit('              stand-in for "all four off". The two configurations differ')
+        emit('              in exactly two further respects: FeedbackReheatingEpsilon')
+        emit('              (2.9 vs 3.0) and RamPressureStrippingOn (1 vs 0). If they')
+        emit('              agree, neither is shaping these statistics, which is direct')
+        emit('              evidence for Major Comment 5(a) on parameter degeneracy.')
         emit('              a non-zero residual is the interaction between them.')
         emit('=' * 96)
 
