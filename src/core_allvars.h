@@ -201,6 +201,13 @@ struct GALAXY
     float tacc[ABSOLUTEMAXSNAPS];
 
     float BHSeedMass;
+    int QuasarModeEventOccurred; /* set true the first time grow_black_hole() (merger- or
+                                    instability-driven quasar mode) actually accretes mass;
+                                    used by AGNAccretionScheme==3 ("first event unlimited")
+                                    instead of comparing BlackHoleMass to BHSeedMass, because
+                                    the radio-mode channel grows BlackHoleMass independently
+                                    of any quasar-mode event and would otherwise close the
+                                    "first event" window before one ever happens. */
 
     /* infall properties -- values frozen at the moment a galaxy first becomes a satellite */
     float infallMvir;

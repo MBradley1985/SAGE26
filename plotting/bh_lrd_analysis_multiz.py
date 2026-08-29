@@ -6,16 +6,20 @@ Multi-redshift companion to bh_lrd_analysis.py.
 
 Instead of one output file per panel per redshift, this script makes ONE
 grid figure PER PANEL (a-f), with each subplot showing that panel at a
-different redshift BIN:
+different, fixed target redshift:
 
-    z = [0-0.5], [0.5-1], [1-2], [2-4], [4-6], [6-8]     (2 rows x 3 cols)
+    z ~ 0, 1, 2, 4, 6, 8     (2 rows x 3 cols)
 
-Each bin is a RANGE, stacking every snapshot whose redshift falls inside it
-(see snaps_in_range()) -- this both fights the sparsity of LRD events at
-high z and gives every subplot a consistent amount of cosmic time/volume
-rather than a single instantaneous snapshot. A single scalar target (mapped
-to its closest available Millennium snapshot column via nearest_snap_for_z())
-is also supported -- see --redshifts. All data reading, unit conversions,
+Each target maps to its single closest available Millennium snapshot (via
+nearest_snap_for_z()), and reads that snapshot's OWN catalogue directly
+(catalogue=f'Snap_{{snap_col}}') -- so a panel shows the population actually
+observed at that redshift, not just the subset of galaxies that happen to
+survive to a later, more-complete catalogue. This requires accretion
+history written with the current (fixed) SnapNum indexing; on older output
+a snapshot's own most-recent column is always blank. Pass --redshifts to
+override the targets, --catalogue to force one group for every panel, or
+--window to stack neighbouring columns around each target if a given
+redshift is too sparse on its own. All data reading, unit conversions,
 LRD selection,
 axis locking, and physical relations are imported unchanged from
 bh_lrd_analysis.py so the two scripts can never drift out of sync; only the
@@ -87,7 +91,7 @@ plt.rcParams.update({
     'legend.frameon': False, 'legend.fontsize': 8,
 })
 
-DEFAULT_REDSHIFT_BINS = [(0.0, 0.5), (0.5, 1.0), (1.0, 2.0), (2.0, 4.0), (4.0, 6.0), (6.0, 8.0)]
+DEFAULT_REDSHIFTS = [0.0, 1.0, 2.0, 4.0, 6.0, 8.0]
 
 # ── Per-panel fixed axis ranges for the multi-z GRID (separate from the
 # single-panel PANEL_*_XLIM/YLIM imported above, since a shared 3x3 grid
@@ -1378,9 +1382,10 @@ def make_grid(panel_key, redshifts, snap_data, output_file, draw_fn,
     """Assemble one grid figure for a given panel, one subplot per bin in
     `redshifts` (any length -- laid out row-major, 3 columns wide, e.g. 6
     bins give 2 rows x 3 cols), using pre-loaded `snap_data[z]` catalogues.
-    Each bin is either a scalar target z or a (lo, hi) range (see
-    DEFAULT_REDSHIFT_BINS / snaps_in_range()) and is used verbatim as the
-    `snap_data` key and as the `z_target` passed to `draw_fn`.
+    Each bin is either a scalar target z (see DEFAULT_REDSHIFTS, the default)
+    or a (lo, hi) range (see snaps_in_range(), for callers that still want
+    to stack a redshift window) and is used verbatim as the `snap_data` key
+    and as the `z_target` passed to `draw_fn`.
 
     Subplots are touching (no gaps) with tick labels shown only on the
     outer left column / bottom row of the grid, like a standard corner plot.
@@ -1516,10 +1521,10 @@ def main():
     )
     p.add_argument('-i', '--input-pattern', default='./output/millennium/model_*.hdf5')
     p.add_argument('--redshifts', type=float, nargs='+', default=None,
-                   help='Target redshifts, one subplot each, single values only '
-                        '(default: the mixed scalar/range bins '
-                        f'{DEFAULT_REDSHIFT_BINS} -- pass this flag to override '
-                        'with plain single-snapshot targets instead).')
+                   help='Target redshifts, one subplot each '
+                        f'(default: {DEFAULT_REDSHIFTS}). Each maps to its '
+                        'single nearest snapshot column -- see --window to '
+                        'stack neighbours if a target is too sparse.')
     p.add_argument('--window', type=int, default=0,
                    help='Stack columns [s-window, s+window] per redshift to fight sparsity at high z.')
     p.add_argument('--catalogue', default=None,
@@ -1556,7 +1561,7 @@ def main():
 
     h_h = read_sim_params(files[0])
     redshifts = read_actual_redshifts(files[0])
-    redshift_bins = args.redshifts if args.redshifts is not None else DEFAULT_REDSHIFT_BINS
+    redshift_bins = args.redshifts if args.redshifts is not None else DEFAULT_REDSHIFTS
     print(f'Files:        {len(files)}')
     print(f'Hubble_h:     {h_h}')
     print(f'BHAR floor:   {args.bhar_floor} M_sun/yr')
@@ -1585,7 +1590,13 @@ def main():
             actual_z = snap_to_z(snap_col, redshifts)
             print(f'  z ~ {zb:g}  ->  snapshot {snap_col} (z = {actual_z:.3f})'
                   + (f'  +/- {args.window}' if args.window else ''))
-            data = read_epoch(files, snap_col, h_h, catalogue=args.catalogue, window=args.window)
+            # default to that snapshot's own catalogue -- the population
+            # actually observed at this redshift, not just the subset of
+            # galaxies surviving to whichever catalogue is most complete.
+            # --catalogue still overrides this for every panel if forced.
+            data = read_epoch(files, snap_col, h_h,
+                              catalogue=args.catalogue or f'Snap_{snap_col}',
+                              window=args.window)
         n_events = len(data['bh_mass'])
         print(f'    catalogue={data["cat_group"]}  events={n_events:,}')
         snap_data[zb] = data

@@ -137,6 +137,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     // BlackHoleSeedingOn == 1: light seeds (power law 30-100 M_sun, slope -0.3)
     // BlackHoleSeedingOn == 2: heavy seeds (constant 10^5 M_sun)
     galaxies[p].BHSeedMass = 0.0;
+    galaxies[p].QuasarModeEventOccurred = 0;
     if(run_params->BlackHoleSeedingOn == 1 || run_params->BlackHoleSeedingOn == 2) {
         if(galaxies[p].BlackHoleMass <= 0.0 && galaxies[p].Mvir > run_params->BHSeedMinHaloMass) {
             galaxies[p].BlackHoleMass = seed_black_hole(p, galaxies, run_params);

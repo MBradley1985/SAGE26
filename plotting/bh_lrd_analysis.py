@@ -2316,9 +2316,9 @@ def main():
     )
     p.add_argument('-i', '--input-pattern',
                    default='./output/millennium/model_*.hdf5')
-    p.add_argument('-s', '--snapshot', type=int, default=40,
+    p.add_argument('-s', '--snapshot', type=int, default=27,
                    help='History COLUMN (= Millennium snapshot) to slice. '
-                        'Default 10 -> z=5.48 (closest to paper z=5).')
+                        'Default 27 -> z~3.')
     p.add_argument('--window', type=int, default=0,
                    help='Stack columns [s-window, s+window] to fight sparsity '
                         'at high z (default 0 = single column).')

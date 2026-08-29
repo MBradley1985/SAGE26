@@ -392,13 +392,13 @@ static double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, co
  * cooling_recipe_regime_aware(); otherwise falls through to the C16-style
  * cooling_recipe_hot(). Returns the mass of gas cooled this substep.
  */
-double cooling_recipe(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
+double cooling_recipe(const int gal, const int halo_snapnum, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     // Check if CGM recipe is enabled for backwards compatibility
     if(run_params->CGMrecipeOn > 0) {
-        return cooling_recipe_regime_aware(gal, dt, galaxies, run_params);
+        return cooling_recipe_regime_aware(gal, halo_snapnum, dt, galaxies, run_params);
     } else {
-        return cooling_recipe_hot(gal, dt, galaxies, run_params);
+        return cooling_recipe_hot(gal, halo_snapnum, dt, galaxies, run_params);
     }
 }
 
@@ -410,7 +410,7 @@ double cooling_recipe(const int gal, const double dt, struct GALAXY *galaxies, c
  * cold-stream component (De Lucia & Blaizot 2006) is blended in for
  * hot-regime halos. AGN heating is applied before the return.
  */
-double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
+double cooling_recipe_hot(const int gal, const int halo_snapnum, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     double coolingGas;
 
@@ -521,7 +521,7 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 		// if AGNrecipeOn we now reduce it in line with past heating before proceeding
 
 		if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
-			coolingGas = do_AGN_heating(coolingGas, gal, dt, x, rcool, galaxies, run_params);
+			coolingGas = do_AGN_heating(coolingGas, gal, halo_snapnum, dt, x, rcool, galaxies, run_params);
         }
 
 		if (coolingGas > 0.0) {
@@ -544,7 +544,7 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
  * mean density within that radius, and returns the cooled mass for this substep.
  * AGN heating via do_AGN_heating_cgm() is applied before the return.
  */
-double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxies,
+double cooling_recipe_cgm(const int gal, const int halo_snapnum, const double dt, struct GALAXY *galaxies,
                          const struct params *run_params)
 {
     double coolingGas = 0.0;
@@ -711,7 +711,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         // r_heat ratchet, no decay, capped at Rvir (suppression and ratchet
         // update handled inside do_AGN_heating_cgm when AGN is active).
         if(run_params->AGNrecipeOn > 0 && run_params->CGMAGNOn > 0) {
-            coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x_agn, r_cool, galaxies, run_params);
+            coolingGas = do_AGN_heating_cgm(coolingGas, gal, halo_snapnum, dt, x_agn, r_cool, galaxies, run_params);
         } else {
             // No AGN: still apply r_heat suppression so quenching persists
             if(galaxies[gal].r_heat >= r_cool) {
@@ -768,7 +768,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
  * residual CGMgas.  Both contributions are applied to ColdGas in-place and
  * the total cooled mass is returned.
  */
-double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
+double cooling_recipe_regime_aware(const int gal, const int halo_snapnum, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     double cgm_cooling = 0.0;
     double hot_cooling = 0.0;
@@ -778,7 +778,7 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
 
         // Primary: Precipitation cooling from CGMgas
         if(galaxies[gal].CGMgas > 0.0) {
-            cgm_cooling = cooling_recipe_cgm(gal, dt, galaxies, run_params);
+            cgm_cooling = cooling_recipe_cgm(gal, halo_snapnum, dt, galaxies, run_params);
         }
 
 
@@ -787,12 +787,12 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
 
         // Primary: Traditional cooling from HotGas
         if(galaxies[gal].HotGas > 0.0) {
-            hot_cooling = cooling_recipe_hot(gal, dt, galaxies, run_params);
+            hot_cooling = cooling_recipe_hot(gal, halo_snapnum, dt, galaxies, run_params);
         }
 
         // Secondary: Precipitation cooling from CGMgas (gradually depletes)
         if(galaxies[gal].CGMgas > 0.0) {
-            cgm_cooling = cooling_recipe_cgm(gal, dt, galaxies, run_params);
+            cgm_cooling = cooling_recipe_cgm(gal, halo_snapnum, dt, galaxies, run_params);
         }
     }
 
@@ -842,7 +842,7 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
  * Does NOT modify any galaxy fields -- the caller draws from the right reservoir
  * and updates r_heat.
  */
-static void agn_accretion_compute(const int centralgal, const double dt, const double x,
+static void agn_accretion_compute(const int centralgal, const int halo_snapnum, const double dt, const double x,
                                    const double coolingGas, const double rcool,
                                    const double reservoir_mass,
                                    struct GALAXY *galaxies, const struct params *run_params,
@@ -870,7 +870,7 @@ static void agn_accretion_compute(const int centralgal, const double dt, const d
     }
 
     AGNrate = eddington_limited_accretion_rate(AGNrate, 1, galaxies[centralgal].BlackHoleMass,
-                                                       galaxies[centralgal].SnapNum, 0, run_params,
+                                                       halo_snapnum, 0, run_params,
                                                        galaxies[centralgal].BHAccretionType, galaxies[centralgal].BHMaxaccretionRate,
                                                        galaxies[centralgal].BHEddingtonRateLimit, galaxies[centralgal].BHMassatAccretion);
         
@@ -903,7 +903,7 @@ static void agn_accretion_compute(const int centralgal, const double dt, const d
  * and suppressed cooling mass, draws the accreted mass from HotGas, and
  * updates r_heat via the standard ratchet.
  */
-double do_AGN_heating(double coolingGas, const int centralgal, const double dt, const double x, const double rcool, struct GALAXY *galaxies, const struct params *run_params)
+double do_AGN_heating(double coolingGas, const int centralgal, const int halo_snapnum, const double dt, const double x, const double rcool, struct GALAXY *galaxies, const struct params *run_params)
 {
     // r_heat suppression (always applied for Regime==1 hot-halo)
     if(galaxies[centralgal].r_heat < rcool) {
@@ -916,14 +916,14 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
 
     if(galaxies[centralgal].HotGas > 0.0) {
         double AGNaccreted, AGNheating;
-        agn_accretion_compute(centralgal, dt, x, coolingGas, rcool,
+        agn_accretion_compute(centralgal, halo_snapnum, dt, x, coolingGas, rcool,
                                galaxies[centralgal].HotGas,
                                galaxies, run_params, &AGNaccreted, &AGNheating);
 
         const double metallicity = get_metallicity(galaxies[centralgal].HotGas,
                                                    galaxies[centralgal].MetalsHotGas);
         galaxies[centralgal].BlackHoleMass += AGNaccreted;
-        galaxies[centralgal].RadioModeBHaccretionMass[galaxies[centralgal].SnapNum] += AGNaccreted;
+        galaxies[centralgal].RadioModeBHaccretionMass[halo_snapnum] += AGNaccreted;
         galaxies[centralgal].HotGas        -= AGNaccreted;
         galaxies[centralgal].MetalsHotGas  -= metallicity * AGNaccreted;
 
@@ -948,7 +948,7 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
  * Applies the same r_heat/rcool suppression and ratchet as the hot-halo
  * path, then caps r_heat at Rvir. Accretion draws from CGMgas.
  */
-double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
+double do_AGN_heating_cgm(double coolingGas, const int centralgal, const int halo_snapnum, const double dt, const double x, const double rcool,
                           struct GALAXY *galaxies, const struct params *run_params)
 {
     if(galaxies[centralgal].r_heat < rcool) {
@@ -962,12 +962,12 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double 
 
     if(galaxies[centralgal].CGMgas > 0.0) {
         double AGNaccreted, AGNheating;
-        agn_accretion_compute(centralgal, dt, x, coolingGas, rcool,
+        agn_accretion_compute(centralgal, halo_snapnum, dt, x, coolingGas, rcool,
                               galaxies[centralgal].CGMgas, galaxies, run_params,
                               &AGNaccreted, &AGNheating);
         const double metallicity = get_metallicity(galaxies[centralgal].CGMgas, galaxies[centralgal].MetalsCGMgas);
         galaxies[centralgal].BlackHoleMass  += AGNaccreted;
-        galaxies[centralgal].RadioModeBHaccretionMass[galaxies[centralgal].SnapNum] += AGNaccreted;
+        galaxies[centralgal].RadioModeBHaccretionMass[halo_snapnum] += AGNaccreted;
         galaxies[centralgal].CGMgas         -= AGNaccreted;
         galaxies[centralgal].MetalsCGMgas   -= metallicity * AGNaccreted;
 

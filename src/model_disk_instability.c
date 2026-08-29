@@ -44,7 +44,7 @@ static const double TOOMRE_DISK_FACTOR = 3.0;
  * collisional_starburst_recipe().  Saves DiskScaleRadius before any mass
  * transfer so the Tonini formula uses the pre-instability disc scale.
  */
-void check_disk_instability(const int p, const int centralgal, const int halonr, const double time, const double dt, const int step,
+void check_disk_instability(const int p, const int centralgal, const int halonr, const int halo_snapnum, const double time, const double dt, const int step,
                             struct GALAXY *galaxies, struct params *run_params)
 {
     // Here we calculate the stability of the stellar and gaseous disk as discussed in Mo, Mao & White (1998).
@@ -97,10 +97,10 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
 
             const double unstable_gas_fraction = unstable_gas / galaxies[p].ColdGas;
             if(run_params->AGNrecipeOn > 0) {
-                grow_black_hole(p, unstable_gas_fraction, 1, dt, -1.0, -1.0, galaxies, run_params);
+                grow_black_hole(p, unstable_gas_fraction, 1, halo_snapnum, dt, -1.0, -1.0, galaxies, run_params);
             }
 
-            collisional_starburst_recipe(unstable_gas_fraction, p, centralgal, time, dt, halonr, 1, step,
+            collisional_starburst_recipe(unstable_gas_fraction, p, centralgal, time, dt, halonr, halo_snapnum, 1, step,
                  0, galaxies[p].DiskScaleRadius, -1.0, -1.0, galaxies, run_params);
         }
     }

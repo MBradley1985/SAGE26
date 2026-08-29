@@ -143,7 +143,7 @@ def run_lrd_compare(runs, output_dir, args):
 
 def run_lrd_multiz_compare(runs, output_dir, args):
     """--plots lrd_multiz: overlay bh_lrd_analysis_multiz.py's panels a-f."""
-    redshift_bins = lam.DEFAULT_REDSHIFT_BINS
+    redshift_bins = lam.DEFAULT_REDSHIFTS
     snap_data_by_run, snap_data_by_run_f = {}, {}
     for zb in redshift_bins:
         entries, entries_f = [], []
@@ -157,7 +157,11 @@ def run_lrd_multiz_compare(runs, output_dir, args):
                 data = la.read_epoch(file_list, cols[0], h_h, catalogue=args.catalogue, cols=cols)
             else:
                 snap_col = lam.nearest_snap_for_z(zb, redshifts)
-                data = la.read_epoch(file_list, snap_col, h_h, catalogue=args.catalogue, window=args.window)
+                # default to that snapshot's own catalogue -- see
+                # bh_lrd_analysis_multiz.py's module docstring.
+                data = la.read_epoch(file_list, snap_col, h_h,
+                                     catalogue=args.catalogue or f'Snap_{snap_col}',
+                                     window=args.window)
             # panels a-e distinguish runs by contour color; panel f (a
             # luminosity function) distinguishes them by linestyle.
             entries.append({'data': data, 'style': contour_style_for_index(i, run['label'])})

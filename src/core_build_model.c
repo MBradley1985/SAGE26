@@ -468,10 +468,10 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
             double coolingGas;
             if(run_params->CGMrecipeOn == 1) {
 
-                cooling_recipe_regime_aware(p, deltaT / effective_steps, galaxies, run_params);
+                cooling_recipe_regime_aware(p, halo_snapnum, deltaT / effective_steps, galaxies, run_params);
 
             } else {
-                coolingGas = cooling_recipe(p, deltaT / effective_steps, galaxies, run_params);
+                coolingGas = cooling_recipe(p, halo_snapnum, deltaT / effective_steps, galaxies, run_params);
                 cool_gas_onto_galaxy(p, coolingGas, galaxies);
             }
 
@@ -479,7 +479,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
             // Map adaptive step to fixed STEPS bins for SFR arrays
             int step_bin = (step * STEPS) / effective_steps;
             if(step_bin >= STEPS) step_bin = STEPS - 1;
-            starformation_and_feedback(p, centralgal, time, deltaT / effective_steps, halonr, step_bin, galaxies, run_params);
+            starformation_and_feedback(p, centralgal, time, deltaT / effective_steps, halonr, halo_snapnum, step_bin, galaxies, run_params);
         }
 
         // check for satellite disruption and merger events
@@ -520,7 +520,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                             // Map adaptive step to fixed STEPS bins for SFR arrays
                             int step_bin = (step * STEPS) / effective_steps;
                             if(step_bin >= STEPS) step_bin = STEPS - 1;
-                            deal_with_galaxy_merger(p, merger_centralgal, centralgal, event_time, deltaT / effective_steps, halonr, step_bin, galaxies, run_params);
+                            deal_with_galaxy_merger(p, merger_centralgal, centralgal, event_time, deltaT / effective_steps, halonr, halo_snapnum, step_bin, galaxies, run_params);
                         }
                     }
                 }

@@ -127,7 +127,7 @@ MILLENNIUM_SNAP_TO_Z = {
 
 # Panel defaults
 DEFAULT_STELLAR_EDGES = [8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 12.0]   # -> 6 bins
-DEFAULT_PANEL_Z       = [0.0, 0.5, 1.0, 2.0, 4.0, 6.0]            # -> 6 redshifts
+DEFAULT_PANEL_Z       = [0.0, 1.0, 2.0, 4.0, 6.0, 8.0]            # -> 6 redshifts, matches bh_lrd_analysis_multiz.DEFAULT_REDSHIFTS
 
 
 # ============================================================================
@@ -650,7 +650,7 @@ def _draw_rate_function(ax, accr, edd, acc_type, volume_h3, edd_limited,
     ax.xaxis.set_minor_locator(AutoMinorLocator(5))
     ax.yaxis.set_minor_locator(AutoMinorLocator(5))
     if show_xlabel:
-        ax.set_xlabel(r'$\log_{10}(\dot{M}_{\rm BH,max}/\dot{M}_{\rm Edd})$',
+        ax.set_xlabel(r'$\log_{10}(\dot{M}_{\rm BH}/\dot{M}_{\rm Edd})$',
                       fontsize=14)
     if show_ylabel:
         yl = (r'$\log_{10}(\mathrm{d}N/\mathrm{d}\log_{10}\lambda\,/\,'
@@ -682,6 +682,10 @@ def plot_accretion_rate_function(file_list, snap_num, hubble_h, redshifts,
     if accr is None or edd is None or typ is None:
         print(f"[skip] {name}: required arrays absent after read.")
         return
+
+    # instantaneous values at snap_num only -- not the galaxy's full history
+    col = min(snap_num, accr.shape[1] - 1)
+    accr, edd, typ = accr[:, col], edd[:, col], typ[:, col]
 
     mask = selection_mask(data['BlackHoleMass'], data['StellarMass'],
                           data['Mvir'], no_cuts)
@@ -723,8 +727,8 @@ def plot_accretion_rate_function(file_list, snap_num, hubble_h, redshifts,
         for j in range(len(pairs), 6):
             axes[j].axis('off')
         z = get_redshift_from_snapshot(snap_num, redshifts)
-        fig.suptitle(f"Accretion rate function by stellar mass "
-                     f"(snap {snap_num}, z = {z:.2f})", fontsize=15)
+        #fig.suptitle(f"Accretion rate function by stellar mass "
+        #             f"(snap {snap_num}, z = {z:.2f})", fontsize=15)
         plt.tight_layout(rect=[0, 0, 1, 0.97])
         out = os.path.join(output_dir,
                            f"bh_accretion_rate_function_stellar_panels{OutputFormat}")
@@ -733,7 +737,13 @@ def plot_accretion_rate_function(file_list, snap_num, hubble_h, redshifts,
         print(f"[ok]   {name} (stellar 2x3) -> {out}")
         return
 
-    # ---- 2x3 redshift panels (instantaneous accretion column per snapshot) ----
+    # ---- 2x3 redshift panels: each target's OWN Snap_{sn} catalogue, so a
+    # panel shows the population actually observed at that redshift (not
+    # just the subset of galaxies that happen to survive to snap_num).
+    # Requires accretion history written with the current (fixed) SnapNum
+    # indexing -- on older output, a snapshot's own most-recent column is
+    # always blank; see the AGN accretion history fix in model_mergers.c /
+    # model_cooling_heating.c. ----
     if bin_mode == 'redshift':
         fig, axes = plt.subplots(2, 3, figsize=(18, 10))
         axes = axes.ravel()
@@ -760,8 +770,8 @@ def plot_accretion_rate_function(file_list, snap_num, hubble_h, redshifts,
                                 show_ylabel=(k % 3 == 0))
             zz = get_redshift_from_snapshot(sn, redshifts)
             axes[k].set_title(f"snap {sn}  (z = {zz:.2f})", fontsize=12)
-        fig.suptitle("Accretion rate function vs redshift (instantaneous)",
-                     fontsize=15)
+        #fig.suptitle("Accretion rate function vs redshift (instantaneous)",
+        #             fontsize=15)
         plt.tight_layout(rect=[0, 0, 1, 0.97])
         out = os.path.join(output_dir,
                            f"bh_accretion_rate_function_redshift_panels{OutputFormat}")
@@ -788,6 +798,9 @@ def _read_rate_function_inputs(file_list, snap_num, hubble_h, no_cuts):
                       data['BHEddingtonRateLimit'], data['BHAccretionType'])
     if accr is None or edd is None or typ is None:
         return None
+    # instantaneous values at snap_num only -- not the galaxy's full history
+    col = min(snap_num, accr.shape[1] - 1)
+    accr, edd, typ = accr[:, col], edd[:, col], typ[:, col]
     mask = selection_mask(data['BlackHoleMass'], data['StellarMass'], data['Mvir'], no_cuts)
     return accr, edd, typ, mask, data
 
@@ -826,7 +839,7 @@ def _draw_rate_function_multirun(ax, per_run, show_legend=True, show_xlabel=True
     ax.xaxis.set_minor_locator(AutoMinorLocator(5))
     ax.yaxis.set_minor_locator(AutoMinorLocator(5))
     if show_xlabel:
-        ax.set_xlabel(r'$\log_{10}(\dot{M}_{\rm BH,max}/\dot{M}_{\rm Edd})$', fontsize=14)
+        ax.set_xlabel(r'$\log_{10}(\dot{M}_{\rm BH}/\dot{M}_{\rm Edd})$', fontsize=14)
     if show_ylabel:
         yl = (r'$\log_{10}(\mathrm{d}N/\mathrm{d}\log_{10}\lambda\,/\,'
               r'\mathrm{Mpc}^{-3}h^{3})$') if styles[0]['volume_h3'] else \
@@ -906,7 +919,7 @@ def plot_accretion_rate_function_compare(runs, output_dir, bin_mode='none',
             axes[k].set_title(rf"${lo:.1f}\leq\log M_\star<{hi:.1f}$", fontsize=12)
         for j in range(len(pairs), 6):
             axes[j].axis('off')
-        fig.suptitle("Accretion rate function by stellar mass (compare)", fontsize=15)
+        #fig.suptitle("Accretion rate function by stellar mass (compare)", fontsize=15)
         plt.tight_layout(rect=[0, 0, 1, 0.97])
         out = os.path.join(output_dir,
                            f"bh_accretion_rate_function_stellar_panels_compare{OutputFormat}")
@@ -916,6 +929,11 @@ def plot_accretion_rate_function_compare(runs, output_dir, bin_mode='none',
         return
 
     if bin_mode == 'redshift':
+        # Each target z reads its own Snap_{sn} catalogue per run (via
+        # _read_rate_function_inputs(..., sn, ...)), so a panel shows the
+        # population actually observed at that redshift rather than the
+        # subset surviving to each run's own snap_num. Requires accretion
+        # history written with the current (fixed) SnapNum indexing.
         fig, axes = plt.subplots(2, 3, figsize=(18, 10))
         axes = axes.ravel()
         for k, tz in enumerate(panel_z[:6]):
@@ -928,14 +946,11 @@ def plot_accretion_rate_function_compare(runs, output_dir, bin_mode='none',
                 if got is None:
                     per_run.append((None, None, None, style)); continue
                 accr, edd, typ, mask, data = got
-                col = min(sn, accr.shape[1] - 1)
-                per_run.append((accr[mask][:, col], edd[mask][:, col],
-                               typ[mask][:, col], style))
+                per_run.append((accr[mask], edd[mask], typ[mask], style))
             _draw_rate_function_multirun(axes[k], per_run, show_legend=(k == 0),
                                         show_xlabel=(k >= 3), show_ylabel=(k % 3 == 0))
             axes[k].set_title(f"z~{tz:.1f}", fontsize=12)
-        fig.suptitle("Accretion rate function vs redshift (compare, instantaneous)",
-                     fontsize=15)
+        #fig.suptitle("Accretion rate function vs redshift (compare, instantaneous)", fontsize=15)
         plt.tight_layout(rect=[0, 0, 1, 0.97])
         out = os.path.join(output_dir,
                            f"bh_accretion_rate_function_redshift_panels_compare{OutputFormat}")
@@ -1541,8 +1556,8 @@ def main():
     p.add_argument('-i', '--input-pattern',
                    default='./output/millennium/model_*.hdf5',
                    help='Glob for the model HDF5 files.')
-    p.add_argument('-s', '--snapshot', type=int, default=None,
-                   help='Snapshot for snapshot-dependent plots (default: latest).')
+    p.add_argument('-s', '--snapshot', type=int, default=27,
+                   help='Snapshot for snapshot-dependent plots (default: 27, z~3).')
     p.add_argument('-o', '--output-dir', default=None,
                    help='Output directory (default: <input_dir>/plots).')
     p.add_argument('--data-dir', default='./data/bh/',
@@ -1626,6 +1641,13 @@ def main():
                                      available, output_dir, args.bin_mode,
                                      stellar_edges, panel_z, args.edd_limited,
                                      volume_h3, args.no_cuts)
+        # always also emit the redshift-panel grid (matches bh_lrd_analysis_multiz.py's
+        # panels) unless that's already what --bin-mode produced above
+        if args.bin_mode != 'redshift':
+            plot_accretion_rate_function(file_list, snap_num, hubble_h, redshifts,
+                                         available, output_dir, 'redshift',
+                                         stellar_edges, panel_z, args.edd_limited,
+                                         volume_h3, args.no_cuts)
     if not args.no_seed_density:
         plot_bh_seed_density(file_list, hubble_h, redshifts, available,
                              volume_h3, output_dir, zmax=args.seed_density_zmax)

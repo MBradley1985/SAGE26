@@ -375,7 +375,7 @@ static double starburst_gas_reservoir(const int cgal, struct GALAXY *galaxies, c
  * wind then acts only on gas that is genuinely left over.
  */
 void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int centralgal,
-                             const double time, const double dt, const int halonr, const int step,
+                             const double time, const double dt, const int halonr, const int halo_snapnum, const int step,
                              struct GALAXY *galaxies, const struct params *run_params)
 {
     double mi, ma, mass_ratio;
@@ -492,17 +492,26 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         // Eddington cap on the demand.  NOTE: this is the single call site for
         // eddington_limited_accretion_rate on the merger channel; grow_black_hole
         // does not re-apply it in the joint path (see there).
-        if(run_params->EddingtonLimitOn && BHaccrete_demanded > 0.0) {
+        //
+        // Always call the limiter, even with EddingtonLimitOn==0: it unconditionally
+        // records BHAccretionType/BHMaxaccretionRate/BHEddingtonRateLimit/BHMassatAccretion
+        // for this snapshot, which is what the accretion plots key merger events off of.
+        // Master switch still wins on whether the rate is actually capped -- eddflag=0
+        // means eddington_limited_accretion_rate returns the rate unclamped (mirrors the
+        // legacy path in grow_black_hole()).
+        if(BHaccrete_demanded > 0.0) {
         double bh_rate = BHaccrete_demanded / bh_accretiontime;
-        int eddflag = accretion_scenario(run_params->AGNAccretionScheme,
+        int eddflag = run_params->EddingtonLimitOn
+                    ? accretion_scenario(run_params->AGNAccretionScheme,
                                         &galaxies[merger_centralgal],
                                         1 /* merger EddType */,
                                         mass_ratio,
-                                        run_params);
+                                        run_params)
+                    : 0;
             bh_rate = eddington_limited_accretion_rate(
                           bh_rate, eddflag,
                           galaxies[merger_centralgal].BlackHoleMass,
-                          galaxies[merger_centralgal].SnapNum,
+                          halo_snapnum,
                           1 /* merger EddType */, run_params,
                           galaxies[merger_centralgal].BHAccretionType,
                           galaxies[merger_centralgal].BHMaxaccretionRate,
@@ -532,7 +541,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
 
     // starburst recipe (pre-scaled) -- applied FIRST, before grow_black_hole,
     // so quasar_mode_wind cannot eject the burst's budgeted gas.
-    collisional_starburst_recipe(mass_ratio, merger_centralgal, centralgal, time, dt, halonr,
+    collisional_starburst_recipe(mass_ratio, merger_centralgal, centralgal, time, dt, halonr, halo_snapnum,
                                  0, step, burst_to_merger_bulge, old_disk_radius,
                                  stars_scaled, reheated_scaled,
                                  galaxies, run_params);
@@ -540,7 +549,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     // grow black hole through accretion from cold disk during mergers
     // (pre-scaled and pre-Eddington-capped; budget accretion time passed through)
     if(run_params->AGNrecipeOn) {
-        grow_black_hole(merger_centralgal, mass_ratio, 0, dt, BHaccrete_scaled,
+        grow_black_hole(merger_centralgal, mass_ratio, 0, halo_snapnum, dt, BHaccrete_scaled,
                         bh_accretiontime, galaxies, run_params);
     }
 
@@ -616,11 +625,11 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
  * from the cold reservoir, and fed to quasar_mode_wind().
  */
 void grow_black_hole(const int merger_centralgal, const double mass_ratio, const int from_instability,
-                     const double dt, const double BHaccrete_in, const double accretiontime_in,
+                     const int halo_snapnum, const double dt, const double BHaccrete_in, const double accretiontime_in,
                      struct GALAXY *galaxies, const struct params *run_params)
 {
     double BHaccrete, metallicity;
-    const int snap = galaxies[merger_centralgal].SnapNum;
+    const int snap = halo_snapnum;
 
     // When the seeding model is enabled, a BH must be seeded (seed_black_hole(),
     // gated on BHSeedMinHaloMass) before it can grow. Without this guard, a galaxy
@@ -705,7 +714,7 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
             BHaccreterate = eddington_limited_accretion_rate(
                                 BHaccreterate, EddFlag,
                                 galaxies[merger_centralgal].BlackHoleMass,
-                                galaxies[merger_centralgal].SnapNum,
+                                halo_snapnum,
                                 EddType, run_params,
                                 galaxies[merger_centralgal].BHAccretionType,
                                 galaxies[merger_centralgal].BHMaxaccretionRate,
@@ -722,6 +731,14 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
         /* ---- SEED TRACKING ---- */
         if(galaxies[merger_centralgal].BlackHoleMass <= 0.0 && BHaccrete > 0.0)
             galaxies[merger_centralgal].BHSeedMass = BHaccrete;
+
+        /* ---- FIRST QUASAR-MODE EVENT TRACKING (AGNAccretionScheme==3) ----
+         * Marked after the Eddington decision above was made for THIS event,
+         * so the event that actually earns "first" status is the one judged
+         * unlimited; every quasar-mode event after it (merger or instability)
+         * sees the flag already set and gets capped. */
+        if(BHaccrete > 0.0 && !galaxies[merger_centralgal].QuasarModeEventOccurred)
+            galaxies[merger_centralgal].QuasarModeEventOccurred = 1;
 
         /* Apply to galaxy*/
         metallicity = get_metallicity(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].MetalsColdGas);
@@ -845,7 +862,13 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].MetalsICS += galaxies[p].MetalsICS;
 
     galaxies[t].BlackHoleMass += galaxies[p].BlackHoleMass;
-    galaxies[t].BHMergerMass[galaxies[t].SnapNum] += galaxies[p].BlackHoleMass; 
+    galaxies[t].BHMergerMass[galaxies[t].SnapNum] += galaxies[p].BlackHoleMass;
+
+    // A satellite that already had its own first quasar-mode event carries
+    // that status into the merged remnant -- the merged lineage shouldn't get
+    // a second "free" unlimited event just because the two galaxies combined.
+    if(galaxies[p].QuasarModeEventOccurred)
+        galaxies[t].QuasarModeEventOccurred = 1;
 
     //if BHExsituGrowthOn is enabled, we track the contributon to BH growth from satellites after merger.
     if(run_params->BHExsituGrowthOn) {
@@ -965,7 +988,7 @@ void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
  * applies SN feedback, updates SFH, and runs the disk-instability check.
  */
 void collisional_starburst_recipe(const double mass_ratio, const int merger_centralgal, const int centralgal,
-                                  const double time, const double dt, const int halonr, const int mode, const int step,
+                                  const double time, const double dt, const int halonr, const int halo_snapnum, const int mode, const int step,
                                   const int burst_to_merger_bulge, const double old_disk_radius,
                                   const double stars_in, const double reheated_in,
                                   struct GALAXY *galaxies, const struct params *run_params)
@@ -1130,7 +1153,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     // check for disk instability
     if(run_params->DiskInstabilityOn && mode == 0) {
         if(mass_ratio < run_params->ThreshMajorMerger) {
-            check_disk_instability(merger_centralgal, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
+            check_disk_instability(merger_centralgal, centralgal, halonr, halo_snapnum, time, dt, step, galaxies, (struct params *) run_params);
         }
     }
 

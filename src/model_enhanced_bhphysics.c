@@ -180,8 +180,14 @@ static int scenario_merger_only_unlimited(const struct GALAXY *gal, int eddtype,
 static int scenario_first_event_unlimited(const struct GALAXY *gal, int eddtype,
                                            const struct params *run_params)
 {
-    // i.e. the growth episode right after seeding.
-    return (gal->BlackHoleMass <= gal->BHSeedMass) ? 0 : 1;
+    // The first quasar-mode event (merger- or instability-driven, whichever
+    // fires first) runs free; every quasar-mode event after that is capped.
+    // Deliberately independent of BlackHoleMass/BHSeedMass: the radio-mode
+    // channel grows BlackHoleMass every snapshot regardless of scenario, so
+    // keying this off BlackHoleMass<=BHSeedMass closed the "first event"
+    // window within a snapshot of seeding, before any real quasar-mode event
+    // had a chance to run unlimited.
+    return gal->QuasarModeEventOccurred ? 1 : 0;
 }
 
 static int scenario_small_halo_unlimited(const struct GALAXY *gal, int eddtype,

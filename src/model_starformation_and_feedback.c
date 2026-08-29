@@ -76,7 +76,7 @@ static const double Z_SOLAR_ASPLUND09 = 0.014;
  * recycling (Krumholz & Dekel 2011 Eq. 22). If the galaxy is in FFB regime,
  * delegates to starformation_ffb() and returns immediately.
  */
-void starformation_and_feedback(const int p, const int centralgal, const double time, const double dt, const int halonr, const int step,
+void starformation_and_feedback(const int p, const int centralgal, const double time, const double dt, const int halonr, const int halo_snapnum, const int step,
                                 struct GALAXY *galaxies, const struct params *run_params)
 {
     XASSERT(step >= 0 && step < STEPS, -1,
@@ -648,7 +648,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
     // check for disk instability
     if(run_params->DiskInstabilityOn) {
-        check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, (struct params *) run_params);
+        check_disk_instability(p, centralgal, halonr, halo_snapnum, time, dt, step, galaxies, (struct params *) run_params);
     }
 
     // formation of new metals - instantaneous recycling approximation - only SNII
