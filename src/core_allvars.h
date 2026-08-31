@@ -480,6 +480,10 @@ struct params
                                  // 0: bypass it -- mdot = M_CGM / t_ff for every CGM halo
     int32_t    FIREmodeOn;
     int32_t    RegimeRandomMode;     // 0: fresh random draw each snapshot (default, original behaviour); 1: use the persistent RegimeRandom assigned at galaxy creation (deterministic regime evolution driven by mass)
+    double     MShockMsun;   // Dekel & Birnboim (2006) virial-shock stability mass [Msun].
+                             // Sets which of two baryon cycles a halo follows, so it is a
+                             // physics parameter rather than a constant; exposed for the
+                             // sensitivity test requested in referee Major Comment 9.
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation, 3: hybrid (Vmax/Vvir, infall-frozen for satellites)
     int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
     int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too

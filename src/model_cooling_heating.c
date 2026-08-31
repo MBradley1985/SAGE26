@@ -102,9 +102,9 @@ static const double PRECIP_TRANSITION_WIDTH = 2.0;
  * A value of 0.1 is the standard choice for the hot CGM (e.g., Makino+98). */
 static const double CGM_BETA_CORE_RADIUS_FRAC = 0.1;
 
-/* De Lucia & Blaizot (2006) eq. 38: virial shock mass scale.
- * Hot-mode shock heating is efficient only above this halo mass. */
-static const double MSHOCK_DB06_MSUN = 6.0e11;  /* Msun */
+/* De Lucia & Blaizot (2006) eq. 38: virial shock mass scale, above which
+ * hot-mode shock heating is efficient.  Settable as MShockMsun in the parameter
+ * file; must be the same value model_regimes.c uses to classify regimes. */
 
 /* Critical redshift below which cold streams are suppressed in M > Mshock halos.
  * De Lucia & Blaizot (2006) estimate z_crit ~ 1-2; we adopt the midpoint. */
@@ -330,14 +330,32 @@ static double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, co
     const double mu = MU_IONISED;
 
     // ========================================================================
-    // UNIFORM / BETA: Use isothermal r_cool formula (like hot-regime)
+    // UNIFORM: r_cool = R_vir
     // ========================================================================
-    // For uniform density, t_cool and t_ff are both roughly constant with radius,
-    // so the iterative solver doesn't converge meaningfully.
-    // For beta profile (beta=2/3), the profile is too flat and has similar issues.
-    // Instead, use the isothermal approach: assume rho(r) ~ 1/r^2 for r_cool,
-    // which gives r_cool = sqrt(rho0 / rho_cool) where rho_cool is the critical density.
-    if(profile_type == 0 || profile_type == 2) {
+    // With a uniform gas profile both t_cool and t_ff are radius-independent:
+    // rho is constant, and M(<r) = Mvir (r/Rvir)^3 gives g ~ r, so
+    // t_ff = sqrt(2r/g) = sqrt(2 Rvir^3 / G Mvir) at every radius.  t_cool(r) =
+    // t_ff(r) therefore has no interior solution -- the reservoir either cools
+    // everywhere inside R_vir or nowhere -- and r_cool = R_vir states that
+    // honestly.  This is what Equations 1 and 2 of the paper assume.
+    //
+    // The isothermal (rho ~ r^-2) formula retained below for the beta profile
+    // was previously applied here as well.  It is numerically a no-op for the
+    // uniform case, since neither t_cool nor t_ff depends on the radius it
+    // returns, but it is inconsistent: r_cool is derived from a rho ~ r^-2
+    // profile and then used with a uniform density.  Only RcoolToRvir, a
+    // diagnostic, changes.
+    if(profile_type == 0) {
+        return Rvir_cgs;
+    }
+
+    // ========================================================================
+    // BETA: Use isothermal r_cool formula (like hot-regime)
+    // ========================================================================
+    // The beta profile (beta = 2/3) is too flat for the iterative solver to
+    // converge, so use the isothermal approach: assume rho(r) ~ 1/r^2, giving
+    // r_cool = sqrt(rho0 / rho_cool) where rho_cool is the critical density.
+    if(profile_type == 2) {
         // t_ff at R_vir: t_ff = sqrt(2 R^3 / (G M))
         const double t_ff_Rvir = sqrt(2.0 * Rvir_cgs * Rvir_cgs * Rvir_cgs / (G_CGS * Mvir_cgs));
 
@@ -487,7 +505,7 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             // threshold host weaker cold streams. Redshift factor (1+z)/(1+1)
             // enhances streams at high-z where cooling is more efficient.
             const double Mvir_physical = CODE_MASS_TO_MSUN(galaxies[gal].Mvir, run_params->Hubble_h);
-            const double mass_ratio = Mvir_physical / MSHOCK_DB06_MSUN;
+            const double mass_ratio = Mvir_physical / run_params->MShockMsun;
 
             // Redshift enhancement: normalized to z=1 following D&B06 eq 40
             const double z_factor = (1.0 + z) / (1.0 + 1.0);

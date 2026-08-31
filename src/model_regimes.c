@@ -23,10 +23,10 @@
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
  * -------------------------------------------------------------------------*/
 
-/* Dekel & Birnboim (2006) critical virial-shock stability mass.
- * Halos below this mass lack a stable virial shock and are classified as
- * CGM-regime.  Value ~6e11 Msun from DB06 Fig. 1 / eq. 4. */
-static const double DEKEL06_M_SHOCK_MSUN  =  6.0e11;
+/* Dekel & Birnboim (2006) critical virial-shock stability mass: halos below it
+ * lack a stable virial shock and are classified as CGM-regime.  Default
+ * 6e11 Msun from DB06 Fig. 1 / eq. 4, now settable as MShockMsun in the
+ * parameter file so it can be varied without a rebuild. */
 
 /* Parsec in cm (IAU 2012).  Used when converting radii between Mpc/h
  * (code units) and pc for surface-density calculations. */
@@ -56,7 +56,7 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
         const double Mvir_physical = CODE_MASS_TO_MSUN(galaxies[p].Mvir, run_params->Hubble_h);
 
         // Shock mass threshold (Dekel & Birnboim 2006)
-        const double Mshock = DEKEL06_M_SHOCK_MSUN;  // Msun
+        const double Mshock = run_params->MShockMsun;  // Msun
 
         // Calculate mass ratio for sigmoid
         const double mass_ratio = Mvir_physical / Mshock;

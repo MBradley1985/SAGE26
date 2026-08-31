@@ -13,6 +13,7 @@ Usage:
 import h5py as h5
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter, ScalarFormatter
 import os
 import numpy as np
 import sys
@@ -9676,7 +9677,7 @@ def _feedback_params(directory=PRIMARY_DIR):
     """Feedback parameters straight from the run header, so the analytic curves
     cannot drift from the model that produced the points."""
     fallback = dict(eps_disk=2.9, eps_halo=0.3, alpha_z=1.25, eta_sn=5.0e-3,
-                    energy_sn=1.0e51, eps_max=2.0, sn_bound=1, reheat_bound=0)
+                    energy_sn=1.0e51, eps_max=2.0, sn_bound=1, reheat_bound=1)
     files = _find_model_files_early(directory)
     if not files:
         return fallback
@@ -9690,7 +9691,13 @@ def _feedback_params(directory=PRIMARY_DIR):
                     energy_sn=get('EnergySN', 1.0e51),
                     eps_max=get('MaxSNEnergyCoupling', 2.0),
                     sn_bound=int(get('SNEnergyConservationOn', 1)),
-                    reheat_bound=int(get('ReheatEnergyConservationOn', 0)))
+                    # capped_eta_reheat() in src/model_misc.h gates the mass-loading
+                    # cap on SNEnergyConservationOn, the same switch as the ejection
+                    # coupling -- there is no separate ReheatEnergyConservationOn.
+                    # Reading one would silently default to 0 and draw analytic
+                    # curves without a cap the model does apply, which shows up as
+                    # a spurious offset at high V_vir and high z.
+                    reheat_bound=int(get('SNEnergyConservationOn', 1)))
 
 
 # FIRE (Muratov et al. 2015) critical circular velocity separating the two
@@ -9736,124 +9743,284 @@ def _eject_per_star(vvir, z, p):
     return np.where(e_fb > e_lift, (e_fb - e_lift) / (0.5 * v ** 2), np.nan)
 
 
+def _log10_tick_formatter(decimals=1):
+    """Label a log-scaled axis with the log10 of the tick position.
+
+    The axes are log-scaled and the labels say log10(...), so the numbers
+    printed must be the exponents (-1, 0, 1, 2), not the values (0.1, 1, 10).
+    *decimals* is fixed rather than per-tick so a set like 1.2, 1.4, 1.6, 1.8,
+    2.0 does not render its one integral member as a bare "2".
+    """
+    def fmt(x, _pos):
+        return '' if x <= 0 else f'{np.log10(x):.{decimals}f}'
+    return FuncFormatter(fmt)
+
+
 def plot_24_mass_loading_vs_velocity(primary, vanilla):
     """
-    Supernova feedback scalings against halo virial velocity.
+    Supernova mass loading and ejection against halo virial velocity.
 
-    Panel (a): the mass-loading factor eta_reheat, with the model medians at
-    z = 0 and the observed outflow compilation.
-    Panel (b): the ejected-to-formed mass ratio mdot_eject / mdot_*, which
-    falls to zero above a redshift-independent threshold in V_vir.
+    Both panels show quantities MEASURED from SAGE26 at several redshifts, with
+    the analytic expressions as thin reference lines.  Measured rather than
+    analytic is the point: Major Comment 2 was "I cannot reproduce the model's
+    stated behaviour from the equations", so a curve that satisfies the algebra
+    by construction answers nothing.  What the panels demonstrate is that the
+    code reproduces the equations, including where the energy bound departs
+    from them.
 
-    Both panels show the code expressions evaluated at several redshifts, with
-    parameters read from the run header.
+    Panel (a): eta_reheat, the stored MassLoading, which is the value actually
+    applied after the reheating bound.  It rises with redshift as (1+z)^1.25.
+
+    Panel (b): mdot_eject / mdot_*, reconstructed per galaxy from the stored
+    MassLoading, V_vir and the snapshot redshift, exactly as
+    compute_sn_feedback() evaluates it.  It falls to zero at the SAME
+    V_vir = V_SN sqrt(eps_halo/eps_disk) at every redshift, because f cancels
+    between the feedback energy and the lifting energy.
+
+    The contrast between the two panels is the figure's argument: mass loading
+    is strongly redshift dependent, the ejection threshold is not.
+
+    Not captured in panel (b): ejection is additionally limited to the gas
+    present in the CGM or hot reservoir, which depends on reservoir state at the
+    timestep and cannot be reconstructed from a snapshot.  The measured curve is
+    therefore an upper bound at low V_vir.
     """
     print('Plot 24: Mass loading and ejection vs virial velocity')
 
     p = _feedback_params()
     esn = _sn_energy_per_mass_kms2(p)
     v_eject = np.sqrt(p['eps_halo'] * esn / p['eps_disk'])
-    redshifts = [0.0, 1.0, 2.0, 4.0, 6.0]
-    vgrid = np.logspace(np.log10(9.0), np.log10(600.0), 500)
-
-    cmap = plt.get_cmap('viridis')
-    colours = [cmap(x) for x in np.linspace(0.05, 0.85, len(redshifts))]
-
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(13.5, 5.4))
-
-    # ---------------- Panel (a): mass loading ----------------
-    for z, c in zip(redshifts, colours):
-        axL.plot(vgrid, _eta_reheat(vgrid, z, p), color=c, lw=2.4,
-                 label=rf'$z = {z:.0f}$', zorder=Z_MODEL_LINE)
-
-    # Lower edge of the measured curves. load_model() already applies the
-    # MIN_PARTICLES cut, but between 20 and ~30 particles the recorded V_vir and
-    # Mvir cease to be mutually consistent and the measured eta falls away from
-    # the scaling by up to an order of magnitude (a factor 17 by V_vir = 12 km/s).
-    # The binned medians are therefore truncated where the measurement is
+    z_targets = [0.0, 1.0, 2.0, 4.0, 6.0]
+    # Lower edge of the measured curves.  load_model() applies the MIN_PARTICLES
+    # cut, but between 20 and ~30 particles the recorded V_vir and Mvir cease to
+    # be mutually consistent and the measured eta falls away from the scaling by
+    # up to an order of magnitude.  Truncate where the measurement is
     # trustworthy rather than where galaxies merely exist.
     V_MEASURED_MIN = 24.0
-    vbins = np.logspace(np.log10(V_MEASURED_MIN), np.log10(400.0), 20)
-    w = (primary['MassLoading'] > 0) & (primary['Vvir'] > 0)
-    plot_binned_median_1sigma(
-        axL, primary['Vvir'][w], primary['MassLoading'][w], vbins,
-        color='steelblue', label='SAGE26, Millennium ($z=0$)',
-        alpha=0.25, lw=3.2, min_count=50,
-        zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE,
-    )
+    vbins = np.logspace(np.log10(V_MEASURED_MIN), np.log10(600.0), 24)
 
-    # microUchuu resolves a decade further down in V_vir than Millennium, so it
-    # shows where the adopted scaling actually operates in the dwarf regime.
-    if model_files_exist(MINIUCHUU_DIR):
-        mu = load_model(MINIUCHUU_DIR, snapshot=f'Snap_{MINIUCHUU_LAST_SNAP}',
-                        properties=['MassLoading', 'Vvir'])
-        if mu:
-            wm = (mu['MassLoading'] > 0) & (mu['Vvir'] > 0)
+    cmap = plt.get_cmap('plasma')
+    colours = [cmap(x) for x in np.linspace(0.05, 0.85, len(z_targets))]
+
+    # figsize and fonts match the other 1x2 figures (plot_9, plot_7b), which
+    # take the stylesheet raw at this canvas size.  A smaller canvas with the
+    # same absolute font sizes renders the text larger relative to the axes.
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(15, 6))
+
+    # Each simulation has its own snapshot grid, so a target redshift maps to a
+    # different actual z in each.  Two targets can also collide on one snapshot
+    # if the grid is coarse at high z, which would draw two identical curves
+    # under different labels.  Report the mapping and drop duplicates, so a
+    # coincidence in the snapshot grid is never mistaken for a physical result.
+    _drawn_snaps = {}
+    _sat_marks = []
+    print('  Fig. 8 redshift mapping (target -> snapshot -> actual z):')
+
+    # The secondary simulation picks the redshift and the primary is matched to
+    # it, rather than both snapping independently to the nominal target.  Taking
+    # the nearest snapshot to the target in each simulation separately put the
+    # two curves labelled z=6 at z=6.197 (Millennium) and z=5.722 (miniUchuu):
+    # eta goes as (1+z)^alpha, so that Dz=0.475 alone offsets them by 8%, which
+    # reads as a resolution difference and is nothing of the kind.  Millennium
+    # Snap_19 sits at z=5.724, so matching on the secondary's redshift brings
+    # the pair to Dz=0.002.  The analytic curve is drawn at the matched primary
+    # redshift for the same reason.
+    _have_secondary = model_files_exist(MINIUCHUU_DIR)
+
+    for z_t, c in zip(z_targets, colours):
+        if _have_secondary:
+            snap2 = _snap_nearest_z(MINIUCHUU_REDSHIFTS, z_t)
+            z_ref = MINIUCHUU_REDSHIFTS[snap2]
+        else:
+            snap2, z_ref = None, z_t
+        snap = _snap_nearest_z(REDSHIFTS, z_ref)
+        z = REDSHIFTS[snap]
+        if snap in _drawn_snaps:
+            print(f'    z={z_t:.0f} -> Snap_{snap} -> z={z:.3f}  SKIPPED, same'
+                  f' snapshot as target z={_drawn_snaps[snap]:.0f}')
+            continue
+        _drawn_snaps[snap] = z_t
+        # Label the redshift actually plotted, not the target it was chosen
+        # from, so a matched pair at z=5.72 is never printed as "z = 6".
+        _zlab = (rf'$z = {z:.0f}$' if abs(z - round(z)) < 0.1
+                 else rf'$z = {z:.1f}$')
+        print(f'    z={z_t:.0f} -> Snap_{snap} -> z={z:.3f} (primary)')
+
+        # Where the ejection coupling saturates.  sn_energy_coupling() caps
+        # eps_halo*f at eps_max, so E_FB never exceeds the whole supernova
+        # budget -- but Eq. 14 as printed is unbounded, and left of these ticks
+        # the plotted curve is the capped value, not what the equation gives.
+        # Collected here and drawn after set_xlim(): tested against the axis
+        # limits in-loop, the first redshift is compared with matplotlib's
+        # default (0, 1) and silently dropped.
+        if p['sn_bound']:
+            _fc = p['eps_max'] / p['eps_halo']
+            _fz = (1.0 + z) ** p['alpha_z']
+            _sat_marks.append(
+                ((60.0 * (_fz / _fc)) if _fz >= _fc
+                 else 60.0 * (_fc / _fz) ** (-1.0 / 3.2), c))
+        # No analytic reference curves in either panel.  Both quantities follow
+        # their scalings by construction -- capped_eta_reheat() stores exactly
+        # eps_disk*f, and the ejected mass is reconstructed from it -- so an
+        # overlaid analytic curve restates the input rather than testing it.
+        try:
+            d = load_model(PRIMARY_DIR, snapshot=f'Snap_{snap}',
+                           properties=['MassLoading', 'Vvir'])
+        except Exception:                                       # noqa: BLE001
+            continue
+        vv = np.asarray(d['Vvir'], float)
+        eta = np.asarray(d['MassLoading'], float)
+        w = (eta > 0) & (vv > 0)
+        if w.sum() < 100:
+            continue
+        plot_binned_median_1sigma(
+            axL, vv[w], eta[w], vbins, color=c,
+            label=_zlab, alpha=0.18, lw=2.2, min_count=50,
+            zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE)
+
+        # Second simulation, dashed and without a shaded band so that ten
+        # curves per panel stay readable.  MINIUCHUU_DIR must point at the
+        # miniUchuu production output for the label below to be accurate.
+        if snap2 is not None:
+            z2 = z_ref
+            # Residual mismatch after matching.  eta goes as (1+z)^alpha, so
+            # report what the leftover Dz is worth: anything above a couple of
+            # per cent is a redshift effect, not resolution.
+            _off = 100.0 * (((1.0 + z2) / (1.0 + z)) ** p['alpha_z'] - 1.0)
+            print(f'    z={z_t:.0f} -> Snap_{snap2} -> z={z2:.3f} (miniUchuu)'
+                  f'   dz={z2 - z:+.3f} vs primary'
+                  + (f'  ==> {_off:+.1f}% offset in eta from redshift alone'
+                     if abs(_off) > 2.0 else '  (matched)'))
+            try:
+                d2 = load_model(MINIUCHUU_DIR, snapshot=f'Snap_{snap2}',
+                                properties=['MassLoading', 'Vvir'])
+                v2 = np.asarray(d2['Vvir'], float)
+                e2 = np.asarray(d2['MassLoading'], float)
+                w2 = (e2 > 0) & (v2 > 0)
+                if w2.sum() >= 100:
+                    plot_binned_median_1sigma(
+                        axL, v2[w2], e2[w2], vbins, color=c, label=None,
+                        ls='--', alpha=0.0, lw=1.8, min_count=50,
+                        zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE)
+                    c2 = p['eps_halo'] * _fire_scaling(v2[w2], MINIUCHUU_REDSHIFTS[snap2], p)
+                    if p['sn_bound']:
+                        c2 = np.minimum(c2, p['eps_max'])
+                    ef2 = c2 * 0.5 * esn
+                    el2 = 0.5 * e2[w2] * v2[w2] ** 2
+                    j2 = np.where(ef2 > el2, (ef2 - el2) / (0.5 * v2[w2] ** 2), np.nan)
+                    k2 = np.isfinite(j2) & (j2 > 0)
+                    if k2.sum() > 100:
+                        plot_binned_median_1sigma(
+                            axR, v2[w2][k2], j2[k2], vbins, color=c, label=None,
+                            ls='--', alpha=0.0, lw=1.8, min_count=50,
+                            zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE)
+            except Exception:                                   # noqa: BLE001
+                pass
+
+        # mdot_eject / mdot_*, reconstructed exactly as the code evaluates it,
+        # but using the STORED eta rather than the analytic one, so the
+        # reheating bound is included as applied.
+        coupling = p['eps_halo'] * _fire_scaling(vv[w], z, p)
+        if p['sn_bound']:
+            coupling = np.minimum(coupling, p['eps_max'])
+        e_fb = coupling * 0.5 * esn
+        e_lift = 0.5 * eta[w] * vv[w] ** 2
+        ej = np.where(e_fb > e_lift, (e_fb - e_lift) / (0.5 * vv[w] ** 2), np.nan)
+        ok = np.isfinite(ej) & (ej > 0)
+        if ok.sum() > 100:
             plot_binned_median_1sigma(
-                axL, mu['Vvir'][wm], mu['MassLoading'][wm], vbins,
-                color='firebrick', label=r'SAGE26, microUchuu ($z=0$)', ls='--',
-                alpha=0.20, lw=3.0, min_count=50,
-                zorder_fill=Z_MODEL_BAND_ALT, zorder_line=Z_MODEL_LINE_ALT,
-            )
+                axR, vv[w][ok], ej[ok], vbins, color=c, label=None,
+                alpha=0.18, lw=2.2, min_count=50,
+                zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE)
 
+    # observations, left panel only
+    obs_handles = []
     for fname, marker, lbl in [('Chisholm_17_ml.csv', 'o', 'Chisholm+17'),
                                ('Heckman_15_ml.csv', 'X', 'Heckman+15'),
                                ('Rupke_05_ml.csv', 's', 'Rupke+05'),
                                ('Sugahara_17_ml.csv', 'd', 'Sugahara+17')]:
-        path = os.path.join(OBS_DIR, 'outflows', fname)
-        if not os.path.exists(path):
+        fp = os.path.join('./data/outflows', fname)
+        if not os.path.exists(fp):
             continue
-        d = pd.read_csv(path, header=None, delimiter='\t')
-        axL.scatter(d[0], d[1], marker=marker, s=45, color='k',
-                    edgecolors='k', linewidths=1.0, facecolors='gray',
-                    alpha=0.6, label=lbl, zorder=Z_OBS)
+        try:
+            # these .csv files are whitespace/tab separated despite the suffix
+            dd = np.loadtxt(fp, unpack=True)
+        except Exception:                                       # noqa: BLE001
+            continue
+        h = axL.scatter(dd[0], dd[1], marker=marker, s=45, color='k',
+                        alpha=0.6, label=lbl, zorder=Z_OBS)
+        obs_handles.append(h)
 
     axL.axvline(FIRE_V_CRIT, color='0.55', ls=':', lw=1.4, zorder=1)
-    axL.annotate(r'$V_{\rm crit}$', xy=(FIRE_V_CRIT, 1.6e3), xytext=(3, 0),
-                 textcoords='offset points', color='0.45', fontsize=9.5, va='top')
-    axL.set_xscale('log')
-    axL.set_yscale('log')
-    axL.set_xlim(9, 600)
-    axL.set_ylim(0.05, 3e3)
-    axL.set_xlabel(r'$V_{\mathrm{vir}}\ [\mathrm{km\ s^{-1}}]$')
-    axL.set_ylabel(r'$\eta_{\mathrm{reheat}} = \dot{m}_{\mathrm{reheat}} / \dot{m}_{*}$')
-    axL.set_title('(a) mass loading', loc='left')
+    # Keep this inside axL's y-range: it was pinned at 1.6e3 and disappeared
+    # when the limit came down to 500.
+    # In-panel annotations take the legend size, not font.size: at the
+    # stylesheet default (20) they render as large as the axis labels and
+    # dominate the panel.  Still stylesheet-driven, just the smaller of the
+    # two values it defines.
+    _ann_fs = plt.rcParams['legend.fontsize']
+    axL.annotate(rf'$V_{{\rm vir}}={FIRE_V_CRIT:.0f}$ km s$^{{-1}}$',
+                 xy=(FIRE_V_CRIT, 260), xytext=(3, 0), fontsize=_ann_fs,
+                 textcoords='offset points', color='0.4')
+    axR.axvline(v_eject, color='crimson', ls='--', lw=1.4, zorder=1)
+    axR.annotate(rf'$\dot{{E}}_{{\rm FB}}=\dot{{E}}_{{\rm lift}}$'
+                 '\n' rf'$V_{{\rm vir}}={v_eject:.0f}$ km s$^{{-1}}$',
+                 xy=(v_eject, 9.0e2), xytext=(-6, 0), ha='right',
+                 fontsize=_ann_fs,
+                 textcoords='offset points', color='crimson')
 
-    handles, labels = axL.get_legend_handles_labels()
-    zset = ({rf'$z = {z:.0f}$' for z in redshifts}
-            | {'SAGE26, Millennium ($z=0$)', r'SAGE26, microUchuu ($z=0$)'})
-    mh = [h for h, l in zip(handles, labels) if l in zset]
-    ml = [l for l in labels if l in zset]
-    oh = [h for h, l in zip(handles, labels) if l not in zset]
-    ol = [l for l in labels if l not in zset]
-    leg = _standard_legend(axL, loc='upper right', handles=mh, labels=ml, fontsize=9)
-    axL.add_artist(leg)
-    _standard_legend(axL, loc='lower left', handles=oh, labels=ol, fontsize=9)
-
-    # ---------------- Panel (b): ejection ----------------
-    for z, c in zip(redshifts, colours):
-        axR.plot(vgrid, _eject_per_star(vgrid, z, p), color=c, lw=2.4,
-                 label=rf'$z = {z:.0f}$', zorder=Z_MODEL_LINE)
-
-    axR.axvline(v_eject, color='crimson', ls='--', lw=1.6, zorder=1)
-    axR.annotate(rf'$\dot{{E}}_{{\rm FB}} = \dot{{E}}_{{\rm lift}}$'
-                 '\n' rf'$V_{{\rm vir}} = {v_eject:.0f}$ km s$^{{-1}}$',
-                 xy=(v_eject, 1.6e3), xytext=(-8, 0), textcoords='offset points',
-                 color='crimson', fontsize=9.5, ha='right', va='top')
-    axR.set_xscale('log')
-    axR.set_yscale('log')
-    axR.set_xlim(9, 600)
-    axR.set_ylim(1e-2, 3e3)
-    axR.set_xlabel(r'$V_{\mathrm{vir}}\ [\mathrm{km\ s^{-1}}]$')
-    axR.set_ylabel(r'$\dot{m}_{\mathrm{eject}} / \dot{m}_{*}$')
-    axR.set_title('(b) ejection', loc='left')
-    _standard_legend(axR, loc='lower left', fontsize=9)
+    for a in (axL, axR):
+        a.set_xscale('log'); a.set_yscale('log')
+        a.set_xlabel(r'$\rm \log_{10}\,V_{vir}\,[km\,s^{-1}]$')
+        # Plain values on both axes rather than 10^n, matching the rest of the
+        # paper.  The explicit tick lists below control which ones appear.
+        a.xaxis.set_major_formatter(_log10_tick_formatter(1))
+        a.yaxis.set_major_formatter(_log10_tick_formatter(0))
+        a.set_xticks([], minor=True)
+        a.set_yticks([], minor=True)
+    axL.set_xlim(15, 600); axL.set_ylim(0.05, 500)
+    axL.set_xticks([10**e for e in (1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6)])
+    axL.set_yticks([10**e for e in (-1, 0, 1, 2)])
+    axR.set_xlim(20, 200); axR.set_ylim(1e-2, 1e4)
+    for _v, _c in _sat_marks:
+        if 20 <= _v <= 200:
+            axR.axvline(_v, ymin=0.0, ymax=0.05, color=_c, lw=2.4,
+                        solid_capstyle='butt', zorder=Z_MODEL_LINE)
+    axR.set_xticks([10**e for e in (1.4, 1.6, 1.8, 2.0, 2.2)])
+    axR.set_yticks([10**e for e in (-2, -1, 0, 1, 2, 3, 4)])
+    # Both are mass ratios -- Msun of gas per Msun of stars formed -- so they
+    # are dimensionless and carry no unit in brackets.
+    # \eta must stay OUTSIDE \rm: mathtext has no Greek glyph in the roman
+    # font, so "\rm \eta" renders as a fallback box.  Roman subscript only.
+    # \rm goes after the \eta so the Greek stays italic and everything from the
+    # "=" onwards is upright, matching axR.
+    axL.set_ylabel(r'$\rm \log_{10}\,\dot{m}_{reheat}/\dot{m}_{*}$')
+    axR.set_ylabel(r'$\rm \log_{10}\,\dot{m}_{eject}/\dot{m}_{*}$')
+    # No hardcoded fontsize anywhere in this figure: sizes come from
+    # kieren_cohare_palatino_sty.mplstyle (legend.fontsize 14, font.size 20)
+    # so this figure matches every other panel in the paper.
+    # Simulation key lives in the ejection panel, lower left, where nothing is
+    # drawn.  The left panel already carries the redshift key (upper right) and
+    # the observations key (lower left), and a third block there is one too
+    # many.  Proxy artists, since every measured curve is drawn label=None.
+    if model_files_exist(MINIUCHUU_DIR):
+        axR.plot([], [], '-',  color='0.3', lw=2.2, label='Millennium')
+        axR.plot([], [], '--', color='0.3', lw=1.8, label='miniUchuu')
+    model_handles = [h for h in axL.get_legend_handles_labels()[0]
+                     if h not in obs_handles]
+    model_labels = [l for h, l in zip(*axL.get_legend_handles_labels())
+                    if h not in obs_handles]
+    leg1 = _standard_legend(axL, loc='upper right',
+                           handles=model_handles, labels=model_labels)
+    axL.add_artist(leg1)
+    if obs_handles:
+        _standard_legend(axL, loc='lower left', handles=obs_handles,
+                         labels=[h.get_label() for h in obs_handles])
+    _standard_legend(axR, loc='lower left')
 
     fig.tight_layout()
     outputFile = os.path.join(OUTPUT_DIR, 'MassLoading_vs_Velocity' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
-    print(f'Saved file to {outputFile}\n')
-
 
 # ======================== GAS RATIO PLOTS =========================
 
@@ -11034,6 +11201,156 @@ EVOLUTION_PLOTS = {
 # =====================================================================
 # PLOT 99: REFEREE DIAGNOSTICS -- prints numbers, draws nothing
 # =====================================================================
+
+# ================= PLOT 37: CGM MASS FRACTION AND BARYON CENSUS =================
+
+def plot_37_cgm_census():
+    """
+    CGM mass fraction and the baryon census versus halo mass.
+
+    Answers referee Major Comment 9: "no CGM property is ever compared to data...
+    Even a plot of CGM mass fraction versus halo mass and redshift, with a sanity
+    check against the baryon census, would help."
+
+    Three panels:
+      1. f_CGM  = m_CGM / M_vir            vs M_vir, several redshifts
+      2. f_hot  = m_hot / M_vir            vs M_vir, with observations
+      3. total baryon budget / (f_b M_vir) vs M_vir, the census check
+
+    Millennium is drawn solid, microUchuu dashed where its output is available.
+
+    OBSERVATIONS.  Panel 2 is the panel with a direct observational counterpart:
+    hot-gas fractions of groups and clusters from X-ray measurements.  No such
+    file ships with the repository, so the overlay is switched on by dropping a
+    whitespace table at OBS_HOTFRAC below with columns
+
+        log10(M_500/Msun)   f_gas   err_lo   err_hi
+
+    Sensible sources are Gonzalez et al. (2013), Lovisari et al. (2015) and
+    Eckert et al. (2016).  Nothing is plotted if the file is absent -- the
+    numbers are deliberately not hard-coded here, since transcribing them by
+    hand is how errors get in.
+    """
+    print('Plot 37: CGM mass fraction and baryon census')
+
+    OBS_HOTFRAC = './data/Gas/hot_gas_fraction_groups.dat'
+
+    z_targets = [0.0, 1.0, 2.0, 3.0, 4.0]
+    reservoirs = ('CGMgas', 'HotGas', 'ColdGas', 'StellarMass', 'EjectedMass')
+    props = list(reservoirs) + ['Mvir', 'Type']
+    edges = np.arange(10.4, 14.2, 0.2)
+    ctr = 0.5 * (edges[:-1] + edges[1:])
+    colours = plt.get_cmap('plasma')(np.linspace(0.0, 0.82, len(z_targets)))
+
+    sims = [('Millennium', PRIMARY_DIR, REDSHIFTS, MASS_CONVERT, BARYON_FRAC, '-')]
+    if model_files_exist(MINIUCHUU_DIR):
+        # Each simulation must be normalised by its OWN baryon fraction --
+        # Millennium uses 0.17 and microUchuu 0.15 (Table 2), so sharing one
+        # value understates the microUchuu census by ~12 per cent and would
+        # fabricate a difference between the two simulations.
+        _mu_hdr = _read_sim_header(MINIUCHUU_DIR)
+        _mu_fb = _mu_hdr.get('baryon_frac', BARYON_FRAC) if _mu_hdr else BARYON_FRAC
+        sims.append(('microUchuu', MINIUCHUU_DIR, MINIUCHUU_REDSHIFTS,
+                     MINIUCHUU_MASS_CONVERT, _mu_fb, '--'))
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4.6))
+
+    fcgm_max = 0.0
+    for sim_name, sim_dir, zlist, mconv, fb, ls in sims:
+        for z_t, col in zip(z_targets, colours):
+            snap = _snap_nearest_z(zlist, z_t)
+            try:
+                d = load_model(sim_dir, snapshot=f'Snap_{snap}', properties=props)
+            except Exception:                                   # noqa: BLE001
+                continue
+            mvir = np.asarray(d['Mvir'], float)
+            cen = (np.asarray(d['Type'], int) == 0) & (mvir > 0)
+            if cen.sum() < 100:
+                continue
+            lm = np.log10(np.where(mvir > 0, mvir, 1.0))
+            res = [np.asarray(d[k], float) for k in reservoirs]
+
+            f_cgm, f_hot, f_tot = [], [], []
+            for lo, hi in zip(edges[:-1], edges[1:]):
+                k = cen & (lm >= lo) & (lm < hi)
+                if k.sum() < 20:
+                    f_cgm.append(np.nan); f_hot.append(np.nan); f_tot.append(np.nan)
+                    continue
+                tot = mvir[k].sum()
+                f_cgm.append(res[0][k].sum() / tot)
+                f_hot.append(res[1][k].sum() / tot)
+                f_tot.append(sum(r[k].sum() for r in res) / tot / fb)
+
+            lab = f'$z={zlist[snap]:.1f}$' if sim_name == 'Millennium' else None
+            axes[0].plot(ctr, f_cgm, ls, color=col, lw=1.9, marker='o', ms=3.2,
+                         label=lab)
+            axes[1].plot(ctr, f_hot, ls, color=col, lw=1.9, marker='o', ms=3.2)
+            axes[2].plot(ctr, f_tot, ls, color=col, lw=1.9, marker='o', ms=3.2)
+            fcgm_max = max(fcgm_max, np.nanmax(f_cgm) if np.any(np.isfinite(f_cgm)) else 0.0)
+
+    # Observational hot-gas fraction: Popesso et al. (2024), eROSITA/eFEDS,
+    # their eq. 4,  f_gas,500 = (2.23 +/- 0.18)e-7 (M500/Msun)^(0.39 +/- 0.02),
+    # calibrated over M500 ~ 5e12 - 5e14 Msun.
+    #
+    # CAVEAT, stated in the caption: the observation is gas within R500 relative
+    # to M500, while the model plots the whole hot reservoir within R_vir
+    # relative to M_vir.  Converting M500 -> M_vir raises the mass by ~1/0.72,
+    # and integrating the gas out to R_vir rather than R500 raises the gas by a
+    # comparable factor, so the two corrections largely cancel and the band is
+    # an approximate rather than an exact comparison.
+    _m500 = np.logspace(np.log10(5e12), np.log10(5e14), 40)
+    _mvir = _m500 / 0.72
+    for _a, _s, _al in ((2.23e-7, 0.39, 0.30),):
+        _lo = (_a - 0.18e-7) * _m500 ** (_s - 0.02)
+        _hi = (_a + 0.18e-7) * _m500 ** (_s + 0.02)
+        axes[1].fill_between(np.log10(_mvir), _lo, _hi, color='0.45',
+                             alpha=_al, lw=0, zorder=Z_OBS,
+                             label='Popesso+24 (eROSITA)')
+    axes[1].legend(fontsize=9, frameon=False, loc='upper left')
+
+    # optional tabulated points, if the user supplies them
+    if os.path.exists(OBS_HOTFRAC):
+        try:
+            o = np.loadtxt(OBS_HOTFRAC)
+            axes[1].errorbar(o[:, 0], o[:, 1], yerr=[o[:, 2], o[:, 3]],
+                             fmt='s', color='k', ms=5, lw=1, alpha=0.7,
+                             zorder=Z_OBS, label='X-ray groups/clusters')
+            axes[1].legend(fontsize=9, frameon=False, loc='upper left')
+        except Exception as exc:                                # noqa: BLE001
+            print(f'  hot-gas fraction observations not plotted: {exc}')
+    else:
+        print(f'  no observational overlay: {OBS_HOTFRAC} absent (see docstring)')
+
+    mshock = np.log10(6.0e11)
+    for a in axes:
+        a.axvline(mshock, color='0.45', ls='--', lw=1.3, zorder=1)
+        a.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M_\odot})$', fontsize=13)
+        a.set_xlim(edges[0], edges[-1])
+        a.tick_params(labelsize=10)
+
+    axes[0].set_ylabel(r'$f_{\rm CGM}=m_{\rm CGM}/M_{\rm vir}$', fontsize=13)
+    axes[0].set_ylim(0.0, max(0.15, 1.08 * fcgm_max))
+    axes[0].text(mshock + 0.06, 0.94 * axes[0].get_ylim()[1],
+                 r'$M_{\rm shock}$', fontsize=10, color='0.35')
+    axes[0].legend(fontsize=10, frameon=False, loc='upper right')
+
+    axes[1].set_ylabel(r'$f_{\rm hot}=m_{\rm hot}/M_{\rm vir}$', fontsize=13)
+    axes[1].set_ylim(0.0, 0.20)
+
+    axes[2].axhline(1.0, color='0.45', ls=':', lw=1.2)
+    axes[2].set_ylabel(r'$(\sum_i m_i)/(f_{\rm b}M_{\rm vir})$', fontsize=13)
+    axes[2].set_ylim(0.3, 1.15)
+
+    if len(sims) > 1:
+        axes[2].plot([], [], '-',  color='0.3', label='Millennium')
+        axes[2].plot([], [], '--', color='0.3', label='microUchuu')
+        axes[2].legend(fontsize=9, frameon=False, loc='lower right')
+
+    fig.tight_layout()
+    outputFile = os.path.join(OUTPUT_DIR, 'CGMCensus' + OUTPUT_FORMAT)
+    save_figure(fig, outputFile)
+
+
 def plot_99_referee_diagnostics():
     """Print every number the referee response needs, labelled by comment.
 
@@ -11087,6 +11404,19 @@ def plot_99_referee_diagnostics():
             else _snap_nearest_z(REDSHIFTS, zt)
         if s not in snaps:
             snaps.append(s)
+
+    # Also load the snapshots Fig. 8 actually plots, matched to the secondary
+    # simulation's grid the same way plot_24 matches them.  Without these the
+    # block 4 table lands on z = 0.51/1.08/3.06/6.20 for a figure drawn at
+    # z = 0.989/2.070/3.866/5.724, and only z = 0 and z = 2.07 can be both
+    # quoted in the text and read off the figure.
+    for zt in (0.0, 1.0, 2.0, 4.0, 6.0):
+        zref = (MINIUCHUU_REDSHIFTS[_snap_nearest_z(MINIUCHUU_REDSHIFTS, zt)]
+                if model_files_exist(MINIUCHUU_DIR) else zt)
+        s = _snap_nearest_z(REDSHIFTS, zref)
+        if s not in snaps:
+            snaps.append(s)
+    snaps.sort(reverse=True)          # descending snapshot = ascending redshift
 
     props = ['StellarMass', 'ColdGas', 'MetalsColdGas', 'SfrDisk', 'SfrBulge',
              'Mvir', 'Vvir', 'VvirPeak', 'Regime', 'FFBRegime', 'CGMgas',
@@ -11228,6 +11558,119 @@ def plot_99_referee_diagnostics():
             print(f'         capped population V_vir: min {v[at_cap].min():.0f}'
                   f'  median {np.median(v[at_cap]):.0f} km/s')
 
+    # Values at fixed V_vir, for the Figure 8 text. eta is the stored
+    # MassLoading (post-bound), and the ejected fraction is reconstructed
+    # exactly as compute_sn_feedback() evaluates it, so both match the figure.
+    print()
+    print('  medians at fixed V_vir -- quote these in the Fig. 8 paragraph')
+    print('  eta = mdot_reheat/mdot_*   eject = mdot_eject/mdot_*  (Msun per Msun of stars)')
+    _p = _feedback_params()
+    _esn = _sn_energy_per_mass_kms2(_p)
+    _vt = (30.0, 50.0, 80.0, 120.0, 160.0)
+    print(f'  {"z":>6}' + ''.join(f'{f"V={vv:.0f}":>18}' for vv in _vt))
+    print(f'  {"":>6}' + ''.join(f'{"eta":>8}{"eject":>10}' for _ in _vt))
+    # Use the SAME snapshots Fig. 8 plots, matched to the secondary simulation's
+    # grid exactly as plot_24 does.  Iterating this block's own snapshot list
+    # instead produced a table at z = 0.51, 1.08, 3.06, 6.20 for a figure drawn
+    # at z = 0.989, 2.070, 3.866, 5.724, so only z = 0 and z = 2.07 could be
+    # quoted in the text and read off the figure.
+    _fig_snaps = []
+    for _zt in (0.0, 1.0, 2.0, 4.0, 6.0):
+        if model_files_exist(MINIUCHUU_DIR):
+            _zref = MINIUCHUU_REDSHIFTS[_snap_nearest_z(MINIUCHUU_REDSHIFTS, _zt)]
+        else:
+            _zref = _zt
+        _s = _snap_nearest_z(REDSHIFTS, _zref)
+        if _s not in _fig_snaps:
+            _fig_snaps.append(_s)
+    for s in _fig_snaps:
+        g = data.get(s)
+        if not g or 'MassLoading' not in g:
+            print(f'  Snap_{s} (z={zof(s):.3f}) not loaded -- add it to the'
+                  ' snapshot list so the table covers every plotted redshift')
+            continue
+        z_ = zof(s)
+        vv_all = (g['VvirPeak'] if 'VvirPeak' in g and g['VvirPeak'].size
+                  else g['Vvir']).astype(float)
+        et_all = g['MassLoading'].astype(float)
+        row = f'  {z_:6.2f}'
+        for vt in _vt:
+            k = (et_all > 0) & (vv_all > 0) & (np.abs(np.log10(vv_all / vt)) < 0.05)
+            if k.sum() < 30:
+                row += f'{"--":>8}{"--":>10}'
+                continue
+            eta_m = float(np.median(et_all[k]))
+            coup = _p['eps_halo'] * _fire_scaling(vt, z_, _p)
+            if _p['sn_bound']:
+                coup = min(coup, _p['eps_max'])
+            e_fb, e_lift = coup * 0.5 * _esn, 0.5 * eta_m * vt * vt
+            ej = (e_fb - e_lift) / (0.5 * vt * vt) if e_fb > e_lift else 0.0
+            row += f'{eta_m:8.1f}{ej:10.0f}'
+        print(row)
+    print('  --> "eject" is not clamped to the available reservoir gas, so it is')
+    print('      an upper bound at low V_vir, as in the right panel of Fig. 8.')
+
+    # Where the energy cap takes over the mass loading.  capped_eta_reheat()
+    # limits eta to eps_max*E_SN/V^2, which carries NO redshift dependence,
+    # while the uncapped FIRE value goes as (1+z)^alpha (V/60)^-1 above the
+    # break.  The cap falls as V^-2 and the FIRE value as V^-1, so they cross,
+    # and above the crossing every redshift lies on the same eta_max(V) curve.
+    # That is the high-z downturn and the merging of adjacent redshifts at
+    # large V_vir -- it needs haloes massive enough to reach these velocities
+    # while z is still high, so it only appears in a large box.
+    # The OTHER clamp: sn_energy_coupling() caps eps_halo*f at eps_max, so E_FB
+    # never exceeds the whole supernova budget.  Distinct from the mass-loading
+    # cap below and it binds far more often -- Eq. 14 as printed is unbounded and
+    # asks for up to 16x the budget in high-z dwarfs.
+    if _p['sn_bound']:
+        _fcrit = _p['eps_max'] / _p['eps_halo']
+        print()
+        print(f'  energy cap on the EJECTION coupling: eps_halo*f <= eps_max'
+              f'  <=>  f <= {_fcrit:.2f}')
+        print('  V_vir below which the coupling saturates, and the SFR it affects:')
+        for s in _fig_snaps + [s for s in snaps if s not in _fig_snaps]:
+            g = data.get(s)
+            if not g or 'Vvir' not in g:
+                continue
+            z_ = zof(s)
+            fz = (1.0 + z_) ** _p['alpha_z']
+            v_sat = (60.0 * (fz / _fcrit) if fz >= _fcrit
+                     else 60.0 * (_fcrit / fz) ** (-1.0 / 3.2))
+            sfr = g['SfrDisk'] + g['SfrBulge']
+            vv = np.asarray(g['Vvir'], float)
+            k = (sfr > 0) & (vv > 0)
+            if k.sum() < 100:
+                continue
+            hit = _p['eps_halo'] * _fire_scaling(vv[k], z_, _p) > _p['eps_max']
+            print(f'    z={z_:5.2f}  saturates for V_vir < {v_sat:6.1f} km/s'
+                  f'   {100 * sfr[k][hit].sum() / sfr[k].sum():6.2f}% of SFR'
+                  f'   {100 * hit.mean():6.2f}% of galaxies')
+        print()
+        print('  energy cap on the mass loading: eta_max = eps_max*E_SN/V^2'
+              f'  = {_p["eps_max"] * _esn:.3g} / V^2   (no z dependence)')
+        print('  above V_cap the FIRE scaling is capped and all redshifts merge:')
+        for zt in (0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0):
+            v_cap = (_p['eps_max'] * _esn
+                     / (_p['eps_disk'] * FIRE_V_CRIT * (1.0 + zt) ** _p['alpha_z']))
+            print(f'    z={zt:4.1f}  V_cap = {v_cap:7.0f} km/s'
+                  f'   eta there = {_p["eps_max"] * _esn / v_cap ** 2:6.2f}')
+        for s in snaps:
+            g = data.get(s)
+            if not g or 'MassLoading' not in g:
+                continue
+            z_ = zof(s)
+            vv_all = (g['VvirPeak'] if 'VvirPeak' in g and g['VvirPeak'].size
+                      else g['Vvir']).astype(float)
+            et_all = g['MassLoading'].astype(float)
+            k = (et_all > 0) & (vv_all > 0)
+            if k.sum() < 50:
+                continue
+            emax = _p['eps_max'] * _esn / vv_all[k] ** 2
+            hit = et_all[k] >= 0.999 * emax
+            print(f'    z={z_:5.2f}  {100 * hit.mean():5.2f}% of galaxies on the cap'
+                  + (f'   V_vir there: median {np.median(vv_all[k][hit]):.0f},'
+                     f' max {vv_all[k][hit].max():.0f} km/s' if hit.any() else ''))
+
     # -----------------------------------------------------------------
     head('5. Dwarf regulation, not shutdown', 'Major 2(g) -- the p17 rewrite')
     if 'ColdGas' in g0:
@@ -11255,15 +11698,32 @@ def plot_99_referee_diagnostics():
         ms = g0['StellarMass']
         sfr = g0['SfrDisk'] + g0['SfrBulge']
         lms = np.log10(np.maximum(ms, 1.0))
+        # Split centrals from satellites: the observational comparisons differ.
+        # All-galaxy fractions compare to the type-split mass functions (Bell+03,
+        # Baldry+12, Moffett+16); centrals-only compares to Geha+12 and Wetzel+12,
+        # which is the relevant test for the dwarf-quiescent problem SAGE16 had.
+        typ = g0['Type'] if 'Type' in g0 else np.zeros(len(ms), dtype=int)
+        cen = (np.asarray(typ, int) == 0)
+        print(f'    {"log m*":>8}{"all":>10}{"centrals":>10}{"satellites":>12}'
+              f'{"N_all":>10}{"f_sat":>8}')
         for c in np.arange(8.25, 12.1, 0.5):
             b = (lms > c - 0.25) & (lms < c + 0.25)
             if b.sum() < 20:
                 continue
             with np.errstate(invalid='ignore', divide='ignore'):
-                ss = np.where(sfr[b] > 0,
-                              np.log10(np.maximum(sfr[b], 1e-30) / ms[b]), -99.0)
-            print(f'    log m* {c:5.2f}   quiescent {100 * np.mean(ss < SSFR_CUT):5.1f}%'
-                  f'   N={int(b.sum())}')
+                ss = np.where(sfr > 0,
+                              np.log10(np.maximum(sfr, 1e-30) / np.maximum(ms, 1.0)),
+                              -99.0)
+            q = ss < SSFR_CUT
+            bc, bs = b & cen, b & ~cen
+            fa = 100 * np.mean(q[b])
+            fc = 100 * np.mean(q[bc]) if bc.sum() >= 20 else np.nan
+            fs = 100 * np.mean(q[bs]) if bs.sum() >= 20 else np.nan
+            print(f'    {c:8.2f}{fa:9.1f}%{fc:9.1f}%{fs:11.1f}%'
+                  f'{int(b.sum()):10d}{bs.sum()/b.sum():8.2f}')
+        print('    --> all-galaxy fractions compare to the type-split mass')
+        print('        functions; centrals-only is the test for the dwarf')
+        print('        quiescent problem (Geha+12, Wetzel+12).')
 
     # -----------------------------------------------------------------
     head('7. Cold stream fraction vs halo mass',
@@ -11357,8 +11817,8 @@ def plot_99_referee_diagnostics():
                  (2.0, 2.5), (2.5, 3.0), (3.0, 3.5), (3.5, 4.5), (4.5, 5.5),
                  (5.5, 6.5), (6.5, 7.5), (7.5, 8.5), (8.5, 9.5), (9.5, 12.0)]
         print(f'  {"z bin":>11}{"N pts":>7}{"med|off|":>10}{"RMS":>7}{"max":>7}'
-              f'{"   obs-obs median":>18}')
-        every, rows = [], []
+              f'{"SAGE16(N,floor)":>18}{"  obs-obs":>11}')
+        every, rows, every_v = [], [], []
         for lo, hi in zbins:
             s = _snap_for_z(REDSHIFTS, 0.5 * (lo + hi)) if '_snap_for_z' in globals() \
                 else _snap_nearest_z(REDSHIFTS, 0.5 * (lo + hi))
@@ -11382,6 +11842,47 @@ def plot_99_referee_diagnostics():
                     if abs(x[j] - lm) > 0.15 or not np.isfinite(phi[j]) or phi[j] < -6.3:
                         continue
                     offs.append(phi[j] - lp)
+
+            # The same measurement against SAGE16.  Without it the table states
+            # how close SAGE26 sits to the data but not that it is closer than
+            # the model it replaces, which is what the SMF grid is showing.
+            # Paired against the SAME observational points SAGE26 was scored
+            # on.  Scoring each model only where it has galaxies flatters
+            # whichever one fails by producing nothing: SAGE16's SMF drops below
+            # the density floor at high z, so those points would be skipped
+            # rather than counted as large offsets, and SAGE16 would appear to
+            # beat SAGE26 in exactly the bins where it is worst.  Points SAGE16
+            # cannot reach are counted separately (n_floor) instead of dropped.
+            offs_v, n_floor = [], 0
+            try:
+                dv = load_model(VANILLA_DIR, snapshot=f'Snap_{s}',
+                                properties=['StellarMass'])
+                msv = dv['StellarMass'][dv['StellarMass'] > 0]
+                if msv.size >= 50:
+                    xv, phiv, _ = mass_function(np.log10(msv), VOLUME,
+                                                binwidth=0.2, mass_range=(7.0, 13.0))
+                    for o in sets:
+                        for lm, lp in zip(o['log_mass'], o['log_phi']):
+                            if not np.isfinite(lp):
+                                continue
+                            # only points SAGE26 was scored on
+                            j = int(np.argmin(np.abs(x - lm)))
+                            if (abs(x[j] - lm) > 0.15 or not np.isfinite(phi[j])
+                                    or phi[j] < -6.3):
+                                continue
+                            jv = int(np.argmin(np.abs(xv - lm)))
+                            if abs(xv[jv] - lm) > 0.15:
+                                continue              # no matching mass bin
+                            # An empty bin comes back NaN, not as a small phi, so
+                            # the isfinite test has to be counted rather than
+                            # skipped -- it IS the "SAGE16 makes no such
+                            # galaxies" case and is the whole high-z story.
+                            if not np.isfinite(phiv[jv]) or phiv[jv] < -6.3:
+                                n_floor += 1
+                                continue
+                            offs_v.append(phiv[jv] - lp)
+            except Exception:                         # noqa: BLE001
+                pass
             # scatter between the observational determinations themselves, for
             # context: at high z this exceeds the model-data offset, so the
             # latter is not a clean measure of model error
@@ -11407,14 +11908,25 @@ def plot_99_referee_diagnostics():
             every += list(a_)
             oo_med = np.median(oo) if len(oo) >= 5 else None
             oo_s = f'{oo_med:18.2f}' if oo_med is not None else f'{"--":>18}'
+            v_ = np.asarray(offs_v)
+            v_med = np.median(np.abs(v_)) if v_.size >= 5 else None
+            v_s = (f'{v_med:9.2f}({v_.size:3d},{n_floor:2d})' if v_med is not None
+                   else f'{"--":>9}        ')
             print(f'  {f"{lo}-{hi}":>11}{a_.size:7d}{np.median(np.abs(a_)):10.2f}'
-                  f'{np.sqrt(np.mean(a_ ** 2)):7.2f}{np.max(np.abs(a_)):7.2f}{oo_s}')
+                  f'{np.sqrt(np.mean(a_ ** 2)):7.2f}{np.max(np.abs(a_)):7.2f}'
+                  f'{v_s}{oo_s}')
             rows.append((lo, hi, a_.size, np.median(np.abs(a_)),
-                         np.sqrt(np.mean(a_ ** 2)), oo_med))
+                         np.sqrt(np.mean(a_ ** 2)), oo_med, v_med))
+            every_v.extend(offs_v)
         if every:
             e = np.asarray(every)
+            ev = np.asarray(every_v)
             print(f'\n  all bins: N={e.size}  median|offset|={np.median(np.abs(e)):.2f} dex'
                   f'  RMS={np.sqrt(np.mean(e ** 2)):.2f} dex')
+            if ev.size:
+                print(f'  SAGE16 over the same comparisons: '
+                      f'median|offset|={np.median(np.abs(ev)):.2f} dex  '
+                      f'RMS={np.sqrt(np.mean(ev ** 2)):.2f} dex  (N={ev.size})')
             print('  --> quote the median as a median, not as a bound; the RMS is the')
             print('      larger number and is what "matches within X dex" implies.')
 
@@ -11427,31 +11939,106 @@ def plot_99_referee_diagnostics():
             print(r'\centering')
             print(r'\caption{Agreement between the SAGE26 stellar mass function and the '
                   r'observational compilation of \Fig{fig:smf_grid}, per redshift bin. '
-                  r'$N_{\rm obs}$ is the number of published data points in the bin, '
-                  r'not a galaxy count. '
+                  r'$N_{\rm obs}$ is the number of model--observation comparisons '
+                  r'in the bin, not a galaxy count. '
                   r'$|\Delta|$ is the median absolute difference in $\log_{10}\phi$ '
                   r'between the model and every observational point in that bin, and '
+                  r'$|\Delta|_{\rm C16}$ is the same quantity for SAGE16 over the '
+                  r'identical set of comparisons, and '
                   r'$\sigma_{\rm obs}$ is the median absolute difference between '
                   r'independent observational determinations at matched stellar mass. '
                   r'Above $z\simeq4.5$ the observations differ from one another by as '
                   r'much as the model differs from them.}')
             print(r'\label{tab:smf_offsets}')
-            print(r'\begin{tabular}{lrccc}')
+            print(r'\begin{tabular}{lrcccc}')
             print(r'\hline')
             print(r'Redshift & $N_{\rm obs}$ & median $|\Delta|$ & RMS $\Delta$ & '
+                  r'$|\Delta|_{\rm C16}$ & '
                   r'$\sigma_{\rm obs}$ \\')
-            print(r' & & (dex) & (dex) & (dex) \\')
+            print(r' & & (dex) & (dex) & (dex) & (dex) \\')
             print(r'\hline')
-            for lo, hi, n, med, rms, oo in rows:
+            for lo, hi, n, med, rms, oo, vmed in rows:
                 oos = f'{oo:.2f}' if oo is not None else r'\nodata'
-                print(rf'${lo}<z<{hi}$ & {n} & {med:.2f} & {rms:.2f} & {oos} \\')
+                vs = f'{vmed:.2f}' if vmed is not None else r'\nodata'
+                print(rf'${lo}<z<{hi}$ & {n} & {med:.2f} & {rms:.2f} & {vs} & {oos} \\')
             print(r'\hline')
+            _allv = (rf'{np.median(np.abs(ev)):.2f}' if ev.size else r'\nodata')
             print(rf'All & {e.size} & {np.median(np.abs(e)):.2f} & '
-                  rf'{np.sqrt(np.mean(e ** 2)):.2f} & \nodata \\')
+                  rf'{np.sqrt(np.mean(e ** 2)):.2f} & {_allv} & \nodata \\')
             print(r'\hline')
             print(r'\end{tabular}')
             print(r'\end{table}')
             print('  ' + '-' * 70)
+
+    # ---------------------------------------------------------------
+    head('12. CGM mass fraction and the baryon census',
+         'Major 9 -- "even a plot of CGM mass fraction versus halo mass and '
+         'redshift, with a sanity check against the baryon census, would help"')
+    reservoirs = ('CGMgas', 'HotGas', 'ColdGas', 'StellarMass', 'EjectedMass')
+    print(f'  {"z":>5}{"logMvir":>9}{"N":>8}{"f_CGM":>8}{"f_hot":>8}'
+          f'{"sum/f_b":>9}')
+    for z_t in (0.0, 1.0, 2.0, 3.0, 4.0):
+        s = _snap_nearest_z(REDSHIFTS, z_t)
+        try:
+            d = load_model(PRIMARY_DIR, snapshot=f'Snap_{s}',
+                           properties=list(reservoirs) + ['Mvir', 'Type'])
+        except Exception:                                   # noqa: BLE001
+            continue
+        mvir = np.asarray(d['Mvir'], float)
+        cen = (np.asarray(d['Type'], int) == 0) & (mvir > 0)
+        lm = np.log10(np.where(mvir > 0, mvir, 1.0))
+        res = [np.asarray(d[k], float) for k in reservoirs]
+        for lo, hi in ((10.5, 11.0), (11.0, 11.5), (11.5, 12.0),
+                       (12.0, 12.5), (12.5, 13.5), (13.5, 15.0)):
+            k = cen & (lm >= lo) & (lm < hi)
+            if k.sum() < 20:
+                continue
+            tot = mvir[k].sum()
+            print(f'  {REDSHIFTS[s]:5.2f}{0.5*(lo+hi):9.2f}{k.sum():8d}'
+                  f'{res[0][k].sum()/tot:8.3f}{res[1][k].sum()/tot:8.3f}'
+                  f'{sum(r[k].sum() for r in res)/tot/BARYON_FRAC:9.3f}')
+        print()
+    print('  --> quote the f_CGM peak, where it falls, and the census closure.')
+    print('      The census must use each simulation\'s OWN baryon fraction.')
+
+    # ---------------------------------------------------------------
+    head('13. Millennium vs the second simulation: cosmology or resolution?',
+         'Major 9 -- "how much of the residual difference between the two '
+         'SAGE26 curves is cosmology and how much is resolution"')
+    if not model_files_exist(MINIUCHUU_DIR):
+        print(f'  second simulation not present at {MINIUCHUU_DIR}; skipped')
+    else:
+        _h2 = _read_sim_header(MINIUCHUU_DIR)
+        print(f'  primary  : {PRIMARY_DIR}  box={BOX_SIZE:g}')
+        print(f'  secondary: {MINIUCHUU_DIR}  box={_h2["box_size"]:g}')
+        print('  CHECK BOTH ARE THE PRODUCTION VOLUMES BEFORE QUOTING.\n')
+        x = np.arange(8.0, 12.4, 0.25)
+        curves = []
+        for D, zl, V in ((PRIMARY_DIR, REDSHIFTS, VOLUME),
+                         (MINIUCHUU_DIR, MINIUCHUU_REDSHIFTS, MINIUCHUU_VOLUME)):
+            s = _snap_nearest_z(zl, 0.0)
+            d = load_model(D, snapshot=f'Snap_{s}', properties=['StellarMass'])
+            m = np.asarray(d['StellarMass'], float)
+            m = m[m > 0]
+            n, _ = np.histogram(np.log10(m), bins=np.append(x, x[-1] + 0.25))
+            curves.append(np.log10(np.maximum(n, 1e-10) / V / 0.25))
+        print(f'  {"logM*":>7}{"primary":>10}{"secondary":>11}{"offset":>9}')
+        offs = []
+        for i, lm in enumerate(x):
+            if curves[0][i] > -5.5 and curves[1][i] > -5.5:
+                dd = curves[1][i] - curves[0][i]
+                offs.append((lm, dd))
+                print(f'  {lm:7.2f}{curves[0][i]:10.3f}{curves[1][i]:11.3f}{dd:+9.3f}')
+        if offs:
+            a = np.array(offs)
+            lo_, hi_ = a[a[:, 0] < 10], a[a[:, 0] >= 10]
+            print(f'\n  mean offset below logM*=10 : {lo_[:, 1].mean():+.3f} dex')
+            print(f'  mean offset above logM*=10 : {hi_[:, 1].mean():+.3f} dex')
+            print(f'  slope with logM*           : '
+                  f'{np.polyfit(a[:, 0], a[:, 1], 1)[0]:+.3f} dex/dex')
+            print('  --> a mass-INDEPENDENT offset is cosmology; one that grows')
+            print('      towards low mass is resolution.')
+
 
     print()
     print('=' * 74)
@@ -11486,6 +12073,7 @@ STANDALONE_PLOTS = {
     34: plot_34_hi_mass_function_primary_uchuu,
     35: plot_35_h2_mass_function_primary_uchuu,
     36: plot_36_selection_thresholds_mz,
+    37: plot_37_cgm_census,
     99: plot_99_referee_diagnostics,
 }
 

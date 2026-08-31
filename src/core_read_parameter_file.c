@@ -124,6 +124,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
     run_params->ReIncorporationFactor      = 0.15;
+    run_params->MShockMsun                 = 6.0e11;
     run_params->EnergySN                   = 1.0e51;
     run_params->EtaSN                      = 5.0e-3;
     run_params->Yield                      = 0.025;
@@ -211,6 +212,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("ThreshMajorMerger",          &(run_params->ThreshMajorMerger),          DOUBLE, 0);
     REG("RecycleFraction",            &(run_params->RecycleFraction),            DOUBLE, 0);
     REG("ReIncorporationFactor",      &(run_params->ReIncorporationFactor),      DOUBLE, 0);
+    REG("MShockMsun",                 &(run_params->MShockMsun),                 DOUBLE, 0);
     REG("EnergySN",                   &(run_params->EnergySN),                   DOUBLE, 0);
     REG("EtaSN",                      &(run_params->EtaSN),                      DOUBLE, 0);
     REG("Yield",                      &(run_params->Yield),                      DOUBLE, 0);
