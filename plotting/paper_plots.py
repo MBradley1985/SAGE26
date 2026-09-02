@@ -7849,7 +7849,7 @@ def _load_smf_grid_observations():
             print(f"  COSMOS-Web load error: {e}")
 
     # ------------------------------------------------------------------
-    # 8. Harvey+24  (ECSV: z, log10Mstar, phi, phi_error_low, phi_error_upp)
+    # 8. Harvey+25  (ECSV: z, log10Mstar, phi, phi_error_low, phi_error_upp)
     # ------------------------------------------------------------------
     if HAS_ASTROPY:
         try:
@@ -7875,9 +7875,9 @@ def _load_smf_grid_observations():
                         elo = np.where(lower > 0, lp - np.log10(lower), 0.0)
                         obs.append({'z': float(z_val), 'log_mass': log_m[ok], 'log_phi': lp,
                                      'err_lo': elo, 'err_hi': ehi,
-                                     'label': 'Harvey+24', 'marker': 'H', 'ms': 8})
+                                     'label': 'Harvey+25', 'marker': 'H', 'ms': 8})
         except Exception as e:
-            print(f"  Harvey+24 load error: {e}")
+            print(f"  Harvey+25 load error: {e}")
 
     # ------------------------------------------------------------------
     # 9–12.  High-z ECSV datasets (Stefanon+21, Navarro-Carrera+23,

@@ -86,7 +86,7 @@ static float calculate_molecular_fraction_BR06_from_hstar(float gas_surface_dens
 
     // BR06 parameters from equation (13) for non-interacting galaxies
     // These are the exact values from the paper
-    const float P0 = 4.54e4;    // Reference pressure, K cm-^3 (equation 13)
+    const float P0 = 4.3e4;    // Reference pressure, K cm-^3 (equation 13)
     const float alpha = 0.92;  // Power law index (equation 13)
 
     // BR06 Equation (11): R_mol = (P_ext/P0)^alpha
