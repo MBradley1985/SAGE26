@@ -162,7 +162,7 @@ def read_snapshot_frame(filepath, snap_num, hubble_h, unit_time_in_s, source_lab
 
 
 def collect_matches(file_list, snap_list, hubble_h, unit_time_in_s, id_field,
-                    galaxy_ids, mass_cuts):
+                    galaxy_ids, mass_cuts, edd_ratio_min=None):
     frames = []
     for snap_num in snap_list:
         for fpath in file_list:
@@ -187,6 +187,15 @@ def collect_matches(file_list, snap_list, hubble_h, unit_time_in_s, id_field,
                         mask &= df.get(field, 0) >= lo
                     if hi is not None:
                         mask &= df.get(field, 0) <= hi
+
+                if edd_ratio_min is not None:
+                    if 'BHMaxaccretionRate' in df.columns and 'BHEddingtonRateLimit' in df.columns:
+                        edd = df['BHEddingtonRateLimit']
+                        ratio = df['BHMaxaccretionRate'] / edd.replace(0, np.nan)
+                        mask &= (edd > 0) & (ratio >= edd_ratio_min)
+                        df = df.assign(EddRatio=ratio)
+                    else:
+                        mask &= False
 
             if mask.any():
                 frames.append(df[mask])
@@ -249,6 +258,10 @@ def main():
                    help='Min BHEddingtonRateLimit, in Msun/yr.')
     p.add_argument('--edd-rate-max', type=float, default=None,
                    help='Max BHEddingtonRateLimit, in Msun/yr.')
+    p.add_argument('--edd-ratio-min', type=float, default=None,
+                   help='Min BHMaxaccretionRate / BHEddingtonRateLimit '
+                        '(e.g. 1.0 selects super-Eddington galaxies, i.e. '
+                        'max accretion rate exceeds the Eddington rate).')
     p.add_argument('-o', '--output', default=None,
                    help='Output file path (default: galaxy_lookup_results.txt '
                         'or .csv next to the first input file).')
@@ -260,7 +273,7 @@ def main():
         args.halo_mass_min, args.halo_mass_max, args.stellar_mass_min,
         args.stellar_mass_max, args.bh_mass_min, args.bh_mass_max,
         args.acc_rate_min, args.acc_rate_max, args.edd_rate_min,
-        args.edd_rate_max))
+        args.edd_rate_max, args.edd_ratio_min))
 
     if args.galaxy_id is None and not mass_filters_given:
         print("Error: supply either --galaxy-id or at least one range "
@@ -319,12 +332,14 @@ def main():
         print(f"  mode        : galaxy ID ({id_field}) in {args.galaxy_id}")
     else:
         print(f"  mode        : range cuts (Msun; Msun/yr for rates) -> {mass_cuts}")
+        if args.edd_ratio_min is not None:
+            print(f"  edd ratio   : BHMaxaccretionRate / BHEddingtonRateLimit >= {args.edd_ratio_min}")
     print("=" * 70)
 
     matches = collect_matches(file_list, snap_list, hubble_h,
                               sim['UnitTime_in_s'], id_field,
                               set(args.galaxy_id) if args.galaxy_id else None,
-                              mass_cuts)
+                              mass_cuts, args.edd_ratio_min)
 
     if matches.empty:
         print("No matching galaxies found.")

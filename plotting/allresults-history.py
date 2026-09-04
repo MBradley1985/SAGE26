@@ -222,28 +222,32 @@ if __name__ == '__main__':
     # Read galaxy properties across ALL files
     print(f'Reading galaxy properties from {len(file_list)} files...\n')
 
-    # Initialize arrays indexed by snapshot number
-    StellarMassFull = [0] * (LastSnap + 1)
-    SfrDiskFull = [0] * (LastSnap + 1)
-    SfrBulgeFull = [0] * (LastSnap + 1)
-    BlackHoleMassFull = [0] * (LastSnap + 1)
-    BulgeMassFull = [0] * (LastSnap + 1)
-    HaloMassFull = [0] * (LastSnap + 1)
-    cgmFull = [0] * (LastSnap + 1)
-    hotgasFull = [0] * (LastSnap + 1)
-    fullcgmFull = [0] * (LastSnap + 1)
-    TypeFull = [0] * (LastSnap + 1)
-    OutflowRateFull = [0] * (LastSnap + 1)
-    coldgasFull = [0] * (LastSnap + 1)
-    dT = [0] * (LastSnap + 1)
-    RegimeFull = [0] * (LastSnap + 1)
-    DiskRadiusFull = [0] * (LastSnap + 1)
-    BulgeRadiusFull = [0] * (LastSnap + 1)
-    RvirFull = [0] * (LastSnap + 1)
-    FFBRegimeFull = [0] * (LastSnap + 1)
-    ConcentrationFull = [0] * (LastSnap + 1)
-    MetallicityFull = [0] * (LastSnap + 1)
-    H2GasFull = [0] * (LastSnap + 1)
+    # Initialize arrays indexed by snapshot number. Snapshots outside
+    # [FirstSnap, LastSnap] (e.g. sparse output that only wrote a handful of
+    # snapshots) are left as empty arrays rather than a bare int 0, so any
+    # boolean-mask indexing on an unpopulated snapshot yields an empty
+    # result instead of "TypeError: 'int' object is not subscriptable".
+    StellarMassFull = [np.array([]) for _ in range(LastSnap + 1)]
+    SfrDiskFull = [np.array([]) for _ in range(LastSnap + 1)]
+    SfrBulgeFull = [np.array([]) for _ in range(LastSnap + 1)]
+    BlackHoleMassFull = [np.array([]) for _ in range(LastSnap + 1)]
+    BulgeMassFull = [np.array([]) for _ in range(LastSnap + 1)]
+    HaloMassFull = [np.array([]) for _ in range(LastSnap + 1)]
+    cgmFull = [np.array([]) for _ in range(LastSnap + 1)]
+    hotgasFull = [np.array([]) for _ in range(LastSnap + 1)]
+    fullcgmFull = [np.array([]) for _ in range(LastSnap + 1)]
+    TypeFull = [np.array([]) for _ in range(LastSnap + 1)]
+    OutflowRateFull = [np.array([]) for _ in range(LastSnap + 1)]
+    coldgasFull = [np.array([]) for _ in range(LastSnap + 1)]
+    dT = [np.array([]) for _ in range(LastSnap + 1)]
+    RegimeFull = [np.array([]) for _ in range(LastSnap + 1)]
+    DiskRadiusFull = [np.array([]) for _ in range(LastSnap + 1)]
+    BulgeRadiusFull = [np.array([]) for _ in range(LastSnap + 1)]
+    RvirFull = [np.array([]) for _ in range(LastSnap + 1)]
+    FFBRegimeFull = [np.array([]) for _ in range(LastSnap + 1)]
+    ConcentrationFull = [np.array([]) for _ in range(LastSnap + 1)]
+    MetallicityFull = [np.array([]) for _ in range(LastSnap + 1)]
+    H2GasFull = [np.array([]) for _ in range(LastSnap + 1)]
 
     for snap in range(FirstSnap, LastSnap + 1):
         Snapshot = f'Snap_{snap}'
