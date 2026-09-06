@@ -507,6 +507,9 @@ struct params
     double SfrEfficiency;         /* SF efficiency per dynamical time [dimensionless] */
     double FFBMaxEfficiency;      /* maximum SF efficiency in the feedback-free burst regime [dimensionless] */
     double FFBConcSigma;      // sigma_c for log-normal concentration scatter (ln c); typical ~0.2 (Jing 2000, Bullock+01)
+    double FFBThresholdSlope; // exponent n in M_vir,FFB ~ ((1+z)/10)^n; -6.2 (Li+24) is the default. The
+                              // normalisation is pinned at z=9, so varying this pivots the threshold about
+                              // that redshift; used to test whether the slope is degenerate with alpha_FFB.
     double FeedbackReheatingEpsilon;   /* SN mass-loading: reheated mass per unit stars formed [dimensionless] */
     double FeedbackEjectionEfficiency; /* fraction of SN energy available to eject gas from the halo [dimensionless] */
     double RadioModeEfficiency;   /* radio-mode AGN heating efficiency [dimensionless] */

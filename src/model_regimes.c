@@ -357,7 +357,10 @@ double calculate_ffb_threshold_mass(const double z, const struct params *run_par
 
     const double h = run_params->Hubble_h;
     const double z_norm = (1.0 + z) / 10.0;
-    const double log_Mvir_ffb_code = 0.8 + log10(h) - 6.2 * log10(z_norm);
+    /* FFBThresholdSlope defaults to -6.2 (Li+24). The 10^10.8 normalisation is
+     * pinned at z = 9, where z_norm = 1, so changing the slope pivots the
+     * threshold about that redshift rather than shifting it wholesale. */
+    const double log_Mvir_ffb_code = 0.8 + log10(h) + run_params->FFBThresholdSlope * log10(z_norm);
 
     return pow(10.0, log_Mvir_ffb_code);
 }

@@ -109,6 +109,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->MaxSNEnergyCoupling        = 2.0; /* cap on eps_halo * f_FIRE: E_FB <= m_* eta_SN E_SN (the whole SN budget) */
     run_params->FFBMaxEfficiency           = 0.2;
     run_params->FFBConcSigma               = 0.2;
+    run_params->FFBThresholdSlope          = -6.2;
     run_params->ConcentrationOn            = 3;
     run_params->FeedbackFreeModeOn         = 1;
     run_params->FFBIgnoreRegime            = 1;
@@ -232,6 +233,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("H2RadialRMaxFactor",         &(run_params->H2RadialRMaxFactor),         DOUBLE, 0);
     REG("FFBMaxEfficiency",           &(run_params->FFBMaxEfficiency),           DOUBLE, 0);
     REG("FFBConcSigma",               &(run_params->FFBConcSigma),               DOUBLE, 0);
+    REG("FFBThresholdSlope",          &(run_params->FFBThresholdSlope),          DOUBLE, 0);
     REG("RedshiftPowerLawExponent",   &(run_params->RedshiftPowerLawExponent),   DOUBLE, 0);
     REG("SNEnergyConservationOn",     &(run_params->SNEnergyConservationOn),     INT, 0);
     REG("MaxSNEnergyCoupling",        &(run_params->MaxSNEnergyCoupling),        DOUBLE, 0);
