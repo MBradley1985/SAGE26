@@ -208,7 +208,7 @@ static int scenario_conc_bulge_unlimited(const struct GALAXY *gal, int eddtype,
     // Bulge-to-total stellar mass ratio above a cut -> unlimited.
     if (gal->StellarMass <= 0.0) return 1;
     const double bulge_frac = gal->BulgeMass / gal->StellarMass;
-    return (bulge_frac > 0.5) ? 0 : 1;
+    return (bulge_frac > 0.7) ? 0 : 1;
 }
 
 static int scenario_minor_merger_unlimited(const struct GALAXY *gal, double mass_ratio,
@@ -221,6 +221,15 @@ static int scenario_major_merger_unlimited(const struct GALAXY *gal, double mass
                                             const struct params *run_params)
 {
     return (mass_ratio > run_params->ThreshMajorMerger) ? 0 : 1;
+}
+
+static int scenario_disk_dominated_unlimited(const struct GALAXY *gal, int eddtype,
+                                          const struct params *run_params)
+{
+    // Bulge-to-total stellar mass ratio above a cut -> unlimited.
+    if (gal->StellarMass <= 0.0) return 1;
+    const double bulge_frac = gal->BulgeMass / gal->StellarMass;
+    return (bulge_frac < 0.3) ? 0 : 1;
 }
 
 int accretion_scenario(int scenario_id, const struct GALAXY *gal,
@@ -236,6 +245,7 @@ int accretion_scenario(int scenario_id, const struct GALAXY *gal,
         case 6: return scenario_conc_bulge_unlimited(gal, eddtype, run_params);
         case 7: return scenario_minor_merger_unlimited(gal, mass_ratio, run_params);
         case 8: return scenario_major_merger_unlimited(gal, mass_ratio, run_params);
+        case 9: return scenario_disk_dominated_unlimited(gal, eddtype, run_params);
         default: return run_params->EddingtonLimitOn;         // safe fallback
     }
 }
