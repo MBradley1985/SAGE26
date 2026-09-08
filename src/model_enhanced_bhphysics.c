@@ -190,16 +190,26 @@ static int scenario_first_event_unlimited(const struct GALAXY *gal, int eddtype,
     return gal->QuasarModeEventOccurred ? 1 : 0;
 }
 
+// Vvir cuts computed from SAGE's own Bryan & Norman (1998) Rvir relation
+// (DELTA_VIRT=200, millennium.par cosmology) at z=0. A fixed Mvir cut
+// corresponds to a different physical halo (different Vvir/Tvir) at every
+// redshift, since Rvir shrinks with H(z); Vvir is computed per-halo at its
+// own redshift, so a fixed Vvir cut tracks the same physical regime at all z.
+// The two scenarios run independently (AGNAccretionScheme selects only one
+// per simulation), so they need not share a single pivot value.
+static const double VVIR_SMALL_HALO_KMS = 75.5;   // Vvir at Mvir=10 code units (~1.4e11 Msun)
+static const double VVIR_LARGE_HALO_KMS = 123.5;  // Vvir at Mvir=6e11 Msun (MSHOCK_DB06_MSUN/DEKEL06_M_SHOCK_MSUN)
+
 static int scenario_small_halo_unlimited(const struct GALAXY *gal, int eddtype,
                                           const struct params *run_params)
 {
-    return (gal->Mvir < 10) ? 0 : 1;  //1.4×10^11 Msun
+    return (gal->Vvir < VVIR_SMALL_HALO_KMS) ? 0 : 1;
 }
 
 static int scenario_massive_halo_unlimited(const struct GALAXY *gal, int eddtype,
                                             const struct params *run_params)
 {
-    return (gal->Mvir > 10) ? 0 : 1; //1.4×10^11 Msun
+    return (gal->Vvir > VVIR_LARGE_HALO_KMS) ? 0 : 1;
 }
 
 static int scenario_conc_bulge_unlimited(const struct GALAXY *gal, int eddtype,

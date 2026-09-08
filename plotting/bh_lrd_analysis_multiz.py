@@ -56,6 +56,7 @@ from bh_lrd_analysis import (
     # plotting helpers
     plot_lit_points, lit_legend_handles, lit_z_mask, _line_rotation_deg,
     draw_contours_multirun,
+    jones25_family_masks, jones25_family_mstar_mbh, jones25_family_fbh, plot_jones25_family,
     # constants
     snap_to_z, MILLENNIUM_SNAP_TO_Z, LIT_Z_TOL,
     LRD_BHAR_DEFAULT, LRD_BHAR_ALT, LRD_FBHM_THRESH, SEED_GROWTH_THRESHOLD,
@@ -65,6 +66,7 @@ from bh_lrd_analysis import (
     PANEL_E_XLIM, PANEL_E_YLIM, PANEL_F_XLIM, PANEL_F_YLIM,
     # literature tables
     PANG26, MATHEE24, LABBE25, FURTAK23, LIN25,
+    KOCEVSKI23, HARIKANE23, MAIOLINO23, KOCEVSKI25, TAYLOR25, JONES25_LRD_SOURCES,
 )
 from run_style import contour_style_for_index, style_for_index, lighten_color
 
@@ -375,13 +377,20 @@ def draw_panel_b(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
 
     pang_m = _lit_z_mask(PANG26['z'], z_target)
     lit_log_fbh = (PANG26['log_mbh'][pang_m] - PANG26['log_mstar'][pang_m]) if show_lit else []
+    jones_masks = jones25_family_masks(JONES25_LRD_SOURCES, z_target)
+    if show_lit:
+        jones_mbh, jones_fbh = jones25_family_fbh(JONES25_LRD_SOURCES, jones_masks)
+    else:
+        jones_mbh, jones_fbh = np.array([]), np.array([])
 
     selected = (lrd_red | lrd_blue) if show_lrd else np.zeros(len(log_mbh), dtype=bool)
     x_lo, x_hi = lock_axis_range(*MULTIZ_PANEL_B_XLIM,
-                                 must_include=[log_mbh[selected], PANG26['log_mbh'][pang_m] if show_lit else []],
+                                 must_include=[log_mbh[selected],
+                                               PANG26['log_mbh'][pang_m] if show_lit else [],
+                                               jones_mbh],
                                  axis_name='panel b x-axis')
     y_lo, y_hi = lock_axis_range(*MULTIZ_PANEL_B_YLIM,
-                                 must_include=[log_fbh[selected], lit_log_fbh],
+                                 must_include=[log_fbh[selected], lit_log_fbh, jones_fbh],
                                  axis_name='panel b y-axis')
     if xlim is not None:
         x_lo, x_hi = xlim
@@ -415,6 +424,8 @@ def draw_panel_b(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
         plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'][pang_m], t_log_fbh,
                         xerr=PANG26['log_mbh_err'][pang_m], yerr=t_fbh_err)
         handles += lit_legend_handles(['Pang+26'])
+    if show_lit:
+        handles += lit_legend_handles(plot_jones25_family(ax, JONES25_LRD_SOURCES, jones_masks, kind='fbh'))
 
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
@@ -445,10 +456,14 @@ def draw_panel_c(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     selected = (lrd_red | lrd_blue) if show_lrd else np.zeros(len(log_mbh), dtype=bool)
     pang_m   = _lit_z_mask(PANG26['z'], z_target)
     furtak_m = _lit_z_mask(FURTAK23['z'], z_target)
+    jones_masks = jones25_family_masks(JONES25_LRD_SOURCES, z_target)
     lit_mstar, lit_mbh = [], []
     if show_lit:
         lit_mstar.append(PANG26['log_mstar'][pang_m])
         lit_mbh.append(PANG26['log_mbh'][pang_m])
+        jones_mstar, jones_mbh = jones25_family_mstar_mbh(JONES25_LRD_SOURCES, jones_masks)
+        lit_mstar.append(jones_mstar)
+        lit_mbh.append(jones_mbh)
         if furtak_m:
             lit_mstar.append([FURTAK23['log_mstar_upper_limit']])
             lit_mbh.append([FURTAK23['log_mbh']])
@@ -499,6 +514,7 @@ def draw_panel_c(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
             plot_lit_points(ax, 'Pang+26', PANG26['log_mstar'][pang_m], PANG26['log_mbh'][pang_m],
                             xerr=PANG26['log_mstar_err'][pang_m], yerr=PANG26['log_mbh_err'][pang_m])
             lit_labels.append('Pang+26')
+        lit_labels += plot_jones25_family(ax, JONES25_LRD_SOURCES, jones_masks, kind='mbh_mstar')
         if furtak_m:
             plot_lit_points(ax, 'Furtak+23', [FURTAK23['log_mstar_upper_limit']], [FURTAK23['log_mbh']],
                             xerr=[[0.4], [0.0]],
@@ -931,10 +947,15 @@ def draw_panel_b_compare(ax, datasets, z_target, show_lit=True, bhar_floor=LRD_B
     pang_m = _lit_z_mask(PANG26['z'], z_target)
     lit_log_mbh = PANG26['log_mbh'][pang_m] if show_lit else []
     lit_log_fbh = (PANG26['log_mbh'][pang_m] - PANG26['log_mstar'][pang_m]) if show_lit else []
+    jones_masks = jones25_family_masks(JONES25_LRD_SOURCES, z_target)
+    if show_lit:
+        jones_mbh, jones_fbh = jones25_family_fbh(JONES25_LRD_SOURCES, jones_masks)
+    else:
+        jones_mbh, jones_fbh = np.array([]), np.array([])
 
-    x_lo, x_hi = lock_axis_range(*MULTIZ_PANEL_B_XLIM, must_include=[lit_log_mbh],
+    x_lo, x_hi = lock_axis_range(*MULTIZ_PANEL_B_XLIM, must_include=[lit_log_mbh, jones_mbh],
                                  axis_name='panel b x-axis (compare)')
-    y_lo, y_hi = lock_axis_range(*MULTIZ_PANEL_B_YLIM, must_include=[lit_log_fbh],
+    y_lo, y_hi = lock_axis_range(*MULTIZ_PANEL_B_YLIM, must_include=[lit_log_fbh, jones_fbh],
                                  axis_name='panel b y-axis (compare)')
     if xlim is not None:
         x_lo, x_hi = xlim
@@ -960,6 +981,8 @@ def draw_panel_b_compare(ax, datasets, z_target, show_lit=True, bhar_floor=LRD_B
         plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'][pang_m], t_log_fbh,
                         xerr=PANG26['log_mbh_err'][pang_m], yerr=t_fbh_err)
         lit_labels.append('Pang+26')
+    if show_lit:
+        lit_labels += plot_jones25_family(ax, JONES25_LRD_SOURCES, jones_masks, kind='fbh')
 
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
@@ -986,10 +1009,14 @@ def draw_panel_c_compare(ax, datasets, z_target, show_lit=True, bhar_floor=LRD_B
 
     pang_m = _lit_z_mask(PANG26['z'], z_target)
     furtak_m = _lit_z_mask(FURTAK23['z'], z_target)
+    jones_masks = jones25_family_masks(JONES25_LRD_SOURCES, z_target)
     lit_mstar, lit_mbh = [], []
     if show_lit:
         lit_mstar.append(PANG26['log_mstar'][pang_m])
         lit_mbh.append(PANG26['log_mbh'][pang_m])
+        jones_mstar, jones_mbh = jones25_family_mstar_mbh(JONES25_LRD_SOURCES, jones_masks)
+        lit_mstar.append(jones_mstar)
+        lit_mbh.append(jones_mbh)
         if furtak_m:
             lit_mstar.append([FURTAK23['log_mstar_upper_limit']])
             lit_mbh.append([FURTAK23['log_mbh']])
@@ -1034,6 +1061,7 @@ def draw_panel_c_compare(ax, datasets, z_target, show_lit=True, bhar_floor=LRD_B
             plot_lit_points(ax, 'Pang+26', PANG26['log_mstar'][pang_m], PANG26['log_mbh'][pang_m],
                             xerr=PANG26['log_mstar_err'][pang_m], yerr=PANG26['log_mbh_err'][pang_m])
             lit_labels.append('Pang+26')
+        lit_labels += plot_jones25_family(ax, JONES25_LRD_SOURCES, jones_masks, kind='mbh_mstar')
         if furtak_m:
             plot_lit_points(ax, 'Furtak+23', [FURTAK23['log_mstar_upper_limit']], [FURTAK23['log_mbh']],
                             xerr=[[0.4], [0.0]],

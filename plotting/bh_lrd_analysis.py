@@ -85,6 +85,7 @@ from scipy.stats import gaussian_kde
 
 from lrd_literature_data import (
     PANG26, MATHEE24, LABBE25, FURTAK23, LIN25, LIT_STYLE,
+    KOCEVSKI23, HARIKANE23, MAIOLINO23, KOCEVSKI25, TAYLOR25, JONES25_LRD_SOURCES,
     SHEN20_ZREF, SHEN20_GAMMA1_A, SHEN20_GAMMA2_A, SHEN20_LSTAR_A, SHEN20_PHISTAR_A,
 )
 from run_style import contour_style_for_index, style_for_index, lighten_color
@@ -671,6 +672,57 @@ def lit_legend_handles(labels):
                    markersize=LIT_STYLE[l]['ms'] - 1, linestyle='none', label=l)
             for l in labels]
 
+
+def jones25_family_masks(sources, redshift):
+    """Per-source z-masks (within LIT_Z_TOL of `redshift`) for the Jones+25
+    Table 1 compilation sources (KOCEVSKI23, HARIKANE23, MAIOLINO23,
+    KOCEVSKI25, TAYLOR25 -- see JONES25_LRD_SOURCES in lrd_literature_data.py).
+    They all share the same schema (z, log_mbh[_err_lo/_hi], log_mstar[_err])."""
+    return [lit_z_mask(s['z'], redshift) for s in sources]
+
+
+def jones25_family_mstar_mbh(sources, masks):
+    """Concatenated (log_mstar, log_mbh) across masked Jones+25-family sources,
+    for use as lock_axis_range() must_include -- before any point is drawn."""
+    mstar = np.concatenate([s['log_mstar'][m] for s, m in zip(sources, masks)])
+    mbh   = np.concatenate([s['log_mbh'][m] for s, m in zip(sources, masks)])
+    return mstar, mbh
+
+
+def jones25_family_fbh(sources, masks):
+    """Concatenated (log_mbh, f_bh) across masked Jones+25-family sources, for
+    use as lock_axis_range() must_include -- before any point is drawn."""
+    mbh = np.concatenate([s['log_mbh'][m] for s, m in zip(sources, masks)])
+    fbh = np.concatenate([s['log_mbh'][m] - s['log_mstar'][m] for s, m in zip(sources, masks)])
+    return mbh, fbh
+
+
+def plot_jones25_family(ax, sources, masks, kind):
+    """Overlay each Jones+25-family source with its own marker/colour (one
+    plot_lit_points() call per study, so each keeps its own legend entry).
+    kind='mbh_mstar' plots (log_mstar, log_mbh); kind='fbh' plots (log_mbh, f_bh).
+    Returns the labels actually plotted (sources with no entry at this z are
+    skipped), for the caller to add to its legend."""
+    labels = []
+    for s, m in zip(sources, masks):
+        if not m.any():
+            continue
+        if kind == 'mbh_mstar':
+            plot_lit_points(ax, s['label'], s['log_mstar'][m], s['log_mbh'][m],
+                            xerr=s['log_mstar_err'][m],
+                            yerr=[s['log_mbh_err_lo'][m], s['log_mbh_err_hi'][m]])
+        elif kind == 'fbh':
+            fbh = s['log_mbh'][m] - s['log_mstar'][m]
+            fbh_err_lo = np.sqrt(s['log_mbh_err_lo'][m]**2 + s['log_mstar_err'][m]**2)
+            fbh_err_hi = np.sqrt(s['log_mbh_err_hi'][m]**2 + s['log_mstar_err'][m]**2)
+            plot_lit_points(ax, s['label'], s['log_mbh'][m], fbh,
+                            xerr=[s['log_mbh_err_lo'][m], s['log_mbh_err_hi'][m]],
+                            yerr=[fbh_err_lo, fbh_err_hi])
+        else:
+            raise ValueError(f"unknown kind {kind!r}")
+        labels.append(s['label'])
+    return labels
+
 # ============================================================================
 # MAIN PLOT
 # ============================================================================
@@ -946,6 +998,11 @@ def plot_panel_b(data, snap_col, output_file,
     redshift = z_override if z_override is not None else snap_to_z(snap_col)
     pang_m = lit_z_mask(PANG26['z'], redshift)
     lit_log_fbh = (PANG26['log_mbh'][pang_m] - PANG26['log_mstar'][pang_m]) if show_lit else []
+    jones_masks = jones25_family_masks(JONES25_LRD_SOURCES, redshift)
+    if show_lit:
+        jones_mbh, jones_fbh = jones25_family_fbh(JONES25_LRD_SOURCES, jones_masks)
+    else:
+        jones_mbh, jones_fbh = np.array([]), np.array([])
 
     # ── figure ────────────────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(7.5, 7.5))
@@ -954,10 +1011,11 @@ def plot_panel_b(data, snap_col, output_file,
     selected = (lrd_red | lrd_blue) if show_lrd else np.zeros(len(log_mbh), dtype=bool)
     x_lo, x_hi = lock_axis_range(*PANEL_B_XLIM,
                                  must_include=[log_mbh[selected],
-                                               PANG26['log_mbh'][pang_m] if show_lit else []],
+                                               PANG26['log_mbh'][pang_m] if show_lit else [],
+                                               jones_mbh],
                                  axis_name='panel b x-axis')
     y_lo, y_hi = lock_axis_range(*PANEL_B_YLIM,
-                                 must_include=[log_fbh[selected], lit_log_fbh],
+                                 must_include=[log_fbh[selected], lit_log_fbh, jones_fbh],
                                  axis_name='panel b y-axis')
 
     log_fbh_thresh = np.log10(LRD_FBHM_THRESH)
@@ -1041,13 +1099,18 @@ def plot_panel_b(data, snap_col, output_file,
         ax.text(x_hi - 3.3, y_hi - 0.5, 'LRD selection',
                 fontsize=13, color='#C62828')
 
-    # ── literature overlay (only Pang+26 gives both M_BH and M_star) ────
+    # ── literature overlay (only sources with both M_BH and M_star) ────
+    lit_labels = []
     if show_lit and pang_m.any():
         t_log_fbh = PANG26['log_mbh'][pang_m] - PANG26['log_mstar'][pang_m]
         t_fbh_err = np.sqrt(PANG26['log_mbh_err'][pang_m]**2 + PANG26['log_mstar_err'][pang_m]**2)
         plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'][pang_m], t_log_fbh,
                         xerr=PANG26['log_mbh_err'][pang_m], yerr=t_fbh_err)
-        ax.legend(handles=lit_legend_handles(['Pang+26']),
+        lit_labels.append('Pang+26')
+    if show_lit:
+        lit_labels += plot_jones25_family(ax, JONES25_LRD_SOURCES, jones_masks, kind='fbh')
+    if lit_labels:
+        ax.legend(handles=lit_legend_handles(lit_labels),
                   loc='upper left', fontsize=12)
 
     # ── axes & decorations ────────────────────────────────────────────────
@@ -1113,6 +1176,7 @@ def plot_panel_c(data, snap_col, output_file,
     redshift = z_override if z_override is not None else snap_to_z(snap_col)
     pang_m   = lit_z_mask(PANG26['z'], redshift)
     furtak_m = lit_z_mask(FURTAK23['z'], redshift)
+    jones_masks = jones25_family_masks(JONES25_LRD_SOURCES, redshift)
 
     # ── figure ────────────────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(7.5, 7.5))
@@ -1123,6 +1187,9 @@ def plot_panel_c(data, snap_col, output_file,
     if show_lit:
         lit_mstar.append(PANG26['log_mstar'][pang_m])
         lit_mbh.append(PANG26['log_mbh'][pang_m])
+        jones_mstar, jones_mbh = jones25_family_mstar_mbh(JONES25_LRD_SOURCES, jones_masks)
+        lit_mstar.append(jones_mstar)
+        lit_mbh.append(jones_mbh)
         if furtak_m:
             lit_mstar.append([FURTAK23['log_mstar_upper_limit']])
             lit_mbh.append([FURTAK23['log_mbh']])
@@ -1217,6 +1284,8 @@ def plot_panel_c(data, snap_col, output_file,
             plot_lit_points(ax, 'Pang+26', PANG26['log_mstar'][pang_m], PANG26['log_mbh'][pang_m],
                             xerr=PANG26['log_mstar_err'][pang_m], yerr=PANG26['log_mbh_err'][pang_m])
             lit_labels.append('Pang+26')
+
+        lit_labels += plot_jones25_family(ax, JONES25_LRD_SOURCES, jones_masks, kind='mbh_mstar')
 
         # Furtak+23: single lensed z=7.04 point; M_star is an upper limit (left arrow)
         if furtak_m:
@@ -1879,13 +1948,18 @@ def plot_panel_b_compare(runs, snap_col, output_file, bhar_floor=LRD_BHAR_DEFAUL
     pang_m = lit_z_mask(PANG26['z'], redshift)
     lit_log_fbh = (PANG26['log_mbh'][pang_m] - PANG26['log_mstar'][pang_m]) if show_lit else []
     lit_log_mbh = PANG26['log_mbh'][pang_m] if show_lit else []
+    jones_masks = jones25_family_masks(JONES25_LRD_SOURCES, redshift)
+    if show_lit:
+        jones_mbh, jones_fbh = jones25_family_fbh(JONES25_LRD_SOURCES, jones_masks)
+    else:
+        jones_mbh, jones_fbh = np.array([]), np.array([])
 
     fig, ax = plt.subplots(figsize=(7.5, 7.5))
     ax.minorticks_on()
 
-    x_lo, x_hi = lock_axis_range(*PANEL_B_XLIM, must_include=[lit_log_mbh],
+    x_lo, x_hi = lock_axis_range(*PANEL_B_XLIM, must_include=[lit_log_mbh, jones_mbh],
                                  axis_name='panel b x-axis (compare)')
-    y_lo, y_hi = lock_axis_range(*PANEL_B_YLIM, must_include=[lit_log_fbh],
+    y_lo, y_hi = lock_axis_range(*PANEL_B_YLIM, must_include=[lit_log_fbh, jones_fbh],
                                  axis_name='panel b y-axis (compare)')
 
     log_fbh_thresh = np.log10(LRD_FBHM_THRESH)
@@ -1908,6 +1982,8 @@ def plot_panel_b_compare(runs, snap_col, output_file, bhar_floor=LRD_BHAR_DEFAUL
         plot_lit_points(ax, 'Pang+26', PANG26['log_mbh'][pang_m], t_log_fbh,
                         xerr=PANG26['log_mbh_err'][pang_m], yerr=t_fbh_err)
         lit_labels.append('Pang+26')
+    if show_lit:
+        lit_labels += plot_jones25_family(ax, JONES25_LRD_SOURCES, jones_masks, kind='fbh')
 
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
@@ -1955,10 +2031,14 @@ def plot_panel_c_compare(runs, snap_col, output_file, bhar_floor=LRD_BHAR_DEFAUL
 
     pang_m = lit_z_mask(PANG26['z'], redshift)
     furtak_m = lit_z_mask(FURTAK23['z'], redshift)
+    jones_masks = jones25_family_masks(JONES25_LRD_SOURCES, redshift)
     lit_mstar, lit_mbh = [], []
     if show_lit:
         lit_mstar.append(PANG26['log_mstar'][pang_m])
         lit_mbh.append(PANG26['log_mbh'][pang_m])
+        jones_mstar, jones_mbh = jones25_family_mstar_mbh(JONES25_LRD_SOURCES, jones_masks)
+        lit_mstar.append(jones_mstar)
+        lit_mbh.append(jones_mbh)
         if furtak_m:
             lit_mstar.append([FURTAK23['log_mstar_upper_limit']])
             lit_mbh.append([FURTAK23['log_mbh']])
@@ -1996,6 +2076,7 @@ def plot_panel_c_compare(runs, snap_col, output_file, bhar_floor=LRD_BHAR_DEFAUL
             plot_lit_points(ax, 'Pang+26', PANG26['log_mstar'][pang_m], PANG26['log_mbh'][pang_m],
                             xerr=PANG26['log_mstar_err'][pang_m], yerr=PANG26['log_mbh_err'][pang_m])
             lit_labels.append('Pang+26')
+        lit_labels += plot_jones25_family(ax, JONES25_LRD_SOURCES, jones_masks, kind='mbh_mstar')
         if furtak_m:
             plot_lit_points(ax, 'Furtak+23', [FURTAK23['log_mstar_upper_limit']],
                             [FURTAK23['log_mbh']],

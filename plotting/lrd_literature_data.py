@@ -126,6 +126,107 @@ LIN25 = {
 }
 
 # ============================================================================
+# Table 1 of Jones et al. (2025, arXiv:2510.07376), "Properties of Our Sample
+# of Broad-line AGN", compiles the M_BH/M_star measurements of five separate
+# JWST NIRSpec broad-line AGN studies -- it is a compilation, not an original
+# measurement, so each LRD == 1 row below (heavily-reddened, "v-shaped" SED
+# sources) is attributed to the study that actually measured it, per Table 1's
+# own per-source grouping. log(M_BH) is quoted there with asymmetric errors
+# (single-epoch viral estimate from broad Halpha); log(M_star) errors are
+# symmetric. No L_bol or M_UV is tabulated for these sources, so they appear
+# only in the M_BH-M_star and f_BH panels (unlike PANG26 they can't be shown
+# on the Lbol/Mdot panels).
+# ============================================================================
+KOCEVSKI23 = {
+    'label': 'Kocevski+23',
+    'id': ['CEERS 746'],
+    'z':             np.array([5.624]),
+    'log_mbh':       np.array([7.19]),
+    'log_mbh_err_lo': np.array([0.13]),
+    'log_mbh_err_hi': np.array([0.11]),
+    'log_mstar':     np.array([7.99]),
+    'log_mstar_err': np.array([0.37]),
+}
+
+HARIKANE23 = {
+    'label': 'Harikane+23',
+    'id': ['CEERS 672'],
+    'z':             np.array([5.666]),
+    'log_mbh':       np.array([6.93]),
+    'log_mbh_err_lo': np.array([0.14]),
+    'log_mbh_err_hi': np.array([0.13]),
+    'log_mstar':     np.array([8.33]),
+    'log_mstar_err': np.array([0.24]),
+}
+
+MAIOLINO23 = {
+    'label': 'Maiolino+23',
+    'id': ['JADES-GN 954', 'JADES-GN 1093', 'JADES-GN 61888'],
+    'z':             np.array([6.760, 5.595, 5.875]),
+    'log_mbh':       np.array([7.60, 6.81, 6.86]),
+    'log_mbh_err_lo': np.array([0.07, 0.21, 0.11]),
+    'log_mbh_err_hi': np.array([0.07, 0.18, 0.10]),
+    'log_mstar':     np.array([8.92, 7.82, 8.24]),
+    'log_mstar_err': np.array([0.76, 0.32, 0.32]),
+}
+
+KOCEVSKI25 = {
+    'label': 'Kocevski+25',
+    'id': ['RUBIES-EGS 37124', 'RUBIES-EGS 42046', 'RUBIES-EGS 42232', 'RUBIES-EGS 49140',
+           'RUBIES-EGS 55604', 'RUBIES-EGS 60935', 'RUBIES-EGS 61496', 'RUBIES-EGS 926125',
+           'RUBIES-EGS 927271', 'RUBIES-UDS 40579', 'RUBIES-UDS 50716', 'RUBIES-UDS 59971'],
+    'z': np.array([5.684, 5.280, 4.955, 6.687,
+                   6.986, 5.288, 5.079, 5.286,
+                   6.786, 3.103, 6.17, 5.365]),
+    'log_mbh': np.array([7.18, 8.47, 7.58, 8.72,
+                         8.55, 7.39, 7.00, 7.10,
+                         6.74, 8.29, 7.26, 6.74]),
+    'log_mbh_err_lo': np.array([0.08, 0.02, 0.03, 0.09,
+                                0.12, 0.04, 0.18, 0.04,
+                                0.18, 0.06, 0.12, 0.21]),
+    'log_mbh_err_hi': np.array([0.07, 0.02, 0.03, 0.08,
+                                0.11, 0.04, 0.15, 0.04,
+                                0.16, 0.05, 0.10, 0.18]),
+    'log_mstar': np.array([8.42, 8.96, 8.71, 9.01,
+                           9.05, 8.49, 8.68, 8.32,
+                           8.70, 8.09, 8.16, 8.61]),
+    'log_mstar_err': np.array([0.37, 0.46, 0.46, 0.35,
+                               0.52, 0.29, 0.46, 0.36,
+                               0.36, 0.51, 0.43, 0.48]),
+}
+
+TAYLOR25 = {
+    'label': 'Taylor+25',
+    'id': ['RUBIES-EGS 28812', 'RUBIES-EGS 29489', 'RUBIES-EGS 37032', 'RUBIES-EGS 50812',
+           'RUBIES-UDS 19521', 'RUBIES-UDS 29813', 'RUBIES-UDS 119957', 'RUBIES-UDS 139709',
+           'RUBIES-UDS 150323', 'RUBIES-UDS 172350', 'RUBIES-UDS 182791', 'RUBIES-UDS 807469'],
+    'z': np.array([4.223, 4.543, 3.850, 3.519,
+                   5.669, 5.440, 4.149, 5.685,
+                   3.618, 5.580, 4.718, 6.778]),
+    'log_mbh': np.array([7.37, 7.56, 7.28, 7.17,
+                         7.03, 7.52, 7.22, 7.86,
+                         7.12, 7.63, 7.93, 7.19]),
+    'log_mbh_err_lo': np.array([0.03, 0.08, 0.09, 0.15,
+                                0.14, 0.08, 0.05, 0.06,
+                                0.06, 0.04, 0.02, 0.14]),
+    'log_mbh_err_hi': np.array([0.03, 0.08, 0.08, 0.13,
+                                0.13, 0.07, 0.05, 0.06,
+                                0.06, 0.04, 0.02, 0.12]),
+    'log_mstar': np.array([9.01, 8.65, 8.67, 8.22,
+                           8.14, 8.29, 8.07, 8.65,
+                           8.94, 8.23, 9.00, 8.34]),
+    'log_mstar_err': np.array([0.43, 0.39, 0.33, 0.38,
+                               0.92, 0.35, 0.45, 0.41,
+                               0.54, 0.47, 0.58, 0.53]),
+}
+
+# Convenience grouping -- all five sources share the exact same schema (z,
+# log_mbh[_err_lo/_hi], log_mstar[_err]), so panels that overlay "the LRD == 1
+# rows of Jones+25 Table 1" can just iterate this list instead of naming each
+# study individually.
+JONES25_LRD_SOURCES = [KOCEVSKI23, HARIKANE23, MAIOLINO23, KOCEVSKI25, TAYLOR25]
+
+# ============================================================================
 # Shen et al. (2020, MNRAS 495, 3252; arXiv:2001.02696) -- bolometric quasar
 # luminosity function, "global fit A" (their Eq. 11 & 14, Table 4). This is
 # a continuous model, not a points table: phi_bol(L, z) = dn/dlogL is a
@@ -151,5 +252,10 @@ LIT_STYLE = {
     'Labbe+25':   {'marker': '^', 'color': '#1E88E5', 'ms': 7},
     'Furtak+23':  {'marker': '*', 'color': '#FB8C00', 'ms': 15},
     'Lin+25':     {'marker': 'v', 'color': '#6D4C41', 'ms': 8},
+    'Kocevski+23': {'marker': 'p', 'color': '#00ACC1', 'ms': 8},
+    'Harikane+23': {'marker': 'h', 'color': '#7CB342', 'ms': 8},
+    'Maiolino+23': {'marker': 'X', 'color': '#3949AB', 'ms': 8},
+    'Kocevski+25': {'marker': '<', 'color': '#D81B60', 'ms': 8},
+    'Taylor+25':   {'marker': '>', 'color': '#F4511E', 'ms': 8},
     'Shen+20':    {'marker': None, 'color': '#000000', 'ms': 0},
 }

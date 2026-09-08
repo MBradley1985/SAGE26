@@ -14,9 +14,14 @@ Two selection modes (mutually exclusive):
   --stellar-mass-min/-max,
   --bh-mass-min/-max,
   --acc-rate-min/-max,
-  --edd-rate-min/-max        any combination of range cuts (Msun, or Msun/yr
-                             for the two rate options, AND'ed together),
-                             applied at the chosen snapshot(s).
+  --edd-rate-min/-max,
+  --edd-ratio-min,
+  --bh-frac-min/-max         any combination of range cuts (Msun, or Msun/yr
+                             for the two rate options, dimensionless ratios
+                             for --edd-ratio-min and --bh-frac-min/-max,
+                             AND'ed together), applied at the chosen
+                             snapshot(s). --bh-frac-min/-max filters on
+                             BlackHoleMass / StellarMass.
 
 Units / conventions (shared across SAGE26)
 ------------------------------------------
@@ -162,7 +167,8 @@ def read_snapshot_frame(filepath, snap_num, hubble_h, unit_time_in_s, source_lab
 
 
 def collect_matches(file_list, snap_list, hubble_h, unit_time_in_s, id_field,
-                    galaxy_ids, mass_cuts, edd_ratio_min=None):
+                    galaxy_ids, mass_cuts, edd_ratio_min=None,
+                    bh_frac_min=None, bh_frac_max=None):
     frames = []
     for snap_num in snap_list:
         for fpath in file_list:
@@ -194,6 +200,20 @@ def collect_matches(file_list, snap_list, hubble_h, unit_time_in_s, id_field,
                         ratio = df['BHMaxaccretionRate'] / edd.replace(0, np.nan)
                         mask &= (edd > 0) & (ratio >= edd_ratio_min)
                         df = df.assign(EddRatio=ratio)
+                    else:
+                        mask &= False
+
+                if bh_frac_min is not None or bh_frac_max is not None:
+                    if 'BlackHoleMass' in df.columns and 'StellarMass' in df.columns:
+                        stellar = df['StellarMass']
+                        bh_frac = df['BlackHoleMass'] / stellar.replace(0, np.nan)
+                        frac_mask = stellar > 0
+                        if bh_frac_min is not None:
+                            frac_mask &= bh_frac >= bh_frac_min
+                        if bh_frac_max is not None:
+                            frac_mask &= bh_frac <= bh_frac_max
+                        mask &= frac_mask
+                        df = df.assign(BHFrac=bh_frac)
                     else:
                         mask &= False
 
@@ -262,6 +282,10 @@ def main():
                    help='Min BHMaxaccretionRate / BHEddingtonRateLimit '
                         '(e.g. 1.0 selects super-Eddington galaxies, i.e. '
                         'max accretion rate exceeds the Eddington rate).')
+    p.add_argument('--bh-frac-min', type=float, default=None,
+                   help='Min BlackHoleMass / StellarMass ratio.')
+    p.add_argument('--bh-frac-max', type=float, default=None,
+                   help='Max BlackHoleMass / StellarMass ratio.')
     p.add_argument('-o', '--output', default=None,
                    help='Output file path (default: galaxy_lookup_results.txt '
                         'or .csv next to the first input file).')
@@ -273,7 +297,8 @@ def main():
         args.halo_mass_min, args.halo_mass_max, args.stellar_mass_min,
         args.stellar_mass_max, args.bh_mass_min, args.bh_mass_max,
         args.acc_rate_min, args.acc_rate_max, args.edd_rate_min,
-        args.edd_rate_max, args.edd_ratio_min))
+        args.edd_rate_max, args.edd_ratio_min, args.bh_frac_min,
+        args.bh_frac_max))
 
     if args.galaxy_id is None and not mass_filters_given:
         print("Error: supply either --galaxy-id or at least one range "
@@ -334,12 +359,16 @@ def main():
         print(f"  mode        : range cuts (Msun; Msun/yr for rates) -> {mass_cuts}")
         if args.edd_ratio_min is not None:
             print(f"  edd ratio   : BHMaxaccretionRate / BHEddingtonRateLimit >= {args.edd_ratio_min}")
+        if args.bh_frac_min is not None or args.bh_frac_max is not None:
+            print(f"  bh fraction : BlackHoleMass / StellarMass in "
+                  f"[{args.bh_frac_min}, {args.bh_frac_max}]")
     print("=" * 70)
 
     matches = collect_matches(file_list, snap_list, hubble_h,
                               sim['UnitTime_in_s'], id_field,
                               set(args.galaxy_id) if args.galaxy_id else None,
-                              mass_cuts, args.edd_ratio_min)
+                              mass_cuts, args.edd_ratio_min,
+                              args.bh_frac_min, args.bh_frac_max)
 
     if matches.empty:
         print("No matching galaxies found.")
