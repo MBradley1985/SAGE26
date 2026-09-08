@@ -116,6 +116,52 @@ OPTIONAL_VARIANTS = {
         'label': r'no SN energy bound', 'switch': ('SNEnergyConservationOn', 0),
         'color': '#17A2B8', 'ls': (0, (2, 1, 5, 1)), 'lw': 2.4, 'zorder': 10,
     },
+    # Ablations of the precipitation criterion itself, inside the two-regime CGM
+    # rather than against it: 'nocgm' above removes the CGM machinery entirely,
+    # so it cannot say how much of the improvement comes from the Voit criterion
+    # as opposed to the regime split plus free-fall accretion.  These three do.
+    # 'precip' is the joint control (mdot = M_CGM/t_ff), 'sigmoid' and 'meq' drop
+    # one factor each, so their offsets are separately attributable.
+    'precip': {
+        'key': 'noprecip', 'par': 'input/millennium_noprecip.par',
+        'out': './output/millennium_noprecip/',
+        'label': r'no precipitation criterion ($f_{\rm inflow}\equiv1$)',
+        'switch': ('PrecipCriterionOn', 0),
+        'color': '#E377C2', 'ls': (0, (4, 1.5, 1, 1.5)), 'lw': 2.4, 'zorder': 10,
+    },
+    'sigmoid': {
+        'key': 'nosigmoid', 'par': 'input/millennium_nosigmoid.par',
+        'out': './output/millennium_nosigmoid/',
+        'label': r'no $f_{\rm inflow}$ sigmoid', 'switch': ('PrecipCriterionOn', 2),
+        'color': '#BCBD22', 'ls': (0, (1, 1)), 'lw': 2.4, 'zorder': 10,
+    },
+    'meq': {
+        'key': 'nomeq', 'par': 'input/millennium_nomeq.par',
+        'out': './output/millennium_nomeq/',
+        'label': r'no condensation term ($M_{\rm eq}=0$)',
+        'switch': ('PrecipCriterionOn', 3),
+        'color': '#7F7F7F', 'ls': (0, (6, 1.5)), 'lw': 2.4, 'zorder': 10,
+    },
+    # Mode 4 drops both factors while keeping the rest of the precipitation
+    # path, so it is the reference the two single-factor rows above should be
+    # read against: mode 4 -> 2 isolates M_eq and mode 4 -> 3 isolates the
+    # sigmoid, with nothing else changing.  Mode 0 ('precip') additionally
+    # skips the hand-over to standard cooling, so it moves two things at once
+    # and is the weaker control, even though the two agree in the mean.
+    'sage16cold': {
+        'key': 'sage16cold', 'par': 'input/millennium_sage16cold.par',
+        'out': './output/millennium_sage16cold/',
+        'label': r'SAGE16 cold accretion ($t_{\rm dyn}$)',
+        'switch': ('PrecipCriterionOn', 5),
+        'color': '#9467BD', 'ls': (0, (8, 2, 2, 2)), 'lw': 2.4, 'zorder': 10,
+    },
+    'precipfactors': {
+        'key': 'noprecipfactors', 'par': 'input/millennium_noprecipfactors.par',
+        'out': './output/millennium_noprecipfactors/',
+        'label': r'no $f_{\rm inflow}$, no $M_{\rm eq}$',
+        'switch': ('PrecipCriterionOn', 4),
+        'color': '#17BECF', 'ls': (0, (3, 1, 1, 1, 1, 1)), 'lw': 2.4, 'zorder': 10,
+    },
 }
 
 # Stellar mass function panels.  'select' is 'all', 'sf' or 'q': the sSFR-split
@@ -529,10 +575,13 @@ def _draw_csfrd_observations(ax):
     figure compares model variants against each other, and the fit is kept
     purely as a fixed reference curve to orient the eye.
     """
-    # Chabrier -> Salpeter (factor 1/0.63) to match SAGE.
+    # Their eq. 15 is a Salpeter-IMF fit; SAGE is Chabrier (RecycleFraction 0.43),
+    # so the curve is shifted DOWN by pp.SALPETER_TO_CHABRIER_DEX. This previously
+    # multiplied by 1/0.63, moving it 0.2 dex the wrong way.
     zz = np.linspace(CSFRD_ZLIM[0], CSFRD_ZLIM[1], 300)
-    psi = 0.015 * (1 + zz)**2.7 / (1 + ((1 + zz) / 2.9)**5.6) / 0.63
-    ax.plot(zz, np.log10(psi), color='gray', lw=1.5, alpha=0.7, zorder=2,
+    psi = 0.015 * (1 + zz)**2.7 / (1 + ((1 + zz) / 2.9)**5.6)
+    ax.plot(zz, np.log10(psi) + pp.SALPETER_TO_CHABRIER_DEX,
+            color='gray', lw=1.5, alpha=0.7, zorder=2,
             label=pp._tex_safe(r'Madau \& Dickinson 2014'))
 
 

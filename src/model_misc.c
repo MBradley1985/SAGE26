@@ -212,12 +212,21 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
  *      z = 0 exceed 0.1 R_vir and the 99.9th percentile r_d is 32 kpc.
  *
  *   2  As 1, but |j| comes from a running mean of the spin *vector* over a halo dynamical time.
- *      Averaging the vector, not |j| or r_d, is the point: discreteness noise in a poorly
- *      resolved halo's angular momentum adds in quadrature to a positive-definite |j|, so it
- *      biases r_d high. Measured on Millennium, median lambda is 0.079 at Len 20-50 against
- *      0.042 at Len > 3000, and 55% of z = 0 centrals sit below Len = 50. Vector averaging
- *      cancels that noise toward zero while the physical spin persists; averaging magnitudes
- *      would suppress the jitter but keep the bias.
+ *      This removes the snapshot-to-snapshot jitter in r_d (measured on Millennium: median
+ *      |dlog r_d| per snapshot 0.047 -> 0.016, and the fraction jumping more than 0.3 dex
+ *      4.7% -> 0.2%), which matters because SFR responds as r_d^-3.7. Averaging the vector
+ *      rather than |j| also shrinks r_d by a near-uniform ~9%, from averaging over the
+ *      halo's spin-axis tumbling.
+ *
+ *      It does NOT remove the low-particle-count bias in |j|, despite that bias being real
+ *      (median lambda is 0.077 at Len 20-50 against 0.044 at Len > 1000). Measured, the
+ *      ratio lambda(Len 20-50) / lambda(Len > 1000) is 1.569 at level 0 and 1.583 at
+ *      level 2 -- unchanged. The reason is that the discreteness error comes from finite
+ *      particle sampling, and halo membership turns over slowly: over one dynamical time
+ *      most of the same particles are still in the halo, so the sampling error is strongly
+ *      correlated between adjacent snapshots and does not average down. Time-averaging only
+ *      suppresses the genuinely fast-fluctuating component. Correcting the resolution bias
+ *      needs an explicit N-dependent de-biasing, which no level here implements.
  *
  * Levels 1 and 2 leave satellites alone: get_disk_radius() is only called for FOF centrals
  * (core_build_model.c), so a Type 1 disk size stays frozen at infall under every setting.

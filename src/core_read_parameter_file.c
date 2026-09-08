@@ -101,7 +101,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->H2RadialRMaxFactor         = 5.0;
     run_params->CGMrecipeOn                = 1;
     run_params->CGMDensityProfile          = 0;
-    run_params->PrecipCriterionOn          = 1; /* (maybe hard-code once published)*/
+    run_params->PrecipCriterionOn          = 1; /* both factors of the precipitation rate */
     run_params->RegimeRandomMode           = 0;   /* default: fresh draw each snapshot (published behaviour); 1 makes the regime persistent per galaxy */ /* (hard-code once published)*/
     run_params->FIREmodeOn                 = 1;
     run_params->RedshiftPowerLawExponent   = 1.25;
@@ -115,7 +115,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->FFBIgnoreRegime            = 1;  /* (hard-code once published)*/
     run_params->FFBRandomMode              = 0;   /* default: fresh draw each snapshot (published behaviour) -- galaxies move in and out of FFB, sustaining a transient low-z FFB population. 1 fixes each galaxy's quantile at creation, which removes both. */ /* (hard-code once published)*/
     run_params->BulgeSizeOn                = 3;
-    run_params->SaveFullSFH                = 1;
+    run_params->SaveFullSFH                = 0;
     run_params->TrackICSAssembly           = 1;
     run_params->StarburstColdGasOn         = 1;
     run_params->DynamicDisruptionSplit     = 2;
@@ -128,6 +128,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->ColdStreamCeilingOn        = 0;     /* 0 reproduces published behaviour */ /* (remove once published)*/
     run_params->StreamMassFactor           = 3.0;   /* Dekel & Birnboim (2006) adopt f = 3 */ /* (remove once published)*/
     run_params->DiskRadiusFactor           = 1.0;   /* f_j: 1.0 reproduces published behaviour exactly */ /* (remove once published)*/
+    run_params->PreventiveHeatingOn        = 0;      /* 0 reproduces published behaviour bit-for-bit */
+    run_params->PreventiveHeatingMass      = 1.0e12; /* Msun; 50% cooling suppression at this halo mass */
+    run_params->PreventiveHeatingSlope     = 2.0;    /* f = 1/(1 + (Mvir/M_prev)^slope) */
+    run_params->PreventiveHeatingEfficiency = 0.02;  /* mode 6: accretion-energy coupling epsilon */
     run_params->DiskRadiusOn               = 0;     /* 0 reproduces published behaviour bit-for-bit 1: + working Rvir fallback and a bound on r_d/Rvir; 2: + spin vector smoothed over a halo dynamical time (removes the low-Len bias in |j|) */ 
     run_params->DiskRadiusMaxFrac          = 0.15;  /* ceiling on r_d/Rvir; used only when DiskRadiusOn > 0 */ 
     run_params->GasDiskRadiusFactor        = 1.0;   /* chi = 1.0: atomic disk cospatial with the stellar disk (published behaviour) */
@@ -223,6 +227,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("StreamMassFactor",           &(run_params->StreamMassFactor),           DOUBLE, 0);
     REG("DiskRadiusFactor",           &(run_params->DiskRadiusFactor),           DOUBLE, 0);
     REG("DiskRadiusOn",               &(run_params->DiskRadiusOn),               INT,    0);
+    REG("PreventiveHeatingOn",        &(run_params->PreventiveHeatingOn),        INT,    0);
+    REG("PreventiveHeatingMass",      &(run_params->PreventiveHeatingMass),      DOUBLE, 0);
+    REG("PreventiveHeatingSlope",     &(run_params->PreventiveHeatingSlope),     DOUBLE, 0);
+    REG("PreventiveHeatingEfficiency",&(run_params->PreventiveHeatingEfficiency),DOUBLE, 0);
     REG("DiskRadiusMaxFrac",          &(run_params->DiskRadiusMaxFrac),          DOUBLE, 0);
     REG("GasDiskRadiusFactor",        &(run_params->GasDiskRadiusFactor),        DOUBLE, 0);
     REG("MShockMsun",                 &(run_params->MShockMsun),                 DOUBLE, 0);
@@ -567,7 +575,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"DiskInstabilityOn",      run_params->DiskInstabilityOn,      0, 1},
             {"CGMrecipeOn",            run_params->CGMrecipeOn,            0, 1},
             {"CGMDensityProfile",      run_params->CGMDensityProfile,      0, 2},
-            {"PrecipCriterionOn",      run_params->PrecipCriterionOn,      0, 1},
+            {"PrecipCriterionOn",      run_params->PrecipCriterionOn,      0, 5},
             {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
             {"RegimeRandomMode",       run_params->RegimeRandomMode,       0, 1},
             {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
@@ -577,6 +585,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"ColdStreamCeilingOn",    run_params->ColdStreamCeilingOn,    0, 1},
             {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 3},
             {"DiskRadiusOn",           run_params->DiskRadiusOn,           0, 2},
+            {"PreventiveHeatingOn",    run_params->PreventiveHeatingOn,    0, 6},
             {"H2DiskAreaOption",       run_params->H2DiskAreaOption,       0, 2},
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
@@ -607,6 +616,21 @@ int read_parameter_file(const char *fname, struct params *run_params)
     if(run_params->H2RadialIntegrationOn && run_params->H2RadialRMaxFactor <= 0.0) {
         fprintf(stderr, "Error: H2RadialRMaxFactor = %g is not valid; it must be > 0.\n",
                 run_params->H2RadialRMaxFactor);
+        ABORT(EXIT_FAILURE);
+    }
+    if(run_params->PreventiveHeatingOn > 0 && run_params->PreventiveHeatingMass <= 0.0) {
+        fprintf(stderr, "Error: PreventiveHeatingMass = %g is not valid; it must be > 0 when PreventiveHeatingOn > 0.\n",
+                run_params->PreventiveHeatingMass);
+        ABORT(EXIT_FAILURE);
+    }
+    if(run_params->PreventiveHeatingOn > 0 && run_params->PreventiveHeatingSlope <= 0.0) {
+        fprintf(stderr, "Error: PreventiveHeatingSlope = %g is not valid; it must be > 0 when PreventiveHeatingOn > 0.\n",
+                run_params->PreventiveHeatingSlope);
+        ABORT(EXIT_FAILURE);
+    }
+    if(run_params->PreventiveHeatingOn == 6 && run_params->PreventiveHeatingEfficiency <= 0.0) {
+        fprintf(stderr, "Error: PreventiveHeatingEfficiency = %g is not valid; it must be > 0 when PreventiveHeatingOn = 6.\n",
+                run_params->PreventiveHeatingEfficiency);
         ABORT(EXIT_FAILURE);
     }
     if(run_params->DiskRadiusOn > 0 && run_params->DiskRadiusMaxFrac <= 0.0) {

@@ -53,7 +53,7 @@ DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through i
 
 CGMrecipeOn                 1   %0: switch off
 CGMDensityProfile           0   %0: uniform; 1: NFW; 2: beta-profile (beta=2/3)
-PrecipCriterionOn           1   %1: Voit t_cool/t_ff precipitation criterion (default); 0: bypass it -- mdot = M_CGM/t_ff for every CGM-regime halo
+PrecipCriterionOn           1   %which factors of the Voit precipitation rate mdot = S((10-r)/2)*(M_CGM-M_eq)/t_ff apply: 0: neither, and no hand-over -- mdot = M_CGM/t_ff always; 1: both (default); 2: M_eq only (no f_inflow sigmoid); 3: sigmoid only (no condensation term); 4: neither, keeping the hand-over (the 2x2 reference); 5: SAGE16 cold accretion, mdot = M_CGM/(Rvir/Vvir), sqrt(2) faster than mode 0
 RegimeRandomMode            0   %0: fresh random draw each snapshot (original; borderline-mass galaxies thrash between regimes); 1: use persistent RegimeRandom assigned at galaxy creation (regime evolves smoothly with Mvir)
 FIREmodeOn                  1   %0: switch off
 SNEnergyConservationOn      1   %1: bound BOTH the reheating and ejection terms by the SN energy available (default; FIREmodeOn=1 only); 0: off, unbounded

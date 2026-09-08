@@ -77,6 +77,20 @@ SSFR_CUT = -11.0       # log10(sSFR/yr^-1) dividing quiescent from star-forming
 # Solar metallicity (Asplund et al. 2009)
 Z_SUN = 0.0134
 
+# IMF convention.
+#
+# SAGE26's RecycleFraction of 0.43 is a Chabrier instantaneous return fraction
+# (Salpeter gives ~0.3), so every model SFR and stellar mass in this module is on
+# a Chabrier scale.  Observational compilations quoted for a Salpeter IMF must
+# therefore be shifted DOWN by this amount before being compared with the model,
+# never up: a Salpeter fit converts the same light into ~1.7x more stellar mass.
+#
+# Getting the sign wrong on one dataset and not another puts two observational
+# curves on the same axes 0.2 dex apart, which is how a real ~0.2 dex model
+# excess at cosmic noon came to look like agreement with Madau & Dickinson and a
+# disagreement with COSMOS-Web (which is natively Chabrier and needs no shift).
+SALPETER_TO_CHABRIER_DEX = -0.24
+
 # Solar mass in grams (for MASS_CONVERT derivation)
 _MSUN_CGS = 1.989e33
 
@@ -1419,7 +1433,10 @@ def load_madau_dickinson_2014_data():
     try:
         table = Table.read(filename, format='ascii.ecsv')
         z = table['z_min']
-        re = table['log_psi']
+        # Madau & Dickinson (2014) quote their compilation for a Salpeter IMF;
+        # shift it onto the model's Chabrier scale. The errors are in dex and so
+        # are unchanged by the shift.
+        re = table['log_psi'] + SALPETER_TO_CHABRIER_DEX
         re_err_plus = table['e_log_psi_up']
         re_err_minus = table['e_log_psi_lo']
         return z, re, re_err_plus, re_err_minus
@@ -1439,7 +1456,9 @@ def load_madau_dickinson_smd_2014_data():
     try:
         table = Table.read(filename, format='ascii.ecsv')
         z = table['z_min']
-        re = table['log_rho']
+        # Salpeter -> Chabrier, as for the SFRD compilation above. Keeps this
+        # curve on the same footing as the COSMOS-Web SMD, which is Chabrier.
+        re = table['log_rho'] + SALPETER_TO_CHABRIER_DEX
         re_err_plus = table['e_log_rho_up']
         re_err_minus = table['e_log_rho_lo']
         return z, re, re_err_plus, re_err_minus
@@ -7159,9 +7178,13 @@ def plot_16_sfrd_history():
         psi = 0.015 * (1+z)**2.7 / (1 + ((1+z)/2.9)**5.6)
         return psi
 
-    f_chab_to_salp = 1/0.63
+    # Their eq. 15 is a Salpeter-IMF fit, so it comes DOWN onto the model's
+    # Chabrier scale. This previously multiplied by 1/0.63, raising it by 0.2 dex
+    # instead of lowering it by 0.24 -- a 0.44 dex error in the wrong direction,
+    # which made the model look ~0.2 dex low against this curve while looking
+    # ~0.2 dex high against the natively-Chabrier COSMOS-Web curve beside it.
     z_values = np.linspace(0, 8, 200)
-    md14 = np.log10(MD14_sfrd(z_values) * f_chab_to_salp)
+    md14 = np.log10(MD14_sfrd(z_values)) + SALPETER_TO_CHABRIER_DEX
     ax.plot(z_values, md14, color='gray', lw=1.5, alpha=0.6, zorder=Z_OBS,
             label=_tex_safe(r'Madau \& Dickinson 2014'))
 
@@ -7575,6 +7598,79 @@ def plot_17_smd_history():
 
 # ========================== SMF OBSERVATIONAL DATA LOADER ==========================
 
+def _select_grid_snapshot(redshifts, first_snap, last_snap, z_lo, z_hi,
+                          z_ref=None, tol=0.05):
+    """
+    Snapshot representing the redshift bin [z_lo, z_hi] for one model.
+
+    Without *z_ref*, returns the in-bin snapshot nearest the bin centre.
+
+    With *z_ref* -- the redshift the reference model actually landed on -- returns the
+    in-bin snapshot nearest *z_ref* instead. Selecting each model independently against
+    the bin centre looks equivalent but is not: the simulations have different snapshot
+    tables (Millennium 64 snapshots, miniUchuu 50), so at high redshift the two curves
+    end up at genuinely different epochs while the panel is labelled with a single bin.
+    Measured on the shipped runs, that put them dz = 0.70 apart in 8.5 < z < 9.5 and
+    dz = 0.47 apart in 5.5 < z < 6.5, on opposite sides of the bin centre -- comparable
+    to 0.2-0.3 dex of SMF evolution at the massive end, i.e. an offset between the model
+    curves that is an artefact of snapshot sampling rather than physics.
+
+    Alignment is not pursued at any cost: candidates within *tol* of the best |z - z_ref|
+    count as ties and are broken toward the bin centre, so a snapshot is not dragged away
+    from the epoch the panel advertises in exchange for a negligible gain in alignment.
+    In 4.5 < z < 5.5 that guard matters -- matching would have improved alignment by 0.01
+    while nearly tripling the distance from the bin centre.
+
+    Returns (snap_num, snap_redshift), or (None, None) if the model has no snapshot in
+    the bin. Residual offsets that no choice can remove are reported by
+    _report_grid_alignment().
+    """
+    sub = np.asarray(redshifts)[first_snap:last_snap + 1]
+    idx = np.where((sub >= z_lo) & (sub <= z_hi))[0]
+    if idx.size == 0:
+        return None, None
+    z_mid = 0.5 * (z_lo + z_hi)
+    if z_ref is None:
+        pick = idx[np.argmin(np.abs(sub[idx] - z_mid))]
+    else:
+        d = np.abs(sub[idx] - z_ref)
+        near = idx[d <= d.min() + tol]
+        pick = near[np.argmin(np.abs(sub[near] - z_mid))]
+    return int(pick + first_snap), float(sub[pick])
+
+
+def _report_grid_alignment(chosen, threshold=0.10):
+    """
+    Print the redshift each model was drawn at per bin, and flag bins where the models
+    are further apart than *threshold* in z.
+
+    Those bins are limited by the coarser snapshot sampling of one simulation, not by the
+    selection: the offset cannot be removed without a snapshot that does not exist. They
+    are printed so the residual is visible in the log rather than hidden inside a panel
+    labelled with a single redshift range.
+
+    *chosen* maps bin label -> list of (model_label, snap_num, snap_redshift).
+    """
+    print('  snapshot alignment across models:')
+    worst = []
+    for bin_label, entries in chosen.items():
+        if len(entries) < 2:
+            continue
+        zs = [e[2] for e in entries]
+        spread = max(zs) - min(zs)
+        detail = ',  '.join(f'{lab}: Snap_{sn} z={zz:.3f}' for lab, sn, zz in entries)
+        flag = '   <-- limited by snapshot sampling' if spread > threshold else ''
+        print(f'    {bin_label:<14s} spread dz={spread:.3f}   {detail}{flag}')
+        if spread > threshold:
+            worst.append((bin_label, spread))
+    if worst:
+        print(f'    {len(worst)} of {len(chosen)} bins exceed dz = {threshold:g}: '
+              + ', '.join(f'{b} ({d:.2f})' for b, d in worst))
+    else:
+        print(f'    all bins aligned to within dz = {threshold:g}')
+
+
+
 def _load_smf_grid_observations():
     """
     Load all observational SMF datasets for the redshift grid plot.
@@ -7767,7 +7863,7 @@ def _load_smf_grid_observations():
                     if key not in bins:
                         bins[key] = {'m': [], 'lp': [], 'ehi': [], 'elo': []}
                     phi_c = 10**lg_p * (h_s / h)**3
-                    bins[key]['m'].append(lg_m - 0.24)  # Salpeter→Chabrier
+                    bins[key]['m'].append(lg_m + SALPETER_TO_CHABRIER_DEX)  # Salpeter→Chabrier
                     bins[key]['lp'].append(np.log10(phi_c))
                     bins[key]['ehi'].append(ehi)
                     bins[key]['elo'].append(elo)
@@ -8063,23 +8159,26 @@ def plot_18_smf_redshift_grid():
     axes_flat = axes.flatten()
     binwidth = 0.1
     _bin18_smf = {}  # store per-bin SMF for comparison printout
+    _alignment = {}  # bin -> [(model, snap, z)] for the alignment report
 
     for i, (z_lo, z_hi) in enumerate(z_bins):
         ax = axes_flat[i]
         z_mid = 0.5 * (z_lo + z_hi)
 
+        # The first model listed sets the epoch for the panel; the rest are matched to
+        # the redshift it actually landed on, not to the bin centre, so overlaid curves
+        # are compared at the same epoch. See _select_grid_snapshot().
+        z_ref_panel = None
         for model in models:
-            mod_redshifts = model['redshifts']
-            first_snap = model['first_snap']
-            last_snap = model['last_snap']
-
-            # Find snapshot closest to bin centre that falls within the bin
-            snap_redshifts = mod_redshifts[first_snap:last_snap + 1]
-            in_bin = np.where((snap_redshifts >= z_lo) & (snap_redshifts <= z_hi))[0]
-            if len(in_bin) == 0:
+            snap_num, snap_z = _select_grid_snapshot(
+                model['redshifts'], model['first_snap'], model['last_snap'],
+                z_lo, z_hi, z_ref=z_ref_panel)
+            if snap_num is None:
                 continue
-            snap_idx = in_bin[np.argmin(np.abs(snap_redshifts[in_bin] - z_mid))]
-            snap_num = snap_idx + first_snap
+            if z_ref_panel is None:
+                z_ref_panel = snap_z
+            _alignment.setdefault(f'{z_lo:.1f}-{z_hi:.1f}', []).append(
+                (model['label'], snap_num, snap_z))
             snap_name = f'Snap_{snap_num}'
 
             try:
@@ -8203,6 +8302,8 @@ def plot_18_smf_redshift_grid():
     ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
     ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
 
+    _report_grid_alignment(_alignment)
+
     outputFile = os.path.join(OUTPUT_DIR, 'SMF_Redshift_Grid' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
 
@@ -8282,23 +8383,26 @@ def plot_18b_smf_redshift_grid_wide():
     axes_flat = axes.flatten()
     binwidth = 0.1
     _bin18b_smf = {}  # store per-bin SMF for comparison printout
+    _alignment = {}  # bin -> [(model, snap, z)] for the alignment report
 
     for i, (z_lo, z_hi) in enumerate(z_bins):
         ax = axes_flat[i]
         z_mid = 0.5 * (z_lo + z_hi)
 
+        # The first model listed sets the epoch for the panel; the rest are matched to
+        # the redshift it actually landed on, not to the bin centre, so overlaid curves
+        # are compared at the same epoch. See _select_grid_snapshot().
+        z_ref_panel = None
         for model in models:
-            mod_redshifts = model['redshifts']
-            first_snap = model['first_snap']
-            last_snap = model['last_snap']
-
-            # Find snapshot closest to bin centre that falls within the bin
-            snap_redshifts = mod_redshifts[first_snap:last_snap + 1]
-            in_bin = np.where((snap_redshifts >= z_lo) & (snap_redshifts <= z_hi))[0]
-            if len(in_bin) == 0:
+            snap_num, snap_z = _select_grid_snapshot(
+                model['redshifts'], model['first_snap'], model['last_snap'],
+                z_lo, z_hi, z_ref=z_ref_panel)
+            if snap_num is None:
                 continue
-            snap_idx = in_bin[np.argmin(np.abs(snap_redshifts[in_bin] - z_mid))]
-            snap_num = snap_idx + first_snap
+            if z_ref_panel is None:
+                z_ref_panel = snap_z
+            _alignment.setdefault(f'{z_lo:.1f}-{z_hi:.1f}', []).append(
+                (model['label'], snap_num, snap_z))
             snap_name = f'Snap_{snap_num}'
 
             try:
@@ -8418,6 +8522,8 @@ def plot_18b_smf_redshift_grid_wide():
 
     fig.tight_layout()
     fig.subplots_adjust(hspace=0.001, wspace=0.001)
+
+    _report_grid_alignment(_alignment)
 
     outputFile = os.path.join(OUTPUT_DIR, 'SMF_Redshift_Grid_Wide' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)

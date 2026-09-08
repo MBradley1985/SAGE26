@@ -1,5 +1,97 @@
 # Changelog
 
+## `PrecipCriterionOn` now selects the individual factors of the precipitation rate (September 2026) — byte-identical at the default
+
+The CGM inflow rate carries two separable suppression factors,
+
+    mdot = S((threshold - r) / width) * (M_CGM - M_eq) / t_ff,
+    r = t_cool/t_ff,   M_eq = M_CGM * r / threshold,
+
+and `PrecipCriterionOn` was a 0/1 switch on both of them at once. It now selects them
+individually: 1 = both (default, unchanged), 2 = `M_eq` only, dropping the sigmoid,
+3 = sigmoid only, dropping the condensation term, 4 = neither while keeping the rest of
+the precipitation path, 0 = neither *and* skipping the hand-over to standard cooling, so
+`mdot = M_CGM/t_ff` for every CGM halo however stable.
+
+Modes 1-4 are a 2x2 factorial differing by nothing but the two factors, so **mode 4 is
+the reference the single-factor rows should be measured against.** Mode 0 changes the
+hand-over as well, so it moves two things at once and is the weaker control. The sigmoid
+is evaluated in all four active modes even where it is not multiplied into the rate,
+because it also supplies that hand-over test (`f < 0.01`, i.e. `r ~ 19.2`); keeping it
+common is what makes the factorial clean. The same gate applies to the
+`PreventiveHeatingOn = 5` hot-halo ceiling, built from the same two factors, so the
+switch means one thing everywhere.
+
+Mode 1 is bit-for-bit unchanged: verified on mini-Millennium against a rebuild of the
+pre-change source, 5440 datasets over 64 snapshots, zero differing.
+
+**Neither factor does much, and the sigmoid does essentially nothing.** Total stellar
+mass in the box relative to mode 4:
+
+| mode | z = 0 | z = 1 | z = 2 | z = 4 |
+|------|-------|-------|-------|-------|
+| 1, both        | 0.9913 | 0.9874 | 0.9850 | 0.9844 |
+| 2, no sigmoid  | 0.9913 | 0.9890 | 0.9881 | 0.9887 |
+| 3, no `M_eq`   | 0.9996 | 0.9988 | 0.9983 | 0.9972 |
+
+and the stellar mass function offset from mode 4, in dex rms over bins holding at least
+10 galaxies:
+
+| mode | z = 0 | z = 1 | z = 2 | z = 4 |
+|------|-------|-------|-------|-------|
+| 1, both        | 0.008 | 0.014 | 0.008 | 0.020 |
+| 2, no sigmoid  | 0.007 | 0.014 | 0.007 | 0.019 |
+| 3, no `M_eq`   | 0.005 | 0.006 | 0.004 | 0.014 |
+
+The condensation term supplies essentially all of the criterion's effect: mode 2 (`M_eq`
+alone) reproduces mode 1 to within 0.001-0.004 dex, so the sigmoid adds nothing on top
+of it. On its own the sigmoid costs 0.03-0.3% of the stellar mass and 0.004-0.014 dex
+rms, under the Poisson error in every bin at every redshift. The whole criterion is
+worth ~1% of the stellar mass and under 0.02 dex, because the regime split already
+routes the marginally stable haloes into the hot branch before the criterion is
+consulted: CGM-regime haloes sit at `r ~ 0.1-0.4`, two orders of magnitude below the
+threshold of 10, so the sigmoid never leaves its ceiling `S(5) = 0.9933` (inflow-weighted
+mean 0.9919 at z = 0 rising to 0.9930 at z = 6, in every mass bin from `log Mvir` 10 to
+12.5).
+
+Mode 2 therefore removes `PRECIP_TRANSITION_WIDTH` from the model at no measurable cost.
+
+Modes 0 and 4 agree in the mean to better than 1 part in 10^4 in total stellar mass,
+despite the hand-over touching 40% of z = 0 galaxies (max 0.30 dex on any one galaxy,
+falling to 0.23% of galaxies and 0.0004 dex by z = 4). The population the hand-over acts
+on carries no mass: above the threshold, 96% of haloes have `CGMgas == 0` exactly, where
+`t_cool` diverges because the density is zero rather than because the halo is held at
+marginal stability, and the whole `r >= 10` population holds 0.014% of the CGM mass.
+
+One defect is preserved rather than fixed, so that it cannot contaminate the factorial:
+for `10 <= r < 19.2` the condensation term is zero while the sigmoid is still above the
+hand-over threshold, so inflow is exactly zero, whereas at `r >= 19.2` the hand-over
+fires and inflow resumes at `M_CGM/t_cool`. Inflow is therefore non-monotonic in
+stability across that interval. It affects 0.29% of z = 0 CGM-regime centrals, so it
+biases nothing, but it is a defect and it lives in the branch that exists only to
+service the sigmoid.
+
+Mode 5 was added afterwards: SAGE16 cold accretion, `mdot = M_CGM / (Rvir/Vvir)`, the rate
+the published model used on its `rcool > Rvir` rapid-cooling branch. It bypasses the criterion
+like mode 0, but drains on the dynamical rather than the free-fall time. Since
+`t_ff = sqrt(2) Rvir/Vvir` exactly for the uniform profile, mode 5 is a uniform `sqrt(2)` = 1.41x
+faster than mode 0 -- the same `M_CGM/t` shape with a different constant. It is by far the
+largest of the six modes:
+
+| mode | z = 0 | z = 1 | z = 2 | z = 4 |
+|------|-------|-------|-------|-------|
+| 0, free-fall | 1.0088 | 1.0128 | 1.0152 | 1.0158 |
+| 5, SAGE16 `t_dyn` | 1.0345 | 1.0843 | 1.1494 | 1.2409 |
+
+as total stellar mass relative to mode 1 (SMF offsets 0.031-0.096 dex rms). A 41% change in the
+inflow-rate normalisation therefore moves the model 3-15x more than deleting the criterion's
+two suppression factors altogether -- the normalisation is what matters, not the shape.
+
+Ablation variants `precip`, `sigmoid`, `meq` and `precipfactors` were added to
+`plotting/ablation_series.py`, covering modes 0, 2, 3 and 4. The existing `nocgm`
+variant removes the CGM machinery wholesale and so cannot separate the Voit criterion
+from the regime split plus free-fall accretion; these can.
+
 ## Bug fix: SFR outputs were scaled by the substep count (September 2026) — NOT byte-identical
 
 `SfrDisk` and `SfrBulge` in both output formats were divided by the compile-time
@@ -27,16 +119,44 @@ re-capturing** -- `SfrDisk` and `SfrBulge` are the only datasets that change.
 matters for `effective_steps < STEPS`, where they were low by the same factor
 (`SubstepResolution = 0.5` halved them). Default output is unchanged.
 
-Galaxies now carry `SubstepsUsed`, set per halo per snapshot in `evolve_galaxies()`.
-The `SFHMassDisk` / `SFHMassBulge` histories accumulate mass rather than rate and were
-correct at every substep count; they are untouched.
+Galaxies now carry `SubstepsUsed`, set per halo per snapshot in `evolve_galaxies()`, and
+`model_misc.h` provides `sfr_rate_divisor()` / `sfr_metallicity_divisor()`. The
+`SFHMassDisk` / `SFHMassBulge` histories accumulate mass rather than rate and were correct
+at every substep count; they are untouched.
+
+The fix is applied in both output paths. It was briefly reverted while chasing a
+Millennium mismatch that turned out to be an unrelated `DiskRadiusFactor = 0.55` left in
+`input/millennium.par`; with `f_j` restored to 1.0 this fix is the only remaining
+difference from the pre-fix model, and it moves 0.05% of the total SFR.
+
+## Plotting: Madau & Dickinson IMF conversion corrected (September 2026)
+
+`paper_plots.py` shifted the Madau & Dickinson (2014) SFRD fit by `x 1/0.63` (+0.20 dex,
+Chabrier -> Salpeter) while `load_madau_dickinson_2014_data()` and the SMD equivalent
+applied no conversion at all, and no caller compensated. Both are wrong in the same
+direction: MD14 is quoted for a Salpeter IMF and SAGE is Chabrier (`whichimf = 1` in
+upstream `allresults-history.py`), so the observations must come DOWN by 0.24 dex.
+
+Verified against the repository's own data rather than asserted: MD14's stellar mass
+density sits +0.26 dex (median, 23 points over z = 0.45-8) above `data/sfrd/SMD.ecsv`,
+which declares `IMF: Chabrier03`. As a second check, the MD14 fit peaked at 0.21
+Msun/yr/Mpc^3 as previously plotted, above any published compilation for any IMF; shifted
+to Chabrier it peaks at 0.077, inside the accepted 0.08-0.10 range.
+
+`SALPETER_TO_CHABRIER_DEX = -0.24` is now defined once and used by both MD14 loaders, the
+fit, and the SMF loader (which already used the literal -0.24). Consequence: the two
+observational curves on the CSFRD axes were 0.6 dex apart and are now 0.15 dex apart, and
+SAGE26 sits on MD14-Chabrier at cosmic noon rather than 0.2 dex below it. **This changes
+figures, not the model.**
 
 ## Disk radius behind a toggle (September 2026) — byte-identical at defaults
 
 `DiskRadiusOn` (default 0) selects the disk scale radius model: 0 reproduces the
 published Mo+98 expression bit-for-bit, 1 adds a working virial fallback and bounds
-`r_d/Rvir`, 2 additionally smooths the halo spin **vector** over a dynamical time to
-remove the low-particle-count bias in `|j|`. New parameters `DiskRadiusMaxFrac` and
+`r_d/Rvir`, 2 additionally smooths the halo spin **vector** over a dynamical time, which cuts the
+snapshot-to-snapshot jitter in `r_d` by 3x. It does *not* remove the low-particle-count
+bias in `|j|` -- that error is correlated between snapshots, so time-averaging cannot
+reach it -- and it does not improve the HI mass function. New parameters `DiskRadiusMaxFrac` and
 `GasDiskRadiusFactor` (the atomic-to-stellar scale length ratio, applied only in the
 HI ionisation cut). See [docs/physics/disk_sizes.md](docs/physics/disk_sizes.md).
 

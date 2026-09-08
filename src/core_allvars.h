@@ -482,8 +482,16 @@ struct params
     int32_t    DiskInstabilityOn;
     int32_t    CGMrecipeOn;
     int32_t    CGMDensityProfile;  // 0: uniform, 1: NFW, 2: beta-profile
-    int32_t    PrecipCriterionOn; // 1: Voit t_cool/t_ff precipitation criterion (default);
-                                 // 0: bypass it -- mdot = M_CGM / t_ff for every CGM halo
+    int32_t    PrecipCriterionOn; // Which factors of the Voit t_cool/t_ff precipitation rate
+                                 // mdot = S((10 - r)/2) * (M_CGM - M_eq)/t_ff are applied:
+                                 // 0: neither -- mdot = M_CGM / t_ff for every CGM halo
+                                 // 1: both (default, the submitted rate)
+                                 // 2: M_eq only -- drop the f_inflow sigmoid
+                                 // 3: sigmoid only -- drop the condensation term
+                                 // 4: neither, but keeping the hand-over to standard
+                                 //    cooling that mode 0 skips (the 2x2 reference)
+                                 // 5: SAGE16 cold accretion, mdot = M_CGM/(Rvir/Vvir)
+                                 //    (= sqrt(2) x mode 0; no hand-over)
     int32_t    FIREmodeOn;
     int32_t    RegimeRandomMode;     // 0: fresh random draw each snapshot (default, original behaviour); 1: use the persistent RegimeRandom assigned at galaxy creation (deterministic regime evolution driven by mass)
     int32_t    ColdStreamCeilingOn;  // Cold-stream shut-off below z_crit.
@@ -498,9 +506,10 @@ struct params
                                   // 1: as 0, plus a working Rvir fallback (from Len*PartMass) and a
                                   //    [DISK_RADIUS_MIN_FRAC, DiskRadiusMaxFrac] * Rvir bound
                                   // 2: as 1, but built from a running mean of the halo spin *vector*
-                                  //    over a halo dynamical time, which suppresses both the
-                                  //    snapshot-to-snapshot jitter and the low-particle-count bias
-                                  //    in |j| (see docs/physics/disk_sizes.md)
+                                  //    over a halo dynamical time. Suppresses the snapshot-to-snapshot
+                                  //    jitter in r_d (3x) and shrinks r_d by a near-uniform ~9%; does
+                                  //    NOT remove the low-particle-count bias in |j|, which is
+                                  //    correlated between snapshots (see docs/physics/disk_sizes.md)
     double     DiskRadiusMaxFrac; // Ceiling on r_d / Rvir when DiskRadiusOn > 0. The default 0.15
                                   // corresponds to lambda ~ 0.21 and moves ~4% of Millennium
                                   // galaxies at z=0; set very large to disable the ceiling.
@@ -512,6 +521,23 @@ struct params
                              // Sets which of two baryon cycles a halo follows, so it is a
                              // physics parameter rather than a constant; exposed for the
                              // sensitivity test requested in referee Major Comment 9.
+    int32_t    PreventiveHeatingOn;  // Non-AGN preventive suppression of the cooling flow:
+                                  // 0: off (published behaviour)
+                                  // 1: halo-mass gate, hot regime (Regime==1) only
+                                  // 2: halo-mass gate, both regimes
+                                  // 3: as 1, but combined with the AGN suppression by taking the
+                                  //    stronger of the two rather than multiplying them
+                                  // 4: as 3, both regimes
+                                  // 5: Voit t_cool/t_ff ceiling on the hot-regime cooling rate
+                                  // 6: gravitational (halo-accretion) heating offset
+                                  // Modes 1/2 multiply, which double-counts at z=0 where the r_heat
+                                  // ratchet has already saturated; modes 3/4 do not.
+                                  // See preventive_suppression() in model_cooling_heating.c.
+    double     PreventiveHeatingMass;   // M_prev [Msun]: halo mass at which the cooling flow is
+                                        // suppressed by 50%. Default 1e12.
+    double     PreventiveHeatingSlope;  // Exponent in f = 1/(1 + (Mvir/M_prev)^slope). Default 2.0.
+    double     PreventiveHeatingEfficiency; // epsilon for mode 6: fraction of the halo's accretion
+                                        // energy thermalised in the corona. Default 0.02.
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation, 3: hybrid (Vmax/Vvir, infall-frozen for satellites)
     int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
     int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too
