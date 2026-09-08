@@ -75,6 +75,7 @@ optional parameters take the listed default if omitted.
 | `DynamicDisruptionSplit` | int | no | `2` | ICS-vs-BCG split for disrupted satellite stellar mass: 0=fixed fraction `FractionDisruptedToICS`; 1=mass-ratio split `f_ICS = 1 - (infallMvir / Mhost)^DisruptionSplitAlpha`; 2=mass-ratio split with concentration weighting (`alpha_eff = DisruptionSplitAlpha * DisruptionSplitCref / c_sat`). |
 | `RamPressureStrippingOn` | 0/1 | no | `1` | Gunn & Gott (1972) ram-pressure stripping of satellite cold gas (ISM): 1=on (default); 0=off. Independent of the always-on hot-gas (starvation) stripping; see `docs/physics/infall.md`. |
 | `RamPressureEpsilon` | double | no | `1.0` | Order-unity prefactor on the ram pressure `P_ram = eps * rho_host * v_sat^2`, absorbing the disk-orientation geometry uncertainty. Used only when `RamPressureStrippingOn=1`. |
+| `DiskRadiusOn` | int | no | `0` | Disk scale radius model. 0=published Mo, Mao & White (1998) eq. 12 from the instantaneous halo spin, unbounded. 1=adds a working virial fallback (the published else-branch is only reachable when `Rvir == 0`, so it returns `r_d = 0` and leaves the galaxy permanently inert; here the virial scale is rebuilt from `Len * PartMass`) and bounds `r_d / Rvir` to `[0.002, DiskRadiusMaxFrac]`. 2=as 1, but `\|j\|` comes from a running mean of the spin **vector** over a halo dynamical time, which removes the low-particle-count bias as well as the snapshot-to-snapshot jitter. See [physics/disk_sizes.md](physics/disk_sizes.md). |
 
 ---
 
@@ -85,6 +86,8 @@ optional parameters take the listed default if omitted.
 | `CGMDensityProfile` | int | no | `0` | CGM gas density profile for precipitation: 0=uniform; 1=NFW; 2=beta (β=2/3). |
 | `PrecipCriterionOn` | 0/1 | no | `1` | Voit t_cool/t_ff precipitation criterion: 1=on; 0=bypass, giving ṁ = M_CGM/t_ff for every CGM halo (the f_inflow ≡ 1 control). |
 | `RegimeRandomMode` | 0/1 | no | `0` | Where the CGM/hot regime draw comes from: 0=a fresh uniform draw each snapshot (default); 1=the persistent `RegimeRandom` assigned at galaxy creation. As for `FFBRandomMode`, the difference is temporal rather than statistical: with 0 borderline-mass galaxies switch regime repeatedly, with 1 the regime evolves monotonically with `M_vir`. |
+| `ColdStreamCeilingOn` | 0/1 | no | `0` | How cold streams shut off below the critical redshift in `M_vir > Mshock` haloes: 0=hard cut at `z = 1.5` (published behaviour); 1=Dekel & Birnboim (2006) eqs 39-41, where the criterion is the stream cooling-to-compression ratio `R = (f Mstar/M_vir)^(2/3) (M_vir/Mshock)^(4/3)` and `f_stream` is a sigmoid in `log10 R` of width 0.3 dex. With 1 the redshift dependence enters through the clustering mass `Mstar(z)` rather than the explicit `(1+z)/2` factor, and `z_crit` emerges from `f Mstar(z_crit) = Mshock` (1.20 for Millennium, 1.01 for miniUchuu at `f = 3`) instead of being imposed, so `f_stream` is continuous in redshift. |
+| `StreamMassFactor` | double | no | `3.0` | The order-unity factor `f` in Dekel & Birnboim (2006) eqs 40-41, setting the stream width relative to the clustering scale. Used only when `ColdStreamCeilingOn=1`; they adopt `f = 3`. |
 
 ---
 
@@ -121,6 +124,14 @@ optional parameters take the listed default if omitted.
 | `RecycleFraction` | dimensionless | `0.43` | Fraction of stellar mass instantaneously recycled to cold gas. |
 | `Yield` | dimensionless | `0.025` | Fraction of stellar mass returned as metals. |
 | `FracZleaveDisk` | dimensionless | `0.0` | Fraction of newly produced metals transferred directly to hot gas. |
+
+### Disk sizes
+
+| Parameter | Units | Default | Description |
+|-----------|-------|---------|-------------|
+| `DiskRadiusFactor` | dimensionless | `1.0` | Angular-momentum retention factor `f_j` multiplying the Mo+98 disk scale radius. Since `R_vir` cancels out of MMW98 eq. 12, the radius is really `r_d = f_j * |j| / (2 Vvir)`. 1.0 = full retention (published). Matching the Somerville et al. (2018) GAMA stellar-size/halo-size ratio (`R*/Rvir ~ 0.017`, flat in mass) needs `f_j ~ 0.55`, which is also the expected `j_disk/j_halo`. Strongly degenerate with `SfrEfficiency`: SFR responds as `r_d^-3.7`, so on Millennium `f_j = 0.55` lowers the total HI mass by 2.9x while raising the total stellar mass by 0.14 dex. |
+| `DiskRadiusMaxFrac` | dimensionless | `0.15` | Ceiling on `r_d / Rvir`, applied after `f_j`, when `DiskRadiusOn > 0`. Bounded against the peak-retained `Rvir` the physics uses, not the instantaneous `Rvir` written to the output column, so a halo below its peak mass can show a larger ratio on output. The default corresponds to `lambda ~ 0.21`; unbounded, 11.5% of Millennium galaxies at z=0 exceed `0.1 Rvir` and the 99.9th-percentile `r_d` is 32 kpc. Set very large to disable. |
+| `GasDiskRadiusFactor` | dimensionless | `1.0` | `chi`: ratio of the atomic-gas scale length to the stellar/H2 scale length, applied **only** in the HI ionisation truncation. 1.0 = cospatial (published behaviour); observed disks have `chi ~ 1.5-2`. Independent of `DiskRadiusOn`. Raising it spreads the same HI over a larger area so more of it falls below `SIGMA_HI_CRIT`, without touching the H2 midplane pressure (H2 is central and shielded, which is why one radius should not set both). A modest lever: `chi = 1.7` moves the ionised fraction from 0.13 to 0.28 at the median surface density. |
 
 ### Supernova feedback
 
@@ -178,7 +189,7 @@ calibration transfer across simulations with different output spacing.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `SubstepResolution` | double | `1.0` | Runtime multiplier on the adaptive-substep floor **and** cap. **Calibration-locked numerical knob, not a physics choice** — the model is calibrated at `1.0`; do not change it for science runs without recalibrating. Coarse steps over-cool (cooling outruns the AGN `r_heat` response before it can react), so raising the resolution lowers the massive-end SMF and total stellar mass. The shift from `1.0` to fully converged is only **~0.1 dex** at the massive end (within typical observational SMF scatter), but runtime grows **~linearly** with the substep count. Use higher values only for deliberate convergence / resolution studies. |
+| `SubstepResolution` | double | `1.0` | Runtime multiplier on the adaptive-substep floor **and** cap. **Calibration-locked numerical knob, not a physics choice** — the model is calibrated at `1.0`; do not change it for science runs without recalibrating. Coarse steps over-cool (cooling outruns the AGN `r_heat` response before it can react), so raising the resolution lowers the massive-end SMF and total stellar mass. The shift from `1.0` to fully converged is only **~0.1 dex** at the massive end (within typical observational SMF scatter), but runtime grows **~linearly** with the substep count. Use higher values only for deliberate convergence / resolution studies. Note that the reported `SfrDisk`/`SfrBulge` are normalised by the substep count actually integrated (`SubstepsUsed`), not by `STEPS`; before September 2026 they were divided by `STEPS`, which scaled the reported SFR by `effective_steps/STEPS` and made this knob useless for convergence testing. **Run convergence sweeps with `FFBRandomMode=1` and `RegimeRandomMode=1`.** With the default per-snapshot draws, changing the substep count shifts the global `rand()` sequence, and the resulting scatter is non-monotonic and larger than the convergence signal: total stellar mass on mini-Millennium goes 1528 / 962 / 1255 / 1191 for N = 5 / 10 / 20 / 30. With persistent per-galaxy draws the same sweep is monotonic and converging -- 1529 / 1349 / 1262 / 1211, i.e. -12%, -6.4%, -4%. Note the two modes agree to within 2% at N = 5, 20 and 30 but differ by 30% at the default N = 10, which is worth understanding before quoting either number. |
 
 **Convergence note.** The substep dependence is a long-standing property of SAGE's
 cooling/feedback operator-splitting (it is present, and slightly *stronger*, with

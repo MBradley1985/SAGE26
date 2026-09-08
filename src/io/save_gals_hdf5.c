@@ -936,17 +936,20 @@ static int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct sav
     float tmp_SfrDiskZ = 0.0;
     float tmp_SfrBulgeZ = 0.0;
 
-    // NOTE: in Msun/yr
+    // NOTE: in Msun/yr. Divisors come from the substep count actually integrated, not STEPS;
+    // see sfr_rate_divisor() in model_misc.h.
+    const int sfr_norm = sfr_rate_divisor(g->SubstepsUsed);
+    const int met_norm = sfr_metallicity_divisor(g->SubstepsUsed);
     for(int step = 0; step < STEPS; step++) {
-        tmp_SfrDisk += g->SfrDisk[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / STEPS;
-        tmp_SfrBulge += g->SfrBulge[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / STEPS;
+        tmp_SfrDisk += g->SfrDisk[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / sfr_norm;
+        tmp_SfrBulge += g->SfrBulge[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / sfr_norm;
 
         if(g->SfrDiskColdGas[step] > 0.0) {
-            tmp_SfrDiskZ += g->SfrDiskColdGasMetals[step] / g->SfrDiskColdGas[step] / STEPS;
+            tmp_SfrDiskZ += g->SfrDiskColdGasMetals[step] / g->SfrDiskColdGas[step] / met_norm;
         }
 
         if(g->SfrBulgeColdGas[step] > 0.0) {
-            tmp_SfrBulgeZ += g->SfrBulgeColdGasMetals[step] / g->SfrBulgeColdGas[step] / STEPS;
+            tmp_SfrBulgeZ += g->SfrBulgeColdGasMetals[step] / g->SfrBulgeColdGas[step] / met_norm;
         }
     }
 
@@ -1315,6 +1318,10 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FFBThresholdSlope", run_params->FFBThresholdSlope, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FFBIgnoreRegime", run_params->FFBIgnoreRegime, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FFBRandomMode", run_params->FFBRandomMode, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "MShockMsun", run_params->MShockMsun, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ColdStreamCeilingOn", run_params->ColdStreamCeilingOn, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "StreamMassFactor", run_params->StreamMassFactor, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DiskRadiusFactor", run_params->DiskRadiusFactor, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FeedbackReheatingEpsilon", run_params->FeedbackReheatingEpsilon, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FeedbackEjectionEfficiency", run_params->FeedbackEjectionEfficiency, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ReIncorporationFactor", run_params->ReIncorporationFactor, H5T_NATIVE_DOUBLE);

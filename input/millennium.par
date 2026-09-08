@@ -57,6 +57,8 @@ FIREmodeOn                  1   %0: switch off
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
 FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 conc); 3: BK25 (ConcentrationOn method); 4: BK25 + log-normal c scatter; 5: Li+24 sharp; 6: Li+24 sigmoid + H2 SF; 7: BK25 log-normal c scatter + H2 SF
 
+DiskRadiusOn                0   %0: published Mo+98 from the instantaneous halo spin; 1: + working Rvir fallback and a bound on r_d/Rvir; 2: + spin vector smoothed over a halo dynamical time (removes the low-Len bias in |j|)
+
 SaveFullSFH                 1   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
 
@@ -65,6 +67,9 @@ TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_acc
 %------------------------------------------
 
 SfrEfficiency               0.05    %efficiency of SF; unused for SFprescription=3,6
+DiskRadiusFactor            1.0     %f_j: angular-momentum retention multiplying the Mo+98 disk radius. 1.0 = full retention; ~0.55 matches the Somerville+18 stellar-size/halo-size ratio
+DiskRadiusMaxFrac           0.15    %ceiling on r_d/Rvir (peak Rvir); used only when DiskRadiusOn > 0
+GasDiskRadiusFactor         1.0     %chi: atomic-disk scale length / stellar-disk scale length, used in the HI ionisation cut only. 1.0 = cospatial (published); observed disks have chi ~ 1.5-2
 FFBMaxEfficiency            0.2     %0.2 fits observations best, 1.0 is theoretical maximum
 
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)

@@ -110,6 +110,10 @@ static const double CGM_BETA_CORE_RADIUS_FRAC = 0.1;
  * De Lucia & Blaizot (2006) estimate z_crit ~ 1-2; we adopt the midpoint. */
 static const double Z_CRIT_DB06 = 1.5;
 
+/* Width, in dex, of the smooth transition about the Dekel & Birnboim (2006)
+ * stream criterion (t_cool/t_comp)_stream = 1 when ColdStreamCeilingOn == 1. */
+static const double STREAM_TRANSITION_WIDTH_DEX = 0.15;
+
 /* Cold-cloud AGN accretion (AGNrecipeOn == 3): BH triggers when its mass exceeds
  * this fraction of the sonic-radius enclosed virial mass, and accretes at this
  * fraction of the current cooling rate. Croton et al. (2006), AGN appendix. */
@@ -510,10 +514,31 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             // Redshift enhancement: normalized to z=1 following D&B06 eq 40
             const double z_factor = (1.0 + z) / (1.0 + 1.0);
 
-            // D&B06 eq 41: below z_crit cold streams are suppressed in M > Mshock halos
             double f_stream;
-            if(z < Z_CRIT_DB06 && mass_ratio > 1.0) {
-                f_stream = 0.0;  // Hard cutoff per D&B06
+            if(run_params->ColdStreamCeilingOn) {
+                // Dekel & Birnboim (2006) eqs 39-41.  Their eq. 39 compares the
+                // cooling and compression times within the stream,
+                //     R = (f Mstar/Mvir)^(2/3) (Mvir/Mshock)^(4/3),
+                // streams penetrating where R < 1.  The redshift dependence
+                // enters through the clustering mass Mstar(z) rather than an
+                // explicit (1+z) factor, and the shut-off is automatic: their
+                // eq. 41 defines z_crit by f Mstar(z_crit) = Mshock, which is
+                // exactly where R = 1 at Mvir = Mshock.  No redshift cut is
+                // imposed, so f_stream is continuous everywhere.
+                const double Mstar = pow(10.0, interpolate_clustering_mass(z, run_params));
+                const double fMstar = run_params->StreamMassFactor * Mstar;
+                const double ratio = pow(fMstar / Mvir_physical, 2.0/3.0)
+                                   * pow(mass_ratio, 4.0/3.0);
+                if(ratio > 0.0) {
+                    const double sigmoid_arg = -log10(ratio) / STREAM_TRANSITION_WIDTH_DEX;
+                    f_stream = 1.0 / (1.0 + exp(-sigmoid_arg));
+                } else {
+                    f_stream = 1.0;
+                }
+            } else if(z < Z_CRIT_DB06 && mass_ratio > 1.0) {
+                // D&B06 eq 41: below z_crit cold streams are suppressed in
+                // M > Mshock halos.  Hard cutoff; published behaviour.
+                f_stream = 0.0;
             } else {
                 // High-z regime: streams can penetrate
                 f_stream = pow(mass_ratio, -4.0/3.0) * z_factor;
@@ -1077,7 +1102,8 @@ static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const 
  */
 void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct GALAXY *galaxies)
 {
-    // add the fraction 1/STEPS of the total cooling gas to the cold disk
+    // Move the cooled mass into the cold disk. coolingGas was already computed for this
+    // substep's dt (deltaT / effective_steps), so there is no 1/STEPS factor here.
     if(coolingGas > 0.0) {
         if(coolingGas < galaxies[centralgal].HotGas) {
             const double metallicity = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);

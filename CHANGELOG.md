@@ -1,5 +1,45 @@
 # Changelog
 
+## Bug fix: SFR outputs were scaled by the substep count (September 2026) — NOT byte-identical
+
+`SfrDisk` and `SfrBulge` in both output formats were divided by the compile-time
+`STEPS` (10) rather than by the number of substeps `evolve_galaxies()` actually
+integrated. The `Sfr*` arrays hold `STEPS` bins but receive one `+=` per substep, so
+when the adaptive scheme (or `SubstepResolution`) makes `effective_steps != STEPS`,
+several substeps land in one bin and the bin sum is a sum over substeps. The reported
+SFR was therefore the true mean multiplied by `effective_steps / STEPS`.
+
+Verified on mini-Millennium against the SFH mass accumulators, which were always
+correct: output/true was exactly 0.500, 2.000 and 2.999 at `SubstepResolution` 0.5,
+2.0 and 3.0, and is now 1.000 at every setting. The knob was unusable for its stated
+purpose -- convergence testing -- because the diagnostic scaled with `N` by
+construction.
+
+At the default `SubstepResolution = 1.0` the adaptive path still fires for a minority
+of fast-evolving high-z haloes: 889 of 173 219 galaxy records (0.51%) change, with
+`effective_steps` of 11-20, peaking at 1-2% of galaxies per snapshot around z = 2-8.
+Their SFR was overstated by 10-100%, but they carry 0.05% of the total SFR, so global
+statistics (SMF, cosmic SFRD) are unaffected. **The regression baseline needs
+re-capturing** -- `SfrDisk` and `SfrBulge` are the only datasets that change.
+
+`SfrDiskZ` / `SfrBulgeZ` are assignments rather than sums, so exactly
+`min(effective_steps, STEPS)` bins carry a value; they now divide by that. This only
+matters for `effective_steps < STEPS`, where they were low by the same factor
+(`SubstepResolution = 0.5` halved them). Default output is unchanged.
+
+Galaxies now carry `SubstepsUsed`, set per halo per snapshot in `evolve_galaxies()`.
+The `SFHMassDisk` / `SFHMassBulge` histories accumulate mass rather than rate and were
+correct at every substep count; they are untouched.
+
+## Disk radius behind a toggle (September 2026) — byte-identical at defaults
+
+`DiskRadiusOn` (default 0) selects the disk scale radius model: 0 reproduces the
+published Mo+98 expression bit-for-bit, 1 adds a working virial fallback and bounds
+`r_d/Rvir`, 2 additionally smooths the halo spin **vector** over a dynamical time to
+remove the low-particle-count bias in `|j|`. New parameters `DiskRadiusMaxFrac` and
+`GasDiskRadiusFactor` (the atomic-to-stellar scale length ratio, applied only in the
+HI ionisation cut). See [docs/physics/disk_sizes.md](docs/physics/disk_sizes.md).
+
 ## Locked-in physics: six validated toggles removed (July 2026) — byte-identical
 
 After the toggle sweep confirmed the new default-on physics, six parameters

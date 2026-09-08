@@ -932,10 +932,17 @@ except Exception:
 
 
 def _delta_vir_bn98(z):
-    """Bryan & Norman 1998 virial overdensity (flat ΛCDM)."""
-    Ez2 = OMEGA_M * (1.0 + z)**3 + OMEGA_L
-    x = OMEGA_M * (1.0 + z)**3 / Ez2 - 1.0
-    return 18.0 * np.pi**2 + 82.0 * x - 39.0 * x**2
+    """Halo overdensity relative to rho_crit(z), matching the model.
+
+    SAGE defines R_vir with DELTA_VIRT = 200 rho_crit (model_halo_properties.c),
+    and the Ishiyama+21 concentration table it reads is mdef=200c.  The MBK25
+    criterion combines R_vir with c through c^2/(2 mu(c)), so both must use the
+    same definition; a Bryan & Norman virial overdensity here (the previous
+    behaviour) mixed a BN98 R_vir with a 200c concentration and biased the
+    threshold mass.  Kept under the original name so existing callers are
+    unaffected.
+    """
+    return 200.0 + 0.0 * np.asarray(z, dtype=float)
 
 
 def _rvir_m(Mvir_msun, z):
@@ -1718,6 +1725,18 @@ def load_himf_observations():
             print(f"Warning: Could not load Zwaan+05 HIMF: {e}")
 
     return observations
+
+
+def _gasmf_obs_yerr(obs, mask):
+    """Normalise the two error conventions used by the gas MF observation loaders.
+
+    Jones+18 and the H2 sets store absolute phi bounds in 'phi_lo'/'phi_hi';
+    Zwaan+05 stores error magnitudes in 'phi_err_lo'/'phi_err_hi'.
+    """
+    phi = obs['phi'][mask]
+    if 'phi_err_lo' in obs:
+        return [obs['phi_err_lo'][mask], obs['phi_err_hi'][mask]]
+    return [phi - obs['phi_lo'][mask], obs['phi_hi'][mask] - phi]
 
 
 # ========================== PLOT 1: STELLAR MASS FUNCTION (SF/Q) ==========================
@@ -10338,6 +10357,128 @@ def plot_29_mdot_vs_vvir():
         output_name='Mdot_vs_Vvir',
         upper_axis=_add_tvir_axis,
     )
+    print_mdot_panel_stats(x_prop='Vvir')
+
+def _read_runtime_attrs(directory):
+    """Runtime parameters from the HDF5 header of the first model file.
+
+    Returns an empty dict if the directory or the group is missing, so callers
+    can fall back for runs written before a parameter existed.
+    """
+    files = _find_model_files_early(directory)
+    if not files:
+        return {}
+    try:
+        with h5.File(files[0], 'r') as f:
+            out = {}
+            for k, v in f['Header/Runtime'].attrs.items():
+                out[k] = v.decode() if isinstance(v, bytes) else v
+            return out
+    except Exception:
+        return {}
+
+
+# Press-Schechter clustering mass M_*(z), log10 in Msun, on the same grid and
+# for the same two cosmologies as interpolate_clustering_mass() in
+# src/model_halo_properties.c.  Mirrored here so the diagnostics can report the
+# Dekel & Birnboim (2006) stream ceiling without re-deriving sigma(M).
+_MSTAR_Z = np.arange(0.0, 15.5, 0.5)
+_MSTAR_MILL = np.array([
+    12.8964, 12.2501, 11.5685, 10.9046, 10.2717, 9.6699, 9.0969, 8.5486,
+    8.0214, 7.5126, 7.0206, 6.5435, 6.0794, 5.6266, 5.1842, 4.7514,
+    4.3276, 3.9122, 3.5045, 3.1039, 2.7098, 2.3217, 1.9393, 1.5626,
+    1.1912, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000])
+_MSTAR_UCHUU = np.array([
+    12.8028, 12.0672, 11.3101, 10.5795, 9.8831, 9.2194, 8.5834, 7.9701,
+    7.3764, 6.8002, 6.2389, 5.6901, 5.1521, 4.6241, 4.1054, 3.5950,
+    3.0915, 2.5943, 2.1027, 1.6166, 1.1359, 1.0000, 1.0000, 1.0000,
+    1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000])
+
+
+def interpolate_clustering_mass_py(z):
+    """log10 M_*(z) in Msun, selected by Omega as the model code does."""
+    table = _MSTAR_UCHUU if abs(OMEGA_M - 0.3089) < 0.01 else _MSTAR_MILL
+    return float(np.interp(z, _MSTAR_Z, table))
+
+
+def print_mdot_panel_stats(x_prop='Vvir'):
+    """Per-panel cold-stream diagnostics for the mdot figures.
+
+    Reports, for the hot-regime centrals that actually carry a stream channel:
+      N_hot        hot-regime centrals in the panel
+      f_str>0      fraction with a non-zero stream rate
+      stream frac  stream share of total reservoir-fed accretion
+      M_stream     Dekel & Birnboim (2006) ceiling Mshock^2/(f Mstar), and
+                   whether the stream window above Mshock is open
+
+    The header echoes ColdStreamCeilingOn and StreamMassFactor from the run so
+    it is unambiguous which prescription produced the figure.
+    """
+    props = _MDOT_PROPS + ['Regime']
+    snap_nums = [s for s, _ in _MDOT_SNAP_PANELS]
+    snapdata = load_snapshots(PRIMARY_DIR, snap_nums, props)
+
+    rt = _read_runtime_attrs(PRIMARY_DIR)
+    ceiling = rt.get('ColdStreamCeilingOn', '?')
+    fstream_f = rt.get('StreamMassFactor', '?')
+    mshock = rt.get('MShockMsun', 6.0e11)
+    print('\n  cold-stream diagnostics  (ColdStreamCeilingOn=%s, StreamMassFactor=%s, '
+          'Mshock=%.2e)' % (ceiling, fstream_f, mshock))
+
+    xlabel = 'log Vvir' if x_prop == 'Vvir' else 'log Mvir'
+    for snap, zlabel in _MDOT_SNAP_PANELS:
+        d = snapdata.get(snap)
+        if d is None:
+            print('    %-9s no data' % zlabel)
+            continue
+        z = REDSHIFTS[snap]
+        mvir = d['Mvir'] * MASS_CONVERT
+        hot = (d.get('Type', np.zeros_like(mvir)) == 0) & (mvir > 0)
+        if 'Regime' in d:
+            hot &= (d['Regime'] == 1)
+        ms = d.get('mdot_stream')
+        mc = d.get('mdot_cool')
+        if ms is None or mc is None or hot.sum() < 5:
+            print('    %-9s too few hot-regime centrals' % zlabel)
+            continue
+
+        # DB06 ceiling for context, whichever prescription is running.
+        window = ''
+        try:
+            mstar = 10.0 ** interpolate_clustering_mass_py(z)
+            f_fac = float(fstream_f) if fstream_f != '?' else 3.0
+            m_ceil = mshock * mshock / (f_fac * mstar)
+            window = ('M_stream=%.2e (%.2f Mshock, %s)'
+                      % (m_ceil, m_ceil / mshock,
+                         'open' if m_ceil > mshock else 'closed'))
+        except Exception:
+            pass
+
+        st, co = ms[hot], mc[hot]
+        tot = st.sum() + co.sum()
+        print('    %-9s N_hot=%6d  f_str>0=%4.0f%%  stream frac=%4.0f%%   %s'
+              % (zlabel, hot.sum(), 100.0 * np.mean(st > 0),
+                 100.0 * st.sum() / tot if tot > 0 else 0.0, window))
+
+        # Trend across the panel's x-axis, which is what the curves show.
+        xv = d[x_prop][hot]
+        with np.errstate(divide='ignore', invalid='ignore'):
+            lx = np.log10(xv)
+        edges = np.percentile(lx[np.isfinite(lx)], [0, 20, 40, 60, 80, 100])
+        cells = []
+        for i in range(len(edges) - 1):
+            m = (lx >= edges[i]) & (lx < edges[i + 1] if i < len(edges) - 2
+                                    else lx <= edges[i + 1])
+            if m.sum() < 5:
+                cells.append('  --  ')
+                continue
+            t = st[m].sum() + co[m].sum()
+            cells.append('%3.0f%%  ' % (100.0 * st[m].sum() / t if t > 0 else 0.0))
+        print('              %s quintiles %s'
+              % (xlabel, ' '.join('%.2f' % e for e in edges[:-1])))
+        print('              stream frac %s' % ' '.join(cells))
+    print()
+
 
 # ========================== MDOT RATIO STATISTICS ==========================
 
@@ -11029,6 +11170,517 @@ def plot_35_h2_mass_function_primary_uchuu():
 
     save_figure(fig, os.path.join(OUTPUT_DIR, 'H2_Mass_Function_Primary_Uchuu' + OUTPUT_FORMAT))
 
+# ========================== PLOT 38: HI MASS FUNCTION (ALL RECIPES) ==========================
+
+def plot_38_hi_mass_function_recipes():
+    """
+    HI mass function at z=0 with bootstrap error shading.
+
+    Direct analogue of plot_33 (H2 mass function): compares the same set of
+    gas-partition prescriptions, here in the atomic phase, against Jones+18
+    (ALFALFA) and Zwaan+05 (HIPASS).
+    """
+    print('Plot 38: HI Mass Function (all recipes)')
+
+    binwidth = 0.2
+    N_BOOT = 100
+    MASS_CUT = 1e8  # Minimum HI mass
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    for i, model in enumerate(_GAS_MODELS):
+        dirpath = model['dir']
+        if not model_files_exist(dirpath):
+            print(f"  Skipping {model['label']}: directory not found")
+            continue
+
+        data = load_model(dirpath, properties=['H1gas'])
+        h1gas = data['H1gas']
+
+        valid = h1gas > MASS_CUT
+        log_mh1 = np.log10(h1gas[valid])
+
+        print(f"  {model['label']}: {np.sum(valid):,} galaxies with H1gas > {MASS_CUT:.0e}")
+
+        centers, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
+            log_mh1, VOLUME, binwidth=binwidth, n_boot=N_BOOT
+        )
+
+        good = np.isfinite(phi) & np.isfinite(phi_lo) & np.isfinite(phi_hi)
+        lw = 3.5 if i == 0 else 2.0
+        ax.plot(centers[good], phi[good], color=model['color'], lw=lw,
+                label=model['label'], zorder=10 - i)
+        ax.fill_between(centers[good], phi_lo[good], phi_hi[good],
+                        color=model['color'], alpha=0.2, edgecolor='none', zorder=9 - i)
+
+    obs_list = load_himf_observations()
+    for obs in obs_list:
+        mass = obs['mass']
+        phi_obs = obs['phi']
+        obs_mask = mass >= 8.0
+        ax.errorbar(mass[obs_mask], phi_obs[obs_mask],
+                    yerr=_gasmf_obs_yerr(obs, obs_mask),
+                    fmt=obs['marker'], color=obs['color'],
+                    markerfacecolor='gray',
+                    markeredgecolor=obs.get('edgecolor', 'k'),
+                    markeredgewidth=1.0,
+                    ms=7, lw=1.0, capsize=2, alpha=0.8,
+                    label=obs['label'], zorder=8)
+
+    ax.set_xlim(8.0, 11.0)
+    ax.set_ylim(-5.5, -0.5)
+    ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
+    ax.yaxis.set_major_locator(plt.MultipleLocator(1.0))
+    ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
+    ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
+
+    ax.set_xlabel(r'$\log_{10}\ M_{\mathrm{HI}}\ [M_{\odot}]$')
+    ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
+
+    handles, labels = ax.get_legend_handles_labels()
+    model_labels = [m['label'] for m in _GAS_MODELS]
+    model_h = [h for h, l in zip(handles, labels) if l in model_labels]
+    model_l = [l for l in labels if l in model_labels]
+    obs_h = [h for h, l in zip(handles, labels) if l not in model_labels]
+    obs_l = [l for l in labels if l not in model_labels]
+
+    if model_h:
+        model_leg = ax.legend(model_h, model_l, loc='lower left', frameon=False)
+        ax.add_artist(model_leg)
+    if obs_h:
+        ax.legend(obs_h, obs_l, loc='upper right', frameon=False)
+
+    save_figure(fig, os.path.join(OUTPUT_DIR, 'HI_Mass_Function' + OUTPUT_FORMAT))
+
+
+# ================ PLOT 39: COLD / HI / H2 MASS FUNCTIONS (STACKED) ================
+
+def plot_39_gas_mass_functions_stacked():
+    """
+    Cold gas, HI and H2 mass functions at z=0 stacked in one column.
+
+    The cold gas and HI panels show SAGE26 and SAGE16 only, both with
+    bootstrap 1-sigma shading.  The H2 panel reproduces plot_33: every gas
+    partition recipe, with SAGE26 (BR06) in black.  SAGE16 does not split the
+    cold gas and so has no H2 line.
+    """
+    print('Plot 39: Cold / HI / H2 mass functions (stacked)')
+
+    binwidth = 0.2
+    N_BOOT = 100
+    MASS_CUT = 1e8
+
+    panels = [
+        {'field': 'ColdGas', 'tag': r'$M_{\mathrm{cold}}$',
+         'obs': load_himf_observations() + load_h2mf_observations(),
+         'recipes': False, 'sage16': True},
+        {'field': 'H1gas', 'tag': r'$M_{\mathrm{HI}}$',
+         'obs': load_himf_observations(),
+         'recipes': False, 'sage16': True},
+        {'field': 'H2gas', 'tag': r'$M_{\mathrm{H_2}}$',
+         'obs': load_h2mf_observations(),
+         'recipes': True, 'sage16': False},
+    ]
+
+    fig, axes = plt.subplots(3, 1, figsize=(7, 13), sharex=True)
+
+    def _mf(dirpath, field):
+        if not model_files_exist(dirpath):
+            return None
+        g = load_model(dirpath, properties=[field])[field]
+        valid = g > MASS_CUT
+        if not np.any(valid):
+            return None
+        return mass_function_bootstrap(np.log10(g[valid]), VOLUME,
+                                       binwidth=binwidth, n_boot=N_BOOT)
+
+    for ax, cfg in zip(axes, panels):
+        if cfg['recipes']:
+            # H2 panel: reproduce plot_33 exactly
+            for i, model in enumerate(_GAS_MODELS):
+                res = _mf(model['dir'], cfg['field'])
+                if res is None:
+                    continue
+                centers, phi, plo, phi_hi, _ = res
+                good = np.isfinite(phi) & np.isfinite(plo) & np.isfinite(phi_hi)
+                lw = 3.5 if i == 0 else 2.0
+                ax.plot(centers[good], phi[good], color=model['color'], lw=lw,
+                        label=model['label'], zorder=10 - i)
+                ax.fill_between(centers[good], plo[good], phi_hi[good],
+                                color=model['color'], alpha=0.2,
+                                edgecolor='none', zorder=9 - i)
+        else:
+            # cold gas and HI panels: SAGE16 and SAGE26 only
+            if cfg['sage16']:
+                res = _mf(VANILLA_DIR, cfg['field'])
+                if res is not None:
+                    centers, phi, plo, phi_hi, _ = res
+                    good = np.isfinite(phi) & np.isfinite(plo) & np.isfinite(phi_hi)
+                    ax.fill_between(centers[good], plo[good], phi_hi[good],
+                                    color='purple', alpha=0.20, lw=0.0,
+                                    zorder=Z_MODEL_BAND_ALT)
+                    ax.plot(centers[good], phi[good], color='purple', ls='--',
+                            lw=3.0, label='SAGE16', zorder=Z_MODEL_LINE_ALT)
+
+            res = _mf(PRIMARY_DIR, cfg['field'])
+            if res is not None:
+                centers, phi, plo, phi_hi, _ = res
+                good = np.isfinite(phi) & np.isfinite(plo) & np.isfinite(phi_hi)
+                ax.fill_between(centers[good], plo[good], phi_hi[good],
+                                color='steelblue', alpha=0.25, lw=0.0,
+                                zorder=Z_MODEL_BAND)
+                ax.plot(centers[good], phi[good], color='steelblue', lw=3.5,
+                        label='SAGE26', zorder=Z_MODEL_LINE)
+
+        for obs in cfg['obs']:
+            mass = obs['mass']; phi_obs = obs['phi']
+            m = mass >= 8.0
+            if not np.any(m):
+                continue
+            ax.errorbar(mass[m], phi_obs[m],
+                        yerr=_gasmf_obs_yerr(obs, m),
+                        fmt=obs['marker'], color=obs['color'],
+                        markerfacecolor='gray',
+                        markeredgecolor=obs.get('edgecolor', 'k'),
+                        markeredgewidth=1.0, ms=6, lw=1.0, capsize=2,
+                        alpha=0.8, label=obs['label'], zorder=Z_OBS)
+
+        ax.set_ylim(-5.5, -0.5)
+        ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
+        ax.yaxis.set_major_locator(plt.MultipleLocator(1.0))
+        ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
+        handles, labels = ax.get_legend_handles_labels()
+        obs_labels = [o['label'] for o in cfg['obs']]
+        oh = [a for a, b in zip(handles, labels) if b in obs_labels]
+        ol = [b for b in labels if b in obs_labels]
+        mh = [a for a, b in zip(handles, labels) if b not in obs_labels]
+        ml = [b for b in labels if b not in obs_labels]
+        if mh:
+            leg = ax.legend(mh, ml, loc='lower left', frameon=False, fontsize=10,
+                            title=cfg['tag'])
+            leg.get_title().set_fontsize(17)
+            leg._legend_box.align = 'left'
+            ax.add_artist(leg)
+        if oh:
+            ax.legend(oh, ol, loc='upper right', frameon=False, fontsize=10)
+
+    axes[-1].set_xlim(8.0, 11.0)
+    axes[-1].set_xlabel(r'$\log_{10}\ M_{\mathrm{gas}}\ [M_{\odot}]$')
+    axes[-1].xaxis.set_major_locator(plt.MultipleLocator(1.0))
+    axes[-1].xaxis.set_minor_locator(plt.MultipleLocator(0.2))
+
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=0.0)
+    save_figure(fig, os.path.join(OUTPUT_DIR,
+                'Gas_Mass_Functions_Stacked' + OUTPUT_FORMAT))
+
+    print_gas_recipe_diagnostics()
+    print_hi_offsets()
+
+
+def print_hi_offsets(masses=(9.5, 10.0, 10.5), binwidth=0.2, mass_cut=1e8):
+    """Print SAGE26's HI/H2 mass function offsets at specific masses, plus a
+    partition test at fixed stellar mass.
+
+    The mass function block gives model - observation in dex at each log M_gas,
+    in the style of the metallicity and bulge-size comparisons.  The partition
+    block compares M_HI/m* against xGASS and M_H2/m* against xCOLD GASS at fixed
+    stellar mass, which separates a genuine cold gas excess (both ratios high)
+    from an atomic/molecular partition problem (HI high, H2 low).
+    """
+    if not model_files_exist(PRIMARY_DIR):
+        return
+    d = load_model(PRIMARY_DIR, properties=['StellarMass', 'H1gas', 'H2gas'])
+
+    def _mf(g):
+        g = g[g > mass_cut]
+        if not g.size:
+            return None, None
+        edges = np.arange(6.0, 12.2 + binwidth, binwidth)
+        n, _ = np.histogram(np.log10(g), bins=edges)
+        with np.errstate(divide='ignore'):
+            return 0.5 * (edges[1:] + edges[:-1]), np.log10(n / VOLUME / binwidth)
+
+    print('  SAGE26 mass function offsets (dex, model - observation)')
+    for name, obs_list, field in (('HI', load_himf_observations(), 'H1gas'),
+                                  ('H2', load_h2mf_observations(), 'H2gas')):
+        cen, phi = _mf(d[field])
+        if cen is None or not obs_list:
+            continue
+        hdr = '    %-8s' % ('log M_%s' % name)
+        for o in obs_list:
+            hdr += '%22s' % o['label'][:20]
+        print(hdr)
+        for m in masses:
+            line = '    %-8.2f' % m
+            for o in obs_list:
+                inside = (m >= o['mass'].min()) and (m <= o['mass'].max())
+                if inside:
+                    line += '%22s' % ('%+.2f' % (np.interp(m, cen, phi)
+                                                 - np.interp(m, o['mass'], o['phi'])))
+                else:
+                    line += '%22s' % '-'
+            print(line)
+
+    # partition test at fixed stellar mass
+    obs = {}
+    for lbl, fn in (('HI/m* (xGASS)', 'Gas/NeutralGasRatio_NonDetEQZero.dat'),
+                    ('H2/m* (xCOLDGASS)', 'Gas/MolecularGasRatio_NonDetEQZero.dat')):
+        path = os.path.join(OBS_DIR, fn)
+        if os.path.exists(path):
+            arr = np.loadtxt(path, comments='#')
+            obs[lbl] = (arr[:, 0], arr[:, 1])
+    if not obs:
+        print()
+        return
+
+    ms = d['StellarMass']
+    w = ms > 0
+    lm = np.log10(ms[w])
+    print()
+    print('  Partition test at fixed stellar mass (dex, model - observation)')
+    print('    %-8s%22s%22s' % ('log m*', 'HI/m* (xGASS)', 'H2/m* (xCOLDGASS)'))
+    for m in masses:
+        sel = (lm > m - 0.15) & (lm < m + 0.15)
+        line = '    %-8.2f' % m
+        for lbl, field in (('HI/m* (xGASS)', 'H1gas'),
+                           ('H2/m* (xCOLDGASS)', 'H2gas')):
+            if lbl not in obs or sel.sum() < 20:
+                line += '%22s' % '-'
+                continue
+            with np.errstate(divide='ignore', invalid='ignore'):
+                ratio = np.log10(d[field][w][sel] / ms[w][sel])
+            mod = np.nanmedian(ratio[np.isfinite(ratio)])
+            line += '%22s' % ('%+.2f' % (mod - np.interp(m, obs[lbl][0], obs[lbl][1])))
+        print(line)
+    print()
+
+
+def print_gas_recipe_diagnostics(binwidth=0.2, mass_cut=1e8):
+    """Print the per-recipe numbers quoted in the gas mass function section.
+
+    Reports, for every gas-partition prescription plus SAGE16:
+      f_Q(1e8.5)   dwarf quiescent fraction at m* = 10^8.5 Msun
+      crossover    lowest m* where the quiescent SMF exceeds the star-forming SMF
+      dSF, dQ      mean offset from Bell+03 blue/red SMFs over 10^10.3-10^11
+      dH2(8-9)     mean offset from Fletcher+20 H2MF over 10^8-10^9
+      dHI(9-10)    mean offset from Jones+18 HIMF over 10^9-10^10
+
+    Called at the end of plot_40 so the figure and its numbers appear together.
+    """
+    models = [(m['label'], m['dir']) for m in _GAS_MODELS] + [('SAGE16', VANILLA_DIR)]
+
+    bell_sf = load_bell_smf_sf_data()
+    bell_q = load_bell_smf_q_data()
+    himf_obs = load_himf_observations()
+    h2mf_obs = load_h2mf_observations()
+
+    def _mf(log_masses, lo=8.0, hi=12.2):
+        edges = np.arange(lo, hi + binwidth, binwidth)
+        n, _ = np.histogram(log_masses, bins=edges)
+        with np.errstate(divide='ignore'):
+            return 0.5 * (edges[1:] + edges[:-1]), np.log10(n / VOLUME / binwidth)
+
+    def _resid(obs_x, obs_y, cen, phi, lo, hi):
+        sel = (obs_x > lo) & (obs_x < hi)
+        if not np.any(sel):
+            return np.nan
+        return np.nanmean(np.interp(obs_x[sel], cen, phi) - obs_y[sel])
+
+    print()
+    print('  Gas prescription diagnostics (z=0)')
+    print('  %-15s %9s %10s %8s %8s %10s %10s'
+          % ('recipe', 'f_Q(8.5)', 'crossover', 'dSF', 'dQ', 'dH2(8-9)', 'dHI(9-10)'))
+
+    for label, dirpath in models:
+        if not model_files_exist(dirpath):
+            print('  %-15s   (not found)' % label)
+            continue
+        d = load_model(dirpath, properties=['StellarMass', 'SfrDisk', 'SfrBulge',
+                                            'H1gas', 'H2gas'])
+        ms = d['StellarMass']
+        w = ms > 0
+        ms = ms[w]
+        sfr = (d['SfrDisk'] + d['SfrBulge'])[w]
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ssfr = np.log10(sfr / ms)
+        lm = np.log10(ms)
+        quiescent = ssfr < SSFR_CUT
+
+        sel = (lm > 8.35) & (lm < 8.65)
+        f_q = 100.0 * np.mean(quiescent[sel]) if sel.sum() > 20 else np.nan
+
+        cen_sf, phi_sf = _mf(lm[~quiescent])
+        cen_q, phi_q = _mf(lm[quiescent])
+        cross = np.nan
+        for i in range(len(cen_sf)):
+            if np.isfinite(phi_sf[i]) and np.isfinite(phi_q[i]) and phi_q[i] > phi_sf[i]:
+                cross = cen_sf[i]
+                break
+
+        d_sf = d_q = np.nan
+        if bell_sf[0] is not None:
+            d_sf = _resid(bell_sf[0], bell_sf[1], cen_sf, phi_sf, 10.3, 11.0)
+        if bell_q[0] is not None:
+            d_q = _resid(bell_q[0], bell_q[1], cen_q, phi_q, 10.3, 11.0)
+
+        d_h2 = np.nan
+        h2 = d['H2gas'][d['H2gas'] > mass_cut]
+        if h2.size and h2mf_obs:
+            c, p = _mf(np.log10(h2))
+            d_h2 = np.nanmean([_resid(o['mass'], o['phi'], c, p, 8.0, 9.0)
+                               for o in h2mf_obs])
+
+        d_hi = np.nan
+        h1 = d['H1gas'][d['H1gas'] > mass_cut]
+        if h1.size and himf_obs:
+            c, p = _mf(np.log10(h1))
+            d_hi = np.nanmean([_resid(o['mass'], o['phi'], c, p, 9.0, 10.0)
+                               for o in himf_obs])
+
+        def _f(v):
+            return ('%+.2f' % v) if np.isfinite(v) else '-'
+        print('  %-15s %8.1f%% %10s %8s %8s %10s %10s'
+              % (label, f_q,
+                 ('%.2f' % cross) if np.isfinite(cross) else '-',
+                 _f(d_sf), _f(d_q), _f(d_h2), _f(d_hi)))
+    print()
+
+
+# ======== PLOT 40: COLD / HI / H2 MASS FUNCTIONS (STACKED, RECIPES ON ALL) ========
+
+def plot_40_gas_mass_functions_stacked_recipes():
+    """
+    As plot_39, but with the gas-partition recipes also drawn faintly behind
+    SAGE26 and SAGE16 on the cold gas and HI panels.
+
+    The H2 panel is unchanged from plot_39 (all recipes, SAGE26 (BR06) black).
+    """
+    print('Plot 40: Cold / HI / H2 mass functions (stacked, recipes on all)')
+
+    binwidth = 0.2
+    N_BOOT = 100
+    MASS_CUT = 1e8
+
+    panels = [
+        {'field': 'ColdGas', 'tag': r'$M_{\mathrm{cold}}$',
+         'obs': load_himf_observations() + load_h2mf_observations(),
+         'h2_style': False, 'sage16': True},
+        {'field': 'H1gas', 'tag': r'$M_{\mathrm{HI}}$',
+         'obs': load_himf_observations(),
+         'h2_style': False, 'sage16': True},
+        {'field': 'H2gas', 'tag': r'$M_{\mathrm{H_2}}$',
+         'obs': load_h2mf_observations(),
+         'h2_style': True, 'sage16': False},
+    ]
+
+    fig, axes = plt.subplots(3, 1, figsize=(7, 13), sharex=True)
+
+    def _mf(dirpath, field):
+        if not model_files_exist(dirpath):
+            return None
+        g = load_model(dirpath, properties=[field])[field]
+        valid = g > MASS_CUT
+        if not np.any(valid):
+            return None
+        return mass_function_bootstrap(np.log10(g[valid]), VOLUME,
+                                       binwidth=binwidth, n_boot=N_BOOT)
+
+    for ax, cfg in zip(axes, panels):
+        if cfg['h2_style']:
+            for i, model in enumerate(_GAS_MODELS):
+                res = _mf(model['dir'], cfg['field'])
+                if res is None:
+                    continue
+                centers, phi, plo, phi_hi, _ = res
+                good = np.isfinite(phi) & np.isfinite(plo) & np.isfinite(phi_hi)
+                lw = 3.5 if i == 0 else 2.0
+                ax.plot(centers[good], phi[good], color=model['color'], lw=lw,
+                        label=model['label'], zorder=10 - i)
+                ax.fill_between(centers[good], plo[good], phi_hi[good],
+                                color=model['color'], alpha=0.2,
+                                edgecolor='none', zorder=9 - i)
+        else:
+            # alternative recipes, faint, behind everything
+            for model in _GAS_MODELS[1:]:
+                res = _mf(model['dir'], cfg['field'])
+                if res is None:
+                    continue
+                centers, phi, _, _, _ = res
+                good = np.isfinite(phi)
+                # unlabelled: the recipes are identified in the H2 panel legend
+                ax.plot(centers[good], phi[good], color=model['color'],
+                        lw=2.0, alpha=0.7, zorder=1)
+
+            if cfg['sage16']:
+                res = _mf(VANILLA_DIR, cfg['field'])
+                if res is not None:
+                    centers, phi, plo, phi_hi, _ = res
+                    good = np.isfinite(phi) & np.isfinite(plo) & np.isfinite(phi_hi)
+                    ax.fill_between(centers[good], plo[good], phi_hi[good],
+                                    color='purple', alpha=0.20, lw=0.0,
+                                    zorder=Z_MODEL_BAND_ALT)
+                    ax.plot(centers[good], phi[good], color='purple', ls='--',
+                            lw=3.0, label='SAGE16', zorder=Z_MODEL_LINE_ALT)
+
+            res = _mf(PRIMARY_DIR, cfg['field'])
+            if res is not None:
+                centers, phi, plo, phi_hi, _ = res
+                good = np.isfinite(phi) & np.isfinite(plo) & np.isfinite(phi_hi)
+                ax.fill_between(centers[good], plo[good], phi_hi[good],
+                                color='steelblue', alpha=0.25, lw=0.0,
+                                zorder=Z_MODEL_BAND)
+                ax.plot(centers[good], phi[good], color='steelblue', lw=3.5,
+                        label='SAGE26', zorder=Z_MODEL_LINE)
+
+        for obs in cfg['obs']:
+            mass = obs['mass']; phi_obs = obs['phi']
+            m = mass >= 8.0
+            if not np.any(m):
+                continue
+            ax.errorbar(mass[m], phi_obs[m],
+                        yerr=_gasmf_obs_yerr(obs, m),
+                        fmt=obs['marker'], color=obs['color'],
+                        markerfacecolor='gray',
+                        markeredgecolor=obs.get('edgecolor', 'k'),
+                        markeredgewidth=1.0, ms=6, lw=1.0, capsize=2,
+                        alpha=0.8, label=obs['label'], zorder=Z_OBS)
+
+        ax.set_ylim(-5.5, -0.5)
+        ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
+        ax.yaxis.set_major_locator(plt.MultipleLocator(1.0))
+        ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
+
+        handles, labels = ax.get_legend_handles_labels()
+        obs_labels = [o['label'] for o in cfg['obs']]
+        oh = [a for a, b in zip(handles, labels) if b in obs_labels]
+        ol = [b for b in labels if b in obs_labels]
+        mh = [a for a, b in zip(handles, labels) if b not in obs_labels]
+        ml = [b for b in labels if b not in obs_labels]
+        if mh:
+            leg = ax.legend(mh, ml, loc='lower left', frameon=False, fontsize=10,
+                            title=cfg['tag'])
+            leg.get_title().set_fontsize(17)
+            leg._legend_box.align = 'left'
+            ax.add_artist(leg)
+        if oh:
+            ax.legend(oh, ol, loc='upper right', frameon=False, fontsize=10)
+
+    axes[-1].set_xlim(8.0, 11.0)
+    axes[-1].set_xlabel(r'$\log_{10}\ M_{\mathrm{gas}}\ [M_{\odot}]$')
+    axes[-1].xaxis.set_major_locator(plt.MultipleLocator(1.0))
+    axes[-1].xaxis.set_minor_locator(plt.MultipleLocator(0.2))
+
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=0.0)
+    save_figure(fig, os.path.join(OUTPUT_DIR,
+                'Gas_Mass_Functions_Stacked_Recipes' + OUTPUT_FORMAT))
+
+    print_gas_recipe_diagnostics()
+    print_hi_offsets()
+
+
 
 # ========================== PLOT 36: SELECTION THRESHOLDS IN THE M-z PLANE ==========================
 
@@ -11092,7 +11744,20 @@ def plot_36_selection_thresholds_mz():
     z_mbk, m_mbk = _dilute(z_mbk, m_mbk)
     z_dek, m_dek = _dilute(z_dek, m_dek)
 
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(11, 4.8), sharey=True)
+    # Three columns: the two selection panels, then the overplotted threshold
+    # curves with a small residual strip beneath them.  The first two panels
+    # span both rows so all three read at a comparable size.
+    # constrained_layout rather than tight_layout: the first two panels span
+    # both rows, which tight_layout lays out badly (it clips the x labels).
+    fig = plt.figure(figsize=(15.5, 5.0), constrained_layout=True)
+    gs = fig.add_gridspec(2, 3, height_ratios=[4.0, 1.0])
+    # constrained_layout ignores the gridspec hspace/wspace; set them on the
+    # layout engine instead.
+    fig.get_layout_engine().set(w_pad=0.01, h_pad=0.01, wspace=0.02, hspace=0.0)
+    axL = fig.add_subplot(gs[:, 0])
+    axR = fig.add_subplot(gs[:, 1], sharey=axL)
+    axM = fig.add_subplot(gs[0, 2], sharey=axL)
+    axD = fig.add_subplot(gs[1, 2], sharex=axM)
 
     # ---------------- Left panel: MBK25 ----------------
     c_lines = [3.0, 4.0, 5.0, 6.0, 7.0]
@@ -11151,7 +11816,120 @@ def plot_36_selection_thresholds_mz():
         ax.set_xlim(z_grid.min(), z_grid.max())
         ax.set_ylim(9.5, 13.5)
 
-    fig.tight_layout()
+    # One redshift tick per unit on every panel; axD inherits from axM via sharex.
+    for ax in (axL, axR, axM, axD):
+        ax.set_xlim(z_grid.min(), z_grid.max())
+        ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
+        ax.xaxis.set_minor_locator(plt.NullLocator())
+
+    # ------------- Middle panel: the two thresholds overplotted -------------
+    # MBK25 threshold at the *median* concentration.  c depends on M, and M on
+    # c, so solve the pair self-consistently at each redshift.
+    def _mbk_threshold_median_c(z):
+        c = 3.3
+        M = float(np.atleast_1d(mbk25_threshold_mass_msun(z, c)))
+        for _ in range(20):
+            c_new = float(np.atleast_1d(_c_ishiyama21(np.array([M]), z)))
+            if not np.isfinite(c_new) or c_new <= 1.0:
+                break
+            M_new = float(np.atleast_1d(mbk25_threshold_mass_msun(z, c_new)))
+            if abs(np.log10(M_new) - np.log10(M)) < 1e-4:
+                M, c = M_new, c_new
+                break
+            M, c = M_new, c_new
+        return M, c
+
+    M_mbk_med, c_med = np.array([_mbk_threshold_median_c(z) for z in z_grid]).T
+    log_mbk = np.log10(M_mbk_med)
+
+    axM.plot(z_grid, log_line, lw=2.4, color='firebrick',
+             label=r'$M_{\rm vir,FFB}(z)$  (Li+24)')
+    axM.plot(z_grid, log_mbk, lw=2.4, color='mediumpurple', ls='--',
+             label=r'$M_{\rm vir,MBK25}(z)$  (median $c$)')
+    axM.fill_between(z_grid, log_line - logit * delta_log_M,
+                     log_line + logit * delta_log_M, color='firebrick',
+                     alpha=0.15, lw=0.0)
+    axM.axvspan(6.0, 12.0, color='0.85', alpha=0.45, zorder=0)
+    axM.legend(loc='lower left', frameon=False, fontsize=8)
+    axM.tick_params(labelbottom=False)
+
+    # ------------------------- Residual sub-panel -------------------------
+    resid = log_mbk - log_line
+    axD.axhline(0.0, color='0.4', lw=1.0)
+    axD.axvspan(6.0, 12.0, color='0.85', alpha=0.45, zorder=0)
+    axD.plot(z_grid, resid, lw=2.2, color='k')
+    axD.set_xlabel(r'Redshift $z$')
+    axD.set_ylabel(r'$\Delta \log_{10} M$', fontsize=9)
+    axD.set_xlim(z_grid.min(), z_grid.max())
+    lim = max(0.12, 1.2 * np.nanmax(np.abs(resid)))
+    axD.set_ylim(-lim, lim)
+    axD.tick_params(labelsize=8)
+    axD.yaxis.set_major_locator(plt.MaxNLocator(3))
+
+    # ------------------------------ diagnostics ------------------------------
+    inb = (z_grid >= 6.0) & (z_grid <= 12.0)
+    print('  threshold separation  delta = log10(M_MBK25/M_FFB):')
+    print('    max |delta| over 6<z<12 : %.3f dex' % np.nanmax(np.abs(resid[inb])))
+    print('    RMS over 6<z<12         : %.3f dex'
+          % np.sqrt(np.nanmean(resid[inb] ** 2)))
+    ipk = np.nanargmax(np.abs(np.where(inb, resid, np.nan)))
+    print('    peaks at z = %.2f (%+0.3f dex)' % (z_grid[ipk], resid[ipk]))
+    sgn = np.sign(resid)
+    xz = np.where(np.diff(sgn) != 0)[0]
+    if len(xz):
+        print('    crosses zero at z = %s'
+              % ', '.join('%.2f' % np.interp(0.0, resid[i:i + 2][::int(sgn[i + 1] - sgn[i]) // 2 or 1],
+                                             z_grid[i:i + 2][::int(sgn[i + 1] - sgn[i]) // 2 or 1])
+                          for i in xz))
+    for zq in (6.0, 8.0, 9.0, 10.1, 12.0):
+        print('    z=%5.1f : MBK25 %.2f  FFB %.2f  delta %+0.3f dex  (median c=%.2f)'
+              % (zq, np.interp(zq, z_grid, log_mbk), np.interp(zq, z_grid, log_line),
+                 np.interp(zq, z_grid, resid), np.interp(zq, z_grid, c_med)))
+
+    # Linear masses at the epoch used in the SFE figure, for its caption.
+    print('  threshold masses in linear units (for figure captions):')
+    for zq in (9.0, 10.1):
+        print('    z=%5.2f : M_FFB = %.3e   M_MBK25 = %.3e  M_sun'
+              % (zq, 10 ** np.interp(zq, z_grid, log_line),
+                 10 ** np.interp(zq, z_grid, log_mbk)))
+
+    # Particle counts at the threshold mass -- the resolution check.
+    m_part = {'Millennium': 8.60e8 / 0.73, 'miniUchuu': 3.27e8 / 0.6774}
+    print('  particles per threshold-mass halo  (m_part: %s):'
+          % ', '.join('%s %.2e' % (k, v) for k, v in m_part.items()))
+    print('    %5s %12s %14s %14s' % ('z', 'M_FFB', 'N(Millennium)', 'N(miniUchuu)'))
+    for zq in (6.0, 8.0, 10.0, 12.0, 14.0):
+        M = 10 ** np.interp(zq, z_grid, log_line)
+        print('    %5.1f %12.3e %14.0f %14.0f'
+              % (zq, M, M / m_part['Millennium'], M / m_part['miniUchuu']))
+
+    # Section 5.2: sigmoid width <-> concentration scatter equivalence.
+    d_logM = delta_log_M
+    sig_logistic = np.pi * d_logM / np.sqrt(3.0)
+    sig_lnc_implied = sig_logistic / 1.5
+    sig_lnc_adopted = 0.2
+    print('  transition-width equivalence (Section 5.2):')
+    print('    logistic sigma for dlogM=%.2f : %.3f dex' % (d_logM, sig_logistic))
+    print('    implied sigma_ln c            : %.3f   (adopted %.2f -> differ by %.1f%%)'
+          % (sig_lnc_implied, sig_lnc_adopted,
+             100.0 * abs(sig_lnc_implied - sig_lnc_adopted) / sig_lnc_adopted))
+
+    # constrained_layout ignores the gridspec hspace, so it leaves a gap between
+    # the third-column panel and its residual strip.  Let it settle the overall
+    # spacing first (which is what stops the x labels being clipped), then freeze
+    # the layout and slide the residual up flush against the panel above.
+    fig.canvas.draw()
+    try:
+        fig.set_layout_engine('none')
+    except AttributeError:          # matplotlib < 3.6
+        fig.set_constrained_layout(False)
+    pL = axL.get_position()
+    pM, pD = axM.get_position(), axD.get_position()
+    h_tot = pL.y1 - pL.y0                 # full height of the first two panels
+    h_res = h_tot / 5.0                   # residual share, matching height_ratios
+    axM.set_position([pM.x0, pL.y0 + h_res, pM.width, h_tot - h_res])
+    axD.set_position([pD.x0, pL.y0, pD.width, h_res])
+
     save_figure(fig, os.path.join(OUTPUT_DIR,
                 'Selection_Thresholds_Mz' + OUTPUT_FORMAT))
 
@@ -12074,6 +12852,9 @@ STANDALONE_PLOTS = {
     35: plot_35_h2_mass_function_primary_uchuu,
     36: plot_36_selection_thresholds_mz,
     37: plot_37_cgm_census,
+    38: plot_38_hi_mass_function_recipes,
+    39: plot_39_gas_mass_functions_stacked,
+    40: plot_40_gas_mass_functions_stacked_recipes,
     99: plot_99_referee_diagnostics,
 }
 

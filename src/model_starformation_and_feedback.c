@@ -107,8 +107,26 @@ static const double SIGMA_HI_CRIT = 0.5;
  * correction is disabled or inapplicable, clamped to [0, 1].
  *
  * coldgas_code : ColdGas in code units (10^10 Msun/h)
- * rs_code      : DiskScaleRadius in code units (Mpc/h)
+ * rs_code      : atomic-disk scale radius in code units (Mpc/h). Callers pass
+ *                GasDiskRadiusFactor * DiskScaleRadius: chi = 1 makes the atomic disk
+ *                cospatial with the stellar/H2 disk (published behaviour), while the
+ *                observed chi ~ 1.5-2 spreads the same HI over a larger area and so
+ *                pushes more of it below the neutral threshold. H2 is untouched -- it is
+ *                central and shielded, which is exactly why one radius should not set both.
  */
+/*
+ * Scale radius of the atomic disk: chi * r_s, where chi = GasDiskRadiusFactor.
+ *
+ * A zeroed struct params (the unit-test harnesses memset theirs) must behave like the
+ * published chi = 1, and read_parameter_file() already rejects chi <= 0, so a non-positive
+ * value here can only mean "never initialised" rather than a real configuration choice.
+ */
+static double atomic_disk_radius(const double rs_code, const struct params *run_params)
+{
+    const double chi = run_params->GasDiskRadiusFactor;
+    return (chi > 0.0) ? chi * rs_code : rs_code;
+}
+
 static double ionized_gas_fraction(const double coldgas_code, const double rs_code,
                                    const double h, const double sigma_hi_crit)
 {
@@ -939,7 +957,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             atomicH = 0.0;  // H2 is capped at the budget; this guards float rounding only
             clamp_count_h1_negative++;
         }
-        const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas, galaxies[p].DiskScaleRadius,
+        const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas,
+                                                  atomic_disk_radius(galaxies[p].DiskScaleRadius, run_params),
                                                   run_params->Hubble_h, SIGMA_HI_CRIT);
         atomicH *= (1.0 - f_ion);
         galaxies[p].H1gas = atomicH;
@@ -1257,7 +1276,8 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     {
         double atomicH = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC - galaxies[p].H2gas;
         if(atomicH < 0.0) { atomicH = 0.0; clamp_count_h1_negative++; }  // float-rounding guard only
-        const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas, galaxies[p].DiskScaleRadius,
+        const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas,
+                                                  atomic_disk_radius(galaxies[p].DiskScaleRadius, run_params),
                                                   run_params->Hubble_h, SIGMA_HI_CRIT);
         atomicH *= (1.0 - f_ion);
         galaxies[p].H1gas = atomicH;

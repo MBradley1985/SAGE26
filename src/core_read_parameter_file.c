@@ -101,19 +101,19 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->H2RadialRMaxFactor         = 5.0;
     run_params->CGMrecipeOn                = 1;
     run_params->CGMDensityProfile          = 0;
-    run_params->PrecipCriterionOn          = 1;
-    run_params->RegimeRandomMode           = 0;   /* default: fresh draw each snapshot (published behaviour); 1 makes the regime persistent per galaxy */
+    run_params->PrecipCriterionOn          = 1; /* (maybe hard-code once published)*/
+    run_params->RegimeRandomMode           = 0;   /* default: fresh draw each snapshot (published behaviour); 1 makes the regime persistent per galaxy */ /* (hard-code once published)*/
     run_params->FIREmodeOn                 = 1;
     run_params->RedshiftPowerLawExponent   = 1.25;
-    run_params->SNEnergyConservationOn     = 1;   /* default: on -- neither the reheating nor the ejection term may spend more than the SN energy available */
-    run_params->MaxSNEnergyCoupling        = 2.0; /* cap on eps_halo * f_FIRE: E_FB <= m_* eta_SN E_SN (the whole SN budget) */
+    run_params->SNEnergyConservationOn     = 1;   /* default: on -- neither the reheating nor the ejection term may spend more than the SN energy available */ /* (hard-code once published)*/
+    run_params->MaxSNEnergyCoupling        = 2.0; /* cap on eps_halo * f_FIRE: E_FB <= m_* eta_SN E_SN (the whole SN budget) */ /* (hard-code once published)*/
     run_params->FFBMaxEfficiency           = 0.2;
     run_params->FFBConcSigma               = 0.2;
     run_params->FFBThresholdSlope          = -6.2;
     run_params->ConcentrationOn            = 3;
     run_params->FeedbackFreeModeOn         = 1;
-    run_params->FFBIgnoreRegime            = 1;
-    run_params->FFBRandomMode              = 0;   /* default: fresh draw each snapshot (published behaviour) -- galaxies move in and out of FFB, sustaining a transient low-z FFB population. 1 fixes each galaxy's quantile at creation, which removes both. */
+    run_params->FFBIgnoreRegime            = 1;  /* (hard-code once published)*/
+    run_params->FFBRandomMode              = 0;   /* default: fresh draw each snapshot (published behaviour) -- galaxies move in and out of FFB, sustaining a transient low-z FFB population. 1 fixes each galaxy's quantile at creation, which removes both. */ /* (hard-code once published)*/
     run_params->BulgeSizeOn                = 3;
     run_params->SaveFullSFH                = 1;
     run_params->TrackICSAssembly           = 1;
@@ -125,6 +125,12 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
     run_params->ReIncorporationFactor      = 0.15;
+    run_params->ColdStreamCeilingOn        = 0;     /* 0 reproduces published behaviour */ /* (remove once published)*/
+    run_params->StreamMassFactor           = 3.0;   /* Dekel & Birnboim (2006) adopt f = 3 */ /* (remove once published)*/
+    run_params->DiskRadiusFactor           = 1.0;   /* f_j: 1.0 reproduces published behaviour exactly */ /* (remove once published)*/
+    run_params->DiskRadiusOn               = 0;     /* 0 reproduces published behaviour bit-for-bit */ /* (remove once published)*/
+    run_params->DiskRadiusMaxFrac          = 0.15;  /* ceiling on r_d/Rvir; used only when DiskRadiusOn > 0 */ /* (remove once published)*/
+    run_params->GasDiskRadiusFactor        = 1.0;   /* chi = 1.0: atomic disk cospatial with the stellar disk (published behaviour) */ /* (remove once published)*/
     run_params->MShockMsun                 = 6.0e11;
     run_params->EnergySN                   = 1.0e51;
     run_params->EtaSN                      = 5.0e-3;
@@ -213,6 +219,12 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("ThreshMajorMerger",          &(run_params->ThreshMajorMerger),          DOUBLE, 0);
     REG("RecycleFraction",            &(run_params->RecycleFraction),            DOUBLE, 0);
     REG("ReIncorporationFactor",      &(run_params->ReIncorporationFactor),      DOUBLE, 0);
+    REG("ColdStreamCeilingOn",        &(run_params->ColdStreamCeilingOn),        INT,    0);
+    REG("StreamMassFactor",           &(run_params->StreamMassFactor),           DOUBLE, 0);
+    REG("DiskRadiusFactor",           &(run_params->DiskRadiusFactor),           DOUBLE, 0);
+    REG("DiskRadiusOn",               &(run_params->DiskRadiusOn),               INT,    0);
+    REG("DiskRadiusMaxFrac",          &(run_params->DiskRadiusMaxFrac),          DOUBLE, 0);
+    REG("GasDiskRadiusFactor",        &(run_params->GasDiskRadiusFactor),        DOUBLE, 0);
     REG("MShockMsun",                 &(run_params->MShockMsun),                 DOUBLE, 0);
     REG("EnergySN",                   &(run_params->EnergySN),                   DOUBLE, 0);
     REG("EtaSN",                      &(run_params->EtaSN),                      DOUBLE, 0);
@@ -562,7 +574,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"FeedbackFreeModeOn",     run_params->FeedbackFreeModeOn,     0, 7},
             {"FFBIgnoreRegime",        run_params->FFBIgnoreRegime,        0, 1},
             {"FFBRandomMode",          run_params->FFBRandomMode,          0, 1},
+            {"ColdStreamCeilingOn",    run_params->ColdStreamCeilingOn,    0, 1},
             {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 3},
+            {"DiskRadiusOn",           run_params->DiskRadiusOn,           0, 2},
             {"H2DiskAreaOption",       run_params->H2DiskAreaOption,       0, 2},
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
@@ -593,6 +607,16 @@ int read_parameter_file(const char *fname, struct params *run_params)
     if(run_params->H2RadialIntegrationOn && run_params->H2RadialRMaxFactor <= 0.0) {
         fprintf(stderr, "Error: H2RadialRMaxFactor = %g is not valid; it must be > 0.\n",
                 run_params->H2RadialRMaxFactor);
+        ABORT(EXIT_FAILURE);
+    }
+    if(run_params->DiskRadiusOn > 0 && run_params->DiskRadiusMaxFrac <= 0.0) {
+        fprintf(stderr, "Error: DiskRadiusMaxFrac = %g is not valid; it must be > 0 when DiskRadiusOn > 0.\n",
+                run_params->DiskRadiusMaxFrac);
+        ABORT(EXIT_FAILURE);
+    }
+    if(run_params->GasDiskRadiusFactor <= 0.0) {
+        fprintf(stderr, "Error: GasDiskRadiusFactor = %g is not valid; it must be > 0.\n",
+                run_params->GasDiskRadiusFactor);
         ABORT(EXIT_FAILURE);
     }
     if(run_params->RamPressureStrippingOn && run_params->RamPressureEpsilon <= 0.0) {

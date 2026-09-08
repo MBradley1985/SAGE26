@@ -256,7 +256,7 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                         galaxies[ngal].mergeIntoID = -1;
                         galaxies[ngal].MergTime = 999.9f;
 
-                        galaxies[ngal].DiskScaleRadius = get_disk_radius(halonr, ngal, halos, galaxies);
+                        galaxies[ngal].DiskScaleRadius = get_disk_radius(halonr, ngal, halos, galaxies, run_params);
                         get_bulge_radius(ngal, galaxies, run_params);
 
                         galaxies[ngal].Type = 0;
@@ -464,6 +464,15 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 ram_pressure_strip_satellite(centralgal, p, Zcurr, deltaT, t_strip, galaxies, run_params);
             }
         }
+    }
+
+    /* Record the substep count on every galaxy in this halo. The Sfr* arrays accumulate one
+     * entry per substep into STEPS fixed bins, so the output average has to divide by the
+     * number of substeps actually taken rather than by STEPS -- otherwise the reported SFR
+     * scales as effective_steps / STEPS. Set for all galaxies, including already-merged ones,
+     * because they are still written out. */
+    for(int p = 0; p < ngal; p++) {
+        galaxies[p].SubstepsUsed = effective_steps;
     }
 
     for(int step = 0; step < effective_steps; step++) {

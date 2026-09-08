@@ -24,6 +24,33 @@ extern "C" {
     #include "model_regimes.h"
 
     /*
+     * Divisors for the per-substep Sfr* accumulators.
+     *
+     * The Sfr* arrays hold STEPS fixed bins but receive one entry per substep, and
+     * evolve_galaxies() integrates over SubstepsUsed substeps, which the adaptive scheme
+     * and SubstepResolution can push above or below STEPS. Several substeps then land in
+     * the same bin, so the bin sum is a sum over *substeps*, and the mean rate across the
+     * snapshot is that sum divided by SubstepsUsed. Dividing by STEPS instead reports an
+     * SFR scaled by SubstepsUsed / STEPS -- verified on Millennium as exactly 0.5x, 2.0x
+     * and 3.0x for SubstepResolution 0.5, 2.0 and 3.0.
+     *
+     * The ColdGas/metals accumulators are assignments rather than sums, so exactly
+     * min(SubstepsUsed, STEPS) distinct bins ever carry a value; that count is their
+     * divisor. Both reduce to STEPS when SubstepsUsed == STEPS, which is every run where
+     * the adaptive path does not fire, so default output is unchanged.
+     */
+    static inline int sfr_rate_divisor(const int substeps_used)
+    {
+        return (substeps_used > 0) ? substeps_used : STEPS;
+    }
+
+    static inline int sfr_metallicity_divisor(const int substeps_used)
+    {
+        const int n = sfr_rate_divisor(substeps_used);
+        return (n < STEPS) ? n : STEPS;
+    }
+
+    /*
      * Deposit metals (or gas + metals) into a galaxy's hot-phase reservoir,
      * routed by regime: CGMgas when the CGM recipe is active and the galaxy
      * is CGM-regime (Regime == 0), HotGas otherwise. These helpers replace
@@ -124,7 +151,8 @@ extern "C" {
     /* functions in model_misc.c */
     extern void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct halo_data *halos, struct GALAXY *galaxies, const struct params *run_params);
     extern double get_metallicity(const double gas, const double metals);
-    extern double get_disk_radius(const int halonr, const int p, const struct halo_data *halos, const struct GALAXY *galaxies);
+    extern double get_disk_radius(const int halonr, const int p, const struct halo_data *halos, struct GALAXY *galaxies,
+                                  const struct params *run_params);
     extern double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct params *run_params);
     extern double dmax(const double x, const double y);
     extern void update_instability_bulge_radius(const int p, const double delta_mass,

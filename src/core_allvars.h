@@ -163,6 +163,10 @@ struct GALAXY
     float SfrDiskColdGasMetals[STEPS]; /* MetalsColdGas at each substep [10^10 Msun/h] */
     float SfrBulgeColdGas[STEPS];      /* ColdGas at each substep of bulge SF [10^10 Msun/h] */
     float SfrBulgeColdGasMetals[STEPS];/* MetalsColdGas at each substep of bulge SF [10^10 Msun/h] */
+    int32_t SubstepsUsed;              /* effective_steps actually integrated over this snapshot. The Sfr*
+                                          arrays above hold STEPS bins but accumulate one entry per substep,
+                                          so the output average must divide by this, not by STEPS. Equals
+                                          STEPS whenever the adaptive path does not fire (see evolve_galaxies). */
 
     /* full star formation history - tracks stellar mass formed at each snapshot */
     float SFHMassDisk[ABSOLUTEMAXSNAPS];   /* stellar mass formed in disk at each snapshot [10^10 Msun/h] */
@@ -174,6 +178,8 @@ struct GALAXY
 
     /* misc */
     float DiskScaleRadius; /* exponential disk scale radius [Mpc/h] */
+    float SpinSmooth[3];   /* main-branch running mean of the halo spin vector [(Mpc/h)(km/s)];
+                              used only when DiskRadiusOn >= 2, carried forward with the galaxy */
     float BulgeRadius;     /* effective (half-mass) bulge radius [Mpc/h] */
     float MergTime;        /* dynamical-friction merger clock; counts down to 0 [code time units]; >999 = unset */
     double Cooling;        /* total cooling luminosity this snapshot [code energy / code time] */
@@ -480,6 +486,28 @@ struct params
                                  // 0: bypass it -- mdot = M_CGM / t_ff for every CGM halo
     int32_t    FIREmodeOn;
     int32_t    RegimeRandomMode;     // 0: fresh random draw each snapshot (default, original behaviour); 1: use the persistent RegimeRandom assigned at galaxy creation (deterministic regime evolution driven by mass)
+    int32_t    ColdStreamCeilingOn;  // Cold-stream shut-off below z_crit.
+                                  // 0: hard z_crit cut for M > Mshock (published behaviour)
+                                  // 1: Dekel & Birnboim (2006) eqs 39-41, smooth -- z_crit emerges
+    double     StreamMassFactor;  // f in Dekel & Birnboim (2006) eqs 40-41; order a few, they use 3.
+    double     DiskRadiusFactor;  // Angular-momentum retention factor f_j multiplying the
+                                  // Mo+98 disk scale radius. 1.0 = full retention (default).
+    int32_t    DiskRadiusOn;      // Disk scale radius model:
+                                  // 0: published behaviour -- Mo+98 from the instantaneous halo spin,
+                                  //    unbounded, and a fallback that returns 0 when Rvir == 0
+                                  // 1: as 0, plus a working Rvir fallback (from Len*PartMass) and a
+                                  //    [DISK_RADIUS_MIN_FRAC, DiskRadiusMaxFrac] * Rvir bound
+                                  // 2: as 1, but built from a running mean of the halo spin *vector*
+                                  //    over a halo dynamical time, which suppresses both the
+                                  //    snapshot-to-snapshot jitter and the low-particle-count bias
+                                  //    in |j| (see docs/physics/disk_sizes.md)
+    double     DiskRadiusMaxFrac; // Ceiling on r_d / Rvir when DiskRadiusOn > 0. The default 0.15
+                                  // corresponds to lambda ~ 0.21 and moves ~4% of Millennium
+                                  // galaxies at z=0; set very large to disable the ceiling.
+    double     GasDiskRadiusFactor; // chi: ratio of the atomic-gas scale length to the stellar/H2
+                                  // scale length, applied in the HI ionisation truncation only.
+                                  // 1.0 = cospatial (default, published behaviour); observed disks
+                                  // have chi ~ 1.5-2.
     double     MShockMsun;   // Dekel & Birnboim (2006) virial-shock stability mass [Msun].
                              // Sets which of two baryon cycles a halo follows, so it is a
                              // physics parameter rather than a constant; exposed for the
@@ -493,7 +521,10 @@ struct params
     int32_t    H2RadialIntegrationOn;     // 0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk
     int32_t    H2RadialNBins;             // radial bins for integration (default 25)
     double     H2RadialRMaxFactor;        // R_max = factor * r_s (default 5.0)
-    int32_t    SaveFullSFH;               // 0 = save averaged SFR (default), 1 = save full SfrDisk[STEPS] and SfrBulge[STEPS] arrays
+    int32_t    SaveFullSFH;               // 0 = save only the snapshot-averaged SfrDisk/SfrBulge (default),
+                                          // 1 = additionally save the per-snapshot SFHMassDisk/SFHMassBulge
+                                          // histories. Those accumulate stellar mass, not rate, so they are
+                                          // correct at any substep count (unlike the Sfr* rate bins).
     int32_t    TrackICSAssembly;          // 0 = off, 1 = track ICS_disrupt and ICS_accrete
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 

@@ -18,6 +18,7 @@
 #include "core_allvars.h"
 
 #include "model_misc.h"
+#include "model_halo_properties.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -34,8 +35,19 @@ static const double SHEN03_INTERCEPT_LOW  = -1.21;
 /* Transition mass between the two eq.(32) regimes, in Msun. */
 static const double SHEN03_M_TRANSITION   =  2.0e10;
 
-/* Fallback disk scale radius: r_d = DISK_RADIUS_FALLBACK_FRAC * R_vir when spin is unavailable. */
+/* Fallback disk scale radius: r_d = DISK_RADIUS_FALLBACK_FRAC * R_vir when spin is unavailable.
+ * Reachable only on the DiskRadiusOn == 0 path, and only when R_vir itself is zero, so it
+ * always returns zero there; kept because that is the published behaviour. */
 static const double DISK_RADIUS_FALLBACK_FRAC = 0.1;
+
+/* Floor on r_d / R_vir when DiskRadiusOn > 0: insurance against a halo whose measured spin is
+ * ~0. Moves 0.02% of Millennium galaxies at z = 0. The matching ceiling is the parameter
+ * DiskRadiusMaxFrac, because anywhere in 0.1-0.2 is a real modelling choice rather than a guard. */
+static const double DISK_RADIUS_MIN_FRAC = 0.002;
+
+/* Peak of the log-normal halo spin distribution (Bullock et al. 2001), used when a halo has no
+ * usable spin measurement at all. Well-resolved (Len > 3000) Millennium halos give 0.042. */
+static const double DISK_RADIUS_MEDIAN_SPIN = 0.04;
 
 /* Tonini+2016 eq. (15): fraction of the disc scale radius that a newly
  * transferred mass element contributes to the instability-bulge half-mass radius. */
@@ -111,6 +123,8 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].MetalsICS = 0.0;
     galaxies[p].MetalsCGMgas = 0.0;
 
+    galaxies[p].SubstepsUsed = STEPS;   /* overwritten by evolve_galaxies before any output */
+
     for(int step = 0; step < STEPS; step++) {
         galaxies[p].SfrDisk[step] = 0.0;
         galaxies[p].SfrBulge[step] = 0.0;
@@ -133,7 +147,13 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].ICS_accrete = 0.0;
     galaxies[p].ICS_sum_mt = 0.0;
 
-    galaxies[p].DiskScaleRadius = get_disk_radius(halonr, p, halos, galaxies);
+    /* Seed the smoothed spin with this halo's spin so the running mean in get_disk_radius()
+     * is a no-op on the first call (DiskRadiusOn >= 2); harmless otherwise. */
+    for(int j = 0; j < 3; j++) {
+        galaxies[p].SpinSmooth[j] = halos[halonr].Spin[j];
+    }
+
+    galaxies[p].DiskScaleRadius = get_disk_radius(halonr, p, halos, galaxies, run_params);
     get_bulge_radius(p, galaxies, run_params);
     galaxies[p].MergTime = 999.9f;
     galaxies[p].Cooling = 0.0;
@@ -167,26 +187,123 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
 }
 
 /*
- * Compute the disk half-mass radius from halo spin (Mo, Shude & White 1998 eq. 12).
+ * Exponential disk scale radius from the halo spin (Mo, Mao & White 1998 eq. 12).
  *
- * Uses the Bullock-style spin parameter and virial properties. Falls back to
- * 0.1 * Rvir when Vvir or Rvir are zero.
+ * This returns the scale length r_d, NOT the half-mass radius: callers wanting
+ * r_half multiply by 1.68 (DISK_HALF_MASS_FRAC in model_mergers.c).
+ *
+ * MMW98 eq. 12 is r_d = (lambda / sqrt(2)) * R_vir with a Bullock-style
+ * lambda = |j| / (sqrt(2) V_vir R_vir), so R_vir cancels and the radius is really
+ *
+ *     r_d = f_j * |j| / (2 V_vir)
+ *
+ * i.e. only the halo specific angular momentum and the circular velocity enter.
+ *
+ * run_params->DiskRadiusOn selects the variant:
+ *
+ *   0  Published behaviour, reproduced bit-for-bit.
+ *
+ *   1  Adds two robustness fixes. (a) A working fallback: the published else-branch is
+ *      reachable only when R_vir == 0 (get_virial_velocity() returns 0 exactly then), so it
+ *      returns 0 and the galaxy is permanently inert -- every downstream H2/SF/stripping path
+ *      guards on DiskScaleRadius > 0. Here the virial scale is rebuilt from the particle count,
+ *      which is what get_virial_mass() already does for subhalos. (b) r_d / R_vir is bounded
+ *      to [DISK_RADIUS_MIN_FRAC, DiskRadiusMaxFrac]; unbounded, 11.5% of Millennium galaxies at
+ *      z = 0 exceed 0.1 R_vir and the 99.9th percentile r_d is 32 kpc.
+ *
+ *   2  As 1, but |j| comes from a running mean of the spin *vector* over a halo dynamical time.
+ *      Averaging the vector, not |j| or r_d, is the point: discreteness noise in a poorly
+ *      resolved halo's angular momentum adds in quadrature to a positive-definite |j|, so it
+ *      biases r_d high. Measured on Millennium, median lambda is 0.079 at Len 20-50 against
+ *      0.042 at Len > 3000, and 55% of z = 0 centrals sit below Len = 50. Vector averaging
+ *      cancels that noise toward zero while the physical spin persists; averaging magnitudes
+ *      would suppress the jitter but keep the bias.
+ *
+ * Levels 1 and 2 leave satellites alone: get_disk_radius() is only called for FOF centrals
+ * (core_build_model.c), so a Type 1 disk size stays frozen at infall under every setting.
  */
-double get_disk_radius(const int halonr, const int p, const struct halo_data *halos, const struct GALAXY *galaxies)
+double get_disk_radius(const int halonr, const int p, const struct halo_data *halos, struct GALAXY *galaxies,
+                       const struct params *run_params)
 {
-    if(galaxies[p].Vvir > 0.0 && galaxies[p].Rvir > 0.0) {
-        /* Mo, Shude & White (1998) eq. 12 with a Bullock-style spin parameter.
-         * The literal 1.414 is intentional: the original code used this truncated
-         * sqrt(2) rather than M_SQRT2 and changing it shifts every disk radius.
-         * Do not replace with M_SQRT2 without re-calibrating. */
-        double SpinMagnitude = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
-                                    halos[halonr].Spin[1] * halos[halonr].Spin[1] + halos[halonr].Spin[2] * halos[halonr].Spin[2]);
+    const double f_j = run_params->DiskRadiusFactor;
 
-        double SpinParameter = SpinMagnitude / (1.414 * galaxies[p].Vvir * galaxies[p].Rvir);
-        return (SpinParameter / 1.414) * galaxies[p].Rvir;
-    } else {
-        return DISK_RADIUS_FALLBACK_FRAC * galaxies[p].Rvir;
+    /* ---------------- DiskRadiusOn == 0: published behaviour ---------------- */
+    if(run_params->DiskRadiusOn == 0) {
+        if(galaxies[p].Vvir > 0.0 && galaxies[p].Rvir > 0.0) {
+            /* Mo, Shude & White (1998) eq. 12 with a Bullock-style spin parameter.
+             * The literal 1.414 is intentional: the original code used this truncated
+             * sqrt(2) rather than M_SQRT2 and changing it shifts every disk radius.
+             * Do not replace with M_SQRT2 without re-calibrating. */
+            double SpinMagnitude = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
+                                        halos[halonr].Spin[1] * halos[halonr].Spin[1] + halos[halonr].Spin[2] * halos[halonr].Spin[2]);
+
+            double SpinParameter = SpinMagnitude / (1.414 * galaxies[p].Vvir * galaxies[p].Rvir);
+            return f_j * (SpinParameter / 1.414) * galaxies[p].Rvir;
+        } else {
+            return f_j * DISK_RADIUS_FALLBACK_FRAC * galaxies[p].Rvir;
+        }
     }
+
+    /* ---------------- DiskRadiusOn >= 1 ---------------- */
+
+    /* Virial scale, repaired from the particle count when the halo catalogue reports
+     * Mvir = 0 for a FOF central (140 of 31739 z = 0 centrals in Millennium file 0). */
+    double Rvir = galaxies[p].Rvir;
+    double Vvir = galaxies[p].Vvir;
+    if(Rvir <= 0.0 || Vvir <= 0.0) {
+        const double mvir = halos[halonr].Len * run_params->PartMass;
+        Rvir = (mvir > 0.0) ? virial_radius_from_mass(mvir, halos[halonr].SnapNum, run_params) : 0.0;
+        Vvir = (Rvir > 0.0) ? sqrt(run_params->G * mvir / Rvir) : 0.0;
+        if(Rvir <= 0.0 || Vvir <= 0.0) {
+            return 0.0;   /* nothing resolved enough to hang a disk on */
+        }
+    }
+
+    /* Spin vector: instantaneous, or the running main-branch mean. */
+    double spin[3];
+    if(run_params->DiskRadiusOn >= 2) {
+        /* Exponential moving average with weight w = dt / (dt + t_dyn). The disk cannot
+         * restructure faster than the halo dynamical time t_dyn = R_vir / V_vir, and the
+         * spin measurement decorrelates on the snapshot spacing dt, so the two timescales
+         * set the weight between them and there is no free parameter. Millennium: w ~ 0.2
+         * at z = 0 (heavy smoothing, t_dyn >> dt) rising to ~0.5 by z = 3, where haloes
+         * really do reorganise within a snapshot. */
+        const int prev_snap = galaxies[p].SnapNum;   /* not yet advanced at this call site */
+        const int this_snap = halos[halonr].SnapNum;
+        double w = 1.0;   /* no usable history -> take the instantaneous spin */
+        if(prev_snap >= 0 && this_snap >= prev_snap) {
+            const double dt = run_params->Age[prev_snap] - run_params->Age[this_snap];  /* Age is lookback */
+            w = (dt > 0.0) ? dt / (dt + Rvir / Vvir) : 0.0;
+        }
+        for(int k = 0; k < 3; k++) {
+            galaxies[p].SpinSmooth[k] = (float)((1.0 - w) * galaxies[p].SpinSmooth[k] + w * halos[halonr].Spin[k]);
+            spin[k] = galaxies[p].SpinSmooth[k];
+        }
+    } else {
+        for(int k = 0; k < 3; k++) {
+            spin[k] = halos[halonr].Spin[k];
+        }
+    }
+
+    const double jmag = sqrt(spin[0] * spin[0] + spin[1] * spin[1] + spin[2] * spin[2]);
+
+    /* MMW98 eq. 12, in the form R_vir actually cancels to. */
+    double r_disk = (jmag > 0.0) ? f_j * jmag / (2.0 * Vvir)
+                                 : f_j * (DISK_RADIUS_MEDIAN_SPIN / M_SQRT2) * Rvir;
+
+    /* Bound the physical size (applied after f_j, so the ceiling is a size limit rather
+     * than a spin limit and scales with any angular-momentum retention factor).
+     * NB the bound is against the peak-retained R_vir the physics uses everywhere else,
+     * not the instantaneous one save_gals_hdf5.c writes to the Rvir output column, so a
+     * halo now below its peak mass can show r_d/Rvir above DiskRadiusMaxFrac on output.
+     * Clamping against the instantaneous R_vir instead would shrink disks during
+     * stripping, which is not what the ceiling is for. */
+    const double r_max = run_params->DiskRadiusMaxFrac * Rvir;
+    const double r_min = DISK_RADIUS_MIN_FRAC * Rvir;
+    if(r_disk > r_max) r_disk = r_max;
+    if(r_disk < r_min) r_disk = r_min;
+
+    return r_disk;
 }
 
 /*
