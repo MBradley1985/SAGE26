@@ -128,9 +128,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->ColdStreamCeilingOn        = 0;     /* 0 reproduces published behaviour */ /* (remove once published)*/
     run_params->StreamMassFactor           = 3.0;   /* Dekel & Birnboim (2006) adopt f = 3 */ /* (remove once published)*/
     run_params->DiskRadiusFactor           = 1.0;   /* f_j: 1.0 reproduces published behaviour exactly */ /* (remove once published)*/
-    run_params->DiskRadiusOn               = 0;     /* 0 reproduces published behaviour bit-for-bit */ /* (remove once published)*/
-    run_params->DiskRadiusMaxFrac          = 0.15;  /* ceiling on r_d/Rvir; used only when DiskRadiusOn > 0 */ /* (remove once published)*/
-    run_params->GasDiskRadiusFactor        = 1.0;   /* chi = 1.0: atomic disk cospatial with the stellar disk (published behaviour) */ /* (remove once published)*/
+    run_params->DiskRadiusOn               = 0;     /* 0 reproduces published behaviour bit-for-bit 1: + working Rvir fallback and a bound on r_d/Rvir; 2: + spin vector smoothed over a halo dynamical time (removes the low-Len bias in |j|) */ 
+    run_params->DiskRadiusMaxFrac          = 0.15;  /* ceiling on r_d/Rvir; used only when DiskRadiusOn > 0 */ 
+    run_params->GasDiskRadiusFactor        = 1.0;   /* chi = 1.0: atomic disk cospatial with the stellar disk (published behaviour) */
     run_params->MShockMsun                 = 6.0e11;
     run_params->EnergySN                   = 1.0e51;
     run_params->EtaSN                      = 5.0e-3;
