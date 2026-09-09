@@ -292,7 +292,11 @@ def read_bh_histories(file_list, snap_num, hubble_h, fields):
                       else np.zeros(ngal))
             for fld in fields:
                 if fld in grp:
-                    c = 1.0 if fld == 'BHAccretionType' else conv
+                    # BHAccretionType is a category code and TimeOfLastMajor/
+                    # MinorMerger are already in Myr -- neither is a mass field,
+                    # so skip the 1e10/h mass conversion for them.
+                    c = 1.0 if fld in ('BHAccretionType', 'TimeOfLastMajorMerger',
+                                       'TimeOfLastMinorMerger') else conv
                     blocks[fld].append(_reshape_history(np.array(grp[fld]), ngal) * c)
                 else:
                     blocks[fld].append(None)
@@ -661,6 +665,192 @@ def _draw_rate_function(ax, accr, edd, acc_type, volume_h3, edd_limited,
         ax.legend(loc='upper right', fontsize=11)
     ax.grid(True, alpha=0.25, ls=':', lw=0.6)
     return result['n']
+
+
+def _merger_is_major_proxy(time_major, time_minor):
+    """
+    Proxy classification for which merger type (major vs minor) triggered a
+    merger-channel BH accretion event. There is no saved per-event merger
+    mass ratio to split on directly -- deal_with_galaxy_merger's mass_ratio
+    is a local C variable, discarded after use (see model_mergers.c) -- so
+    this instead reuses TimeOfLastMajorMerger/TimeOfLastMinorMerger, which
+    ARE already saved.
+
+    Those two scalars are each overwritten to the CURRENT snapshot's time
+    exactly when a merger of that type has just been processed
+    (model_mergers.c:566-583, classified by mass_ratio vs ThreshMajorMerger),
+    and a merger-channel accretion event is recorded within that same
+    deal_with_galaxy_merger() call. Since every merger updates exactly one
+    of the two timestamps to "now" (making it, at that instant, strictly the
+    larger of the two), whichever field is more recent at this galaxy's own
+    snapshot identifies which type this event was.
+
+    Caveat: this is an approximation, not a direct per-event label. It can
+    misclassify if two merger events (one major, one minor) land on the same
+    central in the exact same snapshot, and -- like the accretion history
+    columns it's paired with -- it only resolves the MOST RECENT merger per
+    galaxy at each snapshot.
+    """
+    return np.ravel(time_major) >= np.ravel(time_minor)
+
+
+def _rate_function_series_merger_split(accr, edd, acc_type, is_major, volume_h3,
+                                       edd_limited, n_bins=40):
+    """
+    Like _rate_function_series(), but splits the 'Merger' category into
+    'Major Merger' and 'Minor Merger' using `is_major` (see
+    _merger_is_major_proxy()); Radio Mode and Disk Instability are
+    unchanged. Kept as a separate function (rather than parametrising
+    _rate_function_series) so the widely-reused single/compare/panel call
+    sites of that function are untouched.
+    """
+    accr = np.ravel(accr); edd = np.ravel(edd)
+    acc_type = np.ravel(acc_type); is_major = np.ravel(is_major)
+    valid = (accr > 0) & (edd > 0) & np.isfinite(accr) & np.isfinite(edd)
+    accr, edd, acc_type, is_major = accr[valid], edd[valid], acc_type[valid], is_major[valid]
+    if len(accr) == 0:
+        return None
+
+    lam = accr / edd
+    if edd_limited:
+        lam = np.minimum(lam, 1.0)
+    log_lam = np.log10(lam)
+
+    lo = np.floor(log_lam.min() * 2) / 2
+    if edd_limited:
+        bins = np.linspace(lo, 0.0, n_bins + 1)
+        centre_mask_cap = 0.0
+    else:
+        hi = np.ceil(log_lam.max() * 2) / 2
+        bins = np.linspace(lo, hi, n_bins + 1)
+        centre_mask_cap = None
+    bw = bins[1] - bins[0]
+    centres = 0.5 * (bins[:-1] + bins[1:])
+    pmask = centres <= centre_mask_cap if centre_mask_cap is not None \
+        else np.ones(len(centres), bool)
+
+    is_merger = acc_type == ACC_MERGER
+    cats = [
+        (log_lam,                             'Total',            'k',       2.4, 0.10),
+        (log_lam[is_merger & is_major],        'Major Merger',     '#7B1FA2', 1.9, 0.15),
+        (log_lam[is_merger & ~is_major],       'Minor Merger',     '#1976D2', 1.9, 0.15),
+        (log_lam[acc_type == ACC_RADIO],       'Radio Mode',       '#D32F2F', 1.9, 0.15),
+        (log_lam[acc_type == ACC_INSTAB],      'Disk Instability', '#388E3C', 1.9, 0.15),
+    ]
+
+    gmin = np.inf
+    store = []
+    for data, _, _, _, _ in cats:
+        counts, _ = np.histogram(data, bins=bins)
+        y = counts / (bw * volume_h3) if volume_h3 else counts / bw
+        pos = y > 0
+        logy = np.full_like(y, np.nan, dtype=float)
+        logy[pos] = np.log10(y[pos])
+        if np.any(pos):
+            gmin = min(gmin, np.nanmin(logy[pos]))
+        store.append((logy, pos))
+    floor = gmin - 1.5 if np.isfinite(gmin) else -10.0
+
+    series, allv = [], []
+    for (data, label, color, lw, alpha), (logy, pos) in zip(cats, store):
+        series.append((label, color, lw, alpha, logy, pos))
+        allv.extend(logy[pos & pmask])
+
+    return {'centres': centres, 'pmask': pmask, 'series': series, 'floor': floor,
+            'n': len(log_lam), 'ymax': np.nanmax(allv) if allv else floor + 1.0}
+
+
+def _draw_rate_function_merger_split(ax, accr, edd, acc_type, is_major, volume_h3,
+                                     edd_limited, n_bins=40, show_legend=True,
+                                     show_xlabel=True, show_ylabel=True):
+    """Draw dN/dlog10(lambda) split by channel onto a single axis, with the
+    merger channel itself further split into Major/Minor Merger (see
+    _rate_function_series_merger_split())."""
+    result = _rate_function_series_merger_split(accr, edd, acc_type, is_major,
+                                                volume_h3, edd_limited, n_bins)
+    if result is None:
+        ax.text(0.5, 0.5, 'no data', transform=ax.transAxes,
+                ha='center', va='center', color='grey')
+        return 0
+
+    _draw_rate_series(ax, result)
+
+    ax.axvline(0.0, color='k', ls='--', lw=1.3, alpha=0.7)
+    ax.set_xlim(-10, 5)
+    ax.set_ylim(result['floor'] + 1.0, result['ymax'] + 0.8)
+    ax.xaxis.set_minor_locator(AutoMinorLocator(5))
+    ax.yaxis.set_minor_locator(AutoMinorLocator(5))
+    if show_xlabel:
+        ax.set_xlabel(r'$\log_{10}(\dot{M}_{\rm BH}/\dot{M}_{\rm Edd})$',
+                      fontsize=14)
+    if show_ylabel:
+        yl = (r'$\log_{10}(\mathrm{d}N/\mathrm{d}\log_{10}\lambda\,/\,'
+              r'\mathrm{Mpc}^{-3}h^{3})$') if volume_h3 else \
+             r'$\log_{10}(\mathrm{d}N/\mathrm{d}\log_{10}\lambda)$'
+        ax.set_ylabel(yl, fontsize=13)
+    if show_legend:
+        ax.legend(loc='upper right', fontsize=11)
+    ax.grid(True, alpha=0.25, ls=':', lw=0.6)
+    return result['n']
+
+
+def plot_accretion_rate_function_merger_split(file_list, snap_num, hubble_h, redshifts,
+                                              available, output_dir, panel_z,
+                                              edd_limited, volume_h3, no_cuts):
+    """
+    Redshift-panel (2x3) accretion rate function, exactly like
+    plot_accretion_rate_function(..., bin_mode='redshift'), except the
+    Merger channel is further split into Major/Minor Merger using the
+    TimeOfLastMajorMerger/TimeOfLastMinorMerger proxy in
+    _merger_is_major_proxy() -- see that function's docstring for the
+    caveats of this proxy (there's no saved per-event merger mass ratio to
+    split on directly).
+    """
+    name = "accretion rate function (merger split)"
+    need = ['BHMaxaccretionRate', 'BHEddingtonRateLimit', 'BHAccretionType',
+            'TimeOfLastMajorMerger', 'TimeOfLastMinorMerger']
+    for fld in need:
+        if not field_present(file_list, snap_num, fld):
+            print(f"[skip] {name}: missing {fld}.")
+            return
+
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    axes = axes.ravel()
+    for k, tz in enumerate(panel_z[:6]):
+        sn = snapshot_for_redshift(tz, redshifts, available)
+        if sn is None:
+            axes[k].text(0.5, 0.5, 'no snap', transform=axes[k].transAxes,
+                         ha='center'); axes[k].set_title(f"z~{tz:.1f}")
+            continue
+        d = read_bh_histories(file_list, sn, hubble_h, need)
+        if d is None or d['BHMaxaccretionRate'] is None:
+            axes[k].text(0.5, 0.5, 'no data', transform=axes[k].transAxes,
+                         ha='center')
+            axes[k].set_title(f"snap {sn}")
+            continue
+        m = selection_mask(d['BlackHoleMass'], d['StellarMass'],
+                           d['Mvir'], no_cuts)
+        a, e, t = d['BHMaxaccretionRate'], d['BHEddingtonRateLimit'], d['BHAccretionType']
+        col = min(sn, a.shape[1] - 1)
+        # TimeOfLastMajor/MinorMerger are scalars (reshaped to width 1 by
+        # read_bh_histories), not per-snapshot histories -- always column 0.
+        tmaj = d['TimeOfLastMajorMerger'][m][:, 0]
+        tmin = d['TimeOfLastMinorMerger'][m][:, 0]
+        is_major = _merger_is_major_proxy(tmaj, tmin)
+        _draw_rate_function_merger_split(axes[k], a[m][:, col], e[m][:, col],
+                                         t[m][:, col], is_major,
+                                         volume_h3, edd_limited,
+                                         show_legend=(k == 0),
+                                         show_xlabel=(k >= 3),
+                                         show_ylabel=(k % 3 == 0))
+        zz = get_redshift_from_snapshot(sn, redshifts)
+        axes[k].set_title(f"snap {sn}  (z = {zz:.2f})", fontsize=12)
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+    out = os.path.join(output_dir,
+                       f"bh_accretion_rate_function_redshift_panels_merger_split{OutputFormat}")
+    fig.savefig(out, dpi=140, bbox_inches='tight')
+    plt.close(fig)
+    print(f"[ok]   {name} -> {out}")
 
 
 def plot_accretion_rate_function(file_list, snap_num, hubble_h, redshifts,
@@ -1648,6 +1838,13 @@ def main():
                                          available, output_dir, 'redshift',
                                          stellar_edges, panel_z, args.edd_limited,
                                          volume_h3, args.no_cuts)
+        # same redshift-panel grid again, but with the Merger channel split
+        # into Major/Minor (see plot_accretion_rate_function_merger_split's
+        # docstring for the proxy this relies on).
+        plot_accretion_rate_function_merger_split(file_list, snap_num, hubble_h,
+                                                  redshifts, available, output_dir,
+                                                  panel_z, args.edd_limited,
+                                                  volume_h3, args.no_cuts)
     if not args.no_seed_density:
         plot_bh_seed_density(file_list, hubble_h, redshifts, available,
                              volume_h3, output_dir, zmax=args.seed_density_zmax)
