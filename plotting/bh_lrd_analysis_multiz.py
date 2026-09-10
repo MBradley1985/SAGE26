@@ -102,16 +102,16 @@ DEFAULT_REDSHIFTS = [0.0, 1.0, 2.0, 4.0, 6.0, 8.0]
 # single-panel defaults again; for now they're the same values, carried
 # back into bh_lrd_analysis.py's own PANEL_*_XLIM/YLIM after tuning them
 # here interactively). ──
-MULTIZ_PANEL_A_XLIM = PANEL_A_XLIM
-MULTIZ_PANEL_A_YLIM = PANEL_A_YLIM
-MULTIZ_PANEL_B_XLIM = PANEL_B_XLIM
-MULTIZ_PANEL_B_YLIM = PANEL_B_YLIM
+MULTIZ_PANEL_A_XLIM = (4.0, 9.0)
+MULTIZ_PANEL_A_YLIM = (-10.0, PANEL_A_YLIM[1])
+MULTIZ_PANEL_B_XLIM = (4.0, 9.0)
+MULTIZ_PANEL_B_YLIM = (-6.0, 1.0)
 MULTIZ_PANEL_C_XLIM = PANEL_C_XLIM
 MULTIZ_PANEL_C_YLIM = PANEL_C_YLIM
-MULTIZ_PANEL_D_XLIM = PANEL_D_XLIM
+MULTIZ_PANEL_D_XLIM = (4.0, 9.0)
 MULTIZ_PANEL_D_YLIM = PANEL_D_YLIM
 MULTIZ_PANEL_E_XLIM = PANEL_E_XLIM
-MULTIZ_PANEL_E_YLIM = PANEL_E_YLIM
+MULTIZ_PANEL_E_YLIM = (4.0, PANEL_E_YLIM[1])
 MULTIZ_PANEL_F_XLIM = PANEL_F_XLIM
 MULTIZ_PANEL_F_YLIM = PANEL_F_YLIM
 
@@ -293,7 +293,7 @@ def draw_panel_a(ax, data, z_target, show_lrd=True, use_fbh=True,
     if show_lrd:
         x_fill = np.linspace(x_lo, x_hi, 200)
         y_lower = np.maximum(eddington_mdot(x_fill), np.log10(bhar_floor))
-        ax.fill_between(x_fill, y_lower, y_hi, color='#D32F2F', alpha=0.08, zorder=0)
+        ax.fill_between(x_fill, y_lower, y_hi, color='#C10020', alpha=0.08, zorder=0)
 
     bg = ~(lrd_red | lrd_blue) if show_lrd else np.ones(len(log_mbh), dtype=bool)
     _bg_scatter_and_contours(ax, log_mbh[bg], log_mdot[bg], x_lo, x_hi, y_lo, y_hi)
@@ -301,17 +301,17 @@ def draw_panel_a(ax, data, z_target, show_lrd=True, use_fbh=True,
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(log_mbh[lrd_blue], log_mdot[lrd_blue], s=10,
-                       color='#F57C00', edgecolors='white', linewidths=0.2, zorder=5)
+                       color='#00538A', edgecolors='white', linewidths=0.2, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(log_mbh[lrd_red], log_mdot[lrd_red], s=10,
-                       color='#C62828', edgecolors='white', linewidths=0.2, zorder=6)
+                       color='#C10020', edgecolors='white', linewidths=0.2, zorder=6)
 
     x_ref = np.linspace(x_lo, x_hi, 200)
     y_edd = eddington_mdot(x_ref)
-    ax.plot(x_ref, y_edd, color='#C62828', lw=1.1, zorder=4)
-    ax.plot(x_ref, y_edd + 1.0, color='#E65100', lw=1.1, zorder=4)
-    ax.axhline(np.log10(LRD_BHAR_DEFAULT), color='#C62828', lw=0.8, ls='--', zorder=3, alpha=0.85)
-    ax.axhline(np.log10(LRD_BHAR_ALT), color='#C62828', lw=0.6, ls=':', zorder=3, alpha=0.70)
+    ax.plot(x_ref, y_edd, color='#C10020', lw=1.1, zorder=4)
+    ax.plot(x_ref, y_edd + 1.0, color='#FFB300', lw=1.1, zorder=4)
+    ax.axhline(np.log10(LRD_BHAR_DEFAULT), color='#C10020', lw=0.8, ls='--', zorder=3, alpha=0.85)
+    ax.axhline(np.log10(LRD_BHAR_ALT), color='#C10020', lw=0.6, ls=':', zorder=3, alpha=0.70)
 
     lit_labels = []
     if show_lit:
@@ -343,14 +343,14 @@ def draw_panel_a(ax, data, z_target, show_lrd=True, use_fbh=True,
             ha='right', va='bottom', fontsize=10)
 
     handles = [
-        Line2D([0], [0], color='#C62828', lw=1.6, label=r'$\dot{M}_{\rm BH} = \dot{M}_{\rm Edd}$'),
-        Line2D([0], [0], color='#E65100', lw=1.6, label=r'$\dot{M}_{\rm BH} = 10\,\dot{M}_{\rm Edd}$'),
+        Line2D([0], [0], color='#C10020', lw=1.6, label=r'$\dot{M}_{\rm BH} = \dot{M}_{\rm Edd}$'),
+        Line2D([0], [0], color='#FFB300', lw=1.6, label=r'$\dot{M}_{\rm BH} = 10\,\dot{M}_{\rm Edd}$'),
     ]
     if show_lrd:
-        handles.append(Line2D([0], [0], marker='o', color='w', markerfacecolor='#C62828',
+        handles.append(Line2D([0], [0], marker='o', color='w', markerfacecolor='#C10020',
                               markersize=7, label=(r'LRD ($f_{\rm BH}\geq 3\%$)' if use_fbh else 'LRD')))
         if use_fbh:
-            handles.append(Line2D([0], [0], marker='o', color='w', markerfacecolor='#F57C00',
+            handles.append(Line2D([0], [0], marker='o', color='w', markerfacecolor='#00538A',
                                   markersize=7, label=r'LRD ($f_{\rm BH}<3\%$)'))
     handles += lit_legend_handles(lit_labels)
     return handles, (x_lo, x_hi), (y_lo, y_hi)
@@ -401,7 +401,7 @@ def draw_panel_b(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
 
     log_fbh_thresh = np.log10(LRD_FBHM_THRESH)
     if show_lrd:
-        ax.fill_between([x_lo, x_hi], log_fbh_thresh, y_hi, color='#D32F2F', alpha=0.08, zorder=0)
+        ax.fill_between([x_lo, x_hi], log_fbh_thresh, y_hi, color='#C10020', alpha=0.08, zorder=0)
 
     bg = ~(lrd_red | lrd_blue) if show_lrd else np.ones(len(log_mbh), dtype=bool)
     _bg_scatter_and_contours(ax, log_mbh[bg], log_fbh[bg], x_lo, x_hi, y_lo, y_hi, contour_color='#000000')
@@ -409,13 +409,13 @@ def draw_panel_b(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(log_mbh[lrd_blue], log_fbh[lrd_blue], s=10,
-                       color='#F57C00', edgecolors='white', linewidths=0.2, zorder=5)
+                       color='#00538A', edgecolors='white', linewidths=0.2, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(log_mbh[lrd_red], log_fbh[lrd_red], s=10,
-                       color='#C62828', edgecolors='white', linewidths=0.2, zorder=6)
+                       color='#C10020', edgecolors='white', linewidths=0.2, zorder=6)
 
-    ax.axhline(np.log10(0.1), color='#F57C00', lw=1.4, zorder=4)
-    ax.axhline(log_fbh_thresh, color='#C62828', lw=1.4, zorder=4)
+    ax.axhline(np.log10(0.1), color='#FFB300', lw=1.4, zorder=4)
+    ax.axhline(log_fbh_thresh, color='#C10020', lw=1.4, zorder=4)
 
     handles = []
     if show_lit and pang_m.any():
@@ -503,10 +503,10 @@ def draw_panel_c(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(log_mstar[lrd_blue], log_mbh[lrd_blue], s=10,
-                       color='#F57C00', edgecolors='white', linewidths=0.2, zorder=5)
+                       color='#00538A', edgecolors='white', linewidths=0.2, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(log_mstar[lrd_red], log_mbh[lrd_red], s=10,
-                       color='#C62828', edgecolors='white', linewidths=0.2, zorder=6)
+                       color='#C10020', edgecolors='white', linewidths=0.2, zorder=6)
 
     lit_labels = []
     if show_lit:
@@ -530,9 +530,9 @@ def draw_panel_c(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     handles = [kh_line]
     if show_lrd:
         handles += [
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#C62828',
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#C10020',
                    markersize=7, label=r'LRD ($f_{\rm BH}\geq 3\%$)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#F57C00',
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#00538A',
                    markersize=7, label=r'LRD ($f_{\rm BH}<3\%$)'),
         ]
     handles += lit_legend_handles(lit_labels)
@@ -607,10 +607,10 @@ def draw_panel_d(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(log_mbh[lrd_blue], log_lbol[lrd_blue], s=10,
-                       color='#F57C00', edgecolors='white', linewidths=0.2, zorder=5)
+                       color='#00538A', edgecolors='white', linewidths=0.2, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(log_mbh[lrd_red], log_lbol[lrd_red], s=10,
-                       color='#C62828', edgecolors='white', linewidths=0.2, zorder=6)
+                       color='#C10020', edgecolors='white', linewidths=0.2, zorder=6)
 
     lit_labels = []
     if show_lit:
@@ -647,9 +647,9 @@ def draw_panel_d(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     handles = []
     if show_lrd:
         handles += [
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#C62828',
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#C10020',
                    markersize=7, label=r'LRD ($f_{\rm BH}\geq 3\%$)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#F57C00',
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#00538A',
                    markersize=7, label=r'LRD ($f_{\rm BH}<3\%$)'),
         ]
     handles += lit_legend_handles(lit_labels)
@@ -710,10 +710,10 @@ def draw_panel_e(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     if show_lrd:
         if lrd_blue.sum() > 0:
             ax.scatter(m1450[lrd_blue], log_mbh[lrd_blue], s=10,
-                       color='#F57C00', edgecolors='white', linewidths=0.2, zorder=5)
+                       color='#00538A', edgecolors='white', linewidths=0.2, zorder=5)
         if lrd_red.sum() > 0:
             ax.scatter(m1450[lrd_red], log_mbh[lrd_red], s=10,
-                       color='#C62828', edgecolors='white', linewidths=0.2, zorder=6)
+                       color='#C10020', edgecolors='white', linewidths=0.2, zorder=6)
 
     lit_labels = []
     if show_lit:
@@ -741,9 +741,9 @@ def draw_panel_e(ax, data, z_target, show_lrd=True, bhar_floor=LRD_BHAR_DEFAULT,
     handles = []
     if show_lrd:
         handles += [
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#C62828',
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#C10020',
                    markersize=7, label=r'LRD ($f_{\rm BH}\geq 3\%$)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#F57C00',
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#00538A',
                    markersize=7, label=r'LRD ($f_{\rm BH}<3\%$)'),
         ]
     handles += lit_legend_handles(lit_labels)
@@ -780,8 +780,8 @@ def draw_panel_f(ax, data, z_target, volume_h3, show_lrd=True,
 
     cats = [(log_lbol, 'Total', 'k', 'o')]
     if show_lrd:
-        cats.append((log_lbol[lrd_red], r'LRD ($f_{\rm BH}\geq 3\%$)', '#C62828', 'D'))
-        cats.append((log_lbol[lrd_blue], r'LRD ($f_{\rm BH}<3\%$)', '#F57C00', 's'))
+        cats.append((log_lbol[lrd_red], r'LRD ($f_{\rm BH}\geq 3\%$)', '#C10020', 'D'))
+        cats.append((log_lbol[lrd_blue], r'LRD ($f_{\rm BH}<3\%$)', '#00538A', 's'))
 
     allv = []
     plot_data = []
@@ -884,10 +884,10 @@ def draw_panel_a_compare(ax, datasets, z_target, show_lit=True, bhar_floor=LRD_B
 
     x_ref = np.linspace(x_lo, x_hi, 200)
     y_edd = eddington_mdot(x_ref)
-    ax.plot(x_ref, y_edd, color='#C62828', lw=1.1, zorder=4)
-    ax.plot(x_ref, y_edd + 1.0, color='#E65100', lw=1.1, zorder=4)
-    ax.axhline(np.log10(LRD_BHAR_DEFAULT), color='#C62828', lw=0.8, ls='--', zorder=3, alpha=0.85)
-    ax.axhline(np.log10(LRD_BHAR_ALT), color='#C62828', lw=0.6, ls=':', zorder=3, alpha=0.70)
+    ax.plot(x_ref, y_edd, color='#C10020', lw=1.1, zorder=4)
+    ax.plot(x_ref, y_edd + 1.0, color='#FFB300', lw=1.1, zorder=4)
+    ax.axhline(np.log10(LRD_BHAR_DEFAULT), color='#C10020', lw=0.8, ls='--', zorder=3, alpha=0.85)
+    ax.axhline(np.log10(LRD_BHAR_ALT), color='#C10020', lw=0.6, ls=':', zorder=3, alpha=0.70)
 
     run_handles = draw_contours_multirun(ax, prepped, x_lo, x_hi, y_lo, y_hi,
                                         linewidths=(0.5, 0.8, 1.1), n_kde=N_KDE_GRID)
@@ -921,8 +921,8 @@ def draw_panel_a_compare(ax, datasets, z_target, show_lit=True, bhar_floor=LRD_B
     ax.text(0.95, 0.05, _fmt_z(z_target), transform=ax.transAxes, ha='right', va='bottom', fontsize=10)
 
     handles = [
-        Line2D([0], [0], color='#C62828', lw=1.6, label=r'$\dot{M}_{\rm BH} = \dot{M}_{\rm Edd}$'),
-        Line2D([0], [0], color='#E65100', lw=1.6, label=r'$\dot{M}_{\rm BH} = 10\,\dot{M}_{\rm Edd}$'),
+        Line2D([0], [0], color='#C10020', lw=1.6, label=r'$\dot{M}_{\rm BH} = \dot{M}_{\rm Edd}$'),
+        Line2D([0], [0], color='#FFB300', lw=1.6, label=r'$\dot{M}_{\rm BH} = 10\,\dot{M}_{\rm Edd}$'),
     ] + run_handles + lit_legend_handles(lit_labels)
     return handles, (x_lo, x_hi), (y_lo, y_hi)
 
@@ -968,8 +968,8 @@ def draw_panel_b_compare(ax, datasets, z_target, show_lit=True, bhar_floor=LRD_B
         return None, (x_lo, x_hi), (y_lo, y_hi)
 
     log_fbh_thresh = np.log10(LRD_FBHM_THRESH)
-    ax.axhline(np.log10(0.1), color='#F57C00', lw=1.4, zorder=4)
-    ax.axhline(log_fbh_thresh, color='#C62828', lw=1.4, zorder=4)
+    ax.axhline(np.log10(0.1), color='#FFB300', lw=1.4, zorder=4)
+    ax.axhline(log_fbh_thresh, color='#C10020', lw=1.4, zorder=4)
 
     run_handles = draw_contours_multirun(ax, prepped, x_lo, x_hi, y_lo, y_hi,
                                         linewidths=(0.5, 0.8, 1.1), n_kde=N_KDE_GRID)
@@ -1239,8 +1239,8 @@ def draw_panel_e_compare(ax, datasets, z_target, show_lit=True, bhar_floor=LRD_B
 
 
 _PANEL_F_CAT_SPECS = [('Total', 'k', 'o'),
-                     (r'LRD ($f_{\rm BH}\geq 3\%$)', '#C62828', 'D'),
-                     (r'LRD ($f_{\rm BH}<3\%$)', '#F57C00', 's')]
+                     (r'LRD ($f_{\rm BH}\geq 3\%$)', '#C10020', 'D'),
+                     (r'LRD ($f_{\rm BH}<3\%$)', '#00538A', 's')]
 
 
 def draw_panel_f_compare(ax, datasets, z_target, volume_h3, show_lit=True,
@@ -1369,6 +1369,33 @@ PANEL_SPECS = {
               fname='lrd_bolometric_luminosity_function_multiz.png'),
 }
 
+# Per-panel legend placement as (subplot index, loc), tuned by hand against
+# each panel's own data/reference-curve layout so the legend always lands
+# on empty space. Index is row-major into the grid's flattened axes list
+# (e.g. 5 = bottom-right = the z~8 bin, for the standard 6-redshift grid).
+# Not in LEGEND_PLACEMENT -> DEFAULT_LEGEND_PLACEMENT.
+LEGEND_PLACEMENT = {
+    'a': (5, 'upper right'),
+    'b': (5, 'upper right'),
+    'c': (0, 'upper left'),
+    'd': (0, 'upper left'),
+}
+DEFAULT_LEGEND_PLACEMENT = (0, 'lower left')
+
+# Per-panel x-axis tick override (explicit tick values), for panels whose
+# default AutoLocator skips values worth always labelling.
+XTICKS_OVERRIDE = {
+    'a': [4, 5, 6, 7, 8],
+    'b': [4, 5, 6, 7, 8],
+}
+
+# Per-panel HARD x-axis range, applied AFTER the union-range/must-include
+# widening below -- overrides it rather than just seeding it, so a point
+# that would otherwise force a wider range gets clipped instead.
+HARD_XLIM = {
+    'b': (4.0, 9.0),
+}
+
 
 def _blank_edge_ticklabel(ax, axis, target):
     """Blank the tick label nearest `target` on the given axis ('x' or
@@ -1468,6 +1495,14 @@ def make_grid(panel_key, redshifts, snap_data, output_file, draw_fn,
             legend_by_label.setdefault(h.get_label(), h)
     legend_handles = list(legend_by_label.values())
 
+    if panel_key in HARD_XLIM:
+        for i in range(n):
+            axes_flat[i].set_xlim(*HARD_XLIM[panel_key])
+
+    if panel_key in XTICKS_OVERRIDE:
+        for i in range(n):
+            axes_flat[i].xaxis.set_major_locator(FixedLocator(XTICKS_OVERRIDE[panel_key]))
+
     for j in range(n, len(axes_flat)):
         axes_flat[j].axis('off')
 
@@ -1486,7 +1521,7 @@ def make_grid(panel_key, redshifts, snap_data, output_file, draw_fn,
         if row != last_row_in_col[col]:
             ax.tick_params(labelbottom=False)
 
-    left, right, top, bottom = 0.06, 0.995, 0.95, 0.065
+    left, right, top, bottom = 0.06, 0.995, 0.995, 0.065
     fig.subplots_adjust(left=left, right=right, top=top, bottom=bottom,
                         wspace=0.0, hspace=0.0)
     # Finalize the layout BEFORE reading tick positions below: each
@@ -1517,22 +1552,18 @@ def make_grid(panel_key, redshifts, snap_data, output_file, draw_fn,
     # to clear that tick-label text -- not a large hand-tuned gap.
     big_ax = fig.add_axes([left, bottom, right - left, top - bottom], frameon=False)
     big_ax.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
-    big_ax.set_xlabel(spec['xlabel'], fontsize=13, labelpad=18)
-    big_ax.set_ylabel(spec['ylabel'], fontsize=13, labelpad=24)
+    big_ax.set_xlabel(spec['xlabel'], fontsize=13, labelpad=9)
+    big_ax.set_ylabel(spec['ylabel'], fontsize=13, labelpad=14)
 
-    fig.suptitle(spec['title'], fontsize=15, y=0.995)
     if legend_handles:
-        # Position the legend below the xlabel's ACTUAL rendered extent
-        # (rather than a hand-tuned fraction) so it doesn't collide with it
-        # regardless of legend row count/label length.
-        fig.canvas.draw()
-        renderer = fig.canvas.get_renderer()
-        xlabel_bbox = big_ax.xaxis.label.get_window_extent(renderer=renderer)
-        xlabel_bottom_fig = xlabel_bbox.transformed(fig.transFigure.inverted()).y0
-        legend_y = xlabel_bottom_fig - 0.025
-        fig.legend(handles=legend_handles, loc='upper center',
-                  bbox_to_anchor=(0.55, legend_y), ncol=min(len(legend_handles), 5),
-                  fontsize=10, frameon=False)
+        # Featured in just one panel (rather than below the whole grid) so
+        # the figure doesn't need extra bottom margin for it -- which one,
+        # and in which corner, is tuned per panel in LEGEND_PLACEMENT so it
+        # always lands on empty space.
+        legend_idx, legend_loc = LEGEND_PLACEMENT.get(panel_key, DEFAULT_LEGEND_PLACEMENT)
+        axes_flat[legend_idx].legend(handles=legend_handles, loc=legend_loc,
+                                     fontsize=8, frameon=False, labelspacing=0.3,
+                                     handletextpad=0.4)
 
     fig.savefig(output_file, dpi=150, bbox_inches='tight')
     plt.close(fig)
