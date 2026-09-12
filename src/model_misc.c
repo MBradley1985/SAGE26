@@ -203,10 +203,7 @@ double get_disk_radius(const int halonr, const int p, const struct halo_data *ha
         r_disk = DISK_RADIUS_FALLBACK_FRAC * galaxies[p].Rvir;
     }
 
-    /* Apply a gas concentration/compaction factor. 
-     * A factor between 0.5 and 0.7 compensates for smooth SAM profiles 
-     * and triggers efficient molecular hydrogen formation. 
-     * (Tip: You can later wire this to a run_params variable if you want to grid-search it). */
+    /* Apply a gas concentration/compaction factor.*/
     const double disk_concentration_factor = 0.8;
 
     return r_disk * disk_concentration_factor;

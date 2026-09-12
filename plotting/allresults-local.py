@@ -43,6 +43,32 @@ warnings.filterwarnings("ignore")
 
 # Plotting options (these are not in HDF5, so keep as user options)
 whichimf = 1        # 0=Salpeter; 1=Chabrier
+
+# Offset in dex of each IMF's stellar masses above the Chabrier (2003) scale.
+# Kroupa (2001) sits 0.04 dex above Chabrier -- the value the Tremonti04, MMAdrews13
+# and MMR-Kewley08 headers themselves quote -- and Salpeter 0.24 dex above.
+# paper_plots.py carries the same numbers in IMF_TO_CHABRIER_DEX; keep the two in step.
+_IMF_ABOVE_CHABRIER_DEX = {
+    'chabrier': 0.00,
+    'kroupa': 0.04,
+    'salpeter': 0.24,
+    'diet-salpeter': 0.09,
+}
+
+
+def imf_shift(native):
+    """
+    Dex to add to a log10 stellar mass measured with the *native* IMF to put it on the
+    IMF selected by whichimf.
+
+    Replaces a per-dataset x1.5 (Kroupa->Salpeter) then /1.8 (Salpeter->Chabrier) chain
+    that netted -0.079 dex, disagreeing with the 0.04 dex these files state in their own
+    headers, and that was applied to Tremonti04, MMAdrews13 and MMR-Kewley08 but not to
+    Curti2020 -- which is Kroupa too. That left two Kroupa datasets 0.08 dex apart on the
+    same axes, an offset with no physical content.
+    """
+    target = 'salpeter' if whichimf == 0 else 'chabrier'
+    return _IMF_ABOVE_CHABRIER_DEX[target] - _IMF_ABOVE_CHABRIER_DEX[native]
 dilute = 7500     # Number of galaxies to plot in scatter plots
 sSFRcut = -11.0     # Divide quiescent from star forming galaxies
 
@@ -765,13 +791,8 @@ if __name__ == '__main__':
         tremonti_Z = tremonti_data[:, 1]
         tremonti_Z_err_low = tremonti_data[:, 2]
         tremonti_Z_err_high = tremonti_data[:, 3]
-        # Convert IMF if needed
-        if whichimf == 0:
-            tremonti_mass_corrected = np.log10(10**tremonti_mass * 1.5)
-        elif whichimf == 1:
-            tremonti_mass_corrected = np.log10(10**tremonti_mass * 1.5 / 1.8)
-        else:
-            tremonti_mass_corrected = tremonti_mass
+        # Tremonti+04 masses are Kroupa, per the file header.
+        tremonti_mass_corrected = tremonti_mass + imf_shift('kroupa')
         # Plot main line
         ax.plot(tremonti_mass_corrected, tremonti_Z, '-', color='red', linewidth=1.5, alpha=0.7, label='Tremonti+04')
         # Plot error shading
@@ -780,17 +801,16 @@ if __name__ == '__main__':
         print(f"Warning: Could not load Tremonti04.dat: {e}. Using fallback polynomial fit.")
         w_obs = np.arange(7.0, 13.0, 0.1)
         Zobs = -1.492 + 1.847*w_obs - 0.08026*w_obs*w_obs
-        if whichimf == 0:
-            ax.plot(np.log10((10**w_obs * 1.5)), Zobs, 'o-', linewidth=3, label='Tremonti et al. 2004 (poly fit)')
-        elif whichimf == 1:
-            ax.plot(np.log10((10**w_obs * 1.5 / 1.8)), Zobs, 'o-', linewidth=3, label='Tremonti et al. 2004 (poly fit)')
-        else:
-            ax.plot(w_obs, Zobs, 'o-', linewidth=3, label='Tremonti et al. 2004 (poly fit)')
+        ax.plot(w_obs + imf_shift('kroupa'), Zobs, 'o-', linewidth=3,
+                label='Tremonti et al. 2004 (poly fit)')
     
     # Curti et al. 2020
     try:
         curti_data = np.loadtxt(os.path.join(DataDir, 'metallicity', 'Curti2020.dat'))
-        curti_mass = curti_data[:, 0]
+        # Kroupa: Curti+20 takes its masses from the MPA-JHU catalogue, as
+        # Tremonti+04 and Andrews & Martini+13 do. Previously left unshifted while
+        # its Kroupa peers were moved.
+        curti_mass = curti_data[:, 0] + imf_shift('kroupa')
         curti_Z = curti_data[:, 1]
         curti_Z_low = curti_data[:, 2]
         curti_Z_high = curti_data[:, 3]
@@ -806,12 +826,8 @@ if __name__ == '__main__':
         andrews_data = np.loadtxt(os.path.join(DataDir, 'metallicity', 'MMAdrews13.dat'))
         andrews_mass = andrews_data[:, 0]
         andrews_Z = andrews_data[:, 1]
-        if whichimf == 0:
-            andrews_mass_corrected = np.log10(10**andrews_mass * 1.5)
-        elif whichimf == 1:
-            andrews_mass_corrected = np.log10(10**andrews_mass * 1.5 / 1.8)
-        else:
-            andrews_mass_corrected = andrews_mass
+        # Kroupa, per the file header.
+        andrews_mass_corrected = andrews_mass + imf_shift('kroupa')
         ax.scatter(andrews_mass_corrected, andrews_Z, marker='s', s=30, color='green', edgecolors='darkgreen', linewidth=0.5, alpha=0.8, label='Andrews & Martini 2013')
     except Exception as e:
         print(f"Warning: Could not load MMAdrews13.dat: {e}")
@@ -823,12 +839,8 @@ if __name__ == '__main__':
         t04_end = 74
         kewley_mass_t04 = kewley_data[t04_start:t04_end, 0]
         kewley_Z_t04 = kewley_data[t04_start:t04_end, 1]
-        if whichimf == 0:
-            kewley_mass_corrected = np.log10(10**kewley_mass_t04 * 1.5)
-        elif whichimf == 1:
-            kewley_mass_corrected = np.log10(10**kewley_mass_t04 * 1.5 / 1.8)
-        else:
-            kewley_mass_corrected = kewley_mass_t04
+        # Kroupa, per the file header.
+        kewley_mass_corrected = kewley_mass_t04 + imf_shift('kroupa')
         ax.scatter(kewley_mass_corrected, kewley_Z_t04, marker='D', s=40, color='yellow', edgecolors='goldenrod', linewidth=0.8, alpha=0.8, label='Kewley & Ellison 2008')
     except Exception as e:
         print(f"Warning: Could not load MMR-Kewley08.dat: {e}")
@@ -839,7 +851,8 @@ if __name__ == '__main__':
         gallazzi_mass = gallazzi_data[7:, 0]
         gallazzi_Z_stellar = gallazzi_data[7:, 1]
         gallazzi_Z_gas_approx = gallazzi_Z_stellar + 8.69
-        gallazzi_mass_corrected = gallazzi_mass
+        # Chabrier, per the file header.
+        gallazzi_mass_corrected = gallazzi_mass + imf_shift('chabrier')
         ax.scatter(gallazzi_mass_corrected, gallazzi_Z_gas_approx, marker='P', s=100, color='k', edgecolors='gray', linewidth=0.5, alpha=0.8, label='Gallazzi+05')
     except Exception as e:
         print(f"Warning: Could not load MSZR-Gallazzi05.dat: {e}")
@@ -1960,3 +1973,49 @@ if __name__ == '__main__':
     plt.savefig(OutputDir + 'ejection_efficiency_vs_vvir' + OutputFormat, dpi=150)
     print('Saved file to', outputFile, '\n')
 
+
+#--------------------------------------------------------
+
+# Plotting disk radii vs stellar mass
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    DiskRadius = read_hdf(file_list, Snapshot, 'DiskRadius')  # in Mpc/h
+    DiskRadius = DiskRadius * 1.0e3  # Convert to kpc/h
+    StellarMass = read_hdf(file_list, Snapshot, 'StellarMass') * 1.0e10 / Hubble_h  # Convert to solar masses
+    Rvir = read_hdf(file_list, Snapshot, 'Rvir')  # in Mpc/h
+    Rvir = Rvir * 1.0e3  # Convert to kpc/h
+
+    w = np.where((Rvir > 0.0) & (DiskRadius > 0.0))[0]
+    if len(w) == 0:
+        print('  Skipping disk_radius_vs_stellar_mass: no galaxies with StellarMass > 0 and DiskRadius > 0.\n')
+        plt.close()
+    else:
+        if(len(w) > dilute): w = sample(list(w), dilute)
+
+    # log_stellar_mass = np.log10(StellarMass[w])
+    # log_disk_radius = np.log10(DiskRadius[w])
+    # log_rvir = np.log10(Rvir[w])
+
+    plt.scatter(Rvir[w], DiskRadius[w], s=2, alpha=0.5, rasterized=True)
+
+    # Median line and 1-sigma shading
+    bin_edges = np.logspace(np.log10(Rvir[w].min()), np.log10(Rvir[w].max()), 20)
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    digitized = np.digitize(Rvir[w], bin_edges)
+    medians = [np.median(DiskRadius[w][digitized == i]) for i in range(1, len(bin_edges))]
+    stds = [np.std(DiskRadius[w][digitized == i]) for i in range(1, len(bin_edges))]
+
+    ax.fill_between(bin_centers, np.array(medians) - np.array(stds), np.array(medians) + np.array(stds), alpha=0.2, rasterized=True)
+    ax.plot(bin_centers, medians, color='k', lw=2, label='Median ± 1σ')
+    
+    ax.set_xlabel(r'$\log_{10} R_{\rm vir}\ (\mathrm{Mpc}/h)$')
+    ax.set_ylabel(r'$\log_{10} R_{\rm disk}\ (\mathrm{Mpc}/h)$')
+    # ax.set_xlim(8.0, 12.0)
+    # ax.set_ylim(-1.0, 2.5)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+
+    plt.savefig(OutputDir + 'disk_radius_vs_stellar_mass' + OutputFormat, dpi=150)
+    print('Saved file to', outputFile, '\n')

@@ -125,7 +125,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
     run_params->ReIncorporationFactor      = 0.15;
-    run_params->ColdStreamCeilingOn        = 1;     /* 0 reproduces published behaviour */ /* (remove once published)*/
+    run_params->ColdStreamCeilingOn        = 0;     /* 0 reproduces published behaviour */ /* (remove once published)*/
     run_params->StreamMassFactor           = 3.0;   /* Dekel & Birnboim (2006) adopt f = 3 */ /* (remove once published)*/
     // run_params->DiskRadiusFactor           = 1.0;   /* f_j: 1.0 reproduces published behaviour exactly */ /* (remove once published)*/
     // run_params->PreventiveHeatingOn        = 0;      /* 0 reproduces published behaviour bit-for-bit */

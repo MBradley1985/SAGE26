@@ -57,8 +57,8 @@ SAGE_BINARY = './sage'
 # One entry per curve.  'par' is the parameter file, 'out' its OutputDir, and
 # 'switch' the single parameter that differs from the fiducial run.
 VARIANTS = [
-    {'key': 'full',   'par': 'input/millennium_all.par',
-     'out': './output/millennium_all/',
+    {'key': 'full',   'par': 'input/millennium.par',
+     'out': './output/millennium/',
      'label': r'SAGE26 (fiducial)',            'switch': None,
      'color': 'black',   'ls': '-',  'lw': 3.6, 'zorder': 12},
     {'key': 'nofire', 'par': 'input/millennium_nofire.par',
