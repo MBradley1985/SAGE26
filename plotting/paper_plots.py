@@ -13247,9 +13247,15 @@ def plot_99_referee_diagnostics():
         zbins = [(0, 0.5), (0.5, 0.8), (0.8, 1.1), (1.1, 1.5), (1.5, 2.0),
                  (2.0, 2.5), (2.5, 3.0), (3.0, 3.5), (3.5, 4.5), (4.5, 5.5),
                  (5.5, 6.5), (6.5, 7.5), (7.5, 8.5), (8.5, 9.5), (9.5, 12.0)]
-        print(f'  {"z bin":>11}{"N pts":>7}{"med|off|":>10}{"RMS":>7}{"max":>7}'
-              f'{"SAGE16(N,floor)":>18}{"  obs-obs":>11}')
+        # med|off| cannot distinguish a model that sits above the data from one
+        # that sits below it, and the two models do exactly that at high z, so
+        # the signed medians are reported next to them.  Read those before
+        # concluding which model is closer.
+        print(f'  {"z bin":>11}{"N pts":>7}{"med|off|":>10}{"signed":>8}'
+              f'{"RMS":>7}{"max":>7}{"SAGE16(N,floor)":>18}{"signed":>8}'
+              f'{"  obs-obs":>11}')
         every, rows, every_v = [], [], []
+        every_v_floor = 0
         for lo, hi in zbins:
             s = _snap_for_z(REDSHIFTS, 0.5 * (lo + hi)) if '_snap_for_z' in globals() \
                 else _snap_nearest_z(REDSHIFTS, 0.5 * (lo + hi))
@@ -13279,17 +13285,35 @@ def plot_99_referee_diagnostics():
             # the model it replaces, which is what the SMF grid is showing.
             # Paired against the SAME observational points SAGE26 was scored
             # on.  Scoring each model only where it has galaxies flatters
-            # whichever one fails by producing nothing: SAGE16's SMF drops below
-            # the density floor at high z, so those points would be skipped
-            # rather than counted as large offsets, and SAGE16 would appear to
-            # beat SAGE26 in exactly the bins where it is worst.  Points SAGE16
-            # cannot reach are counted separately (n_floor) instead of dropped.
-            offs_v, n_floor = [], 0
+            # whichever one fails by producing nothing: where SAGE16's SMF falls
+            # below the density floor those points would be skipped rather than
+            # counted as large offsets, and SAGE16 would appear to beat SAGE26 in
+            # exactly the bins where it is worst.  So points SAGE16 cannot reach
+            # are held at the floor (a lower limit on their offset) and also
+            # counted in n_floor, rather than dropped.
+            #
+            # n_floor is reported per bin because it says how much of the SAGE16
+            # number is a limit rather than a measurement.  Do not assume it is
+            # large at high z: measured on mini-Millennium (2026-09-13) SAGE16
+            # produced within 3% of SAGE26's galaxy count in every bin above
+            # z = 4.5, so n_floor was 0-5 points and the two models differed by
+            # the SIGN of their offset, not by SAGE16 vanishing.  The |offset|
+            # reported here cannot show that; check the signed median before
+            # concluding which model is closer.
+            # Why the SAGE16 column is blank, when it is.  A bare '--' is
+            # ambiguous between "SAGE16 matched nothing", "the comparison run is
+            # missing" and "it produced too few galaxies to bin", and the last of
+            # those is a total failure of the model being reported as no data.
+            offs_v, n_floor, v_absent = [], 0, None
             try:
                 dv = load_model(VANILLA_DIR, snapshot=f'Snap_{s}',
                                 properties=['StellarMass'])
                 msv = dv['StellarMass'][dv['StellarMass'] > 0]
-                if msv.size >= 50:
+                if msv.size < 50:
+                    v_absent = (f'SAGE16 produced only {msv.size} galaxies at '
+                                f'Snap_{s} -- too few to bin, so it is absent '
+                                f'from this row rather than scored as a miss')
+                else:
                     xv, phiv, _ = mass_function(np.log10(msv), VOLUME,
                                                 binwidth=0.2, mass_range=(7.0, 13.0))
                     for o in sets:
@@ -13304,16 +13328,31 @@ def plot_99_referee_diagnostics():
                             jv = int(np.argmin(np.abs(xv - lm)))
                             if abs(xv[jv] - lm) > 0.15:
                                 continue              # no matching mass bin
-                            # An empty bin comes back NaN, not as a small phi, so
-                            # the isfinite test has to be counted rather than
-                            # skipped -- it IS the "SAGE16 makes no such
-                            # galaxies" case and is the whole high-z story.
+                            # An empty bin comes back NaN, not as a small phi.
+                            # These points are censored, not missing: SAGE16's
+                            # true phi lies somewhere below the floor, so the
+                            # floor itself bounds how far it sits from the
+                            # observation.  Counting them at the floor makes the
+                            # SAGE16 median a conservative *underestimate* of its
+                            # offset.  Dropping them -- which is what excluding
+                            # them from offs_v did -- discards precisely the
+                            # points where SAGE16 fails worst, so it reported
+                            # SAGE16 as the better model in exactly the high-z
+                            # bins where it produces nothing.
+                            # Where the observation itself sits below the floor
+                            # the censoring carries no information (SAGE16 may
+                            # legitimately match it), so the bound is zero.
                             if not np.isfinite(phiv[jv]) or phiv[jv] < -6.3:
                                 n_floor += 1
+                                offs_v.append(min(-6.3 - lp, 0.0))
                                 continue
                             offs_v.append(phiv[jv] - lp)
-            except Exception:                         # noqa: BLE001
-                pass
+            except Exception as exc:                  # noqa: BLE001
+                # Reported rather than swallowed: a missing or unreadable
+                # comparison run would otherwise print as an empty column and
+                # read as "SAGE16 had nothing to say here".
+                v_absent = (f'SAGE16 comparison unavailable at Snap_{s}: '
+                            f'{exc.__class__.__name__}: {exc}')
             # scatter between the observational determinations themselves, for
             # context: at high z this exceeds the model-data offset, so the
             # latter is not a clean measure of model error
@@ -13343,23 +13382,41 @@ def plot_99_referee_diagnostics():
             v_med = np.median(np.abs(v_)) if v_.size >= 5 else None
             v_s = (f'{v_med:9.2f}({v_.size:3d},{n_floor:2d})' if v_med is not None
                    else f'{"--":>9}        ')
+            v_sgn = f'{np.median(v_):8.2f}' if v_med is not None else f'{"--":>8}'
             print(f'  {f"{lo}-{hi}":>11}{a_.size:7d}{np.median(np.abs(a_)):10.2f}'
+                  f'{np.median(a_):8.2f}'
                   f'{np.sqrt(np.mean(a_ ** 2)):7.2f}{np.max(np.abs(a_)):7.2f}'
-                  f'{v_s}{oo_s}')
+                  f'{v_s}{v_sgn}{oo_s}')
+            if v_med is None:
+                reason = v_absent or (
+                    f'only {v_.size} SAGE16 comparisons in this bin, fewer than '
+                    f'the 5 needed for a median')
+                print(f'{"":>18}^^ {reason}')
             rows.append((lo, hi, a_.size, np.median(np.abs(a_)),
                          np.sqrt(np.mean(a_ ** 2)), oo_med, v_med))
             every_v.extend(offs_v)
+            every_v_floor += n_floor
         if every:
             e = np.asarray(every)
             ev = np.asarray(every_v)
             print(f'\n  all bins: N={e.size}  median|offset|={np.median(np.abs(e)):.2f} dex'
                   f'  RMS={np.sqrt(np.mean(e ** 2)):.2f} dex')
+            print(f'  signed median={np.median(e):+.2f} dex '
+                  f'({"model above the data" if np.median(e) > 0 else "model below the data"})')
             if ev.size:
                 print(f'  SAGE16 over the same comparisons: '
                       f'median|offset|={np.median(np.abs(ev)):.2f} dex  '
                       f'RMS={np.sqrt(np.mean(ev ** 2)):.2f} dex  (N={ev.size})')
+                print(f'  SAGE16 signed median={np.median(ev):+.2f} dex')
+                if every_v_floor:
+                    print(f'  {every_v_floor} of those {ev.size} SAGE16 points are '
+                          f'held at the density floor, so the SAGE16 figures are '
+                          f'lower limits on its true offset.')
             print('  --> quote the median as a median, not as a bound; the RMS is the')
             print('      larger number and is what "matches within X dex" implies.')
+            print('  --> compare the SIGNED medians before saying which model is')
+            print('      closer: opposite signs mean the two models fail in')
+            print('      opposite directions and |offset| alone will mislead.')
 
             # LaTeX, ready to paste beneath the stellar mass function grid.
             # Emitted rather than transcribed so the table cannot drift from

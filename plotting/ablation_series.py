@@ -973,6 +973,8 @@ def write_tables(variants, results, sim, outdir):
         emit(f'PANEL ({letters[col]})   {which} at z = {ref_m["z"]:.2f}'
              f'  (snapshot {ref_m["snap"]})')
         emit('   log10 phi [Mpc^-3 dex^-1], with (variant - fiducial) in dex')
+        if sel_label is not None:
+            emit(f'   split at log sSFR = {pp.SSFR_CUT:.1f}')
         emit('=' * 96)
         emit('  ' + f'{"variant":<26s}' +
              ''.join(f'{f"logM*={m:.1f}":>15s}' for m in TABLE_MASSES) +
@@ -1001,10 +1003,46 @@ def write_tables(variants, results, sim, outdir):
             summary[v['key']].append(note)
             emit('  ' + f'{v["key"]:<26s}' + cells + f'{note:>26s}')
 
+    # ---- how much the sSFR split actually changes ----
+    # If nearly every massive galaxy is star-forming, the split panel repeats the
+    # all-galaxy panel, and a claim about massive *star-forming* galaxies rests on
+    # the same measurement as the claim about massive galaxies.
+    for panel in SMF_PANELS:
+        if panel['select'] == 'all':
+            continue
+        twin = (panel['z'], 'all')
+        pid = panel_id(panel)
+        if twin not in ref['smf'] or ref['smf'][twin]['phi'] is None:
+            continue
+        sel_label = SELECT_LABEL[panel['select']]
+        emit()
+        emit('=' * 96)
+        emit(f'{sel_label.upper()} FRACTION at z = {ref["smf"][pid]["z"]:.2f}'
+             f'   (phi_{panel["select"]} / phi_all, per cent)')
+        emit('=' * 96)
+        emit('  ' + f'{"variant":<26s}' +
+             ''.join(f'{f"logM*={m:.1f}":>15s}' for m in TABLE_MASSES))
+        for v in variants:
+            r = results[v['key']]['smf']
+            if r[pid]['phi'] is None or r[twin]['phi'] is None:
+                continue
+            cells = ''
+            for mass in TABLE_MASSES:
+                num = _interp(r[pid]['x'], r[pid]['phi'], mass)
+                den = _interp(r[twin]['x'], r[twin]['phi'], mass)
+                if np.isfinite(num) and np.isfinite(den):
+                    cells += f'{100.0 * 10**(num - den):>15.1f}'
+                else:
+                    cells += f'{"--":>15s}'
+            name = 'full (fiducial)' if v['key'] == REFERENCE_KEY else v['key']
+            emit('  ' + f'{name:<26s}' + cells)
+
+    # ---- CSFRD panel ----
     col = len(SMF_PANELS)
     emit()
     emit('=' * 96)
     emit(f'PANEL ({letters[col]})   cosmic star formation rate density')
+    emit('   log10 rho_SFR [Msun yr^-1 Mpc^-3], with (variant - fiducial) in dex')
     emit('=' * 96)
     emit('  ' + f'{"variant":<26s}' +
          ''.join(f'{f"z={z:.0f}":>15s}' for z in TABLE_REDSHIFTS) +
@@ -1024,6 +1062,170 @@ def write_tables(variants, results, sim, outdir):
         note = '--' if not np.isfinite(worst) else f'{worst:+.2f} dex at z={at:.1f}'
         summary[v['key']].append(note)
         emit('  ' + f'{v["key"]:<26s}' + cells + f'{note:>26s}')
+
+    # ---- peak of the CSFRD ----
+    emit()
+    emit('=' * 96)
+    emit('PEAK OF THE CSFRD')
+    emit('=' * 96)
+    ref_peak = None
+    for v in variants:
+        r = results[v['key']]
+        good = np.isfinite(r['csfrd']) & (r['z'] <= CSFRD_ZLIM[1])
+        if not np.any(good):
+            continue
+        idx = np.argmax(r['csfrd'][good])
+        peak, z_peak = r['csfrd'][good][idx], r['z'][good][idx]
+        if v['key'] == REFERENCE_KEY:
+            ref_peak = (peak, z_peak)
+            emit(f'  {v["key"]:<26s} {peak:+.2f} dex at z = {z_peak:.2f}')
+        else:
+            dz = z_peak - ref_peak[1] if ref_peak else np.nan
+            dp = peak - ref_peak[0] if ref_peak else np.nan
+            emit(f'  {v["key"]:<26s} {peak:+.2f} dex at z = {z_peak:.2f}'
+                 f'   ({dp:+.2f} dex, dz = {dz:+.2f})')
+
+    # ---- integrated z = 0 quantities ----
+    emit()
+    emit('=' * 96)
+    emit('INTEGRATED z = 0 QUANTITIES')
+    emit('   rho_* is Major Comment 5(c): the Conclusion claims the stellar mass')
+    emit('   density now matches observations, but no figure supports it.')
+    emit('   The quiescent fractions answer Major Comment 8(a) and the p8 request')
+    emit('   to quantify "qualitative improvement" over SAGE16.')
+    emit('=' * 96)
+    qcentres = (8.5, 9.5, 10.5, 11.5)
+    emit('  ' + f'{"variant":<26s}' + f'{"log rho_*":>12s}{"log rho_cold":>14s}' +
+         ''.join(f'{f"fq({m:.1f})":>12s}' for m in qcentres))
+    ref_z0 = ref.get('z0')
+    for v in variants:
+        z0 = results[v['key']].get('z0')
+        if not z0:
+            continue
+        cells = (f'{np.log10(max(z0["rho_star"], 1e-30)):12.4f}'
+                 f'{np.log10(max(z0["rho_cold"], 1e-30)):14.4f}')
+        for m in qcentres:
+            f_, n = z0['qfrac'][m]
+            cells += f'{f_:12.3f}' if n else f'{"--":>12s}'
+        emit('  ' + f'{v["key"]:<26s}' + cells)
+    if ref_z0:
+        emit()
+        emit('  relative to the fiducial run:')
+        for v in variants:
+            if v['key'] == REFERENCE_KEY:
+                continue
+            z0 = results[v['key']].get('z0')
+            if not z0:
+                continue
+            r = z0['rho_star'] / ref_z0['rho_star']
+            emit(f'  {v["key"]:<26s} rho_* x{r:6.3f}  '
+                 f'({100 * (r - 1):+6.1f}%, {np.log10(max(r, 1e-30)):+.3f} dex)')
+
+    # ---- do the four ingredients act independently? ----
+    have = {v['key'] for v in variants}
+    if JOINT_KEY in have and set(FOUR_KEYS) <= have:
+        emit()
+        emit('=' * 96)
+        emit('ARE THE FOUR INGREDIENTS INDEPENDENT?')
+        emit(f'   sum      = {" + ".join(FOUR_KEYS)}, each measured on its own')
+        emit(f'   joint    = {JOINT_KEY} (all four off in one run, nothing else changed)')
+        emit('   residual = joint - sum. Zero means the ingredients act independently;')
+        emit('   joint - SAGE16 is the separate question of whether SAGE16 is a fair')
+        emit('              stand-in for "all four off". The two configurations differ')
+        emit('              in exactly two further respects: FeedbackReheatingEpsilon')
+        emit('              (2.9 vs 3.0) and RamPressureStrippingOn (1 vs 0). If they')
+        emit('              agree, neither is shaping these statistics, which is direct')
+        emit('              evidence for Major Comment 5(a) on parameter degeneracy.')
+        emit('              a non-zero residual is the interaction between them.')
+        emit('=' * 96)
+
+        def additivity(grid, offsets, joint, targets, sage16=None):
+            """
+            Summed offsets, joint offset and their residual; plus SAGE16 where
+            available, which tests whether SAGE16 is a fair stand-in for
+            "all four off" or is displaced by its separate calibration.
+            """
+            total = np.zeros_like(joint)
+            for d in offsets:
+                total = total + d
+            rows = [('sum of the four', total), ('joint (all four off)', joint),
+                    ('interaction residual', joint - total)]
+            if sage16 is not None:
+                rows += [('SAGE16, for comparison', sage16),
+                         ('joint - SAGE16', joint - sage16)]
+            for name, series in rows:
+                cells = ''.join(_cell(_interp(grid, series, t)) for t in targets)
+                emit('  ' + f'{name:<26s}' + cells)
+
+        for col, panel in enumerate(SMF_PANELS):
+            pid = panel_id(panel)
+            ref_phi = ref['smf'][pid]['phi']
+            joint_phi = results[JOINT_KEY]['smf'][pid]['phi']
+            if ref_phi is None or joint_phi is None:
+                continue
+            offsets = [results[k]['smf'][pid]['phi'] - ref_phi for k in FOUR_KEYS
+                       if results[k]['smf'][pid]['phi'] is not None]
+            if len(offsets) != len(FOUR_KEYS):
+                continue
+            sel_label = SELECT_LABEL[panel['select']]
+            title = f'panel ({letters[col]})  z = {ref["smf"][pid]["z"]:.2f}'
+            if sel_label is not None:
+                title += f', {sel_label}'
+            emit()
+            emit(f'  {title}   [dex]')
+            emit('  ' + f'{"":<26s}' +
+                 ''.join(f'{f"logM*={m:.1f}":>15s}' for m in TABLE_MASSES))
+            s16 = None
+            if 'sage16' in have:
+                s16_phi = results['sage16']['smf'][pid]['phi']
+                if s16_phi is not None:
+                    s16 = s16_phi - ref_phi
+            additivity(ref['smf'][pid]['x'], offsets,
+                       joint_phi - ref_phi, TABLE_MASSES, s16)
+
+        offsets = [results[k]['csfrd'] - ref_rho for k in FOUR_KEYS]
+        emit()
+        emit(f'  panel ({letters[len(SMF_PANELS)]})  cosmic SFR density   [dex]')
+        emit('  ' + f'{"":<26s}' +
+             ''.join(f'{f"z={z:.0f}":>15s}' for z in TABLE_REDSHIFTS))
+        s16 = (results['sage16']['csfrd'] - ref_rho) if 'sage16' in have else None
+        additivity(ref_z, offsets, results[JOINT_KEY]['csfrd'] - ref_rho,
+                   TABLE_REDSHIFTS, s16)
+
+    # ---- one-line-per-ingredient summary ----
+    headers = []
+    for p in SMF_PANELS:
+        z_snap = ref['smf'][panel_id(p)]['z']
+        sel = SELECT_LABEL[p['select']]
+        headers.append(f'z={z_snap:.1f} SMF' if sel is None
+                       else f'z={z_snap:.1f} SMF ({sel})')
+    headers.append('CSFRD')
+    emit()
+    emit('=' * 96)
+    emit('WHAT EACH INGREDIENT CONTRIBUTES  (largest offset from the fiducial run, '
+         'per panel)')
+    emit('=' * 96)
+    emit('  ' + f'{"ingredient removed":<26s}' +
+         ''.join(f'{h:>26s}' for h in headers))
+    for v in others:
+        emit('  ' + f'{v["key"]:<26s}' +
+             ''.join(f'{s:>26s}' for s in summary[v['key']]))
+
+    emit()
+    emit(f'Simulation: box {sim["box_size"]:g} Mpc/h, h = {sim["hubble_h"]:g}, '
+         f'volume {sim["volume"]:.3g} Mpc^3.')
+    emit(f'The residual panels shade |offset| < {RESIDUAL_NEGLIGIBLE:.2f} dex: an ingredient whose '
+         f'curve stays')
+    emit('inside that band does not shape that measurement. "largest offset" ignores')
+    emit(f'stellar mass bins holding fewer than {SMF_ROBUST_MIN_COUNT} galaxies in the '
+         f'fiducial run, which')
+    emit(f'for this volume and a {SMF_BINWIDTH:g} dex bin means log10 phi < {floor:.2f}. '
+         f'A larger box lowers')
+    emit('that floor and lets the massive end be quoted further out.')
+    emit()
+    emit('Note: no variant is recalibrated -- each shows the fiducial calibration')
+    emit('with one ingredient removed. SAGE16 is a separately calibrated model, not')
+    emit('a single-switch ablation, and is shown for reference only.')
 
     os.makedirs(outdir, exist_ok=True)
     path = os.path.join(outdir, OUTPUT_NAME + '_stats.txt')
