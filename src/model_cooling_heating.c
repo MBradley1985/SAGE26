@@ -4,11 +4,8 @@
  * Implements the two-regime cooling model selected per-galaxy by the Regime
  * flag set in model_misc.c:
  *
- *   Regime == 0 (CGM-dominated) -- precipitation-driven cooling from the CGMgas
- *     reservoir using the Voit (2015) / McCourt et al. (2012) t_cool/t_ff < 10
- *     threshold.  The CGM density structure is modelled with a uniform, NFW, or
- *     beta (beta = 2/3) profile selected by CGMDensityProfile.  AGN heating uses
- *     the same r_heat ratchet as the hot-halo regime, capped at Rvir.
+ *   Regime == 0 (CGM-dominated) -- model taken from Carr et al. 2023, super simple
+ *     tcool evaluated on a radial profile, tff of the halo, m(dot)_cool = m_CGM / tcool+tff.
  *
  *   Regime == 1 (hot halo) -- classical isothermal-halo cooling following
  *     White & Frenk (1991) and Croton et al. (2006).  When CGMrecipeOn > 0 a
@@ -399,8 +396,6 @@ static void reset_cgm_diagnostics(const int gal, struct GALAXY *galaxies)
 {
     galaxies[gal].tcool = 0.0;
     galaxies[gal].tff = -1.0;
-    // galaxies[gal].tcool_over_tff = -1.0;
-    // galaxies[gal].MachNumber = -1.0;
     galaxies[gal].RcoolToRvir = -1.0;
 }
 
@@ -444,8 +439,6 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
         if(hot_diagnostics_valid) {
             galaxies[gal].tcool = hot_tcool;
             galaxies[gal].tff = -1.0f;
-            // galaxies[gal].tcool_over_tff = -1.0f;
-            // galaxies[gal].MachNumber = -1.0f;
         }
     }
 

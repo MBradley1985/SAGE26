@@ -224,13 +224,10 @@
       "1.0e10 Msun/h") \
     X(tcool, tcool, float, H5T_NATIVE_FLOAT, \
       "Cooling time of the CGM gas in the halo.", \
-      "Myr") \
+      "Gyr") \
     X(tff, tff, float, H5T_NATIVE_FLOAT, \
       "Free-fall time of the CGM gas in the halo.", \
-      "Myr") \
-    X(tdeplete, tdeplete, float, H5T_NATIVE_FLOAT, \
-      "Depletion time of the CGM gas reservoir.", \
-      "Myr") \
+      "Gyr") \
     X(H2DepletionTime_Gyr, H2DepletionTime_Gyr, float, H5T_NATIVE_FLOAT, \
       "H2 depletion time from the K13 prescription. -1 if not applicable.", \
       "Gyr") \

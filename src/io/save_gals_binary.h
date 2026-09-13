@@ -104,9 +104,6 @@ extern "C" {
       float MetalsCGMgas;
       float tcool;
       float tff;
-      // float tcool_over_tff;
-      // float MachNumber;
-      float tdeplete;
       float H2DepletionTime_Gyr;
       float RcoolToRvir;
 

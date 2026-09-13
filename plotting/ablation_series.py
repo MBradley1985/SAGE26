@@ -561,6 +561,74 @@ def measure(variants, sim):
     return out
 
 
+# ========================== OBSERVATIONS ==========================
+#
+# The ablation panels are model-vs-model comparisons, so the observations are
+# drawn as context rather than as the thing being fitted: grey/blue, thin, and
+# behind every model curve.  Both datasets are plotted on the model's Chabrier
+# scale -- see pp.OBS_IMF -- so the Salpeter-quoted Madau & Dickinson fit is
+# shifted down and COSMOS-Web, which is Chabrier natively, is not.
+
+def load_cosmos_web_csfrd():
+    """COSMOS-Web CSFRD inferred from the stellar mass density (Chabrier)."""
+    path = './data/sfrd/CSFRD_inferred_from_SMD.ecsv'
+    if not os.path.exists(path):
+        print(f'  Warning: {path} not found; COSMOS-Web CSFRD omitted')
+        return None
+    try:
+        from astropy.table import Table
+        t = Table.read(path, format='ascii.ecsv')
+        shift = pp.imf_shift('CSFRD-from-SMD')
+        return (np.asarray(t['Redshift'], float),
+                np.log10(np.asarray(t['sfrd_50'], float)) + shift,
+                np.log10(np.asarray(t['sfrd_16'], float)) + shift,
+                np.log10(np.asarray(t['sfrd_84'], float)) + shift)
+    except Exception as exc:
+        print(f'  Warning: could not load COSMOS-Web CSFRD: {exc}')
+        return None
+
+
+def load_cosmos_web_smd():
+    """COSMOS-Web stellar mass density vs redshift (Chabrier)."""
+    path = './data/sfrd/SMD.ecsv'
+    if not os.path.exists(path):
+        print(f'  Warning: {path} not found; COSMOS-Web SMD omitted')
+        return None
+    try:
+        from astropy.table import Table
+        t = Table.read(path, format='ascii.ecsv')
+        shift = pp.imf_shift('SMD (COSMOS-Web)')
+        return (np.asarray(t['z'], float),
+                np.log10(np.asarray(t['rho_50'], float)) + shift,
+                np.log10(np.asarray(t['rho_16'], float)) + shift,
+                np.log10(np.asarray(t['rho_84'], float)) + shift)
+    except Exception as exc:
+        print(f'  Warning: could not load COSMOS-Web SMD: {exc}')
+        return None
+
+
+def madau_dickinson(zz):
+    """
+    Madau & Dickinson (2014) eq. 15, shifted onto the model's Chabrier scale.
+
+    Their fit is quoted for a Salpeter IMF, so it comes DOWN by 0.24 dex -- the
+    same footing as the COSMOS-Web curve beside it, which is Chabrier natively.
+    Leaving one of the two in each IMF is a 0.24 dex inconsistency between
+    observational datasets on the same axes.
+    """
+    psi = 0.015 * (1 + zz)**2.7 / (1 + ((1 + zz) / 2.9)**5.6)
+    return np.log10(psi) + pp.imf_shift('Madau+Dickinson 14')
+
+
+def _draw_obs_band(ax, data, color, label):
+    """Median line plus 16-84 band for one observational dataset."""
+    if data is None:
+        return
+    z, p50, p16, p84 = data
+    ax.fill_between(z, p16, p84, color=color, alpha=0.18, lw=0.0, zorder=1.5)
+    ax.plot(z, p50, color=color, lw=1.6, alpha=0.95, zorder=1.6, label=label)
+
+
 # ========================== PLOTTING ==========================
 
 def _apply_plasma_colours(variants):
@@ -627,6 +695,12 @@ def make_figure(variants, results, sim, outdir):
     ax = fig.add_subplot(gs[0, ncols - 1])
     axr = fig.add_subplot(gs[1, ncols - 1], sharex=ax)
 
+    # Observations behind every model curve, as context for the ablations.
+    zz = np.linspace(CSFRD_ZLIM[0], CSFRD_ZLIM[1], 200)
+    ax.plot(zz, madau_dickinson(zz), color='0.45', lw=1.6, alpha=0.9, zorder=1.5,
+            label=pp._tex_safe(r'Madau \& Dickinson 2014'))
+    _draw_obs_band(ax, load_cosmos_web_csfrd(), '#3366AA', 'COSMOS-Web')
+
     ref_rho = ref['csfrd']
     for v in variants:
         r = results[v['key']]
@@ -651,7 +725,16 @@ def make_figure(variants, results, sim, outdir):
     _format(ax, xmaj=2.0, xmin=0.5, ymaj=1.0, ymin=0.2, hide_xticklabels=True)
     _format(axr, xmaj=2.0, xmin=0.5, ymaj=0.5, ymin=0.1)
 
+    # The model legend lives on the first panel and keeps only model labels, so the
+    # observations need their own key here on the panel that carries them.
     model_labels = [v['label'] for v in variants]
+    o_handles, o_labels = ax.get_legend_handles_labels()
+    obs_keep = [(h, l) for h, l in zip(o_handles, o_labels) if l not in model_labels]
+    if obs_keep:
+        ax.legend([h for h, _ in obs_keep], [l for _, l in obs_keep],
+                  loc='lower left', frameon=False, fontsize=11,
+                  handlelength=2.6, labelspacing=0.3, borderaxespad=0.8)
+
     first_ax = fig.axes[0]
     handles, labels = first_ax.get_legend_handles_labels()
     keep = [(h, l) for h, l in zip(handles, labels) if l in model_labels]
@@ -712,6 +795,9 @@ def make_extra_figure(variants, results, sim, outdir):
                 continue
             ref_x, ref_y = ref['extras'][pid]
             
+        if pid == 'smd':
+            _draw_obs_band(ax, load_cosmos_web_smd(), '#3366AA', 'COSMOS-Web')
+
         for v in variants:
             r = results[v['key']]
             
@@ -744,6 +830,17 @@ def make_extra_figure(variants, results, sim, outdir):
 
         ax.text(0.95, 0.94, p_info['title'], transform=ax.transAxes,
                 ha='right', va='top')
+
+        if pid == 'smd':
+            # As in the CSFRD panel: the model legend is on panel 0 and filters to
+            # model labels, so the observations are keyed on their own panel.
+            _ml = [v['label'] for v in variants]
+            _oh, _ol = ax.get_legend_handles_labels()
+            _ok = [(h, l) for h, l in zip(_oh, _ol) if l not in _ml]
+            if _ok:
+                ax.legend([h for h, _ in _ok], [l for _, l in _ok],
+                          loc='lower left', frameon=False, fontsize=11,
+                          handlelength=2.6, labelspacing=0.3, borderaxespad=0.8)
         
         # Guide bands and labels
         _residual_guides(axr)
