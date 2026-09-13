@@ -2568,10 +2568,27 @@ def plot_3_gas_metallicity_vs_stellar_mass(primary, vanilla):
     """
     print('Plot 3: Gas metallicity vs stellar mass')
 
+    # Selection, applied identically to BOTH models: every galaxy that has a
+    # gas-phase metallicity to report.
+    #
+    # SAGE26 previously carried an extra f_gas > 0.1 floor that SAGE16 did not.
+    # SAGE26 is the more gas-poor model above m_* ~ 1e10 (median f_gas 0.03 against
+    # 0.11 at log m_* = 10.5), so that floor bit far harder on it -- 33% of SAGE26
+    # galaxies survived that bin against 53% of SAGE16's -- and with the per-bin
+    # minimum then set to 50 it ended the SAGE26 curve at log m_* = 10.6 and SAGE16's
+    # at 11.2. Most of that 0.6 dex gap was the mismatched selection, not the models.
+    #
+    # Both now keep every galaxy with cold gas, which carries the curves to 11.1 and
+    # 11.2. Note this is a broader sample than the observations beside it: Tremonti+04
+    # and the rest are emission-line selected and so effectively star-forming, whereas
+    # this includes gas-poor galaxies whose metallicity would be hard to measure.
+    def _gas_rich(data):
+        return ((data['StellarMass'] > 1e8)
+                & (data['ColdGas'] > 0)
+                & (data['MetalsColdGas'] > 0))
+
     # --- Primary model ---
-    w = ((primary['StellarMass'] > 1e8)
-         & (primary['ColdGas'] / (primary['StellarMass'] + primary['ColdGas']) > 0.1)
-         & (primary['MetalsColdGas'] > 0))
+    w = _gas_rich(primary)
     log_mass = np.log10(primary['StellarMass'][w])
     gas_Z = metallicity_12logOH(primary['MetalsColdGas'][w],
                                 primary['ColdGas'][w])
@@ -2580,18 +2597,16 @@ def plot_3_gas_metallicity_vs_stellar_mass(primary, vanilla):
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
-    mass_bins = np.arange(8.0, 12.0 + 0.1, 0.1)
+    mass_bins = np.arange(8.0, 13.0 + 0.1, 0.1)
     plot_binned_median_1sigma(
         ax, log_mass, gas_Z, mass_bins,
         color='steelblue', label='SAGE26',
-        alpha=0.25, lw=3.5, min_count=50,
+        alpha=0.25, lw=3.5, min_count=20,
         zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE,
     )
 
     # --- C16 (Vanilla) model ---
-    w_v = ((vanilla['StellarMass'] > 1e8)
-           & (vanilla['ColdGas'] > 0)
-           & (vanilla['MetalsColdGas'] > 0))
+    w_v = _gas_rich(vanilla)
     if np.any(w_v):
         log_mass_v = np.log10(vanilla['StellarMass'][w_v])
         gas_Z_v = metallicity_12logOH(vanilla['MetalsColdGas'][w_v],
@@ -2599,7 +2614,7 @@ def plot_3_gas_metallicity_vs_stellar_mass(primary, vanilla):
         plot_binned_median_1sigma(
             ax, log_mass_v, gas_Z_v, mass_bins,
             color='purple', label='SAGE16', ls='--',
-            alpha=0.20, lw=3.0, min_count=50,
+            alpha=0.20, lw=3.0, min_count=20,
             zorder_fill=Z_MODEL_BAND_ALT, zorder_line=Z_MODEL_LINE_ALT,
         )
 
@@ -2666,7 +2681,7 @@ def plot_4_bh_bulge_mass(primary, vanilla):
     plot_binned_median_1sigma(
         ax, log_bulge, log_bh, bulge_bins,
         color='steelblue', label='SAGE26',
-        alpha=0.25, lw=3.5, min_count=50,
+        alpha=0.25, lw=3.5, min_count=20,
         zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE,
     )
 
@@ -2678,7 +2693,7 @@ def plot_4_bh_bulge_mass(primary, vanilla):
         plot_binned_median_1sigma(
             ax, log_bulge_v, log_bh_v, bulge_bins,
             color='purple', label='SAGE16', ls='--',
-            alpha=0.20, lw=3.0, min_count=50,
+            alpha=0.20, lw=3.0, min_count=20,
             zorder_fill=Z_MODEL_BAND_ALT, zorder_line=Z_MODEL_LINE_ALT,
         )
 
@@ -2754,7 +2769,7 @@ def plot_5_stellar_halo_mass(primary, vanilla):
     plot_binned_median_1sigma(
         ax, log_mvir, log_mstar, mvir_bins,
         color='steelblue', label='SAGE26',
-        alpha=0.25, lw=3.5, min_count=50,
+        alpha=0.25, lw=3.5, min_count=20,
         zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE,
     )
 
@@ -2766,7 +2781,7 @@ def plot_5_stellar_halo_mass(primary, vanilla):
         plot_binned_median_1sigma(
             ax, log_mvir_v, log_mstar_v, mvir_bins,
             color='purple', label='SAGE16', ls='--',
-            alpha=0.20, lw=3.0, min_count=50,
+            alpha=0.20, lw=3.0, min_count=20,
             zorder_fill=Z_MODEL_BAND_ALT, zorder_line=Z_MODEL_LINE_ALT,
         )
 
@@ -2865,7 +2880,7 @@ def plot_5b_stellar_halo_mass_ratio(primary, vanilla):
         plot_binned_median_1sigma(
             ax, x, y, mvir_bins,
             color='steelblue', label='SAGE26 (Millennium)',
-            alpha=0.25, lw=3.5, min_count=50,
+            alpha=0.25, lw=3.5, min_count=20,
             zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE,
         )
 
@@ -2880,7 +2895,7 @@ def plot_5b_stellar_halo_mass_ratio(primary, vanilla):
             plot_binned_median_1sigma(
                 ax, x, y, mvir_bins,
                 color='darkorange', label='SAGE26 (miniUchuu)', ls='-.',
-                alpha=0.18, lw=3.0, min_count=50,
+                alpha=0.18, lw=3.0, min_count=20,
                 zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE,
             )
         else:
@@ -2892,7 +2907,7 @@ def plot_5b_stellar_halo_mass_ratio(primary, vanilla):
         plot_binned_median_1sigma(
             ax, x, y, mvir_bins,
             color='purple', label='SAGE16', ls='--',
-            alpha=0.20, lw=3.0, min_count=50,
+            alpha=0.20, lw=3.0, min_count=20,
             zorder_fill=Z_MODEL_BAND_ALT, zorder_line=Z_MODEL_LINE_ALT,
         )
 
@@ -7452,7 +7467,7 @@ def plot_15_sfr_vs_stellar_mass(primary, vanilla):
     plot_binned_median_1sigma(
         ax, log_mass, log_sfr, mass_bins,
         color='steelblue', label='SAGE26 (All)',
-        alpha=0.25, lw=3.5, min_count=50,
+        alpha=0.25, lw=3.5, min_count=20,
         zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE,
     )
 
@@ -7474,7 +7489,7 @@ def plot_15_sfr_vs_stellar_mass(primary, vanilla):
         plot_binned_median_1sigma(
             ax, log_mass_v, log_sfr_v, mass_bins,
             color='purple', label='SAGE16 (All)', ls='--',
-            alpha=0.20, lw=3.5, min_count=50,
+            alpha=0.20, lw=3.5, min_count=20,
             zorder_fill=Z_MODEL_BAND_ALT, zorder_line=Z_MODEL_LINE_ALT,
         )
 
@@ -10552,7 +10567,7 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
             continue
         plot_binned_median_1sigma(
             axL, vv[w], eta[w], vbins, color=c,
-            label=_zlab, alpha=0.18, lw=2.2, min_count=50,
+            label=_zlab, alpha=0.18, lw=2.2, min_count=20,
             zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE)
 
         # Second simulation, dashed and without a shaded band so that ten
@@ -10577,7 +10592,7 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
                 if w2.sum() >= 100:
                     plot_binned_median_1sigma(
                         axL, v2[w2], e2[w2], vbins, color=c, label=None,
-                        ls='--', alpha=0.0, lw=1.8, min_count=50,
+                        ls='--', alpha=0.0, lw=1.8, min_count=20,
                         zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE)
                     c2 = p['eps_halo'] * _fire_scaling(v2[w2], MINIUCHUU_REDSHIFTS[snap2], p)
                     if p['sn_bound']:
@@ -10593,7 +10608,7 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
                     if k2.sum() > 100:
                         plot_binned_median_1sigma(
                             axR, v2[w2][k2], j2[k2], vbins, color=c, label=None,
-                            ls='--', alpha=0.0, lw=1.8, min_count=50,
+                            ls='--', alpha=0.0, lw=1.8, min_count=20,
                             zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE)
             except Exception:                                   # noqa: BLE001
                 pass
@@ -10615,7 +10630,7 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
         if ok.sum() > 100:
             plot_binned_median_1sigma(
                 axR, vv[w][ok], ej[ok], vbins, color=c, label=None,
-                alpha=0.18, lw=2.2, min_count=50,
+                alpha=0.18, lw=2.2, min_count=20,
                 zorder_fill=Z_MODEL_BAND, zorder_line=Z_MODEL_LINE)
 
     # observations, left panel only
