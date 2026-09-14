@@ -1983,6 +1983,12 @@ if __name__ == '__main__':
 
     DiskRadius = read_hdf(file_list, Snapshot, 'DiskRadius')  # in Mpc/h
     DiskRadius = DiskRadius * 1.0e3  # Convert to kpc/h
+    # DiskRadius is the exponential scale length of the MMW98 disk (src/model_misc.c).
+    # Sizes are measured as effective (half-light/half-mass) radii, so put the model on
+    # that scale rather than pulling the observations down onto a scale length:
+    # r_e = 1.68 r_d for a pure exponential -- the same constant the model itself uses
+    # for this conversion (DISK_HALF_MASS_FRAC in src/model_mergers.c).
+    DiskRadius = DiskRadius * 1.68  # Scale length -> effective radius
     StellarMass = read_hdf(file_list, Snapshot, 'StellarMass') * 1.0e10 / Hubble_h  # Convert to solar masses
     Rvir = read_hdf(file_list, Snapshot, 'Rvir')  # in Mpc/h
     Rvir = Rvir * 1.0e3  # Convert to kpc/h
@@ -2001,7 +2007,7 @@ if __name__ == '__main__':
     plt.scatter(Rvir[w], DiskRadius[w], s=2, alpha=0.5, rasterized=True)
 
     # Median line and 1-sigma shading
-    bin_edges = np.logspace(np.log10(Rvir[w].min()), np.log10(Rvir[w].max()), 20)
+    bin_edges = np.logspace(np.log10(Rvir[w].min()), np.log10(Rvir[w].max()), 50)
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
     digitized = np.digitize(Rvir[w], bin_edges)
     medians = [np.median(DiskRadius[w][digitized == i]) for i in range(1, len(bin_edges))]
@@ -2009,13 +2015,30 @@ if __name__ == '__main__':
 
     ax.fill_between(bin_centers, np.array(medians) - np.array(stds), np.array(medians) + np.array(stds), alpha=0.2, rasterized=True)
     ax.plot(bin_centers, medians, color='k', lw=2, label='Median ± 1σ')
-    
-    ax.set_xlabel(r'$\log_{10} R_{\rm vir}\ (\mathrm{Mpc}/h)$')
-    ax.set_ylabel(r'$\log_{10} R_{\rm disk}\ (\mathrm{Mpc}/h)$')
+
+    # Somerville et al. (2018), GAMA at z=0.1: the stellar-to-halo size ratio
+    # SRHR = r_e / Rvir, tabulated in eight stellar mass bins from log(M*)=9.25 to 11.34.
+    # Taken as published -- the model has already been converted to r_e above.
+    # Both radii are kpc/h here, so the ratio carries no h and needs no correction.
+    try:
+        srhr = np.loadtxt(os.path.join(DataDir, 'SizesAndAM', 'RSRHSomerville.dat'))
+        re_over_rvir = srhr[:, 1]
+        rvir_ref = np.array([Rvir[w].min(), Rvir[w].max()])
+        ax.fill_between(rvir_ref, re_over_rvir.min() * rvir_ref, re_over_rvir.max() * rvir_ref,
+                        color='firebrick', alpha=0.25, zorder=5,
+                        label=r'Somerville+18 SRHR (9.3 < $\log M_\star$ < 11.3)')
+        ax.plot(rvir_ref, np.median(re_over_rvir) * rvir_ref, '--', color='firebrick',
+                lw=2, zorder=6)
+    except Exception as e:
+        print(f"Warning: Could not load RSRHSomerville.dat: {e}")
+
+    ax.set_xlabel(r'$R_{\rm vir}\ (\mathrm{kpc}/h)$')
+    ax.set_ylabel(r'$R_{\rm e,disk}\ (\mathrm{kpc}/h)$')
     # ax.set_xlim(8.0, 12.0)
-    # ax.set_ylim(-1.0, 2.5)
+    ax.set_ylim(10**-2, 10**2)
     ax.set_xscale('log')
     ax.set_yscale('log')
+    ax.legend(loc='upper left', frameon=False, fontsize=11)
 
     plt.savefig(OutputDir + 'disk_radius_vs_stellar_mass' + OutputFormat, dpi=150)
     print('Saved file to', outputFile, '\n')
