@@ -185,88 +185,6 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
 
 }
 
-/*
- * Halo response factor f_R -- Mo, Mao & White (1998), MNRAS 295, 319, eq. 32.
- *
- * MMW98 eq. 12 gives the disk scale length for a singular isothermal sphere; their
- * eq. 28 redoes it for an NFW halo that contracts adiabatically as the disk assembles,
- * and the two differ by f_c^(-1/2) f_R. The f_c^(-1/2) is absent here because
- * SpinParameter below is the Bullock lambda' rather than the Peebles lambda of eq. 28,
- * and the two differ by exactly f_c^(1/2) (their eq. 22), so it cancels in the
- * prefactor. It survives inside f_R, whose lambda' is built on the Peebles spin.
- * j_d/m_d = 1 throughout.
- *
- * This is the physical quantity DISK_CONCENTRATION_FACTOR was standing in for:
- * f_R = 0.79 at c = 10 and m_d = 0.01, so the old constant was f_R frozen at
- * Milky-Way concentration and a percent-level disk mass fraction.
- */
-static double get_disk_response_factor(const int halonr, const int p, const struct halo_data *halos, const struct GALAXY *galaxies)
-{
-    const double c = galaxies[p].Concentration;
-    if(c <= 0.0 || galaxies[p].Vvir <= 0.0 || galaxies[p].Rvir <= 0.0 || galaxies[p].Mvir <= 0.0) {
-        return DISK_CONCENTRATION_FACTOR;
-    }
-
-    double SpinMagnitude = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
-                                halos[halonr].Spin[1] * halos[halonr].Spin[1] + halos[halonr].Spin[2] * halos[halonr].Spin[2]);
-    double SpinParameter = SpinMagnitude / (SQRT_REPLACEMENT * galaxies[p].Vvir * galaxies[p].Rvir);
-    if(SpinParameter <= 0.0) {
-        return DISK_CONCENTRATION_FACTOR;
-    }
-
-    /* f_c: MMW98 eq. 23 approximation, accurate to 1% over 5 < c < 30. */
-    const double fc = 2.0 / 3.0 + pow(c / 21.5, 0.7);
-    const double lambda_prime = sqrt(fc) * SpinParameter;
-    const double md = (galaxies[p].StellarMass + galaxies[p].ColdGas) / galaxies[p].Mvir;
-
-    return pow(lambda_prime / 0.1, -0.06 + 2.71 * md + 0.0047 / lambda_prime)
-         * (1.0 - 3.0 * md + 5.2 * md * md)
-         * (1.0 - 0.019 * c + 0.00025 * c * c + 0.52 / c);
-}
-
-/*
- * Halo response factor f_R -- Mo, Mao & White (1998), MNRAS 295, 319, eq. 32.
- *
- * Their eq. 12, which get_disk_radius() implements, is the disk scale length for a
- * singular isothermal halo. Their eq. 28 is the same result for an NFW halo that
- * contracts adiabatically as the disk assembles:
- *
- *     R_d = (1/sqrt(2)) (j_d/m_d) lambda R_vir f_c^(-1/2) f_R(lambda, c, m_d, j_d)
- *
- * so f_c^(-1/2) f_R is precisely the gap between eq. 12 and eq. 28. The f_c^(-1/2)
- * cancels here because SpinParameter in get_disk_radius() is the Bullock lambda'
- * rather than the Peebles lambda of eq. 28, and the two differ by exactly f_c^(1/2)
- * (their eq. 22). It survives inside f_R, whose lambda' is built on the Peebles spin.
- * j_d/m_d = 1 throughout.
- *
- * This returns the multiplier get_disk_radius() applies on the way out, replacing the
- * hard-coded DISK_CONCENTRATION_FACTOR -- which was f_R frozen at c = 10, m_d = 0.01
- * (f_R = 0.793 there), and is still the fallback when concentration is unavailable.
- */
-static double get_disk_response_factor(const int halonr, const int p, const struct halo_data *halos, const struct GALAXY *galaxies)
-{
-    const double c = galaxies[p].Concentration;
-    if(c <= 0.0 || galaxies[p].Vvir <= 0.0 || galaxies[p].Rvir <= 0.0 || galaxies[p].Mvir <= 0.0) {
-        return DISK_CONCENTRATION_FACTOR;
-    }
-
-    const double SpinMagnitude = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
-                                      halos[halonr].Spin[1] * halos[halonr].Spin[1] + halos[halonr].Spin[2] * halos[halonr].Spin[2]);
-    const double SpinParameter = SpinMagnitude / (SQRT_REPLACEMENT * galaxies[p].Vvir * galaxies[p].Rvir);
-    if(SpinParameter <= 0.0) {
-        return DISK_CONCENTRATION_FACTOR;
-    }
-
-    /* f_c: MMW98 eq. 23 approximation, accurate to 1% over 5 < c < 30. */
-    const double fc = 2.0 / 3.0 + pow(c / 21.5, 0.7);
-    const double lambda_prime = sqrt(fc) * SpinParameter;
-    const double md = (galaxies[p].StellarMass + galaxies[p].ColdGas) / galaxies[p].Mvir;
-
-    return pow(lambda_prime / 0.1, -0.06 + 2.71 * md + 0.0047 / lambda_prime)
-         * (1.0 - 3.0 * md + 5.2 * md * md)
-         * (1.0 - 0.019 * c + 0.00025 * c * c + 0.52 / c);
-}
-
 double get_disk_radius(const int halonr, const int p, const struct halo_data *halos, const struct GALAXY *galaxies)
 {
     double r_disk;
@@ -281,7 +199,7 @@ double get_disk_radius(const int halonr, const int p, const struct halo_data *ha
 
         double SpinParameter = SpinMagnitude / (SQRT_REPLACEMENT * galaxies[p].Vvir * galaxies[p].Rvir);
         r_disk = (SpinParameter / SQRT_REPLACEMENT) * galaxies[p].Rvir;
-         /* MMW98 eq. 12 is the singular-isothermal-sphere case. Their eq. 28 adds
+        /* MMW98 eq. 12 is the singular-isothermal-sphere case. Their eq. 28 adds
         * f_c^(-1/2) f_R for an NFW halo that contracts adiabatically as the disk
         * assembles; f_c^(-1/2) cancels here because SpinParameter is the Bullock
         * lambda' rather than the Peebles lambda of eq. 28. What remains is f_R,

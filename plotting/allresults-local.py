@@ -1993,7 +1993,7 @@ if __name__ == '__main__':
     Rvir = read_hdf(file_list, Snapshot, 'Rvir')  # in Mpc/h
     Rvir = Rvir * 1.0e3  # Convert to kpc/h
 
-    w = np.where((Rvir > 0.0) & (DiskRadius > 0.0))[0]
+    w = np.where((Rvir > 0.0) & (DiskRadius > 0.0) & (np.log10(StellarMass) > 9.3) & (np.log10(StellarMass) < 11.3))[0]
     if len(w) == 0:
         print('  Skipping disk_radius_vs_stellar_mass: no galaxies with StellarMass > 0 and DiskRadius > 0.\n')
         plt.close()
@@ -2014,7 +2014,7 @@ if __name__ == '__main__':
     stds = [np.std(DiskRadius[w][digitized == i]) for i in range(1, len(bin_edges))]
 
     ax.fill_between(bin_centers, np.array(medians) - np.array(stds), np.array(medians) + np.array(stds), alpha=0.2, rasterized=True)
-    ax.plot(bin_centers, medians, color='k', lw=2, label='Median ± 1σ')
+    ax.plot(bin_centers, medians, color='k', lw=2, label='Median ± 1σ (matching Somerville+18 selection)')
 
     # Somerville et al. (2018), GAMA at z=0.1: the stellar-to-halo size ratio
     # SRHR = r_e / Rvir, tabulated in eight stellar mass bins from log(M*)=9.25 to 11.34.
