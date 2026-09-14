@@ -531,13 +531,7 @@ struct params
     double Reionization_z0;       /* redshift at which the filter mass reaches its peak (Kravtsov+04 z0) */
     double Reionization_zr;       /* redshift at which reionization completes (Kravtsov+04 zr) */
     double ThresholdSatDisruption;/* satellite disrupted when Mvir/(baryonic mass) drops below this [dimensionless] */
-    double FractionDisruptedToICS;  // Fraction of disrupted satellite stellar mass that goes to ICS (rest goes to BCG)
-    int32_t DynamicDisruptionSplit;  // 0: fixed fraction; 1: mass-ratio f_ICL = 1-(Msub/Mhost)^alpha; 2: concentration-weighted
     double SubstepResolution;        // global multiplier on the adaptive substep count (floor STEPS and cap MAX_STEPS both scale by this); default 1.0. Runtime knob for convergence / N-invariance testing without recompiling.
-    int32_t RamPressureStrippingOn;  // 1 = on (DEFAULT): Gunn & Gott (1972) ram-pressure stripping of satellite ColdGas, applied once per snapshot (see model_ram_pressure.c). 0 = off. Independent of the (always-on) analytic hot/CGM-phase stripping.
-    double RamPressureEpsilon;       // order-unity prefactor on the ram pressure P_ram = eps * rho_host * v_sat^2; default 1.0. Absorbs the disk-orientation geometry uncertainty (face-on vs edge-on infall). Only used when RamPressureStrippingOn == 1.
-    double DisruptionSplitAlpha;     // Base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
-    double DisruptionSplitCref;      // Reference concentration for concentration weighting (DynamicDisruptionSplit=2)
     double RedshiftPowerLawExponent; /* exponent of the (1+z) term in the FIRE mass-loading scaling (Muratov+15); default 1.25 */
     int32_t SNEnergyConservationOn;  // 1 = bound the FIRE ejection energy by the supernova energy actually available (DEFAULT); 0 = off (unbounded coupling, the pre-2026 published behaviour). Only acts when FIREmodeOn == 1.
     double MaxSNEnergyCoupling;      // cap on the effective coupling eps_eff = FeedbackEjectionEfficiency * f_FIRE when SNEnergyConservationOn == 1; default 2.0, i.e. E_FB <= m_* eta_SN E_SN (all of the SN energy). 1.0 caps at half.

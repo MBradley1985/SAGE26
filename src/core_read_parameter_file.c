@@ -116,10 +116,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->SaveFullSFH                = 0;
     run_params->TrackICSAssembly           = 1;
     run_params->StarburstColdGasOn         = 1;
-    run_params->DynamicDisruptionSplit     = 2;
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
-    run_params->RamPressureStrippingOn     = 1;   /* default: on -- Gunn & Gott (1972) ISM stripping of satellites. Set 0 for the legacy no-ISM-stripping behaviour. */
-    run_params->RamPressureEpsilon         = 1.0; /* default: unscaled ram pressure P_ram = rho_host * v_sat^2 */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
     run_params->ReIncorporationFactor      = 0.15;
@@ -140,12 +137,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->Reionization_z0            = 8.0;
     run_params->Reionization_zr            = 7.0;
     run_params->ThresholdSatDisruption     = 1.0;
-    run_params->FractionDisruptedToICS     = 0.8;
-    run_params->DisruptionSplitAlpha       = 0.25;
-    run_params->DisruptionSplitCref        = 10.0;
     run_params->Exponent_Forest_Dist_Scheme = 0.7;
-
-    // run_params->CGMsimpleInflowOn         = 1; /* 0: full CGM recipe, 1: simple inflow (no precipitation) */
     run_params->KarpovModeOn              = 0; /* 0: full Karpov+2023 recipe, 1: low-metallicity floor (Z/Z_sun = 0.01) for reheated and ejected gas */
 
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
@@ -203,10 +195,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("SaveFullSFH",           &(run_params->SaveFullSFH),          INT, 0);
     REG("TrackICSAssembly",      &(run_params->TrackICSAssembly),     INT, 0);
     REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
-    REG("DynamicDisruptionSplit",&(run_params->DynamicDisruptionSplit),INT, 0);
     REG("SubstepResolution",     &(run_params->SubstepResolution),     DOUBLE, 0);
-    REG("RamPressureStrippingOn",   &(run_params->RamPressureStrippingOn),   INT, 0);
-    REG("RamPressureEpsilon",       &(run_params->RamPressureEpsilon),       DOUBLE, 0);
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
     REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
     REG("H2RadialNBins",         &(run_params->H2RadialNBins),        INT, 0);
@@ -232,9 +221,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("Reionization_z0",            &(run_params->Reionization_z0),            DOUBLE, 0);
     REG("Reionization_zr",            &(run_params->Reionization_zr),            DOUBLE, 0);
     REG("ThresholdSatDisruption",     &(run_params->ThresholdSatDisruption),     DOUBLE, 0);
-    REG("FractionDisruptedToICS",     &(run_params->FractionDisruptedToICS),     DOUBLE, 0);
-    REG("DisruptionSplitAlpha",       &(run_params->DisruptionSplitAlpha),       DOUBLE, 0);
-    REG("DisruptionSplitCref",        &(run_params->DisruptionSplitCref),        DOUBLE, 0);
     REG("H2RadialRMaxFactor",         &(run_params->H2RadialRMaxFactor),         DOUBLE, 0);
     REG("FFBMaxEfficiency",           &(run_params->FFBMaxEfficiency),           DOUBLE, 0);
     REG("FFBConcSigma",               &(run_params->FFBConcSigma),               DOUBLE, 0);
@@ -573,8 +559,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
             {"TrackICSAssembly",       run_params->TrackICSAssembly,       0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
-            {"DynamicDisruptionSplit", run_params->DynamicDisruptionSplit, 0, 2},
-            {"RamPressureStrippingOn", run_params->RamPressureStrippingOn, 0, 1},
             {"SNEnergyConservationOn", run_params->SNEnergyConservationOn, 0, 1},
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
@@ -606,11 +590,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
                 run_params->GasDiskRadiusFactor);
         ABORT(EXIT_FAILURE);
     }
-    if(run_params->RamPressureStrippingOn && run_params->RamPressureEpsilon <= 0.0) {
-        fprintf(stderr, "Error: RamPressureEpsilon = %g is not valid; it must be > 0 when RamPressureStrippingOn = 1.\n",
-                run_params->RamPressureEpsilon);
-        ABORT(EXIT_FAILURE);
-    }
+
     if(run_params->SNEnergyConservationOn && run_params->MaxSNEnergyCoupling <= 0.0) {
         fprintf(stderr, "Error: MaxSNEnergyCoupling = %g is not valid; it must be > 0 when SNEnergyConservationOn = 1.\n",
                 run_params->MaxSNEnergyCoupling);

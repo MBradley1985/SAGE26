@@ -72,7 +72,7 @@ optional parameters take the listed default if omitted.
 | `ConcentrationOn` | int | no | `3` | Halo concentration method: 0=off; 1=Ishiyama+21 table; 2=V_max/V_vir; 3=V_max/V_vir with infall freeze for satellites. |
 | `BulgeSizeOn` | int | no | `3` | Bulge radius model: 0=off; 1=Shen+2003 eq.33; 2=Shen+2003 eq.32; 3=Tonini+2016 (separate merger and instability channels, mass-weighted average). |
 | `StarburstColdGasOn` | 0/1 | no | `1` | Include cold gas contribution during merger starbursts. |
-| `DynamicDisruptionSplit` | int | no | `2` | ICS-vs-BCG split for disrupted satellite stellar mass: 0=fixed fraction `FractionDisruptedToICS`; 1=mass-ratio split `f_ICS = 1 - (infallMvir / Mhost)^DisruptionSplitAlpha`; 2=mass-ratio split with concentration weighting (`alpha_eff = DisruptionSplitAlpha * DisruptionSplitCref / c_sat`). |
+| `DynamicDisruptionSplit` | int | no | `2` | ICS-vs-BCG split for disrupted satellite stellar mass: 0=fixed fraction `FractionDisruptedToICS`; 1=mass-ratio split `f_ICS = 1 - (infallMvir / Mhost)^DisruptionSplitAlpha`; 2=mass-ratio split with concentration weighting against a fixed reference (`alpha_eff = DisruptionSplitAlpha * DisruptionSplitCref / c_sat`); 3=the same weighting measured against the mean relation instead (`alpha_eff = DisruptionSplitAlpha * c_typ(infallMvir, z_infall) / c_sat`), so an average-concentration satellite recovers mode 1 exactly and the split strength carries no unintended redshift trend. |
 | `RamPressureStrippingOn` | 0/1 | no | `1` | Gunn & Gott (1972) ram-pressure stripping of satellite cold gas (ISM): 1=on (default); 0=off. Independent of the always-on hot-gas (starvation) stripping; see `docs/physics/infall.md`. |
 | `RamPressureEpsilon` | double | no | `1.0` | Order-unity prefactor on the ram pressure `P_ram = eps * rho_host * v_sat^2`, absorbing the disk-orientation geometry uncertainty. Used only when `RamPressureStrippingOn=1`. |
 | `DiskRadiusOn` | int | no | `0` | Disk scale radius model. 0=published Mo, Mao & White (1998) eq. 12 from the instantaneous halo spin, unbounded. 1=adds a working virial fallback (the published else-branch is only reachable when `Rvir == 0`, so it returns `r_d = 0` and leaves the galaxy permanently inert; here the virial scale is rebuilt from `Len * PartMass`) and bounds `r_d / Rvir` to `[0.002, DiskRadiusMaxFrac]`. 2=as 1, but `\|j\|` comes from a running mean of the spin **vector** over a halo dynamical time, which cuts the snapshot-to-snapshot jitter in `r_d` by 3x and shrinks `r_d` by a near-uniform ~9%. It does **not** remove the low-particle-count bias in `\|j\|` -- that error is correlated between adjacent snapshots, so time-averaging cannot reach it. See [physics/disk_sizes.md](physics/disk_sizes.md). |
@@ -156,9 +156,9 @@ optional parameters take the listed default if omitted.
 |-----------|-------|---------|-------------|
 | `ThreshMajorMerger` | dimensionless | `0.3` | Mass ratio above which a merger is classified as major. |
 | `ThresholdSatDisruption` | dimensionless | `1.0` | M_vir-to-baryonic mass ratio below which a satellite is disrupted rather than merged. |
-| `FractionDisruptedToICS` | dimensionless | `0.8` | Fixed fraction of disrupted satellite stellar mass that goes to ICS (vs. central BCG). Used when `DynamicDisruptionSplit=0`, and as the fallback when modes 1/2 cannot compute a mass ratio. |
-| `DisruptionSplitAlpha` | dimensionless | `0.25` | Power-law exponent for the mass-dependent disruption split. |
-| `DisruptionSplitCref` | dimensionless | `10.0` | Reference concentration for the disruption split. |
+| `FractionDisruptedToICS` | dimensionless | `0.8` | Fixed fraction of disrupted satellite stellar mass that goes to ICS (vs. central BCG). Used when `DynamicDisruptionSplit=0`, and as the fallback when modes 1-3 cannot compute a mass ratio. |
+| `DisruptionSplitAlpha` | dimensionless | `0.25` | Power-law exponent for the mass-dependent disruption split (modes 1-3). |
+| `DisruptionSplitCref` | dimensionless | `10.0` | Reference concentration for the disruption split. Mode 2 only; in mode 2 it is degenerate with `DisruptionSplitAlpha` (only their product enters), and mode 3 ignores it in favour of the mean c(M,z). |
 
 ### Gas cycling
 

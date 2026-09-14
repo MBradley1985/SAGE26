@@ -65,11 +65,8 @@ BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 
 SaveFullSFH                 0   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
 StarburstColdGasOn          1   %0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
-DynamicDisruptionSplit      2   %0: fixed fraction; 1: mass-ratio only; 2: concentration-weighted
 
 SubstepResolution           1.0   %multiplier on the adaptive substep count (scales the STEPS floor and MAX_STEPS cap); 1.0 = unscaled
-RamPressureStrippingOn      1     %1: on (default): Gunn & Gott (1972) ram-pressure stripping of satellite ColdGas, once per snapshot; independent of PhysicalStrippingOn (hot/CGM starvation). 0: off
-RamPressureEpsilon          1.0   %order-unity prefactor on P_ram = eps * rho_host * v_sat^2 (disk-orientation geometry); used when RamPressureStrippingOn=1
 
 H2DiskAreaOption            1   %0: pi*r_s^2 (default); 1: pi*(3*r_s)^2 (thrice); 2: 2*pi*r_s^2 (central Sigma_0); ignored when H2RadialIntegrationOn=1
 H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk (H2DiskAreaOption unused)
@@ -96,10 +93,6 @@ BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during
 
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
 ThresholdSatDisruption      1.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption
-FractionDisruptedToICS      0.8     %fraction of disrupted satellite stellar mass to ICS (rest goes to BCG); 1.0 = original behavior
-
-DisruptionSplitAlpha        0.25    %base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
-DisruptionSplitCref         10.0    %reference concentration for concentration weighting (DynamicDisruptionSplit=2)
 
 Yield                       0.025   %fraction of SF mass produced as metals
 RecycleFraction             0.43    %fraction of SF mass instantaneously recycled back to cold

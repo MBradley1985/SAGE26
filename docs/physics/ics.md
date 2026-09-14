@@ -72,6 +72,7 @@ where `f_ICS` is set by `DynamicDisruptionSplit`:
 - Mode 0: fixed `FractionDisruptedToICS`.
 - Mode 1: mass-ratio split `f_ICS = 1 - (infallMvir_sat / Mhost)^DisruptionSplitAlpha`.
 - Mode 2: as mode 1, with `alpha_eff = DisruptionSplitAlpha * DisruptionSplitCref / c_sat` so concentrated satellites resist stripping and deposit more onto the BCG.
+- Mode 3: as mode 2, but with the fixed `DisruptionSplitCref` replaced by `c_typ`, the mean Ishiyama+21 concentration at the satellite's infall mass and epoch. The weighting then responds to concentration *scatter* about the mean relation rather than to the mean relation's own evolution.
 
 The remaining `1 - f_ICS` is added to the central's `StellarMass`,
 `BulgeMass`, and `MergerBulgeMass` (BCG growth).

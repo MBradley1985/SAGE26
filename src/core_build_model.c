@@ -35,7 +35,6 @@
 #include "model_misc.h"
 #include "model_mergers.h"
 #include "model_infall.h"
-#include "model_ram_pressure.h"
 #include "model_reincorporation.h"
 #include "model_starformation_and_feedback.h"
 #include "model_cooling_heating.h"
@@ -446,26 +445,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         }
     }
 
-    // RamPressureStrippingOn == 1: Gunn & Gott (1972) ram-pressure stripping of
-    // satellite ISM (ColdGas), applied once per snapshot outside the substep
-    // loop with the same analytic 1-exp(-dT/t_strip) cadence as scheme 2 above.
-    // Complementary to and independent of PhysicalStrippingOn, which strips the
-    // hot/CGM phase (starvation). Covers Type 1 satellites and Type 2 orphans;
-    // orphans use a frozen-orbit approximation (position frozen at subhalo
-    // loss, velocity replaced by the host Vvir -- see
-    // ram_pressure_strip_satellite).
-    if(run_params->RamPressureStrippingOn == 1) {
-        for(int p = 0; p < ngal; p++) {
-            if(p == centralgal || galaxies[p].mergeType > 0) {
-                continue;
-            }
-            if((galaxies[p].Type == 1 || galaxies[p].Type == 2) && galaxies[p].ColdGas > 0.0) {
-                const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
-                ram_pressure_strip_satellite(centralgal, p, Zcurr, deltaT, t_strip, galaxies, run_params);
-            }
-        }
-    }
-
     /* Record the substep count on every galaxy in this halo. The Sfr* arrays accumulate one
      * entry per substep into STEPS fixed bins, so the output average has to divide by the
      * number of substeps actually taken rather than by STEPS -- otherwise the reported SFR
@@ -550,7 +529,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                         const double event_time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
                         // disruption has occurred!
                         if(galaxies[p].MergTime > 0.0) {
-                            disrupt_satellite_to_ICS(merger_centralgal, p, event_time, galaxies, run_params);
+                            disrupt_satellite_to_ICS(merger_centralgal, p, galaxies, run_params);
                         } else {
                             // a merger has occurred!
                             // Map adaptive step to fixed STEPS bins for SFR arrays
