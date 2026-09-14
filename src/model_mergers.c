@@ -831,6 +831,13 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, struct GALAXY
     galaxies[centralgal].ICS += galaxies[gal].ICS;
     galaxies[centralgal].MetalsICS += galaxies[gal].MetalsICS;
 
+    // Transfer satellite's stellar mass to central's ICS (intra-cluster stars)
+    galaxies[centralgal].ICS += galaxies[gal].StellarMass;
+    galaxies[centralgal].MetalsICS += galaxies[gal].MetalsStellarMass;
+
+    // Transfer black hole mass to central (avoid baryons disappearing)
+    galaxies[centralgal].BlackHoleMass += galaxies[gal].BlackHoleMass;
+
     // Track ICS assembly: pre-existing satellite ICS goes to ICS_accrete
     // This ICS was formed elsewhere (in the satellite's halo) and is being brought in
     if(run_params->TrackICSAssembly && galaxies[gal].ICS > 0.0) {
@@ -840,9 +847,6 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, struct GALAXY
         // not when this packet transferred into the central's reservoir.
         galaxies[centralgal].ICS_sum_mt += galaxies[gal].ICS_sum_mt;
     }
-
-    // Transfer black hole mass to central (avoid baryons disappearing)
-    galaxies[centralgal].BlackHoleMass += galaxies[gal].BlackHoleMass;
 
     // Zero all satellite baryonic fields after transfer -- defensive cleanup so
     // no downstream code can accidentally recount baryons from a merged galaxy.
