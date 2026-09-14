@@ -815,7 +815,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
  * central's ICS and hot/CGM reservoirs.  Optionally tracks disruption time
  * and mass if TrackICSAssembly is set.
  */
-void disrupt_satellite_to_ICS(const int centralgal, const int gal, struct GALAXY *galaxies, const struct params *run_params)
+void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double time, struct GALAXY *galaxies, const struct params *run_params)
 {
     // Transfer satellite's gas to central's hot/CGM reservoir (regime-dependent)
     const double total_gas = galaxies[gal].ColdGas + galaxies[gal].HotGas + galaxies[gal].CGMgas;
@@ -834,6 +834,15 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, struct GALAXY
     // Transfer satellite's stellar mass to central's ICS (intra-cluster stars)
     galaxies[centralgal].ICS += galaxies[gal].StellarMass;
     galaxies[centralgal].MetalsICS += galaxies[gal].MetalsStellarMass;
+
+    // Track ICS assembly: newly disrupted stellar mass goes to ICS_disrupt.
+    // These stars become unbound here and now, so `time` (the lookback time of
+    // this event) is the correct deposit time for the m*t accumulator -- unlike
+    // the accreted channel above, which inherits the satellite's own history.
+    if(run_params->TrackICSAssembly && galaxies[gal].StellarMass > 0.0) {
+        galaxies[centralgal].ICS_disrupt += galaxies[gal].StellarMass;
+        galaxies[centralgal].ICS_sum_mt += galaxies[gal].StellarMass * time;
+    }
 
     // Transfer black hole mass to central (avoid baryons disappearing)
     galaxies[centralgal].BlackHoleMass += galaxies[gal].BlackHoleMass;
