@@ -464,11 +464,6 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].CGMgas += galaxies[p].CGMgas;
     galaxies[t].MetalsCGMgas += galaxies[p].MetalsCGMgas;
 
-    if (sf_prescription_tracks_h2(run_params->SFprescription)) {
-        galaxies[t].H2gas += galaxies[p].H2gas;
-        galaxies[t].H1gas += galaxies[p].H1gas;
-    }
-
     // add merger to bulge
     galaxies[t].BulgeMass += galaxies[p].StellarMass;
     galaxies[t].MetalsBulgeMass += galaxies[p].MetalsStellarMass;
