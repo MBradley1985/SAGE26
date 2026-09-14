@@ -281,6 +281,13 @@ double get_disk_radius(const int halonr, const int p, const struct halo_data *ha
 
         double SpinParameter = SpinMagnitude / (SQRT_REPLACEMENT * galaxies[p].Vvir * galaxies[p].Rvir);
         r_disk = (SpinParameter / SQRT_REPLACEMENT) * galaxies[p].Rvir;
+         /* MMW98 eq. 12 is the singular-isothermal-sphere case. Their eq. 28 adds
+        * f_c^(-1/2) f_R for an NFW halo that contracts adiabatically as the disk
+        * assembles; f_c^(-1/2) cancels here because SpinParameter is the Bullock
+        * lambda' rather than the Peebles lambda of eq. 28. What remains is f_R,
+        * their eq. 32, which equals 0.79 at c = 10 and m_d = 0.01 -- i.e. this
+        * constant is f_R frozen at Milky-Way concentration and a percent-level
+        * disk mass fraction, not a free parameter. */
         return r_disk * DISK_CONCENTRATION_FACTOR;
         // return r_disk * get_disk_response_factor(halonr, p, halos, galaxies);
     } else {
