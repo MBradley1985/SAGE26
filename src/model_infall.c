@@ -220,20 +220,24 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
  * strip_from_satellite -- remove excess gas from a satellite and donate it to
  * the central galaxy's hot/CGM reservoir.
  *
- * `dt` is the full snapshot interval dT and `t_strip` the physical stripping
- * timescale (the host dynamical time Rvir/Vvir of the central, supplied by the
- * caller). The satellite loses exactly a fraction 1-exp(-dT/t_strip) of its
- * *current* baryon excess (baryons above BF*Mvir_sat) in this single call,
- * evaluated once per snapshot OUTSIDE the substep loop (operator-split before
- * the substeps, like the infalling gas). Because exp composes, the stripped
- * fraction is independent of the substep count and invariant to how the
- * interval is split into snapshots (cadence-invariant).
+ * The original SAGE prescription: a satellite whose baryons exceed
+ * BaryonFrac*Mvir gives up 1/nsteps of that excess in this substep, so a full
+ * snapshot removes 1-(1-1/nsteps)^nsteps ~ 1-1/e of it.  Called once per
+ * substep, from the same place add_infall_to_hot() is called for the central.
  *
- * CGM-regime satellites retain CGMgas across snapshots; the CGM branch
- * below strips it using the same baryon-excess rule used for HotGas, so hot-
- * and CGM-regime satellites are handled by structurally identical rules.
+ * `nsteps` is the number of substeps actually taken this snapshot, not the fixed
+ * STEPS the original divided by.  SAGE26 chooses that count adaptively, so a
+ * literal STEPS would stripped the wrong total whenever the two differ; passing
+ * the real count reproduces the original's per-snapshot fraction for any cadence.
+ *
+ * With CGMrecipeOn == 0 this is the original exactly: satellites carry no CGMgas,
+ * so the baryon sum, the reservoir stripped, and the reservoir donated to are all
+ * HotGas.  With CGMrecipeOn == 1 the gas is taken from whichever reservoir the
+ * satellite's own regime holds it in (Regime 0 = CGM, Regime 1 = hot) and given
+ * to the reservoir the central's regime uses.
  */
-void strip_from_satellite(const int centralgal, const int gal, const double Zcurr, const double dt, const double t_strip, struct GALAXY *galaxies, const struct params *run_params)
+void strip_from_satellite(const int centralgal, const int gal, const double Zcurr, const int nsteps,
+                          struct GALAXY *galaxies, const struct params *run_params)
 {
     double reionization_modifier;
 
@@ -243,87 +247,136 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
         reionization_modifier = 1.0;
     }
 
-    /* Excess baryons over BF*Mvir. By this point infall_recipe has already
-     * zeroed satellite EjectedMass and ICS (and CGMgas when CGMrecipeOn != 1),
-     * so these reservoirs do not double-count gas already pooled into the
-     * central. */
+    /* CGMgas is zeroed for satellites when CGMrecipeOn != 1, so this sum is the
+     * original's baryon sum whenever the new recipe is off. */
     const double satBaryons = galaxies[gal].StellarMass + galaxies[gal].ColdGas
-                            + galaxies[gal].HotGas      + galaxies[gal].CGMgas
-                            + galaxies[gal].BlackHoleMass + galaxies[gal].ICS
-                            + galaxies[gal].EjectedMass;
-    const double excess = satBaryons - reionization_modifier * run_params->BaryonFrac * galaxies[gal].Mvir;
+                            + galaxies[gal].HotGas + galaxies[gal].CGMgas
+                            + galaxies[gal].EjectedMass + galaxies[gal].BlackHoleMass
+                            + galaxies[gal].ICS;
 
-    if(excess <= 0.0) {
-        return;
-    }
+    double strippedGas = -1.0 *
+        (reionization_modifier * run_params->BaryonFrac * galaxies[gal].Mvir - satBaryons) / nsteps;
 
-    /* Analytic once-per-snapshot fraction: exactly 1-exp(-dT/t_strip) of the
-     * current excess, with no dependence on the substep count. */
-    const double strip_frac = (t_strip > 0.0) ? (1.0 - exp(-dt / t_strip)) : 1.0;
-    double remainingToStrip = excess * strip_frac;
+    if(strippedGas > 0.0) {
+        /* Take from the reservoir this satellite actually holds its hot-phase gas
+         * in, and give to the one the central uses.  Both reduce to HotGas when
+         * the CGM recipe is off. */
+        const int take_from_cgm = (run_params->CGMrecipeOn == 1 && galaxies[gal].Regime == 0);
+        const int give_to_cgm   = (run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0);
 
-    if(remainingToStrip <= 0.0) {
-        return;
-    }
+        float *sat_gas    = take_from_cgm ? &galaxies[gal].CGMgas       : &galaxies[gal].HotGas;
+        float *sat_metals = take_from_cgm ? &galaxies[gal].MetalsCGMgas : &galaxies[gal].MetalsHotGas;
 
-    /* Donation routing: in the CGM recipe (CGMrecipeOn==1) the central's own
-     * Regime decides which reservoir receives stripped gas. In legacy mode
-     * (CGMrecipeOn==0) all stripped gas goes to the central's HotGas. */
-    const int donate_to_cgm = (run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0);
+        const double metallicity = get_metallicity(*sat_gas, *sat_metals);
+        double strippedGasMetals = strippedGas * metallicity;
 
-    /* Strip CGMgas first when the new recipe is active. We always check both
-     * reservoirs so a satellite that swapped regime mid-evolution does not
-     * leave behind un-strippable gas. The running remainingToStrip tally makes
-     * it impossible to double-strip: whatever is taken here reduces what the
-     * HotGas block can take below. */
-    if(run_params->CGMrecipeOn == 1 && galaxies[gal].CGMgas > 0.0) {
-        double strip_mass = remainingToStrip;
-        if(strip_mass > galaxies[gal].CGMgas) strip_mass = galaxies[gal].CGMgas;
+        if(strippedGas > *sat_gas) strippedGas = *sat_gas;
+        if(strippedGasMetals > *sat_metals) strippedGasMetals = *sat_metals;
 
-        const double metallicity = get_metallicity(galaxies[gal].CGMgas, galaxies[gal].MetalsCGMgas);
-        double strip_metals = strip_mass * metallicity;
-        if(strip_metals > galaxies[gal].MetalsCGMgas) strip_metals = galaxies[gal].MetalsCGMgas;
+        *sat_gas    -= strippedGas;
+        *sat_metals -= strippedGasMetals;
 
-        galaxies[gal].CGMgas       -= strip_mass;
-        galaxies[gal].MetalsCGMgas -= strip_metals;
-
-        if(donate_to_cgm) {
-            galaxies[centralgal].CGMgas       += strip_mass;
-            galaxies[centralgal].MetalsCGMgas += strip_metals;
+        if(give_to_cgm) {
+            galaxies[centralgal].CGMgas       += strippedGas;
+            galaxies[centralgal].MetalsCGMgas += strippedGas * metallicity;
         } else {
-            galaxies[centralgal].HotGas       += strip_mass;
-            galaxies[centralgal].MetalsHotGas += strip_metals;
+            galaxies[centralgal].HotGas       += strippedGas;
+            galaxies[centralgal].MetalsHotGas += strippedGas * metallicity;
         }
-
-        remainingToStrip -= strip_mass;
     }
-
-    if(remainingToStrip > 0.0 && galaxies[gal].HotGas > 0.0) {
-        double strip_mass = remainingToStrip;
-        if(strip_mass > galaxies[gal].HotGas) strip_mass = galaxies[gal].HotGas;
-
-        const double metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);
-        double strip_metals = strip_mass * metallicity;
-        if(strip_metals > galaxies[gal].MetalsHotGas) strip_metals = galaxies[gal].MetalsHotGas;
-
-        galaxies[gal].HotGas       -= strip_mass;
-        galaxies[gal].MetalsHotGas -= strip_metals;
-
-        if(donate_to_cgm) {
-            galaxies[centralgal].CGMgas       += strip_mass;
-            galaxies[centralgal].MetalsCGMgas += strip_metals;
-        } else {
-            galaxies[centralgal].HotGas       += strip_mass;
-            galaxies[centralgal].MetalsHotGas += strip_metals;
-        }
-
-        remainingToStrip -= strip_mass;
-    }
-
-    /* If remainingToStrip is still > 0, the satellite is baryon-rich but its
-     * excess sits in non-strippable reservoirs (stars, cold gas, BH, ICS).
-     * That excess is left in place; we do not invent gas to remove. */
 }
+
+// void strip_from_satellite(const int centralgal, const int gal, const double Zcurr, const double dt, const double t_strip, struct GALAXY *galaxies, const struct params *run_params)
+// {
+//     double reionization_modifier;
+
+//     if(run_params->ReionizationOn) {
+//         reionization_modifier = do_reionization(gal, Zcurr, galaxies, run_params);
+//     } else {
+//         reionization_modifier = 1.0;
+//     }
+
+//     /* Excess baryons over BF*Mvir. By this point infall_recipe has already
+//      * zeroed satellite EjectedMass and ICS (and CGMgas when CGMrecipeOn != 1),
+//      * so these reservoirs do not double-count gas already pooled into the
+//      * central. */
+//     const double satBaryons = galaxies[gal].StellarMass + galaxies[gal].ColdGas
+//                             + galaxies[gal].HotGas      + galaxies[gal].CGMgas
+//                             + galaxies[gal].BlackHoleMass + galaxies[gal].ICS
+//                             + galaxies[gal].EjectedMass;
+//     const double excess = satBaryons - reionization_modifier * run_params->BaryonFrac * galaxies[gal].Mvir;
+
+//     if(excess <= 0.0) {
+//         return;
+//     }
+
+//     /* Analytic once-per-snapshot fraction: exactly 1-exp(-dT/t_strip) of the
+//      * current excess, with no dependence on the substep count. */
+//     const double strip_frac = (t_strip > 0.0) ? (1.0 - exp(-dt / t_strip)) : 1.0;
+//     double remainingToStrip = excess * strip_frac;
+
+//     if(remainingToStrip <= 0.0) {
+//         return;
+//     }
+
+//     /* Donation routing: in the CGM recipe (CGMrecipeOn==1) the central's own
+//      * Regime decides which reservoir receives stripped gas. In legacy mode
+//      * (CGMrecipeOn==0) all stripped gas goes to the central's HotGas. */
+//     const int donate_to_cgm = (run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0);
+
+//     /* Strip CGMgas first when the new recipe is active. We always check both
+//      * reservoirs so a satellite that swapped regime mid-evolution does not
+//      * leave behind un-strippable gas. The running remainingToStrip tally makes
+//      * it impossible to double-strip: whatever is taken here reduces what the
+//      * HotGas block can take below. */
+//     if(run_params->CGMrecipeOn == 1 && galaxies[gal].CGMgas > 0.0) {
+//         double strip_mass = remainingToStrip;
+//         if(strip_mass > galaxies[gal].CGMgas) strip_mass = galaxies[gal].CGMgas;
+
+//         const double metallicity = get_metallicity(galaxies[gal].CGMgas, galaxies[gal].MetalsCGMgas);
+//         double strip_metals = strip_mass * metallicity;
+//         if(strip_metals > galaxies[gal].MetalsCGMgas) strip_metals = galaxies[gal].MetalsCGMgas;
+
+//         galaxies[gal].CGMgas       -= strip_mass;
+//         galaxies[gal].MetalsCGMgas -= strip_metals;
+
+//         if(donate_to_cgm) {
+//             galaxies[centralgal].CGMgas       += strip_mass;
+//             galaxies[centralgal].MetalsCGMgas += strip_metals;
+//         } else {
+//             galaxies[centralgal].HotGas       += strip_mass;
+//             galaxies[centralgal].MetalsHotGas += strip_metals;
+//         }
+
+//         remainingToStrip -= strip_mass;
+//     }
+
+//     if(remainingToStrip > 0.0 && galaxies[gal].HotGas > 0.0) {
+//         double strip_mass = remainingToStrip;
+//         if(strip_mass > galaxies[gal].HotGas) strip_mass = galaxies[gal].HotGas;
+
+//         const double metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);
+//         double strip_metals = strip_mass * metallicity;
+//         if(strip_metals > galaxies[gal].MetalsHotGas) strip_metals = galaxies[gal].MetalsHotGas;
+
+//         galaxies[gal].HotGas       -= strip_mass;
+//         galaxies[gal].MetalsHotGas -= strip_metals;
+
+//         if(donate_to_cgm) {
+//             galaxies[centralgal].CGMgas       += strip_mass;
+//             galaxies[centralgal].MetalsCGMgas += strip_metals;
+//         } else {
+//             galaxies[centralgal].HotGas       += strip_mass;
+//             galaxies[centralgal].MetalsHotGas += strip_metals;
+//         }
+
+//         remainingToStrip -= strip_mass;
+//     }
+
+//     /* If remainingToStrip is still > 0, the satellite is baryon-rich but its
+//      * excess sits in non-strippable reservoirs (stars, cold gas, BH, ICS).
+//      * That excess is left in place; we do not invent gas to remove. */
+// }
 
 // ============================================================================
 // Reionization

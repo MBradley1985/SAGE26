@@ -113,9 +113,22 @@ int32_t save_galaxies(const int64_t task_forestnr, const int numgals, struct hal
         return MALLOC_FAILURE;
     }
 
+    /* Which output snapshot each galaxy belongs to.  This is indexed by galaxy,
+     * not by halo, so it cannot live in haloaux: that array holds one entry per
+     * halo, and numgals exceeds the halo count whenever galaxies outlive their
+     * subhaloes, which any change that lets orphans survive a timestep would
+     * do.  Published runs never reach that state because satellite disruption
+     * culls galaxies aggressively, which is why this went unnoticed. */
+    int32_t *output_snap_n = mymalloc(numgals * sizeof(*(output_snap_n)));
+    if(output_snap_n == NULL) {
+        fprintf(stderr,"Error: Could not allocate memory for %d int elements in array `output_snap_n`\n", numgals);
+        myfree(OutputGalOrder);
+        return MALLOC_FAILURE;
+    }
+
     for(int32_t gal_idx = 0; gal_idx < numgals; gal_idx++) {
         OutputGalOrder[gal_idx] = -1;
-        haloaux[gal_idx].output_snap_n = -1;
+        output_snap_n[gal_idx] = -1;
     }
 
     // First update mergeIntoID to point to the correct galaxy in the output.
@@ -124,7 +137,7 @@ int32_t save_galaxies(const int64_t task_forestnr, const int numgals, struct hal
             if(halogal[gal_idx].SnapNum == run_params->ListOutputSnaps[snap_idx]) {
                 OutputGalOrder[gal_idx] = OutputGalCount[snap_idx];
                 OutputGalCount[snap_idx]++;
-                haloaux[gal_idx].output_snap_n = snap_idx;
+                output_snap_n[gal_idx] = snap_idx;
             }
         }
     }
@@ -171,12 +184,12 @@ int32_t save_galaxies(const int64_t task_forestnr, const int numgals, struct hal
 
     case(sage_binary):
         status = save_binary_galaxies(task_forestnr, numgals, OutputGalCount, forest_info,
-                                      halos, haloaux, halogal, save_info, run_params);
+                                      halos, output_snap_n, halogal, save_info, run_params);
         break;
 
 #ifdef HDF5
     case(sage_hdf5):
-        status = save_hdf5_galaxies(task_forestnr, numgals, forest_info, halos, haloaux, halogal, save_info, run_params);
+        status = save_hdf5_galaxies(task_forestnr, numgals, forest_info, halos, output_snap_n, halogal, save_info, run_params);
         break;
 #endif
 
@@ -186,6 +199,7 @@ int32_t save_galaxies(const int64_t task_forestnr, const int numgals, struct hal
 
     }
 
+    myfree(output_snap_n);
     myfree(OutputGalOrder);
 
     return status;

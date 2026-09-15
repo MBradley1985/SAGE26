@@ -813,20 +813,8 @@ def binned_percentiles(x, y, bins, percentiles=(16, 50, 84), min_count=20):
 
 
 def plot_binned_median_1sigma(
-    ax,
-    x,
-    y,
-    bins,
-    *,
-    color,
-    label,
-    alpha=0.25,
-    lw=3.0,
-    ls='-',
-    min_count=20,
-    zorder_fill=3,
-    zorder_line=4,
-):
+    ax, x, y, bins, *, color, label, alpha=0.25, lw=3.0, ls='-', 
+    min_count=20, zorder_fill=3, zorder_line=4):
     """Plot a median line with a 16--84% (1\u03c3) shaded band."""
     centers, pct = binned_percentiles(x, y, bins, percentiles=(16, 50, 84), min_count=min_count)
     p16, p50, p84 = pct
