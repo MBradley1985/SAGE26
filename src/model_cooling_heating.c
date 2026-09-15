@@ -198,8 +198,8 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             // Mass suppression (M/Mshock)^(-4/3) -- halos well above the shock
             // threshold host weaker cold streams. Redshift factor (1+z)/(1+1)
             // enhances streams at high-z where cooling is more efficient.
-            const double Mvir_physical = CODE_MASS_TO_MSUN(galaxies[gal].Mvir, run_params->Hubble_h);
-            const double mass_ratio = Mvir_physical / run_params->MShockMsun;
+            const double M_shock = MSUN_TO_CODE_MASS(run_params->MShockMsun, run_params->Hubble_h);
+            const double mass_ratio = galaxies[gal].Mvir / M_shock;
 
             // Redshift enhancement: normalized to z=1 following D&B06 eq 40
             const double z_factor = (1.0 + z) / (1.0 + 1.0);
@@ -217,7 +217,7 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
                 // imposed, so f_stream is continuous everywhere.
                 const double Mstar = pow(10.0, interpolate_clustering_mass(z, run_params));
                 const double fMstar = run_params->StreamMassFactor * Mstar;
-                const double ratio = pow(fMstar / Mvir_physical, 2.0/3.0)
+                const double ratio = pow(fMstar / galaxies[gal].Mvir, 2.0/3.0)
                                    * pow(mass_ratio, 4.0/3.0);
                 if(ratio > 0.0) {
                     const double sigmoid_arg = -log10(ratio) / STREAM_TRANSITION_WIDTH_DEX;
@@ -340,7 +340,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
             
             // Pin rcool to Rvir since we are evaluating bulk accretion
             double rcool = galaxies[gal].Rvir;
-            galaxies[gal].RcoolToRvir = 1.0;
+            // galaxies[gal].RcoolToRvir = 1.0;
 
             // 5. Carr et al. Bulk Cooling Formula
             coolingGas = (galaxies[gal].CGMgas / (tcool + tff)) * dt;

@@ -215,7 +215,7 @@ struct GALAXY
     float mdot_cool;    /* instantaneous CGM cooling rate onto the disk [10^10 Msun/h / code time] */
     float mdot_stream;  /* cold-stream inflow rate from CGMgas [10^10 Msun/h / code time] */
 
-    double g_max; /* maximum gravitational instability growth rate for BK25 FFB threshold (dimensionless) */
+    double g_max; /* peak NFW gravitational acceleration for the BK25 FFB threshold, code units (UnitLength/UnitTime^2) */
 };
 
 

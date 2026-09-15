@@ -52,13 +52,10 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
 
         // Convert Mvir to physical units (Msun)
         // Mvir is stored in units of 10^10 Msun/h
-        const double Mvir_physical = CODE_MASS_TO_MSUN(galaxies[p].Mvir, run_params->Hubble_h);
-
-        // Shock mass threshold (Dekel & Birnboim 2006)
-        const double Mshock = run_params->MShockMsun;  // Msun
+        const double Mshock = MSUN_TO_CODE_MASS(run_params->MShockMsun, run_params->Hubble_h);  // Msun
 
         // Calculate mass ratio for sigmoid
-        const double mass_ratio = Mvir_physical / Mshock;
+        const double mass_ratio = galaxies[p].Mvir / Mshock;
 
         int32_t new_regime;
         if(mass_ratio <= 0.0) {
