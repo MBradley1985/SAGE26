@@ -142,8 +142,8 @@ where no accretion occurs.
 ### Step 6 -- diagnostics
 
 `cooling_recipe_cgm()` populates several diagnostic fields on the galaxy:
-`tcool`, `tff`, `tcool_over_tff`, `tdeplete`, `RcoolToRvir`. These are
-the values reported in the HDF5 output for plotting.
+`tcool`, `tff`, `CoolingRate`. These are the values reported in the HDF5
+output for plotting.
 
 ## AGN radio-mode heating
 

@@ -385,7 +385,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
  * reset_cgm_diagnostics -- clear the CGM timescale diagnostics.
  *
  * cooling_recipe_cgm() is only entered when CGMgas > 0, so a halo that drains
- * its reservoir keeps whatever tcool / tff / tcool_over_tff / MachNumber /
+ * its reservoir keeps whatever tcool / tff / MachNumber /
  * RcoolToRvir it had the last time it had gas.  That went stale for 28% of
  * z = 0 Regime-0 centrals and inflated the high-ratio tail of any figure
  * selecting on Regime alone (9.3% above the precipitation threshold, against a

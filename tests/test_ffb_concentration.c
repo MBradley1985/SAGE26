@@ -38,6 +38,10 @@ static void init_millennium_params(struct params *rp)
            * rp->UnitMass_in_g * rp->UnitTime_in_s * rp->UnitTime_in_s;
     rp->EnergySNcode = rp->EnergySN / rp->UnitMass_in_g
                      / rp->UnitVelocity_in_cm_per_s / rp->UnitVelocity_in_cm_per_s;
+    /* memset above zeroes every parameter, so any default that lives in
+     * core_read_parameter_file.c rather than the struct must be restored here.
+     * FFBThresholdSlope = -6.2 is the Li+24 value (see set_defaults()). */
+    rp->FFBThresholdSlope = -6.2;
 }
 
 /* ═══════════════════════════════════════════════════════════════════

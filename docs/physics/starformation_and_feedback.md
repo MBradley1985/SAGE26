@@ -154,9 +154,9 @@ Note that `Vvir` in the output catalogue is the *instantaneous* virial velocity,
 recomputed at output time, whereas the feedback is evaluated with the
 peak-retained `galaxies[p].Vvir` (updated only when `Mvir` grows). The two
 diverge for haloes past their peak -- by a factor of two at `V_vir ~ 11 km/s`
-in microUchuu, and by under 3 per cent above ~25 km/s. `VvirPeak` in the output
-carries the value the physics used; pair feedback quantities with that, not with
-`Vvir`.
+in microUchuu, and by under 3 per cent above ~25 km/s. The peak-retained value
+is no longer written to the output catalogue, so feedback quantities cannot be
+paired against it directly.
 
 **Neither `eta_reheat` nor `reheated_mass` is capped directly.** What limits
 the reheating is the cold gas balance: if `stars + reheated_mass > ColdGas`

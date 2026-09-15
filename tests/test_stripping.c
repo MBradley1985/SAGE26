@@ -1,7 +1,8 @@
 /*
- * RAM PRESSURE STRIPPING TESTS
+ * SATELLITE GAS STRIPPING TESTS
  * 
- * Tests for environmental gas stripping from satellites:
+ * Tests for strip_from_satellite(): environmental gas stripping from
+ * satellites on the t_strip timescale.
  * - Stripping criterion (gas exceeds expected for halo mass)
  * - Mass loss rates from stripping
  * - Gas transfer from satellite to central
@@ -431,7 +432,7 @@ void test_analytic_stripping_scales_with_interval() {
 }
 
 int main() {
-    BEGIN_TEST_SUITE("Ram Pressure Stripping");
+    BEGIN_TEST_SUITE("Satellite Gas Stripping");
 
     test_stripping_removes_gas_from_satellite();
     test_stripping_conserves_mass();

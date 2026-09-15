@@ -140,7 +140,7 @@ run_test_if_exists 9 "Numerical Stability" "./test_build/test_numerical_stabilit
 run_test_if_exists 10 "Metal Enrichment" "./test_build/test_metal_enrichment" \
     "Testing stellar yields, SN feedback, and metal tracking..." 22
 
-run_test_if_exists 11 "Ram Pressure Stripping" "./test_build/test_stripping" \
+run_test_if_exists 11 "Satellite Gas Stripping" "./test_build/test_stripping" \
     "Testing hot/cold gas stripping in satellites..." 14
 
 run_test_if_exists 12 "Multi-Satellite Systems" "./test_build/test_multi_satellite" \

@@ -240,10 +240,9 @@ section below) and the unit actually written.
 | Field | Units | Description |
 |-------|-------|-------------|
 | `Regime` | -- | CGM regime flag (see flag table above). |
-| `tcool` | Msun / Gyr | Cooled gas rate, `coolingGas / dt`, including the active regime's final suppression. |
-| `tff` | Gyr | Free-fall time of the CGM gas at the cooling radius. |
-| `tcool_over_tff` | dimensionless | Voit (2015) precipitation criterion ratio. |
-| `tdeplete` | Myr | Depletion time of the CGM reservoir under the current cooling rate. |
+| `tcool` | Gyr | Cooling time of the CGM density profile (Carr et al. 2023, alpha = 1.4). |
+| `tff` | Gyr | Free-fall time of the halo at the virial radius. |
+| `CoolingRate` | Msun / Gyr | Cooled gas rate, `coolingGas / dt`, including the active regime's final suppression. |
 | `H2DepletionTime_Gyr` | Gyr | H2 depletion time from the K13 prescription. Set to -1 when not applicable. |
 | `RcoolToRvir` | dimensionless | Ratio of the cooling radius to the virial radius. |
 | `mdot_cool` | Msun / yr | Hot-halo cooling rate (mass flowing from hot to cold). |
@@ -341,7 +340,7 @@ array-of-structs.
 | `SaveFullSFH` | Enables the cumulative `SFHMassDisk` / `SFHMassBulge` 2-D HDF5 datasets. |
 | `TrackICSAssembly` | Activates accumulation into `ICS_disrupt`, `ICS_accrete`, `ICS_sum_mt`. |
 | `ConcentrationOn` | Populates the `Concentration` field (otherwise 0). |
-| `CGMrecipeOn` | Populates `Regime`, `CGMgas`, `MetalsCGMgas`, `tcool`, `tff`, `tcool_over_tff`, `tdeplete`, `RcoolToRvir`, `mdot_cool`, `mdot_stream`. With it off, these stay at their initialised values. |
+| `CGMrecipeOn` | Populates `Regime`, `CGMgas`, `MetalsCGMgas`, `tcool`, `tff`, `CoolingRate`, `RcoolToRvir`, `mdot_cool`, `mdot_stream`. With it off, these stay at their initialised values. |
 | `FeedbackFreeModeOn` | Populates `FFBRegime`. |
 
 See [`parameters.md`](parameters.md) for full parameter descriptions
@@ -356,5 +355,5 @@ and defaults.
 - [`physics/ics.md`](physics/ics.md) -- detail on the ICS assembly
   channels that feed `ICS_disrupt` / `ICS_accrete` / `ICS_sum_mt`.
 - [`physics/cooling_and_heating.md`](physics/cooling_and_heating.md) --
-  what `tcool`, `tff`, `tcool_over_tff`, `Regime`, and `Cooling` /
+  what `tcool`, `tff`, `Regime`, and `Cooling` /
   `Heating` actually measure.
