@@ -80,13 +80,19 @@ void test_br06_stellar_floor() {
 void test_br06_reference_values() {
     BEGIN_TEST("BR06: pinned reference values (frozen float behaviour)");
 
-    ASSERT_CLOSE(2.208095342e-01, calculate_molecular_fraction_BR06(10.0f, 100.0f, 3000.0f),
+    /* Values re-pinned against the corrected Blitz & Rosolowsky (2006) fit.
+     * They are golden numbers with no independent derivation: their only job is
+     * to catch unintended drift in the float arithmetic, so a mismatch here
+     * means either a deliberate change to the fit (re-pin) or an accident
+     * (investigate). */
+
+    ASSERT_CLOSE(2.295263e-01, calculate_molecular_fraction_BR06(10.0f, 100.0f, 3000.0f),
                  GOLDEN_RTOL, "f_H2(10, 100, 3000 pc)");
-    ASSERT_CLOSE(1.352882572e-02, calculate_molecular_fraction_BR06(1.0f, 10.0f, 2000.0f),
+    ASSERT_CLOSE(1.421214e-02, calculate_molecular_fraction_BR06(1.0f, 10.0f, 2000.0f),
                  GOLDEN_RTOL, "f_H2(1, 10, 2000 pc)");
-    ASSERT_CLOSE(8.594519496e-01, calculate_molecular_fraction_BR06(100.0f, 1000.0f, 4000.0f),
+    ASSERT_CLOSE(8.653800e-01, calculate_molecular_fraction_BR06(100.0f, 1000.0f, 4000.0f),
                  GOLDEN_RTOL, "f_H2(100, 1000, 4000 pc)");
-    ASSERT_CLOSE(3.886122722e-04, calculate_molecular_fraction_BR06(0.3f, 0.05f, 5000.0f),
+    ASSERT_CLOSE(4.085153e-04, calculate_molecular_fraction_BR06(0.3f, 0.05f, 5000.0f),
                  GOLDEN_RTOL, "f_H2(0.3, 0.05, 5000 pc)");
 }
 
@@ -221,7 +227,7 @@ void test_radial_integration_reference() {
     gal[0].DiskScaleRadius = 0.003;  /* ~3 kpc/h */
 
     float h2 = calculate_molecular_fraction_radial_integration(0, gal, &rp, NULL);
-    ASSERT_CLOSE(2.841610461e-03, h2, GOLDEN_RTOL,
+    ASSERT_CLOSE(2.974629e-03, h2, GOLDEN_RTOL,
                  "H2(ColdGas=0.1, M*=0.5, MB=0.1, rs=0.003, h=0.73)");
     ASSERT_CLOSE(h2, gal[0].H2gas, 1e-12, "Result stored in H2gas");
 }

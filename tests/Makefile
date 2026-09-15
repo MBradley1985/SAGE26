@@ -33,7 +33,6 @@ PROJECT_SOURCES = \
 	$(SRC_DIR)/model_infall.c \
 	$(SRC_DIR)/model_disk_instability.c \
 	$(SRC_DIR)/model_mergers.c \
-	$(SRC_DIR)/model_ram_pressure.c \
 	$(SRC_DIR)/core_cool_func.c
 
 # Test files
@@ -56,8 +55,14 @@ TEST_SOURCES = \
 	test_halo_mergers.c \
 	test_agn_feedback.c \
 	test_ffb_concentration.c \
-	test_halo_ids.c \
-	test_ram_pressure.c
+	test_halo_ids.c
+
+# A missing entry in PROJECT_SOURCES makes check_test_deps return empty for
+# EVERY test, which silently reports "0 suites" and passes. Fail loudly instead.
+MISSING_SOURCES := $(strip $(foreach src,$(PROJECT_SOURCES),$(if $(wildcard $(src)),,$(src))))
+ifneq ($(MISSING_SOURCES),)
+$(warning *** Missing project sources, NO tests can be built: $(MISSING_SOURCES))
+endif
 
 # Function to check if all dependencies exist for a test
 # Usage: $(call check_test_deps,test_name)

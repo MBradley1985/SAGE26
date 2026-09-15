@@ -119,9 +119,8 @@ void test_cooling_freefall_ratio() {
     ASSERT_GREATER_THAN(gal[0].tff, 0.0,
                        "Free-fall time positive");
     
-    // tcool/tff can vary widely depending on conditions
-    ASSERT_TRUE(gal[0].tcool_over_tff > 0.0,
-               "tcool/tff positive");
+    /* The Voit precipitation ratio these two timescales used to form is no
+     * longer part of the model; the CGM regime follows Carr et al. (2023). */
 }
 
 // ============================================================================
@@ -271,27 +270,21 @@ void test_precipitation_regulation() {
 
     SETUP_PRECIP_GAL();
     const double cooled = cooling_recipe_cgm(0, 0.01, gal, &run_params);
-    const double ratio0 = gal[0].tcool_over_tff;
     const double tff0 = gal[0].tff;
-    ASSERT_GREATER_THAN(cooled, 0.0, "Unstable CGM precipitates");
-    ASSERT_LESS_THAN(ratio0, 10.0, "Initial state is below the precipitation threshold");
+    ASSERT_GREATER_THAN(cooled, 0.0, "CGM-regime cooling draws from the reservoir");
 
     /* Iterative drain on the free-fall timescale: self-regulating precipitation
      * must relax tcool/tff toward the threshold and keep a finite reservoir,
      * instead of emptying the CGM as the free-fall dump would. */
     SETUP_PRECIP_GAL();
-    double ratio_last = ratio0;
     for(int i = 0; i < 400 && gal[0].CGMgas > 0.0; i++) {
         const double step_dt = 0.5 * (gal[0].tff > 0.0 ? gal[0].tff : tff0);
         const double c = cooling_recipe_cgm(0, step_dt, gal, &run_params);
         const double metallicity = (gal[0].CGMgas > 0.0) ? gal[0].MetalsCGMgas / gal[0].CGMgas : 0.0;
         gal[0].CGMgas -= c;
         gal[0].MetalsCGMgas -= metallicity * c;
-        ratio_last = gal[0].tcool_over_tff;
     }
     ASSERT_GREATER_THAN(gal[0].CGMgas, 0.0, "Regulated drain keeps a finite CGM reservoir");
-    ASSERT_GREATER_THAN(ratio_last, ratio0, "tcool/tff rises as the CGM drains");
-    ASSERT_GREATER_THAN(ratio_last, 5.0, "Reservoir relaxes toward the threshold equilibrium");
 #undef SETUP_PRECIP_GAL
 }
 
