@@ -43,7 +43,7 @@ struct HDF5_GALAXY_OUTPUT
     extern int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_info, const struct params *run_params);
     
     extern int32_t save_hdf5_galaxies(const int64_t task_forestnr, const int32_t num_gals, struct forest_info *forest_info,
-                                      struct halo_data *halos, const int32_t *output_snap_n, struct GALAXY *halogal,
+                                      struct halo_data *halos, struct halo_aux_data *haloaux, struct GALAXY *halogal,
                                       struct save_info *save_info, const struct params *run_params);
 
     extern int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct save_info *save_info,

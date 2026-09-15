@@ -22,9 +22,6 @@ void test_regime_boundary() {
 
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
-    /* MShockMsun moved from a file-scope constant into run_params; left at zero
-     * the sigmoid argument diverges and every halo classifies as hot. */
-    run_params.MShockMsun = 6.0e11;
     run_params.Hubble_h = 0.7;
 
     // Test that regime assignment follows sigmoid probability around Mshock
@@ -77,9 +74,6 @@ void test_regime_sigmoid_transition() {
 
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
-    /* MShockMsun moved from a file-scope constant into run_params; left at zero
-     * the sigmoid argument diverges and every halo classifies as hot. */
-    run_params.MShockMsun = 6.0e11;
     run_params.Hubble_h = 0.7;
 
     // Test that the sigmoid transition is correctly centered at Mshock
@@ -139,9 +133,6 @@ void test_precipitation_criterion() {
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
-    /* MShockMsun moved from a file-scope constant into run_params; left at zero
-     * the sigmoid argument diverges and every halo classifies as hot. */
-    run_params.MShockMsun = 6.0e11;
     
     // Properly initialize unit system (SAGE standard units)
     run_params.Hubble_h = 0.7;
@@ -175,19 +166,27 @@ void test_precipitation_criterion() {
     // Call cooling recipe to populate tcool, tff
     double cooling = cooling_recipe_cgm(0, dt, &gal, &run_params);
     
-    /* tcool and tff are still tracked per galaxy, but the Voit precipitation
-     * ratio they used to form is no longer part of the model: the CGM regime
-     * now follows Carr et al. (2023). Only the two timescales are asserted. */
+    // Check that tcool, tff, and their ratio are computed
     ASSERT_GREATER_THAN(gal.tcool, 0.0, "tcool > 0");
     ASSERT_GREATER_THAN(gal.tff, 0.0, "tff > 0");
+    ASSERT_GREATER_THAN(gal.tcool_over_tff, 0.0, "tcool/tff > 0");
     
     // NOTE: This unit test demonstrates a limitation - creating isolated galaxy
     // structures without full cosmological context produces unphysical values
     // In real simulations, CGM properties evolve self-consistently with halo growth
     
-    /* The test verifies the calculation runs, not its physical realism: an
-     * isolated galaxy struct has no cosmological history behind its CGM. */
-    ASSERT_GREATER_THAN(cooling, -1.0e-30, "CGM-regime cooling is non-negative");
+    printf("  ℹ tcool/tff calculated: %.6e\n", gal.tcool_over_tff);
+    printf("  ℹ NOTE: Unit test limitation - tcool/tff very small due to simplified setup\n");
+    printf("  ℹ In full simulation, CGM evolves with proper thermal history\n");
+    
+    // The test verifies the CALCULATION runs without errors,not the physical realism
+    // Integration tests with full halo evolution provide realistic tcool/tff values
+    
+    // If tcool/tff < 10, precipitation cooling should be triggered
+    // The cooling_recipe_cgm function will still produce cooling output
+    if(gal.tcool_over_tff < 10.0) {
+        ASSERT_GREATER_THAN(cooling, 0.0, "Unstable CGM (tcool/tff < 10) has cooling > 0");
+    }
 }
 
 void test_gas_routing_to_correct_reservoir() {
@@ -195,9 +194,6 @@ void test_gas_routing_to_correct_reservoir() {
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
-    /* MShockMsun moved from a file-scope constant into run_params; left at zero
-     * the sigmoid argument diverges and every halo classifies as hot. */
-    run_params.MShockMsun = 6.0e11;
     run_params.CGMrecipeOn = 1;
     run_params.SupernovaRecipeOn = 1;
     
@@ -269,9 +265,6 @@ void test_regime_transition() {
 
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
-    /* MShockMsun moved from a file-scope constant into run_params; left at zero
-     * the sigmoid argument diverges and every halo classifies as hot. */
-    run_params.MShockMsun = 6.0e11;
     run_params.Hubble_h = 0.7;
     run_params.CGMrecipeOn = 1;
 
@@ -312,9 +305,6 @@ void test_cold_stream_fraction() {
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
-    /* MShockMsun moved from a file-scope constant into run_params; left at zero
-     * the sigmoid argument diverges and every halo classifies as hot. */
-    run_params.MShockMsun = 6.0e11;
     run_params.CGMrecipeOn = 1;
     run_params.UnitDensity_in_cgs = 6.77e-22;
     run_params.UnitTime_in_s = 3.15e16;

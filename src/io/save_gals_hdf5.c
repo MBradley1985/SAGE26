@@ -452,7 +452,7 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
  * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
  */
 int32_t save_hdf5_galaxies(const int64_t task_forestnr, const int32_t num_gals, struct forest_info *forest_info,
-                           struct halo_data *halos, const int32_t *output_snap_n, struct GALAXY *halogal,
+                           struct halo_data *halos, struct halo_aux_data *haloaux, struct GALAXY *halogal,
                            struct save_info *save_info, const struct params *run_params)
 {
     int32_t status = EXIT_FAILURE;
@@ -460,12 +460,12 @@ int32_t save_hdf5_galaxies(const int64_t task_forestnr, const int32_t num_gals, 
     for(int32_t gal_idx = 0; gal_idx < num_gals; gal_idx++) {
 
         // Only processing galaxies at selected snapshots. This field was generated in `save_galaxies()`.
-        if(output_snap_n[gal_idx] < 0) {
+        if(haloaux[gal_idx].output_snap_n < 0) {
             continue;
         }
 
         // Add galaxies to buffer.
-        int32_t snap_idx = output_snap_n[gal_idx];
+        int32_t snap_idx = haloaux[gal_idx].output_snap_n;
         status = prepare_galaxy_for_hdf5_output(&halogal[gal_idx], save_info, snap_idx, halos, task_forestnr,
                                                 forest_info->original_treenr[task_forestnr], run_params);
         if(status != EXIT_SUCCESS) {

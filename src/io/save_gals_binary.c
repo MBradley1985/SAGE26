@@ -116,7 +116,7 @@ int32_t initialize_binary_galaxy_files(const int filenr, const struct forest_inf
  * Returns EXIT_SUCCESS, or a negative SAGE error code on failure.
  */
 int32_t save_binary_galaxies(const int32_t task_treenr, const int32_t num_gals, const int32_t *OutputGalCount,
-                             struct forest_info *forest_info, struct halo_data *halos, const int32_t *output_snap_n,
+                             struct forest_info *forest_info, struct halo_data *halos, struct halo_aux_data *haloaux,
                              struct GALAXY *halogal, struct save_info *save_info, const struct params *run_params)
 {
 
@@ -158,10 +158,10 @@ int32_t save_binary_galaxies(const int32_t task_treenr, const int32_t num_gals, 
 
     // Prepare all the galaxies for output.
     for(int32_t gal_idx = 0; gal_idx < num_gals; gal_idx++) {
-        if(output_snap_n[gal_idx] < 0) {
+        if(haloaux[gal_idx].output_snap_n < 0) {
             continue;
         }
-        int32_t snap_idx = output_snap_n[gal_idx];
+        int32_t snap_idx = haloaux[gal_idx].output_snap_n;
 
         // Here we move the offset pointer depending upon the number of galaxies processed up to this point.
         struct GALAXY_OUTPUT *galaxy_output = all_outputgals + cumul_output_ngal[snap_idx] + num_gals_processed[snap_idx];

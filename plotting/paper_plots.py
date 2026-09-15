@@ -80,7 +80,7 @@ Z_MODEL_LINE = 10      # primary model line
 Z_MODEL_LINE_ALT = 11  # comparison model line
 
 # Analysis thresholds (not simulation parameters)
-MIN_PARTICLES = 20     # minimum DM particles for a resolved halo (applied at load time)
+MIN_PARTICLES = 1     # minimum DM particles for a resolved halo (applied at load time)
 SSFR_CUT = -11.0       # log10(sSFR/yr^-1) dividing quiescent from star-forming
 
 # Solar metallicity (Asplund et al. 2009)
@@ -12838,7 +12838,7 @@ def plot_99_referee_diagnostics():
     snaps.sort(reverse=True)          # descending snapshot = ascending redshift
 
     props = ['StellarMass', 'ColdGas', 'MetalsColdGas', 'SfrDisk', 'SfrBulge',
-             'Mvir', 'Vvir', 'VvirPeak', 'Regime', 'FFBRegime', 'CGMgas',
+             'Mvir', 'Vvir', 'Regime', 'FFBRegime', 'CGMgas',
              'tcool_over_tff', 'MassLoading', 'mdot_cool', 'mdot_stream', 'Type']
     data = {}
     for s in snaps:
@@ -12963,8 +12963,7 @@ def plot_99_referee_diagnostics():
         if m.sum() < 10:
             continue
         eta, w = g['MassLoading'][m], sfr[m]
-        v = (g['VvirPeak'][m] if 'VvirPeak' in g and g['VvirPeak'].size
-             else g['Vvir'][m]).astype(float)
+        v = g['Vvir'][m].astype(float)
         with np.errstate(over='ignore', invalid='ignore', divide='ignore'):
             eta_max = cap * esn / ((v * 1e5) ** 2 * msun_g)
         at_cap = np.isfinite(eta_max) & (eta >= 0.999 * eta_max)
@@ -13009,8 +13008,7 @@ def plot_99_referee_diagnostics():
                   ' snapshot list so the table covers every plotted redshift')
             continue
         z_ = zof(s)
-        vv_all = (g['VvirPeak'] if 'VvirPeak' in g and g['VvirPeak'].size
-                  else g['Vvir']).astype(float)
+        vv_all = g['Vvir'].astype(float)
         et_all = g['MassLoading'].astype(float)
         row = f'  {z_:6.2f}'
         for vt in _vt:
@@ -13078,8 +13076,7 @@ def plot_99_referee_diagnostics():
             if not g or 'MassLoading' not in g:
                 continue
             z_ = zof(s)
-            vv_all = (g['VvirPeak'] if 'VvirPeak' in g and g['VvirPeak'].size
-                      else g['Vvir']).astype(float)
+            vv_all = g['Vvir'].astype(float)
             et_all = g['MassLoading'].astype(float)
             k = (et_all > 0) & (vv_all > 0)
             if k.sum() < 50:

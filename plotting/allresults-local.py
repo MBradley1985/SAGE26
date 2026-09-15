@@ -740,7 +740,7 @@ if __name__ == '__main__':
     plt.figure()  # New figure
     ax = plt.subplot(111)  # 1 plot on the figure
 
-    w = np.where((Type == 0) & (StellarMass + ColdGas > 0.0) & 
+    w = np.where((StellarMass + ColdGas > 0.0) & 
       (BulgeMass / StellarMass > 0.1) & (BulgeMass / StellarMass < 0.5))[0]
     if(len(w) > dilute): w = sample(list(w), dilute)
     

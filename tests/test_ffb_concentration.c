@@ -38,17 +38,6 @@ static void init_millennium_params(struct params *rp)
            * rp->UnitMass_in_g * rp->UnitTime_in_s * rp->UnitTime_in_s;
     rp->EnergySNcode = rp->EnergySN / rp->UnitMass_in_g
                      / rp->UnitVelocity_in_cm_per_s / rp->UnitVelocity_in_cm_per_s;
-
-    /* Physics values that used to be file-scope constants in the model and are
-     * now read from run_params. A zeroed struct silently removes the physics
-     * they carry -- a zero FFBThresholdSlope, for instance, flattens the
-     * threshold's redshift dependence entirely. Keep these in step with
-     * set_default_params() in src/core_read_parameter_file.c. */
-    rp->MShockMsun          = 6.0e11;   /* Dekel & Birnboim (2006) shock mass */
-    rp->FFBThresholdSlope   = -6.2;     /* Li et al. (2024) (1+z) slope */
-    rp->FFBMaxEfficiency    = 0.2;
-    rp->FFBConcSigma        = 0.2;
-    rp->RedshiftPowerLawExponent = 1.25;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
