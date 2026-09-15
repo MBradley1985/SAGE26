@@ -44,7 +44,6 @@ extern "C" {
       float CentralMvir;
       float Rvir;
       float Vvir;
-      float VvirPeak;
       float Vmax;
       float VelDisp;
 

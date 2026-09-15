@@ -898,7 +898,6 @@ static int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct sav
     save_info->buffer_output_gals[output_snap_idx].CentralMvir[gals_in_buffer] = get_virial_mass(halos[g->HaloNr].FirstHaloInFOFgroup, halos, run_params);
     save_info->buffer_output_gals[output_snap_idx].Rvir[gals_in_buffer] = get_virial_radius(g->HaloNr, halos, run_params);  // output the actual Rvir, not the maximum Rvir
     save_info->buffer_output_gals[output_snap_idx].Vvir[gals_in_buffer] = get_virial_velocity(g->HaloNr, halos, run_params);  // output the actual Vvir, not the maximum Vvir
-    save_info->buffer_output_gals[output_snap_idx].VvirPeak[gals_in_buffer] = g->Vvir;  // the peak-retained value the physics uses
     save_info->buffer_output_gals[output_snap_idx].Vmax[gals_in_buffer] = g->Vmax;
     save_info->buffer_output_gals[output_snap_idx].VelDisp[gals_in_buffer] = halos[g->HaloNr].VelDisp;
 
