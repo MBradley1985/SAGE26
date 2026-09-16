@@ -72,22 +72,9 @@ optional parameters take the listed default if omitted.
 | `ConcentrationOn` | int | no | `3` | Halo concentration method: 0=off; 1=Ishiyama+21 table; 2=V_max/V_vir; 3=V_max/V_vir with infall freeze for satellites. |
 | `BulgeSizeOn` | int | no | `3` | Bulge radius model: 0=off; 1=Shen+2003 eq.33; 2=Shen+2003 eq.32; 3=Tonini+2016 (separate merger and instability channels, mass-weighted average). |
 | `StarburstColdGasOn` | 0/1 | no | `1` | Include cold gas contribution during merger starbursts. |
-| `DynamicDisruptionSplit` | int | no | `2` | ICS-vs-BCG split for disrupted satellite stellar mass: 0=fixed fraction `FractionDisruptedToICS`; 1=mass-ratio split `f_ICS = 1 - (infallMvir / Mhost)^DisruptionSplitAlpha`; 2=mass-ratio split with concentration weighting against a fixed reference (`alpha_eff = DisruptionSplitAlpha * DisruptionSplitCref / c_sat`); 3=the same weighting measured against the mean relation instead (`alpha_eff = DisruptionSplitAlpha * c_typ(infallMvir, z_infall) / c_sat`), so an average-concentration satellite recovers mode 1 exactly and the split strength carries no unintended redshift trend. |
-| `DiskRadiusOn` | int | no | `0` | Disk scale radius model. 0=published Mo, Mao & White (1998) eq. 12 from the instantaneous halo spin, unbounded. 1=adds a working virial fallback (the published else-branch is only reachable when `Rvir == 0`, so it returns `r_d = 0` and leaves the galaxy permanently inert; here the virial scale is rebuilt from `Len * PartMass`) and bounds `r_d / Rvir` to `[0.002, DiskRadiusMaxFrac]`. 2=as 1, but `\|j\|` comes from a running mean of the spin **vector** over a halo dynamical time, which cuts the snapshot-to-snapshot jitter in `r_d` by 3x and shrinks `r_d` by a near-uniform ~9%. It does **not** remove the low-particle-count bias in `\|j\|` -- that error is correlated between adjacent snapshots, so time-averaging cannot reach it. See [physics/disk_sizes.md](physics/disk_sizes.md). |
 
 ---
 
-## CGM model parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `CGMDensityProfile` | int | no | `0` | CGM gas density profile for precipitation: 0=uniform; 1=NFW; 2=beta (β=2/3). |
-| `PrecipCriterionOn` | 0-5 | no | `1` | Which of the two suppression factors in the Voit precipitation rate `ṁ = S((10 - r)/2) × (M_CGM - M_eq)/t_ff` are applied, where `r = t_cool/t_ff` and `M_eq = M_CGM r/10`. 1=both (the submitted rate); 2=`M_eq` only, dropping the `f_inflow` sigmoid; 3=sigmoid only, dropping the condensation term (the bare-sigmoid form printed in the first submission); 4=neither, keeping the rest of the precipitation path; 0=neither *and* skipping the hand-over to standard cooling, so `ṁ = M_CGM/t_ff` for every CGM halo however stable. Modes 1-4 form a 2×2 factorial in the two factors, differing by nothing else, so **mode 4 is the reference the single-factor rows should be measured against**; mode 0 changes the hand-over as well and is the weaker control. Measured on mini-Millennium, the total stellar mass relative to mode 4 is 0.985-0.991 for mode 1, 0.988-0.991 for mode 2, and 0.997-1.000 for mode 3: `M_eq` supplies essentially all of the suppression and the sigmoid 0.03-0.3%, because CGM-regime haloes sit at `r ~ 0.1-0.4` and the sigmoid never leaves its ceiling `S(5) = 0.9933`. SMF offsets from mode 4 are 0.004-0.014 dex rms for the sigmoid alone, below Poisson error in every bin. 5=SAGE16 cold accretion, `ṁ = M_CGM/(R_vir/V_vir)`, bypassing the criterion like mode 0 but draining on the dynamical rather than the free-fall time; since `t_ff = √2 R_vir/V_vir` exactly for the uniform profile, mode 5 is a uniform `√2 = 1.41×` faster than mode 0. Measured on mini-Millennium it raises the total stellar mass by 3.5% at z=0 rising to 24% at z=4 (SMF 0.031-0.096 dex rms), so the inflow-rate normalisation matters far more than the criterion's shape. Also gates the same two factors in the `PreventiveHeatingOn=5` hot-halo ceiling. |
-| `RegimeRandomMode` | 0/1 | no | `0` | Where the CGM/hot regime draw comes from: 0=a fresh uniform draw each snapshot (default); 1=the persistent `RegimeRandom` assigned at galaxy creation. As for `FFBRandomMode`, the difference is temporal rather than statistical: with 0 borderline-mass galaxies switch regime repeatedly, with 1 the regime evolves monotonically with `M_vir`. |
-| `ColdStreamCeilingOn` | 0/1 | no | `0` | How cold streams shut off below the critical redshift in `M_vir > Mshock` haloes: 0=hard cut at `z = 1.5` (published behaviour); 1=Dekel & Birnboim (2006) eqs 39-41, where the criterion is the stream cooling-to-compression ratio `R = (f Mstar/M_vir)^(2/3) (M_vir/Mshock)^(4/3)` and `f_stream` is a sigmoid in `log10 R` of width 0.3 dex. With 1 the redshift dependence enters through the clustering mass `Mstar(z)` rather than the explicit `(1+z)/2` factor, and `z_crit` emerges from `f Mstar(z_crit) = Mshock` (1.20 for Millennium, 1.01 for miniUchuu at `f = 3`) instead of being imposed, so `f_stream` is continuous in redshift. |
-| `StreamMassFactor` | double | no | `3.0` | The order-unity factor `f` in Dekel & Birnboim (2006) eqs 40-41, setting the stream width relative to the clustering scale. Used only when `ColdStreamCeilingOn=1`; they adopt `f = 3`. |
-
----
 
 ## FFB parameters
 
@@ -127,8 +114,6 @@ optional parameters take the listed default if omitted.
 
 | Parameter | Units | Default | Description |
 |-----------|-------|---------|-------------|
-| `DiskRadiusFactor` | dimensionless | `1.0` | Angular-momentum retention factor `f_j` multiplying the Mo+98 disk scale radius. Since `R_vir` cancels out of MMW98 eq. 12, the radius is really `r_d = f_j * |j| / (2 Vvir)`. 1.0 = full retention (published). Matching the Somerville et al. (2018) GAMA stellar-size/halo-size ratio (`R*/Rvir ~ 0.017`, flat in mass) needs `f_j ~ 0.55`, which is also the expected `j_disk/j_halo`. Strongly degenerate with `SfrEfficiency`: SFR responds as `r_d^-3.7`, so on Millennium `f_j = 0.55` lowers the total HI mass by 2.9x while raising the total stellar mass by 0.14 dex. |
-| `DiskRadiusMaxFrac` | dimensionless | `0.15` | Ceiling on `r_d / Rvir`, applied after `f_j`, when `DiskRadiusOn > 0`. Bounded against the peak-retained `Rvir` the physics uses, not the instantaneous `Rvir` written to the output column, so a halo below its peak mass can show a larger ratio on output. The default corresponds to `lambda ~ 0.21`; unbounded, 11.5% of Millennium galaxies at z=0 exceed `0.1 Rvir` and the 99.9th-percentile `r_d` is 32 kpc. Set very large to disable. |
 | `GasDiskRadiusFactor` | dimensionless | `1.0` | `chi`: ratio of the atomic-gas scale length to the stellar/H2 scale length, applied **only** in the HI ionisation truncation. 1.0 = cospatial (published behaviour); observed disks have `chi ~ 1.5-2`. Independent of `DiskRadiusOn`. Raising it spreads the same HI over a larger area so more of it falls below `SIGMA_HI_CRIT`, without touching the H2 midplane pressure (H2 is central and shielded, which is why one radius should not set both). A modest lever: `chi = 1.7` moves the ionised fraction from 0.13 to 0.28 at the median surface density. |
 
 ### Supernova feedback
@@ -154,9 +139,6 @@ optional parameters take the listed default if omitted.
 |-----------|-------|---------|-------------|
 | `ThreshMajorMerger` | dimensionless | `0.3` | Mass ratio above which a merger is classified as major. |
 | `ThresholdSatDisruption` | dimensionless | `1.0` | M_vir-to-baryonic mass ratio below which a satellite is disrupted rather than merged. |
-| `FractionDisruptedToICS` | dimensionless | `0.8` | Fixed fraction of disrupted satellite stellar mass that goes to ICS (vs. central BCG). Used when `DynamicDisruptionSplit=0`, and as the fallback when modes 1-3 cannot compute a mass ratio. |
-| `DisruptionSplitAlpha` | dimensionless | `0.25` | Power-law exponent for the mass-dependent disruption split (modes 1-3). |
-| `DisruptionSplitCref` | dimensionless | `10.0` | Reference concentration for the disruption split. Mode 2 only; in mode 2 it is degenerate with `DisruptionSplitAlpha` (only their product enters), and mode 3 ignores it in favour of the mean c(M,z). |
 
 ### Gas cycling
 
