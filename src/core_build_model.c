@@ -423,27 +423,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         effective_steps = cap_steps;
     }
 
-    // Satellite hot-gas stripping timescale: t_strip = t_dyn(host) = Rvir/Vvir.
-    // const double t_strip = t_dyn;
-
-    // Analytic satellite hot-gas stripping applied ONCE per snapshot, outside
-    // the substep loop, fully decoupled from the substep count. Each satellite
-    // loses exactly a fraction 1-exp(-dT/t_dyn) of its baryon excess (computed
-    // inside strip_from_satellite from dt=deltaT). This is operator-split before
-    // the substeps, mirroring how infallingGas is computed once up front.
-    // for(int p = 0; p < ngal; p++) {
-    //     if(p == centralgal || galaxies[p].mergeType > 0) {
-    //         continue;
-    //     }
-    //     // Strip satellites holding hot-phase gas in either reservoir: Hot-regime
-    //     // in HotGas, CGM-regime in CGMgas (CGMgas is zeroed for satellites when
-    //     // CGMrecipeOn != 1, so legacy runs are unchanged).
-    //     if(galaxies[p].Type == 1 && (galaxies[p].HotGas > 0.0 || galaxies[p].CGMgas > 0.0)) {
-    //         const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
-    //         strip_from_satellite(centralgal, p, Zcurr, deltaT, t_strip, galaxies, run_params);
-    //     }
-    // }
-
     /* Record the substep count on every galaxy in this halo. The Sfr* arrays accumulate one
      * entry per substep into STEPS fixed bins, so the output average has to divide by the
      * number of substeps actually taken rather than by STEPS -- otherwise the reported SFR
