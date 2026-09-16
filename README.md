@@ -134,7 +134,6 @@ Each regime uses a dedicated cooling recipe.
 | Parameter | Values | Effect |
 |-----------|--------|--------|
 | `CGMrecipeOn` | 0/1 | 0=off (classical C16 cooling only); 1=on. Carr+2022 exact copy. |
-| `CGMDensityProfile` | 0–2 | 0=uniform; 1=NFW; 2=beta-profile (β=2/3) |
 
 
 ### Adaptive time integration (`SubstepResolution`)
