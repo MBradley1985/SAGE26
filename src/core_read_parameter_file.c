@@ -100,27 +100,30 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->H2RadialNBins              = 25;
     run_params->H2RadialRMaxFactor         = 5.0;
     run_params->CGMrecipeOn                = 1;
-    run_params->CGMDensityProfile          = 0;
-    run_params->RegimeRandomMode           = 0;
+    run_params->RegimeRandomMode           = 0;   /* default: fresh draw each snapshot (published behaviour); 1 makes the regime persistent per galaxy */ /* (hard-code once published)*/
     run_params->FIREmodeOn                 = 1;
     run_params->RedshiftPowerLawExponent   = 1.25;
+    run_params->SNEnergyConservationOn     = 1;   /* default: on -- neither the reheating nor the ejection term may spend more than the SN energy available */ /* (hard-code once published)*/
+    run_params->MaxSNEnergyCoupling        = 2.0; /* cap on eps_halo * f_FIRE: E_FB <= m_* eta_SN E_SN (the whole SN budget) */ /* (hard-code once published)*/
     run_params->FFBMaxEfficiency           = 0.2;
     run_params->FFBConcSigma               = 0.2;
+    run_params->FFBThresholdSlope          = -6.2;
     run_params->ConcentrationOn            = 3;
     run_params->FeedbackFreeModeOn         = 1;
-    run_params->FFBIgnoreRegime            = 1;
-    run_params->FFBRandomMode              = 0;
+    run_params->FFBIgnoreRegime            = 1;  /* (hard-code once published)*/
+    run_params->FFBRandomMode              = 0;   /* default: fresh draw each snapshot (published behaviour) -- galaxies move in and out of FFB, sustaining a transient low-z FFB population. 1 fixes each galaxy's quantile at creation, which removes both. */ /* (hard-code once published)*/
     run_params->BulgeSizeOn                = 3;
-    run_params->SaveFullSFH                = 1;
+    run_params->SaveFullSFH                = 0;
     run_params->TrackICSAssembly           = 1;
     run_params->StarburstColdGasOn         = 1;
-    run_params->DynamicDisruptionSplit     = 2;
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
-    run_params->RamPressureStrippingOn     = 1;   /* default: on -- Gunn & Gott (1972) ISM stripping of satellites. Set 0 for the legacy no-ISM-stripping behaviour. */
-    run_params->RamPressureEpsilon         = 1.0; /* default: unscaled ram pressure P_ram = rho_host * v_sat^2 */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
     run_params->ReIncorporationFactor      = 0.15;
+    run_params->ColdStreamCeilingOn        = 0;     /* 0 reproduces published behaviour */ /* (remove once published)*/
+    run_params->StreamMassFactor           = 3.0;   /* Dekel & Birnboim (2006) adopt f = 3 */ /* (remove once published)*/
+    run_params->GasDiskRadiusFactor        = 1.0;   /* chi = 1.0: atomic disk cospatial with the stellar disk (published behaviour) */
+    run_params->MShockMsun                 = 6.0e11;
     run_params->EnergySN                   = 1.0e51;
     run_params->EtaSN                      = 5.0e-3;
     run_params->Yield                      = 0.025;
@@ -134,10 +137,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->Reionization_z0            = 8.0;
     run_params->Reionization_zr            = 7.0;
     run_params->ThresholdSatDisruption     = 1.0;
-    run_params->FractionDisruptedToICS     = 0.8;
-    run_params->DisruptionSplitAlpha       = 0.25;
-    run_params->DisruptionSplitCref        = 10.0;
     run_params->Exponent_Forest_Dist_Scheme = 0.7;
+    run_params->KarpovModeOn              = 0; /* 0: full Karpov+2023 recipe, 1: low-metallicity floor (Z/Z_sun = 0.01) for reheated and ejected gas */
 
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
 #define REG(tag, addr, type, req) do {         \
@@ -184,7 +185,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("SFprescription",        &(run_params->SFprescription),       INT, 0);
     REG("AGNrecipeOn",           &(run_params->AGNrecipeOn),          INT, 0);
     REG("CGMrecipeOn",           &(run_params->CGMrecipeOn),          INT, 0);
-    REG("CGMDensityProfile",     &(run_params->CGMDensityProfile),    INT, 0);
     REG("RegimeRandomMode",      &(run_params->RegimeRandomMode),     INT, 0);
     REG("FIREmodeOn",            &(run_params->FIREmodeOn),           INT, 0);
     REG("ConcentrationOn",       &(run_params->ConcentrationOn),      INT, 0);
@@ -195,10 +195,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("SaveFullSFH",           &(run_params->SaveFullSFH),          INT, 0);
     REG("TrackICSAssembly",      &(run_params->TrackICSAssembly),     INT, 0);
     REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
-    REG("DynamicDisruptionSplit",&(run_params->DynamicDisruptionSplit),INT, 0);
     REG("SubstepResolution",     &(run_params->SubstepResolution),     DOUBLE, 0);
-    REG("RamPressureStrippingOn",   &(run_params->RamPressureStrippingOn),   INT, 0);
-    REG("RamPressureEpsilon",       &(run_params->RamPressureEpsilon),       DOUBLE, 0);
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
     REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
     REG("H2RadialNBins",         &(run_params->H2RadialNBins),        INT, 0);
@@ -207,6 +204,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("ThreshMajorMerger",          &(run_params->ThreshMajorMerger),          DOUBLE, 0);
     REG("RecycleFraction",            &(run_params->RecycleFraction),            DOUBLE, 0);
     REG("ReIncorporationFactor",      &(run_params->ReIncorporationFactor),      DOUBLE, 0);
+    REG("ColdStreamCeilingOn",        &(run_params->ColdStreamCeilingOn),        INT,    0);
+    REG("StreamMassFactor",           &(run_params->StreamMassFactor),           DOUBLE, 0);
+    REG("GasDiskRadiusFactor",        &(run_params->GasDiskRadiusFactor),        DOUBLE, 0);
+    REG("MShockMsun",                 &(run_params->MShockMsun),                 DOUBLE, 0);
     REG("EnergySN",                   &(run_params->EnergySN),                   DOUBLE, 0);
     REG("EtaSN",                      &(run_params->EtaSN),                      DOUBLE, 0);
     REG("Yield",                      &(run_params->Yield),                      DOUBLE, 0);
@@ -220,13 +221,14 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("Reionization_z0",            &(run_params->Reionization_z0),            DOUBLE, 0);
     REG("Reionization_zr",            &(run_params->Reionization_zr),            DOUBLE, 0);
     REG("ThresholdSatDisruption",     &(run_params->ThresholdSatDisruption),     DOUBLE, 0);
-    REG("FractionDisruptedToICS",     &(run_params->FractionDisruptedToICS),     DOUBLE, 0);
-    REG("DisruptionSplitAlpha",       &(run_params->DisruptionSplitAlpha),       DOUBLE, 0);
-    REG("DisruptionSplitCref",        &(run_params->DisruptionSplitCref),        DOUBLE, 0);
     REG("H2RadialRMaxFactor",         &(run_params->H2RadialRMaxFactor),         DOUBLE, 0);
     REG("FFBMaxEfficiency",           &(run_params->FFBMaxEfficiency),           DOUBLE, 0);
     REG("FFBConcSigma",               &(run_params->FFBConcSigma),               DOUBLE, 0);
+    REG("FFBThresholdSlope",          &(run_params->FFBThresholdSlope),          DOUBLE, 0);
     REG("RedshiftPowerLawExponent",   &(run_params->RedshiftPowerLawExponent),   DOUBLE, 0);
+    REG("SNEnergyConservationOn",     &(run_params->SNEnergyConservationOn),     INT, 0);
+    REG("MaxSNEnergyCoupling",        &(run_params->MaxSNEnergyCoupling),        DOUBLE, 0);
+    REG("KarpovModeOn",               &(run_params->KarpovModeOn),               INT, 0);
 
 #undef REG
 
@@ -493,7 +495,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     const enum Valid_TreeTypes tree_enums[] = {lhalo_hdf5, lhalo_binary, genesis_hdf5,
                                                consistent_trees_ascii, consistent_trees_hdf5,
                                                gadget4_hdf5};
-    const int nvalid_tree_types  = sizeof(tree_names)/(MAXTAGLEN*sizeof(char));
+    /* enum, not const int: BUILD_BUG_OR_ZERO declares an array of this size, and in C99
+       only an integer constant expression keeps that from being a variable-length array. */
+    enum { nvalid_tree_types = sizeof(tree_names)/(MAXTAGLEN*sizeof(char)) };
     BUILD_BUG_OR_ZERO((nvalid_tree_types == (int) num_tree_types), number_of_tree_types_is_incorrect);
     CHECK_VALID_ENUM_IN_PARAM_FILE(TreeType, nvalid_tree_types, tree_names, tree_enums, my_treetype);
 
@@ -542,21 +546,20 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"ReionizationOn",         run_params->ReionizationOn,         0, 1},
             {"DiskInstabilityOn",      run_params->DiskInstabilityOn,      0, 1},
             {"CGMrecipeOn",            run_params->CGMrecipeOn,            0, 1},
-            {"CGMDensityProfile",      run_params->CGMDensityProfile,      0, 2},
             {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
             {"RegimeRandomMode",       run_params->RegimeRandomMode,       0, 1},
             {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
             {"FeedbackFreeModeOn",     run_params->FeedbackFreeModeOn,     0, 7},
             {"FFBIgnoreRegime",        run_params->FFBIgnoreRegime,        0, 1},
             {"FFBRandomMode",          run_params->FFBRandomMode,          0, 1},
+            {"ColdStreamCeilingOn",    run_params->ColdStreamCeilingOn,    0, 1},
             {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 3},
             {"H2DiskAreaOption",       run_params->H2DiskAreaOption,       0, 2},
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
             {"TrackICSAssembly",       run_params->TrackICSAssembly,       0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
-            {"DynamicDisruptionSplit", run_params->DynamicDisruptionSplit, 0, 2},
-            {"RamPressureStrippingOn", run_params->RamPressureStrippingOn, 0, 1},
+            {"SNEnergyConservationOn", run_params->SNEnergyConservationOn, 0, 1},
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {
@@ -581,9 +584,16 @@ int read_parameter_file(const char *fname, struct params *run_params)
                 run_params->H2RadialRMaxFactor);
         ABORT(EXIT_FAILURE);
     }
-    if(run_params->RamPressureStrippingOn && run_params->RamPressureEpsilon <= 0.0) {
-        fprintf(stderr, "Error: RamPressureEpsilon = %g is not valid; it must be > 0 when RamPressureStrippingOn = 1.\n",
-                run_params->RamPressureEpsilon);
+    
+    if(run_params->GasDiskRadiusFactor <= 0.0) {
+        fprintf(stderr, "Error: GasDiskRadiusFactor = %g is not valid; it must be > 0.\n",
+                run_params->GasDiskRadiusFactor);
+        ABORT(EXIT_FAILURE);
+    }
+
+    if(run_params->SNEnergyConservationOn && run_params->MaxSNEnergyCoupling <= 0.0) {
+        fprintf(stderr, "Error: MaxSNEnergyCoupling = %g is not valid; it must be > 0 when SNEnergyConservationOn = 1.\n",
+                run_params->MaxSNEnergyCoupling);
         ABORT(EXIT_FAILURE);
     }
     if(run_params->SubstepResolution <= 0.0) {

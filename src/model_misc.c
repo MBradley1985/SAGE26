@@ -34,8 +34,21 @@ static const double SHEN03_INTERCEPT_LOW  = -1.21;
 /* Transition mass between the two eq.(32) regimes, in Msun. */
 static const double SHEN03_M_TRANSITION   =  2.0e10;
 
-/* Fallback disk scale radius: r_d = DISK_RADIUS_FALLBACK_FRAC * R_vir when spin is unavailable. */
+/* Fallback disk scale radius: r_d = DISK_RADIUS_FALLBACK_FRAC * R_vir when spin is unavailable.
+ * Reachable only on the DiskRadiusOn == 0 path, and only when R_vir itself is zero, so it
+ * always returns zero there; kept because that is the published behaviour. */
 static const double DISK_RADIUS_FALLBACK_FRAC = 0.1;
+static const double DISK_CONCENTRATION_FACTOR = 0.8;
+static const double SQRT_REPLACEMENT = 1.414;
+
+// /* Floor on r_d / R_vir when DiskRadiusOn > 0: insurance against a halo whose measured spin is
+//  * ~0. Moves 0.02% of Millennium galaxies at z = 0. The matching ceiling is the parameter
+//  * DiskRadiusMaxFrac, because anywhere in 0.1-0.2 is a real modelling choice rather than a guard. */
+// static const double DISK_RADIUS_MIN_FRAC = 0.002;
+
+// /* Peak of the log-normal halo spin distribution (Bullock et al. 2001), used when a halo has no
+//  * usable spin measurement at all. Well-resolved (Len > 3000) Millennium halos give 0.042. */
+// static const double DISK_RADIUS_MEDIAN_SPIN = 0.04;
 
 /* Tonini+2016 eq. (15): fraction of the disc scale radius that a newly
  * transferred mass element contributes to the instability-bulge half-mass radius. */
@@ -111,6 +124,8 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].MetalsICS = 0.0;
     galaxies[p].MetalsCGMgas = 0.0;
 
+    galaxies[p].SubstepsUsed = STEPS;   /* overwritten by evolve_galaxies before any output */
+
     for(int step = 0; step < STEPS; step++) {
         galaxies[p].SfrDisk[step] = 0.0;
         galaxies[p].SfrBulge[step] = 0.0;
@@ -133,6 +148,12 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].ICS_accrete = 0.0;
     galaxies[p].ICS_sum_mt = 0.0;
 
+    /* Seed the smoothed spin with this halo's spin so the running mean in get_disk_radius()
+     * is a no-op on the first call (DiskRadiusOn >= 2); harmless otherwise. */
+    for(int j = 0; j < 3; j++) {
+        galaxies[p].SpinSmooth[j] = halos[halonr].Spin[j];
+    }
+
     galaxies[p].DiskScaleRadius = get_disk_radius(halonr, p, halos, galaxies);
     get_bulge_radius(p, galaxies, run_params);
     galaxies[p].MergTime = 999.9f;
@@ -147,8 +168,6 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].MassLoading = 0.0;
     galaxies[p].tcool = -1.0;
     galaxies[p].tff = -1.0;
-    galaxies[p].tcool_over_tff = -1.0;
-    galaxies[p].tdeplete = -1.0;
     galaxies[p].H2DepletionTime_Gyr = -1.0f;
 
     // infall properties
@@ -166,26 +185,31 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
 
 }
 
-/*
- * Compute the disk half-mass radius from halo spin (Mo, Shude & White 1998 eq. 12).
- *
- * Uses the Bullock-style spin parameter and virial properties. Falls back to
- * 0.1 * Rvir when Vvir or Rvir are zero.
- */
 double get_disk_radius(const int halonr, const int p, const struct halo_data *halos, const struct GALAXY *galaxies)
 {
+    double r_disk;
+    // double r_disk_old;
     if(galaxies[p].Vvir > 0.0 && galaxies[p].Rvir > 0.0) {
-        /* Mo, Shude & White (1998) eq. 12 with a Bullock-style spin parameter.
+        /* Mo, Mao & White (1998) eq. 12 with a Bullock-style spin parameter.
          * The literal 1.414 is intentional: the original code used this truncated
          * sqrt(2) rather than M_SQRT2 and changing it shifts every disk radius.
          * Do not replace with M_SQRT2 without re-calibrating. */
         double SpinMagnitude = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
                                     halos[halonr].Spin[1] * halos[halonr].Spin[1] + halos[halonr].Spin[2] * halos[halonr].Spin[2]);
 
-        double SpinParameter = SpinMagnitude / (1.414 * galaxies[p].Vvir * galaxies[p].Rvir);
-        return (SpinParameter / 1.414) * galaxies[p].Rvir;
+        double SpinParameter = SpinMagnitude / (SQRT_REPLACEMENT * galaxies[p].Vvir * galaxies[p].Rvir);
+        r_disk = (SpinParameter / SQRT_REPLACEMENT) * galaxies[p].Rvir;
+        /* MMW98 eq. 12 is the singular-isothermal-sphere case. Their eq. 28 adds
+        * f_c^(-1/2) f_R for an NFW halo that contracts adiabatically as the disk
+        * assembles; f_c^(-1/2) cancels here because SpinParameter is the Bullock
+        * lambda' rather than the Peebles lambda of eq. 28. What remains is f_R,
+        * their eq. 32, which equals 0.79 at c = 10 and m_d = 0.01 -- i.e. this
+        * constant is f_R frozen at Milky-Way concentration and a percent-level
+        * disk mass fraction, not a free parameter. */
+        return r_disk * DISK_CONCENTRATION_FACTOR;
+        // return r_disk * get_disk_response_factor(halonr, p, halos, galaxies);
     } else {
-        return DISK_RADIUS_FALLBACK_FRAC * galaxies[p].Rvir;
+		return DISK_RADIUS_FALLBACK_FRAC * galaxies[p].Rvir;
     }
 }
 

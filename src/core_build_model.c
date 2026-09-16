@@ -35,7 +35,6 @@
 #include "model_misc.h"
 #include "model_mergers.h"
 #include "model_infall.h"
-#include "model_ram_pressure.h"
 #include "model_reincorporation.h"
 #include "model_starformation_and_feedback.h"
 #include "model_cooling_heating.h"
@@ -256,6 +255,13 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                         galaxies[ngal].mergeIntoID = -1;
                         galaxies[ngal].MergTime = 999.9f;
 
+                        // Compute and store halo concentration if enabled
+                        if(run_params->ConcentrationOn > 0) {
+                            galaxies[ngal].Concentration =
+                                (float)get_halo_concentration(ngal,
+                        run_params->ZZ[halos[halonr].SnapNum], galaxies, run_params);
+                        }
+
                         galaxies[ngal].DiskScaleRadius = get_disk_radius(halonr, ngal, halos, galaxies);
                         get_bulge_radius(ngal, galaxies, run_params);
 
@@ -368,14 +374,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
     const int halo_snapnum = halos[halonr].SnapNum;
     const double Zcurr = run_params->ZZ[halo_snapnum];
-
-    // Compute and store halo concentration if enabled
-    if(run_params->ConcentrationOn > 0) {
-        for(int p = 0; p < ngal; p++) {
-            if(galaxies[p].mergeType > 0) continue;
-            galaxies[p].Concentration = (float)get_halo_concentration(p, Zcurr, galaxies, run_params);
-        }
-    }
     
     if (run_params->CGMrecipeOn == 1) {
         determine_and_store_regime(ngal, galaxies, run_params);
@@ -446,24 +444,13 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         }
     }
 
-    // RamPressureStrippingOn == 1: Gunn & Gott (1972) ram-pressure stripping of
-    // satellite ISM (ColdGas), applied once per snapshot outside the substep
-    // loop with the same analytic 1-exp(-dT/t_strip) cadence as scheme 2 above.
-    // Complementary to and independent of PhysicalStrippingOn, which strips the
-    // hot/CGM phase (starvation). Covers Type 1 satellites and Type 2 orphans;
-    // orphans use a frozen-orbit approximation (position frozen at subhalo
-    // loss, velocity replaced by the host Vvir -- see
-    // ram_pressure_strip_satellite).
-    if(run_params->RamPressureStrippingOn == 1) {
-        for(int p = 0; p < ngal; p++) {
-            if(p == centralgal || galaxies[p].mergeType > 0) {
-                continue;
-            }
-            if((galaxies[p].Type == 1 || galaxies[p].Type == 2) && galaxies[p].ColdGas > 0.0) {
-                const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
-                ram_pressure_strip_satellite(centralgal, p, Zcurr, deltaT, t_strip, galaxies, run_params);
-            }
-        }
+    /* Record the substep count on every galaxy in this halo. The Sfr* arrays accumulate one
+     * entry per substep into STEPS fixed bins, so the output average has to divide by the
+     * number of substeps actually taken rather than by STEPS -- otherwise the reported SFR
+     * scales as effective_steps / STEPS. Set for all galaxies, including already-merged ones,
+     * because they are still written out. */
+    for(int p = 0; p < ngal; p++) {
+        galaxies[p].SubstepsUsed = effective_steps;
     }
 
     for(int step = 0; step < effective_steps; step++) {

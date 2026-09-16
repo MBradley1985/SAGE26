@@ -16,17 +16,16 @@
 #include <time.h>
 
 #include "core_allvars.h"
-
 #include "model_misc.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
  * -------------------------------------------------------------------------*/
 
-/* Dekel & Birnboim (2006) critical virial-shock stability mass.
- * Halos below this mass lack a stable virial shock and are classified as
- * CGM-regime.  Value ~6e11 Msun from DB06 Fig. 1 / eq. 4. */
-static const double DEKEL06_M_SHOCK_MSUN  =  6.0e11;
+/* Dekel & Birnboim (2006) critical virial-shock stability mass: halos below it
+ * lack a stable virial shock and are classified as CGM-regime.  Default
+ * 6e11 Msun from DB06 Fig. 1 / eq. 4, now settable as MShockMsun in the
+ * parameter file so it can be varied without a rebuild. */
 
 /* Parsec in cm (IAU 2012).  Used when converting radii between Mpc/h
  * (code units) and pc for surface-density calculations. */
@@ -53,13 +52,10 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
 
         // Convert Mvir to physical units (Msun)
         // Mvir is stored in units of 10^10 Msun/h
-        const double Mvir_physical = CODE_MASS_TO_MSUN(galaxies[p].Mvir, run_params->Hubble_h);
-
-        // Shock mass threshold (Dekel & Birnboim 2006)
-        const double Mshock = DEKEL06_M_SHOCK_MSUN;  // Msun
+        const double Mshock = MSUN_TO_CODE_MASS(run_params->MShockMsun, run_params->Hubble_h);  // Msun
 
         // Calculate mass ratio for sigmoid
-        const double mass_ratio = Mvir_physical / Mshock;
+        const double mass_ratio = galaxies[p].Mvir / Mshock;
 
         int32_t new_regime;
         if(mass_ratio <= 0.0) {
@@ -357,7 +353,10 @@ double calculate_ffb_threshold_mass(const double z, const struct params *run_par
 
     const double h = run_params->Hubble_h;
     const double z_norm = (1.0 + z) / 10.0;
-    const double log_Mvir_ffb_code = 0.8 + log10(h) - 6.2 * log10(z_norm);
+    /* FFBThresholdSlope defaults to -6.2 (Li+24). The 10^10.8 normalisation is
+     * pinned at z = 9, where z_norm = 1, so changing the slope pivots the
+     * threshold about that redshift rather than shifting it wholesale. */
+    const double log_Mvir_ffb_code = 0.8 + log10(h) + run_params->FFBThresholdSlope * log10(z_norm);
 
     return pow(10.0, log_Mvir_ffb_code);
 }

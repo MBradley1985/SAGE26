@@ -923,29 +923,31 @@ static int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct sav
 
     save_info->buffer_output_gals[output_snap_idx].tcool[gals_in_buffer] = g->tcool;
     save_info->buffer_output_gals[output_snap_idx].tff[gals_in_buffer] = g->tff;
-    save_info->buffer_output_gals[output_snap_idx].tcool_over_tff[gals_in_buffer] = g->tcool_over_tff;
-    save_info->buffer_output_gals[output_snap_idx].tdeplete[gals_in_buffer] = g->tdeplete;
     save_info->buffer_output_gals[output_snap_idx].H2DepletionTime_Gyr[gals_in_buffer] = g->H2DepletionTime_Gyr;
     save_info->buffer_output_gals[output_snap_idx].RcoolToRvir[gals_in_buffer] = g->RcoolToRvir;
     save_info->buffer_output_gals[output_snap_idx].g_max[gals_in_buffer] = g->g_max;
     save_info->buffer_output_gals[output_snap_idx].r_heat[gals_in_buffer] = g->r_heat;
+    save_info->buffer_output_gals[output_snap_idx].CoolingRate[gals_in_buffer] = g->CoolingRate;
 
     float tmp_SfrDisk = 0.0;
     float tmp_SfrBulge = 0.0;
     float tmp_SfrDiskZ = 0.0;
     float tmp_SfrBulgeZ = 0.0;
 
-    // NOTE: in Msun/yr
+    // NOTE: in Msun/yr. Divisors come from the substep count actually integrated, not STEPS;
+    // see sfr_rate_divisor() in model_misc.h.
+    const int sfr_norm = sfr_rate_divisor(g->SubstepsUsed);
+    const int met_norm = sfr_metallicity_divisor(g->SubstepsUsed);
     for(int step = 0; step < STEPS; step++) {
-        tmp_SfrDisk += g->SfrDisk[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / STEPS;
-        tmp_SfrBulge += g->SfrBulge[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / STEPS;
+        tmp_SfrDisk += g->SfrDisk[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / sfr_norm;
+        tmp_SfrBulge += g->SfrBulge[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / sfr_norm;
 
         if(g->SfrDiskColdGas[step] > 0.0) {
-            tmp_SfrDiskZ += g->SfrDiskColdGasMetals[step] / g->SfrDiskColdGas[step] / STEPS;
+            tmp_SfrDiskZ += g->SfrDiskColdGasMetals[step] / g->SfrDiskColdGas[step] / met_norm;
         }
 
         if(g->SfrBulgeColdGas[step] > 0.0) {
-            tmp_SfrBulgeZ += g->SfrBulgeColdGasMetals[step] / g->SfrBulgeColdGas[step] / STEPS;
+            tmp_SfrBulgeZ += g->SfrBulgeColdGasMetals[step] / g->SfrBulgeColdGas[step] / met_norm;
         }
     }
 
@@ -1298,7 +1300,7 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2RadialIntegrationOn", run_params->H2RadialIntegrationOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2RadialNBins", run_params->H2RadialNBins, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2RadialRMaxFactor", run_params->H2RadialRMaxFactor, H5T_NATIVE_DOUBLE);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "CGMDensityProfile", run_params->CGMDensityProfile, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RegimeRandomMode", run_params->RegimeRandomMode, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ConcentrationOn", run_params->ConcentrationOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SaveFullSFH", run_params->SaveFullSFH, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "TrackICSAssembly", run_params->TrackICSAssembly, H5T_NATIVE_INT);
@@ -1308,8 +1310,12 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SfrEfficiency", run_params->SfrEfficiency, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FFBMaxEfficiency", run_params->FFBMaxEfficiency, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FFBConcSigma", run_params->FFBConcSigma, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FFBThresholdSlope", run_params->FFBThresholdSlope, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FFBIgnoreRegime", run_params->FFBIgnoreRegime, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FFBRandomMode", run_params->FFBRandomMode, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "MShockMsun", run_params->MShockMsun, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ColdStreamCeilingOn", run_params->ColdStreamCeilingOn, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "StreamMassFactor", run_params->StreamMassFactor, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FeedbackReheatingEpsilon", run_params->FeedbackReheatingEpsilon, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FeedbackEjectionEfficiency", run_params->FeedbackEjectionEfficiency, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ReIncorporationFactor", run_params->ReIncorporationFactor, H5T_NATIVE_DOUBLE);
@@ -1318,10 +1324,6 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BlackHoleGrowthRate", run_params->BlackHoleGrowthRate, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ThreshMajorMerger", run_params->ThreshMajorMerger, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ThresholdSatDisruption", run_params->ThresholdSatDisruption, H5T_NATIVE_DOUBLE);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FractionDisruptedToICS", run_params->FractionDisruptedToICS, H5T_NATIVE_DOUBLE);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DynamicDisruptionSplit", run_params->DynamicDisruptionSplit, H5T_NATIVE_INT32);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DisruptionSplitAlpha", run_params->DisruptionSplitAlpha, H5T_NATIVE_DOUBLE);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DisruptionSplitCref", run_params->DisruptionSplitCref, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "Yield", run_params->Yield, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RecycleFraction", run_params->RecycleFraction, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FracZleaveDisk", run_params->FracZleaveDisk, H5T_NATIVE_DOUBLE);
@@ -1330,7 +1332,28 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "EnergySN", run_params->EnergySN, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "EtaSN", run_params->EtaSN, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RedshiftPowerLawExponent", run_params->RedshiftPowerLawExponent, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SNEnergyConservationOn", run_params->SNEnergyConservationOn, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "MaxSNEnergyCoupling", run_params->MaxSNEnergyCoupling, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BaryonFrac", run_params->BaryonFrac, H5T_NATIVE_DOUBLE);
+
+    /* Numerical resolution and forest decomposition.  Not physics, but the
+       results depend on them: SubstepResolution sets the integration
+       resolution the model is calibrated at, and the decomposition scheme
+       changes how forests are split across ranks, which the regime/FFB draws
+       are sensitive to. */
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SubstepResolution", run_params->SubstepResolution, H5T_NATIVE_DOUBLE);
+    /* The enum-valued parameters need lvalues: CREATE_SINGLE_ATTRIBUTE takes the
+       address of its argument, so a cast expression cannot be passed directly. */
+    const int32_t forest_dist_scheme = (int32_t) run_params->ForestDistributionScheme;
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ForestDistributionScheme", forest_dist_scheme, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ExponentForestDistributionScheme", run_params->Exponent_Forest_Dist_Scheme, H5T_NATIVE_DOUBLE);
+
+    /* Input provenance: which trees produced this file, and in what format. */
+    const int32_t tree_type_id = (int32_t) run_params->TreeType;
+    const int32_t output_format_id = (int32_t) run_params->OutputFormat;
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "TreeType", tree_type_id, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "OutputFormat", output_format_id, H5T_NATIVE_INT);
+    CREATE_STRING_ATTRIBUTE(runtime_group_id, "TreeName", &run_params->TreeName, strlen(run_params->TreeName));
 
     // Misc runtime Parameters.
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "UnitLength_in_cm", run_params->UnitLength_in_cm, H5T_NATIVE_DOUBLE);

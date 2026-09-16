@@ -33,7 +33,6 @@ PROJECT_SOURCES = \
 	$(SRC_DIR)/model_infall.c \
 	$(SRC_DIR)/model_disk_instability.c \
 	$(SRC_DIR)/model_mergers.c \
-	$(SRC_DIR)/model_ram_pressure.c \
 	$(SRC_DIR)/core_cool_func.c
 
 # Test files
@@ -56,8 +55,7 @@ TEST_SOURCES = \
 	test_halo_mergers.c \
 	test_agn_feedback.c \
 	test_ffb_concentration.c \
-	test_halo_ids.c \
-	test_ram_pressure.c
+	test_halo_ids.c
 
 # Function to check if all dependencies exist for a test
 # Usage: $(call check_test_deps,test_name)
@@ -247,7 +245,7 @@ help:
 	@echo "================="
 	@echo ""
 	@echo "Comprehensive unit tests for SAGE26 semi-analytic model"
-	@echo "with CGM physics extensions (278 tests across 16 suites)"
+	@echo "with CGM physics extensions (608 tests across 19 suites)"
 	@echo ""
 	@echo "Targets:"
 	@echo "  make              - Build all tests"

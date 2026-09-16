@@ -50,14 +50,18 @@ double get_virial_velocity(const int halonr, const struct halo_data *halos, cons
 }
 
 /*
- * Virial radius computed from the Bryan & Norman (1998) overdensity criterion.
+ * Virial radius for an arbitrary mass at a given snapshot, from the Bryan &
+ * Norman (1998) overdensity criterion.
  *
  * R_vir = [G * M_vir / (Delta_c * H(z)^2)]^(1/3), where Delta_c ~ 178 for
- * flat Lambda-CDM. Returns 0 for halos with non-positive virial mass.
+ * flat Lambda-CDM. Returns 0 for non-positive mass.
+ *
+ * Split out of get_virial_radius() so callers that need a radius for a
+ * substitute mass -- get_disk_radius() repairing a halo whose catalogue Mvir
+ * is zero -- can reuse the same conversion instead of duplicating it.
  */
-double get_virial_radius(const int halonr, const struct halo_data *halos, const struct params *run_params)
+double virial_radius_from_mass(const double mvir, const int snapnum, const struct params *run_params)
 {
-  const int snapnum = halos[halonr].SnapNum;
   const double zplus1 = 1.0 + run_params->ZZ[snapnum];
   const double hubble_of_z_sq =
       run_params->Hubble * run_params->Hubble *(run_params->Omega * zplus1 * zplus1 * zplus1 + (1.0 - run_params->Omega - run_params->OmegaLambda) * zplus1 * zplus1 +
@@ -66,7 +70,65 @@ double get_virial_radius(const int halonr, const struct halo_data *halos, const 
   const double rhocrit = 3.0 * hubble_of_z_sq / (8.0 * M_PI * run_params->G);
   const double fac = 1.0 / (DELTA_VIRT * 4.0 * M_PI / 3.0 * rhocrit);
 
-  return cbrt(get_virial_mass(halonr, halos, run_params) * fac);
+  return cbrt(mvir * fac);
+}
+
+/*
+ * Virial radius computed from the Bryan & Norman (1998) overdensity criterion.
+ *
+ * R_vir = [G * M_vir / (Delta_c * H(z)^2)]^(1/3), where Delta_c ~ 178 for
+ * flat Lambda-CDM. Returns 0 for halos with non-positive virial mass.
+ */
+double get_virial_radius(const int halonr, const struct halo_data *halos, const struct params *run_params)
+{
+  return virial_radius_from_mass(get_virial_mass(halonr, halos, run_params), halos[halonr].SnapNum, run_params);
+}
+
+/*
+ * Press-Schechter clustering mass M_*(z), defined by nu = delta_c/sigma(M_*,z) = 1,
+ * returned as log10 of M_* in Msun.
+ *
+ * Used by the Dekel & Birnboim (2006) cold-stream criterion (their eqs 39-41),
+ * where the stream ceiling M_stream = Mshock^2/(f M_*) closes on Mshock at the
+ * critical redshift defined by f M_*(z_crit) = Mshock.  Two cosmology-specific
+ * tables are selected by run_params->Omega, matching the concentration table
+ * below.  M_* falls steeply with redshift and is floored at log10 M_* = 1, well
+ * below any resolved halo, where the ceiling is effectively unbounded.
+ */
+double interpolate_clustering_mass(const double z, const struct params *run_params)
+{
+    #define MSTAR_TABLE_N_Z 31
+    const double mstar_table_z[MSTAR_TABLE_N_Z] = {0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5, 12.0, 12.5, 13.0, 13.5, 14.0, 14.5, 15.0};
+
+    // Millennium / WMAP1: H0=73, Om=0.25, sigma8=0.9, ns=1.0
+    const double mstar_mill[MSTAR_TABLE_N_Z] = {
+        12.8964, 12.2501, 11.5685, 10.9046, 10.2717, 9.6699, 9.0969, 8.5486,
+        8.0214, 7.5126, 7.0206, 6.5435, 6.0794, 5.6266, 5.1842, 4.7514,
+        4.3276, 3.9122, 3.5045, 3.1039, 2.7098, 2.3217, 1.9393, 1.5626,
+        1.1912, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000};
+
+    // Uchuu / Planck15: H0=67.74, Om=0.3089, sigma8=0.8159, ns=0.9667
+    const double mstar_uchuu[MSTAR_TABLE_N_Z] = {
+        12.8028, 12.0672, 11.3101, 10.5795, 9.8831, 9.2194, 8.5834, 7.9701,
+        7.3764, 6.8002, 6.2389, 5.6901, 5.1521, 4.6241, 4.1054, 3.5950,
+        3.0915, 2.5943, 2.1027, 1.6166, 1.1359, 1.0000, 1.0000, 1.0000,
+        1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000};
+
+    const double *table = mstar_mill;
+    if(fabs(run_params->Omega - 0.3089) < 0.01) {
+        table = mstar_uchuu;
+    }
+
+    double zz = z;
+    if(zz < mstar_table_z[0]) zz = mstar_table_z[0];
+    if(zz > mstar_table_z[MSTAR_TABLE_N_Z - 1]) zz = mstar_table_z[MSTAR_TABLE_N_Z - 1];
+
+    int iz = (int)(zz / 0.5);
+    if(iz < 0) iz = 0;
+    if(iz >= MSTAR_TABLE_N_Z - 1) iz = MSTAR_TABLE_N_Z - 2;
+
+    const double fz = (zz - mstar_table_z[iz]) / (mstar_table_z[iz + 1] - mstar_table_z[iz]);
+    return table[iz] * (1.0 - fz) + table[iz + 1] * fz;
 }
 
 /*

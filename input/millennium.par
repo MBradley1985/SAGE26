@@ -57,8 +57,8 @@ FIREmodeOn                  1   %0: switch off
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
 FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 conc); 3: BK25 (ConcentrationOn method); 4: BK25 + log-normal c scatter; 5: Li+24 sharp; 6: Li+24 sigmoid + H2 SF; 7: BK25 log-normal c scatter + H2 SF
 
-SaveFullSFH                 1   %0: switch off
-TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
+SaveFullSFH                 0   %0: switch off
+KarpovModeOn                0   %0: switch off
 
 %------------------------------------------
 %----- SAGE model parameters --------------
@@ -107,18 +107,3 @@ ExponentForestDistributionScheme            0.7 % only relevant for the last two
 UnitLength_in_cm          3.08568e+24 %WATCH OUT: Mpc/h
 UnitMass_in_g             1.989e+43   %WATCH OUT: 10^10Msun
 UnitVelocity_in_cm_per_s  100000      %WATCH OUT: km/s
-
-%------------------------------------------
-%----- Numerical time resolution ----------
-%------------------------------------------
-
-% IMPORTANT: this is a calibration-locked numerical knob, not a physics choice.
-% The per-snapshot physics (cooling, SF, feedback) is integrated with an adaptive
-% number of sub-timesteps; SubstepResolution multiplies that count. The model is
-% CALIBRATED at 1.0 -- do NOT change it for science runs without recalibrating.
-% Higher values converge the time-integration (coarse steps over-cool, so the
-% massive-end SMF drops ~0.1 dex from 1.0 to fully converged -- within the
-% observational scatter) but cost ~linearly more runtime. See the convergence
-% discussion in docs/parameters.md and docs/physics/cooling_and_heating.md.
-
-SubstepResolution           1.0   %multiplier on the adaptive sub-timestep count (scales the STEPS floor and MAX_STEPS cap); 1.0 = calibrated default. Larger = better time-convergence, longer runtime.

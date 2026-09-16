@@ -59,6 +59,7 @@ void report_sf_clamp_counts(void)
  * SF prescriptions. */
 static const double SF_DISK_RADIUS_FRAC = 3.0;
 
+
 /* Kauffmann (1996) eq. 7 cold-gas surface density threshold coefficient.
  * cold_crit = KAUFFMANN96_SF_THRESHOLD * Vvir * reff in code units
  * (Vvir in km/s, reff in Mpc/h, cold_crit in 10^10 Msun/h). */
@@ -106,8 +107,26 @@ static const double SIGMA_HI_CRIT = 0.5;
  * correction is disabled or inapplicable, clamped to [0, 1].
  *
  * coldgas_code : ColdGas in code units (10^10 Msun/h)
- * rs_code      : DiskScaleRadius in code units (Mpc/h)
+ * rs_code      : atomic-disk scale radius in code units (Mpc/h). Callers pass
+ *                GasDiskRadiusFactor * DiskScaleRadius: chi = 1 makes the atomic disk
+ *                cospatial with the stellar/H2 disk (published behaviour), while the
+ *                observed chi ~ 1.5-2 spreads the same HI over a larger area and so
+ *                pushes more of it below the neutral threshold. H2 is untouched -- it is
+ *                central and shielded, which is exactly why one radius should not set both.
  */
+/*
+ * Scale radius of the atomic disk: chi * r_s, where chi = GasDiskRadiusFactor.
+ *
+ * A zeroed struct params (the unit-test harnesses memset theirs) must behave like the
+ * published chi = 1, and read_parameter_file() already rejects chi <= 0, so a non-positive
+ * value here can only mean "never initialised" rather than a real configuration choice.
+ */
+static double atomic_disk_radius(const double rs_code, const struct params *run_params)
+{
+    const double chi = run_params->GasDiskRadiusFactor;
+    return (chi > 0.0) ? chi * rs_code : rs_code;
+}
+
 static double ionized_gas_fraction(const double coldgas_code, const double rs_code,
                                    const double h, const double sigma_hi_crit)
 {
@@ -735,7 +754,8 @@ double reheated_mass = 0.0;
 if(run_params->SupernovaRecipeOn == 1) {
     if(run_params->FIREmodeOn == 1) {
         // FIRE: eta = FeedbackReheatingEpsilon * fire_scaling (Muratov+2015)
-        const double eta_reheat = run_params->FeedbackReheatingEpsilon * fire_scaling;
+        const double eta_reheat = capped_eta_reheat(
+            run_params->FeedbackReheatingEpsilon * fire_scaling, galaxies[p].Vvir, run_params);
         galaxies[p].MassLoading = (float)eta_reheat;
         reheated_mass = eta_reheat * stars;
     } else {
@@ -761,7 +781,7 @@ if(run_params->SupernovaRecipeOn == 1) {
             // E_FB = epsilon_eject * fire_scaling * 0.5 * M_* * (eta_SN * E_SN)
             // Eject whatever energy remains after lifting the reheated gas.
             const double vc = galaxies[p].Vvir;
-            const double E_FB = run_params->FeedbackEjectionEfficiency * fire_scaling *
+            const double E_FB = sn_energy_coupling(fire_scaling, run_params) *
                                 0.5 * stars * (run_params->EtaSNcode * run_params->EnergySNcode);
             const double E_lift = 0.5 * reheated_mass * vc * vc;
             ejected_mass = (E_FB > E_lift) ? (E_FB - E_lift) / (0.5 * vc * vc) : 0.0;
@@ -771,6 +791,82 @@ if(run_params->SupernovaRecipeOn == 1) {
                            (run_params->EtaSNcode * run_params->EnergySNcode) / 
                            (galaxies[p].Vvir * galaxies[p].Vvir) -
                            run_params->FeedbackReheatingEpsilon) * stars;
+        }
+        if (run_params->KarpovModeOn == 1 && galaxies[p].Vvir > 0.0 &&
+            galaxies[p].ColdGas > 0.0 && galaxies[p].DiskScaleRadius > 0.0 &&
+            run_params->Hubble_h > 0.0 && isfinite(stars) && isfinite(galaxies[p].MetalsColdGas)) {
+            // Calculate Metallicity (Z/Z_sun)
+            double Z_ratio = 0.0;
+            if(galaxies[p].ColdGas > 0.0) {
+                // Assuming MetalsColdGas is in the same mass units as ColdGas
+                Z_ratio = (galaxies[p].MetalsColdGas / galaxies[p].ColdGas) / Z_SOLAR_ASPLUND09; 
+            }
+
+            // Enforce the low-metallicity floor
+            if (Z_ratio < 0.01) {
+                Z_ratio = 0.01; // H and He cooling dominates below this
+            }
+
+            // --- Calculate Gas Number Density (n) in cm^-3 ---
+            // 1. Convert DiskRadius to physical cm (assuming input is comoving Mpc/h)
+            double r_disk_cm = (galaxies[p].DiskScaleRadius / run_params->Hubble_h) * CM_PER_MPC;
+            
+            // 2. Estimate disk volume (Cylinder: V = pi * r^2 * h)
+            double scale_height_cm = 0.1 * r_disk_cm; // Typical SAM assumption: h is 10% of R
+            double volume_cm3 = M_PI * r_disk_cm * r_disk_cm * scale_height_cm;
+            
+            // 3. Convert ColdGas mass to grams
+            double mass_msun = CODE_MASS_TO_MSUN(galaxies[p].ColdGas, run_params->Hubble_h);
+            double mass_grams = mass_msun * SOLAR_MASS;
+            
+            // 4. Calculate number density (n = rho / mean_molecular_weight)
+            double rho = mass_grams / volume_cm3;
+            double n = rho / (1.4 * PROTONMASS);
+
+            // KARPOV ET AL. (2020) RECIPE
+            
+            // Assuming 1 SN per 100 M_sun of stars formed[cite: 1]
+            double m_stars_msun = CODE_MASS_TO_MSUN(stars, run_params->Hubble_h);
+            double num_sn = m_stars_msun * run_params->EtaSN;
+            
+            // Table 2 Parameters[cite: 1]
+            double M_cool_A = 5.914e2;
+            double M_cool_alpha = 1.944;
+            double M_cool_beta = -0.057;
+            double M_cool_gamma = -0.302;
+            double P_A = 3.252e43;
+            double P_alpha = 1.404;
+            double P_beta = -5.730;
+            double P_gamma = -1.487;
+
+            /* 
+             * IMPORTANT: The OCR of Equation 5 in the PDF is distorted ("X = A10810(2 (-) Z \beta").
+             * The mathematical form below is a placeholder power-law. You must open the original 
+             * PDF to verify the exact arrangement of the alpha, beta, and gamma exponents. 
+             */
+            // double M_cool_A = 5.914e2, M_cool_alpha = 1.944, M_cool_beta = -0.057, M_cool_gamma = -0.302;
+            // double P_A = 3.252e43,     P_alpha = 1.404,      P_beta = -5.730,      P_gamma = -1.487;
+
+            if (isfinite(n) && n > 0.0 && isfinite(num_sn) && num_sn >= 0.0) {
+                double m_cool_single = M_cool_A * pow(M_cool_alpha, log10(100.0 / n)) * pow(Z_ratio - M_cool_beta, M_cool_gamma);
+                double p_single = P_A * pow(P_alpha, log10(100.0 / n)) * pow(Z_ratio - P_beta, P_gamma);
+
+                // 1. Reheated Mass: SN cooling mass * number of SN[cite: 1]
+                double total_reheated_msun = m_cool_single * num_sn;
+                reheated_mass = MSUN_TO_CODE_MASS(total_reheated_msun, run_params->Hubble_h);
+
+                // 2. Ejected Mass: Momentum-driven ejection[cite: 1]
+                double total_momentum = p_single * num_sn; 
+            
+            // Convert Vvir (km/s) to cm/s for escape velocity calculation
+                double v_esc_cm_s = galaxies[p].Vvir * 1e5; 
+            
+                if (v_esc_cm_s > 0.0 && isfinite(m_cool_single) && isfinite(p_single)) {
+                    double total_ejected_mass_g = total_momentum / v_esc_cm_s;
+                    double total_ejected_mass_msun = total_ejected_mass_g / SOLAR_MASS;
+                    ejected_mass = MSUN_TO_CODE_MASS(total_ejected_mass_msun, run_params->Hubble_h);
+                }
+            }
         }
     } else {
         ejected_mass = 0.0;
@@ -826,7 +922,8 @@ if(run_params->SupernovaRecipeOn == 1 && run_params->FIREmodeOn == 1) {
 if(run_params->SupernovaRecipeOn == 1) {
     if(run_params->FIREmodeOn == 1) {
         if(fire_scaling_valid) {
-            const double eta_reheat  = run_params->FeedbackReheatingEpsilon * fire_scaling;
+            const double eta_reheat  = capped_eta_reheat(
+                run_params->FeedbackReheatingEpsilon * fire_scaling, galaxies[p].Vvir, run_params);
             galaxies[p].MassLoading  = (float)eta_reheat;
             reheated_mass            = eta_reheat * stars;
         }
@@ -849,7 +946,7 @@ if(run_params->SupernovaRecipeOn == 1) {
         if(run_params->FIREmodeOn == 1) {
             if(fire_scaling_valid) {
                 const double vc         = galaxies[p].Vvir;
-                const double E_FB       = run_params->FeedbackEjectionEfficiency * fire_scaling
+                const double E_FB       = sn_energy_coupling(fire_scaling, run_params)
                                           * 0.5 * stars
                                           * (run_params->EtaSNcode * run_params->EnergySNcode);
                 const double E_lift     = 0.5 * reheated_mass * vc * vc;
@@ -936,7 +1033,8 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
             atomicH = 0.0;  // H2 is capped at the budget; this guards float rounding only
             clamp_count_h1_negative++;
         }
-        const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas, galaxies[p].DiskScaleRadius,
+        const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas,
+                                                  atomic_disk_radius(galaxies[p].DiskScaleRadius, run_params),
                                                   run_params->Hubble_h, SIGMA_HI_CRIT);
         atomicH *= (1.0 - f_ion);
         galaxies[p].H1gas = atomicH;
@@ -1254,7 +1352,8 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     {
         double atomicH = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC - galaxies[p].H2gas;
         if(atomicH < 0.0) { atomicH = 0.0; clamp_count_h1_negative++; }  // float-rounding guard only
-        const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas, galaxies[p].DiskScaleRadius,
+        const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas,
+                                                  atomic_disk_radius(galaxies[p].DiskScaleRadius, run_params),
                                                   run_params->Hubble_h, SIGMA_HI_CRIT);
         atomicH *= (1.0 - f_ion);
         galaxies[p].H1gas = atomicH;

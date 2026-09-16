@@ -4,7 +4,7 @@
 
 FileNameGalaxies   model
 %OutputDir         /<absolute>/<root>/<path>/sage-model/output/millennium/
-OutputDir          output/millennium/
+OutputDir          output/millennium_all/
 
 FirstFile         0
 LastFile          7
@@ -52,9 +52,9 @@ ReionizationOn              1   %0: switch off
 DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
 
 CGMrecipeOn                 1   %0: switch off
-CGMDensityProfile           0   %0: uniform; 1: NFW; 2: beta-profile (beta=2/3)
 RegimeRandomMode            0   %0: fresh random draw each snapshot (original; borderline-mass galaxies thrash between regimes); 1: use persistent RegimeRandom assigned at galaxy creation (regime evolves smoothly with Mvir)
 FIREmodeOn                  1   %0: switch off
+SNEnergyConservationOn      1   %1: bound BOTH the reheating and ejection terms by the SN energy available (default; FIREmodeOn=1 only); 0: off, unbounded
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
 FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 conc); 3: BK25 (ConcentrationOn method); 4: BK25 + log-normal c scatter; 5: Li+24 sharp; 6: Li+24 sigmoid + H2 SF; 7: BK25 log-normal c scatter + H2 SF
@@ -62,14 +62,11 @@ FFBIgnoreRegime             1   %0: restrict FFB to CGM-regime (Regime=0) halos;
 FFBRandomMode               0   %0: fresh random draw each snapshot; 1: persistent FFBRandom assigned at galaxy creation
 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
-SaveFullSFH                 1   %0: switch off
+SaveFullSFH                 0   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
 StarburstColdGasOn          1   %0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
-DynamicDisruptionSplit      2   %0: fixed fraction; 1: mass-ratio only; 2: concentration-weighted
 
 SubstepResolution           1.0   %multiplier on the adaptive substep count (scales the STEPS floor and MAX_STEPS cap); 1.0 = unscaled
-RamPressureStrippingOn      1     %1: on (default): Gunn & Gott (1972) ram-pressure stripping of satellite ColdGas, once per snapshot; independent of PhysicalStrippingOn (hot/CGM starvation). 0: off
-RamPressureEpsilon          1.0   %order-unity prefactor on P_ram = eps * rho_host * v_sat^2 (disk-orientation geometry); used when RamPressureStrippingOn=1
 
 H2DiskAreaOption            1   %0: pi*r_s^2 (default); 1: pi*(3*r_s)^2 (thrice); 2: 2*pi*r_s^2 (central Sigma_0); ignored when H2RadialIntegrationOn=1
 H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk (H2DiskAreaOption unused)
@@ -86,6 +83,7 @@ RedshiftPowerLawExponent    1.25    %alpha for (1+z)^alpha in mass loading calcu
 
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)
 FeedbackEjectionEfficiency  0.3     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
+MaxSNEnergyCoupling         2.0     %cap on the effective coupling eps_eff = FeedbackEjectionEfficiency * f_FIRE when SNEnergyConservationOn=1; 2.0 = E_FB <= all the SN energy, 1.0 = <= half
 
 ReIncorporationFactor       0.15    %fraction of ejected mass reincorporated per dynamical time to hot
 
@@ -95,10 +93,6 @@ BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during
 
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
 ThresholdSatDisruption      1.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption
-FractionDisruptedToICS      0.8     %fraction of disrupted satellite stellar mass to ICS (rest goes to BCG); 1.0 = original behavior
-
-DisruptionSplitAlpha        0.25    %base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
-DisruptionSplitCref         10.0    %reference concentration for concentration weighting (DynamicDisruptionSplit=2)
 
 Yield                       0.025   %fraction of SF mass produced as metals
 RecycleFraction             0.43    %fraction of SF mass instantaneously recycled back to cold
