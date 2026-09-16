@@ -238,13 +238,15 @@ optimization.
 If you use SAGE26 in a publication, please cite:
 
 ```bibtex
-@article{bradley2026sage26,
-  author  = {Bradley, Michael and Croton, Darren J.},
-  title   = {SAGE26 Paper I: Modelling the baryon cycle from cosmic dawn to the present day},
-  journal = {in preparation},
-  year    = {2026},
+@article{bradley2026a,
+  title = {{{SAGE26 Paper I}}: {{Modelling}} the Baryon Cycle from Cosmic Dawn to the Present Day},
+  author = {Bradley, Michael and Croton, Darren J. and Paun, Robert A. Mostoghiu and Chowdhury, Dhruba Dutta and Willingham, Jayde},
+  year = 2026,
+  journal = {The Astrophysical Journal Supplement Series},
+  publisher = {(In prep.)}
 }
 ```
+
 
 and the original SAGE paper:
 
