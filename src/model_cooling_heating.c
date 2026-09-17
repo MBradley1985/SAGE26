@@ -156,24 +156,18 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
         const double rho0 = galaxies[gal].HotGas / (4 * M_PI * galaxies[gal].Rvir);
         double rcool = sqrt(rho0 / rho_rcool);
 
-        galaxies[gal].RcoolToRvir = rcool / galaxies[gal].Rvir;  // store uncapped ratio for diagnostics
+        galaxies[gal].RcoolToRvir = rcool / galaxies[gal].Rvir;
 
-        // The cooling radius is physically bounded by the virial radius. Capping
-        // it means neither the cooling rate nor any downstream consumer (e.g.
-        // do_AGN_heating) ever uses an unphysical rcool > Rvir value, and it
-        // removes the SAGE06/16 rapid-cooling discontinuity at Rvir: hot-mode
-        // cooling saturates at 0.5 * m_hot / t_cool rather than jumping by 2x.
-        //
-        // That is a deliberate SAGE26 choice, so it applies only on the SAGE26
-        // path.  CGMrecipeOn == 0 is the backwards-compatibility path and has to
-        // reproduce Croton et al. (2016) exactly, cold-accretion branch and
-        // discontinuity included -- capping there silently halved the cooling of
-        // the majority of the population (70% of galaxies at z = 0 rising to
-        // 99.7% at z = 6, carrying 57-99% of the cooling mass), leaving the
-        // "SAGE16" comparison run at 0.50-0.71 of the published cooling rate.
-        if(run_params->CGMrecipeOn > 0 && rcool > galaxies[gal].Rvir) {
-            rcool = galaxies[gal].Rvir;
-        }
+        // rcool is left uncapped on both paths.  Only hot-regime haloes reach
+        // this function, and for them rcool > Rvir is the physical signature of
+        // a corona that cools faster than it can be shock-heated -- the very
+        // condition that selects cold-stream accretion below, exactly as in
+        // Croton et al. (2016).  Capping it to Rvir erased that signature: the
+        // cold-stream branch became unreachable and the affected haloes (70% of
+        // galaxies at z = 0 rising to 99.7% at z = 6, carrying 57-99% of the
+        // cooling mass) instead cooled at 0.5 * m_hot / t_cool, half the SAGE16
+        // rate.  CGM-regime haloes never come here: cooling_recipe_cgm() pins
+        // its own rcool = Rvir purely to feed the AGN-heating call.
 
         coolingGas = 0.0;
 
@@ -245,19 +239,19 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             double hot_halo_cooling = 0.0;
             
             if(rcool < galaxies[gal].Rvir) {
-                // When rcool < Rvir: both cold streams and hot halo cooling
-                // Cold stream component: rapid accretion on dynamical time
-                cold_stream_cooling = f_stream * galaxies[gal].HotGas / 
-                                     (galaxies[gal].Rvir / galaxies[gal].Vvir) * dt;
-                
-                // Hot halo component: traditional cooling from the shocked gas
-                hot_halo_cooling = (1.0 - f_stream) * (galaxies[gal].HotGas / galaxies[gal].Rvir) * 
+                // Cold-stream regime.  Cold streams accrete on the dynamical
+                // time, the SAGE16 cold-accretion rate scaled by f_stream
+                // (tcool == Rvir/Vvir here).
+                cold_stream_cooling = f_stream * galaxies[gal].HotGas / tcool * dt;
+
+                // The (1 - f_stream) fraction that does not penetrate cools as
+                // a quasi-static flow, the same expression as the branch below.
+                hot_halo_cooling = (1.0 - f_stream) * (galaxies[gal].HotGas / galaxies[gal].Rvir) *
                                   (rcool / (2.0 * tcool)) * dt;
             } else {
-                // When rcool >= Rvir: only hot halo cooling (no cold streams)
-                // rcool >= Rvir: This shouldn't occur for properly-classified hot-regime haloes
-                // (such haloes belong in the CGM/cold-flow regime). Handle conservatively.
-                hot_halo_cooling = (galaxies[gal].HotGas / galaxies[gal].Rvir) * 
+                // Quasi-static cooling flow (SAGE16): no cold streams, the
+                // shocked corona cools from within rcool.
+                hot_halo_cooling = (galaxies[gal].HotGas / galaxies[gal].Rvir) *
                                   (rcool / (2.0 * tcool)) * dt;
             }
 
