@@ -2,8 +2,11 @@ C API Reference
 ===============
 
 This reference is generated automatically from the ``/* ... */`` docstrings in
-``src/``. All functions are documented, including file-private (``static``) ones,
-since those contain the core physics implementations.
+``src/``, including file-private (``static``) functions, since those contain
+much of the core physics implementation.
+
+The physics and core modules are listed below. The tree I/O readers and
+writers under ``src/io/`` are not included here; read those files directly.
 
 Physics
 -------
@@ -54,4 +57,19 @@ Core
    :project: SAGE26
 
 .. doxygenfile:: core_utils.c
+   :project: SAGE26
+
+.. doxygenfile:: core_read_parameter_file.c
+   :project: SAGE26
+
+.. doxygenfile:: core_io_tree.c
+   :project: SAGE26
+
+.. doxygenfile:: core_cool_func.c
+   :project: SAGE26
+
+.. doxygenfile:: core_mymalloc.c
+   :project: SAGE26
+
+.. doxygenfile:: main.c
    :project: SAGE26

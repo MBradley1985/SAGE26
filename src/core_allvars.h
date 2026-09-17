@@ -482,9 +482,14 @@ struct params
     int32_t    CGMrecipeOn;
     int32_t    FIREmodeOn;
     int32_t    RegimeRandomMode;     // 0: fresh random draw each snapshot (default, original behaviour); 1: use the persistent RegimeRandom assigned at galaxy creation (deterministic regime evolution driven by mass)
-    int32_t    ColdStreamCeilingOn;  // Cold-stream shut-off below z_crit.
-                                  // 0: hard z_crit cut for M > Mshock (published behaviour)
-                                  // 1: Dekel & Birnboim (2006) eqs 39-41, smooth -- z_crit emerges
+    int32_t    ColdStreamCeilingOn;  // How the cold-stream fraction f_stream is set.
+                                  // 0: SAGE26 choice (default) -- a smooth fraction
+                                  //    (Mvir/Mshock)^(-4/3) (1+z)/2 with a hard z_crit cut
+                                  //    for M > Mshock.  Streams and the quasi-static flow
+                                  //    coexist; no counterpart in D&B06.
+                                  // 1: Dekel & Birnboim (2006) eq. 39 as published -- the
+                                  //    threshold R < 1, so f_stream is 1 or 0 and z_crit
+                                  //    and the Mstream ceiling emerge from eqs 40-41.
     double     StreamMassFactor;  // f in Dekel & Birnboim (2006) eqs 40-41; order a few, they use 3.
     double     GasDiskRadiusFactor; // chi: ratio of the atomic-gas scale length to the stellar/H2
                                   // scale length, applied in the HI ionisation truncation only.

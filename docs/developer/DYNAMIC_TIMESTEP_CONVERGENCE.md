@@ -1,6 +1,15 @@
 # Dynamic-Timestep Convergence Notes: What Happens as SubSteps → ∞
 
 **Status:** Analysis, informational — not an implementation plan.
+
+> **Doc audit note (2026-09-17):** this note analyses the `sage16` module
+> pipeline of a *separate* project (`models/sage16/modules/`, the "Mimic"
+> refactor), not SAGE26's own source tree. Identifiers such as `SubSteps`,
+> `MaxDynamicSubsteps`, `TimestepScheme` and `Rcool` are that project's, and do
+> not exist in `src/`. SAGE26's own adaptive substepping is controlled by
+> `SubstepResolution` (see [parameters](../parameters.md)). The mathematical
+> analysis carries over -- SAGE26 inherits the same `excess / nsteps` stripping
+> formula -- but do not read the parameter names here as SAGE26 parameters.
 **Scope:** How `SubSteps` (fixed and dynamic interpretations) affects the sage16 physics pipeline in `models/sage16/modules/`, and what happens in the large-N limit. Written alongside the code review of `docs/dev/MIMIC-DYNAMICAL-TIMESTEP-PLAN.md` (commits `469b7adc..HEAD`).
 
 ---

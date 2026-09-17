@@ -23,9 +23,9 @@ Every `.c` and `.h` file opens with a short comment block:
 /*
  * model_cooling_heating.c -- gas cooling and AGN heating prescriptions.
  *
- * Implements regime-aware cooling (classical hot halo vs CGM precipitation per
- * Voit 2015) and AGN radio-mode heating. In the CGM regime, AGN suppression
- * uses the r_heat ratchet capped at R_vir.
+ * Implements regime-aware cooling (classical hot halo vs bulk CGM cooling per
+ * Carr et al. 2023) and AGN radio-mode heating. In the CGM regime, AGN
+ * suppression uses the r_heat ratchet capped at R_vir.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -216,14 +216,14 @@ The file header described in §1 should genuinely orient a reader. For a physics
  * Implements two cooling regimes selected per-galaxy by Regime
  * (set by determine_and_store_regime() from the Dekel & Birnboim 2006
  * M_shock criterion):
- *   Regime == 0 (CGM / precipitation) -- beta-profile (or NFW / uniform) CGM
- *                              with cooling integrated over the density
- *                              distribution; precipitation criterion follows
- *                              Voit (2015) and Sharma et al. (2012).
- *   Regime == 1 (hot halo)     -- classical isothermal halo cooling per
- *                              White & Frenk (1991) and Croton et al. (2006),
- *                              evaluated against Sutherland-Dopita (1993)
- *                              cooling tables.
+ *   Regime == 0 (CGM)      -- single power-law CGM profile (alpha = 1.4,
+ *                             r_0 = 0.1 R_vir) drained in bulk on
+ *                             t_cool + t_ff, following Carr et al. (2023).
+ *   Regime == 1 (hot halo) -- classical isothermal halo cooling per
+ *                             White & Frenk (1991) and Croton et al. (2006),
+ *                             evaluated against Sutherland-Dopita (1993)
+ *                             cooling tables, with the flow split by a
+ *                             Dekel & Birnboim (2006) cold-stream fraction.
  *
  * AGN radio-mode heating is computed in both regimes. In Regime 1 the standard
  * Croton+06 r_heat ratchet suppresses cooling at r < r_heat. Regime 0 uses
@@ -251,31 +251,38 @@ Non-trivial physics functions open with a substantial comment block:
  * cooling_recipe_cgm -- cooling rate in the CGM regime (Regime == 0).
  *
  * Physical setup:
- *   The CGM is modelled by CGMDensityProfile (uniform / NFW / beta with
- *   beta = 2/3). The cooling rate at each radius depends on local density and
- *   metallicity; we integrate the cooling rate over the radial profile to get
- *   the total dM_cool/dt for the halo.
+ *   The CGM follows a single power law, rho ~ r^-alpha with alpha = 1.4 and
+ *   r_0 = 0.1 R_vir (Carr et al. 2023), so R_vir / r_0 = 10 by construction.
+ *   Rather than integrating a local criterion, one bulk cooling time is
+ *   evaluated for the whole reservoir from the density-squared weighted
+ *   effective density, and the reservoir drains on t_cool + t_ff.
  *
  * Algorithm:
- *   1. Compute the profile normalisation from CGMgas and Rvir.
- *   2. Integrate the local cooling rate inward to r_cool, the radius at
- *      which t_cool / t_ff crosses the Voit (2015) precipitation threshold
- *      (evaluated at r_cool).
- *   3. If CGMAGNOn, suppress cooling via the r_heat ratchet capped at R_vir.
- *   4. Return the net mass cooled in the current substep.
+ *   1. Compute rho_0 from CGMgas and the mass integral I_M, then the
+ *      effective cooling density rho_eff = rho_0 * I_cool / I_M.
+ *   2. Form t_cool from rho_eff and the Sutherland-Dopita cooling rate, and
+ *      t_ff at the virial radius.
+ *   3. coolingGas = CGMgas / (t_cool + t_ff) * dt, clamped to CGMgas.
+ *   4. If AGNrecipeOn, suppress cooling via the r_heat ratchet capped at
+ *      R_vir, passing r_cool = R_vir (the flow has no cooling radius of its
+ *      own).
+ *   5. Return the net mass cooled in the current substep.
  *
  * Inputs:
- *   gal     -- the central galaxy of the halo. Reads CGMgas, Rvir, metallicity,
- *              r_heat; writes r_heat via the ratchet.
+ *   gal     -- the central galaxy of the halo. Reads CGMgas, Rvir, Mvir,
+ *              MetalsCGMgas, r_heat; writes r_heat via the ratchet and the
+ *              tcool / tff diagnostics.
  *   dt      -- substep duration in code units (Myr / unit_time).
  *
  * Returns:
- *   Mass cooled into the central galaxy's ColdGas reservoir in code units
- *   (10^10 Msun/h). Guaranteed non-negative; zero if heating dominates.
+ *   Mass cooled from CGMgas in code units (10^10 Msun/h). Guaranteed
+ *   non-negative; zero if heating dominates. The caller performs the
+ *   transfer into ColdGas.
  *
  * References:
- *   - Voit (2015), ApJL 808, L30 -- precipitation criterion (M/M_shock)^4/3.
- *   - Sharma et al. (2012), MNRAS 420, 3174 -- beta-profile cooling.
+ *   - Carr et al. (2023), ApJ 949, 21 -- power-law CGM profile and the bulk
+ *     CGMgas / (t_cool + t_ff) cooling rate.
+ *   - Sutherland & Dopita (1993), ApJS 88, 253 -- cooling tables.
  *   - SAGE26 paper Sec. 3.2 -- CGM-regime AGN suppression formulation.
  *
  * Invariants:
@@ -381,21 +388,23 @@ Use them generously inside non-trivial functions to label the major steps:
 ```c
 double cooling_recipe_cgm(struct GALAXY *gal, double dt)
 {
-    /* Step 1: density profile normalisation. */
-    const double rho_0 = beta_rho_0(gal->CGMgas, gal->Rvir, gal->r_c, BETA_DEFAULT);
+    /* Step 1: profile normalisation, and the density-squared weighted
+     * effective density that sets the bulk cooling time. */
+    const double rho_0   = gal->CGMgas / (4.0 * M_PI * r0 * r0 * r0 * I_M);
+    const double rho_eff = rho_0 * (I_cool / I_M);
 
-    /* Step 2: find the precipitation radius. r_cool is where t_cool == t_dyn;
-     * gas inside r_cool can cool within a dynamical time. */
-    const double r_cool = find_precipitation_radius(rho_0, gal->metallicity, gal->Rvir);
+    /* Step 2: the two timescales. t_cool is the true thermal cooling time of
+     * the alpha = 1.4 profile; t_ff is evaluated at the virial radius. */
+    const double tcool = (x / rho_eff) * (1.5 * MU_IONISED);
+    const double tff   = sqrt(2.0 * gal->Rvir / g_accel);
 
-    /* Step 3: integrate the local cooling rate from the inner core out to r_cool. */
-    const double gross_cooling = integrate_cooling(rho_0, gal->metallicity, gal->r_c, r_cool, dt);
+    /* Step 3: bulk drain on the sum of the two timescales (Carr et al. 2023). */
+    double cooling_gas = (gal->CGMgas / (tcool + tff)) * dt;
 
-    /* Step 4: subtract heating drawn from the persistent reservoir.
-     * The reservoir decays exponentially on tau_dyn between calls. */
-    const double net_cooling = apply_heating_reservoir(gal, gross_cooling, dt);
+    /* Step 4: AGN suppression via the r_heat ratchet, capped at R_vir. */
+    cooling_gas = do_AGN_heating_cgm(cooling_gas, gal, dt, x, gal->Rvir);
 
-    return net_cooling > 0.0 ? net_cooling : 0.0;
+    return cooling_gas > 0.0 ? cooling_gas : 0.0;
 }
 ```
 

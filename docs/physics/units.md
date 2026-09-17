@@ -78,9 +78,9 @@ variable in other units carries an explicit suffix:
 
 - `_pc`, `_pc2` -- parsecs, parsecs squared (`rs_pc`, `disk_area_pc2`)
 - `_kms` -- km/s (`FIRE_V_CRIT_KMS`)
-- `_cgs` -- cgs (`G_CGS`, `EDDINGTON_LUM_PER_MSUN_CGS`)
+- `_cgs` -- cgs (`UnitDensity_in_cgs`, `EDDINGTON_LUM_PER_MSUN_CGS`)
 - `_Gyr`, `_Myr` -- gigayears / megayears (`H2DepletionTime_Gyr`)
-- `_Msun` -- solar masses without the 10^10/h scaling (`MSHOCK_DB06_MSUN`)
+- `Msun` -- solar masses without the 10^10/h scaling (`MShockMsun`)
 
 When adding new code, keep calculations in code units for as long as
 possible and convert once, at the point where a non-code-unit quantity is

@@ -106,32 +106,32 @@ void test_cooling_metal_dependent(void) {
 
 **Better (complex physics invariant):**
 ```c
-void test_cgm_precipitation_radius_monotonic_in_metallicity(void) {
+void test_cgm_cooling_monotonic_in_metallicity(void) {
     /*
-     * Asserts: r_cool (precipitation radius in the CGM regime) increases
-     *          monotonically with metallicity at fixed halo mass.
+     * Asserts: the CGM-regime cooling rate increases monotonically with
+     *          metallicity at fixed halo mass and reservoir mass.
      *
      * Setup: construct a Mvir = 1e12 Msun/h halo with M_CGM at f_b * Mvir,
-     *        beta profile (beta = 2/3), and vary Z from 1e-4 to 0.02.
+     *        the alpha = 1.4 power-law profile, and vary Z from 1e-4 to 0.02.
      *
-     * Physical reason: r_cool is defined as the radius at which t_cool(r) ==
-     *        t_dyn(r). Higher metallicity increases cooling efficiency at
-     *        fixed density and temperature (Sutherland & Dopita 1993), so
-     *        t_cool decreases at every radius. The radius where t_cool first
-     *        equals t_dyn therefore moves outward. See Voit (2015) for the
-     *        precipitation framework.
+     * Physical reason: the bulk rate is CGMgas / (t_cool + t_ff) with
+     *        t_cool ~ x / rho_eff and x ~ T / Lambda(T, Z). Higher metallicity
+     *        raises Lambda at fixed temperature (Sutherland & Dopita 1993),
+     *        so t_cool falls while t_ff -- set by the dark-matter potential --
+     *        is unchanged. The sum therefore falls and the rate rises. See
+     *        Carr et al. (2023) for the bulk-cooling framework.
      *
      * Tolerance: none on monotonicity (strict inequality); we only check
      *        the ordering of three sampled metallicities.
      */
     const double Z[3] = {1e-4, 1e-3, 2e-2};
-    double r_cool[3];
+    double mdot[3];
     for (int i = 0; i < 3; i++) {
         struct GALAXY g = build_test_halo(1e12, Z[i]);
-        r_cool[i] = find_precipitation_radius(...);
+        mdot[i] = cooling_recipe_cgm(0, dt, &g, &run_params);
     }
-    ASSERT_TRUE(r_cool[0] < r_cool[1]);
-    ASSERT_TRUE(r_cool[1] < r_cool[2]);
+    ASSERT_TRUE(mdot[0] < mdot[1]);
+    ASSERT_TRUE(mdot[1] < mdot[2]);
 }
 ```
 

@@ -547,16 +547,6 @@ if __name__ == '__main__':
     (counts_h1, binedges_h1) = np.histogram(H1mass, range=(mi, ma), bins=NB)
     xaxeshisto_h1 = binedges_h1[:-1] + 0.5 * binwidth  # Set the x-axis values to be the centre of the bins
 
-    # additionally calculate red
-    w = np.where(sSFR < sSFRcut)[0]
-    massRED = mass[w]
-    (countsRED, binedges) = np.histogram(massRED, range=(mi, ma), bins=NB)
-
-    # additionally calculate blue
-    w = np.where(sSFR > sSFRcut)[0]
-    massBLU = mass[w]
-    (countsBLU, binedges) = np.histogram(massBLU, range=(mi, ma), bins=NB)
-
     # Baldry+ 2008 modified data used for the MCMC fitting
     Zwaan = np.array([[6.933,   -0.333],
         [7.057,   -0.490],

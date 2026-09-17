@@ -1,6 +1,18 @@
 # Satellite Stripping in SAGE26: Scheme, Cadence-Dependence, and Satellite HI
 
 **Status:** Working notes / summary of findings. **Date:** 2026-07-02.
+
+> **Doc audit note (2026-09-17): partially superseded by the code.** Of the two
+> changes described in the TL;DR below, only the CGM-stripping fix is present in
+> the tree: `strip_from_satellite()` (`src/model_infall.c`) does route a
+> satellite's excess out of `CGMgas` vs `HotGas` by regime. The dynamical-time
+> stripping scheme is **not** implemented -- there is no `PhysicalStrippingOn`
+> or `StrippingTimescaleFactor` parameter, and stripping still divides the
+> recomputed baryon excess by the substep count (`excess / nsteps`), i.e. the
+> stock SAGE scheme this note describes as scheme `0`. Everything below about
+> the *cadence-dependence of that scheme* therefore still applies to the current
+> code; the sections presenting the dynamical-time scheme as the default
+> describe a proposal, not the shipped behaviour.
 **Context:** Follow-up to `DYNAMIC_TIMESTEP_CONVERGENCE.md`, which flagged that
 satellite stripping in stock SAGE is tied to the substep *count* rather than to
 elapsed time — a latent issue that becomes visible now that SAGE26 uses
