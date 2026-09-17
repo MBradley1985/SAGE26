@@ -18,6 +18,10 @@
 #include "../src/model_misc.h"
 #include "../src/model_infall.h"
 
+/* Substep count handed to strip_from_satellite(): it removes the satellite's
+ * baryon excess divided by this, so a value > 1 means gradual stripping. */
+#define NSTEPS 10
+
 void test_stripping_removes_gas_from_satellite() {
     BEGIN_TEST("Stripping Removes Gas from Satellite");
     
@@ -51,8 +55,7 @@ void test_stripping_removes_gas_from_satellite() {
     double initial_cen_hot = galaxies[0].HotGas;
     
     // Apply stripping
-    double Zcurr = 0.0;
-    strip_from_satellite(0, 1, 0.0, 0.0, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, NSTEPS, galaxies, &run_params);
     
     // Satellite should lose gas
     ASSERT_LESS_THAN(galaxies[1].HotGas, initial_sat_hot,
@@ -93,7 +96,7 @@ void test_stripping_conserves_mass() {
     double initial_total_hot = galaxies[0].HotGas + galaxies[1].HotGas;
     double initial_total_metals = galaxies[0].MetalsHotGas + galaxies[1].MetalsHotGas;
     
-    strip_from_satellite(0, 1, 0.0, 0.0, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, NSTEPS, galaxies, &run_params);
     
     double final_total_hot = galaxies[0].HotGas + galaxies[1].HotGas;
     double final_total_metals = galaxies[0].MetalsHotGas + galaxies[1].MetalsHotGas;
@@ -136,7 +139,7 @@ void test_regime_dependent_stripping() {
         double initial_sat_cgm = galaxies[1].CGMgas;
         double initial_sat_hot = galaxies[1].HotGas;
         
-        strip_from_satellite(0, 1, 0.0, 0.0, 0.0, galaxies, &run_params);
+        strip_from_satellite(0, 1, 0.0, NSTEPS, galaxies, &run_params);
         
         // In CGM regime, should strip from CGMgas, not HotGas
         if(galaxies[1].CGMgas < initial_sat_cgm) {
@@ -168,7 +171,7 @@ void test_regime_dependent_stripping() {
         double initial_sat_hot = galaxies[1].HotGas;
         double initial_sat_cgm = galaxies[1].CGMgas;
         
-        strip_from_satellite(0, 1, 0.0, 0.0, 0.0, galaxies, &run_params);
+        strip_from_satellite(0, 1, 0.0, NSTEPS, galaxies, &run_params);
         
         // In Hot regime, should strip from HotGas
         if(galaxies[1].HotGas < initial_sat_hot) {
@@ -208,7 +211,7 @@ void test_no_stripping_if_gas_balanced() {
     
     double initial_sat_hot = galaxies[1].HotGas;
     
-    strip_from_satellite(0, 1, 0.0, 0.0, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, NSTEPS, galaxies, &run_params);
     
     // With balanced baryons, minimal or no stripping
     ASSERT_CLOSE(galaxies[1].HotGas, initial_sat_hot, 0.5,
@@ -246,7 +249,7 @@ void test_stripping_transfers_metals() {
     double Z_sat_before = get_metallicity(galaxies[1].HotGas, galaxies[1].MetalsHotGas);
     double initial_cen_metals = galaxies[0].MetalsHotGas;
     
-    strip_from_satellite(0, 1, 0.0, 0.0, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, NSTEPS, galaxies, &run_params);
     
     // Central should gain metals
     ASSERT_GREATER_THAN(galaxies[0].MetalsHotGas, initial_cen_metals,
@@ -291,7 +294,7 @@ void test_environmental_quenching() {
     
     double initial_cgm = galaxies[1].CGMgas;
     
-    strip_from_satellite(0, 1, 0.0, 0.0, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, NSTEPS, galaxies, &run_params);
     
     // CGM should be reduced
     if(galaxies[1].CGMgas < initial_cgm) {
@@ -335,7 +338,7 @@ void test_no_stripping_below_mass_threshold() {
     
     double initial_sat_hot = galaxies[1].HotGas;
     
-    strip_from_satellite(0, 1, 0.0, 0.0, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, NSTEPS, galaxies, &run_params);
     
     // Should strip at most what's available
     ASSERT_TRUE(galaxies[1].HotGas >= 0.0,
@@ -373,7 +376,7 @@ void test_stripping_timescale() {
     
     double initial_hot = galaxies[1].HotGas;
     
-    strip_from_satellite(0, 1, 0.0, 0.0, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, NSTEPS, galaxies, &run_params);
     
     double stripped = initial_hot - galaxies[1].HotGas;
     
@@ -385,10 +388,10 @@ void test_stripping_timescale() {
     }
 }
 
-/* Helper: strip a satellite's HotGas once over a full snapshot interval dT and
- * return the HotGas remaining. The satellite's only strippable reservoir is
- * HotGas, so the excess is entirely in it. */
-static double analytic_strip_hotgas(double dT, double t_strip) {
+/* Helper: strip a satellite's HotGas over `ncalls` substeps of a snapshot split
+ * into `nsteps`, and return the HotGas remaining. The satellite's only baryon
+ * reservoir is HotGas, so the whole excess sits in it. */
+static double strip_hotgas(int nsteps, int ncalls) {
     struct GALAXY galaxies[2];
     memset(galaxies, 0, sizeof(struct GALAXY) * 2);
 
@@ -403,32 +406,34 @@ static double analytic_strip_hotgas(double dT, double t_strip) {
     galaxies[1].HotGas = 5.0;          // excess = 3.3
     galaxies[1].MetalsHotGas = 0.05;
 
-    strip_from_satellite(0, 1, 0.0, dT, t_strip, galaxies, &run_params);
+    for(int i = 0; i < ncalls; i++) {
+        strip_from_satellite(0, 1, 0.0, nsteps, galaxies, &run_params);
+    }
     return galaxies[1].HotGas;
 }
 
-void test_analytic_stripping_matches_exact_exponential() {
-    BEGIN_TEST("Analytic Stripping = exact 1-exp(-dT/t_strip)");
+void test_stripping_removes_excess_over_nsteps() {
+    BEGIN_TEST("One substep strips excess/nsteps");
 
-    const double dT = 1.0, t_strip = 2.0;
     const double excess0 = 5.0 - 0.17 * 10.0;      // 3.3
-    const double hot = analytic_strip_hotgas(dT, t_strip);
+    const double hot = strip_hotgas(NSTEPS, 1);
 
-    // Exact: HotGas -> BF*Mvir + excess0*exp(-dT/t_strip), in ONE call.
-    const double expected = 0.17 * 10.0 + excess0 * exp(-dT / t_strip);
-    ASSERT_CLOSE(expected, hot, 1e-6, "Strips exactly 1-exp(-dT/t_strip) of the excess");
+    // A single substep removes exactly 1/nsteps of the current baryon excess.
+    ASSERT_CLOSE(5.0 - excess0 / NSTEPS, hot, 1e-5,
+                 "Strips exactly excess/nsteps in one substep");
 }
 
-void test_analytic_stripping_scales_with_interval() {
-    BEGIN_TEST("Analytic Stripping: longer interval strips more");
+void test_stripping_converges_to_baryon_floor() {
+    BEGIN_TEST("Repeated stripping decays towards BF*Mvir");
 
-    const double t_strip = 2.0;
-    const double h_short = analytic_strip_hotgas(0.5, t_strip);
-    const double h_long  = analytic_strip_hotgas(4.0, t_strip);
+    const double h_few  = strip_hotgas(NSTEPS, 1);
+    const double h_many = strip_hotgas(NSTEPS, 50);
 
-    // 1-exp(-dT/t_strip) is monotonic in dT, so a longer snapshot strips more.
-    ASSERT_LESS_THAN(h_long, h_short, "Longer dT leaves less HotGas");
-    ASSERT_GREATER_THAN(h_long, 1.7 - 1e-9, "Never strips below the BF*Mvir floor");
+    // Each call re-measures the excess, so the gas decays geometrically towards
+    // the BF*Mvir floor and never crosses it.
+    ASSERT_LESS_THAN(h_many, h_few, "More substeps leave less HotGas");
+    ASSERT_GREATER_THAN(h_many, 1.7 - 1e-4, "Never strips below the BF*Mvir floor");
+    ASSERT_CLOSE(1.7, h_many, 0.05, "Converges onto the BF*Mvir floor");
 }
 
 int main() {
@@ -442,8 +447,8 @@ int main() {
     test_environmental_quenching();
     test_no_stripping_below_mass_threshold();
     test_stripping_timescale();
-    test_analytic_stripping_matches_exact_exponential();
-    test_analytic_stripping_scales_with_interval();
+    test_stripping_removes_excess_over_nsteps();
+    test_stripping_converges_to_baryon_floor();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

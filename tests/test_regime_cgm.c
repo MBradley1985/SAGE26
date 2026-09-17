@@ -32,7 +32,6 @@ void test_regime_boundary() {
     // With probabilistic assignment, we test statistical behavior
 
     const int N_trials = 1000;
-    const double Mshock = 6.0e11;  // Msun
 
     struct {
         double Mvir_physical;  // Msun

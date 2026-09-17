@@ -17,6 +17,10 @@
 #include "../src/model_misc.h"
 #include "../src/model_infall.h"
 
+/* Substep count handed to strip_from_satellite(): it removes the satellite's
+ * baryon excess divided by this, so a value > 1 means gradual stripping. */
+#define NSTEPS 10
+
 void test_multi_satellite_mass_conservation() {
     BEGIN_TEST("Mass Conservation with Multiple Satellites");
     
@@ -61,7 +65,7 @@ void test_multi_satellite_mass_conservation() {
     
     // Apply stripping to all satellites
     for(int i = 1; i <= 4; i++) {
-        strip_from_satellite(0, i, 0.0, 0.0, 0.0, galaxies, &run_params);
+        strip_from_satellite(0, i, 0.0, NSTEPS, galaxies, &run_params);
     }
     
     // Check total mass conservation
@@ -111,7 +115,7 @@ void test_satellite_gas_transfer_to_central() {
     
     // Strip from all satellites
     for(int i = 1; i <= 3; i++) {
-        strip_from_satellite(0, i, 0.0, 0.0, 0.0, galaxies, &run_params);
+        strip_from_satellite(0, i, 0.0, NSTEPS, galaxies, &run_params);
     }
     
     // Central should have gained gas
@@ -170,7 +174,7 @@ void test_group_scale_metal_budget() {
     
     // Strip from all satellites
     for(int i = 1; i <= 5; i++) {
-        strip_from_satellite(0, i, 0.0, 0.0, 0.0, galaxies, &run_params);
+        strip_from_satellite(0, i, 0.0, NSTEPS, galaxies, &run_params);
     }
     
     double final_total_metals = 0.0;
@@ -226,8 +230,8 @@ void test_differential_stripping_by_mass() {
     double light_hot_before = galaxies[1].HotGas;
     double heavy_hot_before = galaxies[2].HotGas;
     
-    strip_from_satellite(0, 1, 0.0, 0.0, 0.0, galaxies, &run_params);
-    strip_from_satellite(0, 2, 0.0, 0.0, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 1, 0.0, NSTEPS, galaxies, &run_params);
+    strip_from_satellite(0, 2, 0.0, NSTEPS, galaxies, &run_params);
     
     double light_frac_lost = (light_hot_before - galaxies[1].HotGas) / light_hot_before;
     double heavy_frac_lost = (heavy_hot_before - galaxies[2].HotGas) / heavy_hot_before;
@@ -270,7 +274,7 @@ void test_cumulative_stripping_over_time() {
     
     // Apply stripping multiple times (simulating orbit)
     for(int step = 0; step < 10; step++) {
-        strip_from_satellite(0, 1, 0.0, 0.0, 0.0, galaxies, &run_params);
+        strip_from_satellite(0, 1, 0.0, NSTEPS, galaxies, &run_params);
     }
     
     // Should have progressively stripped gas
@@ -306,7 +310,7 @@ void test_no_self_stripping() {
     double initial_hot = galaxies[0].HotGas;
     
     // Try to strip from itself (should be no-op or minimal)
-    strip_from_satellite(0, 0, 0.0, 0.0, 0.0, galaxies, &run_params);
+    strip_from_satellite(0, 0, 0.0, NSTEPS, galaxies, &run_params);
     
     // Should not significantly change
     ASSERT_CLOSE(galaxies[0].HotGas, initial_hot, 0.1,
