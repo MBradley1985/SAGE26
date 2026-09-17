@@ -120,7 +120,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
     run_params->ReIncorporationFactor      = 0.15;
-    run_params->ColdStreamCeilingOn        = 0;     /* 0 reproduces published behaviour */ /* (remove once published)*/
+    run_params->ColdStreamCeilingOn        = 0;     /* SAGE26 smooth f_stream; 1 = D&B06 eq. 40 threshold */ /* (remove once published)*/
     run_params->StreamMassFactor           = 3.0;   /* Dekel & Birnboim (2006) adopt f = 3 */ /* (remove once published)*/
     run_params->GasDiskRadiusFactor        = 1.0;   /* chi = 1.0: atomic disk cospatial with the stellar disk (published behaviour) */
     run_params->MShockMsun                 = 6.0e11;

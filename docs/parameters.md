@@ -64,7 +64,10 @@ optional parameters take the listed default if omitted.
 | `SupernovaRecipeOn` | 0/1 | no | `1` | SN feedback: 0=off; 1=Croton+16 reheating/ejection. |
 | `ReionizationOn` | 0/1 | no | `1` | Reionization suppression of infall: 0=off; 1=Kravtsov+04 analytic fit. |
 | `DiskInstabilityOn` | 0/1 | no | `1` | Disk instability: 0=off; 1=Toomre criterion drives bulge and BH growth. |
-| `CGMrecipeOn` | 0/1 | no | `1` | Two-regime CGM model: 0=off (classical C16 cooling only); 1=on. |
+| `CGMrecipeOn` | 0/1 | no | `1` | Two-regime CGM model: 0=off (classical C16 cooling only, including its rapid cold-accretion branch at `r_cool > R_vir`); 1=on. |
+| `RegimeRandomMode` | 0/1 | no | `0` | Source of the random draw in the CGM/hot regime sigmoid: 0=a fresh uniform draw each snapshot (default), so a borderline-mass central can flip regime between snapshots; 1=the persistent `RegimeRandom` quantile assigned at galaxy creation, so the regime evolves deterministically with `Mvir` and never thrashes. |
+| `ColdStreamCeilingOn` | 0/1 | no | `0` | How the Dekel & Birnboim cold-stream fraction `f_stream` is set in the hot regime. 0=the SAGE26 smooth fraction `(Mvir/Mshock)^(-4/3) (1+z)/2` with a hard cut below `z_crit` for `Mvir > Mshock` (default); 1=DB06 eq. 40 as published, the ceiling `Mstream = Mshock^2/(f Mstar)`, making `f_stream` exactly 1 or 0. See [Cooling and AGN heating](physics/cooling_and_heating.md). |
+| `KarpovModeOn` | 0/1 | no | `0` | Metallicity of SN-reheated and ejected gas: 0=the full Karpov+23 recipe; 1=a low-metallicity floor at `Z/Z_sun = 0.01`. Only acts when the reheating/ejection path computes a metallicity for the outflow. |
 | `FIREmodeOn` | 0/1 | no | `1` | FIRE stellar feedback: 0=off; 1=on. |
 | `SNEnergyConservationOn` | 0/1 | no | `1` | Bound both supernova feedback terms by the energy actually available: 0=off (recovers the unbounded behaviour); 1=on (default). Caps the ejection coupling at `MaxSNEnergyCoupling` and the mass loading at `MaxSNEnergyCoupling * eta_SN E_SN / V_vir^2`, using the same `0.5*eta*V_vir^2` cost convention as `E_lift`, so the model cannot spend more energy than the supernovae release. Only acts when `FIREmodeOn=1`. |
 | `MaxSNEnergyCoupling` | double | no | `2.0` | Cap applied to `eps_eff` when `SNEnergyConservationOn=1`. `2.0` means `E_FB <= m_* eta_SN E_SN` (all of the SN energy); `1.0` caps it at half. Bounds the *energy*, not the empirical FIRE mass loading, which is applied unmodified in `eta_reheat`. |
@@ -83,6 +86,7 @@ optional parameters take the listed default if omitted.
 | `FFBMaxEfficiency` | double | no | `0.2` | Maximum star formation efficiency during FFB bursts. `0.2` matches observations; `1.0` is the theoretical maximum. |
 | `FFBConcSigma` | double | no | `0.2` | Log-normal scatter in halo concentration used by `FeedbackFreeModeOn=4,7` (dex). |
 | `FFBIgnoreRegime` | 0/1 | no | `1` | Apply FFB criterion regardless of CGM regime classification. |
+| `FFBThresholdSlope` | double | no | `-6.2` | Slope of the Li+24 FFB halo-mass threshold, `log10 Mvir_ffb = 10.8 + slope * log10((1+z)/10)`. The `10^10.8 Msun` normalisation is pinned at `z = 9`, so changing the slope pivots the threshold about that redshift rather than shifting it wholesale. |
 | `FFBRandomMode` | 0/1 | no | `0` | Where the FFB draw comes from when it is compared against the Li+24 fraction `f_ffb(M_vir, z)`: 0=a fresh uniform draw each snapshot (default); 1=the persistent `FFBRandom` assigned at galaxy creation. Both compare against the same sigmoid — the difference is temporal. With 0 a galaxy re-enters the lottery every snapshot, so it moves in and out of FFB and a transient low-redshift FFB population persists; with 1 each galaxy holds a fixed quantile, so once `f_ffb` falls below it the galaxy leaves FFB permanently and both the oscillation and the low-z population disappear. |
 | `RedshiftPowerLawExponent` | double | no | `1.25` | Exponent alpha of the `(1+z)^alpha` term in the FIRE mass-loading scaling `eta_reheat = FeedbackReheatingEpsilon * (1+z)^alpha * (V_vir/60 km/s)^beta` (Muratov+15). Used only when `FIREmodeOn=1`. |
 
@@ -146,6 +150,13 @@ optional parameters take the listed default if omitted.
 |-----------|-------|---------|-------------|
 | `ReIncorporationFactor` | dimensionless | `0.15` | Fraction of ejected mass reincorporated per dynamical time. |
 
+### Cooling and cold streams
+
+| Parameter | Units | Default | Description |
+|-----------|-------|---------|-------------|
+| `MShockMsun` | Msun | `6.0e11` | Dekel & Birnboim (2006) virial-shock stability mass. Used twice: it sets the CGM/hot regime classification in `determine_and_store_regime()`, and it sets the cold-stream criterion in `cooling_recipe_hot()`. Both must see the same value, so change it here rather than in either site. |
+| `StreamMassFactor` | dimensionless | `3.0` | The factor `f` in DB06 eqs 40-41, relating the stream width to the clustering mass `M_*(z)`; they adopt 3. Used by both `ColdStreamCeilingOn` branches. Note that the hardcoded `Z_CRIT_DB06 = 1.2` used by the `ColdStreamCeilingOn = 0` branch was derived from `f = 3`, `MShockMsun = 6e11` and the Millennium cosmology, so it must be recomputed if either of these changes. |
+
 ### Reionization
 
 | Parameter | — | Default | Description |
@@ -173,8 +184,8 @@ calibration transfer across simulations with different output spacing.
 
 **Convergence note.** The substep dependence is a long-standing property of SAGE's
 cooling/feedback operator-splitting (it is present, and slightly *stronger*, with
-the classic `CGMrecipeOn=0` cooling), not something introduced by the CGM/precipitation
-physics. Because the effect is only ~0.1 dex on the SMF, the calibrated `1.0` model
+the classic `CGMrecipeOn=0` cooling), not something introduced by the two-regime
+CGM physics. Because the effect is only ~0.1 dex on the SMF, the calibrated `1.0` model
 sits within observational constraints; a converged model would need at most a light
 retune and would show more simulation-consistent behaviour, at higher compute cost.
 

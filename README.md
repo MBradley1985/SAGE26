@@ -239,7 +239,7 @@ If you use SAGE26 in a publication, please cite:
 
 ```bibtex
 @article{bradley2026a,
-  title = {{{SAGE26 Paper I}}: {{Modelling}} the Baryon Cycle from Cosmic Dawn to the Present Day},
+  title = {SAGE26 Paper I: Modelling the Baryon Cycle from Cosmic Dawn to the Present Day},
   author = {Bradley, Michael and Croton, Darren J. and Paun, Robert A. Mostoghiu and Chowdhury, Dhruba Dutta and Willingham, Jayde},
   year = 2026,
   journal = {The Astrophysical Journal Supplement Series},
@@ -292,3 +292,9 @@ Questions and comments welcome via GitHub Issues or email.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+## Acknowledgement
+
+Claude Code (Anthropic) was used during development for documentation and style-guide work, linting, code-error fixes, building the test suite, and some code restructuring. All model design, physics choices, and results remain the authors' own, and all such changes were reviewed and tested before inclusion.
