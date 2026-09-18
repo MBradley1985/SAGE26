@@ -42,19 +42,14 @@ except ImportError:
 # ========================== CONFIGURATION ==========================
 
 # File paths
-PRIMARY_DIR = './output/millennium/'
-VANILLA_DIR = './output/millennium_vanilla/'
-MINIUCHUU_DIR = './output/microuchuu/'
+PRIMARY_DIR = './output/microuchuu/'
+VANILLA_DIR = './output/microuchuu_vanilla/'
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
 
 # Plotting (analysis choices — not simulation parameters)
 OUTPUT_FORMAT = '.pdf'
-# Mass range over which Shen+2003 fitted their early-type size-mass relation
-# (SDSS, log10 m/Msun). The relation is only drawn here; outside it the line would
-# be extrapolation, not data.
-SHEN03_MASS_RANGE = (10.0, 11.5)
-DILUTE = 7500
+
 SEED = 2222
 
 # Draw order: model 1-sigma bands sit beneath the observations (so they tint
@@ -78,7 +73,7 @@ SSFR_CUT = -11.0       # log10(sSFR/yr^-1) dividing quiescent from star-forming
 # No particle-count cut is applied at load time: every halo SAGE wrote is kept,
 # including ones sitting on a handful of particles.  Anything needing resolved
 # haloes only must say so itself, by cutting on 'Len'.
-MIN_COUNT = 2
+MIN_COUNT = 5
 
 # Solar metallicity (Asplund et al. 2009)
 Z_SUN = 0.0134
