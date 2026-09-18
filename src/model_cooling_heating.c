@@ -229,40 +229,17 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             }
             
             // Ensure physical bounds
-            // Cap at 0.5 (50%) to account for partial heating/mixing of cold streams
+            // Cap at 1.0 to account for partial heating/mixing of cold streams
             // as they penetrate through the hot medium
             if(f_stream > 1.0) f_stream = 1.0;
             if(f_stream < 0.0) f_stream = 0.0;
-
-        //     if(run_params->CGMrecipeOn > 0 && rcool > galaxies[gal].Rvir) {
-        //     rcool = galaxies[gal].Rvir;
-        // }
             
             // Calculate cooling: mix of cold streams + hot halo cooling
             double cold_stream_cooling = 0.0;
             double hot_halo_cooling = 0.0;
-            
-            // if(rcool < galaxies[gal].Rvir) {
-            //     // Cold-stream regime.  Cold streams accrete on the dynamical
-            //     // time, the SAGE16 cold-accretion rate scaled by f_stream
-            //     // (tcool == Rvir/Vvir here).
-            //     cold_stream_cooling = f_stream * galaxies[gal].HotGas / tcool * dt;
-
-            //     // The (1 - f_stream) fraction that does not penetrate cools as
-            //     // a quasi-static flow, the same expression as the branch below.
-            //     hot_halo_cooling = (1.0 - f_stream) * (galaxies[gal].HotGas / galaxies[gal].Rvir) *
-            //                       (rcool / (2.0 * tcool)) * dt;
-            // } else {
-            //     // Quasi-static cooling flow (SAGE16): no cold streams, the
-            //     // shocked corona cools from within rcool.
-            //     hot_halo_cooling = (galaxies[gal].HotGas / galaxies[gal].Rvir) *
-            //                       (rcool / (2.0 * tcool)) * dt;
-            // }
 
             cold_stream_cooling = f_stream * galaxies[gal].HotGas / tcool * dt;
 
-            // The (1 - f_stream) fraction that does not penetrate cools as
-            // a quasi-static flow, the same expression as the branch below.
             hot_halo_cooling = (1.0 - f_stream) * (galaxies[gal].HotGas / galaxies[gal].Rvir) *
                                 (rcool / (2.0 * tcool)) * dt;
 
