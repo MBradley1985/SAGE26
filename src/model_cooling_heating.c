@@ -85,8 +85,16 @@ static const double VIRIAL_TEMP_COEFF = 35.9;  /* K (km/s)^-2 */
 static const double Z_CRIT_DB06 = 1.5;
 
 /* Width, in dex, of the smooth transition about the Dekel & Birnboim (2006)
- * stream criterion (t_cool/t_comp)_stream = 1 when ColdStreamCeilingOn == 1. */
-static const double STREAM_TRANSITION_WIDTH_DEX = 0.5;
+ * stream criterion (t_cool/t_comp)_stream = 1 when ColdStreamCeilingOn == 1.
+ * The criterion is a bifurcation -- streams penetrate or they do not -- so the
+ * sigmoid exists only to keep f_stream continuous across it, not to blend the
+ * two accretion channels over a wide mass range.  At 0.5 dex it did the latter:
+ * f_stream sat between 0.1 and 0.9 over M = 10^11-10^13 at z = 0-2, where both
+ * the cold-stream and hot-halo terms fire at once and, near f_stream ~ 0.3,
+ * deliver equal mass (the hot term's rate coefficient is rcool/2Rvir ~ 0.45 for
+ * the median hot-regime halo).  0.15 dex confines the blend to a factor ~2 in
+ * the stream ratio either side of the threshold. */
+static const double STREAM_TRANSITION_WIDTH_DEX = 0.15;
 
 /* Cold-cloud AGN accretion (AGNrecipeOn == 3): BH triggers when its mass exceeds
  * this fraction of the sonic-radius enclosed virial mass, and accretes at this
@@ -216,8 +224,17 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
                 const double ratio = pow(fMstar / galaxies[gal].Mvir, 2.0/3.0)
                                    * pow(mass_ratio, 4.0/3.0);
                 if(ratio > 0.0) {
-                    const double sigmoid_arg = -log10(ratio) / STREAM_TRANSITION_WIDTH_DEX;
-                    f_stream = 1.0 / (1.0 + exp(-sigmoid_arg));
+                    // The transition width is quoted in dex, so the logistic
+                    // must be taken base 10 for it to mean what it says.
+                    // Feeding a dex argument to exp() instead widened it by
+                    // ln(10) -- f_stream = 1/(1 + R^0.869) rather than
+                    // 1/(1 + R^(1/W)) -- a 10%-to-90% span of 2.2 dex at the
+                    // nominal 0.5 dex setting, which is what parked f_stream
+                    // near 0.5 across most of the resolved halo population.
+                    double exponent = log10(ratio) / STREAM_TRANSITION_WIDTH_DEX;
+                    if(exponent > 300.0) exponent = 300.0;
+                    if(exponent < -300.0) exponent = -300.0;
+                    f_stream = 1.0 / (1.0 + pow(10.0, exponent));
                 } else {
                     f_stream = 1.0;
                 }
