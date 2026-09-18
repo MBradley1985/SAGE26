@@ -95,6 +95,7 @@ static const double VIRIAL_TEMP_COEFF = 35.9;  /* K (km/s)^-2 */
  * the value moves with MShockMsun (1.43 at 3e11, 1.03 at 1e12) and with f
  * (0.85 at f = 1, 1.37 at f = 5).  Recompute if any of those change. */
 static const double Z_CRIT_DB06 = 1.2;
+static const double STREAM_TRANSITION_WIDTH_DEX = 0.5;  /* width of the sigmoid transition in log10(Mvir) for cold-stream fraction f_stream */
 
 /* Cold-cloud AGN accretion (AGNrecipeOn == 3): BH triggers when its mass exceeds
  * this fraction of the sonic-radius enclosed virial mass, and accretes at this
@@ -208,44 +209,33 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 
             double f_stream;
             if(run_params->ColdStreamCeilingOn) {
-                // Dekel & Birnboim (2006) eqs 39-41, as published.  Their
-                // eq. 39 compares the cooling and compression times within the
-                // stream,
+                // Dekel & Birnboim (2006) eqs 39-41.  Their eq. 39 compares the
+                // cooling and compression times within the stream,
                 //     R = (f Mstar/Mvir)^(2/3) (Mvir/Mshock)^(4/3),
-                // and streams penetrate where R < 1.  That is a threshold, not
-                // a fraction: the paper predicts whether streams reach the
-                // galaxy, so f_stream is 1 or 0 with no interpolation.
-                //
-                // Both limits of eq. 40 follow from the same test without any
-                // extra redshift cut.  At low z, where f Mstar > Mshock, R < 1
-                // requires Mvir < Mshock; at high z, where f Mstar < Mshock,
-                // streams survive up to the ceiling Mstream = Mshock^2/(f
-                // Mstar).  The two meet at the eq. 41 critical redshift, where
-                // f Mstar(z_crit) = Mshock, so Z_CRIT_DB06 is not needed here.
-                //
-                // interpolate_clustering_mass() returns log10(M_*) in Msun, so
-                // convert to code units before comparing against Mvir.
+                // streams penetrating where R < 1.  The redshift dependence
+                // enters through the clustering mass Mstar(z) rather than an
+                // explicit (1+z) factor, and the shut-off is automatic: their
+                // eq. 41 defines z_crit by f Mstar(z_crit) = Mshock, which is
+                // exactly where R = 1 at Mvir = Mshock.  No redshift cut is
+                // imposed, so f_stream is continuous everywhere.
+                // const double Mstar = pow(10.0, interpolate_clustering_mass(z, run_params));
                 const double Mstar = MSUN_TO_CODE_MASS(pow(10.0, interpolate_clustering_mass(z, run_params)),
                                                        run_params->Hubble_h);
                 const double fMstar = run_params->StreamMassFactor * Mstar;
                 const double ratio = pow(fMstar / galaxies[gal].Mvir, 2.0/3.0)
                                    * pow(mass_ratio, 4.0/3.0);
-
-                // ratio <= 0 is unreachable for a positive Mvir; treat it as
-                // the penetrating limit rather than leaving f_stream unset.
-                f_stream = (ratio <= 0.0 || ratio < 1.0) ? 1.0 : 0.0;
+                if(ratio > 0.0) {
+                    const double sigmoid_arg = -log10(ratio) / STREAM_TRANSITION_WIDTH_DEX;
+                    f_stream = 1.0 / (1.0 + exp(-sigmoid_arg));
+                } else {
+                    f_stream = 1.0;
+                }
             } else if(z < Z_CRIT_DB06 && mass_ratio > 1.0) {
-                // Below z_crit, cold streams are suppressed in M > Mshock
-                // halos -- the low-z limit of DB06 eq. 40, imposed here as a
-                // hard cut at the eq. 41 critical redshift.
+                // D&B06 eq 41: below z_crit cold streams are suppressed in
+                // M > Mshock halos.  Hard cutoff; published behaviour.
                 f_stream = 0.0;
             } else {
-                // High-z regime: streams can penetrate.  The (M/Mshock)^(-4/3)
-                // suppression is motivated by DB06 -- it is the reciprocal of
-                // the halo ratio in their eq. 38 -- but the smooth fraction
-                // itself is a SAGE26 prescription, not one of their results:
-                // their eqs 39-40 predict whether streams penetrate, not what
-                // fraction of the corona they carry.
+                // High-z regime: streams can penetrate
                 f_stream = pow(mass_ratio, -4.0/3.0) * z_factor;
             }
             
