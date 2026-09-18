@@ -244,10 +244,10 @@
       "Cooling rate of cold streams.", \
       "1.0e10 Msun/yr") \
     X(ICS_disrupt, ICS_disrupt, float, H5T_NATIVE_FLOAT, \
-      "Cumulative stellar mass disrupted to ICS (tracks assembly).", \
+      "In-situ ICS: cumulative satellite stellar mass stripped directly into THIS halo's ICS reservoir. Channel of last transfer, not of origin -- all ICS originates in disruption, but a packet formed in a progenitor group is booked under ICS_accrete once that group falls in.", \
       "1.0e10 Msun/h") \
     X(ICS_accrete, ICS_accrete, float, H5T_NATIVE_FLOAT, \
-      "Cumulative ICS accreted from satellites (tracks assembly).", \
+      "Ex-situ ICS: cumulative already-formed ICS brought into THIS halo by infalling or merging satellites. See ICS_disrupt on why this is a transfer channel, not an origin. ICS_disrupt + ICS_accrete == IntraClusterStars by construction.", \
       "1.0e10 Msun/h") \
     X(ICS_sum_mt, ICS_sum_mt, float, H5T_NATIVE_FLOAT, \
       "Mass-weighted sum m*t (code time) at ICS deposition; divide by (ICS_disrupt+ICS_accrete) for mean assembly lookback.", \
