@@ -2,15 +2,14 @@
  * model_cooling_heating.c -- Cooling and AGN heating prescriptions.
  *
  * Implements the two-regime cooling model selected per-galaxy by the Regime
- * flag set in model_regimes.c:
+ * flag set in model_misc.c:
  *
- *   Regime == 0 (CGM-dominated) -- Carr et al. (2023): one bulk cooling time
- *     for a single power-law profile (alpha = 1.4, r_0 = 0.1 Rvir), the halo
- *     free-fall time at Rvir, and m(dot)_cool = m_CGM / (tcool + tff).
+ *   Regime == 0 (CGM-dominated) -- model taken from Carr et al. 2023, super simple
+ *     tcool evaluated on a radial profile, tff of the halo, m(dot)_cool = m_CGM / tcool+tff.
  *
  *   Regime == 1 (hot halo) -- classical isothermal-halo cooling following
  *     White & Frenk (1991) and Croton et al. (2006).  When CGMrecipeOn > 0 a
- *     Dekel & Birnboim (2006) cold-stream fraction is blended in for halos
+ *     De Lucia & Blaizot (2006) cold-stream fraction is blended in for halos
  *     above the virial shock mass.
  *
  * AGN radio-mode accretion is computed via three models (AGNrecipeOn 1/2/3):
@@ -18,15 +17,15 @@
  * In all modes accretion is Eddington-limited and draws from the reservoir
  * appropriate to the regime (HotGas for Regime==1, CGMgas for Regime==0).
  *
- * File-private helpers share the radio-mode AGN accretion calculation between
- * the two regimes and reset the CGM timescale diagnostics.
+ * File-private helpers compute NFW/beta density profiles, their enclosed-mass
+ * integrals, and iteratively solve for the cooling radius.
  *
  * Code units (10^10 Msun/h, Mpc/h, km/s) used throughout; conversions to
  * physical units happen only at the entry points of CGM-mode functions.
  *
  * References: Croton et al. (2006), MNRAS 365, 11; Voit (2015), ApJL 808, L30;
  *   McCourt et al. (2012), MNRAS 419, 3319; Duffy et al. (2008), MNRAS 390, L64;
- *   Dekel & Birnboim (2006), MNRAS 368, 2; Dekel et al. (2009), Nature 457, 451.
+ *   De Lucia & Blaizot (2006), MNRAS 375, 2.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -77,25 +76,17 @@ static const double AGN_HEATING_COEFF_KMS = 1.34e5;  /* km/s */
  * gives 35.9 K (km/s)^-2. */
 static const double VIRIAL_TEMP_COEFF = 35.9;  /* K (km/s)^-2 */
 
-/* Dekel & Birnboim (2006) eq. 38: virial shock mass scale, above which
+/* De Lucia & Blaizot (2006) eq. 38: virial shock mass scale, above which
  * hot-mode shock heating is efficient.  Settable as MShockMsun in the parameter
  * file; must be the same value model_regimes.c uses to classify regimes. */
 
 /* Critical redshift below which cold streams are suppressed in M > Mshock halos.
- * Used by the ColdStreamCeilingOn == 0 branch only; the == 1 branch derives its
- * own crossover from f Mstar(z) = Mshock.
- *
- * Not a free parameter: Dekel & Birnboim (2006) eq. 41 defines it by
- * f Mstar(z_crit) = Mshock.  Solving that on the Millennium/WMAP1 Mstar(z)
- * table in interpolate_clustering_mass(), with f = StreamMassFactor = 3 and
- * MShockMsun = 6e11, gives z_crit = 1.20.  That is below the z_crit ~ 2 quoted
- * by DB06, which reflects their adopted Mstar(z) and shock mass.
- *
- * Tied to that cosmology and Mshock: the Uchuu/Planck15 table gives 1.01, and
- * the value moves with MShockMsun (1.43 at 3e11, 1.03 at 1e12) and with f
- * (0.85 at f = 1, 1.37 at f = 5).  Recompute if any of those change. */
-static const double Z_CRIT_DB06 = 1.5;
-static const double STREAM_TRANSITION_WIDTH_DEX = 0.5;  /* width of the sigmoid transition in log10(Mvir) for cold-stream fraction f_stream */
+ * De Lucia & Blaizot (2006) estimate z_crit ~ 1-2; we adopt the midpoint. */
+static const double Z_CRIT_DB06 = 1.2;
+
+/* Width, in dex, of the smooth transition about the Dekel & Birnboim (2006)
+ * stream criterion (t_cool/t_comp)_stream = 1 when ColdStreamCeilingOn == 1. */
+static const double STREAM_TRANSITION_WIDTH_DEX = 0.15;
 
 /* Cold-cloud AGN accretion (AGNrecipeOn == 3): BH triggers when its mass exceeds
  * this fraction of the sonic-radius enclosed virial mass, and accretes at this
@@ -167,15 +158,16 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 
         galaxies[gal].RcoolToRvir = rcool / galaxies[gal].Rvir;
 
-        // rcool is left uncapped on both paths, as in Croton et al. (2016).
-        // rcool > Rvir is a meaningful state -- a corona cooling faster than it
-        // can be shock-heated -- and it is allowed to set the cooling rate and
-        // the AGN heating radius rather than being clipped to Rvir.  Capping it
-        // silently halved the cooling of the haloes it touched (70% of galaxies
-        // at z = 0 rising to 99.7% at z = 6, carrying 57-99% of the cooling
-        // mass).  CGM-regime haloes never reach this function;
-        // cooling_recipe_cgm() pins its own rcool = Rvir purely to feed the
-        // AGN-heating call.
+        // rcool is left uncapped on both paths.  Only hot-regime haloes reach
+        // this function, and for them rcool > Rvir is the physical signature of
+        // a corona that cools faster than it can be shock-heated -- the very
+        // condition that selects cold-stream accretion below, exactly as in
+        // Croton et al. (2016).  Capping it to Rvir erased that signature: the
+        // cold-stream branch became unreachable and the affected haloes (70% of
+        // galaxies at z = 0 rising to 99.7% at z = 6, carrying 57-99% of the
+        // cooling mass) instead cooled at 0.5 * m_hot / t_cool, half the SAGE16
+        // rate.  CGM-regime haloes never come here: cooling_recipe_cgm() pins
+        // its own rcool = Rvir purely to feed the AGN-heating call.
 
         coolingGas = 0.0;
 
@@ -196,15 +188,14 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             // All halos here are in the hot regime (have virial shocks)
             const double z = run_params->ZZ[galaxies[gal].SnapNum];
             
-            // Stream penetration factor f_stream, set one of two ways by
-            // ColdStreamCeilingOn (see the branches below): the SAGE26 smooth
-            // fraction, or the Dekel & Birnboim (2006) eq. 40 threshold.
+            // D&B06 eqs 39-41: stream penetration factor f_stream.
+            // Mass suppression (M/Mshock)^(-4/3) -- halos well above the shock
+            // threshold host weaker cold streams. Redshift factor (1+z)/(1+1)
+            // enhances streams at high-z where cooling is more efficient.
             const double M_shock = MSUN_TO_CODE_MASS(run_params->MShockMsun, run_params->Hubble_h);
             const double mass_ratio = galaxies[gal].Mvir / M_shock;
 
-            // Redshift enhancement for the smooth branch, normalised to
-            // z = 1.  A SAGE26 choice: DB06 carry no explicit (1+z) factor,
-            // their redshift dependence entering through Mstar(z).
+            // Redshift enhancement: normalized to z=1 following D&B06 eq 40
             const double z_factor = (1.0 + z) / (1.0 + 1.0);
 
             double f_stream;
@@ -218,9 +209,7 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
                 // eq. 41 defines z_crit by f Mstar(z_crit) = Mshock, which is
                 // exactly where R = 1 at Mvir = Mshock.  No redshift cut is
                 // imposed, so f_stream is continuous everywhere.
-                // const double Mstar = pow(10.0, interpolate_clustering_mass(z, run_params));
-                const double Mstar = MSUN_TO_CODE_MASS(pow(10.0, interpolate_clustering_mass(z, run_params)),
-                                                       run_params->Hubble_h);
+                const double Mstar = pow(10.0, interpolate_clustering_mass(z, run_params));
                 const double fMstar = run_params->StreamMassFactor * Mstar;
                 const double ratio = pow(fMstar / galaxies[gal].Mvir, 2.0/3.0)
                                    * pow(mass_ratio, 4.0/3.0);
@@ -239,30 +228,36 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
                 f_stream = pow(mass_ratio, -4.0/3.0) * z_factor;
             }
             
-            // Ensure physical bounds: f_stream is a mass fraction of the
-            // corona routed to streams rather than a quasi-static cooling flow.
+            // Ensure physical bounds
+            // Cap at 0.5 (50%) to account for partial heating/mixing of cold streams
+            // as they penetrate through the hot medium
             if(f_stream > 1.0) f_stream = 1.0;
             if(f_stream < 0.0) f_stream = 0.0;
+
+            if(run_params->CGMrecipeOn > 0 && rcool > galaxies[gal].Rvir) {
+            rcool = galaxies[gal].Rvir;
+        }
             
             // Calculate cooling: mix of cold streams + hot halo cooling
             double cold_stream_cooling = 0.0;
             double hot_halo_cooling = 0.0;
             
-            // There is no rcool vs Rvir branch: in D&B06 (eqs 39-41) stream
-            // penetration is set by halo mass and redshift alone, and their
-            // streams are a feature of haloes that *do* host a virial shock.
-            // Mshock (via f_stream) is therefore the whole criterion; rcool
-            // only sets the rate of the quasi-static component and the AGN
-            // heating radius.
+            if(rcool < galaxies[gal].Rvir) {
+                // Cold-stream regime.  Cold streams accrete on the dynamical
+                // time, the SAGE16 cold-accretion rate scaled by f_stream
+                // (tcool == Rvir/Vvir here).
+                cold_stream_cooling = f_stream * galaxies[gal].HotGas / tcool * dt;
 
-            // Cold streams accrete on the dynamical time (tcool == Rvir/Vvir),
-            // the SAGE16 cold-accretion rate scaled by f_stream.
-            cold_stream_cooling = f_stream * galaxies[gal].HotGas / tcool * dt;
-
-            // The (1 - f_stream) fraction that does not penetrate cools as a
-            // quasi-static flow from within rcool.
-            hot_halo_cooling = (1.0 - f_stream) * (galaxies[gal].HotGas / galaxies[gal].Rvir) *
-                                (rcool / (2.0 * tcool)) * dt;
+                // The (1 - f_stream) fraction that does not penetrate cools as
+                // a quasi-static flow, the same expression as the branch below.
+                hot_halo_cooling = (1.0 - f_stream) * (galaxies[gal].HotGas / galaxies[gal].Rvir) *
+                                  (rcool / (2.0 * tcool)) * dt;
+            } else {
+                // Quasi-static cooling flow (SAGE16): no cold streams, the
+                // shocked corona cools from within rcool.
+                hot_halo_cooling = (galaxies[gal].HotGas / galaxies[gal].Rvir) *
+                                  (rcool / (2.0 * tcool)) * dt;
+            }
 
             galaxies[gal].mdot_cool = hot_halo_cooling / dt;
             galaxies[gal].mdot_stream = cold_stream_cooling / dt;
@@ -388,8 +383,8 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
  * reset_cgm_diagnostics -- clear the CGM timescale diagnostics.
  *
  * cooling_recipe_cgm() is only entered when CGMgas > 0, so a halo that drains
- * its reservoir keeps whatever tcool / tff / RcoolToRvir it had the last time
- * it had gas.  That went stale for 28% of
+ * its reservoir keeps whatever tcool / tff / MachNumber /
+ * RcoolToRvir it had the last time it had gas.  That went stale for 28% of
  * z = 0 Regime-0 centrals and inflated the high-ratio tail of any figure
  * selecting on Regime alone (9.3% above the precipitation threshold, against a
  * true 0.26% among haloes that actually hold a reservoir).  Diagnostics only --
@@ -646,8 +641,8 @@ static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const 
          * earlier clamp of coolingGas used the pre-accretion reservoir.
          * Re-cap so the caller cannot overdraw the CGM by up to AGNaccreted
          * (manifested as an XASSERT abort when cooling was reservoir-limited
-         * and Bondi accretion nonzero in the same call; first seen under the
-         * since-removed non-uniform CGM density profiles). */
+         * and Bondi accretion nonzero in the same call, e.g. with
+         * CGMDensityProfile = 1). */
         if(coolingGas > galaxies[centralgal].CGMgas) {
             coolingGas = galaxies[centralgal].CGMgas;
         }
@@ -659,9 +654,8 @@ static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const 
  * Transfer cooled gas from the HotGas reservoir into the cold disk.
  *
  * Moves up to coolingGas mass (clamped to available HotGas) from HotGas to
- * ColdGas, tracking metallicity consistently. Called from core_build_model.c
- * on the CGMrecipeOn == 0 path only; cooling_recipe_regime_aware() does its
- * own transfer, because it has to draw from two different reservoirs.
+ * ColdGas, tracking metallicity consistently. Called by cooling_recipe_hot()
+ * after AGN heating has been applied.
  */
 void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct GALAXY *galaxies)
 {
