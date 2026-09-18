@@ -583,25 +583,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                     }
                 }
 
-                /* Contini et al. (2014) model Tid. (Sec. 3.2) strips satellites
-                 * continuously, before they merge or are destroyed, and applies to
-                 * type 1 as well as type 2.  Model Disr. (LetOrphansLive == 1) has
-                 * no continuous channel -- the paper treats the two as
-                 * alternatives -- so this runs for mode 2 only. */
-                if(run_params->LetOrphansLive == 2 &&
-                   (galaxies[p].Type == 1 || galaxies[p].Type == 2)) {
-                    int strip_icsgal = galaxies[p].Type == 1 ? centralgal : galaxies[p].CentralGal;
-                    if(galaxies[strip_icsgal].mergeType > 0) {
-                        strip_icsgal = galaxies[strip_icsgal].CentralGal;
-                    }
-
-                    const double strip_time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
-                    if(contini14_tidal_model(centralgal, strip_icsgal, p, strip_time, galaxies, run_params) == 1) {
-                        galaxies[p].mergeIntoID = *numgals + strip_icsgal;
-                        continue;   /* destroyed; nothing else to do this substep */
-                    }
-                }
-
                 // only consider mergers or disruption for halo-to-baryonic mass ratios below the threshold
                 // or for satellites with no baryonic mass (they don't grow and will otherwise hang around forever)
                 double currentMvir = galaxies[p].Mvir - galaxies[p].deltaMvir * (1.0 - ((double)step + 1.0) / (double)effective_steps);
@@ -631,16 +612,10 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                              * where the dynamical-friction clock -- still
                              * running -- eventually merges it instead. */
                             if(run_params->LetOrphansLive > 0 && galaxies[p].Type == 2) {
-                                /* Mode 1 tests the Sec. 3.1 density criterion here.
-                                 * Mode 2 has already applied its Sec. 3.2 stripping
-                                 * above, and destroys a satellite only when the
-                                 * tidal radius cuts inside the bulge, so an orphan
-                                 * that reaches this point simply survives. */
-                                const int destroyed =
-                                    (run_params->LetOrphansLive == 1)
-                                    ? contini14_disruption_model(centralgal, merger_centralgal, p, event_time, galaxies, run_params)
-                                    : 0;
-                                if(destroyed == 0) {
+                                /* Contini et al. (2014) Sec. 3.1: survive unless the
+                                 * halo is denser than the satellite at pericentre. */
+                                if(contini14_disruption_model(centralgal, merger_centralgal, p,
+                                                              event_time, galaxies, run_params) == 0) {
                                     /* No merger event to record for a survivor. */
                                     galaxies[p].mergeIntoID = -1;
                                     /* The orphan already has Mvir = 0; clearing

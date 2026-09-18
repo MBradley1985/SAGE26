@@ -560,7 +560,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
             {"TrackICSAssembly",       run_params->TrackICSAssembly,       0, 1},
-            {"LetOrphansLive",         run_params->LetOrphansLive,         0, 2},
+            {"LetOrphansLive",         run_params->LetOrphansLive,         0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"SNEnergyConservationOn", run_params->SNEnergyConservationOn, 0, 1},
         };

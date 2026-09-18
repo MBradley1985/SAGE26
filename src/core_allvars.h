@@ -520,15 +520,12 @@ struct params
                                           // histories. Those accumulate stellar mass, not rate, so they are
                                           // correct at any substep count (unlike the Sfr* rate bins).
     int32_t    TrackICSAssembly;          // 0 = off, 1 = track in-situ/ex-situ ICS (ICS_disrupt, ICS_accrete, ICS_sum_mt)
-    int32_t    LetOrphansLive;            // orphan treatment, following Contini et al. (2014),
-                                          // whose prescriptions are alternatives (their footnote 3):
+    int32_t    LetOrphansLive;            // orphan treatment, following Contini et al. (2014):
                                           //   0 = off, orphans are destroyed into the ICS the
                                           //       snapshot their subhalo is lost (published SAGE)
                                           //   1 = model Disr. (Sec. 3.1): survive until the halo
                                           //       density at pericentre exceeds the satellite's,
                                           //       then complete disruption
-                                          //   2 = model Tid. (Sec. 3.2): continuous tidal-radius
-                                          //       stripping of type 1 and type 2 satellites
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 
     /* baryonic physics calibration parameters */

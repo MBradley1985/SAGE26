@@ -1,13 +1,14 @@
 /*
  * test_let_orphans_live.c -- unit tests for the Contini et al. (2014) orphan
- * disruption gate (LetOrphansLive == 1).
+ * treatment selected by LetOrphansLive == 1 (their model Disr., Sec. 3.1).
  *
- * Validates: survival of a compact satellite whose mean baryon density exceeds
+ * Validates: survival of a compact satellite whose mean baryon density beats
  * the halo density at pericentre, complete disruption of a diffuse satellite on
- * a plunging orbit, mass and metal conservation during partial tidal stripping,
- * the disk scalelength reset that follows a stripping episode, and the
- * fallback to unconditional disruption for satellites that carry no baryons,
- * and the Henriques & Thomas (2010) continuous tidal stripping of orphans.
+ * a plunging orbit, and the fallback to unconditional disruption for satellites
+ * that carry no baryons.
+ *
+ * Their model Tid. (Sec. 3.2) was implemented and removed -- see
+ * model_mergers.h for why -- so it is no longer covered here.
  *
  * Run: from tests/, `make test_let_orphans_live && ./test_let_orphans_live`.
  *
@@ -73,6 +74,7 @@ void test_dense_satellite_survives(void)
     /* Compact disk galaxy 0.5 Mpc/h out on a near-circular orbit, so the
      * pericentre stays far from the halo centre. */
     galaxies[1].Pos[0] = 0.5;
+    galaxies[1].OrbitRadius = 0.5;
     galaxies[1].Vel[1] = 200.0;
     galaxies[1].StellarMass = 0.1;
     galaxies[1].ColdGas = 0.02;
@@ -80,7 +82,7 @@ void test_dense_satellite_survives(void)
 
     const double mstar_before = galaxies[1].StellarMass;
 
-    const int destroyed = disrupt_satellite_gated(0, 0, 1, 1.0, galaxies, &run_params);
+    const int destroyed = contini14_disruption_model(0, 0, 1, 1.0, galaxies, &run_params);
 
     ASSERT_EQUAL_INT(0, destroyed, "Gate stays shut: satellite is not destroyed");
     ASSERT_EQUAL_INT(0, galaxies[1].mergeType, "mergeType is untouched for a survivor");
@@ -106,6 +108,7 @@ void test_diffuse_satellite_disrupted(void)
 
     /* Radial infall: no tangential velocity means no turning point. */
     galaxies[1].Pos[0] = 0.05;
+    galaxies[1].OrbitRadius = 0.05;
     galaxies[1].Vel[0] = -500.0;
     galaxies[1].StellarMass = 0.01;
     galaxies[1].MetalsStellarMass = 0.0002;
@@ -115,7 +118,7 @@ void test_diffuse_satellite_disrupted(void)
 
     const double stars_before = galaxies[1].StellarMass;
 
-    const int destroyed = disrupt_satellite_gated(0, 0, 1, 1.0, galaxies, &run_params);
+    const int destroyed = contini14_disruption_model(0, 0, 1, 1.0, galaxies, &run_params);
 
     ASSERT_EQUAL_INT(1, destroyed, "Gate opens: satellite is destroyed");
     ASSERT_EQUAL_INT(4, galaxies[1].mergeType, "mergeType records a disruption to the ICS");
@@ -125,85 +128,6 @@ void test_diffuse_satellite_disrupted(void)
 
 }
 
-/*
- * When the gate opens but the tidal radius still lies outside the bulge, only
- * the stellar disk beyond R_t is unbound. Stars must be conserved between the
- * satellite and the central's ICS, and cold gas must follow in proportion.
- */
-void test_partial_stripping_conserves_mass(void)
-{
-    BEGIN_TEST("Partial stripping conserves stars, metals and cold gas");
-
-    struct GALAXY galaxies[2];
-    struct params run_params;
-    setup_pair(galaxies, &run_params, 1000.0, 1000.0);
-
-    /* A real pericentre needs angular momentum; a purely radial orbit takes
-     * the plunge branch and is destroyed outright. */
-    galaxies[1].Pos[0] = 0.05;
-    galaxies[1].Vel[0] = -500.0;
-    galaxies[1].Vel[1] = 200.0;
-    galaxies[1].StellarMass = 0.01;
-    galaxies[1].MetalsStellarMass = 0.0002;
-    galaxies[1].ColdGas = 0.005;
-    galaxies[1].MetalsColdGas = 0.0001;
-    galaxies[1].DiskScaleRadius = 0.05;
-    galaxies[1].BulgeRadius = 0.0;        /* pure disk: no complete disruption */
-
-    const double stars_before = galaxies[1].StellarMass;
-    const double metals_before = galaxies[1].MetalsStellarMass;
-    const double cold_before = galaxies[1].ColdGas;
-
-    const int destroyed = disrupt_satellite_gated(0, 0, 1, 1.0, galaxies, &run_params);
-
-    ASSERT_EQUAL_INT(0, destroyed, "A partially stripped satellite survives");
-    ASSERT_GREATER_THAN(galaxies[0].ICS, 0.0, "Stripped stars reach the ICS");
-    ASSERT_LESS_THAN(galaxies[1].StellarMass, stars_before,
-                     "The satellite loses stellar mass");
-    ASSERT_CLOSE(stars_before, galaxies[1].StellarMass + galaxies[0].ICS, MASS_TOL,
-                 "Stellar mass is conserved across the transfer");
-    ASSERT_CLOSE(metals_before, galaxies[1].MetalsStellarMass + galaxies[0].MetalsICS, MASS_TOL,
-                 "Stellar metals are conserved across the transfer");
-    ASSERT_CLOSE(cold_before, galaxies[1].ColdGas + galaxies[0].HotGas, MASS_TOL,
-                 "Cold gas stripped from the disk reaches the central's hot phase");
-    ASSERT_CLOSE(galaxies[0].ICS, galaxies[0].ICS_disrupt, MASS_TOL,
-                 "ICS assembly tracking records the stripped mass");
-
-}
-
-/*
- * SAGE26 uses DiskScaleRadius directly as the exponential scale length behind
- * Sigma_0 = M / (2 pi r_s^2) in the H2 and star formation prescriptions, so a
- * galaxy that has just lost its outskirts must not come back with a *smaller*
- * scale length and hence a higher central surface density. The scalelength is
- * therefore left alone, deviating from the R_t/10 reset of Contini et al.
- */
-void test_scalelength_preserved(void)
-{
-    BEGIN_TEST("Partial stripping lowers the disk mass without compressing it");
-
-    struct GALAXY galaxies[2];
-    struct params run_params;
-    setup_pair(galaxies, &run_params, 1000.0, 1000.0);
-
-    galaxies[1].Pos[0] = 0.05;
-    galaxies[1].Vel[0] = -500.0;
-    galaxies[1].Vel[1] = 200.0;
-    galaxies[1].StellarMass = 0.01;
-    galaxies[1].ColdGas = 0.005;
-    galaxies[1].DiskScaleRadius = 0.05;
-    galaxies[1].BulgeRadius = 0.0;
-
-    const double r_scale_before = galaxies[1].DiskScaleRadius;
-    const double stars_before = galaxies[1].StellarMass;
-
-    disrupt_satellite_gated(0, 0, 1, 1.0, galaxies, &run_params);
-
-    ASSERT_CLOSE(r_scale_before, galaxies[1].DiskScaleRadius, MASS_TOL,
-                 "Scale length is unchanged by stripping");
-    ASSERT_LESS_THAN(galaxies[1].StellarMass, stars_before,
-                     "Disk mass is reduced, so Sigma_0 falls rather than rises");
-}
 
 /*
  * An orphan with no baryons has no density to compare, and must not be allowed
@@ -218,154 +142,27 @@ void test_empty_satellite_falls_back(void)
     setup_pair(galaxies, &run_params, 100.0, 200.0);
 
     galaxies[1].Pos[0] = 0.5;
+    galaxies[1].OrbitRadius = 0.5;
     galaxies[1].Vel[1] = 200.0;
     galaxies[1].StellarMass = 0.0;
     galaxies[1].ColdGas = 0.0;
     galaxies[1].DiskScaleRadius = 0.005;
 
-    const int destroyed = disrupt_satellite_gated(0, 0, 1, 1.0, galaxies, &run_params);
+    const int destroyed = contini14_disruption_model(0, 0, 1, 1.0, galaxies, &run_params);
 
     ASSERT_EQUAL_INT(1, destroyed, "An empty satellite is removed rather than kept");
     ASSERT_EQUAL_INT(4, galaxies[1].mergeType, "mergeType records the disruption");
 
 }
 
-/*
- * Henriques & Thomas (2010) strip the stellar material lying outside the tidal
- * radius on every timestep. A satellite whose orbit has decayed close in loses
- * most of its disk; the stars must arrive intact in the central's ICS.
- */
-void test_continuous_stripping_conserves_stars(void)
-{
-    BEGIN_TEST("Continuous stripping moves disk stars into the ICS");
-
-    struct GALAXY galaxies[2];
-    struct params run_params;
-    setup_pair(galaxies, &run_params, 1000.0, 1000.0);
-
-    galaxies[1].Vvir = 100.0;
-    galaxies[1].OrbitRadius = 0.1;
-    galaxies[1].StellarMass = 0.01;
-    galaxies[1].MetalsStellarMass = 0.0002;
-    galaxies[1].DiskScaleRadius = 0.005;
-
-    const double stars_before = galaxies[1].StellarMass;
-    const double metals_before = galaxies[1].MetalsStellarMass;
-
-    /* R_t = (1/sqrt(2)) (Vvir_sat/Vvir_halo) r_orbit; the exponential disk
-     * beyond it is M (1 + x) exp(-x) with x = R_t / R_sl. */
-    const double R_t = M_SQRT1_2 * (100.0 / 1000.0) * 0.1;
-    const double x = R_t / 0.005;
-    const double expected = stars_before * (1.0 + x) * exp(-x);
-
-    strip_orphan_stars(0, 0, 1, 1.0, galaxies, &run_params);
-
-    ASSERT_CLOSE(expected, galaxies[0].ICS, MASS_TOL,
-                 "Stripped mass matches the exponential-disk integral");
-    ASSERT_CLOSE(stars_before, galaxies[1].StellarMass + galaxies[0].ICS, MASS_TOL,
-                 "Stellar mass is conserved");
-    ASSERT_CLOSE(metals_before, galaxies[1].MetalsStellarMass + galaxies[0].MetalsICS, MASS_TOL,
-                 "Metals leave in the same proportion as stars");
-    ASSERT_GREATER_THAN(galaxies[1].StellarMass, 0.0, "The satellite is not destroyed");
-}
-
-/*
- * A satellite whose tidal radius sits far outside its own disk keeps its stars:
- * the stripping term must vanish rather than nibble at every timestep.
- */
-void test_wide_orbit_strips_nothing(void)
-{
-    BEGIN_TEST("A satellite well inside its tidal radius is left alone");
-
-    struct GALAXY galaxies[2];
-    struct params run_params;
-    setup_pair(galaxies, &run_params, 1000.0, 1000.0);
-
-    galaxies[1].Vvir = 500.0;
-    galaxies[1].OrbitRadius = 1.0;     /* R_t ends up ~70 disk scalelengths out */
-    galaxies[1].StellarMass = 0.01;
-    galaxies[1].DiskScaleRadius = 0.005;
-
-    const double stars_before = galaxies[1].StellarMass;
-
-    strip_orphan_stars(0, 0, 1, 1.0, galaxies, &run_params);
-
-    ASSERT_CLOSE(stars_before, galaxies[1].StellarMass, MASS_TOL,
-                 "Stellar mass is unchanged");
-    /* The exponential tail is not identically zero, just negligible, so compare
-     * against an absolute floor rather than a relative tolerance about zero. */
-    ASSERT_LESS_THAN(galaxies[0].ICS, MASS_TOL, "Nothing measurable reaches the ICS");
-}
-
-/*
- * The bulge is stripped on its own profile, and the two Tonini bulge components
- * have to shrink with the total so they stay a partition of it.
- */
-void test_bulge_stripping_keeps_components_consistent(void)
-{
-    BEGIN_TEST("Bulge stripping scales the Tonini components with the total");
-
-    struct GALAXY galaxies[2];
-    struct params run_params;
-    setup_pair(galaxies, &run_params, 1000.0, 1000.0);
-
-    galaxies[1].Vvir = 100.0;
-    galaxies[1].OrbitRadius = 0.1;
-    galaxies[1].StellarMass = 0.01;
-    galaxies[1].MetalsStellarMass = 0.0002;
-    galaxies[1].DiskScaleRadius = 0.005;
-    galaxies[1].BulgeMass = 0.002;
-    galaxies[1].MetalsBulgeMass = 0.00004;
-    galaxies[1].BulgeRadius = 0.004;
-    galaxies[1].MergerBulgeMass = 0.0015;
-    galaxies[1].InstabilityBulgeMass = 0.0005;
-
-    strip_orphan_stars(0, 0, 1, 1.0, galaxies, &run_params);
-
-    ASSERT_LESS_THAN(galaxies[1].BulgeMass, 0.002, "The bulge loses mass");
-    ASSERT_CLOSE(galaxies[1].BulgeMass,
-                 galaxies[1].MergerBulgeMass + galaxies[1].InstabilityBulgeMass, MASS_TOL,
-                 "Merger and instability components still sum to the bulge");
-    ASSERT_LESS_THAN(galaxies[1].BulgeMass, galaxies[1].StellarMass,
-                     "The bulge stays a part of the stellar mass");
-}
-
-/*
- * With no orbit recorded there is no tidal radius to compute, so an orphan that
- * predates the toggle being switched on must simply be left alone.
- */
-void test_no_orbit_strips_nothing(void)
-{
-    BEGIN_TEST("No recorded orbit means no stripping");
-
-    struct GALAXY galaxies[2];
-    struct params run_params;
-    setup_pair(galaxies, &run_params, 1000.0, 1000.0);
-
-    galaxies[1].Vvir = 100.0;
-    galaxies[1].OrbitRadius = 0.0;
-    galaxies[1].StellarMass = 0.01;
-    galaxies[1].DiskScaleRadius = 0.005;
-
-    strip_orphan_stars(0, 0, 1, 1.0, galaxies, &run_params);
-
-    ASSERT_CLOSE(0.01, galaxies[1].StellarMass, MASS_TOL, "Stellar mass is unchanged");
-    ASSERT_CLOSE(0.0, galaxies[0].ICS, MASS_TOL, "Nothing is added to the ICS");
-}
 
 int main(void)
 {
-    BEGIN_TEST_SUITE("Contini+14 Orphan Disruption Gate");
+    BEGIN_TEST_SUITE("Contini+14 model Disr. (LetOrphansLive)");
 
     test_dense_satellite_survives();
     test_diffuse_satellite_disrupted();
-    test_partial_stripping_conserves_mass();
-    test_scalelength_preserved();
     test_empty_satellite_falls_back();
-    test_continuous_stripping_conserves_stars();
-    test_wide_orbit_strips_nothing();
-    test_bulge_stripping_keeps_components_consistent();
-    test_no_orbit_strips_nothing();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

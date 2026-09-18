@@ -9,9 +9,8 @@
  * make_bulge_from_burst), the collisional starburst recipe for both mergers
  * and disk instabilities (collisional_starburst_recipe), and satellite
  * disruption into the ICS (disrupt_satellite_to_ICS, plus the gated
- * Contini et al. (2014) models Disr. (contini14_disruption_model) and Tid.
- * (contini14_tidal_model), which are alternatives to each other, selected by
- * LetOrphansLive).
+ * Contini et al. (2014) model Disr. (contini14_disruption_model), selected by
+ * LetOrphansLive.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -68,22 +67,6 @@ static const double KD11_METAL_HALO_MASS = 30.0;  /* 10^10 Msun/h */
  * Also the canonical definition in model_misc.c (calculate_H2_fraction_GD14). */
 static const double Z_SOLAR_GD14 = 0.02;
 
-/* Contini et al. (2014) tidal radius, their eq. 5 (after Binney & Tremaine 2008):
- * R_t = (M_sat / (CONTINI14_TIDAL_DENOM * M_DM,halo))^(1/3) * D. */
-static const double CONTINI14_TIDAL_DENOM = 3.0;
-
-/* Contini et al. (2014) Sec. 3.2: the stellar disk is truncated at
- * R_sat = CONTINI14_DISK_TRUNC_FRAC * R_sl, which encloses 99.9 per cent of an
- * exponential disk.  After a stripping episode the scalelength is reset to
- * R_t / CONTINI14_DISK_TRUNC_FRAC. */
-static const double CONTINI14_DISK_TRUNC_FRAC = 10.0;
-
-/* Contini et al. (2014) Sec. 3.2 reset the disc scalelength to R_t/10 after a
- * stripping episode.  Set to 0 to skip that step: SAGE26 drives its H2 and star
- * formation from Sigma_0 = M/(2 pi r_s^2), so shrinking r_s raises the central
- * surface density of a galaxy that has just been stripped.  See
- * contini14_tidal_model() for the full caveat. */
-#define CONTINI14_RESET_SCALELENGTH 1
 
 /* Bisection controls for the pericentre solution of Contini et al. (2014) eq. 3.
  * The equation is monotonic above its single minimum, so a fixed iteration count
@@ -1208,159 +1191,3 @@ int contini14_disruption_model(const int centralgal, const int merger_centralgal
 }
 
 
-/*
- * contini14_tidal_model -- Contini et al. (2014) model Tid., Sec. 3.2.
- *
- * Physical setup:
- *   Each satellite loses mass continuously, before merging or being destroyed.
- *   Approximating the satellite as a spherically symmetric isothermal sphere,
- *   the tidal radius is their eq. 5,
- *
- *       R_t = ( M_sat / (3 M_DM,halo) )^(1/3) D.
- *
- *   The galaxy is a two-component system.  If R_t is smaller than the bulge
- *   radius the satellite is completely disrupted and its stars and cold gas go
- *   to the ICL and the hot component of the central.  If R_t sits between the
- *   bulge radius and the disc truncation radius R_sat = 10 R_sl, the shell
- *   between R_t and R_sat is stripped into the ICL, a proportional fraction of
- *   the cold gas moves to the central's hot component, and the disc scalelength
- *   is reset to R_t / 10 so the disc is again truncated at ten scalelengths.
- *
- *   The prescription applies to BOTH kinds of satellite.  For type 1 galaxies
- *   M_sat includes the dark matter, and stripping happens only where their
- *   eq. 6 holds, R_half^DM < R_half^Disc: the subhalo must have been stripped
- *   back inside the stellar disc before the stars feel anything.
- *
- * Caveat on the scalelength reset:
- *   SAGE26 uses DiskScaleRadius directly as the exponential scale length of the
- *   surface density that drives the H2 and star formation prescriptions
- *   (Sigma_0 = M / (2 pi r_s^2), model_h2_chemistry.c).  Contini et al. do not
- *   use the disc size that way.  Resetting r_s to R_t/10 therefore RAISES the
- *   central surface density of a galaxy that has just lost its outskirts and can
- *   push its star formation rate up rather than down.  The reset is applied here
- *   because it is what the paper specifies; CONTINI14_RESET_SCALELENGTH turns it
- *   off for testing how much of the result depends on it.
- *
- * Inputs:
- *   centralgal -- central of the parent FOF halo, supplying M_DM,halo and the
- *                 reference position.
- *   icsgal     -- galaxy whose ICL receives the stripped stars.
- *   gal        -- the satellite being stripped (type 1 or type 2).
- *   time       -- lookback time of this substep, for the ICS accumulator.
- *
- * Returns:
- *   1 if the satellite was completely disrupted, 0 otherwise.
- *
- * References:
- *   - Contini et al. (2014), MNRAS 437, 3787, Sec. 3.2, eqs. 5-6.
- *   - Binney & Tremaine (2008) for eq. 5.
- */
-int contini14_tidal_model(const int centralgal, const int icsgal, const int gal,
-                          const double time, struct GALAXY *galaxies, const struct params *run_params)
-{
-    if(galaxies[centralgal].Mvir <= 0.0) {
-        return 0;
-    }
-
-    /* eq. 5: M_sat is the baryonic mass for an orphan, and includes the
-     * surviving dark matter for a type 1. */
-    double sat_mass = galaxies[gal].StellarMass + galaxies[gal].ColdGas;
-    if(galaxies[gal].Type == 1) {
-        sat_mass += galaxies[gal].Mvir;
-
-        /* eq. 6: stellar stripping of a type 1 only once its subhalo has been
-         * stripped back inside the stellar disc.  For the isothermal profile
-         * assumed throughout this model M(<r) ~ r, so the subhalo half-mass
-         * radius is Rvir/2. */
-        const double r_half_dm = 0.5 * galaxies[gal].Rvir;
-        const double r_half_disc = DISK_HALF_MASS_FRAC * galaxies[gal].DiskScaleRadius;
-        if(r_half_disc <= 0.0 || r_half_dm >= r_half_disc) {
-            return 0;
-        }
-    }
-
-    if(sat_mass <= 0.0) {
-        return 0;
-    }
-
-    const double D = contini14_orbit_separation(centralgal, gal, galaxies, run_params);
-    if(D <= 0.0) {
-        disrupt_satellite_to_ICS(icsgal, gal, time, galaxies, run_params);
-        return 1;
-    }
-
-    const double R_t = cbrt(sat_mass / (CONTINI14_TIDAL_DENOM * galaxies[centralgal].Mvir)) * D;
-
-    /* Inside the bulge: complete disruption. */
-    if(R_t < galaxies[gal].BulgeRadius) {
-        disrupt_satellite_to_ICS(icsgal, gal, time, galaxies, run_params);
-        return 1;
-    }
-
-    const double r_scale = galaxies[gal].DiskScaleRadius;
-    double disk_mass = galaxies[gal].StellarMass - galaxies[gal].BulgeMass;
-    if(disk_mass < 0.0) {
-        disk_mass = 0.0;
-    }
-    if(r_scale <= 0.0 || disk_mass <= 0.0) {
-        return 0;
-    }
-
-    const double R_sat = CONTINI14_DISK_TRUNC_FRAC * r_scale;
-    if(R_t >= R_sat) {
-        return 0;
-    }
-
-    /* Mass of an exponential disc outside R is M (1 + R/R_sl) exp(-R/R_sl);
-     * the stripped shell is the difference between R_t and the truncation. */
-    const double x_t = R_t / r_scale;
-    const double x_sat = R_sat / r_scale;
-    double stripped = disk_mass * ((1.0 + x_t) * exp(-x_t) - (1.0 + x_sat) * exp(-x_sat));
-
-    if(stripped <= 0.0) {
-        return 0;
-    }
-    if(stripped > disk_mass) {
-        stripped = disk_mass;
-    }
-
-    double disk_metals = galaxies[gal].MetalsStellarMass - galaxies[gal].MetalsBulgeMass;
-    if(disk_metals < 0.0) {
-        disk_metals = 0.0;
-    }
-    const double metallicity = get_metallicity(disk_mass, disk_metals);
-    double stripped_metals = stripped * metallicity;
-    if(stripped_metals > disk_metals) {
-        stripped_metals = disk_metals;
-    }
-
-    galaxies[gal].StellarMass -= stripped;
-    galaxies[gal].MetalsStellarMass -= stripped_metals;
-
-    galaxies[icsgal].ICS += stripped;
-    galaxies[icsgal].MetalsICS += stripped_metals;
-
-    if(run_params->TrackICSAssembly) {
-        galaxies[icsgal].ICS_disrupt += stripped;
-        galaxies[icsgal].ICS_sum_mt += stripped * time;
-    }
-
-    /* A proportional fraction of the cold gas follows the stars into the
-     * central's hot component. */
-    const double strip_fraction = stripped / disk_mass;
-    const double cold_stripped = strip_fraction * galaxies[gal].ColdGas;
-    const double cold_metals_stripped = strip_fraction * galaxies[gal].MetalsColdGas;
-    if(cold_stripped > 0.0) {
-        galaxies[gal].ColdGas -= cold_stripped;
-        galaxies[gal].MetalsColdGas -= cold_metals_stripped;
-        add_gas_to_hot_reservoir(&galaxies[icsgal], run_params, cold_stripped, cold_metals_stripped);
-    }
-
-    /* The truncated disc is re-described with a scalelength of R_t / 10.  See
-     * the caveat in this function's header before changing this. */
-    if(CONTINI14_RESET_SCALELENGTH) {
-        galaxies[gal].DiskScaleRadius = R_t / CONTINI14_DISK_TRUNC_FRAC;
-    }
-
-    return 0;
-}
