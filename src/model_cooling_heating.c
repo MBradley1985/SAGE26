@@ -86,7 +86,7 @@ static const double Z_CRIT_DB06 = 1.5;
 
 /* Width, in dex, of the smooth transition about the Dekel & Birnboim (2006)
  * stream criterion (t_cool/t_comp)_stream = 1 when ColdStreamCeilingOn == 1. */
-static const double STREAM_TRANSITION_WIDTH_DEX = 0.15;
+static const double STREAM_TRANSITION_WIDTH_DEX = 0.5;
 
 /* Cold-cloud AGN accretion (AGNrecipeOn == 3): BH triggers when its mass exceeds
  * this fraction of the sonic-radius enclosed virial mass, and accretes at this
@@ -209,7 +209,9 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
                 // eq. 41 defines z_crit by f Mstar(z_crit) = Mshock, which is
                 // exactly where R = 1 at Mvir = Mshock.  No redshift cut is
                 // imposed, so f_stream is continuous everywhere.
-                const double Mstar = pow(10.0, interpolate_clustering_mass(z, run_params));
+                // const double Mstar = pow(10.0, interpolate_clustering_mass(z, run_params));
+                const double Mstar = MSUN_TO_CODE_MASS(pow(10.0, interpolate_clustering_mass(z, run_params)),
+                                                       run_params->Hubble_h);
                 const double fMstar = run_params->StreamMassFactor * Mstar;
                 const double ratio = pow(fMstar / galaxies[gal].Mvir, 2.0/3.0)
                                    * pow(mass_ratio, 4.0/3.0);
