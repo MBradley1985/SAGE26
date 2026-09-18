@@ -340,8 +340,8 @@ static int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT 
      * is what every other galaxy type reports. Fall back on the values the
      * orphan itself carries: frozen when its subhalo was last resolved, and the
      * same ones the physics uses for it while it survives. Only reachable with
-     * DisruptionGate == 1, the only way an orphan is ever written out. */
-    if(run_params->DisruptionGate == 1 && g->Type == 2) {
+     * LetOrphansLive == 1, the only way an orphan is ever written out. */
+    if(run_params->LetOrphansLive > 0 && g->Type == 2) {
         o->Rvir = g->Rvir;
         o->Vvir = g->Vvir;
     }

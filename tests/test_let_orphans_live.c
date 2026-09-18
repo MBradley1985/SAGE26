@@ -1,6 +1,6 @@
 /*
- * test_disruption_gate.c -- unit tests for the Contini et al. (2014) orphan
- * disruption gate (DisruptionGate == 1).
+ * test_let_orphans_live.c -- unit tests for the Contini et al. (2014) orphan
+ * disruption gate (LetOrphansLive == 1).
  *
  * Validates: survival of a compact satellite whose mean baryon density exceeds
  * the halo density at pericentre, complete disruption of a diffuse satellite on
@@ -9,7 +9,7 @@
  * fallback to unconditional disruption for satellites that carry no baryons,
  * and the Henriques & Thomas (2010) continuous tidal stripping of orphans.
  *
- * Run: from tests/, `make test_disruption_gate && ./test_disruption_gate`.
+ * Run: from tests/, `make test_let_orphans_live && ./test_let_orphans_live`.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */

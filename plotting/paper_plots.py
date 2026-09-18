@@ -42,7 +42,7 @@ except ImportError:
 # ========================== CONFIGURATION ==========================
 
 # File paths
-PRIMARY_DIR = './output/millennium_liveorphans/'
+PRIMARY_DIR = './output/millennium/'
 VANILLA_DIR = './output/millennium_vanilla/'
 NOFFB_DIR = './output/millennium_noffb/'
 NOCGM_DIR = './output/millennium_nocgm/'

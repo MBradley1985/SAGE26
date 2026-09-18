@@ -101,7 +101,7 @@ output if you need `SFHMassDisk` / `SFHMassBulge`.
 | 1 | Central of a sub-halo (Type 1 satellite, still has its own subhalo). |
 | 2 | Orphan satellite (subhalo lost; will merge or disrupt within the current timestep). |
 
-Type 2 galaxies only appear in the catalogue when `DisruptionGate = 1`.
+Type 2 galaxies only appear in the catalogue when `LetOrphansLive = 1`.
 With the gate off every orphan is destroyed in the snapshot that created
 it, so nothing of that type survives to the output pass.
 

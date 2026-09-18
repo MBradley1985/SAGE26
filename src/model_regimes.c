@@ -54,9 +54,9 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
          * the criterion below to the CGM regime for every orphan regardless of
          * the halo it actually had. Its Rvir, Vvir and Vmax are already frozen
          * at the last snapshot the subhalo was resolved; freeze the regime with
-         * them. Only reachable with DisruptionGate == 1, since otherwise an
+         * them. Only reachable with LetOrphansLive == 1, since otherwise an
          * orphan never survives long enough for its regime to be re-evaluated. */
-        if(run_params->DisruptionGate == 1 && galaxies[p].Type == 2) continue;
+        if(run_params->LetOrphansLive > 0 && galaxies[p].Type == 2) continue;
 
         // Convert Mvir to physical units (Msun)
         // Mvir is stored in units of 10^10 Msun/h

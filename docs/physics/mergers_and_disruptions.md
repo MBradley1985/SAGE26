@@ -30,9 +30,9 @@ Type 1 satellites merge into the central of the host halo. Type 2
 (orphan) satellites merge into whatever was their central at the time
 their subhalo was lost.
 
-### `DisruptionGate` -- the Contini et al. (2014) orphan gate
+### `LetOrphansLive` -- the Contini et al. (2014) orphan gate
 
-With `DisruptionGate = 0` (the default) step 3 above destroys the
+With `LetOrphansLive = 0` (the default) step 3 above destroys the
 satellite outright. Because an orphan's `M_vir` is set to zero the moment
 its subhalo leaves the tree, and the `currentMvir` ramp in
 `evolve_galaxies()` reaches exactly zero on the final substep, the
@@ -40,7 +40,7 @@ condition in step 2 always succeeds for an orphan: every orphan is
 therefore destroyed within the snapshot in which it was created, and
 `ThresholdSatDisruption` cannot prevent it.
 
-`DisruptionGate = 1` replaces that behaviour, for Type 2 galaxies only,
+`LetOrphansLive = 1` replaces that behaviour, for Type 2 galaxies only,
 with the prescription of Contini et al. (2014). Their model Disr.
 (Sec. 3.1, following Guo et al. 2011) requires the halo to be dense
 enough at the satellite's pericentre to unbind it:
@@ -61,7 +61,7 @@ enough at the satellite's pericentre to unbind it:
 
 Between those tests the orphan is not left untouched. Henriques & Thomas
 (2010) strip stellar material from orphans on *every* timestep, and
-`DisruptionGate = 1` does the same:
+`LetOrphansLive = 1` does the same:
 
 1. When a galaxy first becomes an orphan, `OrbitRadius` is seeded with the
    virial radius of the halo it is falling into -- the same radius

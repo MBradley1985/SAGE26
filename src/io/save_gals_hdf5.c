@@ -906,8 +906,8 @@ static int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct sav
      * is what every other galaxy type reports. Fall back on the values the
      * orphan itself carries: frozen when its subhalo was last resolved, and the
      * same ones the physics uses for it while it survives. Only reachable with
-     * DisruptionGate == 1, the only way an orphan is ever written out. */
-    if(run_params->DisruptionGate == 1 && g->Type == 2) {
+     * LetOrphansLive == 1, the only way an orphan is ever written out. */
+    if(run_params->LetOrphansLive > 0 && g->Type == 2) {
         out_Rvir = g->Rvir;
         out_Vvir = g->Vvir;
     }
@@ -1320,7 +1320,7 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ConcentrationOn", run_params->ConcentrationOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SaveFullSFH", run_params->SaveFullSFH, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "TrackICSAssembly", run_params->TrackICSAssembly, H5T_NATIVE_INT);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DisruptionGate", run_params->DisruptionGate, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "LetOrphansLive", run_params->LetOrphansLive, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "StarburstColdGasOn", run_params->StarburstColdGasOn, H5T_NATIVE_INT);
 
     // Model parameters.

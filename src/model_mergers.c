@@ -9,9 +9,9 @@
  * make_bulge_from_burst), the collisional starburst recipe for both mergers
  * and disk instabilities (collisional_starburst_recipe), and satellite
  * disruption into the ICS (disrupt_satellite_to_ICS, plus the gated
- * Contini et al. 2014 variant disrupt_satellite_gated and the Henriques &
- * Thomas 2010 continuous stripping strip_orphan_stars, both selected by
- * DisruptionGate).
+ * Contini et al. (2014) models Disr. (contini14_disruption_model) and Tid.
+ * (contini14_tidal_model), which are alternatives to each other, selected by
+ * LetOrphansLive).
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -78,15 +78,12 @@ static const double CONTINI14_TIDAL_DENOM = 3.0;
  * R_t / CONTINI14_DISK_TRUNC_FRAC. */
 static const double CONTINI14_DISK_TRUNC_FRAC = 10.0;
 
-/* Henriques & Thomas (2010) eq. 4: R_t = (1/sqrt(2)) (sigma_sat/sigma_halo) r_sat.
- * For an isothermal sphere sigma = Vvir/sqrt(2) on both sides of the ratio, so
- * only this leading factor remains once the ratio is written in Vvir. */
-static const double HT10_TIDAL_COEFF = M_SQRT1_2;
-
-/* Henriques & Thomas (2010) eq. 8: the bulge mass profile M(<r) = M r^2/(r^2+a^2)
- * uses a scale radius a = HT10_BULGE_SCALE_FRAC * R_b, with R_b the half-mass
- * (effective) bulge radius. */
-static const double HT10_BULGE_SCALE_FRAC = 0.56;
+/* Contini et al. (2014) Sec. 3.2 reset the disc scalelength to R_t/10 after a
+ * stripping episode.  Set to 0 to skip that step: SAGE26 drives its H2 and star
+ * formation from Sigma_0 = M/(2 pi r_s^2), so shrinking r_s raises the central
+ * surface density of a galaxy that has just been stripped.  See
+ * contini14_tidal_model() for the full caveat. */
+#define CONTINI14_RESET_SCALELENGTH 1
 
 /* Bisection controls for the pericentre solution of Contini et al. (2014) eq. 3.
  * The equation is monotonic above its single minimum, so a fixed iteration count
@@ -923,7 +920,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
 }
 
 // ============================================================================
-// Contini et al. (2014) disruption gate -- DisruptionGate == 1
+// Contini et al. (2014) disruption gate -- LetOrphansLive == 1
 // ============================================================================
 
 /*
@@ -1057,87 +1054,114 @@ static double contini14_half_mass_radius(const int gal, const struct GALAXY *gal
 }
 
 /*
- * disrupt_satellite_gated -- Contini et al. (2014) survival gate and partial
- * tidal stripping for an orphan satellite.
+ * contini14_orbit_separation -- halocentric distance D of a satellite.
+ *
+ * Contini et al. (2014) take D from the position of the satellite, which for an
+ * orphan they follow via the most bound particle of its last identified
+ * substructure (their Sec. 3.1).  SAGE has no particle data: MostBoundID is only
+ * an identifier, and for consistent-trees input it is the Rockstar halo id
+ * rather than a particle at all (core_simulation.h).  An orphan's Pos is simply
+ * frozen at the snapshot its subhalo was last resolved.
+ *
+ * Using that frozen position would leave D constant for the rest of the
+ * orphan's life, so it would never sink and the density test below would be
+ * very nearly static -- the opposite of the paper, where orphans spiral in and
+ * their pericentric density rises until they are destroyed.  Instead the orbit
+ * is decayed on the dynamical-friction clock SAGE already integrates.  That is
+ * Contini's own eq. 1 (Chandrasekhar, via estimate_merging_time), in which
+ * t_merge ~ r^2 at fixed satellite mass, so r shrinks as the square root of the
+ * fraction of the clock still left.  The decay is applied by the caller; this
+ * function only reports the radius to use.
+ *
+ * Type 1 satellites still have a resolved subhalo, so their true separation is
+ * available and is used directly, with the minimum-image convention for the
+ * periodic box.
+ *
+ * Returns the separation in code units (Mpc/h), or 0.0 if it cannot be formed.
+ */
+static double contini14_orbit_separation(const int centralgal, const int gal,
+                                         const struct GALAXY *galaxies, const struct params *run_params)
+{
+    if(galaxies[gal].Type == 2) {
+        return galaxies[gal].OrbitRadius;
+    }
+
+    double d_sq = 0.0;
+    for(int j = 0; j < 3; j++) {
+        double d = galaxies[gal].Pos[j] - galaxies[centralgal].Pos[j];
+        if(d > 0.5 * run_params->BoxSize) {
+            d -= run_params->BoxSize;
+        } else if(d < -0.5 * run_params->BoxSize) {
+            d += run_params->BoxSize;
+        }
+        d_sq += d * d;
+    }
+    return sqrt(d_sq);
+}
+
+
+/*
+ * contini14_disruption_model -- Contini et al. (2014) model Disr., Sec. 3.1.
  *
  * Physical setup:
- *   SAGE's default behaviour destroys an orphan outright the moment its
- *   subhalo leaves the merger tree.  Contini et al. (2014) instead require the
- *   parent halo to be dense enough at the satellite's pericentre to unbind it.
- *   Their model Disr. (Sec. 3.1, following Guo et al. 2011) compares the halo
- *   density at pericentre with the mean baryon density of the satellite inside
- *   its half-mass radius, and only destroys satellites that lose that
- *   comparison.  Satellites that survive keep their reservoirs and carry on to
- *   the next snapshot, where the test is repeated; the dynamical-friction
- *   clock continues to run, so a survivor eventually merges instead.
+ *   The satellite orbits in the singular isothermal potential of their eq. 2.
+ *   Conserving energy and angular momentum gives the pericentre (eq. 3).  If
+ *   the halo's mean density inside the pericentre exceeds the satellite's mean
+ *   baryon density inside its half-mass radius (eq. 4),
  *
- *   When the gate does open, the material removed is set by the tidal radius
- *   of their Sec. 3.2 (eqs. 5-6) rather than by wholesale destruction: only the
- *   stellar disk outside R_t is unbound, and total destruction is reserved for
- *   satellites whose tidal radius has cut inside the bulge.
+ *       M_DM,halo(R_peri) / R_peri^3  >  M_sat / R_half^3,
  *
- * Algorithm:
- *   1. Evaluate the satellite's separation D and relative velocity from the
- *      parent halo centre, using the minimum-image convention for the periodic
- *      box.
- *   2. Solve eq. 3 for the pericentre and form the halo density there,
- *      rho_halo = M_DM,halo(R_peri) / R_peri^3, with M(<R) = Vvir^2 R / G for
- *      the isothermal potential of eq. 2.
- *   3. Form the satellite density rho_sat = M_sat / R_half^3 with
- *      M_sat = StellarMass + ColdGas (eq. 4).
- *   4. If rho_halo <= rho_sat the satellite survives untouched: return 0.
- *   5. Otherwise compute R_t from eq. 5.  If R_t is inside the bulge radius
- *      the satellite is completely disrupted (Sec. 3.2); hand over to
- *      disrupt_satellite_to_ICS() and return 1.
- *   6. If R_t lies inside the truncation radius R_sat = 10 R_sl, strip the
- *      exponential-disk mass in the shell R_t to R_sat into the central's ICS,
- *      move the same fraction of the cold gas to the central's hot phase, and
- *      reset the scalelength to R_t / 10.  The satellite survives: return 0.
+ *   the satellite is disrupted and ALL of its stars are assigned to the ICL of
+ *   the central galaxy.  There is no partial stripping in this model; that is
+ *   model Tid. (Sec. 3.2), which the paper treats as an alternative rather than
+ *   a companion (their footnote 3).
+ *
+ *   Satellites that pass the test keep their reservoirs and are carried to the
+ *   next snapshot, where the test is repeated against an orbit that has decayed
+ *   and a halo that has grown.  The dynamical-friction clock keeps running, so a
+ *   long-term survivor merges rather than being disrupted.
  *
  * Inputs:
- *   centralgal       -- central galaxy of the parent FOF halo.  Supplies the
- *                       potential (Mvir, Vvir) and the reference position.
- *   merger_centralgal-- galaxy that receives the stripped material.
- *   gal              -- the orphan being tested.
- *   time             -- lookback time of this substep, code units, recorded in
- *                       the ICS assembly accumulator.
+ *   centralgal        -- central of the parent FOF halo; supplies Mvir, Vvir, Pos, Vel.
+ *   merger_centralgal -- galaxy that receives the disrupted material.
+ *   gal               -- the orphan under test.
+ *   time              -- lookback time of this substep, for the ICS accumulator.
  *
  * Returns:
- *   1 if the satellite was completely disrupted (mergeType is now set and the
- *   caller must not touch it again), 0 if it survived this substep.
+ *   1 if the satellite was disrupted (mergeType is set; the caller must not
+ *   touch it again), 0 if it survived.
  *
  * References:
- *   - Contini et al. (2014), MNRAS 437, 3787, Sec. 3.1 (eqs. 2-4) and
- *     Sec. 3.2 (eqs. 5-6).
- *   - Guo et al. (2011), MNRAS 413, 101 -- the disruption criterion adopted by
- *     Contini et al. as their model Disr.
- *
- * Invariants:
- *   - Stripped mass never exceeds the stellar disk mass.
- *   - A satellite with no baryons, or with no usable size information, is
- *     passed to disrupt_satellite_to_ICS() so that empty orphans cannot
- *     survive indefinitely.
+ *   - Contini et al. (2014), MNRAS 437, 3787, Sec. 3.1, eqs. 2-4.
+ *   - Guo et al. (2011), MNRAS 413, 101, whose criterion Contini et al. adopt.
  */
-int disrupt_satellite_gated(const int centralgal, const int merger_centralgal, const int gal,
-                            const double time, struct GALAXY *galaxies, const struct params *run_params)
+int contini14_disruption_model(const int centralgal, const int merger_centralgal, const int gal,
+                               const double time, struct GALAXY *galaxies, const struct params *run_params)
 {
     const double sat_mass = galaxies[gal].StellarMass + galaxies[gal].ColdGas;
     const double half_mass_radius = contini14_half_mass_radius(gal, galaxies);
 
-    /* Degenerate satellites cannot be tested; fall back to the ungated
-     * behaviour so they are removed rather than left orbiting forever. */
+    /* A satellite with no baryons or no size cannot be tested.  Removing it is
+     * the safe outcome -- otherwise it orbits forever contributing nothing. */
     if(sat_mass <= 0.0 || half_mass_radius <= 0.0 ||
        galaxies[centralgal].Vvir <= 0.0 || galaxies[centralgal].Mvir <= 0.0) {
         disrupt_satellite_to_ICS(merger_centralgal, gal, time, galaxies, run_params);
         return 1;
     }
 
-    /* Step 1: separation and relative velocity from the parent halo centre.
-     * Halo positions are periodic, so a FOF group straddling a box face would
-     * otherwise report a separation of order the box size. */
+    const double D = contini14_orbit_separation(centralgal, gal, galaxies, run_params);
+    if(D <= 0.0) {
+        /* Arrived at the halo centre: nothing survives there. */
+        disrupt_satellite_to_ICS(merger_centralgal, gal, time, galaxies, run_params);
+        return 1;
+    }
+
+    /* Velocity relative to the halo centre, split into total and tangential
+     * parts for eq. 3.  An orphan's velocity is frozen with its position. */
     double dx[3];
-    double dv[3];
-    double D_sq = 0.0;
+    double v_sq = 0.0;
+    double v_radial = 0.0;
+    double dx_norm = 0.0;
     for(int j = 0; j < 3; j++) {
         double d = galaxies[gal].Pos[j] - galaxies[centralgal].Pos[j];
         if(d > 0.5 * run_params->BoxSize) {
@@ -1146,67 +1170,138 @@ int disrupt_satellite_gated(const int centralgal, const int merger_centralgal, c
             d += run_params->BoxSize;
         }
         dx[j] = d;
-        dv[j] = galaxies[gal].Vel[j] - galaxies[centralgal].Vel[j];
-        D_sq += d * d;
+        dx_norm += d * d;
     }
-    const double D = sqrt(D_sq);
-
-    if(D <= 0.0) {
-        /* Sitting on the halo centre: nothing survives there. */
-        disrupt_satellite_to_ICS(merger_centralgal, gal, time, galaxies, run_params);
-        return 1;
-    }
-
-    double v_sq = 0.0;
-    double v_radial = 0.0;
+    dx_norm = sqrt(dx_norm);
     for(int j = 0; j < 3; j++) {
-        v_sq += dv[j] * dv[j];
-        v_radial += dv[j] * dx[j] / D;
+        const double dv = galaxies[gal].Vel[j] - galaxies[centralgal].Vel[j];
+        v_sq += dv * dv;
+        if(dx_norm > 0.0) {
+            v_radial += dv * dx[j] / dx_norm;
+        }
     }
     const double v_total = sqrt(v_sq);
     double v_tang_sq = v_sq - v_radial * v_radial;
     if(v_tang_sq < 0.0) {
         v_tang_sq = 0.0;
     }
-    const double v_tang = sqrt(v_tang_sq);
 
-    /* Step 2: halo density at pericentre.  For phi(R) = Vvir^2 ln R the
-     * enclosed mass is M(<R) = Vvir^2 R / G, so M(<R_peri) / R_peri^3 reduces
-     * to Vvir^2 / (G R_peri^2). */
-    const double r_peri = contini14_pericentre(D, v_total, v_tang, galaxies[centralgal].Vvir);
+    const double r_peri = contini14_pericentre(D, v_total, sqrt(v_tang_sq), galaxies[centralgal].Vvir);
     if(r_peri <= 0.0) {
-        /* Radial plunge: the density at pericentre diverges and the gate is
-         * always open. */
+        /* Radial plunge: the density at pericentre diverges, eq. 4 always holds. */
         disrupt_satellite_to_ICS(merger_centralgal, gal, time, galaxies, run_params);
         return 1;
     }
+
+    /* For phi(R) = Vvir^2 ln R the enclosed mass is M(<R) = Vvir^2 R / G, so
+     * M(<R_peri)/R_peri^3 reduces to Vvir^2 / (G R_peri^2). */
     const double rho_halo = galaxies[centralgal].Vvir * galaxies[centralgal].Vvir /
                             (run_params->G * r_peri * r_peri);
-
-    /* Step 3: mean baryon density of the satellite inside its half-mass radius. */
     const double rho_sat = sat_mass / (half_mass_radius * half_mass_radius * half_mass_radius);
 
-    /* Step 4: the gate.  A satellite denser than its surroundings at pericentre
-     * is not disrupted, and lives to be tested again next substep. */
-    if(rho_halo <= rho_sat) {
+    if(rho_halo > rho_sat) {
+        disrupt_satellite_to_ICS(merger_centralgal, gal, time, galaxies, run_params);
+        return 1;
+    }
+
+    return 0;
+}
+
+
+/*
+ * contini14_tidal_model -- Contini et al. (2014) model Tid., Sec. 3.2.
+ *
+ * Physical setup:
+ *   Each satellite loses mass continuously, before merging or being destroyed.
+ *   Approximating the satellite as a spherically symmetric isothermal sphere,
+ *   the tidal radius is their eq. 5,
+ *
+ *       R_t = ( M_sat / (3 M_DM,halo) )^(1/3) D.
+ *
+ *   The galaxy is a two-component system.  If R_t is smaller than the bulge
+ *   radius the satellite is completely disrupted and its stars and cold gas go
+ *   to the ICL and the hot component of the central.  If R_t sits between the
+ *   bulge radius and the disc truncation radius R_sat = 10 R_sl, the shell
+ *   between R_t and R_sat is stripped into the ICL, a proportional fraction of
+ *   the cold gas moves to the central's hot component, and the disc scalelength
+ *   is reset to R_t / 10 so the disc is again truncated at ten scalelengths.
+ *
+ *   The prescription applies to BOTH kinds of satellite.  For type 1 galaxies
+ *   M_sat includes the dark matter, and stripping happens only where their
+ *   eq. 6 holds, R_half^DM < R_half^Disc: the subhalo must have been stripped
+ *   back inside the stellar disc before the stars feel anything.
+ *
+ * Caveat on the scalelength reset:
+ *   SAGE26 uses DiskScaleRadius directly as the exponential scale length of the
+ *   surface density that drives the H2 and star formation prescriptions
+ *   (Sigma_0 = M / (2 pi r_s^2), model_h2_chemistry.c).  Contini et al. do not
+ *   use the disc size that way.  Resetting r_s to R_t/10 therefore RAISES the
+ *   central surface density of a galaxy that has just lost its outskirts and can
+ *   push its star formation rate up rather than down.  The reset is applied here
+ *   because it is what the paper specifies; CONTINI14_RESET_SCALELENGTH turns it
+ *   off for testing how much of the result depends on it.
+ *
+ * Inputs:
+ *   centralgal -- central of the parent FOF halo, supplying M_DM,halo and the
+ *                 reference position.
+ *   icsgal     -- galaxy whose ICL receives the stripped stars.
+ *   gal        -- the satellite being stripped (type 1 or type 2).
+ *   time       -- lookback time of this substep, for the ICS accumulator.
+ *
+ * Returns:
+ *   1 if the satellite was completely disrupted, 0 otherwise.
+ *
+ * References:
+ *   - Contini et al. (2014), MNRAS 437, 3787, Sec. 3.2, eqs. 5-6.
+ *   - Binney & Tremaine (2008) for eq. 5.
+ */
+int contini14_tidal_model(const int centralgal, const int icsgal, const int gal,
+                          const double time, struct GALAXY *galaxies, const struct params *run_params)
+{
+    if(galaxies[centralgal].Mvir <= 0.0) {
         return 0;
     }
 
-    /* Step 5: tidal radius, and complete disruption once it cuts into the bulge. */
-    const double R_t = cbrt(sat_mass / (CONTINI14_TIDAL_DENOM * galaxies[centralgal].Mvir)) * D;
+    /* eq. 5: M_sat is the baryonic mass for an orphan, and includes the
+     * surviving dark matter for a type 1. */
+    double sat_mass = galaxies[gal].StellarMass + galaxies[gal].ColdGas;
+    if(galaxies[gal].Type == 1) {
+        sat_mass += galaxies[gal].Mvir;
 
-    if(R_t < galaxies[gal].BulgeRadius) {
-        disrupt_satellite_to_ICS(merger_centralgal, gal, time, galaxies, run_params);
+        /* eq. 6: stellar stripping of a type 1 only once its subhalo has been
+         * stripped back inside the stellar disc.  For the isothermal profile
+         * assumed throughout this model M(<r) ~ r, so the subhalo half-mass
+         * radius is Rvir/2. */
+        const double r_half_dm = 0.5 * galaxies[gal].Rvir;
+        const double r_half_disc = DISK_HALF_MASS_FRAC * galaxies[gal].DiskScaleRadius;
+        if(r_half_disc <= 0.0 || r_half_dm >= r_half_disc) {
+            return 0;
+        }
+    }
+
+    if(sat_mass <= 0.0) {
+        return 0;
+    }
+
+    const double D = contini14_orbit_separation(centralgal, gal, galaxies, run_params);
+    if(D <= 0.0) {
+        disrupt_satellite_to_ICS(icsgal, gal, time, galaxies, run_params);
         return 1;
     }
 
-    /* Step 6: strip the exponential stellar disk outside R_t. */
+    const double R_t = cbrt(sat_mass / (CONTINI14_TIDAL_DENOM * galaxies[centralgal].Mvir)) * D;
+
+    /* Inside the bulge: complete disruption. */
+    if(R_t < galaxies[gal].BulgeRadius) {
+        disrupt_satellite_to_ICS(icsgal, gal, time, galaxies, run_params);
+        return 1;
+    }
+
     const double r_scale = galaxies[gal].DiskScaleRadius;
     double disk_mass = galaxies[gal].StellarMass - galaxies[gal].BulgeMass;
     if(disk_mass < 0.0) {
         disk_mass = 0.0;
     }
-
     if(r_scale <= 0.0 || disk_mass <= 0.0) {
         return 0;
     }
@@ -1216,9 +1311,8 @@ int disrupt_satellite_gated(const int centralgal, const int merger_centralgal, c
         return 0;
     }
 
-    /* Enclosed mass of an exponential disk outside radius R is
-     * M (1 + R/R_sl) exp(-R/R_sl); the shell between R_t and the truncation
-     * radius is the difference of the two. */
+    /* Mass of an exponential disc outside R is M (1 + R/R_sl) exp(-R/R_sl);
+     * the stripped shell is the difference between R_t and the truncation. */
     const double x_t = R_t / r_scale;
     const double x_sat = R_sat / r_scale;
     double stripped = disk_mass * ((1.0 + x_t) * exp(-x_t) - (1.0 + x_sat) * exp(-x_sat));
@@ -1230,8 +1324,6 @@ int disrupt_satellite_gated(const int centralgal, const int merger_centralgal, c
         stripped = disk_mass;
     }
 
-    /* Stellar metals follow the disk, whose metal mass is the stellar total
-     * less what is locked in the bulge. */
     double disk_metals = galaxies[gal].MetalsStellarMass - galaxies[gal].MetalsBulgeMass;
     if(disk_metals < 0.0) {
         disk_metals = 0.0;
@@ -1245,157 +1337,6 @@ int disrupt_satellite_gated(const int centralgal, const int merger_centralgal, c
     galaxies[gal].StellarMass -= stripped;
     galaxies[gal].MetalsStellarMass -= stripped_metals;
 
-    galaxies[merger_centralgal].ICS += stripped;
-    galaxies[merger_centralgal].MetalsICS += stripped_metals;
-
-    if(run_params->TrackICSAssembly) {
-        galaxies[merger_centralgal].ICS_disrupt += stripped;
-        galaxies[merger_centralgal].ICS_sum_mt += stripped * time;
-    }
-
-    /* Contini et al. (2014) Sec. 3.2: a proportional fraction of the cold gas
-     * follows the stripped stars into the central's hot phase. */
-    const double strip_fraction = stripped / disk_mass;
-    const double cold_stripped = strip_fraction * galaxies[gal].ColdGas;
-    const double cold_metals_stripped = strip_fraction * galaxies[gal].MetalsColdGas;
-    if(cold_stripped > 0.0) {
-        galaxies[gal].ColdGas -= cold_stripped;
-        galaxies[gal].MetalsColdGas -= cold_metals_stripped;
-        add_gas_to_hot_reservoir(&galaxies[merger_centralgal], run_params, cold_stripped, cold_metals_stripped);
-    }
-
-    /* Contini et al. re-describe the truncated disk with a scalelength of
-     * R_t / 10 so that it is again truncated at ten scalelengths. That step is
-     * deliberately not taken here: SAGE26 uses DiskScaleRadius directly as the
-     * exponential scale length of the surface density that drives the H2 and
-     * star formation prescriptions (Sigma_0 = M / (2 pi r_s^2) in
-     * model_h2_chemistry.c), so compressing r_s tenfold *raises* the central
-     * surface density of a galaxy that has just lost its outskirts, and sends
-     * its star formation rate up rather than down. Leaving r_s alone keeps the
-     * retained material on the profile it already had inside R_t, and lets the
-     * reduced mass lower Sigma_0 as it should. */
-
-    return 0;
-}
-
-/*
- * strip_orphan_stars -- continuous tidal stripping of an orphan satellite.
- *
- * Physical setup:
- *   Henriques & Thomas (2010) strip stellar material from orphans on every
- *   timestep rather than only at a disruption event.  Material lying outside
- *   the satellite's tidal radius is unbound and joins the intracluster
- *   component.  Assuming an isothermal profile for both the satellite and the
- *   parent halo, and a circular orbit, their eq. 4 gives
- *
- *     R_t = (1 / sqrt(2)) * (sigma_sat / sigma_halo) * r_sat,
- *
- *   where r_sat is the current halocentric radius of the decaying orbit.  For
- *   an isothermal sphere sigma = Vvir / sqrt(2), so the dispersion ratio is
- *   just the ratio of virial velocities and the sqrt(2) factors cancel.
- *
- *   The mass outside R_t is evaluated per component.  The disk is exponential,
- *   so from their eq. 6 the mass beyond R_t is M_disk (1 + x) exp(-x) with
- *   x = R_t / R_sl.  The bulge follows their eq. 9, M(<r) = M r^2 / (r^2 + a^2)
- *   with a = HT10_BULGE_SCALE_FRAC * R_b, leaving M a^2 / (R_t^2 + a^2)
- *   outside.  R_b is the half-mass bulge radius, which SAGE26 already models
- *   via get_bulge_radius(); Henriques & Thomas instead recover it from a
- *   Djorgovski & Davis (1987) relation because their base model had no bulge
- *   sizes at all.
- *
- *   The paper assumes a uniform metallicity distribution, so stars and metals
- *   are stripped in equal fractions.
- *
- * Algorithm:
- *   1. Bail out unless the orbit and both virial velocities are usable.
- *   2. Form R_t from eq. 4.
- *   3. Accumulate the disk mass beyond R_t (eq. 6) and the bulge mass beyond
- *      R_t (eq. 9).
- *   4. Move that mass, and the same fraction of the stellar metals, into the
- *      central's ICS; shrink the bulge components in proportion.
- *
- * Inputs:
- *   centralgal -- central galaxy of the parent FOF halo, supplying sigma_halo.
- *   icsgal     -- galaxy whose ICS reservoir receives the stripped stars.
- *   gal        -- the orphan being stripped.
- *   time       -- lookback time of this substep, code units, recorded in the
- *                 ICS assembly accumulator.
- *
- * References:
- *   - Henriques & Thomas (2010), MNRAS 403, 768, Sec. 2.2, eqs. 4, 6 and 9.
- *
- * Invariants:
- *   - Stripped mass never exceeds the satellite's stellar mass, and neither
- *     StellarMass nor BulgeMass is driven negative.
- *   - Nothing is stripped when R_t is large enough to enclose the galaxy.
- */
-void strip_orphan_stars(const int centralgal, const int icsgal, const int gal,
-                        const double time, struct GALAXY *galaxies, const struct params *run_params)
-{
-    /* Step 1: the orbit has to be resolved and both velocity dispersions known. */
-    if(galaxies[gal].OrbitRadius <= 0.0 || galaxies[gal].Vvir <= 0.0 ||
-       galaxies[centralgal].Vvir <= 0.0 || galaxies[gal].StellarMass <= 0.0) {
-        return;
-    }
-
-    /* Step 2: tidal radius.  sigma = Vvir / sqrt(2) for an isothermal sphere in
-     * both numerator and denominator, so only the velocity ratio survives. */
-    const double R_t = HT10_TIDAL_COEFF * (galaxies[gal].Vvir / galaxies[centralgal].Vvir)
-                       * galaxies[gal].OrbitRadius;
-
-    /* Step 3: mass beyond R_t, component by component. */
-    double disk_mass = galaxies[gal].StellarMass - galaxies[gal].BulgeMass;
-    if(disk_mass < 0.0) {
-        disk_mass = 0.0;
-    }
-    const double bulge_mass = galaxies[gal].BulgeMass;
-
-    double stripped_disk = 0.0;
-    if(disk_mass > 0.0 && galaxies[gal].DiskScaleRadius > 0.0) {
-        const double x = R_t / galaxies[gal].DiskScaleRadius;
-        stripped_disk = disk_mass * (1.0 + x) * exp(-x);
-    }
-
-    double stripped_bulge = 0.0;
-    if(bulge_mass > 0.0 && galaxies[gal].BulgeRadius > 0.0) {
-        const double a = HT10_BULGE_SCALE_FRAC * galaxies[gal].BulgeRadius;
-        stripped_bulge = bulge_mass * a * a / (R_t * R_t + a * a);
-    }
-
-    if(stripped_disk > disk_mass) {
-        stripped_disk = disk_mass;
-    }
-    if(stripped_bulge > bulge_mass) {
-        stripped_bulge = bulge_mass;
-    }
-
-    const double stripped = stripped_disk + stripped_bulge;
-    if(stripped <= 0.0) {
-        return;
-    }
-
-    /* Step 4: hand the unbound stars to the central's ICS.  Uniform metallicity
-     * means metals leave in the same proportion as stars. */
-    const double metallicity = get_metallicity(galaxies[gal].StellarMass, galaxies[gal].MetalsStellarMass);
-    double stripped_metals = stripped * metallicity;
-    if(stripped_metals > galaxies[gal].MetalsStellarMass) {
-        stripped_metals = galaxies[gal].MetalsStellarMass;
-    }
-
-    galaxies[gal].StellarMass -= stripped;
-    galaxies[gal].MetalsStellarMass -= stripped_metals;
-
-    if(stripped_bulge > 0.0) {
-        /* Keep the two Tonini bulge components consistent with the total. */
-        const double remaining_frac = (bulge_mass - stripped_bulge) / bulge_mass;
-        const double bulge_metals = galaxies[gal].MetalsBulgeMass * (1.0 - remaining_frac);
-
-        galaxies[gal].BulgeMass -= stripped_bulge;
-        galaxies[gal].MetalsBulgeMass -= bulge_metals;
-        galaxies[gal].MergerBulgeMass *= remaining_frac;
-        galaxies[gal].InstabilityBulgeMass *= remaining_frac;
-    }
-
     galaxies[icsgal].ICS += stripped;
     galaxies[icsgal].MetalsICS += stripped_metals;
 
@@ -1403,4 +1344,23 @@ void strip_orphan_stars(const int centralgal, const int icsgal, const int gal,
         galaxies[icsgal].ICS_disrupt += stripped;
         galaxies[icsgal].ICS_sum_mt += stripped * time;
     }
+
+    /* A proportional fraction of the cold gas follows the stars into the
+     * central's hot component. */
+    const double strip_fraction = stripped / disk_mass;
+    const double cold_stripped = strip_fraction * galaxies[gal].ColdGas;
+    const double cold_metals_stripped = strip_fraction * galaxies[gal].MetalsColdGas;
+    if(cold_stripped > 0.0) {
+        galaxies[gal].ColdGas -= cold_stripped;
+        galaxies[gal].MetalsColdGas -= cold_metals_stripped;
+        add_gas_to_hot_reservoir(&galaxies[icsgal], run_params, cold_stripped, cold_metals_stripped);
+    }
+
+    /* The truncated disc is re-described with a scalelength of R_t / 10.  See
+     * the caveat in this function's header before changing this. */
+    if(CONTINI14_RESET_SCALELENGTH) {
+        galaxies[gal].DiskScaleRadius = R_t / CONTINI14_DISK_TRUNC_FRAC;
+    }
+
+    return 0;
 }

@@ -351,7 +351,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
              * the committed regression baseline. Sanitising it unconditionally
              * is the right fix but needs a deliberate baseline re-capture. */
             const double tff_out = tff * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR;
-            galaxies[gal].tff = (run_params->DisruptionGate == 1 && !isfinite(tff_out))
+            galaxies[gal].tff = (run_params->LetOrphansLive > 0 && !isfinite(tff_out))
                                 ? -1.0f
                                 : (float)tff_out;
             

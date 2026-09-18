@@ -20,10 +20,13 @@ extern "C" {
 
     /* functions in model_mergers.c*/
     extern void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double time, struct GALAXY *galaxies, const struct params *run_params);
-    extern int disrupt_satellite_gated(const int centralgal, const int merger_centralgal, const int gal,
-                                       const double time, struct GALAXY *galaxies, const struct params *run_params);
-    extern void strip_orphan_stars(const int centralgal, const int icsgal, const int gal,
-                                   const double time, struct GALAXY *galaxies, const struct params *run_params);
+    /* Contini et al. (2014) orphan treatments.  Models Disr. (Sec. 3.1) and Tid.
+     * (Sec. 3.2) are alternatives to each other -- see their footnote 3 -- and are
+     * selected by LetOrphansLive = 1 and 2 respectively. */
+    extern int contini14_disruption_model(const int centralgal, const int merger_centralgal, const int gal,
+                                          const double time, struct GALAXY *galaxies, const struct params *run_params);
+    extern int contini14_tidal_model(const int centralgal, const int icsgal, const int gal,
+                                     const double time, struct GALAXY *galaxies, const struct params *run_params);
     extern double estimate_merging_time(const int sat_halo, const int mother_halo, const int ngal, struct halo_data *halos, struct GALAXY *galaxies, const struct params *run_params);
     extern void deal_with_galaxy_merger(const int p, int merger_centralgal, const int centralgal, const double time,
                                         const double dt, const int halonr, const int step, struct GALAXY *galaxies, const struct params *run_params);

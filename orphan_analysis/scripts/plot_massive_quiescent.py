@@ -2,7 +2,7 @@
 
 Replicates the CentralSatelliteFraction_MassiveQuiescent diagnostic from
 plotting/allresults-history.py (top 10 per cent by stellar mass, sSFR below
-0.2/t_H) for the DisruptionGate = 0 and = 1 runs. Satellites are Type >= 1, so
+0.2/t_H) for the LetOrphansLive = 0 and = 1 runs. Satellites are Type >= 1, so
 orphans are included where they exist -- matching the script, and the reason the
 two curves sum to 1 again.
 
@@ -74,9 +74,9 @@ def main():
     os.makedirs(FIGS, exist_ok=True)
     alist = np.loadtxt(ALIST)
 
-    runs = [("DisruptionGate = 0 (default)",
+    runs = [("LetOrphansLive = 0 (default)",
              "/Users/mbradley/Documents/PhD/SAGE26/output/millennium/model_0.hdf5"),
-            ("DisruptionGate = 1",
+            ("LetOrphansLive = 1",
              os.environ["GATE_RUN"])]
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.2), sharey=True)

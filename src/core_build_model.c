@@ -307,13 +307,13 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                      * built this galaxy's clock assuming it starts at the virial
                      * radius of the halo it is falling into, so start the orbit
                      * from the same place to keep the two consistent. */
-                    if(run_params->DisruptionGate == 1) {
+                    if(run_params->LetOrphansLive > 0) {
                         galaxies[ngal].OrbitRadius = get_virial_radius(halos[halonr].FirstHaloInFOFgroup, halos, run_params);
                     }
 
                     galaxies[ngal].Type = 2;
                 }
-            } else if(run_params->DisruptionGate == 1 && galaxies[ngal].Type == 2) {
+            } else if(run_params->LetOrphansLive > 0 && galaxies[ngal].Type == 2) {
                 /* A surviving orphan skips the block above, which is also where
                  * the per-snapshot accumulators are cleared for every other
                  * galaxy. Left alone they would keep summing across snapshots
@@ -361,13 +361,13 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
         }
     }
 
-    /* With DisruptionGate == 1 an orphan can outlive the snapshot in which it
+    /* With LetOrphansLive == 1 an orphan can outlive the snapshot in which it
      * lost its subhalo, so a halo can inherit orphans without inheriting any
      * type 0 or 1 galaxy -- a case that cannot arise with the gate off, where
      * every orphan is destroyed before it can be written out.  Contini et al.
      * (2014) keep such a galaxy bound to its FOF group, so give the orphans a
      * central to belong to rather than leaving CentralGal at -1. */
-    if(run_params->DisruptionGate == 1 && centralgal == -1 && ngal > ngalstart) {
+    if(run_params->LetOrphansLive > 0 && centralgal == -1 && ngal > ngalstart) {
         if(ngalstart > 0) {
             /* A satellite halo of this FOF group: the group central was
              * established when FirstHaloInFOFgroup was processed first. */
@@ -515,13 +515,13 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                     reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
                 }
             } else if(galaxies[p].Type == 1 ||
-                      (run_params->DisruptionGate == 1 && galaxies[p].Type == 2)) {
+                      (run_params->LetOrphansLive > 0 && galaxies[p].Type == 2)) {
                 // Satellites hand their baryon excess to the central once per
                 // substep, in the same place and on the same cadence as the
                 // original SAGE. strip_from_satellite divides by the substep
                 // count, so the per-snapshot fraction does not depend on it.
                 //
-                // Orphans join them once DisruptionGate == 1. The Type 1
+                // Orphans join them once LetOrphansLive == 1. The Type 1
                 // restriction is inherited from SAGE16, where it cost nothing
                 // because an orphan was destroyed inside the snapshot that
                 // created it. Once orphans survive it would strand their hot and
@@ -565,28 +565,41 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 const double mergtime_before = galaxies[p].MergTime;
                 galaxies[p].MergTime -= deltaT / effective_steps;
 
-                /* Henriques & Thomas (2010) strip stellar material from orphans
-                 * on every timestep, not only when they are destroyed.  Their
-                 * dynamical-friction time (their eq. 2, the one SAGE already
-                 * uses in estimate_merging_time) scales as r_sat^2 at fixed
-                 * satellite mass, so the orbit shrinks as the square root of
-                 * the fraction of the merging clock still left.  Tying the
-                 * orbit to the existing clock this way leaves merger timing
-                 * untouched -- only the stripping is new. */
-                if(run_params->DisruptionGate == 1 && galaxies[p].Type == 2) {
+                /* Decay the orphan's orbit on the dynamical-friction clock.
+                 * Contini et al. (2014) follow an orphan's position via the most
+                 * bound particle of its last identified substructure; SAGE has no
+                 * particle data (MostBoundID is only an identifier, and for
+                 * consistent-trees input it is a halo id), so the frozen position
+                 * would leave the orbit static and the orphan would never sink.
+                 * Their own eq. 1 is the Chandrasekhar time, t_merge ~ r^2 at
+                 * fixed satellite mass, so the radius shrinks as the square root
+                 * of the fraction of the clock still left.  Tying the orbit to the
+                 * clock SAGE already integrates leaves merger timing untouched. */
+                if(run_params->LetOrphansLive > 0 && galaxies[p].Type == 2) {
                     if(mergtime_before > 0.0 && galaxies[p].MergTime > 0.0) {
                         galaxies[p].OrbitRadius *= sqrt(galaxies[p].MergTime / mergtime_before);
                     } else {
                         galaxies[p].OrbitRadius = 0.0;
                     }
+                }
 
-                    int strip_icsgal = galaxies[p].CentralGal;
+                /* Contini et al. (2014) model Tid. (Sec. 3.2) strips satellites
+                 * continuously, before they merge or are destroyed, and applies to
+                 * type 1 as well as type 2.  Model Disr. (LetOrphansLive == 1) has
+                 * no continuous channel -- the paper treats the two as
+                 * alternatives -- so this runs for mode 2 only. */
+                if(run_params->LetOrphansLive == 2 &&
+                   (galaxies[p].Type == 1 || galaxies[p].Type == 2)) {
+                    int strip_icsgal = galaxies[p].Type == 1 ? centralgal : galaxies[p].CentralGal;
                     if(galaxies[strip_icsgal].mergeType > 0) {
                         strip_icsgal = galaxies[strip_icsgal].CentralGal;
                     }
 
                     const double strip_time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
-                    strip_orphan_stars(centralgal, strip_icsgal, p, strip_time, galaxies, run_params);
+                    if(contini14_tidal_model(centralgal, strip_icsgal, p, strip_time, galaxies, run_params) == 1) {
+                        galaxies[p].mergeIntoID = *numgals + strip_icsgal;
+                        continue;   /* destroyed; nothing else to do this substep */
+                    }
                 }
 
                 // only consider mergers or disruption for halo-to-baryonic mass ratios below the threshold
@@ -608,7 +621,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                         const double event_time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
                         // disruption has occurred!
                         if(galaxies[p].MergTime > 0.0) {
-                            /* DisruptionGate == 1 replaces the unconditional
+                            /* LetOrphansLive == 1 replaces the unconditional
                              * destruction of an orphan with the Contini et al.
                              * (2014) model Disr. survival test plus their
                              * tidal-radius stripping.  Their prescription acts
@@ -617,8 +630,17 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                              * reservoirs and is carried to the next snapshot,
                              * where the dynamical-friction clock -- still
                              * running -- eventually merges it instead. */
-                            if(run_params->DisruptionGate == 1 && galaxies[p].Type == 2) {
-                                if(disrupt_satellite_gated(centralgal, merger_centralgal, p, event_time, galaxies, run_params) == 0) {
+                            if(run_params->LetOrphansLive > 0 && galaxies[p].Type == 2) {
+                                /* Mode 1 tests the Sec. 3.1 density criterion here.
+                                 * Mode 2 has already applied its Sec. 3.2 stripping
+                                 * above, and destroys a satellite only when the
+                                 * tidal radius cuts inside the bulge, so an orphan
+                                 * that reaches this point simply survives. */
+                                const int destroyed =
+                                    (run_params->LetOrphansLive == 1)
+                                    ? contini14_disruption_model(centralgal, merger_centralgal, p, event_time, galaxies, run_params)
+                                    : 0;
+                                if(destroyed == 0) {
                                     /* No merger event to record for a survivor. */
                                     galaxies[p].mergeIntoID = -1;
                                     /* The orphan already has Mvir = 0; clearing
