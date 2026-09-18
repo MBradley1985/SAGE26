@@ -59,6 +59,7 @@ FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 
 
 SaveFullSFH                 0   %0: switch off
 KarpovModeOn                0   %0: switch off
+DisruptionGate              0   %0: orphans always destroyed into the ICS; 1: Contini et al. 2014 density gate + tidal-radius stripping
 
 %------------------------------------------
 %----- SAGE model parameters --------------

@@ -896,8 +896,24 @@ static int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct sav
     save_info->buffer_output_gals[output_snap_idx].Len[gals_in_buffer] = g->Len;
     save_info->buffer_output_gals[output_snap_idx].Mvir[gals_in_buffer] = g->Mvir;
     save_info->buffer_output_gals[output_snap_idx].CentralMvir[gals_in_buffer] = get_virial_mass(halos[g->HaloNr].FirstHaloInFOFgroup, halos, run_params);
-    save_info->buffer_output_gals[output_snap_idx].Rvir[gals_in_buffer] = get_virial_radius(g->HaloNr, halos, run_params);  // output the actual Rvir, not the maximum Rvir
-    save_info->buffer_output_gals[output_snap_idx].Vvir[gals_in_buffer] = get_virial_velocity(g->HaloNr, halos, run_params);  // output the actual Vvir, not the maximum Vvir
+    double out_Rvir = get_virial_radius(g->HaloNr, halos, run_params);    // output the actual Rvir, not the maximum Rvir
+    double out_Vvir = get_virial_velocity(g->HaloNr, halos, run_params);  // output the actual Vvir, not the maximum Vvir
+
+    /* An orphan has no subhalo of its own left in the tree, so halos[g->HaloNr]
+     * is its *host* rather than its own halo. Sourcing Rvir and Vvir from there
+     * reports the host's virial quantities -- a cluster's few hundred km/s for
+     * a dwarf -- alongside the orphan's own Mvir of zero and its own Vmax, which
+     * is what every other galaxy type reports. Fall back on the values the
+     * orphan itself carries: frozen when its subhalo was last resolved, and the
+     * same ones the physics uses for it while it survives. Only reachable with
+     * DisruptionGate == 1, the only way an orphan is ever written out. */
+    if(run_params->DisruptionGate == 1 && g->Type == 2) {
+        out_Rvir = g->Rvir;
+        out_Vvir = g->Vvir;
+    }
+
+    save_info->buffer_output_gals[output_snap_idx].Rvir[gals_in_buffer] = out_Rvir;
+    save_info->buffer_output_gals[output_snap_idx].Vvir[gals_in_buffer] = out_Vvir;
     save_info->buffer_output_gals[output_snap_idx].Vmax[gals_in_buffer] = g->Vmax;
     save_info->buffer_output_gals[output_snap_idx].VelDisp[gals_in_buffer] = halos[g->HaloNr].VelDisp;
 
@@ -1304,6 +1320,7 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ConcentrationOn", run_params->ConcentrationOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SaveFullSFH", run_params->SaveFullSFH, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "TrackICSAssembly", run_params->TrackICSAssembly, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DisruptionGate", run_params->DisruptionGate, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "StarburstColdGasOn", run_params->StarburstColdGasOn, H5T_NATIVE_INT);
 
     // Model parameters.

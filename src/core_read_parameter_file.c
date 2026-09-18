@@ -115,6 +115,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->BulgeSizeOn                = 3;
     run_params->SaveFullSFH                = 0;
     run_params->TrackICSAssembly           = 1;
+    run_params->DisruptionGate             = 0;   /* default: off -- reproduces the published all-or-nothing orphan disruption */
     run_params->StarburstColdGasOn         = 1;
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
     run_params->ThreshMajorMerger          = 0.3;
@@ -194,6 +195,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("BulgeSizeOn",           &(run_params->BulgeSizeOn),          INT, 0);
     REG("SaveFullSFH",           &(run_params->SaveFullSFH),          INT, 0);
     REG("TrackICSAssembly",      &(run_params->TrackICSAssembly),     INT, 0);
+    REG("DisruptionGate",        &(run_params->DisruptionGate),       INT, 0);
     REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
     REG("SubstepResolution",     &(run_params->SubstepResolution),     DOUBLE, 0);
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
@@ -558,6 +560,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
             {"TrackICSAssembly",       run_params->TrackICSAssembly,       0, 1},
+            {"DisruptionGate",         run_params->DisruptionGate,         0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"SNEnergyConservationOn", run_params->SNEnergyConservationOn, 0, 1},
         };

@@ -157,6 +157,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].DiskScaleRadius = get_disk_radius(halonr, p, halos, galaxies);
     get_bulge_radius(p, galaxies, run_params);
     galaxies[p].MergTime = 999.9f;
+    galaxies[p].OrbitRadius = 0.0;
     galaxies[p].Cooling = 0.0;
     galaxies[p].Heating = 0.0;
     galaxies[p].r_heat = 0.0;

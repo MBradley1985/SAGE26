@@ -362,6 +362,17 @@ static int32_t sage_per_forest(const int64_t forestnr, struct save_info *save_in
         }
     }
 
+    /* From here on HaloAux is used as per-galaxy bookkeeping rather than
+     * per-halo: save_galaxies() and the output writers index it by galaxy to
+     * carry output_snap_n. The halo-indexed fields (HaloFlag, DoneFlag,
+     * NGalaxies, FirstGalaxy) are finished with, so the array can be grown
+     * safely here. A forest holds at most one galaxy per halo unless orphans
+     * are allowed to survive their snapshot (DisruptionGate == 1), so this
+     * only ever grows the array when that gate is open. */
+    if(numgals > nhalos) {
+        HaloAux = myrealloc(HaloAux, numgals * sizeof(HaloAux[0]));
+    }
+
     status = save_galaxies(forestnr, numgals, Halo, forest_info, HaloAux, HaloGal, save_info, run_params);
     if(status != EXIT_SUCCESS) {
         return status;

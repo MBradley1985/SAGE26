@@ -1740,7 +1740,7 @@ if __name__ == '__main__':
             if snap_idx < len(TypeFull):
                 types = TypeFull[snap_idx]
                 central_counts.append(np.sum(types == 0))
-                satellite_counts.append(np.sum(types == 1))
+                satellite_counts.append(np.sum(types >= 1))  # >= 1: orphans (Type 2) are satellites too
 
         if len(central_counts) == 0 or len(satellite_counts) == 0:
             continue
@@ -1783,7 +1783,7 @@ if __name__ == '__main__':
             continue
         n_total = len(types)
         n_cen = np.sum(types == 0)
-        n_sat = np.sum(types == 1)
+        n_sat = np.sum(types >= 1)  # >= 1: orphans (Type 2) are satellites too
         if n_total == 0:
             continue
         z_arr_cs.append(redshifts[snap])
@@ -1860,7 +1860,7 @@ if __name__ == '__main__':
             continue
 
         n_cen = np.sum(types[quiescent] == 0)
-        n_sat = np.sum(types[quiescent] == 1)
+        n_sat = np.sum(types[quiescent] >= 1)  # >= 1: orphans (Type 2) are satellites too
 
         z_arr_mq.append(z)
         central_frac_mq.append(n_cen / n_q)
@@ -1921,7 +1921,7 @@ if __name__ == '__main__':
                 sSFR_linear = sfr_total / stellar_mass
                 quenched = sSFR_linear < 10.0**sSFRcut
                 quenched_central_counts.append(np.sum((types == 0) & quenched))
-                quenched_satellite_counts.append(np.sum((types == 1) & quenched))
+                quenched_satellite_counts.append(np.sum((types >= 1) & quenched))  # >= 1: orphans too
 
         if len(quenched_central_counts) == 0 or len(quenched_satellite_counts) == 0:
             continue

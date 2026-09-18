@@ -337,7 +337,23 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
 
             // Diagnostic storage
             galaxies[gal].tcool = (float)(tcool * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR);
-            galaxies[gal].tff = (float)(tff * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR);
+            /* A galaxy with Mvir = 0 has no free-fall time: g_accel vanishes and
+             * tff diverges. The cooling rate still goes correctly to zero via
+             * the 1/(tcool + tff) term below, but the stored diagnostic would
+             * carry an infinity into the output. Orphans hit this on every
+             * substep once they are allowed to survive, so the value is
+             * replaced with the same -1 sentinel used for "not evaluated"
+             * elsewhere. tff is only ever written, never read back by the
+             * physics, so this changes no result.
+             *
+             * The default path is deliberately left alone: it writes one
+             * non-finite tff on mini-Millennium (Snap_30), which is baked into
+             * the committed regression baseline. Sanitising it unconditionally
+             * is the right fix but needs a deliberate baseline re-capture. */
+            const double tff_out = tff * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR;
+            galaxies[gal].tff = (run_params->DisruptionGate == 1 && !isfinite(tff_out))
+                                ? -1.0f
+                                : (float)tff_out;
             
             // Pin rcool to Rvir since we are evaluating bulk accretion
             double rcool = galaxies[gal].Rvir;

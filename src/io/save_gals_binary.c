@@ -332,6 +332,19 @@ static int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT 
     o->CentralMvir = get_virial_mass(halos[g->HaloNr].FirstHaloInFOFgroup, halos, run_params);
     o->Rvir = get_virial_radius(g->HaloNr, halos, run_params);  // output the actual Rvir, not the maximum Rvir
     o->Vvir = get_virial_velocity(g->HaloNr, halos, run_params);  // output the actual Vvir, not the maximum Vvir
+
+    /* An orphan has no subhalo of its own left in the tree, so halos[g->HaloNr]
+     * is its *host* rather than its own halo. Sourcing Rvir and Vvir from there
+     * reports the host's virial quantities -- a cluster's few hundred km/s for
+     * a dwarf -- alongside the orphan's own Mvir of zero and its own Vmax, which
+     * is what every other galaxy type reports. Fall back on the values the
+     * orphan itself carries: frozen when its subhalo was last resolved, and the
+     * same ones the physics uses for it while it survives. Only reachable with
+     * DisruptionGate == 1, the only way an orphan is ever written out. */
+    if(run_params->DisruptionGate == 1 && g->Type == 2) {
+        o->Rvir = g->Rvir;
+        o->Vvir = g->Vvir;
+    }
     o->Vmax = g->Vmax;
     o->VelDisp = halos[g->HaloNr].VelDisp;
 

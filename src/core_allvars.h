@@ -134,6 +134,8 @@ struct GALAXY
     float Vvir;          /* virial circular velocity [km/s] */
     float Vmax;          /* maximum circular velocity of the (sub)halo [km/s] */
     float Concentration; /* NFW concentration parameter; computed if ConcentrationOn > 0 */
+    float OrbitRadius;   /* halocentric radius of an orphan's decaying orbit [Mpc/h];
+                          * tracked only while DisruptionGate == 1, zero otherwise */
 
     /* baryonic reservoirs [all in 10^10 Msun/h] */
     float ColdGas;
@@ -518,6 +520,9 @@ struct params
                                           // histories. Those accumulate stellar mass, not rate, so they are
                                           // correct at any substep count (unlike the Sfr* rate bins).
     int32_t    TrackICSAssembly;          // 0 = off, 1 = track in-situ/ex-situ ICS (ICS_disrupt, ICS_accrete, ICS_sum_mt)
+    int32_t    DisruptionGate;            // 0 = off (orphans are always destroyed into the ICS),
+                                          // 1 = Contini et al. (2014) model Disr. survival gate plus
+                                          // their tidal-radius partial stripping, applied to orphans only
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 
     /* baryonic physics calibration parameters */

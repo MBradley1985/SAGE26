@@ -308,6 +308,11 @@ else
 endif
 
 # Byte-for-byte output regression against the committed baseline manifests.
-# Requires a serial (non-MPI) build: make clean && make USE-MPI=
-regression: $(EXEC)
+# The harness refuses an MPI-linked binary, and object files do not record which
+# configuration produced them, so this rebuilds serially from scratch instead of
+# depending on $(EXEC) and inheriting whatever happens to be current. Note that
+# it leaves a serial build behind: run plain `make` afterwards to get MPI back.
+regression:
+	$(MAKE) clean
+	$(MAKE) USE-MPI= $(EXEC)
 	./tests/regression_baseline.sh

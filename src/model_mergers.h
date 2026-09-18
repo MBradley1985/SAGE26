@@ -4,7 +4,8 @@
  * Declares estimate_merging_time() (dynamical friction timescale per
  * Binney & Tremaine), deal_with_galaxy_merger() (the merger dispatcher),
  * collisional_starburst_recipe(), BH growth from cold-gas accretion,
- * and satellite disruption to the intra-cluster stellar component.
+ * satellite disruption to the intra-cluster stellar component, and the
+ * Contini et al. (2014) gated variant of that disruption.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -19,6 +20,10 @@ extern "C" {
 
     /* functions in model_mergers.c*/
     extern void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double time, struct GALAXY *galaxies, const struct params *run_params);
+    extern int disrupt_satellite_gated(const int centralgal, const int merger_centralgal, const int gal,
+                                       const double time, struct GALAXY *galaxies, const struct params *run_params);
+    extern void strip_orphan_stars(const int centralgal, const int icsgal, const int gal,
+                                   const double time, struct GALAXY *galaxies, const struct params *run_params);
     extern double estimate_merging_time(const int sat_halo, const int mother_halo, const int ngal, struct halo_data *halos, struct GALAXY *galaxies, const struct params *run_params);
     extern void deal_with_galaxy_merger(const int p, int merger_centralgal, const int centralgal, const double time,
                                         const double dt, const int halonr, const int step, struct GALAXY *galaxies, const struct params *run_params);

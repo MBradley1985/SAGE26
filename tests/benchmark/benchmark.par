@@ -55,6 +55,7 @@ QuasarModeEfficiency        0.005
 BlackHoleGrowthRate         0.015
 ThreshMajorMerger           0.3
 ThresholdSatDisruption      1.0
+DisruptionGate              0       %0: orphans always destroyed into the ICS; 1: Contini et al. 2014 density gate + tidal-radius stripping
 Yield                       0.025
 RecycleFraction             0.43
 FracZleaveDisk              0.0

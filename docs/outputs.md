@@ -101,6 +101,10 @@ output if you need `SFHMassDisk` / `SFHMassBulge`.
 | 1 | Central of a sub-halo (Type 1 satellite, still has its own subhalo). |
 | 2 | Orphan satellite (subhalo lost; will merge or disrupt within the current timestep). |
 
+Type 2 galaxies only appear in the catalogue when `DisruptionGate = 1`.
+With the gate off every orphan is destroyed in the snapshot that created
+it, so nothing of that type survives to the output pass.
+
 For Type 0 galaxies, all infall fields (`infallMvir`, `infallVvir`,
 `infallVmax`, `infallStellarMass`, `TimeOfInfall`) are zeroed on
 output -- they are only meaningful for satellites.
@@ -178,12 +182,41 @@ section below) and the unit actually written.
 | `Len` | -- | Number of particles in the galaxy's halo. |
 | `Mvir` | 1.0e10 Msun / h | Virial mass of this galaxy's halo. |
 | `CentralMvir` | 1.0e10 Msun / h | Virial mass of the main FoF halo (central). |
-| `Rvir` | Mpc / h | Virial radius of this galaxy's halo. |
-| `Vvir` | km / s | Virial velocity of this galaxy's halo. |
+| `Rvir` | Mpc / h | Virial radius of this galaxy's halo. For Type 2 orphans, the last resolved value of their own subhalo (see below). |
+| `Vvir` | km / s | Virial velocity of this galaxy's halo. For Type 2 orphans, the last resolved value of their own subhalo (see below). |
 | `Vmax` | km / s | Maximum circular velocity of this galaxy's halo. |
 | `VelDisp` | km / s | Velocity dispersion of this galaxy's halo. |
 | `Concentration` | -- | NFW halo concentration from the Ishiyama+21 c-M relation (set when `ConcentrationOn = 1`). |
 | `g_max` | code units (UnitLength / UnitTime^2) | Peak NFW gravitational acceleration used for the Boylan-Kolchin (2025) feedback-free-burst threshold (HDF5 dtype: float64). Set per snapshot by the BK25 `FeedbackFreeModeOn` methods and reset to 0 for non-FFB haloes; not a running maximum across snapshots, and unrelated to CGM cooling. |
+
+#### Halo properties of orphans
+
+An orphan (Type 2) no longer has a subhalo in the merger tree, so its
+`HaloNr` points at the *host* halo it now sits in rather than at a halo of
+its own. `Rvir` and `Vvir` are therefore taken from the values the galaxy
+itself carries -- frozen at the last snapshot its subhalo was resolved,
+and the same ones the physics uses for it while it survives -- so that
+they mean the same thing as for Type 0 and Type 1 and stay commensurate
+with `Vmax` and `infallVvir`. Reading them from `HaloNr` would instead
+report the host's virial quantities, identical for every orphan in the
+same halo.
+
+`Mvir` needs no such fallback: it is read from the galaxy's own record
+rather than from `HaloNr`, and is zero for an orphan by construction --
+that is the flag that the subhalo is gone, and it is the value the physics
+itself uses (the `currentMvir` ramp in the disruption test, and
+`deltaMvir`). Use `infallMvir` for the halo mass the galaxy last had. Note
+that `Mvir`, `Rvir` and `Vvir` are therefore not a consistent virial triple
+for an orphan: do not derive a mass from `Vvir` for these galaxies.
+
+`CentralMvir` needs no fallback either. It resolves through
+`halos[HaloNr].FirstHaloInFOFgroup`, and an orphan's `HaloNr` is still a
+halo of its FoF group, so it returns that group's main halo exactly as it
+does for a Type 1 satellite.
+
+Two fields have no per-galaxy counterpart to fall back on and are still
+read from the host halo, so they do **not** describe an orphan's own
+halo: `VelDisp` and `Spinx`/`Spiny`/`Spinz`.
 
 ### Baryonic reservoirs
 
