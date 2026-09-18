@@ -59,7 +59,6 @@ FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 
 
 SaveFullSFH                 0   %0: switch off
 KarpovModeOn                0   %0: switch off
-ColdStreamCeilingOn         0   %0: SAGE26 smooth f_stream (default); 1: D&B06 eq. 39 threshold
 
 %------------------------------------------
 %----- SAGE model parameters --------------

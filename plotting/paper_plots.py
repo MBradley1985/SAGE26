@@ -80,7 +80,7 @@ Z_MODEL_LINE = 10      # primary model line
 Z_MODEL_LINE_ALT = 11  # comparison model line
 
 # Analysis thresholds (not simulation parameters)
-MIN_PARTICLES = 1     # minimum DM particles for a resolved halo (applied at load time)
+MIN_PARTICLES = 20     # minimum DM particles for a resolved halo (applied at load time)
 SSFR_CUT = -11.0       # log10(sSFR/yr^-1) dividing quiescent from star-forming
 
 # Solar metallicity (Asplund et al. 2009)
@@ -12253,8 +12253,9 @@ def plot_40_gas_mass_functions_stacked_recipes():
     def _mf(dirpath, field):
         if not model_files_exist(dirpath):
             return None
-        g = load_model(dirpath, properties=[field])[field]
-        valid = g > MASS_CUT
+        d = load_model(dirpath, properties=[field, 'Type'])
+        g = d[field]
+        valid = (g > MASS_CUT) & (d['Type'] == 0)
         if not np.any(valid):
             return None
         return mass_function_bootstrap(np.log10(g[valid]), VOLUME,
