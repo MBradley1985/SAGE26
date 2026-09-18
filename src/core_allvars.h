@@ -171,8 +171,13 @@ struct GALAXY
     /* full star formation history - tracks stellar mass formed at each snapshot */
     float SFHMassDisk[ABSOLUTEMAXSNAPS];   /* stellar mass formed in disk at each snapshot [10^10 Msun/h] */
     float SFHMassBulge[ABSOLUTEMAXSNAPS];  /* stellar mass formed in bulge (starbursts) at each snapshot [10^10 Msun/h] */
-    float ICS_disrupt;                     /* cumulative stellar mass disrupted to ICS (assembly tracking) [10^10 Msun/h] */
-    float ICS_accrete;                     /* cumulative ICS accreted from satellites (assembly tracking) [10^10 Msun/h] */
+    /* ICS assembly tracking.  These are channels of LAST TRANSFER into this
+       halo's reservoir, not channels of origin: every gram of ICS is created by
+       disrupt_satellite_to_ICS(), but ICS assembled in a progenitor group is
+       re-booked as ICS_accrete when that group falls in.  Invariant:
+       ICS_disrupt + ICS_accrete == ICS. */
+    float ICS_disrupt;                     /* in-situ: satellite stars stripped straight into this reservoir [10^10 Msun/h] */
+    float ICS_accrete;                     /* ex-situ: already-formed ICS carried in by infalling/merging satellites [10^10 Msun/h] */
     float ICS_sum_mt;                      /* mass-weighted accumulator [10^10 Msun/h * code time]: sum of m*t at ICS deposition;
                                               mean ICS-assembly lookback = ICS_sum_mt / (ICS_disrupt + ICS_accrete) */
 
@@ -512,7 +517,7 @@ struct params
                                           // 1 = additionally save the per-snapshot SFHMassDisk/SFHMassBulge
                                           // histories. Those accumulate stellar mass, not rate, so they are
                                           // correct at any substep count (unlike the Sfr* rate bins).
-    int32_t    TrackICSAssembly;          // 0 = off, 1 = track ICS_disrupt and ICS_accrete
+    int32_t    TrackICSAssembly;          // 0 = off, 1 = track in-situ/ex-situ ICS (ICS_disrupt, ICS_accrete, ICS_sum_mt)
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 
     /* baryonic physics calibration parameters */

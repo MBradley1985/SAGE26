@@ -456,8 +456,29 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].EjectedMass += galaxies[p].EjectedMass;
     galaxies[t].MetalsEjectedMass += galaxies[p].MetalsEjectedMass;
 
+    // Track ICS assembly: a merging satellite's ICS was formed in its own halo,
+    // so it enters the central's reservoir through the accreted (ex-situ) channel,
+    // exactly as in infall_recipe() and disrupt_satellite_to_ICS().  Without this
+    // the central's ICS grows while ICS_disrupt + ICS_accrete does not, breaking
+    // the accounting identity, and the satellite's deposit-time history is lost.
+    // In practice infall_recipe() sweeps satellite ICS to the central at the top
+    // of every snapshot, so galaxies[p].ICS is almost always 0 here -- but it is
+    // not guaranteed to be, since a satellite can acquire ICS mid-snapshot by
+    // hosting a disruption of its own before merging.
+    if(run_params->TrackICSAssembly && galaxies[p].ICS > 0.0) {
+        galaxies[t].ICS_accrete += galaxies[p].ICS;
+        // Inherit the mass-weighted deposit-time accumulator so the mean assembly
+        // time reflects when these stars were originally stripped, not when the
+        // packet transferred into the central.
+        galaxies[t].ICS_sum_mt += galaxies[p].ICS_sum_mt;
+    }
+
     galaxies[t].ICS += galaxies[p].ICS;
     galaxies[t].MetalsICS += galaxies[p].MetalsICS;
+
+    // The assembly history now belongs to the central; clear it on the satellite
+    // so no later pass can count it twice.
+    galaxies[p].ICS_disrupt = galaxies[p].ICS_accrete = galaxies[p].ICS_sum_mt = 0.0;
 
     galaxies[t].BlackHoleMass += galaxies[p].BlackHoleMass;
 
@@ -842,8 +863,10 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     // Transfer black hole mass to central (avoid baryons disappearing)
     galaxies[centralgal].BlackHoleMass += galaxies[gal].BlackHoleMass;
 
-    // Track ICS assembly: pre-existing satellite ICS goes to ICS_accrete
-    // This ICS was formed elsewhere (in the satellite's halo) and is being brought in
+    // Track ICS assembly: pre-existing satellite ICS goes to the ex-situ channel.
+    // This ICS was formed elsewhere (by disruption in the satellite's own halo) and
+    // is only being carried in here -- so ICS_accrete records where a packet came
+    // from, not how it was made.
     if(run_params->TrackICSAssembly && galaxies[gal].ICS > 0.0) {
         galaxies[centralgal].ICS_accrete += galaxies[gal].ICS;
         // Inherit satellite's mass-weighted deposit-time accumulator so the
@@ -859,6 +882,8 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     galaxies[gal].CGMgas          = galaxies[gal].MetalsCGMgas      = 0.0f;
     galaxies[gal].EjectedMass     = galaxies[gal].MetalsEjectedMass = 0.0f;
     galaxies[gal].ICS             = galaxies[gal].MetalsICS         = 0.0f;
+    galaxies[gal].ICS_disrupt     = galaxies[gal].ICS_accrete       = 0.0f;
+    galaxies[gal].ICS_sum_mt      = 0.0f;
     galaxies[gal].StellarMass     = galaxies[gal].MetalsStellarMass = 0.0f;
     galaxies[gal].BulgeMass       = galaxies[gal].MetalsBulgeMass   = 0.0f;
     galaxies[gal].BlackHoleMass   = 0.0f;
