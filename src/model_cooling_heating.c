@@ -94,7 +94,7 @@ static const double VIRIAL_TEMP_COEFF = 35.9;  /* K (km/s)^-2 */
  * Tied to that cosmology and Mshock: the Uchuu/Planck15 table gives 1.01, and
  * the value moves with MShockMsun (1.43 at 3e11, 1.03 at 1e12) and with f
  * (0.85 at f = 1, 1.37 at f = 5).  Recompute if any of those change. */
-static const double Z_CRIT_DB06 = 1.2;
+static const double Z_CRIT_DB06 = 1.5;
 static const double STREAM_TRANSITION_WIDTH_DEX = 0.5;  /* width of the sigmoid transition in log10(Mvir) for cold-stream fraction f_stream */
 
 /* Cold-cloud AGN accretion (AGNrecipeOn == 3): BH triggers when its mass exceeds

@@ -80,7 +80,7 @@ Z_MODEL_LINE = 10      # primary model line
 Z_MODEL_LINE_ALT = 11  # comparison model line
 
 # Analysis thresholds (not simulation parameters)
-MIN_PARTICLES = 1     # minimum DM particles for a resolved halo (applied at load time)
+MIN_PARTICLES = 20     # minimum DM particles for a resolved halo (applied at load time)
 SSFR_CUT = -11.0       # log10(sSFR/yr^-1) dividing quiescent from star-forming
 
 # Solar metallicity (Asplund et al. 2009)
