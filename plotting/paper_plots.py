@@ -5903,7 +5903,8 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
 
     Each panel is annotated with its model name in the bottom-right corner.
     Line style encodes the burst regime rather than the galaxy sample: solid
-    where FFBRegime==1 ("With bursts"), dashed where it is 0 ("No bursts").
+    where FFBRegime==1 (the panel's bursting galaxies), dashed where it is 0
+    ("Normal galaxies").
     The transition-marker legend entry is only drawn for panels that actually
     contain an FFB -> non-FFB crossing inside the plotted time range.
     """
@@ -5939,19 +5940,44 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
 
     fig, axes = plt.subplots(2, 1, figsize=(8, 10), sharex=True)
 
-    t_min_all = []
+    # The figure is drawn directly against redshift.  The old cosmic-time cap of
+    # 1 Gyr becomes a redshift floor, taken from the snapshots themselves so the
+    # two axes describe exactly the same range of the run.
     t_max = 1.0
 
-    for ax, cfg in zip(axes, panels):
+    import matplotlib.lines as mlines
+
+    # Both panels share one x-axis, so the limits have to be known before
+    # anything is gated against them: a marker tested only against its own
+    # panel's snapshot range can pass and still land outside the shared limits,
+    # which would draw the legend entry for a line the reader cannot see.
+    panel_tracks = []
+    z_lo_all, z_hi_all = [], []
+    for cfg in panels:
         tracks = _sfh_transition_tracks(cfg['data'] or {}, needed_snaps,
                                         ffb_gal_ids, norm_gal_ids)
+        z_in_range = []
+        if tracks is not None:
+            z_in_range = [REDSHIFTS[s] for s in tracks['cosmic_times']
+                          if tracks['cosmic_times'][s] <= t_max]
+            if z_in_range:
+                z_lo_all.append(min(z_in_range))
+                z_hi_all.append(max(z_in_range))
+        panel_tracks.append((cfg, tracks, z_in_range))
+
+    z_lo = min(z_lo_all) if z_lo_all else 0.0
+    z_hi = max(z_hi_all) if z_hi_all else 1.0
+
+    for ax, (cfg, tracks, z_in_range) in zip(axes, panel_tracks):
         if tracks is None:
             print(f"  No usable galaxies for the {cfg['tag']} panel.")
             ax.text(0.5, 0.5, f"No {cfg['tag']} data", transform=ax.transAxes,
                     ha='center', va='center', color='0.5')
             continue
 
-        t_min_all.append(min(tracks['cosmic_times'].values()))
+        z_of_snap = {s: REDSHIFTS[s] for s in tracks['cosmic_times']}
+        if not z_in_range:
+            continue
 
         burst_label_done = quiet_label_done = False
         for gid in tracks['plot_ids']:
@@ -5963,34 +5989,44 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
                            key=lambda x: x[0])
 
             for k in range(len(pairs) - 1):
-                t0, sfr0, r0, _ = pairs[k]
-                t1, sfr1, _, _  = pairs[k + 1]
+                _t0, sfr0, r0, s0 = pairs[k]
+                _t1, sfr1, _r1, s1 = pairs[k + 1]
+                z0, z1 = z_of_snap[s0], z_of_snap[s1]
 
                 lbl = None
                 if r0 == 1 and not burst_label_done:
-                    lbl = 'With bursts'
+                    lbl = f"{cfg['tag']} galaxies"
                     burst_label_done = True
                 elif r0 == 0 and not quiet_label_done:
-                    lbl = 'No bursts'
+                    lbl = 'Normal galaxies'
                     quiet_label_done = True
 
-                ax.plot([t0, t1], [sfr0, sfr1],
+                ax.plot([z0, z1], [sfr0, sfr1],
                         '-' if r0 == 1 else '--',
                         color=cfg['color'] if r0 == 1 else 'firebrick',
                         alpha=1.0, lw=2.2, label=lbl, zorder=2)
 
         # Transition markers, and the matching legend entry only if any land
-        # inside the plotted range.
-        drew_transition = False
+        # inside the plotted range.  The test is against the figure's shared
+        # limits and is two-sided, so the legend entry appears exactly when a
+        # marker is visible.  A marker sitting on a limit draws on the spine and
+        # reads as absent, so it is reported rather than silently counted.
+        drew_transition = 0
         for gid in tracks['ffb_ids']:
             if gid not in tracks['transition']:
                 continue
-            t_trans, _ = tracks['transition'][gid]
-            if not (min(tracks['cosmic_times'].values()) <= t_trans <= t_max):
+            _t_trans, z_trans = tracks['transition'][gid]
+            if not (z_lo <= z_trans <= z_hi):
                 continue
-            ax.axvline(t_trans, color='goldenrod', ls='--', lw=1.2,
+            ax.axvline(z_trans, color='goldenrod', ls='--', lw=1.2,
                        alpha=0.85, zorder=4)
-            drew_transition = True
+            drew_transition += 1
+            if z_trans in (z_lo, z_hi):
+                print(f"    {cfg['tag']}: transition for {gid} sits on the "
+                      f'z = {z_trans:.2f} axis limit and will draw on the spine')
+        n_out = len(tracks['transition']) - drew_transition
+        print(f"    {cfg['tag']}: {drew_transition} transition marker(s) drawn"
+              + (f', {n_out} outside the plotted range' if n_out else ''))
 
         ax.set_ylabel(r'$\log_{10}\,\mathrm{SFR}\;[M_{\odot}\,\mathrm{yr}^{-1}]$')
         ax.set_yscale('log')
@@ -6000,20 +6036,24 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
         ax.text(0.98, 0.04, cfg['tag'], transform=ax.transAxes,
                 ha='right', va='bottom', fontsize=20, zorder=10)
 
-        import matplotlib.lines as mlines
-
-        handles, labels = ax.get_legend_handles_labels()
+        # Fixed legend order in every panel — bursting sample, controls, then
+        # the transition marker — regardless of which line happened to be drawn
+        # first.
+        by_label = dict(zip(*reversed(ax.get_legend_handles_labels())))
+        order = [f"{cfg['tag']} galaxies", 'Normal galaxies']
+        handles = [by_label[l] for l in order if l in by_label]
+        labels  = [l for l in order if l in by_label]
         if drew_transition:
-            handles = handles + [mlines.Line2D([], [], color='goldenrod',
-                                               ls='--', lw=1.5)]
-            labels  = labels + [cfg['trans_label']]
+            handles.append(mlines.Line2D([], [], color='goldenrod',
+                                         ls='--', lw=1.5))
+            labels.append(cfg['trans_label'])
         if labels:
             _standard_legend(ax, loc='upper left',
                              handles=handles, labels=labels)
 
-    t_min = min(t_min_all) if t_min_all else 0.0
-    axes[0].set_xlim(t_min, t_max)
-    axes[1].set_xlabel('Cosmic time [Gyr]')
+    if z_lo_all:
+        axes[0].set_xlim(z_lo, z_hi)
+    axes[1].set_xlabel('Redshift')
 
     # The panels butt together, so the top panel's lowest decade label and the
     # bottom panel's highest would print on top of each other.  Keep every tick
@@ -6029,18 +6069,6 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
         _ax.set_yticks(_ticks)
         _ax.set_yticklabels(_decade_labels(_blank))
         _ax.set_ylim(1e-3, 1e5)
-
-    # Redshift axis on the top panel only.
-    ax_top = axes[0].twiny()
-    z_ticks = [10, 8, 6, 5, 4, 3, 2.5, 2, 1.5, 1]
-    t_ticks = [cosmic_time_gyr(z) for z in z_ticks]
-    xlim = axes[0].get_xlim()
-    z_ticks_f = [z for z, t in zip(z_ticks, t_ticks) if xlim[0] <= t <= xlim[1]]
-    t_ticks_f = [t for t in t_ticks if xlim[0] <= t <= xlim[1]]
-    ax_top.set_xlim(xlim)
-    ax_top.set_xticks(t_ticks_f)
-    ax_top.set_xticklabels([str(z) for z in z_ticks_f])
-    ax_top.set_xlabel('Redshift')
 
     fig.tight_layout()
     fig.subplots_adjust(hspace=0.0)
