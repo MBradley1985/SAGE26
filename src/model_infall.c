@@ -2,12 +2,14 @@
  * model_infall.c -- baryon infall, satellite stripping, and reionisation.
  *
  * Implements four routines called from evolve_galaxies() each timestep:
- *   infall_recipe      -- computes the net infalling mass for a central halo
- *                         and routes it to the correct reservoir (HotGas or
- *                         CGMgas) via add_infall_to_hot(); calls
- *                         strip_from_satellite() for each satellite.
- *   strip_from_satellite -- removes all remaining gas from a satellite galaxy
- *                           and adds it to the central's hot/CGM reservoir.
+ *   infall_recipe      -- computes the net infalling mass for a central halo,
+ *                         pools satellite ejecta/ICS into the central, and
+ *                         migrates the central's gas between the HotGas and
+ *                         CGMgas reservoirs according to its regime.
+ *   strip_from_satellite -- removes part of a satellite's baryon excess
+ *                           (analytic 1-exp(-dT/t_strip), once per snapshot) and
+ *                           adds it to the central's hot/CGM reservoir;
+ *                           called from evolve_galaxies().
  *   do_reionization    -- computes the reionisation suppression factor for
  *                         low-mass haloes using the Gnedin (2000) model.
  *   add_infall_to_hot  -- adds (or subtracts) infallingGas to the appropriate
@@ -92,8 +94,10 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
             // satellite ICS (and its assembly history) goes to central
             // if the satellite carried ICS it was a former group central
             if(galaxies[i].ICS > 0.0) {
-                // Track this ICS mass as accretion - this ICS was formed elsewhere
-                // and is now being brought in by the infalling satellite
+                // Ex-situ channel: this ICS was formed elsewhere (by disruption in
+                // the satellite's own halo) and is now being brought in.  Note this
+                // runs every snapshot for every satellite, so ICS that a progenitor
+                // group built in-situ is re-booked as accreted once it falls in.
                 if(run_params->TrackICSAssembly) {
                     galaxies[centralgal].ICS_accrete += galaxies[i].ICS;
                     // Inherit the satellite's mass-weighted deposit-time accumulator
@@ -216,19 +220,12 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
 
 /*
  * strip_from_satellite -- remove excess gas from a satellite and donate it to
- * the central galaxy's hot/CGM reservoir, one effective substep at a time.
- *
- * The stripped fraction per call is 1/effective_steps of the satellite's
- * current baryon excess (baryons above BF*Mvir_sat).  Calling this once per
- * substep over effective_steps substeps yields a consistent per-snapshot
- * stripping fraction regardless of the adaptive timestep count.
- *
- * CGM-regime satellites retain CGMgas across snapshots; the CGM branch
- * below strips it gradually using the same baryon-excess rule used for
- * HotGas. Hot- and CGM-regime satellites are therefore handled by
- * structurally identical rules.
+ * the central galaxy's hot/CGM reservoir.
+ *  
  */
-void strip_from_satellite(const int centralgal, const int gal, const double Zcurr, const int effective_steps, struct GALAXY *galaxies, const struct params *run_params)
+
+void strip_from_satellite(const int centralgal, const int gal, const double Zcurr, const int nsteps,
+                          struct GALAXY *galaxies, const struct params *run_params)
 {
     double reionization_modifier;
 
@@ -238,90 +235,43 @@ void strip_from_satellite(const int centralgal, const int gal, const double Zcur
         reionization_modifier = 1.0;
     }
 
+    /* CGMgas is zeroed for satellites when CGMrecipeOn != 1, so this sum is the
+     * original's baryon sum whenever the new recipe is off. */
+    const double satBaryons = galaxies[gal].StellarMass + galaxies[gal].ColdGas
+                            + galaxies[gal].HotGas + galaxies[gal].CGMgas
+                            + galaxies[gal].EjectedMass + galaxies[gal].BlackHoleMass
+                            + galaxies[gal].ICS;
+
     double strippedGas = -1.0 *
-        (reionization_modifier * run_params->BaryonFrac * galaxies[gal].Mvir - (galaxies[gal].StellarMass + galaxies[gal].ColdGas + galaxies[gal].HotGas + galaxies[gal].CGMgas + galaxies[gal].BlackHoleMass + galaxies[gal].ICS + galaxies[gal].EjectedMass) ) / effective_steps;
+        (reionization_modifier * run_params->BaryonFrac * galaxies[gal].Mvir - satBaryons) / nsteps;
 
     if(strippedGas > 0.0) {
-        if(run_params->CGMrecipeOn > 0) {
-            if(galaxies[gal].Regime == 0) {
-                // CGM-regime satellite.  infall_recipe already zeroed CGMgas and
-                // pooled it into the central; strip remaining CGMgas first, then
-                // fall through to HotGas if any persists from a prior Regime=1 phase.
-                double stripped_cgm = strippedGas;
-                if(stripped_cgm > galaxies[gal].CGMgas) stripped_cgm = galaxies[gal].CGMgas;
+        /* Take from the reservoir this satellite actually holds its hot-phase gas
+         * in, and give to the one the central uses.  Both reduce to HotGas when
+         * the CGM recipe is off. */
+        const int take_from_cgm = (run_params->CGMrecipeOn == 1 && galaxies[gal].Regime == 0);
+        const int give_to_cgm   = (run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0);
 
-                if(stripped_cgm > 0.0) {
-                    const double metallicity = get_metallicity(galaxies[gal].CGMgas, galaxies[gal].MetalsCGMgas);
-                    double stripped_cgm_metals = stripped_cgm * metallicity;
-                    if(stripped_cgm_metals > galaxies[gal].MetalsCGMgas) stripped_cgm_metals = galaxies[gal].MetalsCGMgas;
+        float *sat_gas    = take_from_cgm ? &galaxies[gal].CGMgas       : &galaxies[gal].HotGas;
+        float *sat_metals = take_from_cgm ? &galaxies[gal].MetalsCGMgas : &galaxies[gal].MetalsHotGas;
 
-                    galaxies[gal].CGMgas -= stripped_cgm;
-                    galaxies[gal].MetalsCGMgas -= stripped_cgm_metals;
+        const double metallicity = get_metallicity(*sat_gas, *sat_metals);
+        double strippedGasMetals = strippedGas * metallicity;
 
-                    if(galaxies[centralgal].Regime == 0) {
-                        galaxies[centralgal].CGMgas += stripped_cgm;
-                        galaxies[centralgal].MetalsCGMgas += stripped_cgm_metals;
-                    } else {
-                        galaxies[centralgal].HotGas += stripped_cgm;
-                        galaxies[centralgal].MetalsHotGas += stripped_cgm_metals;
-                    }
-                    strippedGas -= stripped_cgm;
-                }
+        if(strippedGas > *sat_gas) strippedGas = *sat_gas;
+        if(strippedGasMetals > *sat_metals) strippedGasMetals = *sat_metals;
 
-                // Fallback: strip residual HotGas left from a previous Regime=1 phase
-                if(strippedGas > 0.0 && galaxies[gal].HotGas > 0.0) {
-                    const double metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);
-                    double stripped_hot_metals = strippedGas * metallicity;
+        *sat_gas    -= strippedGas;
+        *sat_metals -= strippedGasMetals;
 
-                    if(strippedGas > galaxies[gal].HotGas) strippedGas = galaxies[gal].HotGas;
-                    if(stripped_hot_metals > galaxies[gal].MetalsHotGas) stripped_hot_metals = galaxies[gal].MetalsHotGas;
-
-                    galaxies[gal].HotGas -= strippedGas;
-                    galaxies[gal].MetalsHotGas -= stripped_hot_metals;
-
-                    if(galaxies[centralgal].Regime == 0) {
-                        galaxies[centralgal].CGMgas += strippedGas;
-                        galaxies[centralgal].MetalsCGMgas += stripped_hot_metals;
-                    } else {
-                        galaxies[centralgal].HotGas += strippedGas;
-                        galaxies[centralgal].MetalsHotGas += stripped_hot_metals;
-                    }
-                }
-            } else {
-                // HOT-regime satellite: strip from HotGas
-                const double metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);
-                double strippedGasMetals = strippedGas * metallicity;
-
-                if(strippedGas > galaxies[gal].HotGas) strippedGas = galaxies[gal].HotGas;
-                if(strippedGasMetals > galaxies[gal].MetalsHotGas) strippedGasMetals = galaxies[gal].MetalsHotGas;
-
-                galaxies[gal].HotGas -= strippedGas;
-                galaxies[gal].MetalsHotGas -= strippedGasMetals;
-
-                if(galaxies[centralgal].Regime == 0) {
-                    galaxies[centralgal].CGMgas += strippedGas;
-                    galaxies[centralgal].MetalsCGMgas += strippedGasMetals;
-                } else {
-                    galaxies[centralgal].HotGas += strippedGas;
-                    galaxies[centralgal].MetalsHotGas += strippedGasMetals;
-                }
-            }
+        if(give_to_cgm) {
+            galaxies[centralgal].CGMgas       += strippedGas;
+            galaxies[centralgal].MetalsCGMgas += strippedGas * metallicity;
         } else {
-            // Original behavior when CGMrecipeOn = 0
-            const double metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);
-            double strippedGasMetals = strippedGas * metallicity;
-
-            if(strippedGas > galaxies[gal].HotGas) strippedGas = galaxies[gal].HotGas;
-            if(strippedGasMetals > galaxies[gal].MetalsHotGas) strippedGasMetals = galaxies[gal].MetalsHotGas;
-
-            galaxies[gal].HotGas -= strippedGas;
-            galaxies[gal].MetalsHotGas -= strippedGasMetals;
-
-            galaxies[centralgal].HotGas += strippedGas;
-            galaxies[centralgal].MetalsHotGas += strippedGasMetals;
+            galaxies[centralgal].HotGas       += strippedGas;
+            galaxies[centralgal].MetalsHotGas += strippedGas * metallicity;
         }
     }
-
 }
 
 // ============================================================================

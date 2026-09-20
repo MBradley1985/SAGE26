@@ -150,6 +150,12 @@ int32_t save_binary_galaxies(const int32_t task_treenr, const int32_t num_gals, 
         return MALLOC_FAILURE;
     }
 
+    /* GALAXY_OUTPUT contains alignment padding (before g_max and after r_heat).
+       The structs are written raw to disk, so zero the block first: otherwise
+       uninitialised heap bytes leak into the padding, making the output files
+       non-reproducible at the byte level (every field value is unaffected). */
+    memset(all_outputgals, 0, num_output_gals * sizeof(all_outputgals[0]));
+
     // Prepare all the galaxies for output.
     for(int32_t gal_idx = 0; gal_idx < num_gals; gal_idx++) {
         if(haloaux[gal_idx].output_snap_n < 0) {
@@ -355,17 +361,20 @@ static int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT 
     o->SfrDiskZ = 0.0;
     o->SfrBulgeZ = 0.0;
 
-    // NOTE: in Msun/yr
+    // NOTE: in Msun/yr. Divisors come from the substep count actually integrated, not STEPS;
+    // see sfr_rate_divisor() in model_misc.h.
+    const int sfr_norm = sfr_rate_divisor(g->SubstepsUsed);
+    const int met_norm = sfr_metallicity_divisor(g->SubstepsUsed);
     for(int step = 0; step < STEPS; step++) {
-        o->SfrDisk += g->SfrDisk[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / STEPS;
-        o->SfrBulge += g->SfrBulge[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / STEPS;
+        o->SfrDisk += g->SfrDisk[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / sfr_norm;
+        o->SfrBulge += g->SfrBulge[step] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / sfr_norm;
 
         if(g->SfrDiskColdGas[step] > 0.0) {
-            o->SfrDiskZ += g->SfrDiskColdGasMetals[step] / g->SfrDiskColdGas[step] / STEPS;
+            o->SfrDiskZ += g->SfrDiskColdGasMetals[step] / g->SfrDiskColdGas[step] / met_norm;
         }
 
         if(g->SfrBulgeColdGas[step] > 0.0) {
-            o->SfrBulgeZ += g->SfrBulgeColdGasMetals[step] / g->SfrBulgeColdGas[step] / STEPS;
+            o->SfrBulgeZ += g->SfrBulgeColdGasMetals[step] / g->SfrBulgeColdGas[step] / met_norm;
         }
     }
 
@@ -416,8 +425,6 @@ static int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT 
     o->MetalsCGMgas = g->MetalsCGMgas;
     o->tcool = g->tcool;
     o->tff = g->tff;
-    o->tcool_over_tff = g->tcool_over_tff;
-    o->tdeplete = g->tdeplete;
     o->H2DepletionTime_Gyr = g->H2DepletionTime_Gyr;
     o->RcoolToRvir = g->RcoolToRvir;
 
@@ -427,6 +434,7 @@ static int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT 
     o->mdot_stream = g->mdot_stream * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS;
     o->g_max = g->g_max;
     o->r_heat = g->r_heat;
+    o->CoolingRate = g->CoolingRate;
 
     return EXIT_SUCCESS;
 }

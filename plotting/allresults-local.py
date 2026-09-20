@@ -28,6 +28,7 @@ from random import sample, seed
 import h5py as h5
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import LogNorm
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 from scipy.stats import gaussian_kde, stats
@@ -43,10 +44,36 @@ warnings.filterwarnings("ignore")
 
 # Plotting options (these are not in HDF5, so keep as user options)
 whichimf = 1        # 0=Salpeter; 1=Chabrier
+
+# Offset in dex of each IMF's stellar masses above the Chabrier (2003) scale.
+# Kroupa (2001) sits 0.04 dex above Chabrier -- the value the Tremonti04, MMAdrews13
+# and MMR-Kewley08 headers themselves quote -- and Salpeter 0.24 dex above.
+# paper_plots.py carries the same numbers in IMF_TO_CHABRIER_DEX; keep the two in step.
+_IMF_ABOVE_CHABRIER_DEX = {
+    'chabrier': 0.00,
+    'kroupa': 0.04,
+    'salpeter': 0.24,
+    'diet-salpeter': 0.09,
+}
+
+
+def imf_shift(native):
+    """
+    Dex to add to a log10 stellar mass measured with the *native* IMF to put it on the
+    IMF selected by whichimf.
+
+    Replaces a per-dataset x1.5 (Kroupa->Salpeter) then /1.8 (Salpeter->Chabrier) chain
+    that netted -0.079 dex, disagreeing with the 0.04 dex these files state in their own
+    headers, and that was applied to Tremonti04, MMAdrews13 and MMR-Kewley08 but not to
+    Curti2020 -- which is Kroupa too. That left two Kroupa datasets 0.08 dex apart on the
+    same axes, an offset with no physical content.
+    """
+    target = 'salpeter' if whichimf == 0 else 'chabrier'
+    return _IMF_ABOVE_CHABRIER_DEX[target] - _IMF_ABOVE_CHABRIER_DEX[native]
 dilute = 7500     # Number of galaxies to plot in scatter plots
 sSFRcut = -11.0     # Divide quiescent from star forming galaxies
 
-OutputFormat = '.pdf'
+OutputFormat = '.png'
 plt.rcParams["figure.figsize"] = (8.34,6.25)
 plt.rcParams["figure.dpi"] = 96
 plt.rcParams["font.size"] = 14
@@ -521,16 +548,6 @@ if __name__ == '__main__':
     (counts_h1, binedges_h1) = np.histogram(H1mass, range=(mi, ma), bins=NB)
     xaxeshisto_h1 = binedges_h1[:-1] + 0.5 * binwidth  # Set the x-axis values to be the centre of the bins
 
-    # additionally calculate red
-    w = np.where(sSFR < sSFRcut)[0]
-    massRED = mass[w]
-    (countsRED, binedges) = np.histogram(massRED, range=(mi, ma), bins=NB)
-
-    # additionally calculate blue
-    w = np.where(sSFR > sSFRcut)[0]
-    massBLU = mass[w]
-    (countsBLU, binedges) = np.histogram(massBLU, range=(mi, ma), bins=NB)
-
     # Baldry+ 2008 modified data used for the MCMC fitting
     Zwaan = np.array([[6.933,   -0.333],
         [7.057,   -0.490],
@@ -714,7 +731,7 @@ if __name__ == '__main__':
     plt.figure()  # New figure
     ax = plt.subplot(111)  # 1 plot on the figure
 
-    w = np.where((Type == 0) & (StellarMass + ColdGas > 0.0) & 
+    w = np.where((StellarMass + ColdGas > 0.0) & 
       (BulgeMass / StellarMass > 0.1) & (BulgeMass / StellarMass < 0.5))[0]
     if(len(w) > dilute): w = sample(list(w), dilute)
     
@@ -765,13 +782,8 @@ if __name__ == '__main__':
         tremonti_Z = tremonti_data[:, 1]
         tremonti_Z_err_low = tremonti_data[:, 2]
         tremonti_Z_err_high = tremonti_data[:, 3]
-        # Convert IMF if needed
-        if whichimf == 0:
-            tremonti_mass_corrected = np.log10(10**tremonti_mass * 1.5)
-        elif whichimf == 1:
-            tremonti_mass_corrected = np.log10(10**tremonti_mass * 1.5 / 1.8)
-        else:
-            tremonti_mass_corrected = tremonti_mass
+        # Tremonti+04 masses are Kroupa, per the file header.
+        tremonti_mass_corrected = tremonti_mass + imf_shift('kroupa')
         # Plot main line
         ax.plot(tremonti_mass_corrected, tremonti_Z, '-', color='red', linewidth=1.5, alpha=0.7, label='Tremonti+04')
         # Plot error shading
@@ -780,17 +792,16 @@ if __name__ == '__main__':
         print(f"Warning: Could not load Tremonti04.dat: {e}. Using fallback polynomial fit.")
         w_obs = np.arange(7.0, 13.0, 0.1)
         Zobs = -1.492 + 1.847*w_obs - 0.08026*w_obs*w_obs
-        if whichimf == 0:
-            ax.plot(np.log10((10**w_obs * 1.5)), Zobs, 'o-', linewidth=3, label='Tremonti et al. 2004 (poly fit)')
-        elif whichimf == 1:
-            ax.plot(np.log10((10**w_obs * 1.5 / 1.8)), Zobs, 'o-', linewidth=3, label='Tremonti et al. 2004 (poly fit)')
-        else:
-            ax.plot(w_obs, Zobs, 'o-', linewidth=3, label='Tremonti et al. 2004 (poly fit)')
+        ax.plot(w_obs + imf_shift('kroupa'), Zobs, 'o-', linewidth=3,
+                label='Tremonti et al. 2004 (poly fit)')
     
     # Curti et al. 2020
     try:
         curti_data = np.loadtxt(os.path.join(DataDir, 'metallicity', 'Curti2020.dat'))
-        curti_mass = curti_data[:, 0]
+        # Kroupa: Curti+20 takes its masses from the MPA-JHU catalogue, as
+        # Tremonti+04 and Andrews & Martini+13 do. Previously left unshifted while
+        # its Kroupa peers were moved.
+        curti_mass = curti_data[:, 0] + imf_shift('kroupa')
         curti_Z = curti_data[:, 1]
         curti_Z_low = curti_data[:, 2]
         curti_Z_high = curti_data[:, 3]
@@ -806,12 +817,8 @@ if __name__ == '__main__':
         andrews_data = np.loadtxt(os.path.join(DataDir, 'metallicity', 'MMAdrews13.dat'))
         andrews_mass = andrews_data[:, 0]
         andrews_Z = andrews_data[:, 1]
-        if whichimf == 0:
-            andrews_mass_corrected = np.log10(10**andrews_mass * 1.5)
-        elif whichimf == 1:
-            andrews_mass_corrected = np.log10(10**andrews_mass * 1.5 / 1.8)
-        else:
-            andrews_mass_corrected = andrews_mass
+        # Kroupa, per the file header.
+        andrews_mass_corrected = andrews_mass + imf_shift('kroupa')
         ax.scatter(andrews_mass_corrected, andrews_Z, marker='s', s=30, color='green', edgecolors='darkgreen', linewidth=0.5, alpha=0.8, label='Andrews & Martini 2013')
     except Exception as e:
         print(f"Warning: Could not load MMAdrews13.dat: {e}")
@@ -823,12 +830,8 @@ if __name__ == '__main__':
         t04_end = 74
         kewley_mass_t04 = kewley_data[t04_start:t04_end, 0]
         kewley_Z_t04 = kewley_data[t04_start:t04_end, 1]
-        if whichimf == 0:
-            kewley_mass_corrected = np.log10(10**kewley_mass_t04 * 1.5)
-        elif whichimf == 1:
-            kewley_mass_corrected = np.log10(10**kewley_mass_t04 * 1.5 / 1.8)
-        else:
-            kewley_mass_corrected = kewley_mass_t04
+        # Kroupa, per the file header.
+        kewley_mass_corrected = kewley_mass_t04 + imf_shift('kroupa')
         ax.scatter(kewley_mass_corrected, kewley_Z_t04, marker='D', s=40, color='yellow', edgecolors='goldenrod', linewidth=0.8, alpha=0.8, label='Kewley & Ellison 2008')
     except Exception as e:
         print(f"Warning: Could not load MMR-Kewley08.dat: {e}")
@@ -839,7 +842,8 @@ if __name__ == '__main__':
         gallazzi_mass = gallazzi_data[7:, 0]
         gallazzi_Z_stellar = gallazzi_data[7:, 1]
         gallazzi_Z_gas_approx = gallazzi_Z_stellar + 8.69
-        gallazzi_mass_corrected = gallazzi_mass
+        # Chabrier, per the file header.
+        gallazzi_mass_corrected = gallazzi_mass + imf_shift('chabrier')
         ax.scatter(gallazzi_mass_corrected, gallazzi_Z_gas_approx, marker='P', s=100, color='k', edgecolors='gray', linewidth=0.5, alpha=0.8, label='Gallazzi+05')
     except Exception as e:
         print(f"Warning: Could not load MSZR-Gallazzi05.dat: {e}")
@@ -1497,29 +1501,34 @@ if __name__ == '__main__':
 
     # -------------------------------------------------------
 
-    print('Plotting outflow vs Vvir')
+    print('Plotting mass loading factor vs Vvir')
 
     plt.figure()
-    w = np.where((StellarMass > 0.0) & (OutflowRate > 0.0))[0]
-    if(len(w) > dilute): w = sample(list(w), dilute)
+    w = np.where((StellarMass > 0.0) & (MassLoading > 0.0))[0]
+    if len(w) == 0:
+        print('  Skipping mass_loading_vs_vvir: no galaxies with MassLoading > 0 '
+              '(FIRE mass-loading mode off).\n')
+        plt.close()
+    else:
+        if(len(w) > dilute): w = sample(list(w), dilute)
 
-    log10_stellar_mass = np.log10(StellarMass[w])
-    mass_loading = OutflowRate[w]
+        log10_stellar_mass = np.log10(StellarMass[w])
+        mass_loading = MassLoading[w]
 
-    plt.scatter(Vvir[w], mass_loading, c='k', marker='x', s=1, alpha=0.9)
+        plt.scatter(np.log10(Vvir[w]), mass_loading, c='k', marker='x', s=1, alpha=0.9)
 
-    plt.xlabel(r'$V_{\mathrm{vir}}\ (\mathrm{km/s})$')
-    plt.ylabel(r'$\dot{M}_{\mathrm{outflow}}\ (M_{\odot}\ \mathrm{yr}^{-1})$')
+        plt.xlabel(r'$\log_{10} V_{\mathrm{vir}}\ (\mathrm{km/s})$')
+        plt.ylabel(r'$\eta_{\mathrm{reheat}} = \dot{M}_{\mathrm{reheat}} / \dot{M}_{\star}$')
 
-    plt.xlim(min(Vvir[w]), 300)
-    plt.ylim(0.01, max(mass_loading)*1.1)
+        # plt.xlim(min(np.log10(Vvir[w])), 2.477)
+        # plt.ylim(0.01, max(mass_loading)*1.1)
 
-    plt.tight_layout()
+        plt.tight_layout()
 
-    outputFile = OutputDir + 'outflow_rate_vs_stellar_mass' + OutputFormat
-    plt.savefig(outputFile)
-    print('Saved file to', outputFile, '\n')
-    plt.close()
+        outputFile = OutputDir + 'mass_loading_vs_vvir' + OutputFormat
+        plt.savefig(outputFile)
+        print('Saved file to', outputFile, '\n')
+        plt.close()
 
     # -------------------------------------------------------
     
@@ -1774,3 +1783,253 @@ if __name__ == '__main__':
     plt.savefig(outputFile, dpi=150)
     print('Saved file to', outputFile, '\n')
     plt.close()
+
+#--------------------------------------------------------
+
+    # Plotting tcool/tff vs Mvir
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    tcool = read_hdf(file_list, Snapshot, 'CoolingRate')
+    Mvir = read_hdf(file_list, Snapshot, 'Mvir') *1.0e10 / Hubble_h # Convert to solar masses
+    Rvir = read_hdf(file_list, Snapshot, 'Rvir')
+    Regime = read_hdf(file_list, Snapshot, 'Regime')
+
+    # Cooled gas rate vs Mvir
+    w = np.where((Mvir > 0.0) & (tcool > 0.0) & (Rvir > 0.0))[0]
+
+    Rvir = Rvir[w]
+    log_Mvir = np.log10(Mvir)[w]
+    tcool = tcool[w]
+    Regime = Regime[w]
+    Tvir = Tvir[w]
+
+    print('  cooled gas rate vs Mvir sample stats:')
+    if tcool.size > 0:
+        print(f'    cooled gas rate: {tcool.min():.2f} to {tcool.max():.2f}')
+    else:
+        print('    no positive cooled gas rates found; skipping statistics for this plot')
+    
+    # print(f'  Plotting {len(w)} galaxies with Mvir > 0, tcool/tff > 0, and within 0.1 Rvir and CGM-regime.')
+
+    # Median line and 1-sigma shading
+    # bin_edges = np.arange(10.0, 12.5, 0.25)
+    # bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    # digitized = np.digitize(log_Mvir[w], bin_edges)
+    # medians = [np.median(tcool_tff[w][digitized == i]) for i in range(1, len(bin_edges))]
+    # stds = [np.std(tcool_tff[w][digitized == i]) for i in range(1, len(bin_edges))]
+
+    # ax.fill_between(bin_centers, np.array(medians) - np.array(stds), np.array(medians) + np.array(stds), alpha=0.2, rasterized=True)
+    # ax.plot(bin_centers, medians, color='k', lw=2, label='Median ± 1σ')
+
+    cgm = Regime == 0
+    hot = Regime == 1
+    unclassified = ~(cgm | hot)
+    if np.any(cgm):
+        ax.scatter(log_Mvir[cgm], tcool[cgm], s=2, alpha=0.5,
+                   color='tab:blue', label='CGM regime', rasterized=True)
+    if np.any(hot):
+        ax.scatter(log_Mvir[hot], tcool[hot], s=2, alpha=0.5,
+                   color='tab:red', label='Hot regime', rasterized=True)
+    if np.any(unclassified):
+        temperature_points = ax.scatter(log_Mvir[unclassified], tcool[unclassified],
+                                         s=2, alpha=0.5, c=Tvir[unclassified],
+                                         cmap='viridis', norm=LogNorm(),
+                                         label='Unclassified',
+                                         rasterized=True)
+        colorbar = plt.colorbar(temperature_points, ax=ax, pad=0.02)
+        colorbar.set_label(r'$T_{\rm vir}$ (K)')
+    ax.set_yscale('log')
+
+    ax.set_xlabel(r'$\log_{10} M_{\rm vir}\ (M_{\odot})$')
+    ax.set_ylabel(r'$\mathrm{Cooling\ rate}\ (M_{\odot}\ \mathrm{Gyr}^{-1})$')
+    ax.legend(frameon=False)
+    # ax.set_xlim(10.0, 12.0)
+    # ax.set_ylim(0.0, 40.0)
+
+    plt.savefig(OutputDir + 'tcool_vs_mvir' + OutputFormat, dpi=150)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+#--------------------------------------------------------
+
+# CGM fraction vs Mvir
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    # CGM_gas = read_hdf(file_list, Snapshot, 'CGMgas') *1.0e10 / Hubble_h # Convert to solar masses
+    # Mvir = read_hdf(file_list, Snapshot, 'Mvir') *1.0e10 / Hubble_h # Convert to solar masses
+    Regime = read_hdf(file_list, Snapshot, 'Regime')
+
+    log_Mvir = Mvir
+    log_CGM = CGMgas
+
+    CGM_fraction = np.log10(CGMgas / Mvir) * 0.17  # Normalize by cosmic baryon fraction
+
+    print('  CGM fraction vs Mvir sample stats:')
+    print(f'    CGM fraction: {CGM_fraction.min():.4f} to {CGM_fraction.max():.4f}')
+
+    plt.scatter(np.log10(Mvir), CGM_fraction, s=2, alpha=0.5, rasterized=True)
+
+    ax.set_xlabel(r'$\log_{10} M_{\rm vir}\ (M_{\odot})$')
+    ax.set_ylabel(r'$\mathrm{CGM\ Fraction}$')
+    ax.set_xlim(10.0, 12.0)
+    ax.set_ylim(-2.5, 0.0)
+    # ax.set_xscale('log')
+    # ax.set_yscale('log')
+
+    # ax.set_xlim(1.0e10, 1.0e12)
+
+    plt.savefig(OutputDir + 'cgm_fraction_vs_mvir' + OutputFormat, dpi=150)
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+#--------------------------------------------------------
+
+    # Ejection vs Vvir
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    w = np.where((SfrDisk + SfrBulge > 0.0) & (MassLoading > 0.0) & (Vvir > 0.0) & (Mvir > 0.0))[0]
+    if len(w) == 0:
+        print('  Skipping ejection_vs_vvir: no galaxies with SFR > 0, MassLoading > 0, and Vvir > 0.\n')
+        plt.close()
+    else:
+        if(len(w) > dilute): w = sample(list(w), dilute)
+
+    MassLoading = read_hdf(file_list, Snapshot, 'MassLoading')[w]
+    Vvir = read_hdf(file_list, Snapshot, 'Vvir')[w]
+    SfrDisk = read_hdf(file_list, Snapshot, 'SfrDisk')[w]
+    SfrBulge = read_hdf(file_list, Snapshot, 'SfrBulge')[w]
+    V_sn = 501.0  # km/s, characteristic supernova velocity
+
+    # reheat = MassLoading * (SfrDisk + SfrBulge)
+    # E_fb = 0.3 * MassLoading * (SfrDisk + SfrBulge) * (V_sn**2)  # Feedback energy from supernovae
+    # E_lift = 0.5 * reheat * (Vvir**2)  # Energy required to lift gas out of the halo
+    # sfr = SfrDisk + SfrBulge
+    # eject = (E_fb - E_lift) / (0.5 * (Vvir**2))  # Ejection energy
+    # eject = np.maximum(0.0, eject)
+
+    # SAGE26 FIRE constants from your text
+    epsilon_disk = 2.9  
+    epsilon_halo = 0.3
+    V_sn = 501.0  
+    
+    sfr = SfrDisk + SfrBulge
+    reheat = MassLoading * sfr
+    
+    # Extract the pure scaling factor 'f' from eta_reheat (MassLoading)
+    f_factor = MassLoading / epsilon_disk
+    
+    # Eq. 4: Feedback Energy (using f_factor, not MassLoading)
+    E_fb = 0.5 * epsilon_halo * f_factor * sfr * (V_sn**2)
+    
+    # Eq. 5: Lifting Energy (using the full MassLoading / eta_reheat)
+    E_lift = 0.5 * reheat * (Vvir**2)
+    
+    # Eq. 6: Ejected mass
+    eject = (E_fb - E_lift) / (0.5 * Vvir**2)
+    
+    # Enforce the condition that ejection cannot be negative
+    eject = np.maximum(0.0, eject)
+
+    print('Ejection sample stats:')
+    print(f'    Ejection energy: {eject.min():.4f} to {eject.max():.4f}')
+
+
+    ejection_efficiency = (eject / sfr) # Ejection efficiency
+
+    print('  Ejection efficiency vs Vvir sample stats:')
+    print(f'    Ejection efficiency: {ejection_efficiency.min():.4f} to {ejection_efficiency.max():.4f}')
+
+    plt.scatter(np.log10(Vvir), np.log10(ejection_efficiency), s=2, alpha=0.5, rasterized=True)
+
+    # Median line and 1-sigma shading
+    bin_edges = np.arange(1.0, 3.0, 0.1)
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    digitized = np.digitize(np.log10(Vvir), bin_edges)
+    medians = [np.median(np.log10(ejection_efficiency[digitized == i])) for i in range(1, len(bin_edges))]
+    stds = [np.std(np.log10(ejection_efficiency[digitized == i])) for i in range(1, len(bin_edges))]
+
+    ax.fill_between(bin_centers, np.array(medians) - np.array(stds), np.array(medians) + np.array(stds), alpha=0.2, rasterized=True)
+    ax.plot(bin_centers, medians, color='k', lw=2, label='Median ± 1σ')
+
+    ax.set_xlabel(r'$\log_{10} V_{\rm vir}\ (\mathrm{km/s})$')
+    ax.set_ylabel(r'$\mathrm{Ejection\ Efficiency}$')
+    # ax.set_xlim(1.0, 3.0)
+
+    plt.savefig(OutputDir + 'ejection_efficiency_vs_vvir' + OutputFormat, dpi=150)
+    print('Saved file to', outputFile, '\n')
+
+
+#--------------------------------------------------------
+
+# Plotting disk radii vs stellar mass
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    DiskRadius = read_hdf(file_list, Snapshot, 'DiskRadius')  # in Mpc/h
+    DiskRadius = DiskRadius * 1.0e3  # Convert to kpc/h
+    # DiskRadius is the exponential scale length of the MMW98 disk (src/model_misc.c).
+    # Sizes are measured as effective (half-light/half-mass) radii, so put the model on
+    # that scale rather than pulling the observations down onto a scale length:
+    # r_e = 1.68 r_d for a pure exponential -- the same constant the model itself uses
+    # for this conversion (DISK_HALF_MASS_FRAC in src/model_mergers.c).
+    DiskRadius = DiskRadius * 1.68  # Scale length -> effective radius
+    StellarMass = read_hdf(file_list, Snapshot, 'StellarMass') * 1.0e10 / Hubble_h  # Convert to solar masses
+    Rvir = read_hdf(file_list, Snapshot, 'Rvir')  # in Mpc/h
+    Rvir = Rvir * 1.0e3  # Convert to kpc/h
+
+    w = np.where((Rvir > 0.0) & (DiskRadius > 0.0) & (np.log10(StellarMass) > 9.3) & (np.log10(StellarMass) < 11.3))[0]
+    if len(w) == 0:
+        print('  Skipping disk_radius_vs_stellar_mass: no galaxies with StellarMass > 0 and DiskRadius > 0.\n')
+        plt.close()
+    else:
+        if(len(w) > dilute): w = sample(list(w), dilute)
+
+    # log_stellar_mass = np.log10(StellarMass[w])
+    # log_disk_radius = np.log10(DiskRadius[w])
+    # log_rvir = np.log10(Rvir[w])
+
+    plt.scatter(Rvir[w], DiskRadius[w], s=2, alpha=0.5, rasterized=True)
+
+    # Median line and 1-sigma shading
+    bin_edges = np.logspace(np.log10(Rvir[w].min()), np.log10(Rvir[w].max()), 50)
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    digitized = np.digitize(Rvir[w], bin_edges)
+    medians = [np.median(DiskRadius[w][digitized == i]) for i in range(1, len(bin_edges))]
+    stds = [np.std(DiskRadius[w][digitized == i]) for i in range(1, len(bin_edges))]
+
+    ax.fill_between(bin_centers, np.array(medians) - np.array(stds), np.array(medians) + np.array(stds), alpha=0.2, rasterized=True)
+    ax.plot(bin_centers, medians, color='k', lw=2, label='Median ± 1σ (matching Somerville+18 selection)')
+
+    # Somerville et al. (2018), GAMA at z=0.1: the stellar-to-halo size ratio
+    # SRHR = r_e / Rvir, tabulated in eight stellar mass bins from log(M*)=9.25 to 11.34.
+    # Taken as published -- the model has already been converted to r_e above.
+    # Both radii are kpc/h here, so the ratio carries no h and needs no correction.
+    try:
+        srhr = np.loadtxt(os.path.join(DataDir, 'SizesAndAM', 'RSRHSomerville.dat'))
+        re_over_rvir = srhr[:, 1]
+        rvir_ref = np.array([Rvir[w].min(), Rvir[w].max()])
+        ax.fill_between(rvir_ref, re_over_rvir.min() * rvir_ref, re_over_rvir.max() * rvir_ref,
+                        color='firebrick', alpha=0.25, zorder=5,
+                        label=r'Somerville+18 SRHR (9.3 < $\log M_\star$ < 11.3)')
+        ax.plot(rvir_ref, np.median(re_over_rvir) * rvir_ref, '--', color='firebrick',
+                lw=2, zorder=6)
+    except Exception as e:
+        print(f"Warning: Could not load RSRHSomerville.dat: {e}")
+
+    ax.set_xlabel(r'$R_{\rm vir}\ (\mathrm{kpc}/h)$')
+    ax.set_ylabel(r'$R_{\rm e,disk}\ (\mathrm{kpc}/h)$')
+    # ax.set_xlim(8.0, 12.0)
+    ax.set_ylim(10**-2, 10**2)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.legend(loc='upper left', frameon=False, fontsize=11)
+
+    plt.savefig(OutputDir + 'disk_radius_vs_stellar_mass' + OutputFormat, dpi=150)
+    print('Saved file to', outputFile, '\n')

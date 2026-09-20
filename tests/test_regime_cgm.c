@@ -3,7 +3,7 @@
  * 
  * Tests for:
  * - Regime boundary determination (Voit 2015)
- * - CGM precipitation criterion
+ * - CGM bulk cooling timescales
  * - Gas routing to correct reservoirs
  * - Regime transitions
  */
@@ -22,13 +22,16 @@ void test_regime_boundary() {
 
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
+    /* memset zeroes every parameter, so defaults that live in
+     * core_read_parameter_file.c must be restored by hand.
+     * MShockMsun = 6e11 Msun is the DB06 value (see set_defaults()). */
+    run_params.MShockMsun = 6.0e11;
     run_params.Hubble_h = 0.7;
 
     // Test that regime assignment follows sigmoid probability around Mshock
     // With probabilistic assignment, we test statistical behavior
 
     const int N_trials = 1000;
-    const double Mshock = 6.0e11;  // Msun
 
     struct {
         double Mvir_physical;  // Msun
@@ -74,6 +77,10 @@ void test_regime_sigmoid_transition() {
 
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
+    /* memset zeroes every parameter, so defaults that live in
+     * core_read_parameter_file.c must be restored by hand.
+     * MShockMsun = 6e11 Msun is the DB06 value (see set_defaults()). */
+    run_params.MShockMsun = 6.0e11;
     run_params.Hubble_h = 0.7;
 
     // Test that the sigmoid transition is correctly centered at Mshock
@@ -125,14 +132,18 @@ void test_regime_sigmoid_transition() {
     }
 }
 
-void test_precipitation_criterion() {
-    BEGIN_TEST("CGM Precipitation Criterion (tcool/tff < 10)");
+void test_cgm_cooling_timescales() {
+    BEGIN_TEST("CGM Bulk Cooling Timescales (tcool, tff)");
     
     struct GALAXY gal;
     memset(&gal, 0, sizeof(struct GALAXY));
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
+    /* memset zeroes every parameter, so defaults that live in
+     * core_read_parameter_file.c must be restored by hand.
+     * MShockMsun = 6e11 Msun is the DB06 value (see set_defaults()). */
+    run_params.MShockMsun = 6.0e11;
     
     // Properly initialize unit system (SAGE standard units)
     run_params.Hubble_h = 0.7;
@@ -159,34 +170,31 @@ void test_precipitation_criterion() {
     gal.SnapNum = 30;
     gal.Regime = 0;                 // CGM regime (M < Mshock)
     
-    // Note: tcool/tff calculation requires proper density/temperature
+    // Note: the tcool calculation requires proper density/temperature
     // which comes from the cooling calculation itself
     double dt = 0.001;
     
     // Call cooling recipe to populate tcool, tff
-    double cooling = cooling_recipe_cgm(0, dt, &gal, &run_params);
+    double cooling = cooling_recipe_cgm(0, gal.SnapNum, dt, &gal, &run_params);
     
-    // Check that tcool, tff, and their ratio are computed
+    // Both timescales feeding the bulk cooling rate should be computed
     ASSERT_GREATER_THAN(gal.tcool, 0.0, "tcool > 0");
     ASSERT_GREATER_THAN(gal.tff, 0.0, "tff > 0");
-    ASSERT_GREATER_THAN(gal.tcool_over_tff, 0.0, "tcool/tff > 0");
     
     // NOTE: This unit test demonstrates a limitation - creating isolated galaxy
     // structures without full cosmological context produces unphysical values
     // In real simulations, CGM properties evolve self-consistently with halo growth
     
-    printf("  ℹ tcool/tff calculated: %.6e\n", gal.tcool_over_tff);
-    printf("  ℹ NOTE: Unit test limitation - tcool/tff very small due to simplified setup\n");
+    printf("  ℹ tcool = %.6e Gyr, tff = %.6e Gyr\n", gal.tcool, gal.tff);
+    printf("  ℹ NOTE: Unit test limitation - simplified setup, not a physical halo\n");
     printf("  ℹ In full simulation, CGM evolves with proper thermal history\n");
     
-    // The test verifies the CALCULATION runs without errors,not the physical realism
-    // Integration tests with full halo evolution provide realistic tcool/tff values
+    // The test verifies the CALCULATION runs without errors, not the physical realism
+    // Integration tests with full halo evolution provide realistic timescales
     
-    // If tcool/tff < 10, precipitation cooling should be triggered
-    // The cooling_recipe_cgm function will still produce cooling output
-    if(gal.tcool_over_tff < 10.0) {
-        ASSERT_GREATER_THAN(cooling, 0.0, "Unstable CGM (tcool/tff < 10) has cooling > 0");
-    }
+    // The single Carr+23 bulk recipe always cools a CGM reservoir with gas:
+    // mdot = M_CGM / (tcool + tff), with no threshold gating it.
+    ASSERT_GREATER_THAN(cooling, 0.0, "CGM with gas has cooling > 0");
 }
 
 void test_gas_routing_to_correct_reservoir() {
@@ -194,6 +202,10 @@ void test_gas_routing_to_correct_reservoir() {
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
+    /* memset zeroes every parameter, so defaults that live in
+     * core_read_parameter_file.c must be restored by hand.
+     * MShockMsun = 6e11 Msun is the DB06 value (see set_defaults()). */
+    run_params.MShockMsun = 6.0e11;
     run_params.CGMrecipeOn = 1;
     run_params.SupernovaRecipeOn = 1;
     
@@ -265,6 +277,10 @@ void test_regime_transition() {
 
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
+    /* memset zeroes every parameter, so defaults that live in
+     * core_read_parameter_file.c must be restored by hand.
+     * MShockMsun = 6e11 Msun is the DB06 value (see set_defaults()). */
+    run_params.MShockMsun = 6.0e11;
     run_params.Hubble_h = 0.7;
     run_params.CGMrecipeOn = 1;
 
@@ -305,6 +321,10 @@ void test_cold_stream_fraction() {
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
+    /* memset zeroes every parameter, so defaults that live in
+     * core_read_parameter_file.c must be restored by hand.
+     * MShockMsun = 6e11 Msun is the DB06 value (see set_defaults()). */
+    run_params.MShockMsun = 6.0e11;
     run_params.CGMrecipeOn = 1;
     run_params.UnitDensity_in_cgs = 6.77e-22;
     run_params.UnitTime_in_s = 3.15e16;
@@ -327,7 +347,7 @@ void test_cold_stream_fraction() {
     // For this test, we check that the cooling recipe runs correctly
     // and that cold stream fraction behaves physically
     double initial_hot_gas = gal.HotGas;
-    double cooling = cooling_recipe_hot(0, dt, &gal, &run_params);
+    double cooling = cooling_recipe_hot(0, gal.SnapNum, dt, &gal, &run_params);
     
     ASSERT_GREATER_THAN(cooling + 1e-10, 0.0, "Cooling occurs in hot halo");
     ASSERT_TRUE(cooling <= initial_hot_gas, "Cooling doesn't exceed available gas");
@@ -350,7 +370,7 @@ int main() {
 
     test_regime_boundary();
     test_regime_sigmoid_transition();
-    test_precipitation_criterion();
+    test_cgm_cooling_timescales();
     test_gas_routing_to_correct_reservoir();
     test_regime_transition();
     test_cold_stream_fraction();

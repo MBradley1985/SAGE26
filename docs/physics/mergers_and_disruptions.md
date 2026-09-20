@@ -197,19 +197,17 @@ ICS reservoir. The function:
    `ColdGas + HotGas + CGMgas` goes to the central's `CGMgas` if Regime 0
    or `HotGas` if Regime 1).
 2. **Transfers ejected mass and pre-existing ICS** unchanged.
-3. **Disrupts the satellite's stellar mass** -- splits it between the
-   central's ICS and the central's stellar mass (BCG accretion). The
-   split is controlled by `DynamicDisruptionSplit`:
+3. **Disrupts the satellite's stellar mass** -- all of it is added to the
+   central's `ICS` and `MetalsICS`. There is no ICS-versus-BCG split, so
+   disruption contributes nothing to the central's `StellarMass`,
+   `BulgeMass` or `MergerBulgeMass`. The satellite's black hole is
+   transferred to the central so that baryons are conserved.
 
-| Value | Split | Formula |
-|-------|-------|---------|
-| 0 | Fixed | `f_ICS = FractionDisruptedToICS` |
-| 1 | Mass-ratio | `f_ICS = 1 - (infallMvir / Mhost)^DisruptionSplitAlpha` -- low mass-ratio satellites are stripped on wider orbits and contribute more to ICS. Uses the satellite's `infallMvir` (frozen at the time of infall), not its current `Mvir`. |
-| 2 | Mass-ratio with concentration weighting | as mode 1, but with `alpha_eff = DisruptionSplitAlpha * DisruptionSplitCref / c_sat` -- concentrated satellites resist stripping and deposit more onto the BCG |
-
-The `infallMvir / Mhost` ratio is clipped to 1.0. If either mass is
-zero or unknown, the function falls back to the fixed
-`FractionDisruptedToICS`.
+   (Earlier versions split this mass with `DynamicDisruptionSplit`,
+   `FractionDisruptedToICS`, `DisruptionSplitAlpha` and
+   `DisruptionSplitCref`, including concentration-weighted variants. That
+   machinery and those parameters have been removed; `get_halo_concentration()`
+   survives and is still used elsewhere, e.g. by the FFB and disk-size models.)
 
 4. **Records assembly history** if `TrackICSAssembly = 1`:
    `ICS_disrupt` accumulates the satellite stellar mass newly disrupted
@@ -246,10 +244,6 @@ by any code path), 4 (disrupted to ICS).
 | `ThreshMajorMerger` | Mass-ratio threshold for major vs minor classification. |
 | `ThresholdSatDisruption` | M_vir/baryon threshold below which a satellite is eligible for an event. |
 | `StarburstColdGasOn` | 0 forces the burst to recompute H2 from current ColdGas; 1 uses the stored value. |
-| `DynamicDisruptionSplit` | ICS-vs-BCG split mode for disrupted satellites (0 fixed, 1 mass-ratio, 2 mass-ratio with concentration weighting). |
-| `FractionDisruptedToICS` | Fixed-split fraction (mode 0) or fallback. |
-| `DisruptionSplitAlpha` | Exponent in the mass-ratio split (modes 1 and 2). |
-| `DisruptionSplitCref` | Reference concentration for mode 2. |
 | `BulgeSizeOn` | Bulge radius model (0 off, 1-2 Shen+2003, 3 Tonini+2016 multi-channel). |
 | `TrackICSAssembly` | Record `ICS_disrupt` and `ICS_accrete` assembly history. |
 | `SFprescription` | Used to pick the H2 recipe in the burst when `StarburstColdGasOn = 0`. |

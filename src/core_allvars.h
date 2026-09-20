@@ -125,12 +125,11 @@ struct GALAXY
     float dT;                    /* total time interval for this snapshot step [code time units] */
 
     /* (sub)halo properties */
-    float Pos[3];
-    float Vel[3];
+    float Pos[3];        /* comoving position, copied from the host halo [Mpc/h] */
+    float Vel[3];        /* peculiar velocity, copied from the host halo [km/s] */
     int   Len;           /* number of simulation particles in the host (sub)halo */
     float Mvir;          /* virial mass [10^10 Msun/h] */
     float deltaMvir;     /* change in virial mass since previous snapshot [10^10 Msun/h] */
-    float CentralMvir;   /* virial mass of the FOF host halo [10^10 Msun/h] */
     float Rvir;          /* virial radius [Mpc/h] */
     float Vvir;          /* virial circular velocity [km/s] */
     float Vmax;          /* maximum circular velocity of the (sub)halo [km/s] */
@@ -157,34 +156,44 @@ struct GALAXY
     float MetalsICS;
     float MetalsCGMgas;
 
-    /* per-substep SFR trackers (used to compute magnitudes) */
-    float SfrDisk[STEPS];
-    float SfrBulge[STEPS];
-    float SfrDiskColdGas[STEPS];
-    float SfrDiskColdGasMetals[STEPS];
-    float SfrBulgeColdGas[STEPS];
-    float SfrBulgeColdGasMetals[STEPS];
+    /* per-substep SFR trackers; converted to Msun/yr at output */
+    float SfrDisk[STEPS];              /* disk SFR per substep [10^10 Msun/h / code time] */
+    float SfrBulge[STEPS];             /* bulge (starburst) SFR per substep [10^10 Msun/h / code time] */
+    float SfrDiskColdGas[STEPS];       /* ColdGas at each substep, for output metallicity of disk SF [10^10 Msun/h] */
+    float SfrDiskColdGasMetals[STEPS]; /* MetalsColdGas at each substep [10^10 Msun/h] */
+    float SfrBulgeColdGas[STEPS];      /* ColdGas at each substep of bulge SF [10^10 Msun/h] */
+    float SfrBulgeColdGasMetals[STEPS];/* MetalsColdGas at each substep of bulge SF [10^10 Msun/h] */
+    int32_t SubstepsUsed;              /* effective_steps actually integrated over this snapshot. The Sfr*
+                                          arrays above hold STEPS bins but accumulate one entry per substep,
+                                          so the output average must divide by this, not by STEPS. Equals
+                                          STEPS whenever the adaptive path does not fire (see evolve_galaxies). */
 
     /* full star formation history - tracks stellar mass formed at each snapshot */
-    float SFHMassDisk[ABSOLUTEMAXSNAPS];   /* stellar mass formed in disk at each snapshot */
-    float SFHMassBulge[ABSOLUTEMAXSNAPS];  /* stellar mass formed in bulge (starbursts) at each snapshot */
-    float ICS_disrupt;                     /* cumulative stellar mass disrupted to ICS (assembly tracking) */
-    float ICS_accrete;                     /* cumulative ICS accreted from satellites (assembly tracking) */
-    float ICS_sum_mt;                      /* mass-weighted accumulator: sum of m*t (code time) at ICS deposition;
+    float SFHMassDisk[ABSOLUTEMAXSNAPS];   /* stellar mass formed in disk at each snapshot [10^10 Msun/h] */
+    float SFHMassBulge[ABSOLUTEMAXSNAPS];  /* stellar mass formed in bulge (starbursts) at each snapshot [10^10 Msun/h] */
+    /* ICS assembly tracking.  These are channels of LAST TRANSFER into this
+       halo's reservoir, not channels of origin: every gram of ICS is created by
+       disrupt_satellite_to_ICS(), but ICS assembled in a progenitor group is
+       re-booked as ICS_accrete when that group falls in.  Invariant:
+       ICS_disrupt + ICS_accrete == ICS. */
+    float ICS_disrupt;                     /* in-situ: satellite stars stripped straight into this reservoir [10^10 Msun/h] */
+    float ICS_accrete;                     /* ex-situ: already-formed ICS carried in by infalling/merging satellites [10^10 Msun/h] */
+    float ICS_sum_mt;                      /* mass-weighted accumulator [10^10 Msun/h * code time]: sum of m*t at ICS deposition;
                                               mean ICS-assembly lookback = ICS_sum_mt / (ICS_disrupt + ICS_accrete) */
 
     /* misc */
     float DiskScaleRadius; /* exponential disk scale radius [Mpc/h] */
+    float SpinSmooth[3];   /* main-branch running mean of the halo spin vector [(Mpc/h)(km/s)];
+                              used only when DiskRadiusOn >= 2, carried forward with the galaxy */
     float BulgeRadius;     /* effective (half-mass) bulge radius [Mpc/h] */
     float MergTime;        /* dynamical-friction merger clock; counts down to 0 [code time units]; >999 = unset */
     double Cooling;        /* total cooling luminosity this snapshot [code energy / code time] */
     double Heating;        /* total AGN heating luminosity this snapshot [code energy / code time] */
     float r_heat;          /* AGN radio-mode heating radius [Mpc/h]; suppresses cooling gas at r < r_heat. Ratchet-only (no decay), capped at Rvir in the CGM regime. */
     float QuasarModeBHaccretionMass; /* BH mass accreted in quasar mode this snapshot [10^10 Msun/h] */
-    float TimeOfLastMajorMerger;
-    float TimeOfLastMinorMerger;
+    float TimeOfLastMajorMerger;     /* lookback time to z=0 at last major merger [code time units]; -1 = never; written out in Myr */
+    float TimeOfLastMinorMerger;     /* lookback time to z=0 at last minor merger [code time units]; -1 = never; written out in Myr */
     float OutflowRate;           /* SN-driven gas outflow rate [10^10 Msun/h / code time] */
-    float TotalSatelliteBaryons; /* sum of all baryonic mass in satellites (used for output diagnostics) */
     float RcoolToRvir;           /* ratio of cooling radius to virial radius at last cooling evaluation */
 
     /* black hole growth tracking */
@@ -210,19 +219,18 @@ struct GALAXY
                                     "first event" window before one ever happens. */
 
     /* infall properties -- values frozen at the moment a galaxy first becomes a satellite */
-    float infallMvir;
-    float infallVvir;
-    float infallVmax;
-    float infallStellarMass;
-    float TimeOfInfall; /* snapshot number at infall */
+    float infallMvir;        /* Mvir at infall [10^10 Msun/h] */
+    float infallVvir;        /* Vvir at infall [km/s] */
+    float infallVmax;        /* Vmax at infall [km/s] */
+    float infallStellarMass; /* StellarMass at infall [10^10 Msun/h] */
+    float TimeOfInfall;      /* snapshot number at infall (stored as float); -1 = never a satellite */
 
     float MassLoading; /* SN mass-loading factor eta = M_ejected / M_* for the current SF episode */
 
-    /* CGM properties (set each snapshot by cooling_recipe_cgm / cooling_recipe_regime_aware) */
-    float tcool;             /* cooling time at the precipitation radius [code time units] */
-    float tff;               /* free-fall time at the precipitation radius [code time units] */
-    float tcool_over_tff;    /* ratio used for precipitation threshold test */
-    float tdeplete;          /* gas depletion timescale from the current SF episode [code time units] */
+    /* Cooling diagnostics (set each snapshot by the active cooling recipe) */
+    float tcool;             /* cooled gas rate [Msun/Gyr] */
+    float tff;               /* free-fall time at the precipitation radius [Gyr] */
+    float CoolingRate;       /* cooling rate [Msun/Gyr] */
     float H2DepletionTime_Gyr; /* molecular depletion time from K13 prescription [Gyr] */
 
     /* bulge properties -- split by formation channel for morphology tracking */
@@ -234,7 +242,7 @@ struct GALAXY
     float mdot_cool;    /* instantaneous CGM cooling rate onto the disk [10^10 Msun/h / code time] */
     float mdot_stream;  /* cold-stream inflow rate from CGMgas [10^10 Msun/h / code time] */
 
-    double g_max; /* maximum gravitational instability growth rate for BK25 FFB threshold (dimensionless) */
+    double g_max; /* peak NFW gravitational acceleration for the BK25 FFB threshold, code units (UnitLength/UnitTime^2) */
 };
 
 
@@ -246,9 +254,6 @@ struct halo_aux_data
     int32_t HaloFlag;
     int32_t NGalaxies;
     int FirstGalaxy;
-#ifdef PROCESS_LHVT_STYLE
-    int orig_index;
-#endif
     int output_snap_n;
 };
 
@@ -502,22 +507,39 @@ struct params
     int32_t    ReionizationOn;
     int32_t    DiskInstabilityOn;
     int32_t    CGMrecipeOn;
-    int32_t    CGMDensityProfile;  // 0: uniform, 1: NFW, 2: beta-profile
     int32_t    FIREmodeOn;
-    int32_t    CGMrecipeSAGEOn;
-    int32_t    CGMAGNOn;              // 0: disable AGN heating in CGM-regime entirely; 1: enable (default)
     int32_t    RegimeRandomMode;     // 0: fresh random draw each snapshot (default, original behaviour); 1: use the persistent RegimeRandom assigned at galaxy creation (deterministic regime evolution driven by mass)
-    int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation
+    int32_t    ColdStreamCeilingOn;  // How the cold-stream fraction f_stream is set.
+                                  // 0: SAGE26 choice (default) -- a smooth fraction
+                                  //    (Mvir/Mshock)^(-4/3) (1+z)/2 with a hard z_crit cut
+                                  //    for M > Mshock.  Streams and the quasi-static flow
+                                  //    coexist; no counterpart in D&B06.
+                                  // 1: Dekel & Birnboim (2006) eq. 39 as published -- the
+                                  //    threshold R < 1, so f_stream is 1 or 0 and z_crit
+                                  //    and the Mstream ceiling emerge from eqs 40-41.
+    double     StreamMassFactor;  // f in Dekel & Birnboim (2006) eqs 40-41; order a few, they use 3.
+    double     GasDiskRadiusFactor; // chi: ratio of the atomic-gas scale length to the stellar/H2
+                                  // scale length, applied in the HI ionisation truncation only.
+                                  // 1.0 = cospatial (default, published behaviour); observed disks
+                                  // have chi ~ 1.5-2.
+    double     MShockMsun;   // Dekel & Birnboim (2006) virial-shock stability mass [Msun].
+                             // Sets which of two baryon cycles a halo follows, so it is a
+                             // physics parameter rather than a constant; exposed for the
+                             // sensitivity test requested in referee Major Comment 9.
+    int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation, 3: hybrid (Vmax/Vvir, infall-frozen for satellites)
     int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
     int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too
-    int32_t    FFBRandomMode;       // 0: draw a fresh random each snapshot; 1: use persistent FFBRandom assigned at galaxy creation
-    int32_t    BulgeSizeOn;
+    int32_t    FFBRandomMode;       // 0: draw a fresh random each snapshot (DEFAULT, published behaviour -- galaxies move in and out of FFB); 1: use the persistent FFBRandom assigned at galaxy creation (FFB status fixed per galaxy)
+    int32_t    BulgeSizeOn;   // 0: off; 1: Shen+03 eq. 33; 2: Shen+03 eq. 32 two-regime; 3: Tonini+16 separate merger/instability bulges
     int32_t    H2DiskAreaOption;          // 0 = pi*r_s^2, 1 = pi*(3*r_s)^2, 2 = 2*pi*r_s^2 (central Sigma_0)
     int32_t    H2RadialIntegrationOn;     // 0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk
     int32_t    H2RadialNBins;             // radial bins for integration (default 25)
     double     H2RadialRMaxFactor;        // R_max = factor * r_s (default 5.0)
-    int32_t    SaveFullSFH;               // 0 = save averaged SFR (default), 1 = save full SfrDisk[STEPS] and SfrBulge[STEPS] arrays
-    int32_t    TrackICSAssembly;          // 0 = off, 1 = track ICS_disrupt and ICS_accrete
+    int32_t    SaveFullSFH;               // 0 = save only the snapshot-averaged SfrDisk/SfrBulge (default),
+                                          // 1 = additionally save the per-snapshot SFHMassDisk/SFHMassBulge
+                                          // histories. Those accumulate stellar mass, not rate, so they are
+                                          // correct at any substep count (unlike the Sfr* rate bins).
+    int32_t    TrackICSAssembly;          // 0 = off, 1 = track in-situ/ex-situ ICS (ICS_disrupt, ICS_accrete, ICS_sum_mt)
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 
     /* baryonic physics calibration parameters */
@@ -525,18 +547,21 @@ struct params
     double Yield;                 /* metal yield per unit stellar mass locked up */
     double FracZleaveDisk;        /* fraction of SN-enriched gas that leaves the disk (vs stays in ColdGas) */
     double ReIncorporationFactor; /* rate at which ejected gas re-accretes onto the hot halo */
-    double ThreshMajorMerger;
-    double BaryonFrac;
-    double SfrEfficiency;
-    double FFBMaxEfficiency;
+    double ThreshMajorMerger;     /* mass ratio above which a merger is 'major' [dimensionless] */
+    double BaryonFrac;            /* cosmic baryon fraction Omega_b/Omega_m [dimensionless] */
+    double SfrEfficiency;         /* SF efficiency per dynamical time [dimensionless] */
+    double FFBMaxEfficiency;      /* maximum SF efficiency in the feedback-free burst regime [dimensionless] */
     double FFBConcSigma;      // sigma_c for log-normal concentration scatter (ln c); typical ~0.2 (Jing 2000, Bullock+01)
-    double FeedbackReheatingEpsilon;
-    double FeedbackEjectionEfficiency;
-    
+    double FFBThresholdSlope; // exponent n in M_vir,FFB ~ ((1+z)/10)^n; -6.2 (Li+24) is the default. The
+                              // normalisation is pinned at z=9, so varying this pivots the threshold about
+                              // that redshift; used to test whether the slope is degenerate with alpha_FFB.
+    double FeedbackReheatingEpsilon;   /* SN mass-loading: reheated mass per unit stars formed [dimensionless] */
+    double FeedbackEjectionEfficiency; /* fraction of SN energy available to eject gas from the halo [dimensionless] */
+
     /* Black Hole settings */
-    double RadioModeEfficiency;
-    double QuasarModeEfficiency;
-    double BlackHoleGrowthRate;
+    double RadioModeEfficiency;   /* radio-mode AGN heating efficiency [dimensionless] */
+    double QuasarModeEfficiency;  /* quasar-mode BH accretion efficiency during mergers [dimensionless] */
+    double BlackHoleGrowthRate;   /* BH growth normalisation per merger [dimensionless] */
     double BHAccretionNorm;
     double BHMassScalingIndex;
 
@@ -547,17 +572,21 @@ struct params
     int32_t EddingtonLimitOn; // 0: off, 1: on
     int32_t AGNDynamicAccretionOn; // 0: off, 1: on
     int32_t AGNAccretionScheme; // 0: default (global EddingtonLimitOn); 1: disk only; 2: merger only; 3: first event; 4: small halo; 5: massive halo; 6: conc/bulge; 7: minor merger; 8: major merger
-    
-    
-    double Reionization_z0;
-    double Reionization_zr;
-    double ThresholdSatDisruption;
+
+    double Reionization_z0;       /* redshift at which the filter mass reaches its peak (Kravtsov+04 z0) */
+    double Reionization_zr;       /* redshift at which reionization completes (Kravtsov+04 zr) */
+    double ThresholdSatDisruption;/* satellite disrupted when Mvir/(baryonic mass) drops below this [dimensionless] */
     double FractionDisruptedToICS;  // Fraction of disrupted satellite stellar mass that goes to ICS (rest goes to BCG)
     int32_t DynamicDisruptionSplit;  // 0: fixed fraction; 1: mass-ratio f_ICL = 1-(Msub/Mhost)^alpha; 2: concentration-weighted
     double DisruptionSplitAlpha;     // Base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
     double DisruptionSplitCref;      // Reference concentration for concentration weighting (DynamicDisruptionSplit=2)
-    double RedshiftPowerLawExponent;
 
+    double SubstepResolution;        // global multiplier on the adaptive substep count (floor STEPS and cap MAX_STEPS both scale by this); default 1.0. Runtime knob for convergence / N-invariance testing without recompiling.
+    double RedshiftPowerLawExponent; /* exponent of the (1+z) term in the FIRE mass-loading scaling (Muratov+15); default 1.25 */
+    int32_t SNEnergyConservationOn;  // 1 = bound the FIRE ejection energy by the supernova energy actually available (DEFAULT); 0 = off (unbounded coupling, the pre-2026 published behaviour). Only acts when FIREmodeOn == 1.
+    double MaxSNEnergyCoupling;      // cap on the effective coupling eps_eff = FeedbackEjectionEfficiency * f_FIRE when SNEnergyConservationOn == 1; default 2.0, i.e. E_FB <= m_* eta_SN E_SN (all of the SN energy). 1.0 caps at half.
+
+    int32_t KarpovModeOn;  // 0 = off (default, published behaviour); 1 = Karpov+2020 supernova feedback model (mdot_outflow = eta_SN * SFR, no energy budget, no cooling flow, no precipitation threshold, no cold streams)
     /* code unit definitions (set from parameter file; all other unit fields derived from these) */
     double UnitLength_in_cm;          /* 1 code length = this many cm (default: 1 Mpc/h) */
     double UnitVelocity_in_cm_per_s;  /* 1 code velocity = this many cm/s (default: 1 km/s) */

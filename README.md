@@ -23,10 +23,9 @@ of halo properties. Test trees for the
 
 | Feature | Parameter | Reference |
 |---------|-----------|-----------|
-| Two-regime CGM model | `CGMrecipeOn` | Dekel & Birnboim (2006), Voit (2015) |
+| Two-regime CGM model with self-regulating precipitation | `CGMrecipeOn` | Dekel & Birnboim (2006), Voit (2015) |
 | FIRE stellar feedback | `FIREmodeOn` | Muratov et al. (2015) |
 | Feedback-free burst galaxies | `FeedbackFreeModeOn` | Li et al. (2024), Boylan-Kolchin (2025) |
-| NFW/beta CGM density profiles | `CGMDensityProfile` | — |
 | 7 H2 star formation prescriptions | `SFprescription` | BR06, KMT09, KD12, K13, GD14, S25 |
 | Separate merger/instability bulge tracking | `BulgeSizeOn` | Tonini et al. (2016) |
 | ICS assembly tracking | `TrackICSAssembly` | — |
@@ -134,8 +133,19 @@ Each regime uses a dedicated cooling recipe.
 
 | Parameter | Values | Effect |
 |-----------|--------|--------|
-| `CGMrecipeOn` | 0/1 | 0=off (classical C16 cooling only); 1=on |
-| `CGMDensityProfile` | 0–2 | 0=uniform; 1=NFW; 2=beta-profile (β=2/3) |
+| `CGMrecipeOn` | 0/1 | 0=off (classical C16 cooling only); 1=on. Carr+2022 exact copy. |
+
+
+### Adaptive time integration (`SubstepResolution`)
+
+The snapshot interval is integrated with a substep count that scales with
+`deltaT / t_dyn`, so high-redshift snapshots spanning several dynamical times
+are resolved with more substeps (bounded by a `STEPS` floor and `MAX_STEPS`
+cap) rather than a fixed count.
+
+| Parameter | Values | Effect |
+|-----------|--------|--------|
+| `SubstepResolution` | double | Runtime multiplier on both the adaptive-substep floor and cap; default 1.0. Sweep for convergence / N-invariance testing without recompiling |
 
 ### FIRE stellar feedback (`FIREmodeOn`)
 
@@ -173,7 +183,6 @@ Each regime uses a dedicated cooling recipe.
 
 | Parameter | Values | Effect |
 |-----------|--------|--------|
-| `DynamicDisruptionSplit` | 0–2 | Route disrupted satellite mass: 0=fixed fraction via `FractionDisruptedToICS` ; 1=mass-ratio ;  2=mass-ratio with concentration weighting |
 | `TrackICSAssembly` | 0/1 | Record satellite disruption / accretion contributions to ICS |
 
 ### Output
@@ -200,7 +209,7 @@ cd tests && make quick              # single fastest check
 bash tests/run_integration_tests.sh # full integration test (slower)
 ```
 
-The regression baseline checks that output is bit-identical across 5380 datasets:
+The regression baseline checks that output is bit-identical across 5444 datasets:
 
 ```bash
 bash tests/regression_baseline.sh
@@ -229,13 +238,15 @@ optimization.
 If you use SAGE26 in a publication, please cite:
 
 ```bibtex
-@article{bradley2026sage26,
-  author  = {Bradley, Michael and Croton, Darren J.},
-  title   = {SAGE26 Paper I: Modelling the baryon cycle from cosmic dawn to the present day},
-  journal = {in preparation},
-  year    = {2026},
+@article{bradley2026a,
+  title = {SAGE26 Paper I: Modelling the Baryon Cycle from Cosmic Dawn to the Present Day},
+  author = {Bradley, Michael and Croton, Darren J. and Paun, Robert A. Mostoghiu and Chowdhury, Dhruba Dutta and Willingham, Jayde},
+  year = 2026,
+  journal = {The Astrophysical Journal Supplement Series},
+  publisher = {(In prep.)}
 }
 ```
+
 
 and the original SAGE paper:
 
@@ -281,3 +292,9 @@ Questions and comments welcome via GitHub Issues or email.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+## Acknowledgement
+
+Claude Code (Anthropic) was used during development for documentation and style-guide work, linting, code-error fixes, building the test suite, and some code restructuring. All model design, physics choices, and results remain the authors' own, and all such changes were reviewed and tested before inclusion.

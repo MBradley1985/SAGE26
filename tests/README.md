@@ -4,7 +4,7 @@ Comprehensive unit and integration tests for the SAGE26 semi-analytic galaxy for
 
 ## Overview
 
-This test suite validates the physical correctness and numerical stability of the SAGE26 model through **278 automated tests** across **16 test suites** covering:
+This test suite validates the physical correctness and numerical stability of the SAGE26 model through **559 automated tests** across **18 test suites** covering:
 - Conservation laws (mass, metals, energy)
 - Regime determination and CGM physics
 - Bulge size calculations and morphology
@@ -24,11 +24,11 @@ This test suite validates the physical correctness and numerical stability of th
 ## Recent Updates (December 2025)
 
 **Test Suite Review Completed:** A comprehensive review identified and improved several tests:
-- Enhanced CGM precipitation test with informative diagnostics
+- Enhanced CGM cooling test with informative diagnostics
 - Better documentation of AGN quenching test limitations
 - Completed disk shrinking test implementation
 - Improved cold stream fraction validation
-- Root cause analysis of tcool/tff unit test behavior
+- Root cause analysis of CGM cooling-timescale unit test behavior
 
 See `TEST_SUITE_REVIEW.md` for complete findings and analysis.
 
@@ -103,7 +103,7 @@ bash run_integration_tests.sh
 **What it tests:**
 - Voit (2015) regime boundary calculation (M/Mshock)^(4/3)
 - Power law scaling of regime criterion
-- CGM precipitation criterion (tcool/tff < 10)
+- CGM bulk cooling timescales (tcool, tff)
 - Gas routing to correct reservoirs (CGM vs HotGas)
 - Regime transitions and gas preservation
 - Cold stream fraction scaling
@@ -116,7 +116,7 @@ bash run_integration_tests.sh
 - `cooling_recipe_regime_aware()`
 - `update_from_feedback()` (regime-aware routing)
 
-**Note on tcool/tff test:** The precipitation criterion test produces very small tcool/tff values (~1e-22) due to unit test limitations. Isolated galaxy structures without cosmological context can't reproduce realistic CGM thermodynamics. This is expected - the test validates the calculation runs correctly, while integration tests with full evolution validate physical realism. See `TEST_SUITE_REVIEW.md` for detailed analysis.
+**Note on the CGM cooling test:** the cooling-timescale test produces a very small tcool (~1e-22 Gyr) due to unit test limitations. Isolated galaxy structures without cosmological context can't reproduce realistic CGM thermodynamics. This is expected - the test validates the calculation runs correctly, while integration tests with full evolution validate physical realism. See `TEST_SUITE_REVIEW.md` for detailed analysis.
 
 ### 3. Bulge Size Physics (`test_bulge_sizes.c`) - 13 tests
 
@@ -355,22 +355,25 @@ These help catch performance regressions during development.
 | Test Suite | Tests | Coverage |
 |------------|-------|----------|
 | Conservation Laws | 37 | Core physics operations |
-| Regime/CGM | 21 | Regime determination, CGM cooling |
-| Bulge Sizes | 13 | Size calculations all modes |
+| Regime/CGM | 38 | Regime determination, CGM bulk cooling |
+| Bulge Sizes | 19 | Size calculations all modes |
 | Physics Validation | 31 | Physical bounds, quenching |
 | Mergers | 13 | Merger physics, timescales |
 | Disk Instability | 9 | Instability criterion |
 | Gas Infall | 12 | Infall routing, reionization |
 | Numerical Stability | 24 | Edge cases, precision |
 | Metal Enrichment | 22 | Stellar yields, SN feedback |
-| Ram Pressure Stripping | 14 | Hot/cold gas stripping |
-| Multi-Satellite Systems | 9 | Orbital dynamics, tidal effects |
+| Satellite Gas Stripping | 17 | Environmental stripping on t_strip |
+| Multi-Satellite Systems | 8 | Orbital dynamics, tidal effects |
 | Star Formation Recipes | 27 | SF laws, quenching mechanisms |
+| H2 Chemistry | 51 | BR06/KD12/K13/GD14 fits, radial integration |
 | Reincorporation | 21 | Ejected gas return rates |
-| Cooling & Heating | 25 | Thermal balance, precipitation |
+| Cooling & Heating | 29 | Thermal balance, CGM drain |
 | Halo Assembly & Mergers | 24 | Mass ratios, dynamical friction |
 | AGN Feedback | 18 | Radio/quasar modes, Eddington limits |
-| **Total** | **278** | **Complete model physics** |
+| FFB & Concentration | 66 | Feedback-free bursts, halo concentration |
+| Halo & Galaxy IDs | 142 | Unique-ID encoding/decoding, overflow |
+| **Total** | **608** | **Complete model physics** |
 
 ## Unit Tests vs Integration Tests
 
@@ -379,7 +382,7 @@ These help catch performance regressions during development.
 - Fast execution (~seconds)
 - Validate calculations run correctly
 - May produce unrealistic values when physics requires cosmological context
-- Example: CGM precipitation test validates calculation but produces tiny tcool/tff
+- Example: the CGM cooling test validates the calculation but produces a tiny tcool
 
 **Integration Tests** (`run_integration_tests.sh`):
 - Test full galaxy evolution over cosmic time

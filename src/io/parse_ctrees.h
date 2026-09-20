@@ -239,23 +239,6 @@ static inline int parse_header_ctrees(char (*column_names)[PARSE_CTREES_MAX_COLN
             for(size_t i=0;i<totlen;i++) {
                 /* if(token[i] == '#') continue; */
                 if(token[i] == '(') {
-
-#if 0
-                    /* locate the ending ')' -- this while loop is only for additional
-                       testing and can be commented out */
-                    size_t j = i+1;
-                    while(j < totlen) {
-                        if(token[j] == ')') {
-                            token[j] = '\0';
-                            /* fprintf(stderr," `token = %s` ", &token[i+1]); */
-                            int ctrees_colnum = atoi(&(token[i+1]));
-                            PARSE_CTREES_XASSERT(ctrees_colnum == col, EXIT_FAILURE,
-                                                 "ctrees_colnum = %d should equal col = %d\n",
-                                                 ctrees_colnum, col);
-                            break;
-                        }
-                    }
-#endif
                     break;
                 }
                 colname[size] = token[i];
@@ -519,9 +502,3 @@ static inline int read_single_tree_ctrees(int fd, off_t offset, const struct ctr
 #undef PARSE_CTREES_MAXBUFSIZE
 #undef PARSE_CTREES_XASSERT
 #undef LAST_NUMBERED_COLUMN_IN_CTREES
-
-#if 0
-/* this will be required externally to pass in the
-   array of strings, containing the column names  */
-#undef PARSE_CTREES_MAX_COLNAME_LEN
-#endif

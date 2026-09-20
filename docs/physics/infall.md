@@ -26,7 +26,7 @@ SAGE26 routes the infalling gas to one of two destinations depending on the
 central's regime classification:
 
 - **Regime 0 (CGM):** infall accumulates in `CGMgas` and cools through the
-  precipitation recipe.
+  Carr et al. (2023) bulk CGM recipe.
 - **Regime 1 (hot halo):** infall accumulates in `HotGas` and cools through
   the classical isothermal recipe.
 
@@ -111,15 +111,17 @@ The reincorporated gas inherits the metallicity of the ejected reservoir
 and is routed by regime: `CGMgas` if Regime 0, `HotGas` if Regime 1
 (or always `HotGas` when `CGMrecipeOn = 0`).
 
-## `strip_from_satellite()` -- per-substep satellite stripping
+## `strip_from_satellite()` -- satellite hot-gas stripping
 
 For Type 1 satellites (those with their own dark matter subhalo) the
-function transfers excess gas from the satellite to the central, one
-substep at a time. The "excess" is defined as the satellite's current
-baryons above `BaryonFrac * Mvir_sat * reionization_modifier`. A fraction
-`1 / effective_steps` of the excess is stripped per call, so the total
-per-snapshot stripping fraction is independent of the adaptive substep
-count.
+function transfers excess hot-phase gas from the satellite to the central,
+once per snapshot, outside the substep loop. The "excess" is the
+satellite's current baryons above `BaryonFrac * Mvir_sat *
+reionization_modifier`. The stripped fraction is analytic --
+`1 - exp(-dT/t_strip)`, where `t_strip = Rvir/Vvir` is the host dynamical
+time -- so it is exactly the physical (cadence- and substep-invariant)
+amount: no dependence on the adaptive substep count or on how the interval
+is split into snapshots.
 
 For CGM-regime satellites the bulk transfer has already happened in
 `infall_recipe()` (CGMgas was zeroed and merged into the central's
@@ -155,5 +157,5 @@ See [`parameters.md`](../parameters.md) for full descriptions and defaults.
   baryon budget, and velocity-thresholded reincorporation.
 - Dekel & Birnboim (2006), MNRAS 368, 2 -- M_shock criterion underlying
   regime classification.
-- Voit (2015), ApJL 808, L30 -- CGM precipitation framework that informs
-  the regime-aware routing.
+- Carr et al. (2023), ApJ 949, 21 -- bulk CGM cooling model used by the
+  Regime 0 destination.

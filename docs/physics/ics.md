@@ -60,21 +60,23 @@ this halo absorbed them.
 ### 2. Satellite disruption
 
 When `disrupt_satellite_to_ICS()` fires (see
-[Mergers and disruption](mergers_and_disruptions.md)), some fraction of
-the satellite's stellar mass is added to the central's ICS:
+[Mergers and disruption](mergers_and_disruptions.md)), **all** of the
+satellite's stellar mass is added to the central's ICS:
 
 ```
-new_ICS_from_stripping = f_ICS * StellarMass_sat
+new_ICS_from_stripping = StellarMass_sat
 ```
 
-where `f_ICS` is set by `DynamicDisruptionSplit`:
+There is no ICS-versus-BCG split: disruption contributes nothing to the
+central's `StellarMass`, `BulgeMass` or `MergerBulgeMass`. The satellite's
+black hole is transferred to the central (so baryons are conserved), its gas
+goes to the central's hot or CGM reservoir via `add_gas_to_hot_reservoir()`,
+its ejected mass and pre-existing ICS transfer across, and all of its
+baryonic fields are then zeroed.
 
-- Mode 0: fixed `FractionDisruptedToICS`.
-- Mode 1: mass-ratio split `f_ICS = 1 - (infallMvir_sat / Mhost)^DisruptionSplitAlpha`.
-- Mode 2: as mode 1, with `alpha_eff = DisruptionSplitAlpha * DisruptionSplitCref / c_sat` so concentrated satellites resist stripping and deposit more onto the BCG.
-
-The remaining `1 - f_ICS` is added to the central's `StellarMass`,
-`BulgeMass`, and `MergerBulgeMass` (BCG growth).
+(Earlier versions carried a tunable split governed by
+`DynamicDisruptionSplit`, `FractionDisruptedToICS`, `DisruptionSplitAlpha`
+and `DisruptionSplitCref`. Those parameters no longer exist.)
 
 When `TrackICSAssembly = 1`, this event contributes:
 
@@ -154,10 +156,7 @@ but worth knowing when computing population statistics.
 | Parameter | Effect |
 |-----------|--------|
 | `TrackICSAssembly` | 0 disables `ICS_disrupt` / `ICS_accrete` / `ICS_sum_mt` tracking; the `ICS` field itself is always tracked. |
-| `DynamicDisruptionSplit` | Controls the disruption split between ICS and BCG (see [Mergers and disruption](mergers_and_disruptions.md)). |
-| `FractionDisruptedToICS` | Fixed split fraction (mode 0) or fallback. |
-| `DisruptionSplitAlpha` | Exponent in the mass-ratio split (modes 1 and 2). |
-| `DisruptionSplitCref` | Reference concentration for mode 2. |
+| `ThresholdSatDisruption` | Satellite is disrupted when `Mvir / baryonic mass` falls below this, which is what triggers the transfer described above. |
 
 See [`parameters.md`](../parameters.md) for full descriptions and defaults.
 

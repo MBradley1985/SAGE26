@@ -62,7 +62,7 @@ void test_cooling_time_scaling() {
     
     // Use shorter timestep to avoid cooling all gas in one step
     double dt = 0.001;  // 1 Myr instead of 10
-    double cooling_small = cooling_recipe(0, dt, &gal_small, &run_params);
+    double cooling_small = cooling_recipe(0, gal_small.SnapNum, dt, &gal_small, &run_params);
     
     // Test cooling in massive halo
     struct GALAXY gal_large;
@@ -74,7 +74,7 @@ void test_cooling_time_scaling() {
     gal_large.Rvir = 0.5;
     gal_large.SnapNum = 30;
     
-    double cooling_large = cooling_recipe(0, dt, &gal_large, &run_params);
+    double cooling_large = cooling_recipe(0, gal_large.SnapNum, dt, &gal_large, &run_params);
     
     // Both should cool, but rates depend on physics
     ASSERT_GREATER_THAN(cooling_small + 1e-10, 0.0, "Small halo cools");
@@ -234,7 +234,7 @@ void test_quenching_in_massive_halos() {
     double dt = 0.1;  // 100 Myr
     
     // Calculate cooling with AGN heating
-    double cooling = cooling_recipe(0, dt, &gal, &run_params);
+    double cooling = cooling_recipe(0, gal.SnapNum, dt, &gal, &run_params);
     
     // NOTE: AGN heating requires proper thermal history (r_heat, Heating) and 
     // multi-timestep state which this unit test doesn't set up. This test verifies

@@ -4,7 +4,7 @@
 
 FileNameGalaxies   model
 %OutputDir         /<absolute>/<root>/<path>/sage-model/output/millennium/
-OutputDir          output/millennium/
+OutputDir   /Users/mbradley/Documents/PhD/SAGE26/output/millennium/
 
 FirstFile         0
 LastFile          15
@@ -29,10 +29,10 @@ TreeType              lhalo_binary % 'genesis_lhalo_hdf5', 'lhalo_binary', 'cons
 NumSimulationTreeFiles 512 % Number of files the trees are split over. This can be different to `FirstFile` -> `LastFile` range.
 
 %SimulationDir      /<absolute>/<root>/<path>/sage-home/sage-model/input/millennium/trees/
-SimulationDir       input/millennium/trees/
+SimulationDir   /Users/mbradley/Documents/PhD/SAGE26/input/millennium/trees/
 %FileWithSnapList   /<absolute>/<root>/<path>/sage-home/sage-model/input/millennium/trees/millennium.a_list
-FileWithSnapList    input/millennium/trees/millennium.a_list
-LastSnapShotNr       63
+FileWithSnapList /Users/mbradley/Documents/PhD/SAGE26/input/millennium/trees/millennium.a_list
+LastSnapShotNr        63
 
 Omega           0.25
 OmegaLambda     0.75
@@ -59,6 +59,7 @@ FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 
 
 SaveFullSFH                 0   %0: switch off
 TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
+KarpovModeOn                0   %0: switch off
 
 EddingtonLimitOn            0   %0: No forced limit; 1: All accretion EddLimited
 AGNDynamicAccretionOn       1   %0: default to dt; 1: Use tdyn 

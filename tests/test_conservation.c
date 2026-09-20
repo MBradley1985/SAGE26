@@ -245,7 +245,7 @@ void test_cooling_conserves_mass() {
     
     // Calculate cooling
     double dt = 0.001;
-    double coolingGas = cooling_recipe(0, dt, &gal, &run_params);
+    double coolingGas = cooling_recipe(0, gal.SnapNum, dt, &gal, &run_params);
     
     // Verify cooling function returned sensible value
     ASSERT_TRUE(coolingGas >= 0.0, "Cooling rate is non-negative");

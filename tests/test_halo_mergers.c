@@ -272,8 +272,13 @@ void test_black_hole_merger_growth() {
     double mass_ratio = 0.5;  // Major merger
     double initial_BH = gal[0].BlackHoleMass;
     double initial_cold = gal[0].ColdGas;
-    
-    grow_black_hole(0, mass_ratio, gal, &run_params);
+    double dt = 0.01;  // Gyr
+
+    // from_instability=0 (merger-driven growth being tested here), halo_snapnum=0
+    // (no real halo timeline in this synthetic unit test), and BHaccrete_in/
+    // accretiontime_in=-1.0 (legacy sentinel: compute the demand internally,
+    // matching this test's original pre-joint-budget call).
+    grow_black_hole(0, mass_ratio, 0, 0, dt, -1.0, -1.0, gal, &run_params);
     
     // Check that function executed (BH mass should be >= initial)
     ASSERT_TRUE(gal[0].BlackHoleMass >= initial_BH,

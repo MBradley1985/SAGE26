@@ -40,9 +40,11 @@
 
 #include "model_mergers.h"
 #include "model_misc.h"
+
 #include "model_starformation_and_feedback.h"
 #include "model_disk_instability.h"
 #include "model_enhanced_bhphysics.h"
+#include "model_halo_properties.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -230,8 +232,9 @@ static double calculate_merger_remnant_radius(const struct GALAXY *g1, const str
  * size the SN feedback demand (reheated_demanded = factor * stars_demanded)
  * before any gas is consumed.  Returns 0.0 if SupernovaRecipeOn != 1.  In FIRE
  * mode applies the Muratov+2015 scaling FeedbackReheatingEpsilon * (1+z)^alpha *
- * (v/FIRE_V_CRIT_KMS)^beta; otherwise returns the constant
- * FeedbackReheatingEpsilon.
+ * (v/FIRE_V_CRIT_KMS)^beta, run through the same capped_eta_reheat() energy-
+ * conservation bound (SNEnergyConservationOn) applied on the legacy path;
+ * otherwise returns the constant FeedbackReheatingEpsilon.
  */
 static double merger_feedback_factor(const int gal, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -247,7 +250,7 @@ static double merger_feedback_factor(const int gal, struct GALAXY *galaxies, con
             ? pow(vc_floored / FIRE_V_CRIT_KMS, -3.2)
             : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
         const double fire_scaling = pow(1.0 + z, run_params->RedshiftPowerLawExponent) * v_term;
-        return run_params->FeedbackReheatingEpsilon * fire_scaling;
+        return capped_eta_reheat(run_params->FeedbackReheatingEpsilon * fire_scaling, vc, run_params);
     } else {
         return run_params->FeedbackReheatingEpsilon;
     }
@@ -270,14 +273,12 @@ static double merger_feedback_factor(const int gal, struct GALAXY *galaxies, con
 static double starburst_gas_reservoir(const int cgal, struct GALAXY *galaxies, const struct params *run_params)
 {
     if (run_params->StarburstColdGasOn == 0 &&
-        (run_params->SFprescription == 1 || run_params->SFprescription == 3 || run_params->SFprescription == 4 ||
-         run_params->SFprescription == 5 || run_params->SFprescription == 6 ||
-         run_params->SFprescription == 7)) {
+        sf_prescription_tracks_h2(run_params->SFprescription)) {
 
         double h2gas_fresh = 0.0;
         if(galaxies[cgal].ColdGas > 0.0 && galaxies[cgal].DiskScaleRadius > 0.0) {
-            const float h     = run_params->Hubble_h;
-            const float rs_pc = (float)(galaxies[cgal].DiskScaleRadius * 1.0e6 / h);
+            const float h     = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
+            const float rs_pc = (float)(CODE_LENGTH_TO_PC(galaxies[cgal].DiskScaleRadius, h));
             if(rs_pc > 0.0f) {
                 if(run_params->H2RadialIntegrationOn) {
                     // Radial integration stores result in galaxies[cgal].H2gas
@@ -292,12 +293,11 @@ static double starburst_gas_reservoir(const int cgal, struct GALAXY *galaxies, c
                     else
                         disk_area_pc2 = 2.0f * (float)M_PI * rs_pc * rs_pc;
 
-                    const float Sigma_gas = (float)(galaxies[cgal].ColdGas * 1.0e10 / h) / disk_area_pc2;
+                    const float Sigma_gas = (float)(CODE_MASS_TO_MSUN(galaxies[cgal].ColdGas, h)) / disk_area_pc2;
 
-                    if(run_params->SFprescription == 1 || run_params->SFprescription == 3) {
+                    if(sf_prescription_is_br06(run_params->SFprescription)) {
                         // BR06 / Somerville+H2
-                        const float Sigma_star = (float)((galaxies[cgal].StellarMass - galaxies[cgal].BulgeMass)
-                                                 * 1.0e10 / h) / disk_area_pc2;
+                        const float Sigma_star = (float)(CODE_MASS_TO_MSUN(galaxies[cgal].StellarMass - galaxies[cgal].BulgeMass, h)) / disk_area_pc2;
                         h2gas_fresh = calculate_molecular_fraction_BR06(Sigma_gas, Sigma_star, rs_pc)
                                       * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
                     } else if(run_params->SFprescription == 4) {
@@ -858,8 +858,29 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].EjectedMass += galaxies[p].EjectedMass;
     galaxies[t].MetalsEjectedMass += galaxies[p].MetalsEjectedMass;
 
+    // Track ICS assembly: a merging satellite's ICS was formed in its own halo,
+    // so it enters the central's reservoir through the accreted (ex-situ) channel,
+    // exactly as in infall_recipe() and disrupt_satellite_to_ICS().  Without this
+    // the central's ICS grows while ICS_disrupt + ICS_accrete does not, breaking
+    // the accounting identity, and the satellite's deposit-time history is lost.
+    // In practice infall_recipe() sweeps satellite ICS to the central at the top
+    // of every snapshot, so galaxies[p].ICS is almost always 0 here -- but it is
+    // not guaranteed to be, since a satellite can acquire ICS mid-snapshot by
+    // hosting a disruption of its own before merging.
+    if(run_params->TrackICSAssembly && galaxies[p].ICS > 0.0) {
+        galaxies[t].ICS_accrete += galaxies[p].ICS;
+        // Inherit the mass-weighted deposit-time accumulator so the mean assembly
+        // time reflects when these stars were originally stripped, not when the
+        // packet transferred into the central.
+        galaxies[t].ICS_sum_mt += galaxies[p].ICS_sum_mt;
+    }
+
     galaxies[t].ICS += galaxies[p].ICS;
     galaxies[t].MetalsICS += galaxies[p].MetalsICS;
+
+    // The assembly history now belongs to the central; clear it on the satellite
+    // so no later pass can count it twice.
+    galaxies[p].ICS_disrupt = galaxies[p].ICS_accrete = galaxies[p].ICS_sum_mt = 0.0;
 
     galaxies[t].BlackHoleMass += galaxies[p].BlackHoleMass;
     galaxies[t].BHMergerMass[galaxies[t].SnapNum] += galaxies[p].BlackHoleMass;
@@ -886,13 +907,6 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
 
     galaxies[t].CGMgas += galaxies[p].CGMgas;
     galaxies[t].MetalsCGMgas += galaxies[p].MetalsCGMgas;
-
-    if (run_params->SFprescription == 1 || run_params->SFprescription == 3 ||
-        run_params->SFprescription == 4 || run_params->SFprescription == 5 ||
-        run_params->SFprescription == 6 || run_params->SFprescription == 7) {
-        galaxies[t].H2gas += galaxies[p].H2gas;
-        galaxies[t].H1gas += galaxies[p].H1gas;
-    }
 
     // add merger to bulge
     galaxies[t].BulgeMass += galaxies[p].StellarMass;
@@ -1047,7 +1061,9 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         // this bursting results in SN feedback on the cold/hot gas
         if(run_params->SupernovaRecipeOn == 1) {
             if(run_params->FIREmodeOn == 1) {
-                reheated_mass = run_params->FeedbackReheatingEpsilon * fire_scaling * stars;
+                reheated_mass = capped_eta_reheat(
+                    run_params->FeedbackReheatingEpsilon * fire_scaling,
+                    galaxies[merger_centralgal].Vvir, run_params) * stars;
             } else {
                 reheated_mass = run_params->FeedbackReheatingEpsilon * stars;
             }
@@ -1071,7 +1087,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
             if(run_params->FIREmodeOn == 1) {
                 // FIRE energy-based ejection; fire_scaling pre-computed above
                 const double vc = galaxies[merger_centralgal].Vvir;
-                const double E_FB = run_params->FeedbackEjectionEfficiency * fire_scaling *
+                const double E_FB = sn_energy_coupling(fire_scaling, run_params) *
                                     0.5 * stars * (run_params->EtaSNcode * run_params->EnergySNcode);
                 const double E_lift = 0.5 * reheated_mass * vc * vc;
                 ejected_mass = (E_FB > E_lift) ? (E_FB - E_lift) / (0.5 * vc * vc) : 0.0;
@@ -1140,9 +1156,10 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
 
     // Clamp H2/H1 after gas has been consumed and ejected, so any chained merger
     // or disk-instability check that reads H2gas gets a physically consistent value.
-    if (run_params->SFprescription == 1 || run_params->SFprescription == 3 ||
-        run_params->SFprescription == 4 || run_params->SFprescription == 5 ||
-        run_params->SFprescription == 6 || run_params->SFprescription == 7) {
+    // Note: this quick refresh skips the HIIonizationOn cut (H1 here is the full
+    // atomic remainder); the next SF substep recomputes H1 with the ionisation
+    // correction applied.
+    if (sf_prescription_tracks_h2(run_params->SFprescription)) {
         if(galaxies[merger_centralgal].H2gas > galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC)
             galaxies[merger_centralgal].H2gas = galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC;
         galaxies[merger_centralgal].H1gas = (galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC)
@@ -1153,7 +1170,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     // check for disk instability
     if(run_params->DiskInstabilityOn && mode == 0) {
         if(mass_ratio < run_params->ThreshMajorMerger) {
-            check_disk_instability(merger_centralgal, centralgal, halonr, halo_snapnum, time, dt, step, galaxies, (struct params *) run_params);
+            check_disk_instability(merger_centralgal, centralgal, halonr, halo_snapnum, time, dt, step, galaxies, run_params);
         }
     }
 
@@ -1168,42 +1185,19 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         // Metals that leave disk - regime dependent
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
         
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0) {
-                // CGM-regime: metals go to CGM
-                galaxies[centralgal].MetalsCGMgas += metals_leaving_disk;
-            } else {
-                // Hot-ICM-regime: metals go to HotGas
-                galaxies[centralgal].MetalsHotGas += metals_leaving_disk;
-            }
-        } else {
-            // Original SAGE behavior: metals go to HotGas
-            galaxies[centralgal].MetalsHotGas += metals_leaving_disk;
-        }
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, metals_leaving_disk);
     } else {
         // MAJOR MERGER or very low cold gas: ALL metals leave disk
         // No functional disk left, so all metals go directly to CGM/HotGas
         const double all_metals = run_params->Yield * stars;
         
-        if(run_params->CGMrecipeOn == 1) {
-            if(galaxies[centralgal].Regime == 0) {
-                // CGM-regime: metals go to CGM
-                galaxies[centralgal].MetalsCGMgas += all_metals;
-            } else {
-                // Hot-ICM-regime: metals go to HotGas
-                galaxies[centralgal].MetalsHotGas += all_metals;
-            }
-        } else {
-            // Original SAGE behavior: metals go to HotGas
-            galaxies[centralgal].MetalsHotGas += all_metals;
-        }
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }
 }
 
 // ============================================================================
 // Intracluster Stars (ICS) and Disruption
 // ============================================================================
-
 /*
  * disrupt_satellite_to_ICS -- disrupt satellite gal into the central's ICS
  * (intra-cluster stars) reservoir.
@@ -1218,21 +1212,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     const double total_gas = galaxies[gal].ColdGas + galaxies[gal].HotGas + galaxies[gal].CGMgas;
     const double total_metals_gas = galaxies[gal].MetalsColdGas + galaxies[gal].MetalsHotGas + galaxies[gal].MetalsCGMgas;
     
-    if(run_params->CGMrecipeOn == 1) {
-        if(galaxies[centralgal].Regime == 0) {
-            // CGM-regime: disrupted gas goes to CGM
-            galaxies[centralgal].CGMgas += total_gas;
-            galaxies[centralgal].MetalsCGMgas += total_metals_gas;
-        } else {
-            // Hot-ICM-regime: disrupted gas goes to HotGas
-            galaxies[centralgal].HotGas += total_gas;
-            galaxies[centralgal].MetalsHotGas += total_metals_gas;
-        }
-    } else {
-        // Original SAGE behavior: disrupted gas goes to HotGas
-        galaxies[centralgal].HotGas += total_gas;
-        galaxies[centralgal].MetalsHotGas += total_metals_gas;
-    }
+    add_gas_to_hot_reservoir(&galaxies[centralgal], run_params, total_gas, total_metals_gas);
 
     // Transfer ejected mass (same for all regimes)
     galaxies[centralgal].EjectedMass += galaxies[gal].EjectedMass;
@@ -1242,8 +1222,26 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     galaxies[centralgal].ICS += galaxies[gal].ICS;
     galaxies[centralgal].MetalsICS += galaxies[gal].MetalsICS;
 
-    // Track ICS assembly: pre-existing satellite ICS goes to ICS_accrete
-    // This ICS was formed elsewhere (in the satellite's halo) and is being brought in
+    // Transfer satellite's stellar mass to central's ICS (intra-cluster stars)
+    galaxies[centralgal].ICS += galaxies[gal].StellarMass;
+    galaxies[centralgal].MetalsICS += galaxies[gal].MetalsStellarMass;
+
+    // Track ICS assembly: newly disrupted stellar mass goes to ICS_disrupt.
+    // These stars become unbound here and now, so `time` (the lookback time of
+    // this event) is the correct deposit time for the m*t accumulator -- unlike
+    // the accreted channel above, which inherits the satellite's own history.
+    if(run_params->TrackICSAssembly && galaxies[gal].StellarMass > 0.0) {
+        galaxies[centralgal].ICS_disrupt += galaxies[gal].StellarMass;
+        galaxies[centralgal].ICS_sum_mt += galaxies[gal].StellarMass * time;
+    }
+
+    // Transfer black hole mass to central (avoid baryons disappearing)
+    galaxies[centralgal].BlackHoleMass += galaxies[gal].BlackHoleMass;
+
+    // Track ICS assembly: pre-existing satellite ICS goes to the ex-situ channel.
+    // This ICS was formed elsewhere (by disruption in the satellite's own halo) and
+    // is only being carried in here -- so ICS_accrete records where a packet came
+    // from, not how it was made.
     if(run_params->TrackICSAssembly && galaxies[gal].ICS > 0.0) {
         galaxies[centralgal].ICS_accrete += galaxies[gal].ICS;
         // Inherit satellite's mass-weighted deposit-time accumulator so the
@@ -1252,73 +1250,6 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
         galaxies[centralgal].ICS_sum_mt += galaxies[gal].ICS_sum_mt;
     }
 
-    // Disrupt stellar mass: split between ICS and BCG
-    double frac_to_ICS;
-    if(run_params->DynamicDisruptionSplit >= 1) {
-        // Dynamic split based on halo mass ratio: f_ICL = 1 - (Msub/Mhost)^alpha_eff
-        // Low mass-ratio satellites -> mostly ICL (disrupted on wide orbits)
-        // High mass-ratio satellites -> more to BCG (deposited near centre)
-        const double Msub = (double)galaxies[gal].infallMvir;
-        const double Mhost = (double)galaxies[centralgal].Mvir;
-        if(Msub > 0.0 && Mhost > 0.0) {
-            double mass_ratio = Msub / Mhost;
-            if(mass_ratio > 1.0) mass_ratio = 1.0;
-
-            double alpha_eff = run_params->DisruptionSplitAlpha;
-            if(run_params->DynamicDisruptionSplit == 2) {
-                // Concentration-weighted: concentrated satellites resist stripping
-                // alpha_eff = alpha_0 * (c_ref / c_sat)
-                // High c_sat -> small alpha -> f_ICL closer to 0 -> more to BCG
-                // Low c_sat  -> large alpha -> f_ICL closer to 1 -> more to ICL
-                const double c_sat = (double)galaxies[gal].Concentration;
-                if(c_sat > 0.0) {
-                    alpha_eff *= run_params->DisruptionSplitCref / c_sat;
-                }
-            }
-
-            frac_to_ICS = 1.0 - pow(mass_ratio, alpha_eff);
-        } else {
-            frac_to_ICS = run_params->FractionDisruptedToICS;  // fallback
-        }
-    } else {
-        // Fixed fraction mode (original behavior)
-        frac_to_ICS = run_params->FractionDisruptedToICS;
-    }
-    const double frac_to_BCG = 1.0 - frac_to_ICS;
-    const double new_ICS_from_stripping = frac_to_ICS * galaxies[gal].StellarMass;
-
-    galaxies[centralgal].ICS += new_ICS_from_stripping;
-    galaxies[centralgal].MetalsICS += frac_to_ICS * galaxies[gal].MetalsStellarMass;
-    
-    // Track ICS assembly: newly disrupted stellar mass goes to ICS_disrupt
-    if(run_params->TrackICSAssembly) {
-        galaxies[centralgal].ICS_disrupt += new_ICS_from_stripping;
-        // Record deposition time for the mass-weighted assembly-time accumulator
-        galaxies[centralgal].ICS_sum_mt += new_ICS_from_stripping * time;
-    }
-
-    // Add remainder to BCG bulge (accreted onto outer envelope)
-    galaxies[centralgal].StellarMass += frac_to_BCG * galaxies[gal].StellarMass;
-    galaxies[centralgal].MetalsStellarMass += frac_to_BCG * galaxies[gal].MetalsStellarMass;
-    galaxies[centralgal].BulgeMass += frac_to_BCG * galaxies[gal].StellarMass;
-    galaxies[centralgal].MetalsBulgeMass += frac_to_BCG * galaxies[gal].MetalsStellarMass;
-    galaxies[centralgal].MergerBulgeMass += frac_to_BCG * galaxies[gal].StellarMass;  // Track as merger-driven
-    get_bulge_radius(centralgal, galaxies, run_params);
-
-    // Transfer star formation history from disrupted satellite to central
-    // - Fraction going to BCG bulge: track in SFHMassBulge (stellar ages)
-    // Note: For ICS stellar ages, we would need SFHMassICS, but that's been replaced
-    // by ICS_disrupt/ICS_accrete which track assembly times, not stellar ages
-    if(run_params->SaveFullSFH) {
-        for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
-            const double sat_sfh = galaxies[gal].SFHMassDisk[snap] + galaxies[gal].SFHMassBulge[snap];
-            galaxies[centralgal].SFHMassBulge[snap] += frac_to_BCG * sat_sfh;
-        }
-    }
-
-    // Transfer black hole mass to central (avoid baryons disappearing)
-    galaxies[centralgal].BlackHoleMass += galaxies[gal].BlackHoleMass;
-
     // Zero all satellite baryonic fields after transfer -- defensive cleanup so
     // no downstream code can accidentally recount baryons from a merged galaxy.
     galaxies[gal].ColdGas         = galaxies[gal].MetalsColdGas     = 0.0f;
@@ -1326,6 +1257,8 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     galaxies[gal].CGMgas          = galaxies[gal].MetalsCGMgas      = 0.0f;
     galaxies[gal].EjectedMass     = galaxies[gal].MetalsEjectedMass = 0.0f;
     galaxies[gal].ICS             = galaxies[gal].MetalsICS         = 0.0f;
+    galaxies[gal].ICS_disrupt     = galaxies[gal].ICS_accrete       = 0.0f;
+    galaxies[gal].ICS_sum_mt      = 0.0f;
     galaxies[gal].StellarMass     = galaxies[gal].MetalsStellarMass = 0.0f;
     galaxies[gal].BulgeMass       = galaxies[gal].MetalsBulgeMass   = 0.0f;
     galaxies[gal].BlackHoleMass   = 0.0f;

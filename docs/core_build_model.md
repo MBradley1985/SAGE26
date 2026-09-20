@@ -83,7 +83,6 @@ end-of-snapshot tasks:
 
 - Normalise `Cooling`, `Heating`, and `OutflowRate` to per-unit-time
   by dividing the accumulated values by `deltaT`.
-- Sum `TotalSatelliteBaryons` on the central from each remaining satellite.
 - Re-attach the galaxy list to `haloaux[]` for downstream output.
 - Shift `mergeIntoID` to account for merged galaxies that will not be
   written out (output indices are a contiguous range, so every preceding
@@ -92,22 +91,24 @@ end-of-snapshot tasks:
 ## The two-regime split as a code path map
 
 The CGM model (`CGMrecipeOn = 1`) classifies every galaxy as Regime 0
-(CGM / precipitation, below the Dekel & Birnboim 2006 M_shock) or
-Regime 1 (hot halo, classical Croton+06). The classification controls
-several decisions in the substep loop:
+(CGM, below the Dekel & Birnboim 2006 M_shock) or Regime 1 (hot halo,
+classical Croton+06). The classification is a stochastic sigmoid in
+`Mvir / M_shock` -- see [Cooling and AGN heating](physics/cooling_and_heating.md)
+-- and controls several decisions in the substep loop:
 
 | Step | Regime 0 (CGM) | Regime 1 (hot halo) |
 |------|----------------|---------------------|
 | Infall destination | `CGMgas` | `HotGas` |
 | Cooling recipe | `cooling_recipe_cgm()` (primary) | `cooling_recipe_hot()` (primary) + `cooling_recipe_cgm()` for any residual `CGMgas` |
-| Density profile | `CGMDensityProfile` (uniform / NFW / beta) | isothermal |
+| Density profile | power law, `alpha = 1.4`, `r_0 = 0.1 R_vir` (Carr+23) | singular isothermal |
 | AGN suppression mechanism | `r_heat` ratchet capped at R_vir | `r_heat` ratchet (no R_vir cap) |
-| Precipitation criterion | `t_cool / t_ff` (Voit 2015) | none -- isothermal `r_cool` from Sutherland-Dopita cooling time |
+| Cooling criterion | bulk `CGMgas / (t_cool + t_ff)` (Carr+23) | isothermal `r_cool` from Sutherland-Dopita cooling time, split by the DB06 cold-stream fraction |
 
-When `CGMrecipeOn = 0`, `determine_and_store_regime()` is not called at
-all (the `Regime` field is left unset) and the substep loop dispatches
-cooling to `cooling_recipe()` -> `cooling_recipe_hot()` for every galaxy
-regardless of mass, recovering the original SAGE behaviour.
+When `CGMrecipeOn = 0`, `determine_and_store_regime()` still runs but
+`Regime` is never read: the substep loop dispatches cooling to
+`cooling_recipe()` -> `cooling_recipe_hot()` for every galaxy regardless of
+mass, recovering the original SAGE behaviour (including its rapid
+cold-accretion branch at `r_cool > R_vir`).
 
 ## Galaxy types
 

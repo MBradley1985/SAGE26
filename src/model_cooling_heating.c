@@ -4,11 +4,8 @@
  * Implements the two-regime cooling model selected per-galaxy by the Regime
  * flag set in model_misc.c:
  *
- *   Regime == 0 (CGM-dominated) -- precipitation-driven cooling from the CGMgas
- *     reservoir using the Voit (2015) / McCourt et al. (2012) t_cool/t_ff < 10
- *     threshold.  The CGM density structure is modelled with a uniform, NFW, or
- *     beta (beta = 2/3) profile selected by CGMDensityProfile.  AGN heating uses
- *     the same r_heat ratchet as the hot-halo regime, capped at Rvir.
+ *   Regime == 0 (CGM-dominated) -- model taken from Carr et al. 2023, super simple
+ *     tcool evaluated on a radial profile, tff of the halo, m(dot)_cool = m_CGM / tcool+tff.
  *
  *   Regime == 1 (hot halo) -- classical isothermal-halo cooling following
  *     White & Frenk (1991) and Croton et al. (2006).  When CGMrecipeOn > 0 a
@@ -51,14 +48,6 @@
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
  * -------------------------------------------------------------------------*/
 
-/* Duffy et al. (2008) NFW concentration-mass-redshift relation,
- * Table 1 "Full sample" (relaxed halos, NFW profile, 200c overdensity).
- * c = A * (M/M_pivot)^B * (1+z)^C */
-static const double DUFFY08_A       =  7.85;
-static const double DUFFY08_M_PIVOT =  2.0e12;  /* pivot mass in Msun */
-static const double DUFFY08_B       = -0.081;
-static const double DUFFY08_C       = -0.71;
-
 /* Mean molecular weight for fully ionised, primordial (H+He) gas.
  * X_H = 0.76, Y_He = 0.24 => mu = 1/(2*X + 3*Y/4) ~ 0.59. */
 static const double MU_IONISED = 0.59;
@@ -83,307 +72,41 @@ static const double AGN_HOT_GAS_PIVOT  = 0.1;     /* hot-gas-to-halo mass fracti
  * per unit accreted mass.  Croton et al. (2006) eq. 19. */
 static const double AGN_HEATING_COEFF_KMS = 1.34e5;  /* km/s */
 
-/* Gravitational constant in CGS (NIST CODATA 2018). */
-static const double G_CGS = 6.674e-8;  /* cm^3 g^-1 s^-2 */
-
 /* Virial temperature coefficient: T_vir = VIRIAL_TEMP_COEFF * Vvir^2 [Kelvin].
  * Follows from T = mu * m_p * Vvir^2 / (2 * k_B) with mu = MU_IONISED = 0.59;
  * gives 35.9 K (km/s)^-2. */
 static const double VIRIAL_TEMP_COEFF = 35.9;  /* K (km/s)^-2 */
 
-/* McCourt et al. (2012) thermal instability threshold: precipitation occurs
- * when t_cool / t_ff < PRECIP_THRESHOLD (= 10). */
-static const double PRECIP_THRESHOLD = 10.0;
-
-/* Width of the tanh/sigmoid transition zone around PRECIP_THRESHOLD.
- * Smooths the discontinuity at exactly t_cool/t_ff = 10. */
-static const double PRECIP_TRANSITION_WIDTH = 2.0;
-
-/* Beta-profile core radius as a fraction of the virial radius: r_c = frac * Rvir.
- * A value of 0.1 is the standard choice for the hot CGM (e.g., Makino+98). */
-static const double CGM_BETA_CORE_RADIUS_FRAC = 0.1;
-
-/* De Lucia & Blaizot (2006) eq. 38: virial shock mass scale.
- * Hot-mode shock heating is efficient only above this halo mass. */
-static const double MSHOCK_DB06_MSUN = 6.0e11;  /* Msun */
+/* De Lucia & Blaizot (2006) eq. 38: virial shock mass scale, above which
+ * hot-mode shock heating is efficient.  Settable as MShockMsun in the parameter
+ * file; must be the same value model_regimes.c uses to classify regimes. */
 
 /* Critical redshift below which cold streams are suppressed in M > Mshock halos.
  * De Lucia & Blaizot (2006) estimate z_crit ~ 1-2; we adopt the midpoint. */
 static const double Z_CRIT_DB06 = 1.5;
+
+/* Width, in dex, of the smooth transition about the Dekel & Birnboim (2006)
+ * stream criterion (t_cool/t_comp)_stream = 1 when ColdStreamCeilingOn == 1.
+ * The criterion is a bifurcation -- streams penetrate or they do not -- so the
+ * sigmoid exists only to keep f_stream continuous across it, not to blend the
+ * two accretion channels over a wide mass range.  At 0.5 dex it did the latter:
+ * f_stream sat between 0.1 and 0.9 over M = 10^11-10^13 at z = 0-2, where both
+ * the cold-stream and hot-halo terms fire at once and, near f_stream ~ 0.3,
+ * deliver equal mass (the hot term's rate coefficient is rcool/2Rvir ~ 0.45 for
+ * the median hot-regime halo).  0.15 dex confines the blend to a factor ~2 in
+ * the stream ratio either side of the threshold. */
+static const double STREAM_TRANSITION_WIDTH_DEX = 0.15;
 
 /* Cold-cloud AGN accretion (AGNrecipeOn == 3): BH triggers when its mass exceeds
  * this fraction of the sonic-radius enclosed virial mass, and accretes at this
  * fraction of the current cooling rate. Croton et al. (2006), AGN appendix. */
 static const double AGN_COLD_CLOUD_FRAC = 1.0e-4;
 
-// ============================================================================
-// CGM Density Profile Helper Functions (file-private)
-// ============================================================================
+/* File-private: AGN radio-mode heating for CGM-regime galaxies (defined below). */
+static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const int halo_snapnum, const double dt, const double x, const double rcool,
+                                 struct GALAXY *galaxies, const struct params *run_params);
 
-/*
- * NFW profile normalisation rho_s for total mass M_CGM within R_vir.
- *
- * Solves M_CGM = 4*pi * rho_s * r_s^3 * [ln(1+c) - c/(1+c)] for rho_s,
- * where r_s = Rvir / c_NFW is the scale radius.
- */
-static double nfw_rho_s(const double M_CGM, const double Rvir, const double c_NFW)
-{
-    const double r_s = Rvir / c_NFW;
-    // M_CGM = 4pi rho_s r_s^3 * [ln(1+c) - c/(1+c)]
-    const double f_c = log(1.0 + c_NFW) - c_NFW / (1.0 + c_NFW);
-    return M_CGM / (4.0 * M_PI * r_s * r_s * r_s * f_c);
-}
 
-/* NFW density rho(r) = rho_s / [x*(1+x)^2] where x = r/r_s. */
-static double nfw_density(const double r, const double rho_s, const double r_s)
-{
-    const double x = r / r_s;
-    if(x < 1e-10) return rho_s / (1e-10 * 1.0 * 1.0);  // Avoid singularity at r=0
-    return rho_s / (x * (1.0 + x) * (1.0 + x));
-}
-
-/* NFW concentration c(M, z) from Duffy et al. (2008): c = 7.85*(M/2e12)^-0.081*(1+z)^-0.71. */
-static double nfw_concentration(const double Mvir_Msun, const double z)
-{
-    // c = A * (M/M_pivot)^B * (1+z)^C  (Duffy et al. 2008)
-    return DUFFY08_A * pow(Mvir_Msun / DUFFY08_M_PIVOT, DUFFY08_B) * pow(1.0 + z, DUFFY08_C);
-}
-
-/*
- * Beta-profile normalisation rho_0 for total mass M_CGM within R_vir.
- *
- * Profile: rho(r) = rho_0 / [1 + (r/r_c)^2]^(3*beta/2).
- * Uses an analytic form for beta ~ 2/3 and Simpson quadrature otherwise.
- */
-static double beta_rho_0(const double M_CGM, const double Rvir, const double r_c, const double beta)
-{
-    // For general beta, the enclosed mass integral is:
-    // M(<R) = 4pi rho_0 integral_0^R r^2 / [1 + (r/r_c)^2]^(3beta/2) dr
-    //
-    // For beta = 2/3 (common value), this simplifies to:
-    // M(<R) = 4pi rho_0 r_c^3 * [arctan(R/r_c) - (R/r_c)/(1 + (R/r_c)^2)]
-    // But we need the more general form...
-    //
-    // Use numerical approximation for general beta:
-    // For large R/r_c, M ~ 4pi rho_0 r_c^3 * (some function of beta)
-
-    const double x = Rvir / r_c;
-    double mass_integral;
-
-    if(fabs(beta - 2.0/3.0) < 0.01) {
-        // beta ~ 2/3: use analytic form
-        // M = 4pi rho_0 r_c^3 * [arctan(x) - x/(1+x^2)]
-        mass_integral = atan(x) - x / (1.0 + x * x);
-    } else {
-        // General beta: numerical integration using Simpson's rule
-        const int n_steps = 100;
-        const double dr = Rvir / n_steps;
-        double integral = 0.0;
-        for(int i = 0; i <= n_steps; i++) {
-            const double r = i * dr;
-            const double y = r / r_c;
-            const double rho_factor = 1.0 / pow(1.0 + y * y, 1.5 * beta);
-            double weight = (i == 0 || i == n_steps) ? 1.0 : ((i % 2 == 0) ? 2.0 : 4.0);
-            integral += weight * r * r * rho_factor;
-        }
-        integral *= dr / 3.0;
-        // M = 4pi rho_0 * integral, so mass_integral = integral / r_c^3
-        mass_integral = integral / (r_c * r_c * r_c);
-    }
-
-    if(mass_integral <= 0.0) return 0.0;
-    return M_CGM / (4.0 * M_PI * r_c * r_c * r_c * mass_integral);
-}
-
-/* Beta-profile density rho(r) = rho_0 / [1 + (r/r_c)^2]^(3*beta/2). */
-static double beta_density(const double r, const double rho_0, const double r_c, const double beta)
-{
-    const double y = r / r_c;
-    return rho_0 / pow(1.0 + y * y, 1.5 * beta);
-}
-
-// ============================================================================
-// Enclosed Mass Functions for each profile
-// ============================================================================
-
-/* NFW enclosed mass M(<r) = M_total * f(x)/f(c), where f(u) = ln(1+u) - u/(1+u). */
-static double nfw_enclosed_mass(const double r, const double M_total, const double Rvir, const double c_NFW)
-{
-    const double r_s = Rvir / c_NFW;
-    const double x = r / r_s;
-
-    // M(<r) / M_total = f(x) / f(c)
-    const double f_x = log(1.0 + x) - x / (1.0 + x);
-    const double f_c = log(1.0 + c_NFW) - c_NFW / (1.0 + c_NFW);
-
-    if(f_c <= 0.0) return M_total;
-    return M_total * f_x / f_c;
-}
-
-/* Beta-profile (beta=2/3) enclosed mass using the analytic arctan form. */
-static double beta_enclosed_mass(const double r, const double M_total, const double Rvir, const double r_c)
-{
-    const double x = r / r_c;
-    const double X = Rvir / r_c;
-
-    const double f_x = atan(x) - x / (1.0 + x * x);
-    const double f_X = atan(X) - X / (1.0 + X * X);
-
-    if(f_X <= 0.0) return M_total;
-    return M_total * f_x / f_X;
-}
-
-/* Dispatch enclosed-mass calculation to the appropriate profile model (0=uniform, 1=NFW, 2=beta). */
-static double cgm_enclosed_mass(const double r, const double M_total, const double Rvir,
-                                 const double Mvir_Msun, const double z, const int profile_type)
-{
-    if(r >= Rvir) return M_total;
-    if(r <= 0.0) return 0.0;
-
-    if(profile_type == 0) {
-        // Uniform density: M(<r) = M_total * (r/Rvir)^3
-        const double ratio = r / Rvir;
-        return M_total * ratio * ratio * ratio;
-    } else if(profile_type == 1) {
-        // NFW profile
-        const double c_NFW = nfw_concentration(Mvir_Msun, z);
-        return nfw_enclosed_mass(r, M_total, Rvir, c_NFW);
-    } else if(profile_type == 2) {
-        // Beta profile (beta = 2/3, r_c = CGM_BETA_CORE_RADIUS_FRAC * Rvir)
-        const double r_c = CGM_BETA_CORE_RADIUS_FRAC * Rvir;
-        return beta_enclosed_mass(r, M_total, Rvir, r_c);
-    } else {
-        // Default to uniform
-        const double ratio = r / Rvir;
-        return M_total * ratio * ratio * ratio;
-    }
-}
-
-/*
- * CGM gas density at radius r in CGS units (g/cm^3).
- *
- * Dispatches to the selected profile model (profile_type: 0=uniform, 1=NFW, 2=beta).
- * Falls back to uniform for unrecognised profile_type values.
- */
-static double cgm_density_at_radius(const double r_cgs, const double CGMgas_cgs, const double Rvir_cgs,
-                                    const double Mvir_Msun, const double z, const int profile_type)
-{
-    if(profile_type == 0) {
-        // Uniform density
-        const double volume_cgs = (4.0 * M_PI / 3.0) * Rvir_cgs * Rvir_cgs * Rvir_cgs;
-        return CGMgas_cgs / volume_cgs;
-
-    } else if(profile_type == 1) {
-        // NFW profile
-        const double c_NFW = nfw_concentration(Mvir_Msun, z);
-        const double r_s_cgs = Rvir_cgs / c_NFW;
-        const double rho_s = nfw_rho_s(CGMgas_cgs, Rvir_cgs, c_NFW);
-        return nfw_density(r_cgs, rho_s, r_s_cgs);
-
-    } else if(profile_type == 2) {
-        // Beta profile with beta = 2/3 and r_c = CGM_BETA_CORE_RADIUS_FRAC * Rvir
-        const double beta = 2.0 / 3.0;
-        const double r_c_cgs = CGM_BETA_CORE_RADIUS_FRAC * Rvir_cgs;
-        const double rho_0 = beta_rho_0(CGMgas_cgs, Rvir_cgs, r_c_cgs, beta);
-        return beta_density(r_cgs, rho_0, r_c_cgs, beta);
-
-    } else {
-        // Default to uniform if unknown profile type
-        const double volume_cgs = (4.0 * M_PI / 3.0) * Rvir_cgs * Rvir_cgs * Rvir_cgs;
-        return CGMgas_cgs / volume_cgs;
-    }
-}
-
-/*
- * Solve iteratively for the cooling radius r_cool where t_cool(r) = t_ff(r).
- *
- * Returns r_cool in CGS units. For uniform and beta profiles the isothermal
- * analytic approximation is used (the profile is too flat for iteration to
- * converge). For NFW, a Newton-like iteration over t_cool/t_ff converges in
- * typically < 10 steps.  Result is bounded to [0.001, 1.0] * Rvir.
- */
-static double solve_for_rcool(const double CGMgas_cgs, const double Rvir_cgs, const double Mvir_cgs,
-                              const double Mvir_Msun, const double temp, const double lambda,
-                              const double z, const int profile_type,
-                              __attribute__((unused)) const struct params *run_params)
-{
-    const double mu = MU_IONISED;
-
-    // ========================================================================
-    // UNIFORM / BETA: Use isothermal r_cool formula (like hot-regime)
-    // ========================================================================
-    // For uniform density, t_cool and t_ff are both roughly constant with radius,
-    // so the iterative solver doesn't converge meaningfully.
-    // For beta profile (beta=2/3), the profile is too flat and has similar issues.
-    // Instead, use the isothermal approach: assume rho(r) ~ 1/r^2 for r_cool,
-    // which gives r_cool = sqrt(rho0 / rho_cool) where rho_cool is the critical density.
-    if(profile_type == 0 || profile_type == 2) {
-        // t_ff at R_vir: t_ff = sqrt(2 R^3 / (G M))
-        const double t_ff_Rvir = sqrt(2.0 * Rvir_cgs * Rvir_cgs * Rvir_cgs / (G_CGS * Mvir_cgs));
-
-        // Critical density where t_cool = t_ff
-        // rho_cool = (3/2) mu m_p k T / (Lambda t_ff)
-        const double rho_cool = (1.5 * mu * PROTONMASS * BOLTZMANN * temp) / (lambda * t_ff_Rvir);
-
-        // Isothermal profile normalization: rho0 = M / (4pi R)
-        const double rho0 = CGMgas_cgs / (4.0 * M_PI * Rvir_cgs);
-
-        // r_cool from isothermal: rho(r_cool) = rho0/r_cool^2 = rho_cool
-        double r_cool = sqrt(rho0 / rho_cool);
-
-        // Apply bounds
-        if(r_cool > Rvir_cgs) r_cool = Rvir_cgs;
-        if(r_cool < 0.001 * Rvir_cgs) r_cool = 0.001 * Rvir_cgs;
-
-        return r_cool;
-    }
-
-    // ========================================================================
-    // NFW PROFILE: Iterative solver (cuspy profile converges well)
-    // ========================================================================
-    const double prefactor = 1.5 * mu * PROTONMASS * BOLTZMANN * temp / lambda;
-
-    double r_cool = 0.5 * Rvir_cgs;
-    const int max_iter = 30;
-    const double tolerance = 0.01;
-
-    for(int iter = 0; iter < max_iter; iter++) {
-        const double rho = cgm_density_at_radius(r_cool, CGMgas_cgs, Rvir_cgs, Mvir_Msun, z, profile_type);
-
-        if(rho <= 0.0) {
-            r_cool = Rvir_cgs;
-            break;
-        }
-
-        const double t_cool = prefactor / rho;
-
-        const double M_enclosed = cgm_enclosed_mass(r_cool, Mvir_cgs, Rvir_cgs, Mvir_Msun, z, profile_type);
-        const double g_accel = (M_enclosed > 0.0) ? G_CGS * M_enclosed / (r_cool * r_cool) : 0.0;
-
-        if(g_accel <= 0.0) {
-            r_cool = Rvir_cgs;
-            break;
-        }
-
-        const double t_ff = sqrt(2.0 * r_cool / g_accel);
-        const double ratio = t_cool / t_ff;
-
-        const double r_cool_new = r_cool * pow(ratio, -0.3);
-
-        double r_bounded = r_cool_new;
-        if(r_bounded > Rvir_cgs) r_bounded = Rvir_cgs;
-        if(r_bounded < 0.001 * Rvir_cgs) r_bounded = 0.001 * Rvir_cgs;
-
-        if(fabs(r_bounded - r_cool) / r_cool < tolerance) {
-            r_cool = r_bounded;
-            break;
-        }
-
-        r_cool = r_bounded;
-    }
-
-    return r_cool;
-}
 
 /*
  * Top-level cooling dispatcher: routes to regime-aware or classic hot-halo recipe.
@@ -414,8 +137,17 @@ double cooling_recipe_hot(const int gal, const int halo_snapnum, const double dt
 {
     double coolingGas;
 
+    galaxies[gal].tcool = 0.0f;
+
     if(galaxies[gal].HotGas > 0.0 && galaxies[gal].Vvir > 0.0) {
         const double tcool = galaxies[gal].Rvir / galaxies[gal].Vvir;
+        const double tff = M_SQRT2 * tcool;
+        // Store tcool and tff specifically for the hot-halo recipe, which is used in the CGM path to determine the cooling radius.
+        galaxies[gal].tcool = (float)((tcool * 1.0e10 / run_params->Hubble_h
+                       * SEC_PER_GIGAYEAR / run_params->UnitTime_in_s));
+        galaxies[gal].tff = (float)((tff * 1.0e10 / run_params->Hubble_h
+                       * SEC_PER_GIGAYEAR / run_params->UnitTime_in_s));
+
         const double temp = VIRIAL_TEMP_COEFF * galaxies[gal].Vvir * galaxies[gal].Vvir;  // in Kelvin
 
         double logZ = -10.0;
@@ -439,20 +171,33 @@ double cooling_recipe_hot(const int gal, const int halo_snapnum, const double dt
 
         // an isothermal density profile for the hot gas is assumed here
         const double rho0 = galaxies[gal].HotGas / (4 * M_PI * galaxies[gal].Rvir);
-        const double rcool = sqrt(rho0 / rho_rcool);
+        double rcool = sqrt(rho0 / rho_rcool);
 
         galaxies[gal].RcoolToRvir = rcool / galaxies[gal].Rvir;
 
+        // rcool is left uncapped on both paths.  Only hot-regime haloes reach
+        // this function, and for them rcool > Rvir is the physical signature of
+        // a corona that cools faster than it can be shock-heated -- the very
+        // condition that selects cold-stream accretion below, exactly as in
+        // Croton et al. (2016).  Capping it to Rvir erased that signature: the
+        // cold-stream branch became unreachable and the affected haloes (70% of
+        // galaxies at z = 0 rising to 99.7% at z = 6, carrying 57-99% of the
+        // cooling mass) instead cooled at 0.5 * m_hot / t_cool, half the SAGE16
+        // rate.  CGM-regime haloes never come here: cooling_recipe_cgm() pins
+        // its own rcool = Rvir purely to feed the AGN-heating call.
+
         coolingGas = 0.0;
-        
+
         if(run_params->CGMrecipeOn == 0) {
-            // Original behavior: SAGE C16 cooling recipe
+            // SAGE C16 hot-halo cooling, both branches (Croton et al. 2016).
+            // tcool here is the halo dynamical time Rvir/Vvir.
             if(rcool > galaxies[gal].Rvir) {
-                // "cold accretion" regime
-                coolingGas = galaxies[gal].HotGas / (galaxies[gal].Rvir / galaxies[gal].Vvir) * dt;
-                // BH Stuff !!!! Some frac of the cooling gas maybe v small
+                // Rapid "cold accretion": the whole corona cools within a
+                // dynamical time.  Discontinuous with the branch below by a
+                // factor 2 at rcool = Rvir; that is the published behaviour.
+                coolingGas = galaxies[gal].HotGas / tcool * dt;
             } else {
-                // "hot halo cooling" regime
+                // Quasi-static cooling flow.
                 coolingGas = (galaxies[gal].HotGas / galaxies[gal].Rvir) * (rcool / (2.0 * tcool)) * dt;
             }
         } else {
@@ -464,23 +209,55 @@ double cooling_recipe_hot(const int gal, const int halo_snapnum, const double dt
             // Mass suppression (M/Mshock)^(-4/3) -- halos well above the shock
             // threshold host weaker cold streams. Redshift factor (1+z)/(1+1)
             // enhances streams at high-z where cooling is more efficient.
-            const double Mvir_physical = galaxies[gal].Mvir * 1.0e10 / run_params->Hubble_h;
-            const double mass_ratio = Mvir_physical / MSHOCK_DB06_MSUN;
+            const double M_shock = MSUN_TO_CODE_MASS(run_params->MShockMsun, run_params->Hubble_h);
+            const double mass_ratio = galaxies[gal].Mvir / M_shock;
 
             // Redshift enhancement: normalized to z=1 following D&B06 eq 40
             const double z_factor = (1.0 + z) / (1.0 + 1.0);
 
-            // D&B06 eq 41: below z_crit cold streams are suppressed in M > Mshock halos
             double f_stream;
-            if(z < Z_CRIT_DB06 && mass_ratio > 1.0) {
-                f_stream = 0.0;  // Hard cutoff per D&B06
+            if(run_params->ColdStreamCeilingOn) {
+                // Dekel & Birnboim (2006) eqs 39-41.  Their eq. 39 compares the
+                // cooling and compression times within the stream,
+                //     R = (f Mstar/Mvir)^(2/3) (Mvir/Mshock)^(4/3),
+                // streams penetrating where R < 1.  The redshift dependence
+                // enters through the clustering mass Mstar(z) rather than an
+                // explicit (1+z) factor, and the shut-off is automatic: their
+                // eq. 41 defines z_crit by f Mstar(z_crit) = Mshock, which is
+                // exactly where R = 1 at Mvir = Mshock.  No redshift cut is
+                // imposed, so f_stream is continuous everywhere.
+                // const double Mstar = pow(10.0, interpolate_clustering_mass(z, run_params));
+                const double Mstar = MSUN_TO_CODE_MASS(pow(10.0, interpolate_clustering_mass(z, run_params)),
+                                                       run_params->Hubble_h);
+                const double fMstar = run_params->StreamMassFactor * Mstar;
+                const double ratio = pow(fMstar / galaxies[gal].Mvir, 2.0/3.0)
+                                   * pow(mass_ratio, 4.0/3.0);
+                if(ratio > 0.0) {
+                    // The transition width is quoted in dex, so the logistic
+                    // must be taken base 10 for it to mean what it says.
+                    // Feeding a dex argument to exp() instead widened it by
+                    // ln(10) -- f_stream = 1/(1 + R^0.869) rather than
+                    // 1/(1 + R^(1/W)) -- a 10%-to-90% span of 2.2 dex at the
+                    // nominal 0.5 dex setting, which is what parked f_stream
+                    // near 0.5 across most of the resolved halo population.
+                    double exponent = log10(ratio) / STREAM_TRANSITION_WIDTH_DEX;
+                    if(exponent > 300.0) exponent = 300.0;
+                    if(exponent < -300.0) exponent = -300.0;
+                    f_stream = 1.0 / (1.0 + pow(10.0, exponent));
+                } else {
+                    f_stream = 1.0;
+                }
+            } else if(z < Z_CRIT_DB06 && mass_ratio > 1.0) {
+                // D&B06 eq 41: below z_crit cold streams are suppressed in
+                // M > Mshock halos.  Hard cutoff; published behaviour.
+                f_stream = 0.0;
             } else {
                 // High-z regime: streams can penetrate
                 f_stream = pow(mass_ratio, -4.0/3.0) * z_factor;
             }
             
             // Ensure physical bounds
-            // Cap at 0.5 (50%) to account for partial heating/mixing of cold streams
+            // Cap at 1.0 to account for partial heating/mixing of cold streams
             // as they penetrate through the hot medium
             if(f_stream > 1.0) f_stream = 1.0;
             if(f_stream < 0.0) f_stream = 0.0;
@@ -488,23 +265,11 @@ double cooling_recipe_hot(const int gal, const int halo_snapnum, const double dt
             // Calculate cooling: mix of cold streams + hot halo cooling
             double cold_stream_cooling = 0.0;
             double hot_halo_cooling = 0.0;
-            
-            if(rcool < galaxies[gal].Rvir) {
-                // When rcool < Rvir: both cold streams and hot halo cooling
-                // Cold stream component: rapid accretion on dynamical time
-                cold_stream_cooling = f_stream * galaxies[gal].HotGas / 
-                                     (galaxies[gal].Rvir / galaxies[gal].Vvir) * dt;
-                
-                // Hot halo component: traditional cooling from the shocked gas
-                hot_halo_cooling = (1.0 - f_stream) * (galaxies[gal].HotGas / galaxies[gal].Rvir) * 
-                                  (rcool / (2.0 * tcool)) * dt;
-            } else {
-                // When rcool >= Rvir: only hot halo cooling (no cold streams)
-                // rcool >= Rvir: This shouldn't occur for properly-classified hot-regime haloes
-                // (such haloes belong in the CGM/cold-flow regime). Handle conservatively.
-                hot_halo_cooling = (galaxies[gal].HotGas / galaxies[gal].Rvir) * 
-                                  (rcool / (2.0 * tcool)) * dt;
-            }
+
+            cold_stream_cooling = f_stream * galaxies[gal].HotGas / tcool * dt;
+
+            hot_halo_cooling = (1.0 - f_stream) * (galaxies[gal].HotGas / galaxies[gal].Rvir) *
+                                (rcool / (2.0 * tcool)) * dt;
 
             galaxies[gal].mdot_cool = hot_halo_cooling / dt;
             galaxies[gal].mdot_stream = cold_stream_cooling / dt;
@@ -518,31 +283,36 @@ double cooling_recipe_hot(const int gal, const int halo_snapnum, const double dt
             if(coolingGas < 0.0) coolingGas = 0.0;
         }
 
-		// at this point we have calculated the maximal cooling rate
-		// if AGNrecipeOn we now reduce it in line with past heating before proceeding
+        // at this point we have calculated the maximal cooling rate
+        // if AGNrecipeOn we now reduce it in line with past heating before proceeding
 
-		if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
-			coolingGas = do_AGN_heating(coolingGas, gal, halo_snapnum, dt, x, rcool, galaxies, run_params);
+        if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
+            coolingGas = do_AGN_heating(coolingGas, gal, halo_snapnum, dt, x, rcool, galaxies, run_params);
         }
 
-		if (coolingGas > 0.0) {
-			galaxies[gal].Cooling += 0.5 * coolingGas * galaxies[gal].Vvir * galaxies[gal].Vvir;
+        if (coolingGas > 0.0) {
+            galaxies[gal].Cooling += 0.5 * coolingGas * galaxies[gal].Vvir * galaxies[gal].Vvir;
         }
-	} else {
-		coolingGas = 0.0;
+    } else {
+        coolingGas = 0.0;
     }
 
-	XASSERT(coolingGas >= 0.0, -1,
+    XASSERT(coolingGas >= 0.0, -1,
             "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
+        galaxies[gal].CoolingRate = (dt > 0.0)
+            ? (float)((coolingGas / dt) * 1.0e10 / run_params->Hubble_h
+                      * SEC_PER_GIGAYEAR / run_params->UnitTime_in_s)
+            : 0.0f;
     return coolingGas;
 }
 
 /*
  * CGM precipitation-driven cooling recipe (SAGE26 two-regime model).
  *
- * Computes cooling from the CGMgas reservoir using the Voit (2015) t_cool/t_ff
- * criterion. Solves for the cooling radius via solve_for_rcool(), evaluates the
- * mean density within that radius, and returns the cooled mass for this substep.
+ * Computes cooling from the CGMgas reservoir using the Carr et al. (2023)
+ * closed-form alpha=1.4 density profile: the analytic cooling and free-fall
+ * times integrated over that profile give a bulk cooling rate of
+ * m_CGM / (tcool + tff), with rcool pinned to Rvir for the AGN-heating call.
  * AGN heating via do_AGN_heating_cgm() is applied before the return.
  */
 double cooling_recipe_cgm(const int gal, const int halo_snapnum, const double dt, struct GALAXY *galaxies,
@@ -550,216 +320,78 @@ double cooling_recipe_cgm(const int gal, const int halo_snapnum, const double dt
 {
     double coolingGas = 0.0;
 
-    // ========================================================================
-    // EARLY EXIT CONDITIONS
-    // ========================================================================
-    if(galaxies[gal].CGMgas <= 0.0 || galaxies[gal].Vvir <= 0.0 || galaxies[gal].Rvir <= 0.0) {
-        return 0.0;
-    }
+    if(galaxies[gal].CGMgas > 0.0 && galaxies[gal].Vvir > 0.0) {
+        const double temp = VIRIAL_TEMP_COEFF * galaxies[gal].Vvir * galaxies[gal].Vvir;  // in Kelvin
 
-    // ========================================================================
-    // STEP 1: CALCULATE COOLING TIME (CGS UNITS) WITH DENSITY PROFILE
-    // ========================================================================
-
-    // Virial temperature
-    const double temp = VIRIAL_TEMP_COEFF * galaxies[gal].Vvir * galaxies[gal].Vvir; // Kelvin
-
-    // Metallicity
-    double logZ = -10.0;
-    if(galaxies[gal].MetalsCGMgas > 0) {
-        logZ = log10(galaxies[gal].MetalsCGMgas / galaxies[gal].CGMgas);
-    }
-
-    // Cooling function (erg cm^3 s^-1)
-    double lambda = get_metaldependent_cooling_rate(log10(temp), logZ);
-
-    if(lambda <= 0.0) {
-        return 0.0;
-    }
-
-    // Convert CGM mass and radius to CGS
-    const double CGMgas_cgs = galaxies[gal].CGMgas * 1e10 * SOLAR_MASS / run_params->Hubble_h; // g
-    const double Rvir_cgs = galaxies[gal].Rvir * CM_PER_MPC / run_params->Hubble_h; // cm
-    const double Mvir_cgs = galaxies[gal].Mvir * 1e10 * SOLAR_MASS / run_params->Hubble_h; // g
-    const double Mvir_Msun = galaxies[gal].Mvir * 1e10 / run_params->Hubble_h; // Msun
-    const double z = run_params->ZZ[galaxies[gal].SnapNum];
-
-    // Get density profile type (0: uniform, 1: NFW, 2: beta)
-    // IMPORTANT: Density profile physics only applies to CGM-regime haloes (Regime == 0)
-    // Hot-regime haloes always use uniform density for simple CGM depletion
-    const int profile_type = (galaxies[gal].Regime == 0) ? run_params->CGMDensityProfile : 0;
-
-    // ========================================================================
-    // STEP 1b: SOLVE FOR COOLING RADIUS (consistent with hot regime approach)
-    // ========================================================================
-    // Find r_cool where t_cool(r_cool) = t_ff(r_cool)
-    // This is done iteratively for all profile types
-
-    const double r_cool_cgs = solve_for_rcool(CGMgas_cgs, Rvir_cgs, Mvir_cgs, Mvir_Msun,
-                                               temp, lambda, z, profile_type, run_params);
-
-    // Get density at the cooling radius
-    const double mass_density_cgs = cgm_density_at_radius(r_cool_cgs, CGMgas_cgs, Rvir_cgs,
-                                                           Mvir_Msun, z, profile_type);
-
-    if(mass_density_cgs <= 0.0) {
-        return 0.0;
-    }
-
-    // Store r_cool / R_vir for diagnostics
-    galaxies[gal].RcoolToRvir = r_cool_cgs / Rvir_cgs;
-
-    // Convert r_cool to code units
-    const double r_cool = r_cool_cgs / (CM_PER_MPC / run_params->Hubble_h);
-
-    // Cooling time at r_cool: tcool = (3/2) * mu * m_p * k * T / (rho * Lambda)
-    const double mu = MU_IONISED;
-    const double tcool_cgs = (1.5 * mu * PROTONMASS * BOLTZMANN * temp) / (mass_density_cgs * lambda);
-    const double tcool = tcool_cgs / run_params->UnitTime_in_s; // code units
-
-    // ========================================================================
-    // STEP 2: CALCULATE FREE-FALL TIME AT r_cool
-    // ========================================================================
-
-    // Enclosed mass at r_cool (using proper profile)
-    const double M_enclosed_rcool = cgm_enclosed_mass(r_cool_cgs, Mvir_cgs, Rvir_cgs,
-                                                       Mvir_Msun, z, profile_type);
-    // Convert to code units
-    const double M_enclosed_code = M_enclosed_rcool / (1e10 * SOLAR_MASS / run_params->Hubble_h);
-
-    // Gravitational acceleration at r_cool
-    const double g_accel = (M_enclosed_code > 0.0 && r_cool > 0.0)
-        ? run_params->G * M_enclosed_code / (r_cool * r_cool)
-        : 0.0;
-
-    // Free-fall time at r_cool: tff = sqrt(2*r_cool/g)
-    if(g_accel <= 0.0) {
-        galaxies[gal].tcool = tcool;
-        galaxies[gal].tff = -1.0;
-        galaxies[gal].tcool_over_tff = -1.0;
-        galaxies[gal].tdeplete = -1.0;
-        galaxies[gal].RcoolToRvir = -1.0;
-        return 0.0;
-    }
-    const double tff = sqrt(2.0 * r_cool / g_accel); // code units
-
-    // ========================================================================
-    // STEP 2b: CHARACTERISTIC RADIUS FOR PRECIPITATION CRITERION
-    // ========================================================================
-    // Evaluate t_cool/t_ff at r_cool (traditional Voit-style choice).
-    const double tcool_char = tcool;
-    const double tff_char = tff;
-    const double tcool_over_tff_char = tcool / tff;
-
-    // Store characteristic-radius values for diagnostics/plotting
-    galaxies[gal].tcool = tcool_char;
-    galaxies[gal].tff = tff_char;
-    galaxies[gal].tcool_over_tff = tcool_over_tff_char;
-
-    // ========================================================================
-    // STEP 3: PRECIPITATION CRITERION
-    // ========================================================================
-
-    double precipitation_fraction = 0.0;
-
-    // Logistic sigmoid centred on PRECIP_THRESHOLD, characteristic width = 2.
-    // f = 1 / (1 + exp(-(threshold - r) / 2))
-    // Smoothly ranges from ~1 (very unstable) through 0.5 at threshold to ~0 (very stable).
-    // Falls back to standard cooling once the sigmoid is negligible (< 0.01),
-    // which occurs at t_cool/t_ff ~ 19.
-    {
-        const double x = (PRECIP_THRESHOLD - tcool_over_tff_char) / PRECIP_TRANSITION_WIDTH;
-        const double f = 1.0 / (1.0 + exp(-x));
-        if(f >= 0.01) {
-            precipitation_fraction = f;
-        } else {
-            if(tcool_char > 0) {
-                coolingGas = galaxies[gal].CGMgas / tcool_char * dt;
-                if(coolingGas > galaxies[gal].CGMgas)
-                    coolingGas = galaxies[gal].CGMgas;
-            }
+        double logZ = -10.0;
+        if(galaxies[gal].MetalsCGMgas > 0) {
+            logZ = log10(galaxies[gal].MetalsCGMgas / galaxies[gal].CGMgas);
         }
-    }
 
-    // ========================================================================
-    // STEP 4: CALCULATE PRECIPITATION RATE
-    // ========================================================================
+        double lambda = get_metaldependent_cooling_rate(log10(temp), logZ);
 
-    if(precipitation_fraction > 0.0) {
-        // Gas precipitates on the free-fall timescale when thermally unstable
-        // This is the key physical insight: dM/dt = f_precip * M_CGM / t_ff
-        const double precip_rate = precipitation_fraction * galaxies[gal].CGMgas / tff_char;
-        coolingGas = precip_rate * dt;
-        
-        // Physical limits
-        if(coolingGas > galaxies[gal].CGMgas) {
-            coolingGas = galaxies[gal].CGMgas;
-        }
-        if(coolingGas < 0.0) {
-            coolingGas = 0.0;
-        }
-    }
+        if(lambda > 0.0) {
+            double x = PROTONMASS * BOLTZMANN * temp / lambda;        
+            x /= (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s); 
 
-    // AGN heating only fires for proper CGM-regime (Regime==0) halos.
-    // Regime==1 residual CGMgas drains naturally; do_AGN_heating() on HotGas
-    // in cooling_recipe_hot() handles all AGN for hot-halo galaxies.
-    if(galaxies[gal].Regime == 0) {
-        // AGN x parameter: (k_B T / lambda) in code-units density*time -- passed to
-        // both AGN heating paths (Bondi-Hoyle uses it; empirical and cold-cloud do not).
-        const double x_agn = (PROTONMASS * BOLTZMANN * temp / lambda)
-                             / (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);
+            // 1. Carr et al. 2023 Density Profile Constants (alpha = 1.4, r0 = 0.1 * Rvir)
+            const double alpha = 1.4;
+            const double r0 = 0.1 * galaxies[gal].Rvir;
+            const double ratio = 10.0; // Rvir / r0 is always 10 based on the paper's definition
+            
+            // Volumetric integral factors for mass (I_M) and cooling (I_cool)
+            const double I_M = (pow(ratio, 3.0 - alpha) - 1.0) / (3.0 - alpha);
+            const double I_cool = (pow(ratio, 3.0 - 2.0 * alpha) - 1.0) / (3.0 - 2.0 * alpha);
 
-        // r_heat ratchet, no decay, capped at Rvir (suppression and ratchet
-        // update handled inside do_AGN_heating_cgm when AGN is active).
-        if(run_params->AGNrecipeOn > 0 && run_params->CGMAGNOn > 0) {
-            coolingGas = do_AGN_heating_cgm(coolingGas, gal, halo_snapnum, dt, x_agn, r_cool, galaxies, run_params);
-        } else {
-            // No AGN: still apply r_heat suppression so quenching persists
-            if(galaxies[gal].r_heat >= r_cool) {
+            // 2. Calculate rho0 and the effective cooling density
+            const double rho0 = galaxies[gal].CGMgas / (4.0 * M_PI * r0 * r0 * r0 * I_M);
+            const double rho_eff = rho0 * (I_cool / I_M);
+
+            // 3. True thermal cooling time of the alpha=1.4 profile
+            const double tcool = (x / rho_eff) * (1.5 * MU_IONISED);
+
+            // 4. Free-fall time at Rvir (as defined in the paper)
+            const double g_accel = run_params->G * galaxies[gal].Mvir / (galaxies[gal].Rvir * galaxies[gal].Rvir);
+            const double tff = sqrt(2.0 * galaxies[gal].Rvir / g_accel);
+
+            // Diagnostic storage
+            galaxies[gal].tcool = (float)(tcool * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR);
+            galaxies[gal].tff = (float)(tff * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR);
+
+            // Pin rcool to Rvir since we are evaluating bulk accretion
+            double rcool = galaxies[gal].Rvir;
+            // galaxies[gal].RcoolToRvir = 1.0;
+
+            // 5. Carr et al. Bulk Cooling Formula
+            coolingGas = (galaxies[gal].CGMgas / (tcool + tff)) * dt;
+
+            if(coolingGas > galaxies[gal].CGMgas) {
+                coolingGas = galaxies[gal].CGMgas;
+            } else if(coolingGas < 0.0) {
                 coolingGas = 0.0;
-            } else if(galaxies[gal].r_heat > 0.0f) {
-                coolingGas *= 1.0 - galaxies[gal].r_heat / r_cool;
+            }
+
+            if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
+                coolingGas = do_AGN_heating_cgm(coolingGas, gal, halo_snapnum, dt, x, rcool, galaxies, run_params);
+            }
+
+            if (coolingGas > 0.0) {
+                galaxies[gal].Cooling += 0.5 * coolingGas * galaxies[gal].Vvir * galaxies[gal].Vvir;
             }
         }
     }
 
-    // ========================================================================
-    // STEP 5: TRACK COOLING ENERGY
-    // ========================================================================
+    galaxies[gal].CoolingRate = (dt > 0.0)
+        ? (float)((coolingGas / dt) * 1.0e10 / run_params->Hubble_h
+                  * SEC_PER_GIGAYEAR / run_params->UnitTime_in_s)
+        : 0.0f;
 
-    // Energy associated with cooling (for feedback balance tracking)
-    if(coolingGas > 0.0) {
-        // Specific energy ~ 0.5 * Vvir^2 (thermal + kinetic)
-        galaxies[gal].Cooling += 0.5 * coolingGas * galaxies[gal].Vvir * galaxies[gal].Vvir;
-    }
-
-    // ========================================================================
-    // STEP 6: CALCULATE DEPLETION TIMESCALE (DIAGNOSTIC)
-    // ========================================================================
-
-    // Depletion timescale (only meaningful for CGM-regime haloes)
-    if(galaxies[gal].Regime == 0) {
-        if(precipitation_fraction > 1e-6 && isfinite(tff_char)) {
-            const double depletion_time = tff_char / precipitation_fraction;
-            galaxies[gal].tdeplete = isfinite(depletion_time) ? (float)depletion_time : -1.0f;
-        } else {
-            galaxies[gal].tdeplete = -1.0f;
-        }
-    } else {
-        // Hot-regime haloes: reset diagnostic fields (density profile physics doesn't apply)
-        galaxies[gal].tcool = -1.0f;
-        galaxies[gal].tff = -1.0f;
-        galaxies[gal].tcool_over_tff = -1.0f;
-        galaxies[gal].tdeplete = -1.0f;
-    }
-
-    // Sanity check
-    XASSERT(coolingGas >= 0.0, -1, "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
-    XASSERT(coolingGas <= galaxies[gal].CGMgas + 1e-12, -1,
-            "Error: Cooling gas = %g exceeds CGM gas = %g", coolingGas, galaxies[gal].CGMgas);
-
+    XASSERT(coolingGas >= 0.0, -1,
+            "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
+            
     return coolingGas;
 }
+
 
 /*
  * Regime-aware cooling: dispatches CGM and hot-halo recipes by galaxy Regime flag.
@@ -769,10 +401,30 @@ double cooling_recipe_cgm(const int gal, const int halo_snapnum, const double dt
  * residual CGMgas.  Both contributions are applied to ColdGas in-place and
  * the total cooled mass is returned.
  */
+/*
+ * reset_cgm_diagnostics -- clear the CGM timescale diagnostics.
+ *
+ * cooling_recipe_cgm() is only entered when CGMgas > 0, so a halo that drains
+ * its reservoir keeps whatever tcool / tff / MachNumber /
+ * RcoolToRvir it had the last time it had gas.  That went stale for 28% of
+ * z = 0 Regime-0 centrals and inflated the high-ratio tail of any figure
+ * selecting on Regime alone (9.3% above the precipitation threshold, against a
+ * true 0.26% among haloes that actually hold a reservoir).  Diagnostics only --
+ * no mass or energy is touched.
+ */
+static void reset_cgm_diagnostics(const int gal, struct GALAXY *galaxies)
+{
+    galaxies[gal].tcool = 0.0;
+    galaxies[gal].tff = -1.0;
+    galaxies[gal].RcoolToRvir = -1.0;
+}
+
 double cooling_recipe_regime_aware(const int gal, const int halo_snapnum, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     double cgm_cooling = 0.0;
     double hot_cooling = 0.0;
+    float hot_tcool = -1.0f;
+    int hot_diagnostics_valid = 0;
 
     if(galaxies[gal].Regime == 0) {
         // CGM REGIME: CGM physics dominates
@@ -780,6 +432,8 @@ double cooling_recipe_regime_aware(const int gal, const int halo_snapnum, const 
         // Primary: Precipitation cooling from CGMgas
         if(galaxies[gal].CGMgas > 0.0) {
             cgm_cooling = cooling_recipe_cgm(gal, halo_snapnum, dt, galaxies, run_params);
+        } else {
+            reset_cgm_diagnostics(gal, galaxies);
         }
 
 
@@ -789,17 +443,32 @@ double cooling_recipe_regime_aware(const int gal, const int halo_snapnum, const 
         // Primary: Traditional cooling from HotGas
         if(galaxies[gal].HotGas > 0.0) {
             hot_cooling = cooling_recipe_hot(gal, halo_snapnum, dt, galaxies, run_params);
+            if(galaxies[gal].Vvir > 0.0 && galaxies[gal].tcool > 0.0) {
+                hot_tcool = galaxies[gal].tcool;
+                hot_diagnostics_valid = 1;
+            }
         }
 
         // Secondary: Precipitation cooling from CGMgas (gradually depletes)
         if(galaxies[gal].CGMgas > 0.0) {
             cgm_cooling = cooling_recipe_cgm(gal, halo_snapnum, dt, galaxies, run_params);
+        } else if(!hot_diagnostics_valid) {
+            reset_cgm_diagnostics(gal, galaxies);
+        }
+
+        if(hot_diagnostics_valid) {
+            galaxies[gal].tcool = hot_tcool;
+            galaxies[gal].tff = -1.0f;
         }
     }
 
-    // Now apply the cooling directly to preserve the physics-based split
-    // Apply CGM cooling
+    // Apply CGM cooling. Clamp to available CGMgas after AGN heating (which
+    // runs inside cooling_recipe_cgm for Regime==0 and can drain CGMgas
+    // between the internal cap and this apply).
     if(cgm_cooling > 0.0) {
+        if(cgm_cooling > galaxies[gal].CGMgas) {
+            cgm_cooling = galaxies[gal].CGMgas;
+        }
         const double metallicity = get_metallicity(galaxies[gal].CGMgas, galaxies[gal].MetalsCGMgas);
         galaxies[gal].ColdGas += cgm_cooling;
         galaxies[gal].MetalsColdGas += metallicity * cgm_cooling;
@@ -820,6 +489,10 @@ double cooling_recipe_regime_aware(const int gal, const int halo_snapnum, const 
     }
 
     double total_cooling = cgm_cooling + hot_cooling;
+    galaxies[gal].CoolingRate = (dt > 0.0)
+        ? (float)((total_cooling / dt) * 1.0e10 / run_params->Hubble_h
+                  * SEC_PER_GIGAYEAR / run_params->UnitTime_in_s)
+        : 0.0f;
     XASSERT(total_cooling >= 0.0, -1,
             "Error: Cooling gas mass = %g should be >= 0.0", total_cooling);
     return total_cooling;
@@ -907,7 +580,8 @@ static void agn_accretion_compute(const int centralgal, const int halo_snapnum, 
 double do_AGN_heating(double coolingGas, const int centralgal, const int halo_snapnum, const double dt, const double x, const double rcool, struct GALAXY *galaxies, const struct params *run_params)
 {
     // r_heat suppression (always applied for Regime==1 hot-halo)
-    if(galaxies[centralgal].r_heat < rcool) {
+    if(galaxies[centralgal].r_heat < rcool &&
+       !(run_params->CGMrecipeOn == 1 && galaxies[centralgal].r_heat >= 0.99 * rcool)) {
         coolingGas = (1.0 - galaxies[centralgal].r_heat / rcool) * coolingGas;
     } else {
         coolingGas = 0.0;
@@ -940,6 +614,9 @@ double do_AGN_heating(double coolingGas, const int centralgal, const int halo_sn
                 * galaxies[centralgal].Vvir * galaxies[centralgal].Vvir;
     }
 
+    if(run_params->CGMrecipeOn > 0 && galaxies[centralgal].r_heat > galaxies[centralgal].Rvir)
+        galaxies[centralgal].r_heat = galaxies[centralgal].Rvir;
+
     return coolingGas;
 }
 
@@ -949,10 +626,11 @@ double do_AGN_heating(double coolingGas, const int centralgal, const int halo_sn
  * Applies the same r_heat/rcool suppression and ratchet as the hot-halo
  * path, then caps r_heat at Rvir. Accretion draws from CGMgas.
  */
-double do_AGN_heating_cgm(double coolingGas, const int centralgal, const int halo_snapnum, const double dt, const double x, const double rcool,
-                          struct GALAXY *galaxies, const struct params *run_params)
+static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const int halo_snapnum, const double dt, const double x, const double rcool,
+                                 struct GALAXY *galaxies, const struct params *run_params)
 {
-    if(galaxies[centralgal].r_heat < rcool) {
+    if(galaxies[centralgal].r_heat < rcool &&
+       !(run_params->CGMrecipeOn == 1 && galaxies[centralgal].r_heat >= 0.99 * rcool)) {
         coolingGas = (1.0 - galaxies[centralgal].r_heat / rcool) * coolingGas;
     } else {
         coolingGas = 0.0;
@@ -982,6 +660,16 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const int hal
 
         if(AGNheating > 0.0)
             galaxies[centralgal].Heating += 0.5 * AGNheating * galaxies[centralgal].Vvir * galaxies[centralgal].Vvir;
+
+        /* The BH accretion above drew AGNaccreted out of CGMgas, but any
+         * earlier clamp of coolingGas used the pre-accretion reservoir.
+         * Re-cap so the caller cannot overdraw the CGM by up to AGNaccreted
+         * (manifested as an XASSERT abort when cooling was reservoir-limited
+         * and Bondi accretion nonzero in the same call, e.g. with
+         * CGMDensityProfile = 1). */
+        if(coolingGas > galaxies[centralgal].CGMgas) {
+            coolingGas = galaxies[centralgal].CGMgas;
+        }
     }
     return coolingGas;
 }
@@ -995,7 +683,8 @@ double do_AGN_heating_cgm(double coolingGas, const int centralgal, const int hal
  */
 void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct GALAXY *galaxies)
 {
-    // add the fraction 1/STEPS of the total cooling gas to the cold disk
+    // Move the cooled mass into the cold disk. coolingGas was already computed for this
+    // substep's dt (deltaT / effective_steps), so there is no 1/STEPS factor here.
     if(coolingGas > 0.0) {
         if(coolingGas < galaxies[centralgal].HotGas) {
             const double metallicity = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);

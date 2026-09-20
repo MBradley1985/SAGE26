@@ -8,7 +8,7 @@
  * Key physics tested:
  * - Metal-dependent cooling rates
  * - Cooling time calculations (tcool)
- * - Free-fall time and tcool/tff ratio for precipitation
+ * - Cooling time and free-fall time feeding the CGM bulk cooling rate
  * - Cooling radius (rcool) calculations
  * - AGN heating suppression of cooling
  * - Temperature scaling with Vvir
@@ -88,7 +88,7 @@ void test_metallicity_dependent_cooling() {
 // TEST 3: Cooling Time vs Free-Fall Time Ratio
 // ============================================================================
 void test_cooling_freefall_ratio() {
-    BEGIN_TEST("Cooling Time vs Free-Fall Time Ratio");
+    BEGIN_TEST("Cooling Time and Free-Fall Time Are Computed");
     
     struct GALAXY gal[1];
     memset(gal, 0, sizeof(struct GALAXY));
@@ -111,17 +111,14 @@ void test_cooling_freefall_ratio() {
     
     // Call cooling to calculate tcool and tff
     double dt = 0.01;
-    cooling_recipe_cgm(0, dt, gal, &run_params);
-    
+    cooling_recipe_cgm(0, /*halo_snapnum*/ 0, dt, gal, &run_params);
+
     // Both times should be positive
     ASSERT_GREATER_THAN(gal[0].tcool, 0.0,
                        "Cooling time positive");
     ASSERT_GREATER_THAN(gal[0].tff, 0.0,
                        "Free-fall time positive");
     
-    // tcool/tff can vary widely depending on conditions
-    ASSERT_TRUE(gal[0].tcool_over_tff > 0.0,
-               "tcool/tff positive");
 }
 
 // ============================================================================
@@ -149,8 +146,8 @@ void test_cooling_radius() {
     gal[0].Regime = 1;
     
     double dt = 0.01;
-    cooling_recipe_hot(0, dt, gal, &run_params);
-    
+    cooling_recipe_hot(0, /*halo_snapnum*/ 0, dt, gal, &run_params);
+
     // RcoolToRvir should be calculated
     ASSERT_GREATER_THAN(gal[0].RcoolToRvir, 0.0,
                        "Cooling radius positive");
@@ -193,8 +190,8 @@ void test_cooling_mass_dependence() {
     gal[1].Rvir = 200.0;
     gal[1].Cooling = 0.0;
     
-    double cooled0 = cooling_recipe_hot(0, dt, gal, &run_params);
-    double cooled1 = cooling_recipe_hot(1, dt, gal, &run_params);
+    double cooled0 = cooling_recipe_hot(0, /*halo_snapnum*/ 0, dt, gal, &run_params);
+    double cooled1 = cooling_recipe_hot(1, /*halo_snapnum*/ 0, dt, gal, &run_params);
     
     // More gas should cool more
     ASSERT_GREATER_THAN(cooled1, cooled0,
@@ -208,10 +205,10 @@ void test_cooling_mass_dependence() {
 }
 
 // ============================================================================
-// TEST 6: CGM Precipitation Cooling
+// TEST 6: CGM Bulk Cooling
 // ============================================================================
-void test_cgm_precipitation() {
-    BEGIN_TEST("CGM Precipitation When tcool/tff < 10");
+void test_cgm_bulk_cooling() {
+    BEGIN_TEST("CGM Bulk Cooling: mdot = M_CGM / (tcool + tff)");
     
     struct GALAXY gal[1];
     memset(gal, 0, sizeof(struct GALAXY));
@@ -224,7 +221,7 @@ void test_cgm_precipitation() {
     run_params.Hubble_h = 0.7;
     run_params.G = 43007.1;
     
-    // Setup for precipitation (high density, low temperature)
+    // Dense, metal-rich, cool halo: short tcool, so a healthy cooling rate
     gal[0].CGMgas = 20.0;  // Large CGM mass
     gal[0].MetalsCGMgas = 0.4;  // High metallicity
     gal[0].Vvir = 100.0;  // Low velocity (cooler)
@@ -233,17 +230,68 @@ void test_cgm_precipitation() {
     gal[0].Regime = 0;
     
     double dt = 0.01;
-    double cooled = cooling_recipe_cgm(0, dt, gal, &run_params);
+    double cooled = cooling_recipe_cgm(0, /*halo_snapnum*/ 0, dt, gal, &run_params);
     
     // Should have some cooling
     ASSERT_GREATER_THAN(cooled, 0.0,
-                       "Precipitation produces cooling");
+                       "Bulk cooling produces cooling");
     
-    // Check tcool/tff was calculated
+    // Check both timescales were calculated
     ASSERT_GREATER_THAN(gal[0].tcool, 0.0,
                        "Cooling time calculated");
     ASSERT_GREATER_THAN(gal[0].tff, 0.0,
                        "Free-fall time calculated");
+}
+
+// ============================================================================
+// TEST 6b: Self-regulating drain of the bulk cooling recipe
+// ============================================================================
+void test_cgm_drain_regulation() {
+    BEGIN_TEST("CGM Drain: mdot ~ M_CGM keeps the reservoir finite");
+
+    struct params run_params;
+    memset(&run_params, 0, sizeof(struct params));
+    run_params.CGMrecipeOn = 1;
+    run_params.UnitTime_in_s = 3.08568e+16;
+    run_params.UnitDensity_in_cgs = 6.76991e-31;
+    run_params.Hubble_h = 0.7;
+    run_params.G = 43007.1;
+
+    struct GALAXY gal[1];
+    /* dense, fast-cooling CGM (same halo as test_cgm_bulk_cooling) */
+#define SETUP_CGM_GAL() do { \
+        memset(gal, 0, sizeof(struct GALAXY)); \
+        gal[0].CGMgas = 20.0; gal[0].MetalsCGMgas = 0.4; \
+        gal[0].Vvir = 100.0; gal[0].Rvir = 100.0; gal[0].Mvir = 50.0; \
+        gal[0].Regime = 0; \
+    } while(0)
+
+    SETUP_CGM_GAL();
+    const double cooled = cooling_recipe_cgm(0, /*halo_snapnum*/ 0, 0.01, gal, &run_params);
+    const double tcool0 = gal[0].tcool;
+    const double tff0 = gal[0].tff;
+    ASSERT_GREATER_THAN(cooled, 0.0, "Dense CGM cools");
+    ASSERT_GREATER_THAN(tff0, 0.0, "Free-fall time calculated");
+
+    /* Iterative drain on the free-fall timescale. mdot = M_CGM / (tcool + tff)
+     * with tcool ~ 1/M_CGM, so the rate falls faster than linearly as the
+     * reservoir empties: the drain self-limits and never exhausts the CGM. */
+    SETUP_CGM_GAL();
+    double tcool_last = tcool0;
+    int overdrawn = 0;
+    for(int i = 0; i < 400 && gal[0].CGMgas > 0.0; i++) {
+        const double step_dt = 0.5 * (gal[0].tff > 0.0 ? gal[0].tff : tff0);
+        const double c = cooling_recipe_cgm(0, /*halo_snapnum*/ 0, step_dt, gal, &run_params);
+        if(c > gal[0].CGMgas) overdrawn = 1;
+        const double metallicity = (gal[0].CGMgas > 0.0) ? gal[0].MetalsCGMgas / gal[0].CGMgas : 0.0;
+        gal[0].CGMgas -= c;
+        gal[0].MetalsCGMgas -= metallicity * c;
+        tcool_last = gal[0].tcool;
+    }
+    ASSERT_TRUE(overdrawn == 0, "Cooled mass never exceeds the reservoir");
+    ASSERT_GREATER_THAN(gal[0].CGMgas, 0.0, "Regulated drain keeps a finite CGM reservoir");
+    ASSERT_GREATER_THAN(tcool_last, tcool0, "tcool rises as the CGM drains");
+#undef SETUP_CGM_GAL
 }
 
 // ============================================================================
@@ -273,7 +321,7 @@ void test_cooling_mass_conservation() {
     
     // Very long timestep
     double dt = 10.0;  // Gyr
-    double cooled = cooling_recipe_hot(0, dt, gal, &run_params);
+    double cooled = cooling_recipe_hot(0, /*halo_snapnum*/ 0, dt, gal, &run_params);
     
     // Cooled mass should not exceed initial hot gas
     ASSERT_TRUE(cooled <= initial_hot,
@@ -320,8 +368,8 @@ void test_regime_aware_cooling() {
     gal[1].Mvir = 75.0;
     
     // Use regime-aware wrapper
-    double cooled_cgm = cooling_recipe(0, dt, gal, &run_params);
-    double cooled_hot = cooling_recipe(1, dt, gal, &run_params);
+    double cooled_cgm = cooling_recipe(0, /*halo_snapnum*/ 0, dt, gal, &run_params);
+    double cooled_hot = cooling_recipe(1, /*halo_snapnum*/ 0, dt, gal, &run_params);
     
     // Both should produce some cooling
     ASSERT_TRUE(cooled_cgm >= 0.0,
@@ -364,8 +412,8 @@ void test_cooling_time_scaling() {
     gal[1].Regime = 0;
     
     double dt = 0.01;
-    cooling_recipe_cgm(0, dt, gal, &run_params);
-    cooling_recipe_cgm(1, dt, gal, &run_params);
+    cooling_recipe_cgm(0, /*halo_snapnum*/ 0, dt, gal, &run_params);
+    cooling_recipe_cgm(1, /*halo_snapnum*/ 0, dt, gal, &run_params);
     
     // Larger halo should have longer cooling time
     // (lower density, higher temperature)
@@ -419,7 +467,8 @@ int main(void) {
     test_cooling_freefall_ratio();
     test_cooling_radius();
     test_cooling_mass_dependence();
-    test_cgm_precipitation();
+    test_cgm_bulk_cooling();
+    test_cgm_drain_regulation();
     test_cooling_mass_conservation();
     test_regime_aware_cooling();
     test_cooling_time_scaling();

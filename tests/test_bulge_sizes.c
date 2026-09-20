@@ -237,7 +237,7 @@ void test_disk_radius_after_instability() {
                        "Test setup: disk mass exceeds Mcrit (unstable)");
 
     // Call the REAL check_disk_instability function
-    check_disk_instability(0, 0, 0, 0.0, 0.001, 0, gal, &run_params);
+    check_disk_instability(0, 0, 0, /*halo_snapnum*/ 0, 0.0, 0.001, 0, gal, &run_params);
 
     // Disk scale radius is unchanged: remaining disk retains same specific angular
     // momentum per unit mass, so r_d stays constant (Mo, Mao & White 1998 framework).

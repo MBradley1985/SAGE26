@@ -60,7 +60,9 @@ int my_snprintf(char *buffer, int len, const char *format, ...)
  */
 char *get_time_string(struct timeval t0, struct timeval t1)
 {
-  const size_t MAXLINESIZE = 1024;
+  /* enum, not const size_t: 'tmp' below is sized from this, and in C99 only an
+     integer constant expression keeps that from being a variable-length array. */
+  enum { MAXLINESIZE = 1024 };
   char *time_string = malloc(MAXLINESIZE * sizeof(char));
   if(time_string == NULL)  {
       fprintf(stderr,"Error: Could not allocate memory to hold string variable representing time in function '%s'..returning\n", __FUNCTION__);
@@ -86,10 +88,10 @@ char *get_time_string(struct timeval t0, struct timeval t1)
               my_snprintf(tmp, MAXLINESIZE, "%5d %s", (int)time_to_print, units[which]);
               const size_t len = strlen(tmp);
               const size_t required_len = curr_index + len + 1;
-              XRETURN(MAXLINESIZE >= required_len, NULL,
+              XRETURN((size_t) MAXLINESIZE >= required_len, NULL,
                       "buffer overflow will occur: string has space for %zu bytes while concatenating "
                       "requires at least %zu bytes\n",
-                      MAXLINESIZE, required_len);
+                      (size_t) MAXLINESIZE, required_len);
               strcpy(time_string + curr_index, tmp);
               curr_index += len;
           }
@@ -103,7 +105,8 @@ char *get_time_string(struct timeval t0, struct timeval t1)
 /* getnumlines -- count non-empty, non-comment lines in a text file. */
 int64_t getnumlines(const char *fname,const char comment)
 {
-    const int MAXLINESIZE = 10000;
+    /* enum, not const int: see the note in get_time_string above. */
+    enum { MAXLINESIZE = 10000 };
     int64_t nlines=0;
     char str_line[MAXLINESIZE];
 

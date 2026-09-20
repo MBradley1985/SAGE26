@@ -3,8 +3,10 @@ tests/test_data/
 input/millennium/
 output/
 input/microuchuu/
+input/300/
 tests/test_build/
 tests/test_output/
+docs/referee/
 
 *.o
 *.*~
@@ -41,9 +43,17 @@ yy*
 
 # Documentation with Sphinx / Doxygen #
 docs/build
+docs/_build/
 docs/make.bat
 docs/_doxygen/
+_doxygen/
 
 # Regression baseline — manifests for slow optional configs are captured locally on demand,
 # not committed. Only the default-sweep configs in tests/regression_baseline.sh are tracked.
 tests/baseline/microuchuu/
+
+# Claude Code local files
+.claude/
+CLAUDE.md
+
+plotting/random_plotting_scripts/

@@ -20,7 +20,7 @@ The `OutputFormat` parameter selects one of two writers:
 | `sage_hdf5` | HDF5 column store with metadata | One file per task plus a master file linking them. |
 
 Both writers emit one file per output snapshot listed in
-`FileWithOutputSnaps`. Per-galaxy field content is the same in both
+`NumOutputs`. Per-galaxy field content is the same in both
 formats, but field *names* and the on-disk layout differ -- see the
 field reference below.
 
@@ -119,11 +119,21 @@ output -- they are only meaningful for satellites.
 
 | Value | Meaning |
 |-------|---------|
-| 0 | CGM regime (cool flow / precipitation; cooling driven by `cooling_recipe_cgm()`). |
-| 1 | Hot-halo regime (Mvir above the Dekel & Birnboim 2006 M_shock; cooling driven by `cooling_recipe_hot()`). |
+| 0 | CGM regime (cooling driven by `cooling_recipe_cgm()`, Carr et al. 2023 bulk cooling of `CGMgas`). |
+| 1 | Hot-halo regime (Mvir above the Dekel & Birnboim 2006 M_shock; cooling driven by `cooling_recipe_hot()` on `HotGas`). |
 
-Set every snapshot in `determine_and_store_regime()` when
-`CGMrecipeOn = 1`. Left at zero (and unused) when `CGMrecipeOn = 0`.
+Set every snapshot by `determine_and_store_regime()`, which always runs; the
+flag is only acted on when `CGMrecipeOn = 1`.
+
+The assignment is **stochastic**: a sigmoid in `log10(Mvir / M_shock)` of
+width 0.1 dex gives the probability of the hot regime, and a uniform draw
+decides. So `Regime` is not a deterministic function of mass, and haloes
+near `M_shock` can be either. With `RegimeRandomMode = 0` the draw is
+repeated every snapshot, so a borderline halo may flip between snapshots;
+with `RegimeRandomMode = 1` it reuses the galaxy's persistent `RegimeRandom`
+quantile, so the regime changes only as `Mvir` does. Bear this in mind when
+splitting a population on `Regime` -- it is a probabilistic label, not a mass
+cut.
 
 ### `FFBRegime` -- feedback-free burst classification
 
@@ -173,7 +183,7 @@ section below) and the unit actually written.
 | `Vmax` | km / s | Maximum circular velocity of this galaxy's halo. |
 | `VelDisp` | km / s | Velocity dispersion of this galaxy's halo. |
 | `Concentration` | -- | NFW halo concentration from the Ishiyama+21 c-M relation (set when `ConcentrationOn = 1`). |
-| `g_max` | -- | Running maximum of the precipitation g-parameter across all snapshots for this halo (HDF5 dtype: float64). |
+| `g_max` | code units (UnitLength / UnitTime^2) | Peak NFW gravitational acceleration used for the Boylan-Kolchin (2025) feedback-free-burst threshold (HDF5 dtype: float64). Set per snapshot by the BK25 `FeedbackFreeModeOn` methods and reset to 0 for non-FFB haloes; not a running maximum across snapshots, and unrelated to CGM cooling. |
 
 ### Baryonic reservoirs
 
@@ -240,14 +250,18 @@ section below) and the unit actually written.
 | Field | Units | Description |
 |-------|-------|-------------|
 | `Regime` | -- | CGM regime flag (see flag table above). |
-| `tcool` | Myr | Cooling time of the CGM gas at the cooling radius. |
-| `tff` | Myr | Free-fall time of the CGM gas at the cooling radius. |
-| `tcool_over_tff` | dimensionless | Voit (2015) precipitation criterion ratio. |
-| `tdeplete` | Myr | Depletion time of the CGM reservoir under the current cooling rate. |
+| `tcool` | Gyr | Meaning depends on regime. Regime 0: bulk cooling time of the Carr et al. (2023) `alpha = 1.4` CGM profile. Regime 1: the halo dynamical time `R_vir / V_vir`. |
+| `tff` | Gyr | Regime 0: halo free-fall time at the virial radius. Regime 1: set to **-1** as a sentinel -- the hot path has no CGM free-fall time. |
+| `CoolingRate` | Msun / Gyr | Cooled gas rate, `coolingGas / dt`, including the active regime's final suppression. On the regime-aware path this is the sum of both reservoirs' contributions. |
 | `H2DepletionTime_Gyr` | Gyr | H2 depletion time from the K13 prescription. Set to -1 when not applicable. |
-| `RcoolToRvir` | dimensionless | Ratio of the cooling radius to the virial radius. |
-| `mdot_cool` | Msun / yr | Hot-halo cooling rate (mass flowing from hot to cold). |
-| `mdot_stream` | Msun / yr | Cold-stream accretion rate (CGM-regime mass flowing from CGM to cold). |
+| `RcoolToRvir` | dimensionless | Ratio of the cooling radius to the virial radius, from the hot-halo path only. **Uncapped**, so values > 1 occur and are physical (a corona cooling faster than it can be shock-heated). Set to **-1** when the cooling radius was never evaluated for this halo. |
+| `mdot_cool` | Msun / yr | Quasi-static hot-halo cooling rate, `(1 - f_stream)` share of the flow out of `HotGas`. Hot-regime path only. |
+| `mdot_stream` | Msun / yr | Dekel & Birnboim cold-stream accretion rate, `f_stream` share of the flow out of **`HotGas`** -- a hot-regime quantity, not a CGM one. Zero for Regime 0 galaxies. |
+| `r_heat` | Mpc / h | AGN heating radius; the monotonic ratchet that suppresses cooling by `(1 - r_heat / r_cool)`. Capped at `R_vir` on the CGM path only. |
+
+A halo that has drained its `CGMgas` has `tcool`, `tff` and `RcoolToRvir`
+cleared rather than left holding the last values it computed, so selecting on
+`Regime` alone does not pick up stale timescales.
 
 ### Infall properties (Type > 0 only)
 
@@ -337,11 +351,11 @@ array-of-structs.
 | `OutputFormat` | Selects `sage_binary` or `sage_hdf5`. |
 | `OutputDir` | Directory for the output files. |
 | `FileNameGalaxies` | Filename stem; final names are `<stem>_<filenr>` (binary) or `<stem>_<filenr>.hdf5` (HDF5), plus `<stem>.hdf5` master. |
-| `FileWithOutputSnaps` | Snapshot list to write. Each listed snap becomes either its own binary file or a `Snap_<N>` HDF5 group. |
+| `NumOutputs` | Number of snapshots to write, followed by a `->` line listing them in the parameter file. `-1` writes every snapshot. Each selected snap becomes either its own binary file or a `Snap_<N>` HDF5 group. |
 | `SaveFullSFH` | Enables the cumulative `SFHMassDisk` / `SFHMassBulge` 2-D HDF5 datasets. |
 | `TrackICSAssembly` | Activates accumulation into `ICS_disrupt`, `ICS_accrete`, `ICS_sum_mt`. |
 | `ConcentrationOn` | Populates the `Concentration` field (otherwise 0). |
-| `CGMrecipeOn` | Populates `Regime`, `CGMgas`, `MetalsCGMgas`, `tcool`, `tff`, `tcool_over_tff`, `tdeplete`, `RcoolToRvir`, `mdot_cool`, `mdot_stream`. With it off, these stay at their initialised values. |
+| `CGMrecipeOn` | Populates `CGMgas`, `MetalsCGMgas`, `tcool`, `tff`, `RcoolToRvir`, `mdot_cool`, `mdot_stream`. With it off, these stay at their initialised values. `Regime` is written either way (the classifier always runs) but is only acted on when this is 1; `CoolingRate` is populated on both paths. |
 | `FeedbackFreeModeOn` | Populates `FFBRegime`. |
 
 See [`parameters.md`](parameters.md) for full parameter descriptions
@@ -356,5 +370,5 @@ and defaults.
 - [`physics/ics.md`](physics/ics.md) -- detail on the ICS assembly
   channels that feed `ICS_disrupt` / `ICS_accrete` / `ICS_sum_mt`.
 - [`physics/cooling_and_heating.md`](physics/cooling_and_heating.md) --
-  what `tcool`, `tff`, `tcool_over_tff`, `Regime`, and `Cooling` /
+  what `tcool`, `tff`, `Regime`, and `Cooling` /
   `Heating` actually measure.

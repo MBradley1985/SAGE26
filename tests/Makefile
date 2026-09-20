@@ -24,12 +24,16 @@ OUTPUT_DIR = ./test_build
 PROJECT_SOURCES = \
 	$(SRC_DIR)/core_utils.c \
 	$(SRC_DIR)/model_misc.c \
+	$(SRC_DIR)/model_h2_chemistry.c \
+	$(SRC_DIR)/model_halo_properties.c \
+	$(SRC_DIR)/model_regimes.c \
 	$(SRC_DIR)/model_starformation_and_feedback.c \
 	$(SRC_DIR)/model_cooling_heating.c \
 	$(SRC_DIR)/model_reincorporation.c \
 	$(SRC_DIR)/model_infall.c \
 	$(SRC_DIR)/model_disk_instability.c \
 	$(SRC_DIR)/model_mergers.c \
+	$(SRC_DIR)/model_enhanced_bhphysics.c \
 	$(SRC_DIR)/core_cool_func.c
 
 # Test files
@@ -46,6 +50,7 @@ TEST_SOURCES = \
 	test_stripping.c \
 	test_multi_satellite.c \
 	test_star_formation_recipes.c \
+	test_h2_chemistry.c \
 	test_reincorporation.c \
 	test_cooling_heating.c \
 	test_halo_mergers.c \
@@ -241,7 +246,7 @@ help:
 	@echo "================="
 	@echo ""
 	@echo "Comprehensive unit tests for SAGE26 semi-analytic model"
-	@echo "with CGM physics extensions (278 tests across 16 suites)"
+	@echo "with CGM physics extensions (608 tests across 19 suites)"
 	@echo ""
 	@echo "Targets:"
 	@echo "  make              - Build all tests"

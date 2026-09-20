@@ -116,7 +116,7 @@ void test_agn_suppresses_cooling() {
     double x = 1.0;  // Parameter for AGN calculation
     double rcool = 150.0;  // Cooling radius
     
-    double final_cooling = do_AGN_heating(initial_cooling, 0, dt, x, rcool, gal, &run_params);
+    double final_cooling = do_AGN_heating(initial_cooling, 0, /*halo_snapnum*/ 0, dt, x, rcool, gal, &run_params);
     
     // AGN should suppress some or all cooling
     ASSERT_TRUE(final_cooling <= initial_cooling,
@@ -163,8 +163,8 @@ void test_heating_radius() {
     double x = 1.0;
     double rcool = 200.0;
     
-    do_AGN_heating(cooling, 0, dt, x, rcool, gal, &run_params);
-    
+    do_AGN_heating(cooling, 0, /*halo_snapnum*/ 0, dt, x, rcool, gal, &run_params);
+
     // Heating radius should have increased from zero
     ASSERT_TRUE(gal[0].r_heat >= 0.0,
                "Heating radius non-negative");
@@ -205,8 +205,8 @@ void test_agn_mass_conservation() {
     double x = 1.0;
     double rcool = 200.0;
     
-    do_AGN_heating(cooling, 0, dt, x, rcool, gal, &run_params);
-    
+    do_AGN_heating(cooling, 0, /*halo_snapnum*/ 0, dt, x, rcool, gal, &run_params);
+
     double final_total = gal[0].HotGas + gal[0].BlackHoleMass;
     
     // Total baryonic mass should be conserved
@@ -305,8 +305,8 @@ void test_agn_accretion_limit() {
     double x = 1.0;
     double rcool = 200.0;
     
-    do_AGN_heating(cooling, 0, dt, x, rcool, gal, &run_params);
-    
+    do_AGN_heating(cooling, 0, /*halo_snapnum*/ 0, dt, x, rcool, gal, &run_params);
+
     // Hot gas should not go negative
     ASSERT_TRUE(gal[0].HotGas >= 0.0,
                "Hot gas cannot be negative");
