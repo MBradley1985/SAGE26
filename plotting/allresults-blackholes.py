@@ -506,53 +506,144 @@ def plot_bh_growth_channels(file_list, snap_num, hubble_h, redshifts,
     print(f"[ok]   {name} -> {out}")
 
 
+def _residual_series(base_res, other_res, key):
+    """
+    Interpolate one channel's log10(median) growth track for `other_res`
+    onto `base_res`'s z grid (restricted to their overlapping z range) and
+    return (z_common, other - base) in dex, or (None, None) if there isn't
+    enough overlapping, valid data for a residual.
+    """
+    bz = np.array([r['z'] for r in base_res])
+    oz = np.array([r['z'] for r in other_res])
+    border = np.argsort(bz)
+    oorder = np.argsort(oz)
+    bz, oz = bz[border], oz[oorder]
+    bp50 = np.array([r[key][1] for r in base_res])[border]
+    op50 = np.array([r[key][1] for r in other_res])[oorder]
+    b_ok = ~np.isnan(bp50) & (bp50 > 0)
+    o_ok = ~np.isnan(op50) & (op50 > 0)
+    if np.sum(b_ok) < 2 or np.sum(o_ok) < 2:
+        return None, None
+    lo = max(bz[b_ok].min(), oz[o_ok].min())
+    hi = min(bz[b_ok].max(), oz[o_ok].max())
+    zcommon = bz[b_ok][(bz[b_ok] >= lo) & (bz[b_ok] <= hi)]
+    if len(zcommon) < 2:
+        return None, None
+    b_interp = np.interp(zcommon, bz[b_ok], np.log10(bp50[b_ok]))
+    o_interp = np.interp(zcommon, oz[o_ok], np.log10(op50[o_ok]))
+    return zcommon, o_interp - b_interp
+
+
 def plot_bh_growth_channels_compare(runs, output_dir):
     """
-    Overlay BH growth channel tracks for multiple runs onto the same 1x4
-    grid. `runs` is a list of dicts, each with the same fields
+    Overlay BH growth channel tracks for multiple runs (any number >= 1) onto
+    the same 1x4 grid, each panel with a thin residuals row underneath
+    showing, per channel, every additional run's difference (in dex) from
+    the first ("base") run -- run 2 vs run 1, run 3 vs run 1, etc. -- rather
+    than every pairwise combination, so the row stays readable past two runs.
+    `runs` is a list of dicts, each with the same fields
     plot_bh_growth_channels() takes individually (file_list, snap_num,
     hubble_h, redshifts, available) plus a 'style' dict from run_style.py
     (must include a 'label').
     """
     name = "BH growth channels (compare)"
-    fig, axes = plt.subplots(1, 4, figsize=(18, 5), sharey=True)
+    fig = plt.figure(figsize=(18, 6.5))
+    gs = fig.add_gridspec(2, 4, height_ratios=[3, 1], hspace=0.06, wspace=0)
+    axes, rax = [], []
+    for i in range(4):
+        axes.append(fig.add_subplot(gs[0, i], sharey=axes[0] if axes else None))
+        rax.append(fig.add_subplot(gs[1, i], sharex=axes[i], sharey=rax[0] if rax else None))
+
     run_handles = []
-    any_ok = False
+    run_data = []  # per run: (sorted_results_per_bin, have) or None
 
     for run in runs:
-        style = run['style']
+        # Channel colors are already at full strength for every run here --
+        # runs are told apart by linestyle (solid/dashed/dotted), not by
+        # lightening, so extra runs stay as visible as the base run.
+        style = {**run['style'], 'lighten': 0.0}
         results, have = _compute_growth_channel_data(
             run['file_list'], run['snap_num'], run['hubble_h'],
             run['redshifts'], run['available'])
         if results is None:
             print(f"  [skip] {style['label']}: no growth-channel data.")
+            run_data.append(None)
             continue
-        any_ok = True
+        sorted_results = [sorted(r, key=lambda e: e['z'], reverse=True) for r in results]
+        run_data.append((sorted_results, have))
         for i, ax in enumerate(axes):
-            res = sorted(results[i], key=lambda r: r['z'], reverse=True)
-            _draw_growth_lines(ax, res, have, style)
+            _draw_growth_lines(ax, sorted_results[i], have, style)
         run_handles.append(plt.Line2D([0], [0], color='black', lw=1.8,
                                       ls=style['linestyle'], label=style['label']))
 
-    if not any_ok:
+    if not any(run_data):
         print(f"[skip] {name}: no data for any run.")
         plt.close(fig)
         return
 
-    for i, ax in enumerate(axes):
+    # residuals: every other run vs. the first run that actually has data
+    base_idx = next((i for i, d in enumerate(run_data) if d is not None), None)
+    if base_idx is not None:
+        base_results, base_have = run_data[base_idx]
+        for i in range(4):
+            base_res = base_results[i]
+            if not base_res:
+                continue
+            for ridx, run in enumerate(runs):
+                if ridx == base_idx or run_data[ridx] is None:
+                    continue
+                other_results, other_have = run_data[ridx]
+                other_res = other_results[i]
+                if not other_res:
+                    continue
+                style = run['style']
+                for _, key, color in GROWTH_CHANNELS:
+                    if not (base_have[key] and other_have[key]):
+                        continue
+                    zcommon, resid = _residual_series(base_res, other_res, key)
+                    if zcommon is None:
+                        continue
+                    rax[i].plot(zcommon, resid, color=color, lw=1.2,
+                                ls=style['linestyle'])
+
+    for i, (ax, rx) in enumerate(zip(axes, rax)):
         ax.set_title(GROWTH_BIN_LABELS[i])
-        ax.set_xlabel(r'Redshift ($z$)')
+        ax.tick_params(labelbottom=False)
         if i == 0:
             ax.set_ylabel(r'$\log_{10}(M_{\rm BH}\,[M_\odot])$')
+        else:
+            ax.tick_params(labelleft=False)
         ax.set_xlim(0, 7.0)
-        ax.set_ylim(-2.5, 10)
+        ax.set_ylim(0, 10)
         ax.grid(True, alpha=0.3)
+
+        rx.axhline(0, color='grey', lw=0.8, alpha=0.7, zorder=0)
+        rx.set_xlabel(r'Redshift ($z$)')
+        if i == 0:
+            rx.set_ylabel(r'$\Delta\log_{10}(M_{\rm BH})$', fontsize=9)
+        else:
+            rx.tick_params(labelleft=False)
+        rx.set_ylim(-0.5, 0.5)
+        rx.grid(True, alpha=0.3)
+        rx.xaxis.set_major_locator(plt.MultipleLocator(1))
 
     channel_handles = [plt.Line2D([0], [0], color=c, lw=2) for _, _, c in GROWTH_CHANNELS]
     leg1 = axes[-1].legend(channel_handles, [l for l, _, _ in GROWTH_CHANNELS],
-                           fontsize=9, loc='upper left')
+                           fontsize=9, loc='lower left')
     axes[-1].add_artist(leg1)
-    axes[-1].legend(handles=run_handles, fontsize=9, loc='lower right')
+    if run_handles:
+        axes[-1].legend(handles=run_handles, fontsize=9, loc='lower right')
+
+    # panels touch (wspace=0) -- each panel's rightmost x tick label sits
+    # right against the next panel's leftmost "0" label, so drop the
+    # rightmost one on all but the last panel (mirrors plot_bh_growth_channels).
+    fig.canvas.draw()
+    for rx in rax[:-1]:
+        xmin, xmax = rx.get_xlim()
+        in_range = [lbl for t, lbl in zip(rx.get_xticks(), rx.get_xticklabels())
+                    if xmin - 1e-9 <= t <= xmax + 1e-9]
+        if in_range:
+            in_range[-1].set_visible(False)
 
     plt.tight_layout()
     out = os.path.join(output_dir, f"bh_growth_channels_compare{OutputFormat}")

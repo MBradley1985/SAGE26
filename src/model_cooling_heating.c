@@ -450,6 +450,7 @@ double cooling_recipe_hot(const int gal, const int halo_snapnum, const double dt
             if(rcool > galaxies[gal].Rvir) {
                 // "cold accretion" regime
                 coolingGas = galaxies[gal].HotGas / (galaxies[gal].Rvir / galaxies[gal].Vvir) * dt;
+                // BH Stuff !!!! Some frac of the cooling gas maybe v small
             } else {
                 // "hot halo cooling" regime
                 coolingGas = (galaxies[gal].HotGas / galaxies[gal].Rvir) * (rcool / (2.0 * tcool)) * dt;
