@@ -302,35 +302,7 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                         galaxies[ngal].infallStellarMass = galaxies[ngal].StellarMass;
                     }
 
-                    /* Henriques & Thomas (2010) Sec. 2.1 follow the orbital
-                     * radius of an orphan as it decays.  estimate_merging_time()
-                     * built this galaxy's clock assuming it starts at the virial
-                     * radius of the halo it is falling into, so start the orbit
-                     * from the same place to keep the two consistent. */
-                    if(run_params->LetOrphansLive > 0) {
-                        galaxies[ngal].OrbitRadius = get_virial_radius(halos[halonr].FirstHaloInFOFgroup, halos, run_params);
-                    }
-
                     galaxies[ngal].Type = 2;
-                }
-            } else if(run_params->LetOrphansLive > 0 && galaxies[ngal].Type == 2) {
-                /* A surviving orphan skips the block above, which is also where
-                 * the per-snapshot accumulators are cleared for every other
-                 * galaxy. Left alone they would keep summing across snapshots
-                 * for as long as the orphan lives, so the reported SFR, cooling
-                 * and heating would grow without bound. Clear them here on the
-                 * same schedule. These are output diagnostics rather than state
-                 * the physics reads back, so this corrects the reporting and
-                 * nothing else. */
-                galaxies[ngal].Cooling = 0.0;
-                galaxies[ngal].Heating = 0.0;
-                galaxies[ngal].QuasarModeBHaccretionMass = 0.0;
-                galaxies[ngal].OutflowRate = 0.0;
-
-                for(int step = 0; step < STEPS; step++) {
-                    galaxies[ngal].SfrDisk[step] = galaxies[ngal].SfrBulge[step] = 0.0;
-                    galaxies[ngal].SfrDiskColdGas[step] = galaxies[ngal].SfrDiskColdGasMetals[step] = 0.0;
-                    galaxies[ngal].SfrBulgeColdGas[step] = galaxies[ngal].SfrBulgeColdGasMetals[step] = 0.0;
                 }
             }
 
@@ -358,37 +330,6 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                     "Error: Expected to find centralgal=-1. instead centralgal=%d\n", centralgal);
 
             centralgal = i;
-        }
-    }
-
-    /* With LetOrphansLive == 1 an orphan can outlive the snapshot in which it
-     * lost its subhalo, so a halo can inherit orphans without inheriting any
-     * type 0 or 1 galaxy -- a case that cannot arise with the gate off, where
-     * every orphan is destroyed before it can be written out.  Contini et al.
-     * (2014) keep such a galaxy bound to its FOF group, so give the orphans a
-     * central to belong to rather than leaving CentralGal at -1. */
-    if(run_params->LetOrphansLive > 0 && centralgal == -1 && ngal > ngalstart) {
-        if(ngalstart > 0) {
-            /* A satellite halo of this FOF group: the group central was
-             * established when FirstHaloInFOFgroup was processed first. */
-            centralgal = galaxies[0].CentralGal;
-        } else {
-            /* The main halo of the group itself has no central. Spawn one, as
-             * the empty-halo path above does; init_galaxy() requires halonr to
-             * be FirstHaloInFOFgroup, which holds here because ngalstart == 0
-             * only for the first halo processed in the group. */
-            if(ngal == (*maxgals - 1)) {
-                *maxgals += 10000;
-
-                *ptr_to_galaxies = myrealloc(*ptr_to_galaxies, *maxgals * sizeof(struct GALAXY));
-                *ptr_to_halogal  = myrealloc(*ptr_to_halogal, *maxgals * sizeof(struct GALAXY));
-                galaxies = *ptr_to_galaxies;
-                halogal = *ptr_to_halogal;
-            }
-
-            init_galaxy(ngal, halonr, galaxycounter, halos, galaxies, run_params);
-            centralgal = ngal;
-            ngal++;
         }
     }
 
@@ -514,22 +455,11 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 if(run_params->ReIncorporationFactor > 0.0) {
                     reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
                 }
-            } else if(galaxies[p].Type == 1 ||
-                      (run_params->LetOrphansLive > 0 && galaxies[p].Type == 2)) {
+            } else if(galaxies[p].Type == 1) {
                 // Satellites hand their baryon excess to the central once per
                 // substep, in the same place and on the same cadence as the
                 // original SAGE. strip_from_satellite divides by the substep
                 // count, so the per-snapshot fraction does not depend on it.
-                //
-                // Orphans join them once LetOrphansLive == 1. The Type 1
-                // restriction is inherited from SAGE16, where it cost nothing
-                // because an orphan was destroyed inside the snapshot that
-                // created it. Once orphans survive it would strand their hot and
-                // CGM gas: it could not be stripped, and could not cool either,
-                // since the CGM free-fall time is built from Mvir and an
-                // orphan's Mvir is zero. Contini et al. (2014) associate no hot
-                // component with satellites at all (Sec. 3.1, footnote 5), so
-                // returning it to the central is what their model assumes.
                 strip_from_satellite(centralgal, p, Zcurr, effective_steps, galaxies, run_params);
             }
 
@@ -562,26 +492,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                         p, galaxies[p].MergTime);
 
                 const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
-                const double mergtime_before = galaxies[p].MergTime;
                 galaxies[p].MergTime -= deltaT / effective_steps;
-
-                /* Decay the orphan's orbit on the dynamical-friction clock.
-                 * Contini et al. (2014) follow an orphan's position via the most
-                 * bound particle of its last identified substructure; SAGE has no
-                 * particle data (MostBoundID is only an identifier, and for
-                 * consistent-trees input it is a halo id), so the frozen position
-                 * would leave the orbit static and the orphan would never sink.
-                 * Their own eq. 1 is the Chandrasekhar time, t_merge ~ r^2 at
-                 * fixed satellite mass, so the radius shrinks as the square root
-                 * of the fraction of the clock still left.  Tying the orbit to the
-                 * clock SAGE already integrates leaves merger timing untouched. */
-                if(run_params->LetOrphansLive > 0 && galaxies[p].Type == 2) {
-                    if(mergtime_before > 0.0 && galaxies[p].MergTime > 0.0) {
-                        galaxies[p].OrbitRadius *= sqrt(galaxies[p].MergTime / mergtime_before);
-                    } else {
-                        galaxies[p].OrbitRadius = 0.0;
-                    }
-                }
 
                 // only consider mergers or disruption for halo-to-baryonic mass ratios below the threshold
                 // or for satellites with no baryonic mass (they don't grow and will otherwise hang around forever)
@@ -602,31 +513,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                         const double event_time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
                         // disruption has occurred!
                         if(galaxies[p].MergTime > 0.0) {
-                            /* LetOrphansLive == 1 replaces the unconditional
-                             * destruction of an orphan with the Contini et al.
-                             * (2014) model Disr. survival test plus their
-                             * tidal-radius stripping.  Their prescription acts
-                             * on orphans only, so type 1 satellites keep the
-                             * original behaviour.  A survivor keeps its
-                             * reservoirs and is carried to the next snapshot,
-                             * where the dynamical-friction clock -- still
-                             * running -- eventually merges it instead. */
-                            if(run_params->LetOrphansLive > 0 && galaxies[p].Type == 2) {
-                                /* Contini et al. (2014) Sec. 3.1: survive unless the
-                                 * halo is denser than the satellite at pericentre. */
-                                if(contini14_disruption_model(centralgal, merger_centralgal, p,
-                                                              event_time, galaxies, run_params) == 0) {
-                                    /* No merger event to record for a survivor. */
-                                    galaxies[p].mergeIntoID = -1;
-                                    /* The orphan already has Mvir = 0; clearing
-                                     * deltaMvir stops the currentMvir ramp above
-                                     * from resurrecting its pre-orphan halo mass
-                                     * in later snapshots. */
-                                    galaxies[p].deltaMvir = 0.0;
-                                }
-                            } else {
-                                disrupt_satellite_to_ICS(merger_centralgal, p, event_time, galaxies, run_params);
-                            }
+                            disrupt_satellite_to_ICS(merger_centralgal, p, event_time, galaxies, run_params);
                         } else {
                             // a merger has occurred!
                             // Map adaptive step to fixed STEPS bins for SFR arrays

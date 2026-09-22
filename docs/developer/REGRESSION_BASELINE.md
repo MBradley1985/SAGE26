@@ -8,7 +8,7 @@ committed baseline exactly — every HDF5 dataset bit-identical.
 
 | System | Entry point | Build required | What it hashes |
 |---|---|---|---|
-| Dataset-level baseline (primary) | `make regression` (rebuilds serially itself) or `tests/regression_baseline.sh` against an existing serial build | serial (`make clean && make USE-MPI=`) | SHA-256 of every dataset in every `model*.hdf5` (~5,444 datasets for mini-Millennium), plus file-level hashes and smoke statistics |
+| Dataset-level baseline (primary) | `make regression` or `tests/regression_baseline.sh` | serial (`make clean && make USE-MPI=`) | SHA-256 of every dataset in every `model*.hdf5` (~5,444 datasets for mini-Millennium), plus file-level hashes and smoke statistics |
 | Binary checksum benchmark | `tests/run_benchmark_test.sh verify` | MPI (`make clean && make`) | SHA-256 of the 64 `sage_binary` output files from `tests/benchmark/benchmark.par` |
 
 The dataset-level system is the release gate. The binary benchmark
@@ -16,11 +16,6 @@ additionally covers the `sage_binary` output writer, which the HDF5 baseline
 does not exercise.
 
 ## Everyday usage
-
-`make regression` cleans and rebuilds serially on its own, so it works whatever
-configuration the tree is in; it leaves a serial build behind, so run plain
-`make` afterwards if you want MPI back. Calling the harness directly needs a
-serial build already in place -- it refuses an MPI-linked binary.
 
 ```bash
 # one-time (or after intentional physics changes): capture the baseline

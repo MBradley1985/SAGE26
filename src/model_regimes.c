@@ -50,14 +50,6 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
     for(int p = 0; p < ngal; p++) {
         if(galaxies[p].mergeType > 0) continue;
 
-        /* An orphan has Mvir = 0 because its subhalo is gone, which would drive
-         * the criterion below to the CGM regime for every orphan regardless of
-         * the halo it actually had. Its Rvir, Vvir and Vmax are already frozen
-         * at the last snapshot the subhalo was resolved; freeze the regime with
-         * them. Only reachable with LetOrphansLive == 1, since otherwise an
-         * orphan never survives long enough for its regime to be re-evaluated. */
-        if(run_params->LetOrphansLive > 0 && galaxies[p].Type == 2) continue;
-
         // Convert Mvir to physical units (Msun)
         // Mvir is stored in units of 10^10 Msun/h
         const double Mshock = MSUN_TO_CODE_MASS(run_params->MShockMsun, run_params->Hubble_h);  // Msun
