@@ -49,13 +49,35 @@ VANILLA_DIR = './output/microuchuu_vanilla/'
 # ICS statistic in this module.  MINIUCHUU_DIR shares microUchuu's particle mass
 # and buys cluster statistics, not resolution.
 MILLENNIUM_DIR = './output/millennium/'
-# Orphan-treatment experiment: identical runs differing only in LetOrphansLive.
-# gate_off = orphans destroyed into the ICS the snapshot their subhalo is lost
-#            (the published SAGE16/SAGE26 behaviour).
-# gate_on  = Contini et al. (2014) survival gate + tidal-radius stripping, with
-#            Henriques & Thomas (2010) orbital decay, so orphans live on.
-GATE_OFF_DIR = './output/microuchuu_gate_off/'
-GATE_ON_DIR  = './output/microuchuu_gate_on/'
+
+# ThresholdSatDisruption experiment: identical microUchuu runs differing only in
+# that parameter, which sets the Mvir-to-baryonic mass ratio below which a
+# satellite is merged or disrupted (core_build_model.c).  1.0 is the published
+# value.  Ordered low to high so the colour ramp reads with the parameter.
+THRESHOLD_RUNS = (
+    ('0.0', './output/microuchuu_thresh_0.0/'),
+    ('0.5', './output/microuchuu_thresh_0.5/'),
+    ('1.0', './output/microuchuu_thresh_1.0/'),
+    ('5.0', './output/microuchuu_thresh_5.0/'),
+)
+# Sequential ramp: the parameter is ordered, so the colours should be too.
+# Starts at a mid tone rather than near-white so every curve is legible on paper.
+THRESHOLD_COLOURS = {'0.0': '#9ecae1', '0.5': '#4292c6', '1.0': '#08519c', '5.0': '#f16913'}
+THRESHOLD_FIDUCIAL = '1.0'
+
+# MergerTimeFactor experiment.  This is the parameter that actually moves stellar
+# mass between the ICS and the BCG: core_build_model.c sends a satellite's stars
+# to the ICS when its subhalo is lost while MergTime > 0, and onto the central
+# once the clock has expired, so shortening the clock moves mass to the BCG.
+# 2.0 is the published value, hardcoded before it was promoted to a parameter.
+MERGERTIME_RUNS = (
+    ('0.25', './output/microuchuu_mtf_0.25/'),
+    ('0.5',  './output/microuchuu_mtf_0.5/'),
+    ('1.0',  './output/microuchuu_mtf_1.0/'),
+    ('2.0',  './output/microuchuu_mtf_2.0/'),
+)
+MERGERTIME_COLOURS = {'0.25': '#9ecae1', '0.5': '#4292c6', '1.0': '#08519c', '2.0': '#f16913'}
+MERGERTIME_FIDUCIAL = '2.0'
 MINIUCHUU_DIR  = './output/miniuchuu/'
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
@@ -293,81 +315,6 @@ def _snap_nearest_z(redshifts, target_z):
 
 
 
-# --------------- Final-snapshot guard ---------------
-#
-# The last snapshot of a consistent-trees run is NOT safe for any analysis that
-# touches central/satellite assignment or FOF grouping.
-#
-# src/io/ctrees_utils.c collapses the FOF structure of the final snapshot: for
-# every forest holding more than one FOF group at z=0 it finds the most massive
-# one and rewrites every other z=0 central into a subhalo of it (pid and upid are
-# overwritten; MostBoundID has its sign flipped as a marker).  SAGE needs one
-# root FOF per forest to walk the tree, so this is deliberate -- but it means the
-# z=0 grouping is not the halo catalogue's.
-#
-# In microUchuu it shows up as:
-#     snap 48  satellite fraction 0.113   FOF members reach 1.3 Rvir
-#     snap 49  satellite fraction 0.209   FOF members reach 15  Rvir
-# while the consistent-trees file itself reports a subhalo fraction of 0.116 at
-# snap 49, continuing a smooth decline from 0.139 at snap 40.  The number of z=0
-# centrals SAGE writes (440,651) is exactly the forest count, which is the
-# signature of the collapse.
-#
-# Millennium (lhalo_binary) is unaffected -- 0.131 through its final snapshot --
-# so the guard tests each run rather than assuming.  Stepping back one snapshot
-# costs dz = 0.022 in microUchuu, which is cosmologically nothing.
-
-_ANALYSIS_SNAP_CACHE = {}
-
-# A final snapshot whose satellite fraction exceeds the previous one by more than
-# this factor is taken to be collapsed.  The real jump is 1.85x and ordinary
-# evolution between adjacent snapshots is well under a per cent, so anything in
-# roughly 1.2--1.5 separates them; 1.3 sits in the middle of that gap.
-_SAT_FRACTION_JUMP = 1.3
-
-
-def analysis_snapshot(directory):
-    """
-    The last snapshot of *directory* that is safe for z=0 analysis.
-
-    Returns the final snapshot number, or the one before it when the final
-    snapshot's satellite fraction jumps by more than _SAT_FRACTION_JUMP -- the
-    signature of the ctrees forest collapse described above.  Returns None if the
-    directory holds no readable model files.
-    """
-    if directory in _ANALYSIS_SNAP_CACHE:
-        return _ANALYSIS_SNAP_CACHE[directory]
-
-    files = _find_model_files_early(directory)
-    if not files:
-        _ANALYSIS_SNAP_CACHE[directory] = None
-        return None
-
-    snap = None
-    try:
-        with h5.File(files[0], 'r') as f:
-            last = int(f['Header/Simulation'].attrs['LastSnapshotNr'])
-            fracs = {}
-            for s in (last - 1, last):
-                key = f'Snap_{s}'
-                if key in f and 'Type' in f[key]:
-                    t = np.asarray(f[key]['Type'])
-                    fracs[s] = float(np.mean(t == 1)) if t.size else np.nan
-        snap = last
-        if (len(fracs) == 2 and np.isfinite(list(fracs.values())).all()
-                and fracs[last - 1] > 0
-                and fracs[last] / fracs[last - 1] > _SAT_FRACTION_JUMP):
-            snap = last - 1
-            print(f'  {directory}: final snapshot {last} has satellite fraction '
-                  f'{fracs[last]:.3f} vs {fracs[last - 1]:.3f} at {last - 1} -- '
-                  f'ctrees FOF collapse, using Snap_{snap} for z=0.')
-    except Exception as e:
-        print(f'Warning: could not check final snapshot in {directory}: {e}')
-
-    _ANALYSIS_SNAP_CACHE[directory] = snap
-    return snap
-
-
 # --------------- Primary simulation parameters (from HDF5) ---------------
 
 _primary_hdr = _read_sim_header(PRIMARY_DIR)
@@ -381,15 +328,12 @@ if _primary_hdr is not None:
     OMEGA_L          = _primary_hdr['omega_lambda']
     BARYON_FRAC      = _primary_hdr['baryon_frac']
     OMEGA_B          = BARYON_FRAC * OMEGA_M
-    _PRIMARY_Z0_SNAP = analysis_snapshot(PRIMARY_DIR)
-    if _PRIMARY_Z0_SNAP is None:
-        _PRIMARY_Z0_SNAP = _primary_hdr['last_snap_nr']
-    SNAPSHOT         = f"Snap_{_PRIMARY_Z0_SNAP}"
+    SNAPSHOT         = f"Snap_{_primary_hdr['last_snap_nr']}"
     REDSHIFTS        = _primary_hdr['redshifts']
     OUTPUT_DIR       = os.path.join(PRIMARY_DIR, 'ICS_plots/')
 
     # Snapshot aliases for key redshifts (derived from the redshift table)
-    SNAP_Z0  = _PRIMARY_Z0_SNAP     # guarded, not _snap_for_z(REDSHIFTS, 0.0)
+    SNAP_Z0  = _snap_for_z(REDSHIFTS, 0.0)
     SNAP_Z1  = _snap_for_z(REDSHIFTS, 1.0)
     SNAP_Z2  = _snap_for_z(REDSHIFTS, 2.0)
     SNAP_Z3  = _snap_for_z(REDSHIFTS, 3.0)
@@ -1081,9 +1025,7 @@ def halo_ics_table(directory, verbose=True):
             print(f'  No model files in {directory}, skipping.')
         return None
     conv = hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h']
-    snap = analysis_snapshot(directory)
-    if snap is None:
-        snap = hdr['last_snap_nr']
+    snap = hdr['last_snap_nr']
     props = ['StellarMass', 'IntraClusterStars', 'MetalsIntraClusterStars',
              'Mvir', 'Type', 'CentralGalaxyIndex']
     data = read_snap_from_files(find_model_files(directory),
@@ -1147,398 +1089,112 @@ def _stacked(x, num, den, bins, min_count=MIN_COUNT):
     return 0.5 * (bins[:-1] + bins[1:]), out
 
 
-def plot_1_icl_fraction_and_bcg_ratio(primary, vanilla):
-    """
-    f_ICS and M_ICL/M_BCG against halo mass, microUchuu vs Millennium.
 
-    Left panel is the quantity observers usually quote and is the *weak* test:
-    the model applies no surface-brightness limit, so it is expected to sit at or
-    above the data.  Right panel is the discriminating one, because the ICL and
-    the BCG share the same mass budget -- every star wrongly disrupted is counted
-    twice over, once as ICL excess and once as BCG deficit.
-
-    Millennium is the resolution control: same physics, 2.6x coarser particle
-    mass.  If the two lines lie on top of each other the mechanism is not a
-    resolution effect.
-    """
-    print('Plot 1: ICL fraction and ICL-to-BCG ratio vs halo mass')
-
-    micro = _halo_ics_from_data(primary)
-    mill  = halo_ics_table(MILLENNIUM_DIR)
-
-    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.6))
-    ax1, ax2 = axes
-
-    for tab, colour, label, ls in (
-            (micro, 'tab:blue',   r'microUchuu ($m_{\rm p}=3.3\times10^{8}$)', '-'),
-            (mill,  'tab:orange', r'Millennium ($m_{\rm p}=8.6\times10^{8}$)', '--')):
-        if tab is None:
-            continue
-        lm = np.log10(tab['Mvir'])
-        tot = tab['ICS'] + tab['Stars']
-        ok = (tot > 0) & (tab['ICS'] > 0)
-        plot_binned_median_1sigma(ax1, lm[ok], (tab['ICS'] / tot)[ok], _ICL_BINS,
-                                  color=colour, label=label, ls=ls,
-                                  zorder_line=Z_MODEL_LINE, zorder_fill=Z_MODEL_BAND)
-        c, st = _stacked(lm[ok], tab['ICS'][ok], tot[ok], _ICL_BINS)
-        ax1.plot(c, st, color=colour, ls=':', lw=1.6, zorder=Z_MODEL_LINE,
-                 label=(r'stacked $\sum M_{\rm ICL}/\sum M_{\star}$' if ls == '-' else None))
-
-        okb = (tab['BCG'] > 0) & (tab['ICS'] > 0)
-        plot_binned_median_1sigma(ax2, lm[okb], (tab['ICS'] / tab['BCG'])[okb], _ICL_BINS,
-                                  color=colour, label=label, ls=ls,
-                                  zorder_line=Z_MODEL_LINE, zorder_fill=Z_MODEL_BAND)
-
-    # --- observations, left panel ---
-    for scale, mrange, colour, name in (
-            ('cluster', _CLUSTER_MASS_RANGE, '0.35', 'clusters'),
-            ('group',   _GROUP_MASS_RANGE,   '0.60', 'groups')):
-        f = _obs_fracs(scale)
-        if f.size:
-            ax1.fill_between(mrange, f.min(), f.max(), color=colour, alpha=0.25,
-                             lw=0, zorder=Z_OBS,
-                             label=f'observed {name} ({f.size} pts, $z<0.3$)')
-            ax1.plot(mrange, [np.median(f)] * 2, color=colour, lw=1.4, zorder=Z_OBS)
-
-    # --- right panel: indicative range only ---
-    r = _INDICATIVE_RANGES['M_ICL/M_BCG']
-    ax2.fill_between(_CLUSTER_MASS_RANGE, r['lo'], r['hi'], color='0.35', alpha=0.25,
-                     lw=0, zorder=Z_OBS,
-                     label=_tex_safe(f"{r['source']} (indicative)"))
-
-    ax1.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
-    ax1.set_ylabel(r'$f_{\rm ICL} = M_{\rm ICL}/(M_{\rm ICL}+M_{\star})$')
-    ax1.set_ylim(0, 0.65)
-    ax2.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
-    ax2.set_ylabel(r'$M_{\rm ICL}/M_{\rm BCG}$')
-    ax2.set_yscale('log')
-    ax2.set_ylim(0.05, 30)
-    for ax in axes:
-        ax.set_xlim(11.5, 15.0)
-        _standard_legend(ax, loc='upper left', fontsize=8)
-    fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'ICL_fraction_and_BCG_ratio' + OUTPUT_FORMAT))
-
-
-def plot_2_icl_metallicity(primary, vanilla):
-    """
-    ICL metallicity against halo mass -- the control on the mechanism.
-
-    Where the disrupted stars are *put* does not change what they are made of, so
-    if the ICS is built from the right galaxies this should already agree with
-    observations even while the mass budget is wrong.  It is also the constraint
-    that any correction has to survive: moving the metal-rich massive satellites
-    into the BCG must pull this curve down.
-    """
-    print('Plot 2: ICL metallicity vs halo mass')
-
-    micro = _halo_ics_from_data(primary)
-    mill  = halo_ics_table(MILLENNIUM_DIR)
-
-    fig, ax = plt.subplots(figsize=(6.2, 4.6))
-    for tab, colour, label, ls in (
-            (micro, 'tab:blue',   'microUchuu', '-'),
-            (mill,  'tab:orange', 'Millennium', '--')):
-        if tab is None:
-            continue
-        ok = tab['ICS'] > 0
-        z = (tab['MetalsICS'][ok] / tab['ICS'][ok]) / Z_SUN
-        plot_binned_median_1sigma(ax, np.log10(tab['Mvir'][ok]), z, _ICL_BINS,
-                                  color=colour, label=label, ls=ls,
-                                  zorder_line=Z_MODEL_LINE, zorder_fill=Z_MODEL_BAND)
-
-    r = _INDICATIVE_RANGES['Z_ICS']
-    ax.fill_between(_CLUSTER_MASS_RANGE, r['lo'], r['hi'], color='0.35', alpha=0.25,
-                    lw=0, zorder=Z_OBS,
-                    label=_tex_safe(f"{r['source']} (indicative)"))
-    ax.axhline(1.0, color='0.5', lw=0.8, ls=':', zorder=1)
-
-    ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
-    ax.set_ylabel(r'$Z_{\rm ICL}/Z_\odot$')
-    ax.set_xlim(11.5, 15.0)
-    ax.set_ylim(0, 1.4)
-    _standard_legend(ax, loc='lower right', fontsize=8)
-    fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'ICL_metallicity' + OUTPUT_FORMAT))
-
-
-def plot_3_bcg_halo_mass(primary, vanilla):
-    """
-    BCG stellar mass against halo mass, against Kravtsov+18.
-
-    The other half of the coupled prediction in Plot 1: if the ICL is too heavy
-    because satellites that had merged were disrupted instead, the BCGs must be
-    correspondingly too light.  The dotted line adds the ICL back onto the BCG --
-    the ceiling a correction could reach if *every* disrupted star were instead
-    delivered to the central, which brackets the effect from above.
-    """
-    print('Plot 3: BCG stellar mass vs halo mass')
-
-    micro = _halo_ics_from_data(primary)
-    obs = load_bcg_halo_observations()
-
-    fig, ax = plt.subplots(figsize=(6.2, 4.6))
-    lm = np.log10(micro['Mvir'])
-    ok = micro['BCG'] > 0
-    plot_binned_median_1sigma(ax, lm[ok], np.log10(micro['BCG'][ok]), _ICL_BINS,
-                              color='tab:blue', label='microUchuu BCG',
-                              zorder_line=Z_MODEL_LINE, zorder_fill=Z_MODEL_BAND)
-    okc = (micro['BCG'] + micro['ICS']) > 0
-    c, pct = binned_percentiles(lm[okc], np.log10((micro['BCG'] + micro['ICS'])[okc]),
-                                _ICL_BINS, percentiles=(50,))
-    ax.plot(c, pct[0], color='tab:blue', ls=':', lw=1.8, zorder=Z_MODEL_LINE,
-            label=r'BCG $+$ all ICL (upper bound)')
-
-    if obs is not None:
-        ax.plot(obs['mvir'], obs['mstar'], 'o', ms=4.5, color='0.25',
-                mfc='none', mew=1.0, zorder=Z_OBS, label='Kravtsov+18')
-
-    ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
-    ax.set_ylabel(r'$\log_{10}(M_{\star,\rm BCG}/{\rm M}_\odot)$')
-    ax.set_xlim(11.5, 15.0)
-    ax.set_ylim(9.0, 12.5)
-    _standard_legend(ax, loc='upper left', fontsize=8)
-    fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'BCG_halo_mass' + OUTPUT_FORMAT))
-
-
-
-# ========================== ORPHAN GATE EXPERIMENT ==========================
+# ========================== THRESHOLD EXPERIMENT ==========================
 #
-# Two runs of the same binary on the same trees, differing only in
-# LetOrphansLive.  Everything below is a direct off/on comparison, so any
-# difference is the orphan treatment and nothing else.
+# ThresholdSatDisruption gates the merger/disruption test in
+# core_build_model.c:
 #
-# Benchmarks used on these panels:
-#   Contini et al. (2014), MNRAS 437, 3787 -- a semi-analytic ICL model:
-#       f_ICL = 0.10-0.40 with large scatter and NO halo-mass dependence;
-#       major contributors are satellites with M* >~ 10^10.5 Msun;
-#       ICL forms late (below z ~ 1); bulk of ICL stars subsolar in metallicity;
-#       f_ICL is 30-40 per cent larger when the particle mass is 10x coarser.
-#   Observations: the f_ICL compilation already in this module.
-
-CONTINI14_FICL = (0.10, 0.40)   # model range, all halo masses
-
-_GATE_STYLE = {
-    'gate_off': dict(color='tab:red',  ls='-',  label=r'orphans destroyed (\texttt{LetOrphansLive=0})'),
-    'gate_on':  dict(color='tab:green', ls='--', label=r'orphans survive (\texttt{LetOrphansLive=1})'),
-}
+#     currentMvir = Mvir - deltaMvir * (1 - (step+1)/steps)
+#     if (galaxyBaryons == 0 || currentMvir/galaxyBaryons <= ThresholdSatDisruption)
+#
+# For a type 1 satellite this decides whether the galaxy is destroyed at all.
+# For an orphan it does not: SAGE sets an orphan's Mvir to 0 and deltaMvir to
+# -Mvir_prev, so currentMvir ramps to exactly 0 on the final substep and the
+# test passes for any positive threshold.  Varying the parameter therefore
+# changes only *which substep* an orphan's event fires on, which shifts the
+# MergTime > 0 test (disrupt to ICS) against MergTime <= 0 (merge onto the
+# central) by at most one snapshot's deltaT.  These two figures measure how much
+# of a lever that actually is.
 
 
-def _gate_tables(snap=None):
-    """Per-halo ICL/BCG tables for the two gate runs, keyed by tag."""
-    out = {}
-    for tag, d in (('gate_off', GATE_OFF_DIR), ('gate_on', GATE_ON_DIR)):
-        if not model_files_exist(d):
-            print(f'  {d} missing, skipping {tag}')
+def _sweep_tables(runs):
+    """Per-halo tables for each run in a parameter sweep that exists on disk."""
+    out = []
+    for value, directory in runs:
+        if not model_files_exist(directory):
+            print(f'  {directory} missing, skipping {value}')
             continue
-        if snap is None:
-            out[tag] = halo_ics_table(d)
-        else:
-            hdr = _read_sim_header(d)
-            conv = hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h']
-            data = read_snap_from_files(find_model_files(d), f'Snap_{snap}',
-                                        ['StellarMass', 'IntraClusterStars',
-                                         'MetalsIntraClusterStars', 'Mvir',
-                                         'Type', 'CentralGalaxyIndex'],
-                                        mass_convert=conv)
-            out[tag] = _halo_ics_from_data(data) if data else None
+        tab = halo_ics_table(directory)
+        if tab is not None:
+            out.append((value, tab))
     return out
 
 
-def plot_4_gate_icl_fraction(*_):
+def _plot_sweep(runs, colours, fiducial, param, symbol, quantity, filename):
     """
-    f_ICS against halo mass, orphans destroyed vs orphans surviving.
+    One parameter sweep, one quantity, median with a 16-84 per cent band.
 
-    f_ICS is M_ICS divided by every star in the halo -- central, satellites and
-    (when the gate is on) surviving orphans.  The model applies no
-    surface-brightness limit, so it should sit at or above a limited measurement
-    rather than on top of one.
+    *quantity* is 'fics' for M_ICS over every star in the FOF halo, or 'bcg' for
+    the central's stellar mass.  Both are drawn against halo mass on the shared
+    _ICL_BINS, with the fiducial run drawn heavier so it reads out of the set.
     """
-    print('Plot 4: f_ICS vs halo mass, orphan gate off vs on')
-    tabs = _gate_tables()
+    tabs = _sweep_tables(runs)
+    if not tabs:
+        print(f'  No runs found for {param}; nothing to plot.')
+        return
+
     fig, ax = plt.subplots(figsize=(6.6, 4.8))
-    for tag, t in tabs.items():
-        if t is None:
-            continue
-        lm = np.log10(t['Mvir']); tot = t['ICS'] + t['Stars']
-        ok = (tot > 0) & (t['ICS'] > 0)
-        st = _GATE_STYLE[tag]
-        plot_binned_median_1sigma(ax, lm[ok], (t['ICS'] / tot)[ok], _ICL_BINS,
-                                  color=st['color'], ls=st['ls'], label=st['label'],
-                                  zorder_line=Z_MODEL_LINE, zorder_fill=Z_MODEL_BAND)
-        c, stk = _stacked(lm[ok], t['ICS'][ok], tot[ok], _ICL_BINS)
-        ax.plot(c, stk, color=st['color'], ls=':', lw=1.5, zorder=Z_MODEL_LINE)
+    for value, t in tabs:
+        if quantity == 'fics':
+            total = t['ICS'] + t['Stars']
+            ok = (total > 0) & (t['Mvir'] > 0)
+            y = (t['ICS'] / total)[ok]
+        else:
+            ok = (t['BCG'] > 0) & (t['Mvir'] > 0)
+            y = np.log10(t['BCG'][ok])
+        is_fid = (value == fiducial)
+        plot_binned_median_1sigma(
+            ax, np.log10(t['Mvir'][ok]), y, _ICL_BINS,
+            color=colours[value],
+            label=rf'${symbol} = {value}$' + (' (fiducial)' if is_fid else ''),
+            lw=3.2 if is_fid else 2.0, alpha=0.18,
+            zorder_line=Z_MODEL_LINE + (1 if is_fid else 0),
+            zorder_fill=Z_MODEL_BAND)
 
-    ax.fill_between([11.5, 15.0], *CONTINI14_FICL, color='tab:blue', alpha=0.13, lw=0,
-                    zorder=1, label=r'Contini+14 model (0.10--0.40, no $M_{\rm halo}$ trend)')
-    for scale, mrange, colour, name in (('cluster', _CLUSTER_MASS_RANGE, '0.35', 'clusters'),
-                                        ('group',   _GROUP_MASS_RANGE,   '0.60', 'groups')):
-        f = _obs_fracs(scale)
-        if f.size:
-            ax.fill_between(mrange, f.min(), f.max(), color=colour, alpha=0.3, lw=0,
-                            zorder=Z_OBS, label=f'observed {name} ($z<0.3$)')
     ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
-    ax.set_ylabel(r'$f_{\rm ICS} = M_{\rm ICS}/M_{\star,\rm halo}$')
-    ax.set_xlim(11.5, 15.0); ax.set_ylim(0, 0.7)
-    _standard_legend(ax, loc='upper left', fontsize=7.5)
+    if quantity == 'fics':
+        ax.set_ylabel(r'$f_{\rm ICS} = M_{\rm ICS}/M_{\star,\rm halo}$')
+        ax.set_ylim(0, 0.8)
+    else:
+        ax.set_ylabel(r'$\log_{10}(M_{\star,\rm BCG}/{\rm M}_\odot)$')
+        ax.set_ylim(9.0, 12.5)
+    ax.set_xlim(11.5, 15.0)
+    _standard_legend(ax, loc='upper left', fontsize=8, title=param)
     fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'gate_fICS_vs_halomass' + OUTPUT_FORMAT))
+    save_figure(fig, os.path.join(OUTPUT_DIR, filename + OUTPUT_FORMAT))
 
 
-def plot_5_gate_icl_bcg_ratio(*_):
-    """M_ICL/M_BCG against halo mass for both gate settings."""
-    print('Plot 5: M_ICL/M_BCG vs halo mass, orphan gate off vs on')
-    tabs = _gate_tables()
-    fig, ax = plt.subplots(figsize=(6.6, 4.8))
-    for tag, t in tabs.items():
-        if t is None:
-            continue
-        lm = np.log10(t['Mvir']); ok = (t['BCG'] > 0) & (t['ICS'] > 0)
-        st = _GATE_STYLE[tag]
-        plot_binned_median_1sigma(ax, lm[ok], (t['ICS'] / t['BCG'])[ok], _ICL_BINS,
-                                  color=st['color'], ls=st['ls'], label=st['label'],
-                                  zorder_line=Z_MODEL_LINE, zorder_fill=Z_MODEL_BAND)
-    r = _INDICATIVE_RANGES['M_ICL/M_BCG']
-    ax.fill_between(_CLUSTER_MASS_RANGE, r['lo'], r['hi'], color='0.35', alpha=0.3, lw=0,
-                    zorder=Z_OBS, label=_tex_safe(f"{r['source']} (indicative)"))
-    ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
-    ax.set_ylabel(r'$M_{\rm ICL}/M_{\rm BCG}$')
-    ax.set_yscale('log'); ax.set_xlim(11.5, 15.0); ax.set_ylim(0.01, 30)
-    _standard_legend(ax, loc='upper left', fontsize=7.5)
-    fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'gate_ICL_BCG_ratio' + OUTPUT_FORMAT))
+def plot_1_threshold_ics_fraction(*_):
+    """f_ICS against halo mass for each ThresholdSatDisruption value."""
+    print('Plot 1: f_ICS vs halo mass for each ThresholdSatDisruption')
+    _plot_sweep(THRESHOLD_RUNS, THRESHOLD_COLOURS, THRESHOLD_FIDUCIAL,
+                'ThresholdSatDisruption', r'\theta', 'fics',
+                'threshold_fICS_vs_halomass')
 
 
-def plot_6_gate_icl_metallicity(*_):
-    """ICL metallicity against halo mass for both gate settings."""
-    print('Plot 6: ICL metallicity vs halo mass, orphan gate off vs on')
-    tabs = _gate_tables()
-    fig, ax = plt.subplots(figsize=(6.6, 4.8))
-    for tag, t in tabs.items():
-        if t is None:
-            continue
-        ok = t['ICS'] > 0
-        st = _GATE_STYLE[tag]
-        plot_binned_median_1sigma(ax, np.log10(t['Mvir'][ok]),
-                                  (t['MetalsICS'][ok] / t['ICS'][ok]) / Z_SUN, _ICL_BINS,
-                                  color=st['color'], ls=st['ls'], label=st['label'],
-                                  zorder_line=Z_MODEL_LINE, zorder_fill=Z_MODEL_BAND)
-    ax.axhline(1.0, color='0.4', lw=1.0, ls=':', zorder=1)
-    ax.text(11.6, 1.02, r'solar', fontsize=7, color='0.4')
-    ax.axhspan(0.0, 1.0, color='tab:blue', alpha=0.10, lw=0, zorder=0,
-               label=r'Contini+14: bulk of ICL stars subsolar')
-    ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
-    ax.set_ylabel(r'$Z_{\rm ICL}/Z_\odot$')
-    ax.set_xlim(11.5, 15.0); ax.set_ylim(0, 1.4)
-    _standard_legend(ax, loc='lower right', fontsize=7.5)
-    fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'gate_ICL_metallicity' + OUTPUT_FORMAT))
+def plot_2_threshold_bcg_mass(*_):
+    """BCG stellar mass against halo mass for each ThresholdSatDisruption value."""
+    print('Plot 2: BCG stellar mass vs halo mass for each ThresholdSatDisruption')
+    _plot_sweep(THRESHOLD_RUNS, THRESHOLD_COLOURS, THRESHOLD_FIDUCIAL,
+                'ThresholdSatDisruption', r'\theta', 'bcg',
+                'threshold_BCG_vs_halomass')
 
 
-def plot_7_gate_bcg_halo_mass(*_):
-    """BCG stellar mass against halo mass for both gate settings, vs Kravtsov+18."""
-    print('Plot 7: BCG stellar mass vs halo mass, orphan gate off vs on')
-    tabs = _gate_tables()
-    obs = load_bcg_halo_observations()
-    fig, ax = plt.subplots(figsize=(6.6, 4.8))
-    for tag, t in tabs.items():
-        if t is None:
-            continue
-        lm = np.log10(t['Mvir']); ok = t['BCG'] > 0
-        st = _GATE_STYLE[tag]
-        plot_binned_median_1sigma(ax, lm[ok], np.log10(t['BCG'][ok]), _ICL_BINS,
-                                  color=st['color'], ls=st['ls'], label=st['label'],
-                                  zorder_line=Z_MODEL_LINE, zorder_fill=Z_MODEL_BAND)
-    if obs is not None:
-        ax.plot(obs['mvir'], obs['mstar'], 'o', ms=4.5, color='0.25', mfc='none',
-                mew=1.0, zorder=Z_OBS, label='Kravtsov+18')
-    ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
-    ax.set_ylabel(r'$\log_{10}(M_{\star,\rm BCG}/{\rm M}_\odot)$')
-    ax.set_xlim(11.5, 15.0); ax.set_ylim(9.0, 12.5)
-    _standard_legend(ax, loc='upper left', fontsize=7.5)
-    fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'gate_BCG_halo_mass' + OUTPUT_FORMAT))
+def plot_3_mergertime_ics_fraction(*_):
+    """f_ICS against halo mass for each MergerTimeFactor value."""
+    print('Plot 3: f_ICS vs halo mass for each MergerTimeFactor')
+    _plot_sweep(MERGERTIME_RUNS, MERGERTIME_COLOURS, MERGERTIME_FIDUCIAL,
+                'MergerTimeFactor', r'\alpha', 'fics',
+                'mergertime_fICS_vs_halomass')
 
 
-def plot_8_gate_stellar_mass_function(*_):
-    """
-    Stellar mass function, orphans destroyed vs orphans surviving.
-
-    This is the check most likely to break the gate: every orphan that survives
-    is a galaxy that did not exist before, so it enters the SMF.  Left panel is
-    all galaxies, right panel is non-centrals only, where the effect concentrates.
-    """
-    print('Plot 8: stellar mass function, orphan gate off vs on')
-    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.6))
-    bins = np.arange(7.5, 12.6, 0.2)
-    cen = 0.5 * (bins[:-1] + bins[1:])
-    for tag, d in (('gate_off', GATE_OFF_DIR), ('gate_on', GATE_ON_DIR)):
-        if not model_files_exist(d):
-            continue
-        hdr = _read_sim_header(d)
-        conv = hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h']
-        vol = (hdr['box_size'] / hdr['hubble_h'])**3 * hdr['volume_fraction']
-        snap = analysis_snapshot(d) or hdr['last_snap_nr']
-        data = read_snap_from_files(find_model_files(d), f'Snap_{snap}',
-                                    ['StellarMass', 'Type'], mass_convert=conv)
-        sm = data['StellarMass']; T = data['Type']
-        st = _GATE_STYLE[tag]
-        for ax, mask, ttl in ((axes[0], sm > 0, 'all galaxies'),
-                              (axes[1], (sm > 0) & (T != 0), 'satellites and orphans')):
-            n, _ = np.histogram(np.log10(sm[mask]), bins=bins)
-            phi = n / vol / 0.2
-            good = n > 0
-            ax.plot(cen[good], np.log10(phi[good]), color=st['color'], ls=st['ls'],
-                    lw=2.2, label=st['label'], zorder=Z_MODEL_LINE)
-            ax.set_title(ttl, fontsize=9)
-    for ax in axes:
-        ax.set_xlabel(r'$\log_{10}(M_\star/{\rm M}_\odot)$')
-        ax.set_ylabel(r'$\log_{10}(\phi\,/\,{\rm Mpc^{-3}\,dex^{-1}})$')
-        ax.set_xlim(7.5, 12.5); ax.set_ylim(-6, 0.5)
-        _standard_legend(ax, loc='lower left', fontsize=7.5)
-    fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'gate_stellar_mass_function' + OUTPUT_FORMAT))
-
-
-def plot_9_gate_icl_evolution(*_):
-    """
-    f_ICS against redshift for cluster-scale haloes, both gate settings.
-
-    Contini+14 find the ICL forms late, below z ~ 1.  The observations grow by
-    roughly a factor 8 between z ~ 1 and z ~ 0, though surface-brightness dimming
-    biases the high-redshift points low, so the comparison is indicative.
-    """
-    print('Plot 9: f_ICS vs redshift, orphan gate off vs on')
-    snaps = [30, 40, 45, 48]
-    fig, ax = plt.subplots(figsize=(6.6, 4.8))
-    for tag in ('gate_off', 'gate_on'):
-        zs, fs = [], []
-        for sn in snaps:
-            tabs = _gate_tables(snap=sn)
-            t = tabs.get(tag)
-            if t is None:
-                continue
-            w = (t['Mvir'] > 10**13.5) & (t['ICS'] > 0)
-            if w.sum() < 3:
-                continue
-            zs.append(REDSHIFTS[sn])
-            fs.append(t['ICS'][w].sum() / (t['ICS'][w].sum() + t['Stars'][w].sum()))
-        st = _GATE_STYLE[tag]
-        ax.plot(zs, fs, 'o-', color=st['color'], ls=st['ls'], lw=2.2, ms=6,
-                label=st['label'] + r' ($M_{\rm vir}>10^{13.5}$)', zorder=Z_MODEL_LINE)
-    for o in load_icl_fraction_observations('cluster'):
-        ax.plot(o['z'], o['f'], 'o', ms=4, mfc='none', color='0.4',
-                mew=0.9, zorder=Z_OBS)
-    ax.plot([], [], 'o', ms=4, mfc='none', color='0.4', mew=0.9,
-            label='observed clusters (compilation)')
-    ax.set_xlabel(r'redshift $z$')
-    ax.set_ylabel(r'$f_{\rm ICS}$')
-    ax.set_xlim(-0.05, 1.6); ax.set_ylim(0, 0.7)
-    _standard_legend(ax, loc='upper right', fontsize=7.5)
-    fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'gate_fICS_vs_redshift' + OUTPUT_FORMAT))
-
+def plot_4_mergertime_bcg_mass(*_):
+    """BCG stellar mass against halo mass for each MergerTimeFactor value."""
+    print('Plot 4: BCG stellar mass vs halo mass for each MergerTimeFactor')
+    _plot_sweep(MERGERTIME_RUNS, MERGERTIME_COLOURS, MERGERTIME_FIDUCIAL,
+                'MergerTimeFactor', r'\alpha', 'bcg',
+                'mergertime_BCG_vs_halomass')
 
 
 def load_z0_stellar_mass_functions():
@@ -1546,23 +1202,19 @@ def load_z0_stellar_mass_functions():
     Observed z ~ 0 stellar mass functions, on the model's mass and volume units.
 
     Li & White (2009), SDSS DR7: the file quotes stellar mass in Msun/h^2 and
-    number density per (Mpc/h)^3, both for h = 0.73, so masses shift by
-    -2log10(h) and densities by +3log10(h).  It reaches log M* = 11.84, which is
-    why it is here -- it is the only z ~ 0 set in data/smf that covers the
-    massive end where the orphan gate changes the model most.
+    number density per (Mpc/h)^3 for h = 0.73, so masses shift by -2log10(h) and
+    densities by +3log10(h).  It reaches log M* = 11.84, which is why it is here
+    -- it is the only z ~ 0 set in data/smf that covers the massive end.
 
-    Moffett+16 (GAMA), summed over the four morphological classes.  Its coverage
-    stops at log M* ~ 11.1 because the individual classes go undefined beyond it,
-    so it constrains the knee rather than the bright end.
+    Moffett+16 (GAMA), summed over its four morphological classes; its coverage
+    stops near log M* ~ 11.1 because the classes go undefined beyond it.
 
-    Neither has an established IMF in this module (see report_imf_audit); no
-    shift is applied to Li & White.
-
-    MISSING, and it matters here: Bernardi et al. (2013) redid the SDSS massive
-    end with Sersic/SerExp photometry and found it substantially higher than Li &
-    White, whose model magnitudes underestimate the largest galaxies.  Any
-    apparent bright-end excess against Li & White alone should not be read as a
-    model failure until Bernardi+13 is digitised into data/smf/ and added here.
+    MISSING and relevant: Bernardi et al. (2013) redid the SDSS massive end with
+    Sersic/SerExp photometry and found it well above Li & White, whose model
+    magnitudes underestimate the largest galaxies.  A model sitting above Li &
+    White at log M* > 11.5 should not be called discrepant until Bernardi+13 is
+    digitised into data/smf/ and added here.  Neither set has an established IMF
+    in this module -- see report_imf_audit().
     """
     out = {}
     path = os.path.join(OBS_DIR, 'smf/SMF_Li2009.dat')
@@ -1587,38 +1239,43 @@ def load_z0_stellar_mass_functions():
     return out
 
 
-def plot_10_gate_smf_vs_observations(*_):
+def plot_5_mergertime_smf(*_):
     """
-    z ~ 0 stellar mass function with the orphan gate off and on, against data.
+    z ~ 0 stellar mass function across the MergerTimeFactor sweep.
 
-    This is the check that can break the gate.  Saving orphans from the ICS has
-    to put their stars somewhere, and the massive end is where the model has the
-    least room to move -- so the right panel zooms on log M* > 10.5, where
-    gate-on roughly triples the number of galaxies above 10^11.5.
+    Shortening the dynamical-friction clock does not only move stars from the
+    ICS to the BCG -- it changes when every satellite merges, so the mass
+    function has to be checked before the f_ICS result can be believed.  The
+    right panel zooms on log M* > 10.5, where mass arriving on centrals shows up
+    and where the model has least room to move.
     """
-    print('Plot 10: z=0 stellar mass function vs observations, orphan gate off vs on')
+    print('Plot 5: z=0 stellar mass function across the MergerTimeFactor sweep')
     obs = load_z0_stellar_mass_functions()
     bins = np.arange(8.0, 12.61, 0.2)
     cen = 0.5 * (bins[:-1] + bins[1:])
 
     fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.6))
-    for tag, d in (('gate_off', GATE_OFF_DIR), ('gate_on', GATE_ON_DIR)):
-        if not model_files_exist(d):
+    for value, directory in MERGERTIME_RUNS:
+        if not model_files_exist(directory):
             continue
-        hdr = _read_sim_header(d)
+        hdr = _read_sim_header(directory)
         conv = hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h']
         vol = (hdr['box_size'] / hdr['hubble_h'])**3 * hdr['volume_fraction']
-        snap = analysis_snapshot(d) or hdr['last_snap_nr']
-        data = read_snap_from_files(find_model_files(d), f'Snap_{snap}',
+        data = read_snap_from_files(find_model_files(directory),
+                                    f"Snap_{hdr['last_snap_nr']}",
                                     ['StellarMass'], mass_convert=conv)
+        if not data:
+            continue
         sm = data['StellarMass']
         n, _ = np.histogram(np.log10(sm[sm > 0]), bins=bins)
-        phi = n / vol / 0.2
         good = n > 0
-        st = _GATE_STYLE[tag]
+        is_fid = (value == MERGERTIME_FIDUCIAL)
         for ax in axes:
-            ax.plot(cen[good], np.log10(phi[good]), color=st['color'], ls=st['ls'],
-                    lw=2.2, label=st['label'], zorder=Z_MODEL_LINE)
+            ax.plot(cen[good], np.log10((n / vol / 0.2)[good]),
+                    color=MERGERTIME_COLOURS[value],
+                    lw=3.2 if is_fid else 2.0,
+                    label=rf'$\alpha = {value}$' + (' (fiducial)' if is_fid else ''),
+                    zorder=Z_MODEL_LINE + (1 if is_fid else 0))
 
     markers = {'Li+White 09': ('o', '0.25'), 'Moffett+16 total': ('s', '0.5')}
     for name, o in obs.items():
@@ -1636,14 +1293,13 @@ def plot_10_gate_smf_vs_observations(*_):
     axes[0].set_xlim(8.0, 12.5); axes[0].set_ylim(-6.0, 0.0)
     axes[0].set_title('full range', fontsize=9)
     axes[1].set_xlim(10.5, 12.5); axes[1].set_ylim(-6.0, -1.5)
-    axes[1].set_title(r'massive end (where the gate bites)', fontsize=9)
+    axes[1].set_title('massive end', fontsize=9)
     for ax in axes:
         ax.set_xlabel(r'$\log_{10}(M_\star/{\rm M}_\odot)$')
         ax.set_ylabel(r'$\log_{10}(\phi\,/\,{\rm Mpc^{-3}\,dex^{-1}})$')
         _standard_legend(ax, loc='lower left', fontsize=7.5)
     fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'gate_SMF_vs_observations' + OUTPUT_FORMAT))
-
+    save_figure(fig, os.path.join(OUTPUT_DIR, 'mergertime_SMF' + OUTPUT_FORMAT))
 
 
 def load_highz_stellar_mass_functions():
@@ -1651,15 +1307,14 @@ def load_highz_stellar_mass_functions():
     Observed stellar mass functions in redshift bins, on the model's units.
 
     Muzzin+13 (UltraVISTA, h = 0.7, Kroupa) and Wright+18 (GAMA/G10-COSMOS,
-    h = 0.7, Chabrier; its densities are quoted per 0.25 dex bin and are
-    corrected here).  Both pass through imf_shift().  Returns a list of dicts
-    with 'z', 'mass', 'logphi', 'label'.
+    h = 0.7, Chabrier, quoted per 0.25 dex bin and corrected here).  Both pass
+    through imf_shift().  Returns a list of dicts with 'z', 'mass', 'logphi'
+    and 'label'.
     """
     out = []
     path = os.path.join(OBS_DIR, 'smf/SMF_Muzzin2013.dat')
     if os.path.exists(path):
-        h_m = 0.7
-        bins = {}
+        h_m, bins = 0.7, {}
         for line in open(path):
             line = line.strip()
             if not line or line.startswith('#'):
@@ -1679,8 +1334,7 @@ def load_highz_stellar_mass_functions():
 
     path = os.path.join(OBS_DIR, 'smf/Wright18_CombinedSMF.dat')
     if os.path.exists(path):
-        h_w = 0.7
-        bins = {}
+        h_w, bins = 0.7, {}
         for line in open(path):
             line = line.strip()
             if not line or line.startswith('#'):
@@ -1693,7 +1347,6 @@ def load_highz_stellar_mass_functions():
                 continue
             bins.setdefault(mz, {'m': [], 'lp': []})
             bins[mz]['m'].append(ms + imf_shift('Wright+18'))
-            # quoted per 0.25 dex bin -> per dex, then h-cube to the model's h
             bins[mz]['lp'].append(np.log10(10**(ly + np.log10(1.0 / 0.25))
                                            * (h_w / HUBBLE_H)**3))
         for mz, v in bins.items():
@@ -1702,44 +1355,43 @@ def load_highz_stellar_mass_functions():
     return out
 
 
-def plot_11_gate_smf_evolution(*_):
+def plot_6_mergertime_smf_evolution(*_):
     """
-    Stellar mass function at z ~ 0.43 and z ~ 1.22, orphan gate off and on.
+    Stellar mass function at z ~ 0.43, 1.22 and 2.46 across the MergerTimeFactor
+    sweep.
 
-    The z = 0 panel (Plot 10) cannot settle whether the gate's extra massive
-    galaxies are a problem, because the bright end there is exactly where SDSS
-    photometry is least reliable.  Testing the same comparison at higher redshift
-    against independent surveys is the stronger check.
-
-    The gate runs hold five snapshots (49, 48, 45, 40, 30), so z = 0.43 and
-    z = 1.22 are what is available above z = 0.
+    Shortening the dynamical-friction clock assembles centrals earlier, so the
+    same change that raises the z = 0 massive end should push the higher-redshift
+    massive end -- where the model runs short of the data -- in the opposite
+    direction.  That is the trade this figure is for.
     """
-    print('Plot 11: stellar mass function evolution, orphan gate off vs on')
+    print('Plot 6: stellar mass function evolution across the MergerTimeFactor sweep')
     obs = load_highz_stellar_mass_functions()
     bins = np.arange(8.0, 12.61, 0.2)
     cen = 0.5 * (bins[:-1] + bins[1:])
-    panels = [(40, 0.43), (30, 1.22)]
+    panels = [(40, 0.43), (30, 1.22), (20, 2.46)]
 
-    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.6))
+    fig, axes = plt.subplots(1, 3, figsize=(14.5, 4.5))
     for ax, (snap, z_model) in zip(axes, panels):
-        for tag, d in (('gate_off', GATE_OFF_DIR), ('gate_on', GATE_ON_DIR)):
-            if not model_files_exist(d):
+        for value, directory in MERGERTIME_RUNS:
+            if not model_files_exist(directory):
                 continue
-            hdr = _read_sim_header(d)
+            hdr = _read_sim_header(directory)
             conv = hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h']
             vol = (hdr['box_size'] / hdr['hubble_h'])**3 * hdr['volume_fraction']
-            data = read_snap_from_files(find_model_files(d), f'Snap_{snap}',
+            data = read_snap_from_files(find_model_files(directory), f'Snap_{snap}',
                                         ['StellarMass'], mass_convert=conv)
             if not data:
                 continue
             sm = data['StellarMass']
             n, _ = np.histogram(np.log10(sm[sm > 0]), bins=bins)
             good = n > 0
-            st = _GATE_STYLE[tag]
-            ax.plot(cen[good], np.log10((n / vol / 0.2)[good]), color=st['color'],
-                    ls=st['ls'], lw=2.2, label=st['label'], zorder=Z_MODEL_LINE)
+            is_fid = (value == MERGERTIME_FIDUCIAL)
+            ax.plot(cen[good], np.log10((n / vol / 0.2)[good]),
+                    color=MERGERTIME_COLOURS[value], lw=3.2 if is_fid else 2.0,
+                    label=rf'$\alpha = {value}$' + (' (fiducial)' if is_fid else ''),
+                    zorder=Z_MODEL_LINE + (1 if is_fid else 0))
 
-        # observations within 0.35 in redshift of the model snapshot
         mk = {'Muzzin+13': ('^', '0.25'), 'Wright+18': ('s', '0.5')}
         for o in obs:
             if abs(o['z'] - z_model) > 0.35:
@@ -1752,34 +1404,343 @@ def plot_11_gate_smf_evolution(*_):
         ax.set_xlabel(r'$\log_{10}(M_\star/{\rm M}_\odot)$')
         ax.set_ylabel(r'$\log_{10}(\phi\,/\,{\rm Mpc^{-3}\,dex^{-1}})$')
         ax.set_xlim(9.0, 12.5); ax.set_ylim(-6.0, -1.0)
-        _standard_legend(ax, loc='lower left', fontsize=7.5)
+        _standard_legend(ax, loc='lower left', fontsize=7)
     fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'gate_SMF_evolution' + OUTPUT_FORMAT))
+    save_figure(fig, os.path.join(OUTPUT_DIR, 'mergertime_SMF_evolution' + OUTPUT_FORMAT))
+
+
+def _plot_sweep_redshift(runs, colours, fiducial, param, symbol, filename,
+                         mvir_min=10**13.5):
+    """
+    f_ICS against redshift for one parameter sweep, cluster-scale haloes.
+
+    Stacked rather than median: sum(M_ICS)/sum(M_star) over every halo above
+    *mvir_min* in each snapshot.  At these masses there are only tens of haloes
+    per snapshot, so a median would be noisy and a stack is also closer to what
+    an observational compilation reports.  The observed cluster f_ICL points are
+    overlaid for scale -- with the caveat that the model applies no
+    surface-brightness limit and so should sit at or above them, and that
+    cosmological dimming biases the high-redshift measurements low.
+    """
+    fig, ax = plt.subplots(figsize=(6.6, 4.8))
+    plotted = False
+    for value, directory in runs:
+        if not model_files_exist(directory):
+            print(f'  {directory} missing, skipping {value}')
+            continue
+        hdr = _read_sim_header(directory)
+        conv = hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h']
+        files = find_model_files(directory)
+        zs, fs = [], []
+        for snap in sorted(hdr['output_snaps']):
+            data = read_snap_from_files(
+                files, f'Snap_{snap}',
+                ['StellarMass', 'IntraClusterStars', 'MetalsIntraClusterStars',
+                 'Mvir', 'Type', 'CentralGalaxyIndex'], mass_convert=conv)
+            if not data:
+                continue
+            t = _halo_ics_from_data(data)
+            w = (t['Mvir'] > mvir_min) & ((t['ICS'] + t['Stars']) > 0)
+            if w.sum() < 3:
+                continue
+            zs.append(hdr['redshifts'][snap])
+            fs.append(t['ICS'][w].sum() / (t['ICS'][w].sum() + t['Stars'][w].sum()))
+        if not zs:
+            continue
+        order = np.argsort(zs)
+        zs = np.asarray(zs)[order]; fs = np.asarray(fs)[order]
+        is_fid = (value == fiducial)
+        ax.plot(zs, fs, '-', color=colours[value], lw=3.2 if is_fid else 2.0,
+                label=rf'${symbol} = {value}$' + (' (fiducial)' if is_fid else ''),
+                zorder=Z_MODEL_LINE + (1 if is_fid else 0))
+        plotted = True
+
+    if not plotted:
+        print(f'  No runs found for {param}; nothing to plot.')
+        plt.close(fig)
+        return
+
+    for o in load_icl_fraction_observations('cluster'):
+        ax.plot(o['z'], o['f'], 'o', ms=4, mfc='none', color='0.45', mew=0.9,
+                zorder=Z_OBS)
+    ax.plot([], [], 'o', ms=4, mfc='none', color='0.45', mew=0.9,
+            label='observed clusters (compilation)')
+
+    ax.set_xlabel(r'redshift $z$')
+    ax.set_ylabel(r'$f_{\rm ICS} = M_{\rm ICS}/M_{\star,\rm halo}$'
+                  '\n' r'($M_{\rm vir} > 10^{13.5}\,{\rm M}_\odot$, stacked)')
+    ax.set_xlim(-0.05, 2.7)
+    ax.set_ylim(0, 0.75)
+    _standard_legend(ax, loc='upper right', fontsize=8, title=param)
+    fig.tight_layout()
+    save_figure(fig, os.path.join(OUTPUT_DIR, filename + OUTPUT_FORMAT))
+
+
+def plot_7_threshold_ics_redshift(*_):
+    """f_ICS against redshift for each ThresholdSatDisruption value."""
+    print('Plot 7: f_ICS vs redshift for each ThresholdSatDisruption')
+    _plot_sweep_redshift(THRESHOLD_RUNS, THRESHOLD_COLOURS, THRESHOLD_FIDUCIAL,
+                         'ThresholdSatDisruption', r'\theta',
+                         'threshold_fICS_vs_redshift')
+
+
+def plot_8_mergertime_ics_redshift(*_):
+    """f_ICS against redshift for each MergerTimeFactor value."""
+    print('Plot 8: f_ICS vs redshift for each MergerTimeFactor')
+    _plot_sweep_redshift(MERGERTIME_RUNS, MERGERTIME_COLOURS, MERGERTIME_FIDUCIAL,
+                         'MergerTimeFactor', r'\alpha',
+                         'mergertime_fICS_vs_redshift')
+
+
+# ========================== PAPER FIGURES ==========================
+#
+# Four figures carrying the argument that SAGE26's ICL fraction is set by a
+# dynamical-friction timescale rather than by disruption physics:
+#   1  the criterion is inert, the timescale is not
+#   2  the same, against redshift and the observed compilation
+#   3  what the timescale does to the accreted-mass budget
+#   4  what the model already gets right
+
+
+def plot_1_fics_vs_halomass(*_):
+    """
+    f_ICS against halo mass: the nominal disruption criterion beside the
+    dynamical-friction timescale.
+
+    Left: ThresholdSatDisruption, which compares Mvir/(M*+M_cold) and is the
+    parameter named for disruption.  An orphan's Mvir is set to zero, so the test
+    passes for any positive value and the curves barely separate.
+    Right: MergerTimeFactor, which does not appear in any disruption criterion
+    and moves f_ICS by a factor of four.
+    """
+    print('Plot 1: f_ICS vs halo mass -- inert criterion vs active timescale')
+    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.6), sharey=True)
+
+    for ax, (runs, colours, fid, param, sym) in zip(axes, (
+            (THRESHOLD_RUNS, THRESHOLD_COLOURS, THRESHOLD_FIDUCIAL,
+             r'ThresholdSatDisruption $\theta$', r'\theta'),
+            (MERGERTIME_RUNS, MERGERTIME_COLOURS, MERGERTIME_FIDUCIAL,
+             r'MergerTimeFactor $\alpha$', r'\alpha'))):
+        for value, t in _sweep_tables(runs):
+            total = t['ICS'] + t['Stars']
+            ok = (total > 0) & (t['Mvir'] > 0)
+            is_fid = (value == fid)
+            plot_binned_median_1sigma(
+                ax, np.log10(t['Mvir'][ok]), (t['ICS'] / total)[ok], _ICL_BINS,
+                color=colours[value],
+                label=rf'${sym} = {value}$' + (' (published)' if is_fid else ''),
+                lw=3.2 if is_fid else 2.0, alpha=0.18,
+                zorder_line=Z_MODEL_LINE + (1 if is_fid else 0),
+                zorder_fill=Z_MODEL_BAND)
+        f = _obs_fracs('cluster')
+        if f.size:
+            ax.fill_between(_CLUSTER_MASS_RANGE, f.min(), f.max(), color='0.35',
+                            alpha=0.28, lw=0, zorder=Z_OBS,
+                            label=r'observed clusters ($z<0.3$)')
+        ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
+        ax.set_xlim(11.5, 15.0); ax.set_ylim(0, 0.8)
+        ax.set_title(param, fontsize=9)
+        _standard_legend(ax, loc='upper left', fontsize=7.5)
+    axes[0].set_ylabel(r'$f_{\rm ICS} = M_{\rm ICS}/M_{\star,\rm halo}$')
+    fig.tight_layout()
+    save_figure(fig, os.path.join(OUTPUT_DIR, 'fig1_fICS_criterion_vs_timescale' + OUTPUT_FORMAT))
+
+
+def _routing_budget(directory):
+    """
+    Stellar mass removed from satellites, split by destination.
+
+    Every galaxy SAGE destroys is stamped with a mergeType on its last written
+    record: 4 for disruption into the ICS, 1 or 2 for a merger onto the central.
+    Summing the stellar mass of each over all available snapshots gives the
+    accreted-mass budget and how it was routed.  Returns (M_to_ICS, M_to_central).
+    """
+    hdr = _read_sim_header(directory)
+    if hdr is None:
+        return None
+    conv = hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h']
+    files = find_model_files(directory)
+    to_ics = to_cen = 0.0
+    snaps = sorted(hdr['output_snaps'])
+    for snap in snaps[:-1]:          # the final snapshot stamps nothing
+        d = read_snap_from_files(files, f'Snap_{snap}', ['StellarMass', 'mergeType'],
+                                 mass_convert=conv)
+        if not d or 'mergeType' not in d:
+            continue
+        mt, sm = d['mergeType'], d['StellarMass']
+        to_ics += sm[mt == 4].sum()
+        to_cen += sm[(mt == 1) | (mt == 2)].sum()
+    return to_ics, to_cen
+
+
+def plot_3_ics_routing(*_):
+    """
+    What the merger-time clock does to the accreted stellar-mass budget.
+
+    Left: the fraction of all stellar mass removed from satellites that SAGE
+    routes into the ICS rather than onto the central, as a function of
+    MergerTimeFactor.  The same galaxies die at the same moments at every alpha
+    -- only the destination changes.
+    Right: the cluster-scale f_ICS that results, against the observed range.
+    """
+    print('Plot 3: accreted stellar-mass routing vs MergerTimeFactor')
+    alphas, frac, fics = [], [], []
+    for value, directory in MERGERTIME_RUNS:
+        if not model_files_exist(directory):
+            continue
+        budget = _routing_budget(directory)
+        if budget is None or sum(budget) <= 0:
+            continue
+        t = halo_ics_table(directory)
+        lm = np.log10(t['Mvir']); tot = t['ICS'] + t['Stars']
+        w = (lm >= 14.0) & (lm < 14.5) & (tot > 0)
+        alphas.append(float(value))
+        frac.append(budget[0] / sum(budget))
+        fics.append(np.median((t['ICS'] / tot)[w]) if w.sum() >= 5 else np.nan)
+    if not alphas:
+        print('  No MergerTimeFactor runs found; nothing to plot.')
+        return
+    o = np.argsort(alphas)
+    alphas = np.asarray(alphas)[o]; frac = np.asarray(frac)[o]; fics = np.asarray(fics)[o]
+
+    from matplotlib.ticker import NullLocator
+
+    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.4))
+    for ax, y, ylab, ytop in (
+            (axes[0], frac, 'fraction of accreted $M_\\star$\nrouted to the ICS', 1.0),
+            (axes[1], fics, r'$f_{\rm ICS}$ ($10^{14}$--$10^{14.5}\,{\rm M}_\odot$)', 0.5)):
+        ax.plot(alphas, y, 'o-', color='#08519c', lw=2.4, ms=7, zorder=Z_MODEL_LINE)
+        for a, v in zip(alphas, y):
+            if np.isfinite(v):
+                ax.annotate(f'{v:.2f}', (a, v), textcoords='offset points',
+                            xytext=(0, 9), ha='center', fontsize=7.5, color='#08519c')
+        ax.axvline(float(MERGERTIME_FIDUCIAL), color='0.5', ls=':', lw=1.2, zorder=1)
+        ax.annotate('published', (float(MERGERTIME_FIDUCIAL), ytop * 0.06),
+                    textcoords='offset points', xytext=(-5, 0), rotation=90,
+                    fontsize=7, color='0.4', va='bottom', ha='right')
+        ax.set_xscale('log')
+        # the sweep values are the only ticks worth showing; the decade minor
+        # ticks a log axis adds by default collide with them
+        ax.xaxis.set_minor_locator(NullLocator())
+        ax.set_xticks(alphas); ax.set_xticklabels([f'{a:g}' for a in alphas])
+        ax.set_xlim(alphas.min() * 0.8, alphas.max() * 1.25)
+        ax.set_xlabel(r'MergerTimeFactor $\alpha$')
+        ax.set_ylabel(ylab)
+        ax.set_ylim(0, ytop)
+    f = _obs_fracs('cluster')
+    if f.size:
+        axes[1].axhspan(f.min(), f.max(), color='0.35', alpha=0.25, lw=0, zorder=1,
+                        label=r'observed clusters ($z<0.3$)')
+        _standard_legend(axes[1], loc='upper left', fontsize=7.5)
+    fig.tight_layout()
+    save_figure(fig, os.path.join(OUTPUT_DIR, 'fig3_ICS_routing_vs_alpha' + OUTPUT_FORMAT))
+
+
+def plot_4_ics_properties(*_):
+    """
+    What SAGE26 already gets right about the ICL.
+
+    Left: ICL metallicity against halo mass.  Contini+14 and Werner+26 both find
+    the bulk of ICL stars are subsolar, and the model agrees without tuning.
+    Right: the stellar mass of the galaxies supplying the ICS, weighted by the
+    mass each contributes.  Contini+14 identify M* > 10^10.5 satellites as the
+    major contributors and Werner+26's Fig. 8 puts ICL progenitors at the same
+    scale; the model picks out the same population.  Both panels use the
+    published alpha, since neither quantity is what alpha changes.
+    """
+    print('Plot 4: ICL metallicity and progenitor mass at the published alpha')
+    directory = dict(MERGERTIME_RUNS)[MERGERTIME_FIDUCIAL]
+    if not model_files_exist(directory):
+        print(f'  {directory} missing; nothing to plot.')
+        return
+    hdr = _read_sim_header(directory)
+    conv = hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h']
+    files = find_model_files(directory)
+
+    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.4))
+
+    t = halo_ics_table(directory)
+    ok = t['ICS'] > 0
+    plot_binned_median_1sigma(
+        axes[0], np.log10(t['Mvir'][ok]), (t['MetalsICS'][ok] / t['ICS'][ok]) / Z_SUN,
+        _ICL_BINS, color='#08519c', label=r'SAGE26 ($\alpha=2.0$)', lw=3.0, alpha=0.2,
+        zorder_line=Z_MODEL_LINE, zorder_fill=Z_MODEL_BAND)
+    axes[0].axhspan(0.0, 1.0, color='0.4', alpha=0.13, lw=0, zorder=1,
+                    label=r'subsolar (Contini+14; Werner+26)')
+    axes[0].axhline(1.0, color='0.45', lw=1.0, ls=':', zorder=2)
+    axes[0].set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
+    axes[0].set_ylabel(r'$Z_{\rm ICL}/Z_\odot$')
+    axes[0].set_xlim(11.5, 15.0); axes[0].set_ylim(0, 1.4)
+    _standard_legend(axes[0], loc='lower right', fontsize=7.5)
+
+    # progenitor masses: the stellar mass of every galaxy stamped mergeType == 4
+    masses, weights = [], []
+    snaps = sorted(hdr['output_snaps'])
+    for snap in snaps[:-1]:
+        d = read_snap_from_files(files, f'Snap_{snap}', ['StellarMass', 'mergeType'],
+                                 mass_convert=conv)
+        if not d or 'mergeType' not in d:
+            continue
+        sm = d['StellarMass'][d['mergeType'] == 4]
+        sm = sm[sm > 0]
+        masses.append(np.log10(sm)); weights.append(sm)
+    if masses:
+        lm = np.concatenate(masses); w = np.concatenate(weights)
+        bins = np.arange(6.0, 12.01, 0.25)
+        axes[1].hist(lm, bins=bins, weights=w / w.sum(), color='#08519c',
+                     alpha=0.75, zorder=Z_MODEL_LINE,
+                     label='mass-weighted')
+        axes[1].hist(lm, bins=bins, weights=np.full_like(w, 1.0 / len(w)),
+                     histtype='step', color='0.3', lw=1.6, zorder=Z_MODEL_LINE + 1,
+                     label='event-weighted')
+        order = np.argsort(lm)
+        cw = np.cumsum(w[order]) / w.sum()
+        med = lm[order][np.searchsorted(cw, 0.5)]
+        axes[1].axvspan(10.5, 12.0, color='0.35', alpha=0.20, lw=0, zorder=0,
+                        label=r'Contini+14 major contributors ($>10^{10.5}$)')
+        axes[1].axvline(med, color='#08519c', ls='--', lw=1.6, zorder=Z_MODEL_LINE + 2)
+        axes[1].annotate(rf'mass-weighted median $= {med:.2f}$', (med, 1.0),
+                         xycoords=('data', 'axes fraction'),
+                         textcoords='offset points', xytext=(-6, -12),
+                         ha='right', va='top', fontsize=7.5, color='#08519c')
+    axes[1].set_xlabel(r'$\log_{10}(M_\star/{\rm M}_\odot)$ of the disrupted galaxy')
+    axes[1].set_ylabel('fraction per bin')
+    axes[1].set_xlim(6.0, 12.0)
+    _standard_legend(axes[1], loc='upper left', fontsize=7.5)
+
+    fig.tight_layout()
+    save_figure(fig, os.path.join(OUTPUT_DIR, 'fig4_ICL_metallicity_and_progenitors' + OUTPUT_FORMAT))
+
+
+def plot_2_fics_vs_redshift(*_):
+    """f_ICS against redshift for the MergerTimeFactor sweep (paper Fig. 2)."""
+    print('Plot 2: f_ICS vs redshift, MergerTimeFactor sweep')
+    _plot_sweep_redshift(MERGERTIME_RUNS, MERGERTIME_COLOURS, MERGERTIME_FIDUCIAL,
+                         r'MergerTimeFactor $\alpha$', r'\alpha',
+                         'fig2_fICS_vs_redshift')
 
 
 # ========================== MAIN ==========================
 
 # Registry of plot functions
 # z=0 plots take (primary, vanilla); evolution plots take (snapdata)
-Z0_PLOTS = {
-    1: plot_1_icl_fraction_and_bcg_ratio,
-    2: plot_2_icl_metallicity,
-    3: plot_3_bcg_halo_mass,
-}
+Z0_PLOTS = {}
 
 EVOLUTION_PLOTS = {}
 
 # Plot 2 reads three simulations across many snapshots, each with its own
 # snapshot numbering and mass units, so it does its own loading.
+# Paper figures 1-4 carry the argument; 5-9 are the supporting checks.
 STANDALONE_PLOTS = {
-    4: plot_4_gate_icl_fraction,
-    5: plot_5_gate_icl_bcg_ratio,
-    6: plot_6_gate_icl_metallicity,
-    7: plot_7_gate_bcg_halo_mass,
-    8: plot_8_gate_stellar_mass_function,
-    9: plot_9_gate_icl_evolution,
-    10: plot_10_gate_smf_vs_observations,
-    11: plot_11_gate_smf_evolution,
+    1: plot_1_fics_vs_halomass,
+    2: plot_2_fics_vs_redshift,
+    3: plot_3_ics_routing,
+    4: plot_4_ics_properties,
+    5: plot_4_mergertime_bcg_mass,
+    6: plot_5_mergertime_smf,
+    7: plot_6_mergertime_smf_evolution,
+    8: plot_2_threshold_bcg_mass,
+    9: plot_7_threshold_ics_redshift,
 }
 
 ALL_PLOTS = {**Z0_PLOTS, **EVOLUTION_PLOTS, **STANDALONE_PLOTS}

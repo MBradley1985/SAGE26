@@ -6168,8 +6168,8 @@ def plot_13_ffb_vs_redshift(snapdata):
         ax.axvline(np.log10(M_thresh), color=color, ls=':', alpha=1.0, lw=1)
 
         # MBK25 theoretical curve (log-normal concentration scatter, sigma_c=0.2)
-        f_mbk25 = ffb_fraction_mbk25(Mvir, actual_z, sigma_c=0.2)
-        ax.plot(log_Mvir, f_mbk25, color=color, lw=2, ls='--', alpha=0.8)
+        # f_mbk25 = ffb_fraction_mbk25(Mvir, actual_z, sigma_c=0.2)
+        # ax.plot(log_Mvir, f_mbk25, color=color, lw=2, ls='--', alpha=0.8)
 
         # Li+24 simulation data — circles
         if snap_idx in snapdata:

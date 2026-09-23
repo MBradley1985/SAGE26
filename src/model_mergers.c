@@ -73,7 +73,14 @@ static double calculate_merger_remnant_radius(const struct GALAXY *g1, const str
  * for a satellite entering mother_halo.
  *
  * Uses the Binney & Tremaine (1987) dynamical friction formula scaled by
- * MergerTimeFactor.  Returns the merger time in code units (Myr/h).
+ * run_params->MergerTimeFactor (default 2.0, the published value).
+ *
+ * This timescale decides more than when a satellite merges.  When a satellite's
+ * subhalo is lost from the tree, core_build_model.c sends its stars to the ICS
+ * if the clock is still running (MergTime > 0) and onto the central if it has
+ * expired -- so MergerTimeFactor sets the split of accreted stellar mass between
+ * the intracluster component and the BCG.  Returns the merger time in code units
+ * (Myr/h).
  */
 double estimate_merging_time(const int sat_halo, const int mother_halo, const int ngal, struct halo_data *halos, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -92,7 +99,7 @@ double estimate_merging_time(const int sat_halo, const int mother_halo, const in
     const double SatelliteRadius = get_virial_radius(mother_halo, halos, run_params);
 
     if(SatelliteMass > 0.0 && coulomb > 0.0 && halos[sat_halo].Len >= MinNumPartSatHalo) {
-        mergtime = 2.0 *
+        mergtime = run_params->MergerTimeFactor *
             1.17 * SatelliteRadius * SatelliteRadius * get_virial_velocity(mother_halo, halos, run_params) / (coulomb * run_params->G * SatelliteMass);
     } else {
         mergtime = -1.0;

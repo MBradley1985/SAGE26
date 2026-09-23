@@ -56,8 +56,6 @@ TEST_SOURCES = \
 	test_agn_feedback.c \
 	test_ffb_concentration.c \
 	test_halo_ids.c \
-	test_let_orphans_live.c
-
 # Function to check if all dependencies exist for a test
 # Usage: $(call check_test_deps,test_name)
 define check_test_deps

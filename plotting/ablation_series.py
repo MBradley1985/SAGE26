@@ -122,6 +122,74 @@ VARIANTS = [
 #      'color': '#474747', 'ls': (0, (10, 3)),      'lw': 2.4, 'zorder': 9},
 # ]
 
+# ---------------------------------------------------------------------------
+# Orphan series (--series orphans)
+#
+# Where the ICS ends up is decided by two parameters, acting on two different
+# populations:
+#
+#   MergerTimeFactor (alpha) scales the dynamical-friction clock set at infall.
+#     SAGE reads that clock once, when a satellite's subhalo is lost from the
+#     tree: time left -> the galaxy is treated as still infalling and its stars
+#     are unbound into the ICS; expired -> it is treated as already arrived and
+#     its stars are added to the central.  alpha therefore routes accreted
+#     stellar mass between the two reservoirs.  2.0 is the published value.
+#
+#   ThresholdSatDisruption (theta) is the Mvir/baryon ratio below which a
+#     satellite is processed at all.  It is vacuous for orphans, whose Mvir is
+#     set to zero, so below 1.0 it does almost nothing; above 1.0 it starts
+#     catching still-resolved type 1 satellites, a channel alpha cannot reach.
+#
+# The joint run tests whether the two act independently.
+ORPHAN_VARIANTS = [
+    {'key': 'fid',  'par': 'input/microuchuu_mtf_2.0.par',
+     'out': './output/microuchuu_mtf_2.0/',
+     'label': r'fiducial ($\alpha=2.0$, $\theta=1.0$)', 'switch': None,
+     'color': 'black',   'ls': '-',  'lw': 3.6, 'zorder': 12},
+    {'key': 'a10',  'par': 'input/microuchuu_mtf_1.0.par',
+     'out': './output/microuchuu_mtf_1.0/',
+     'label': r'$\alpha=1.0$', 'switch': ('MergerTimeFactor', 1.0),
+     'color': '#0C5DA5', 'ls': (0, (6, 2)),    'lw': 2.4, 'zorder': 10},
+    {'key': 'a05',  'par': 'input/microuchuu_mtf_0.5.par',
+     'out': './output/microuchuu_mtf_0.5/',
+     'label': r'$\alpha=0.5$', 'switch': ('MergerTimeFactor', 0.5),
+     'color': '#00B945', 'ls': (0, (1, 1.4)),  'lw': 2.6, 'zorder': 10},
+    {'key': 'a025', 'par': 'input/microuchuu_mtf_0.25.par',
+     'out': './output/microuchuu_mtf_0.25/',
+     'label': r'$\alpha=0.25$', 'switch': ('MergerTimeFactor', 0.25),
+     'color': '#845B97', 'ls': (0, (4, 1.5)),  'lw': 2.4, 'zorder': 10},
+    {'key': 'th00', 'par': 'input/microuchuu_thresh_0.0.par',
+     'out': './output/microuchuu_thresh_0.0/',
+     'label': r'$\theta=0.0$', 'switch': ('ThresholdSatDisruption', 0.0),
+     'color': '#FF9500', 'ls': (0, (7, 2, 1.5, 2)), 'lw': 2.4, 'zorder': 10},
+    {'key': 'th50', 'par': 'input/microuchuu_thresh_5.0.par',
+     'out': './output/microuchuu_thresh_5.0/',
+     'label': r'$\theta=5.0$', 'switch': ('ThresholdSatDisruption', 5.0),
+     'color': '#FF2C00', 'ls': (0, (3, 1.6)),  'lw': 2.4, 'zorder': 11},
+    {'key': 'a10th00', 'par': 'input/microuchuu_a1.0_th0.0.par',
+     'out': './output/microuchuu_a1.0_th0.0/',
+     'label': r'$\alpha=1.0$, $\theta=0.0$',
+     'switch': [('MergerTimeFactor', 1.0), ('ThresholdSatDisruption', 0.0)],
+     'color': '#4C72B0', 'ls': (0, (5, 1, 1, 1)), 'lw': 2.2, 'zorder': 9},
+    {'key': 'a05th50', 'par': 'input/microuchuu_a0.5_th5.0.par',
+     'out': './output/microuchuu_a0.5_th5.0/',
+     'label': r'$\alpha=0.5$, $\theta=5.0$',
+     'switch': [('MergerTimeFactor', 0.5), ('ThresholdSatDisruption', 5.0)],
+     'color': '#C44E52', 'ls': (0, (2, 1, 5, 1)), 'lw': 2.2, 'zorder': 9},
+    {'key': 'a05th00', 'par': 'input/microuchuu_a0.5_th0.0.par',
+     'out': './output/microuchuu_a0.5_th0.0/',
+     'label': r'$\alpha=0.5$, $\theta=0.0$ (joint)',
+     'switch': [('MergerTimeFactor', 0.5), ('ThresholdSatDisruption', 0.0)],
+     'color': '#937860', 'ls': '-',  'lw': 2.8, 'zorder': 8},
+]
+
+# Independence test for the orphan series: do alpha and theta applied separately
+# sum to the same effect as applying both at once?
+ORPHAN_COMBO_KEYS = ('a05', 'th00')
+ORPHAN_JOINT_KEY = 'a05th00'
+ORPHAN_REFERENCE_KEY = 'fid'
+
+
 # The four ingredients whose individual contributions sum to the joint ablation.
 # Comparing that sum against JOINT_KEY measures how far they are from acting
 # independently, without the calibration differences that make SAGE16 unusable
@@ -1128,7 +1196,7 @@ def write_tables(variants, results, sim, outdir):
         emit('=' * 96)
         emit('ARE THE FOUR INGREDIENTS INDEPENDENT?')
         emit(f'   sum      = {" + ".join(FOUR_KEYS)}, each measured on its own')
-        emit(f'   joint    = {JOINT_KEY} (all four off in one run, nothing else changed)')
+        emit(f'   joint    = {JOINT_KEY} (applied together in one run, nothing else changed)')
         emit('   residual = joint - sum. Zero means the ingredients act independently;')
         emit('   joint - SAGE16 is the separate question of whether SAGE16 is a fair')
         emit('              stand-in for "all four off". The two configurations differ')
@@ -1240,6 +1308,11 @@ def write_tables(variants, results, sim, outdir):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('--series', default='physics', choices=('physics', 'orphans'),
+                    help="which ablation set to plot: 'physics' (default, the four "
+                         "SAGE26 ingredients) or 'orphans' (MergerTimeFactor and "
+                         "ThresholdSatDisruption, the two parameters that route "
+                         "accreted stellar mass between the ICS and the BCG)")
     ap.add_argument('--run', action='store_true',
                     help='run SAGE for any variant whose output is missing')
     ap.add_argument('--force', action='store_true',
@@ -1255,6 +1328,14 @@ def main():
     ap.add_argument('--outdir', default=None,
                     help='where to write the figure (default: <fiducial>/plots/)')
     args = ap.parse_args()
+
+    global VARIANTS, REFERENCE_KEY, FOUR_KEYS, JOINT_KEY, OUTPUT_NAME
+    if args.series == 'orphans':
+        VARIANTS = ORPHAN_VARIANTS
+        REFERENCE_KEY = ORPHAN_REFERENCE_KEY
+        FOUR_KEYS = ORPHAN_COMBO_KEYS
+        JOINT_KEY = ORPHAN_JOINT_KEY
+        OUTPUT_NAME = 'Ablation_Series_Orphans'
 
     variants = [v for v in VARIANTS
                 if not (args.no_sage16 and v['key'] == 'sage16')]

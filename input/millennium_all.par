@@ -93,7 +93,7 @@ BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during
 
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
 ThresholdSatDisruption      1.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption
-LetOrphansLive              0   %0: off, orphans destroyed into the ICS when their subhalo is lost; 1: Contini+14 model Disr. (Sec 3.1 pericentre density gate, then full disruption)
+MergerTimeFactor            2.0     %multiplies the dynamical-friction merger time; sets whether a satellite's clock is still running when its subhalo is lost, and so whether its stars go to the ICS (running) or the central (expired). 2.0 = published
 
 Yield                       0.025   %fraction of SF mass produced as metals
 RecycleFraction             0.43    %fraction of SF mass instantaneously recycled back to cold

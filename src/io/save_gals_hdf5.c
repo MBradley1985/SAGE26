@@ -94,7 +94,9 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CHECK_STATUS_AND_RETURN_ON_FAIL(atype, (int32_t) atype,             \
                                     "Could not copy an existing data type when creating a String attribute.\n" \
                                     "The attribute we wanted to create was '" #attribute_name"'.\n"); \
-    herr_t attr_status = H5Tset_size(atype, stringlen);                 \
+    size_t macro_strsize = (size_t)(stringlen);                        \
+    if(macro_strsize == 0) macro_strsize = 1; /* HDF5 rejects zero-sized string types. */ \
+    herr_t attr_status = H5Tset_size(atype, macro_strsize);           \
     CHECK_STATUS_AND_RETURN_ON_FAIL(attr_status, (int32_t) attr_status, \
                                     "Could not set the total size of a datatype when creating a String attribute.\n" \
                                     "The attribute we wanted to create was '" #attribute_name"'.\n"); \
@@ -1250,8 +1252,8 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
                                     (int32_t) file_id);
 
     // Simulation information.
-    CREATE_STRING_ATTRIBUTE(sim_group_id, "SimulationDir", &run_params->SimulationDir, strlen(run_params->SimulationDir));
-    CREATE_STRING_ATTRIBUTE(sim_group_id, "FileWithSnapList", &run_params->FileWithSnapList, strlen(run_params->FileWithSnapList));
+    CREATE_STRING_ATTRIBUTE(sim_group_id, "SimulationDir", &run_params->SimulationDir, strlen(run_params->SimulationDir) + 1);
+    CREATE_STRING_ATTRIBUTE(sim_group_id, "FileWithSnapList", &run_params->FileWithSnapList, strlen(run_params->FileWithSnapList) + 1);
     CREATE_SINGLE_ATTRIBUTE(sim_group_id, "LastSnapshotNr", run_params->LastSnapshotNr, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(sim_group_id, "SimMaxSnaps", run_params->SimMaxSnaps, H5T_NATIVE_INT);
 
@@ -1276,13 +1278,13 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
 
     // Data and version information.
     CREATE_SINGLE_ATTRIBUTE(misc_group_id, "num_cores", run_params->NTasks, H5T_NATIVE_INT);
-    CREATE_STRING_ATTRIBUTE(misc_group_id, "sage_data_version", &SAGE_DATA_VERSION, strlen(SAGE_DATA_VERSION));
-    CREATE_STRING_ATTRIBUTE(misc_group_id, "sage_version", &SAGE_VERSION, strlen(SAGE_VERSION));
-    CREATE_STRING_ATTRIBUTE(misc_group_id, "git_SHA_reference", &GITREF_STR, strlen(GITREF_STR));
+    CREATE_STRING_ATTRIBUTE(misc_group_id, "sage_data_version", &SAGE_DATA_VERSION, strlen(SAGE_DATA_VERSION) + 1);
+    CREATE_STRING_ATTRIBUTE(misc_group_id, "sage_version", &SAGE_VERSION, strlen(SAGE_VERSION) + 1);
+    CREATE_STRING_ATTRIBUTE(misc_group_id, "git_SHA_reference", &GITREF_STR, strlen(GITREF_STR) + 1);
 
     // Output file info.
-    CREATE_STRING_ATTRIBUTE(runtime_group_id, "FileNameGalaxies", &run_params->FileNameGalaxies, strlen(run_params->FileNameGalaxies));
-    CREATE_STRING_ATTRIBUTE(runtime_group_id, "OutputDir", &run_params->OutputDir, strlen(run_params->OutputDir));
+    CREATE_STRING_ATTRIBUTE(runtime_group_id, "FileNameGalaxies", &run_params->FileNameGalaxies, strlen(run_params->FileNameGalaxies) + 1);
+    CREATE_STRING_ATTRIBUTE(runtime_group_id, "OutputDir", &run_params->OutputDir, strlen(run_params->OutputDir) + 1);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FirstFile", run_params->FirstFile, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "LastFile", run_params->LastFile, H5T_NATIVE_INT);
 
@@ -1324,6 +1326,7 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BlackHoleGrowthRate", run_params->BlackHoleGrowthRate, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ThreshMajorMerger", run_params->ThreshMajorMerger, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ThresholdSatDisruption", run_params->ThresholdSatDisruption, H5T_NATIVE_DOUBLE);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "MergerTimeFactor", run_params->MergerTimeFactor, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "Yield", run_params->Yield, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RecycleFraction", run_params->RecycleFraction, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FracZleaveDisk", run_params->FracZleaveDisk, H5T_NATIVE_DOUBLE);
@@ -1353,7 +1356,7 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     const int32_t output_format_id = (int32_t) run_params->OutputFormat;
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "TreeType", tree_type_id, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "OutputFormat", output_format_id, H5T_NATIVE_INT);
-    CREATE_STRING_ATTRIBUTE(runtime_group_id, "TreeName", &run_params->TreeName, strlen(run_params->TreeName));
+    CREATE_STRING_ATTRIBUTE(runtime_group_id, "TreeName", &run_params->TreeName, strlen(run_params->TreeName) + 1);
 
     // Misc runtime Parameters.
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "UnitLength_in_cm", run_params->UnitLength_in_cm, H5T_NATIVE_DOUBLE);

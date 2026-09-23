@@ -541,6 +541,12 @@ struct params
     double Reionization_z0;       /* redshift at which the filter mass reaches its peak (Kravtsov+04 z0) */
     double Reionization_zr;       /* redshift at which reionization completes (Kravtsov+04 zr) */
     double ThresholdSatDisruption;/* satellite disrupted when Mvir/(baryonic mass) drops below this [dimensionless] */
+    double MergerTimeFactor;      /* multiplies the Binney & Tremaine dynamical-friction merger time.
+                                     Sets how long a satellite's merging clock runs, and so whether it
+                                     still has time left when its subhalo is lost -- which decides
+                                     whether its stars go to the ICS (clock running) or onto the central
+                                     (clock expired). 2.0 reproduces the published SAGE16/SAGE26
+                                     behaviour [dimensionless] */
     double SubstepResolution;        // global multiplier on the adaptive substep count (floor STEPS and cap MAX_STEPS both scale by this); default 1.0. Runtime knob for convergence / N-invariance testing without recompiling.
     double RedshiftPowerLawExponent; /* exponent of the (1+z) term in the FIRE mass-loading scaling (Muratov+15); default 1.25 */
     int32_t SNEnergyConservationOn;  // 1 = bound the FIRE ejection energy by the supernova energy actually available (DEFAULT); 0 = off (unbounded coupling, the pre-2026 published behaviour). Only acts when FIREmodeOn == 1.
