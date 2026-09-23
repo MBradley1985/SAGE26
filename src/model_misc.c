@@ -38,7 +38,7 @@ static const double SHEN03_M_TRANSITION   =  2.0e10;
  * Reachable only on the DiskRadiusOn == 0 path, and only when R_vir itself is zero, so it
  * always returns zero there; kept because that is the published behaviour. */
 static const double DISK_RADIUS_FALLBACK_FRAC = 0.1;
-static const double DISK_CONCENTRATION_FACTOR = 0.8;
+static const double DISK_CONCENTRATION_FACTOR = 1.0;
 static const double SQRT_REPLACEMENT = 1.414;
 
 // /* Floor on r_d / R_vir when DiskRadiusOn > 0: insurance against a halo whose measured spin is

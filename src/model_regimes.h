@@ -3,7 +3,8 @@
  *
  * CGM vs hot-halo regime (Dekel & Birnboim 2006 shock mass) and the
  * feedback-free-burst regime (Li+24 mass thresholds, BK25 acceleration
- * criterion) with their threshold/fraction helpers.
+ * criterion, Dekel+23 free-fall-time criterion) with their threshold/fraction
+ * helpers.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */

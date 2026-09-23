@@ -108,6 +108,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->FFBMaxEfficiency           = 0.2;
     run_params->FFBConcSigma               = 0.2;
     run_params->FFBThresholdSlope          = -6.2;
+    run_params->FFBFeedbackDelayMyr        = 1.0;
+    run_params->FFBCloudClumping           = 1.0;
     run_params->ConcentrationOn            = 3;
     run_params->FeedbackFreeModeOn         = 1;
     run_params->FFBIgnoreRegime            = 1;  /* (hard-code once published)*/
@@ -227,6 +229,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("FFBMaxEfficiency",           &(run_params->FFBMaxEfficiency),           DOUBLE, 0);
     REG("FFBConcSigma",               &(run_params->FFBConcSigma),               DOUBLE, 0);
     REG("FFBThresholdSlope",          &(run_params->FFBThresholdSlope),          DOUBLE, 0);
+    REG("FFBFeedbackDelayMyr",        &(run_params->FFBFeedbackDelayMyr),        DOUBLE, 0);
+    REG("FFBCloudClumping",           &(run_params->FFBCloudClumping),           DOUBLE, 0);
     REG("RedshiftPowerLawExponent",   &(run_params->RedshiftPowerLawExponent),   DOUBLE, 0);
     REG("SNEnergyConservationOn",     &(run_params->SNEnergyConservationOn),     INT, 0);
     REG("MaxSNEnergyCoupling",        &(run_params->MaxSNEnergyCoupling),        DOUBLE, 0);
@@ -551,7 +555,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
             {"RegimeRandomMode",       run_params->RegimeRandomMode,       0, 1},
             {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
-            {"FeedbackFreeModeOn",     run_params->FeedbackFreeModeOn,     0, 7},
+            {"FeedbackFreeModeOn",     run_params->FeedbackFreeModeOn,     0, 8},
             {"FFBIgnoreRegime",        run_params->FFBIgnoreRegime,        0, 1},
             {"FFBRandomMode",          run_params->FFBRandomMode,          0, 1},
             {"ColdStreamCeilingOn",    run_params->ColdStreamCeilingOn,    0, 1},
@@ -620,6 +624,19 @@ int read_parameter_file(const char *fname, struct params *run_params)
         fprintf(stderr, "Error: FeedbackFreeModeOn = %d uses log-normal concentration scatter, but\n"
                         "FFBConcSigma = %g; the scatter width must be > 0 (typical ~0.2).\n",
                 run_params->FeedbackFreeModeOn, run_params->FFBConcSigma);
+        ABORT(EXIT_FAILURE);
+    }
+    if(run_params->FeedbackFreeModeOn == 8 && run_params->FFBFeedbackDelayMyr <= 0.0) {
+        fprintf(stderr, "Error: FeedbackFreeModeOn = 8 uses the Dekel+23 free-fall-time criterion, but\n"
+                        "FFBFeedbackDelayMyr = %g; the feedback delay must be > 0 (fiducial ~1 Myr, eq. 3).\n",
+                run_params->FFBFeedbackDelayMyr);
+        ABORT(EXIT_FAILURE);
+    }
+    if(run_params->FeedbackFreeModeOn == 8 && run_params->FFBCloudClumping < 1.0) {
+        fprintf(stderr, "Error: FeedbackFreeModeOn = 8 uses the Dekel+23 free-fall-time criterion, but\n"
+                        "FFBCloudClumping = %g; the clumping factor must be >= 1 (star-forming clumps are\n"
+                        "at least as dense as the halo's mean virial density).\n",
+                run_params->FFBCloudClumping);
         ABORT(EXIT_FAILURE);
     }
 

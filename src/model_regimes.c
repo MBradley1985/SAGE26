@@ -4,7 +4,8 @@
  * determine_and_store_regime() implements the Dekel & Birnboim (2006)
  * shock-mass criterion; determine_and_store_ffb_regime() implements the
  * Li+24 and BK25 feedback-free burst thresholds with optional lognormal
- * concentration scatter.
+ * concentration scatter, plus the Dekel+23 free-fall-time/density criterion
+ * (eqs. 3-5) evaluated directly from the galaxy's own CGM free-fall time.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -34,6 +35,14 @@ static const double PC_IN_CM              =  3.08568e18;
 /* Boylan-Kolchin (2025) Table 1: critical gravitational acceleration for FFB.
  * Units: M_sun / pc^2 (pre-multiplication by G to get acceleration). */
 static const double BK25_G_CRIT_MSUN_PC2 = 3100.0;
+
+/* Dekel et al. (2023) sec. 2, below eq. 4: mean molecular weight adopted for
+ * neutral atomic H+He gas at T < 10^4 K (mu = 1.4 adjusted to 1.2 for gas). */
+static const double MU_NEUTRAL_FFB = 1.2;
+
+/* Dekel et al. (2023) eq. 4 normalisation: 10^3.5 cm^-3, the density unit n_3.5
+ * is expressed in (n_3.5 = n / N_3P5_CM3). */
+static const double N_3P5_CM3 = 3162.2776601683795;  /* 10^3.5 */
 
 
 /*
@@ -132,7 +141,8 @@ static double inverse_normal_cdf(double p)
  * Classify galaxies as feedback-free burst (FFB) or normal mode.
  *
  * When FeedbackFreeModeOn > 0, evaluates each central galaxy against the FFB
- * mass and redshift criteria (Li+2024) and sets galaxies[p].FFBmode.
+ * mass and redshift criteria (Li+2024), the BK25 acceleration criterion, or
+ * the Dekel+23 free-fall-time criterion (mode 8), and sets galaxies[p].FFBRegime.
  * Uses a lognormal scatter (via inverse_normal_cdf) around the threshold when
  * the scatter mode is enabled. Skips all galaxies when FFBmodeOn == 0.
  */
@@ -328,6 +338,47 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
 
             if(g_max > g_crit) {
                 galaxies[p].FFBRegime = 1;  // FFB halo
+            } else {
+                galaxies[p].FFBRegime = 0;  // Normal halo
+            }
+        } else if(run_params->FeedbackFreeModeOn == 8) {
+            // Dekel et al. (2023) free-fall-time criterion (eqs. 3-5): FFB proceeds
+            // free of stellar-wind/SN feedback whenever the free-fall time is shorter
+            // than the feedback delay, t_ff < t_fbk ~ 1 Myr (eq. 3), which for the
+            // eq. (4) t_ff(n) relation is equivalent to a gas density n > n_fbk ~
+            // 2.23e3 cm^-3 (eq. 5).
+            //
+            // n is the galaxy's own cold-gas disc density -- ColdGas within a
+            // sphere of radius DiskScaleRadius -- boosted by FFBCloudClumping (c)
+            // from that disc-averaged value up to the density of the actual
+            // star-forming clumps (Dekel+23 sec. 6-7 argue the clouds fragment out
+            // well below the disc scale). This is measurably closer to n_fbk than
+            // the halo's mean virial density: on millennium_noffb at z~8.5,
+            // median disc n ~ 50 cm^-3 against a mean virial density ~0.2 cm^-3,
+            // so c ~ O(10) rather than O(10^4) is enough to cross the threshold.
+            //
+            // t_ff is then eq. (4) applied directly to n, not the separate
+            // sqrt(2R/g) virial free-fall time used elsewhere in the code
+            // (e.g. cooling_recipe_cgm(), model_cooling_heating.c).
+            const double ColdGas = galaxies[p].ColdGas;
+            const double R = galaxies[p].DiskScaleRadius;
+
+            if(ColdGas <= 0.0 || R <= 0.0) {
+                galaxies[p].FFBRegime = 0;
+                continue;
+            }
+
+            const double mass_g = ColdGas * run_params->UnitMass_in_g / run_params->Hubble_h;
+            const double radius_cm = R * run_params->UnitLength_in_cm / run_params->Hubble_h;
+            const double volume_cm3 = (4.0 / 3.0) * M_PI * radius_cm * radius_cm * radius_cm;
+            const double rho = run_params->FFBCloudClumping * mass_g / volume_cm3;
+            const double n = rho / (MU_NEUTRAL_FFB * PROTONMASS);
+
+            // eq. (4): t_ff = 0.84 Myr * n_3.5^(-1/2), n_3.5 = n / 10^3.5 cm^-3.
+            const double tff_Myr = 0.84 * sqrt(N_3P5_CM3 / n);
+
+            if(tff_Myr < run_params->FFBFeedbackDelayMyr) {
+                galaxies[p].FFBRegime = 1;  // FFB halo - free-fall time below the feedback delay
             } else {
                 galaxies[p].FFBRegime = 0;  // Normal halo
             }

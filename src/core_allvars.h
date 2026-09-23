@@ -505,7 +505,7 @@ struct params
                              // physics parameter rather than a constant; exposed for the
                              // sensitivity test requested in referee Major Comment 9.
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation, 3: hybrid (Vmax/Vvir, infall-frozen for satellites)
-    int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
+    int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF, 8: Dekel+23 free-fall-time/density criterion (eqs. 3-5)
     int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too
     int32_t    FFBRandomMode;       // 0: draw a fresh random each snapshot (DEFAULT, published behaviour -- galaxies move in and out of FFB); 1: use the persistent FFBRandom assigned at galaxy creation (FFB status fixed per galaxy)
     int32_t    BulgeSizeOn;   // 0: off; 1: Shen+03 eq. 33; 2: Shen+03 eq. 32 two-regime; 3: Tonini+16 separate merger/instability bulges
@@ -533,6 +533,17 @@ struct params
     double FFBThresholdSlope; // exponent n in M_vir,FFB ~ ((1+z)/10)^n; -6.2 (Li+24) is the default. The
                               // normalisation is pinned at z=9, so varying this pivots the threshold about
                               // that redshift; used to test whether the slope is degenerate with alpha_FFB.
+    double FFBFeedbackDelayMyr; // t_fbk in Dekel+23 eq. 3: the delay before stellar winds/SNe become
+                                // effective in a low-Z starburst (~1 Myr fiducial). Used by
+                                // FeedbackFreeModeOn=8: FFB requires t_ff < t_fbk, where t_ff is eq. (4)
+                                // evaluated at the galaxy's cold-gas disc density (ColdGas within a
+                                // DiskScaleRadius sphere), boosted by FFBCloudClumping.
+    double FFBCloudClumping;   // c in Dekel+23 sec. 6/eq. 37: density enhancement of the star-forming
+                                // clumps above the galaxy's disc-averaged cold-gas density (c >= 1).
+                                // FeedbackFreeModeOn=8 multiplies the disc density n by c before
+                                // evaluating eq. (4); on millennium_noffb at z~8.5 the median disc
+                                // density is ~50 cm^-3 against n_fbk ~2.2e3 cm^-3 (eq. 5), so c ~ O(10)
+                                // is enough to bring typical halos across the threshold.
     double FeedbackReheatingEpsilon;   /* SN mass-loading: reheated mass per unit stars formed [dimensionless] */
     double FeedbackEjectionEfficiency; /* fraction of SN energy available to eject gas from the halo [dimensionless] */
     double RadioModeEfficiency;   /* radio-mode AGN heating efficiency [dimensionless] */

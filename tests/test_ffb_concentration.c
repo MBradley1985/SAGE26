@@ -9,7 +9,8 @@
  * - BK25 g_max acceleration calculation (modes 2, 3)
  * - BK25 + log-normal concentration scatter (mode 4)
  * - Li+24 mass sharp cutoff (mode 5)
- * - FeedbackFreeModeOn modes 0–5
+ * - Dekel+23 free-fall-time criterion (mode 8)
+ * - FeedbackFreeModeOn modes 0–5, 8
  */
 
 #include <stdio.h>
@@ -908,6 +909,115 @@ void test_ffb_mode5_ignores_random()
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "Not FFB below threshold regardless of FFBRandom");
 }
 
+void test_ffb_mode8_clumping_triggers_ffb()
+{
+    BEGIN_TEST("FeedbackFreeModeOn=8 (Dekel+23 eq. 4/5) triggers FFB with enough clumping");
+
+    struct params rp;
+    init_millennium_params(&rp);
+    rp.FeedbackFreeModeOn = 8;
+    rp.FFBFeedbackDelayMyr = 1.0;   /* eq. 3 fiducial */
+
+    /* ColdGas=0.01 (~1.37e8 Msun physical), DiskScaleRadius=0.0003 (~0.41 kpc
+     * physical) -- both in the ballpark of a real SAGE26 high-z central --
+     * give a disc-averaged density n(c=1) ~ 16 cm^-3, far below n_fbk. */
+    struct GALAXY gal;
+    memset(&gal, 0, sizeof(struct GALAXY));
+    gal.ColdGas = 0.01f;
+    gal.DiskScaleRadius = 0.0003f;
+    gal.Regime = 0;
+
+    rp.FFBCloudClumping = 1.0;
+    determine_and_store_ffb_regime(1, 10.0, &gal, &rp);
+    ASSERT_EQUAL_INT(0, gal.FFBRegime, "No clumping: disc-averaged t_ff is not below t_fbk");
+
+    /* c=200 lifts n above n_fbk (n_fbk/n(c=1) ~ 140), so eq. (4)'s t_ff drops
+     * below the 1 Myr feedback delay. */
+    rp.FFBCloudClumping = 200.0;
+    determine_and_store_ffb_regime(1, 10.0, &gal, &rp);
+    ASSERT_EQUAL_INT(1, gal.FFBRegime, "Sufficient clumping: t_ff drops below t_fbk");
+}
+
+void test_ffb_mode8_denser_disc_more_likely_ffb()
+{
+    BEGIN_TEST("FeedbackFreeModeOn=8 favours a denser (more compact) cold-gas disc");
+
+    struct params rp;
+    init_millennium_params(&rp);
+    rp.FeedbackFreeModeOn = 8;
+    rp.FFBFeedbackDelayMyr = 1.0;
+    rp.FFBCloudClumping = 10.0;
+
+    /* Same ColdGas mass, more compact disc -> higher density -> shorter t_ff. */
+    struct GALAXY gal_compact;
+    memset(&gal_compact, 0, sizeof(struct GALAXY));
+    gal_compact.ColdGas = 0.01f;
+    gal_compact.DiskScaleRadius = 0.0001f;
+    gal_compact.Regime = 0;
+    determine_and_store_ffb_regime(1, 10.0, &gal_compact, &rp);
+
+    struct GALAXY gal_diffuse;
+    memset(&gal_diffuse, 0, sizeof(struct GALAXY));
+    gal_diffuse.ColdGas = 0.01f;
+    gal_diffuse.DiskScaleRadius = 0.001f;
+    gal_diffuse.Regime = 0;
+    determine_and_store_ffb_regime(1, 10.0, &gal_diffuse, &rp);
+
+    ASSERT_EQUAL_INT(1, gal_compact.FFBRegime, "Compact disc crosses the t_ff < t_fbk threshold");
+    ASSERT_EQUAL_INT(0, gal_diffuse.FFBRegime, "Diffuse disc of the same mass does not");
+}
+
+void test_ffb_mode8_feedback_delay_monotonic()
+{
+    BEGIN_TEST("FeedbackFreeModeOn=8: raising FFBFeedbackDelayMyr can only add FFB halos");
+
+    struct params rp;
+    init_millennium_params(&rp);
+    rp.FeedbackFreeModeOn = 8;
+    rp.FFBCloudClumping = 1.0;
+
+    struct GALAXY gal;
+    memset(&gal, 0, sizeof(struct GALAXY));
+    gal.ColdGas = 0.01f;
+    gal.DiskScaleRadius = 0.0003f;
+    gal.Regime = 0;
+
+    rp.FFBFeedbackDelayMyr = 1.0e-3;
+    determine_and_store_ffb_regime(1, 10.0, &gal, &rp);
+    ASSERT_EQUAL_INT(0, gal.FFBRegime, "Vanishingly small t_fbk: never FFB");
+
+    rp.FFBFeedbackDelayMyr = 1.0e3;
+    determine_and_store_ffb_regime(1, 10.0, &gal, &rp);
+    ASSERT_EQUAL_INT(1, gal.FFBRegime, "Enormous t_fbk: always FFB");
+}
+
+void test_ffb_mode8_invalid_halo()
+{
+    BEGIN_TEST("FeedbackFreeModeOn=8 handles ColdGas/DiskScaleRadius <= 0");
+
+    struct params rp;
+    init_millennium_params(&rp);
+    rp.FeedbackFreeModeOn = 8;
+    rp.FFBFeedbackDelayMyr = 1.0e6;   /* would otherwise force FFB=1 */
+    rp.FFBCloudClumping = 1.0;
+
+    struct GALAXY gal_zero_gas;
+    memset(&gal_zero_gas, 0, sizeof(struct GALAXY));
+    gal_zero_gas.ColdGas = 0.0f;
+    gal_zero_gas.DiskScaleRadius = 0.0003f;
+    gal_zero_gas.Regime = 0;
+    determine_and_store_ffb_regime(1, 10.0, &gal_zero_gas, &rp);
+    ASSERT_EQUAL_INT(0, gal_zero_gas.FFBRegime, "Zero cold gas is never FFB");
+
+    struct GALAXY gal_zero_radius;
+    memset(&gal_zero_radius, 0, sizeof(struct GALAXY));
+    gal_zero_radius.ColdGas = 0.01f;
+    gal_zero_radius.DiskScaleRadius = 0.0f;
+    gal_zero_radius.Regime = 0;
+    determine_and_store_ffb_regime(1, 10.0, &gal_zero_radius, &rp);
+    ASSERT_EQUAL_INT(0, gal_zero_radius.FFBRegime, "Zero disc radius is never FFB");
+}
+
 /* ═══════════════════════════════════════════════════════════════════
  *  main
  * ═══════════════════════════════════════════════════════════════════ */
@@ -960,6 +1070,10 @@ int main()
     test_ffb_mode4_deterministic();
     test_ffb_mode5_hard_threshold();
     test_ffb_mode5_ignores_random();
+    test_ffb_mode8_clumping_triggers_ffb();
+    test_ffb_mode8_denser_disc_more_likely_ffb();
+    test_ffb_mode8_feedback_delay_monotonic();
+    test_ffb_mode8_invalid_halo();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

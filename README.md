@@ -161,6 +161,7 @@ cap) rather than a fixed count.
 | 0 | Off |
 | 1 | Li+2024 sigmoid |
 | 2 | Boylan-Kolchin+2025 (Ishiyama+21 concentration) |
+| 8 | Dekel+2023 free-fall-time criterion (eqs. 3-5) |
 
 ### Halo concentration (`ConcentrationOn`)
 

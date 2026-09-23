@@ -235,16 +235,22 @@ Everything else still runs:
 - Metal production and routing via the same Krumholz & Dekel (2011)
   Eq. 22 factor, regime-aware to `MetalsCGMgas` or `MetalsHotGas`.
 
-`gas_for_sf` is either the full `ColdGas` (modes 1-5) or the molecular
+`gas_for_sf` is either the full `ColdGas` (modes 1-5, 8) or the molecular
 fraction `H2gas` (modes 6-7). For H2 modes the H2 calculation is run
 inline using whichever underlying SFprescription (BR06, KD12, KMT09,
 K13, GD14) is set.
 
-The seven sub-modes of `FeedbackFreeModeOn` (1-7) control which threshold
-classifies a galaxy as FFB-eligible (Li+2024 vs Boylan-Kolchin+2025, sigmoid
-vs sharp, concentration source). The classification itself lives in
-`determine_and_store_ffb_regime()`; this function only consumes the
-`FFBRegime` flag.
+The eight sub-modes of `FeedbackFreeModeOn` (1-8) control which threshold
+classifies a galaxy as FFB-eligible (Li+2024 mass threshold vs
+Boylan-Kolchin+2025 acceleration threshold vs Dekel+2023 free-fall-time
+threshold, sigmoid vs sharp, concentration source). Mode 8 evaluates the
+Dekel et al. (2023) criterion (their eqs. 3-5) directly: eq. (4) is applied to
+the galaxy's own cold-gas disc density (`ColdGas` within a `DiskScaleRadius`
+sphere), scaled up by `FFBCloudClumping` to the density of the actual
+star-forming clumps, and FFB requires the resulting free-fall time to be
+shorter than the `FFBFeedbackDelayMyr` feedback delay (~1 Myr, eq. 3). The
+classification itself lives in `determine_and_store_ffb_regime()`; this
+function only consumes the `FFBRegime` flag.
 
 ## What is NOT in this module
 
@@ -270,8 +276,9 @@ vs sharp, concentration source). The classification itself lives in
 | `FracZleaveDisk` | Fraction of new metals that leave the disk (modulated by halo mass). |
 | `FIREmodeOn` | Switch to FIRE/Muratov+15 reheating and ejection. |
 | `RedshiftPowerLawExponent` | Redshift exponent in the FIRE scaling. |
-| `FeedbackFreeModeOn` | FFB regime classification mode (0-7); 0 disables the FFB path. |
+| `FeedbackFreeModeOn` | FFB regime classification mode (0-8); 0 disables the FFB path. |
 | `FFBMaxEfficiency` | SF efficiency in FFB mode. |
+| `FFBFeedbackDelayMyr`, `FFBCloudClumping` | Dekel+23 free-fall-time criterion parameters, mode 8 only. |
 | `H2DiskAreaOption`, `H2RadialIntegrationOn`, `H2RadialNBins`, `H2RadialRMaxFactor` | H2 surface-density geometry. |
 | `DiskInstabilityOn` | Run the Toomre check after SF. |
 
