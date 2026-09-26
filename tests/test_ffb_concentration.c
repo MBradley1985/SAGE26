@@ -43,6 +43,9 @@ static void init_millennium_params(struct params *rp)
      * core_read_parameter_file.c rather than the struct must be restored here.
      * FFBThresholdSlope = -6.2 is the Li+24 value (see set_defaults()). */
     rp->FFBThresholdSlope = -6.2;
+    /* Dekel+23 shell-scenario fiducials used by FeedbackFreeModeOn=8. */
+    rp->FFBStreamRadiusFraction = 0.05;   /* R_str/Rvir, eq. 61 */
+    rp->FFBShellSoundSpeedKms   = 13.0;   /* T ~ 10^4 K -> Mach ~ 15 at Vvir ~ 200 */
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -515,7 +518,7 @@ void test_ffb_mode0_all_normal()
         gals[i].FFBRegime = 1;  /* pre-set to 1 to verify it gets cleared */
     }
 
-    determine_and_store_ffb_regime(3, 10.0, gals, &rp);
+    determine_and_store_ffb_regime(3, 10.0, 0.0, 1.0, gals, &rp);
 
     ASSERT_EQUAL_INT(0, gals[0].FFBRegime, "Galaxy 0: FFBRegime=0 when mode off");
     ASSERT_EQUAL_INT(0, gals[1].FFBRegime, "Galaxy 1: FFBRegime=0 when mode off");
@@ -544,19 +547,19 @@ void test_ffb_mode1_respects_persistent_random()
 
     /* Low random → should be FFB (random < 0.5) */
     gal.FFBRandom = 0.1f;
-    determine_and_store_ffb_regime(1, z, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
     ASSERT_EQUAL_INT(1, gal.FFBRegime, "FFBRandom=0.1 < f_ffb=0.5 → FFB");
 
     /* High random → should NOT be FFB (random > 0.5) */
     gal.FFBRandom = 0.9f;
-    determine_and_store_ffb_regime(1, z, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "FFBRandom=0.9 > f_ffb=0.5 → normal");
 
     /* Deterministic: same random gives same result */
     gal.FFBRandom = 0.1f;
-    determine_and_store_ffb_regime(1, z, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
     int first = gal.FFBRegime;
-    determine_and_store_ffb_regime(1, z, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
     int second = gal.FFBRegime;
     ASSERT_EQUAL_INT(first, second,
                      "Same FFBRandom gives same result (deterministic)");
@@ -581,7 +584,7 @@ void test_ffb_hot_regime_excluded()
     gal.FFBRandom = 0.01f;       /* very low random → would be FFB */
     gal.Regime = 1;              /* but in hot CGM regime */
 
-    determine_and_store_ffb_regime(1, z, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "Hot-regime galaxy is not FFB");
 }
 
@@ -600,7 +603,7 @@ void test_ffb_mode2_gmax_threshold()
     gal_big.Rvir = 0.05;    /* compact → high g_max */
     gal_big.Regime = 0;
 
-    determine_and_store_ffb_regime(1, 10.0, &gal_big, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gal_big, &rp);
 
     /* Small halo at low z: should NOT be FFB */
     struct GALAXY gal_small;
@@ -609,7 +612,7 @@ void test_ffb_mode2_gmax_threshold()
     gal_small.Rvir = 0.03;
     gal_small.Regime = 0;
 
-    determine_and_store_ffb_regime(1, 0.0, &gal_small, &rp);
+    determine_and_store_ffb_regime(1, 0.0, 0.0, 1.0, &gal_small, &rp);
 
     ASSERT_EQUAL_INT(1, gal_big.FFBRegime,   "Massive compact halo at z=10 is FFB");
     ASSERT_EQUAL_INT(0, gal_small.FFBRegime,  "Small halo at z=0 is not FFB");
@@ -656,8 +659,8 @@ void test_ffb_mode3_uses_stored_concentration()
                         "Higher concentration → higher g_max");
 
     /* Verify determine_and_store_ffb_regime runs without crashing */
-    determine_and_store_ffb_regime(1, 10.0, &gals[0], &rp);
-    determine_and_store_ffb_regime(1, 10.0, &gals[1], &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gals[0], &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gals[1], &rp);
 
     printf("  g_max(c=20) = %.4e,  g_max(c=2) = %.4e (double precision)\n",
            gmax_hi, gmax_lo);
@@ -684,7 +687,7 @@ void test_ffb_merged_galaxies_skipped()
     gal.mergeType = 1;            /* merged */
     gal.FFBRegime = 99;           /* sentinel value */
 
-    determine_and_store_ffb_regime(1, z, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
 
     /* mergeType > 0 is skipped, so FFBRegime should be untouched */
     ASSERT_EQUAL_INT(99, gal.FFBRegime,
@@ -708,7 +711,7 @@ void test_ffb_mode4_basic_threshold()
     gal_big.Regime = 0;
     gal_big.FFBRandom = 0.5f;
 
-    determine_and_store_ffb_regime(1, 10.0, &gal_big, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gal_big, &rp);
     ASSERT_EQUAL_INT(1, gal_big.FFBRegime,
                      "Massive halo at z=10 is FFB (σ_c=0)");
 
@@ -720,7 +723,7 @@ void test_ffb_mode4_basic_threshold()
     gal_small.Regime = 0;
     gal_small.FFBRandom = 0.5f;
 
-    determine_and_store_ffb_regime(1, 0.0, &gal_small, &rp);
+    determine_and_store_ffb_regime(1, 0.0, 0.0, 1.0, &gal_small, &rp);
     ASSERT_EQUAL_INT(0, gal_small.FFBRegime,
                      "Small halo at z=0 is not FFB (σ_c=0)");
 
@@ -755,8 +758,8 @@ void test_ffb_mode4_scatter_splits_identical_halos()
     gals[0].FFBRandom = 0.01f;
     gals[1].FFBRandom = 0.99f;
 
-    determine_and_store_ffb_regime(1, 10.0, &gals[0], &rp);
-    determine_and_store_ffb_regime(1, 10.0, &gals[1], &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gals[0], &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gals[1], &rp);
 
     /* Both should have valid g_max */
     ASSERT_GREATER_THAN(gals[0].g_max, 0.0, "g_max stored for low-scatter galaxy");
@@ -793,12 +796,12 @@ void test_ffb_mode4_zero_sigma_matches_mode2()
 
     /* Mode 2: BK25 with Ishiyama+21 table, hard cutoff */
     rp.FeedbackFreeModeOn = 2;
-    determine_and_store_ffb_regime(1, 10.0, &gal_m2, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gal_m2, &rp);
 
     /* Mode 4: BK25 with Ishiyama+21 table + scatter, but σ_c = 0 */
     rp.FeedbackFreeModeOn = 4;
     rp.FFBConcSigma       = 0.0;
-    determine_and_store_ffb_regime(1, 10.0, &gal_m4, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gal_m4, &rp);
 
     ASSERT_EQUAL_INT(gal_m2.FFBRegime, gal_m4.FFBRegime,
                      "Same FFBRegime when σ_c = 0");
@@ -827,12 +830,12 @@ void test_ffb_mode4_deterministic()
     gal.Regime = 0;
     gal.FFBRandom = 0.42f;
 
-    determine_and_store_ffb_regime(1, 5.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, 5.0, 0.0, 1.0, &gal, &rp);
     int regime1 = gal.FFBRegime;
     double gmax1 = gal.g_max;
 
     /* Call again — same FFBRandom should give identical result */
-    determine_and_store_ffb_regime(1, 5.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, 5.0, 0.0, 1.0, &gal, &rp);
     int regime2 = gal.FFBRegime;
     double gmax2 = gal.g_max;
 
@@ -860,7 +863,7 @@ void test_ffb_mode5_hard_threshold()
     gal_above.Rvir = 0.1;
     gal_above.Regime = 0;
 
-    determine_and_store_ffb_regime(1, z, &gal_above, &rp);
+    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal_above, &rp);
     ASSERT_EQUAL_INT(1, gal_above.FFBRegime,
                      "Halo above M_thresh is FFB");
 
@@ -871,7 +874,7 @@ void test_ffb_mode5_hard_threshold()
     gal_below.Rvir = 0.1;
     gal_below.Regime = 0;
 
-    determine_and_store_ffb_regime(1, z, &gal_below, &rp);
+    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal_below, &rp);
     ASSERT_EQUAL_INT(0, gal_below.FFBRegime,
                      "Halo below M_thresh is not FFB");
 }
@@ -895,76 +898,117 @@ void test_ffb_mode5_ignores_random()
     gal.Regime = 0;
 
     gal.FFBRandom = 0.01f;
-    determine_and_store_ffb_regime(1, z, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
     ASSERT_EQUAL_INT(1, gal.FFBRegime, "FFB with FFBRandom=0.01");
 
     gal.FFBRandom = 0.99f;
-    determine_and_store_ffb_regime(1, z, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
     ASSERT_EQUAL_INT(1, gal.FFBRegime, "FFB with FFBRandom=0.99 (ignored)");
 
     /* Halo below threshold: also ignores FFBRandom */
     gal.Mvir = M_thresh * 0.5;
     gal.FFBRandom = 0.01f;
-    determine_and_store_ffb_regime(1, z, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "Not FFB below threshold regardless of FFBRandom");
 }
 
-void test_ffb_mode8_clumping_triggers_ffb()
+/* --- FeedbackFreeModeOn=8: Dekel+23 SHELL criterion (eqs. 38-41) ------------
+ *
+ * A z~10, Mvir~1e11 Msun central: Rvir ~ 13 kpc (0.0095 Mpc/h) and
+ * Vvir ~ 238 km/s. dt = 7.466e-5 code time is a 0.1 Gyr snapshot spacing
+ * (1 code time unit = 1339.5 Gyr at h = 0.73).
+ *
+ * At those values the shell density crosses n_fbk at infallingGas ~ 0.466
+ * code mass (~64 Msun/yr), so 0.1 sits clearly below it and 0.5 clearly
+ * above. Stated once here so every mode-8 test shares the same straddle. */
+#define MODE8_RVIR   0.0095      /* Mpc/h  */
+#define MODE8_VVIR   238.0       /* km/s   */
+#define MODE8_DT     7.466e-5    /* code time, = 0.1 Gyr */
+#define MODE8_LOW    0.1         /* code mass, n_sh ~ 478 cm^-3  -> no FFB */
+#define MODE8_HIGH   0.5         /* code mass, n_sh ~ 2392 cm^-3 -> FFB    */
+
+static void init_mode8_galaxy(struct GALAXY *gal)
 {
-    BEGIN_TEST("FeedbackFreeModeOn=8 (Dekel+23 eq. 4/5) triggers FFB with enough clumping");
+    memset(gal, 0, sizeof(struct GALAXY));
+    gal->Type = 0;               /* centrals only: satellites have no stream */
+    gal->Rvir = (float)MODE8_RVIR;
+    gal->Vvir = (float)MODE8_VVIR;
+    gal->Regime = 0;
+    /* ColdGas/DiskScaleRadius deliberately left at zero: the shell density is
+     * an inflow-flux density and must not depend on any reservoir mass. */
+}
+
+void test_ffb_mode8_accretion_triggers_ffb()
+{
+    BEGIN_TEST("FeedbackFreeModeOn=8 (Dekel+23 shell) triggers FFB at high accretion");
 
     struct params rp;
     init_millennium_params(&rp);
     rp.FeedbackFreeModeOn = 8;
     rp.FFBFeedbackDelayMyr = 1.0;   /* eq. 3 fiducial */
+    rp.FFBCloudClumping = 1.0;      /* eq. 62 corresponds to c = 1 for the shell */
 
-    /* ColdGas=0.01 (~1.37e8 Msun physical), DiskScaleRadius=0.0003 (~0.41 kpc
-     * physical) -- both in the ballpark of a real SAGE26 high-z central --
-     * give a disc-averaged density n(c=1) ~ 16 cm^-3, far below n_fbk. */
     struct GALAXY gal;
-    memset(&gal, 0, sizeof(struct GALAXY));
-    gal.ColdGas = 0.01f;
-    gal.DiskScaleRadius = 0.0003f;
-    gal.Regime = 0;
+    init_mode8_galaxy(&gal);
 
-    rp.FFBCloudClumping = 1.0;
-    determine_and_store_ffb_regime(1, 10.0, &gal, &rp);
-    ASSERT_EQUAL_INT(0, gal.FFBRegime, "No clumping: disc-averaged t_ff is not below t_fbk");
+    determine_and_store_ffb_regime(1, 10.0, MODE8_LOW, MODE8_DT, &gal, &rp);
+    ASSERT_EQUAL_INT(0, gal.FFBRegime, "Low accretion: shell t_ff is not below t_fbk");
 
-    /* c=200 lifts n above n_fbk (n_fbk/n(c=1) ~ 140), so eq. (4)'s t_ff drops
-     * below the 1 Myr feedback delay. */
-    rp.FFBCloudClumping = 200.0;
-    determine_and_store_ffb_regime(1, 10.0, &gal, &rp);
-    ASSERT_EQUAL_INT(1, gal.FFBRegime, "Sufficient clumping: t_ff drops below t_fbk");
+    determine_and_store_ffb_regime(1, 10.0, MODE8_HIGH, MODE8_DT, &gal, &rp);
+    ASSERT_EQUAL_INT(1, gal.FFBRegime, "High accretion: shell t_ff drops below t_fbk");
 }
 
-void test_ffb_mode8_denser_disc_more_likely_ffb()
+void test_ffb_mode8_uses_no_cold_gas()
 {
-    BEGIN_TEST("FeedbackFreeModeOn=8 favours a denser (more compact) cold-gas disc");
+    BEGIN_TEST("FeedbackFreeModeOn=8 ignores ColdGas entirely (flux, not reservoir)");
 
     struct params rp;
     init_millennium_params(&rp);
     rp.FeedbackFreeModeOn = 8;
     rp.FFBFeedbackDelayMyr = 1.0;
-    rp.FFBCloudClumping = 10.0;
+    rp.FFBCloudClumping = 1.0;
 
-    /* Same ColdGas mass, more compact disc -> higher density -> shorter t_ff. */
+    /* Two galaxies identical but for an enormous difference in cold-gas
+     * content and disc compactness -- the old disc criterion separated them
+     * completely; the shell criterion must not distinguish them at all. */
+    struct GALAXY gal_gasless, gal_gasrich;
+    init_mode8_galaxy(&gal_gasless);
+    init_mode8_galaxy(&gal_gasrich);
+    gal_gasrich.ColdGas = 10.0f;
+    gal_gasrich.DiskScaleRadius = 1.0e-5f;   /* extremely compact disc */
+
+    determine_and_store_ffb_regime(1, 10.0, MODE8_HIGH, MODE8_DT, &gal_gasless, &rp);
+    determine_and_store_ffb_regime(1, 10.0, MODE8_HIGH, MODE8_DT, &gal_gasrich, &rp);
+    ASSERT_EQUAL_INT(gal_gasless.FFBRegime, gal_gasrich.FFBRegime,
+                     "ColdGas and DiskScaleRadius do not affect the shell criterion");
+}
+
+void test_ffb_mode8_compact_halo_more_likely_ffb()
+{
+    BEGIN_TEST("FeedbackFreeModeOn=8 favours a smaller stream cross-section");
+
+    struct params rp;
+    init_millennium_params(&rp);
+    rp.FeedbackFreeModeOn = 8;
+    rp.FFBFeedbackDelayMyr = 1.0;
+    rp.FFBCloudClumping = 1.0;
+
+    /* n_sh ~ R_str^-2, so halving Rvir quadruples the shell density. At
+     * infallingGas = 0.2 the full-size halo falls short of n_fbk and the
+     * compact one clears it. */
+    const double infall = 0.2;
+
+    struct GALAXY gal_big;
+    init_mode8_galaxy(&gal_big);
+    determine_and_store_ffb_regime(1, 10.0, infall, MODE8_DT, &gal_big, &rp);
+
     struct GALAXY gal_compact;
-    memset(&gal_compact, 0, sizeof(struct GALAXY));
-    gal_compact.ColdGas = 0.01f;
-    gal_compact.DiskScaleRadius = 0.0001f;
-    gal_compact.Regime = 0;
-    determine_and_store_ffb_regime(1, 10.0, &gal_compact, &rp);
+    init_mode8_galaxy(&gal_compact);
+    gal_compact.Rvir = (float)(MODE8_RVIR / 2.0);
+    determine_and_store_ffb_regime(1, 10.0, infall, MODE8_DT, &gal_compact, &rp);
 
-    struct GALAXY gal_diffuse;
-    memset(&gal_diffuse, 0, sizeof(struct GALAXY));
-    gal_diffuse.ColdGas = 0.01f;
-    gal_diffuse.DiskScaleRadius = 0.001f;
-    gal_diffuse.Regime = 0;
-    determine_and_store_ffb_regime(1, 10.0, &gal_diffuse, &rp);
-
-    ASSERT_EQUAL_INT(1, gal_compact.FFBRegime, "Compact disc crosses the t_ff < t_fbk threshold");
-    ASSERT_EQUAL_INT(0, gal_diffuse.FFBRegime, "Diffuse disc of the same mass does not");
+    ASSERT_EQUAL_INT(0, gal_big.FFBRegime, "Full-size halo does not reach n_fbk");
+    ASSERT_EQUAL_INT(1, gal_compact.FFBRegime, "Compact halo's denser stream does");
 }
 
 void test_ffb_mode8_feedback_delay_monotonic()
@@ -977,23 +1021,20 @@ void test_ffb_mode8_feedback_delay_monotonic()
     rp.FFBCloudClumping = 1.0;
 
     struct GALAXY gal;
-    memset(&gal, 0, sizeof(struct GALAXY));
-    gal.ColdGas = 0.01f;
-    gal.DiskScaleRadius = 0.0003f;
-    gal.Regime = 0;
+    init_mode8_galaxy(&gal);
 
     rp.FFBFeedbackDelayMyr = 1.0e-3;
-    determine_and_store_ffb_regime(1, 10.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, 10.0, MODE8_LOW, MODE8_DT, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "Vanishingly small t_fbk: never FFB");
 
     rp.FFBFeedbackDelayMyr = 1.0e3;
-    determine_and_store_ffb_regime(1, 10.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, 10.0, MODE8_LOW, MODE8_DT, &gal, &rp);
     ASSERT_EQUAL_INT(1, gal.FFBRegime, "Enormous t_fbk: always FFB");
 }
 
 void test_ffb_mode8_invalid_halo()
 {
-    BEGIN_TEST("FeedbackFreeModeOn=8 handles ColdGas/DiskScaleRadius <= 0");
+    BEGIN_TEST("FeedbackFreeModeOn=8 handles no accretion, zero Rvir/Vvir and satellites");
 
     struct params rp;
     init_millennium_params(&rp);
@@ -1001,21 +1042,34 @@ void test_ffb_mode8_invalid_halo()
     rp.FFBFeedbackDelayMyr = 1.0e6;   /* would otherwise force FFB=1 */
     rp.FFBCloudClumping = 1.0;
 
-    struct GALAXY gal_zero_gas;
-    memset(&gal_zero_gas, 0, sizeof(struct GALAXY));
-    gal_zero_gas.ColdGas = 0.0f;
-    gal_zero_gas.DiskScaleRadius = 0.0003f;
-    gal_zero_gas.Regime = 0;
-    determine_and_store_ffb_regime(1, 10.0, &gal_zero_gas, &rp);
-    ASSERT_EQUAL_INT(0, gal_zero_gas.FFBRegime, "Zero cold gas is never FFB");
+    struct GALAXY gal;
 
-    struct GALAXY gal_zero_radius;
-    memset(&gal_zero_radius, 0, sizeof(struct GALAXY));
-    gal_zero_radius.ColdGas = 0.01f;
-    gal_zero_radius.DiskScaleRadius = 0.0f;
-    gal_zero_radius.Regime = 0;
-    determine_and_store_ffb_regime(1, 10.0, &gal_zero_radius, &rp);
-    ASSERT_EQUAL_INT(0, gal_zero_radius.FFBRegime, "Zero disc radius is never FFB");
+    init_mode8_galaxy(&gal);
+    determine_and_store_ffb_regime(1, 10.0, 0.0, MODE8_DT, &gal, &rp);
+    ASSERT_EQUAL_INT(0, gal.FFBRegime, "No accretion this step: not FFB");
+
+    init_mode8_galaxy(&gal);
+    determine_and_store_ffb_regime(1, 10.0, -1.0, MODE8_DT, &gal, &rp);
+    ASSERT_EQUAL_INT(0, gal.FFBRegime, "Shrinking halo (negative infall): not FFB");
+
+    init_mode8_galaxy(&gal);
+    determine_and_store_ffb_regime(1, 10.0, MODE8_HIGH, 0.0, &gal, &rp);
+    ASSERT_EQUAL_INT(0, gal.FFBRegime, "Zero timestep: not FFB");
+
+    init_mode8_galaxy(&gal);
+    gal.Rvir = 0.0f;
+    determine_and_store_ffb_regime(1, 10.0, MODE8_HIGH, MODE8_DT, &gal, &rp);
+    ASSERT_EQUAL_INT(0, gal.FFBRegime, "Zero Rvir: not FFB");
+
+    init_mode8_galaxy(&gal);
+    gal.Vvir = 0.0f;
+    determine_and_store_ffb_regime(1, 10.0, MODE8_HIGH, MODE8_DT, &gal, &rp);
+    ASSERT_EQUAL_INT(0, gal.FFBRegime, "Zero Vvir: not FFB");
+
+    init_mode8_galaxy(&gal);
+    gal.Type = 1;
+    determine_and_store_ffb_regime(1, 10.0, MODE8_HIGH, MODE8_DT, &gal, &rp);
+    ASSERT_EQUAL_INT(0, gal.FFBRegime, "Satellite: no cosmic-web stream of its own");
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1070,8 +1124,9 @@ int main()
     test_ffb_mode4_deterministic();
     test_ffb_mode5_hard_threshold();
     test_ffb_mode5_ignores_random();
-    test_ffb_mode8_clumping_triggers_ffb();
-    test_ffb_mode8_denser_disc_more_likely_ffb();
+    test_ffb_mode8_accretion_triggers_ffb();
+    test_ffb_mode8_uses_no_cold_gas();
+    test_ffb_mode8_compact_halo_more_likely_ffb();
     test_ffb_mode8_feedback_delay_monotonic();
     test_ffb_mode8_invalid_halo();
 

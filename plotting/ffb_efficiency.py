@@ -1,16 +1,17 @@
 #!/usr/bin/env python
 """
-SAGE26 FFB efficiency comparison: two runs differing only in FFBMaxEfficiency
-(alpha_eff = 0.2 fiducial, 1.0 the theoretical maximum), in three redshift bins.
-Nothing is recalibrated between them, so the 1.0 run is not a re-tuned model.
+SAGE26 FFB efficiency: the alpha_eff = 0.2 fiducial run, in three redshift
+bins. The alpha_eff = 1.0 run (the theoretical maximum, differing only in
+FFBMaxEfficiency and not re-tuned) can be added alongside it with
+--with-alpha1.
 
 Two figures in <fid>/plots/:
 
-    FFB_Efficiency_SHMR.pdf               m*/Mvir against halo mass, axes
+    SHMR.pdf               m*/Mvir against halo mass, axes
                                           sized to the data, with the stellar
                                           baryon fraction on the right
 
-    FFB_Efficiency_SHMR_ScreenshotAxes.pdf  the same curves, fixed to the
+    SHMR_ScreenshotAxes.pdf  the same curves, fixed to the
                                           x=5-300, y=7e-3-0.04 range read off
                                           the NIRISS WFSS proposal figure's SHMR
                                           panel -- an axis match only, NOT a
@@ -23,10 +24,11 @@ Two figures in <fid>/plots/:
                                           calibration outcomes, not predictions
                                           SAGE26 is expected to match.
 
-    FFB_Efficiency_Panels.pdf             row 1 (wide)  number counts vs m*
+    Panels.pdf             row 1 (wide)  number counts vs m*
                                           row 2  SHMR | SFR-m* | MZR | quiescent
 
-Colour is the redshift bin, line style the efficiency (solid 0.2, dashed 1.0).
+Colour is the redshift bin; line style distinguishes efficiency (solid 0.2,
+dashed 1.0) when --with-alpha1 draws both, but there is no legend for it.
 Self-contained: reads the SAGE HDF5 output directly, across every MPI rank's
 model_*.hdf5, and imports nothing from the rest of the plotting code.
 
@@ -47,7 +49,7 @@ its left end and leaves every remaining point unchanged (verified -- with and
 without the cut, every shared bin agrees exactly).
 
     python plotting/ffb_efficiency.py
-    python plotting/ffb_efficiency.py --fid output/miniUchuu --full output/miniUchuu_ffb100
+    python plotting/ffb_efficiency.py --with-alpha1 --fid output/miniUchuu --full output/miniUchuu_ffb100
     python plotting/ffb_efficiency.py --figure shmr           # SHMR pair only, skip panels
     python plotting/ffb_efficiency.py --min-mstar 0           # extend below the limit
     python plotting/ffb_efficiency.py --dilute 500000         # thin a big box
@@ -84,8 +86,6 @@ Z_SUN = 0.02                            # for 12 + log10(O/H), solar = 9.0
 
 FID_STYLE = dict(ls='-', lw=1.5)
 FULL_STYLE = dict(ls=(0, (5, 1.8)), lw=1.0)
-FID_LABEL = r'SAGE26 $\alpha_{\rm eff} = 0.2$ (fiducial)'
-FULL_LABEL = r'SAGE26 $\alpha_{\rm eff} = 1.0$'
 
 # --- SHMR figure axes ---
 XLIM = (7.0, 1000.0)
@@ -338,11 +338,8 @@ def legend(ax, loc, handles, **kwargs):
 
 
 def legend_handles():
-    epochs = [Line2D([], [], color=c, lw=1.5, label=rf'${lo:g} < z < {hi:g}$')
-              for lo, hi, c in Z_BINS]
-    effs = [Line2D([], [], color='0.35', **FID_STYLE, label=FID_LABEL),
-            Line2D([], [], color='0.35', **FULL_STYLE, label=FULL_LABEL)]
-    return epochs, effs
+    return [Line2D([], [], color=c, lw=1.5, label=rf'${lo:g} < z < {hi:g}$')
+            for lo, hi, c in Z_BINS]
 
 
 def mass_cut_note(ax, min_mstar, x, y, **kwargs):
@@ -351,7 +348,7 @@ def mass_cut_note(ax, min_mstar, x, y, **kwargs):
                 transform=ax.transAxes, fontsize=10, **kwargs)
 
 
-def figure_shmr(samples, f_b, min_mstar, outdir, fixed_axes=False):
+def figure_shmr(samples, models, f_b, min_mstar, outdir, fixed_axes=False):
     """m*/Mvir against halo mass, on the proposal figure's axes.
 
     fixed_axes=True locks the panel to SCREENSHOT_XLIM/YLIM -- the range and
@@ -371,7 +368,8 @@ def figure_shmr(samples, f_b, min_mstar, outdir, fixed_axes=False):
     drawn = []
 
     for z_lo, z_hi, color in Z_BINS:
-        for full, style in ((False, FID_STYLE), (True, FULL_STYLE)):
+        for full in models:
+            style = FULL_STYLE if full else FID_STYLE
             g, hubble_h = samples[(z_lo, z_hi, full)]
             x, y = shmr(g, hubble_h)
             ax.plot(x, y, color=color, zorder=3, **style)
@@ -403,18 +401,16 @@ def figure_shmr(samples, f_b, min_mstar, outdir, fixed_axes=False):
     right.set_yticks(fb_keep, [str(t) for t in fb_keep])
     right.set_yticks([], minor=True)
 
-    epochs, effs = legend_handles()
-    ax.add_artist(legend(ax, 'upper left', epochs, fontsize=11))
-    legend(ax, 'lower right', effs, fontsize=11)
+    legend(ax, 'upper left', legend_handles(), fontsize=11)
     mass_cut_note(ax, min_mstar, 0.97, 0.97, ha='right', va='top')
 
     fig.tight_layout()
-    name = 'FFB_Efficiency_SHMR_ScreenshotAxes.pdf' if fixed_axes \
-           else 'FFB_Efficiency_SHMR.pdf'
+    name = 'SHMR_ScreenshotAxes.pdf' if fixed_axes \
+           else 'SHMR.pdf'
     save(fig, outdir, name)
 
 
-def figure_panels(samples, min_mstar, outdir):
+def figure_panels(samples, models, min_mstar, outdir):
     """Number counts across the top; SHMR, SFR, MZR and quiescent beneath."""
     # constrained layout, not tight_layout: the wide top panel spans the
     # gridspec and tight_layout cannot place it without overlapping row 2.
@@ -429,7 +425,8 @@ def figure_panels(samples, min_mstar, outdir):
     ax_counts.set_yscale('log')
 
     for z_lo, z_hi, color in Z_BINS:
-        for full, style in ((False, FID_STYLE), (True, FULL_STYLE)):
+        for full in models:
+            style = FULL_STYLE if full else FID_STYLE
             g, hubble_h = samples[(z_lo, z_hi, full)]
 
             # Counts at the bin centres, on the shared MSTAR_BINS grid.
@@ -471,16 +468,11 @@ def figure_panels(samples, min_mstar, outdir):
     ax_q.text(0.04, 0.95, r'sSFR $< 10^{-11}\ \mathrm{yr}^{-1}$',
               transform=ax_q.transAxes, va='top', fontsize=9, color='0.35')
 
-    epochs, effs = legend_handles()
-    ax_counts.add_artist(legend(ax_counts, 'upper right', epochs, fontsize=11))
-    # Stacked under the redshift key rather than in another corner, so the two
-    # halves of the encoding are read together.
-    legend(ax_counts, 'upper right', effs, fontsize=11,
-           bbox_to_anchor=(1.0, 0.74))
+    legend(ax_counts, 'upper right', legend_handles(), fontsize=11)
     mass_cut_note(ax_counts, min_mstar, 0.5, 1.02, ha='center', va='bottom',
                   color='0.35')
 
-    save(fig, outdir, 'FFB_Efficiency_Panels.pdf')
+    save(fig, outdir, 'Panels.pdf')
 
 
 def save(fig, outdir, name):
@@ -498,9 +490,12 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--fid', default=FID_DIR, help='alpha_eff = 0.2 output')
     ap.add_argument('--full', default=FULL_DIR, help='alpha_eff = 1.0 output')
+    ap.add_argument('--with-alpha1', action='store_true',
+                    help='also plot the alpha_eff = 1.0 run (--full) alongside '
+                         'the fiducial 0.2 run; off by default')
     ap.add_argument('--figure', default='both', choices=('both', 'shmr', 'panels'),
                     help="'shmr' also produces the fixed-axis "
-                         "FFB_Efficiency_SHMR_ScreenshotAxes.pdf alongside it")
+                         "SHMR_ScreenshotAxes.pdf alongside it")
     ap.add_argument('--min-mstar', type=float, default=MIN_MSTAR, metavar='MSUN')
     ap.add_argument('--dilute', type=int, default=DILUTE, metavar='N',
                     help='randomly thin each sample to at most N galaxies')
@@ -519,8 +514,12 @@ def main():
     props = ['StellarMass', 'Mvir'] if args.figure == 'shmr' else list(PROPS)
 
     # Each run read once, in one pass over its files, then sliced per bin.
+    # The alpha_eff = 1.0 run is only read/plotted when --with-alpha1 is given.
+    models = [False, True] if args.with_alpha1 else [False]
+    runs = {False: args.fid, True: args.full}
     samples = {}
-    for full, directory in ((False, args.fid), (True, args.full)):
+    for full in models:
+        directory = runs[full]
         hdr, per_snap = load_run(directory, props, min_mstar,
                                  args.nproc, not args.no_cache)
         for z_lo, z_hi, _ in Z_BINS:
@@ -534,10 +533,10 @@ def main():
     # 'screenshot' is a fixed-axis view of the same SHMR curves as 'shmr', so
     # it is drawn alongside it by default rather than needing its own flag.
     if args.figure in ('both', 'shmr', 'screenshot'):
-        figure_shmr(samples, f_b, min_mstar, outdir)
-        figure_shmr(samples, f_b, min_mstar, outdir, fixed_axes=True)
+        figure_shmr(samples, models, f_b, min_mstar, outdir)
+        figure_shmr(samples, models, f_b, min_mstar, outdir, fixed_axes=True)
     if args.figure in ('both', 'panels'):
-        figure_panels(samples, min_mstar, outdir)
+        figure_panels(samples, models, min_mstar, outdir)
 
 
 if __name__ == '__main__':

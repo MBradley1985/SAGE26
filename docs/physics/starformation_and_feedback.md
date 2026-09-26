@@ -244,11 +244,29 @@ The eight sub-modes of `FeedbackFreeModeOn` (1-8) control which threshold
 classifies a galaxy as FFB-eligible (Li+2024 mass threshold vs
 Boylan-Kolchin+2025 acceleration threshold vs Dekel+2023 free-fall-time
 threshold, sigmoid vs sharp, concentration source). Mode 8 evaluates the
-Dekel et al. (2023) criterion (their eqs. 3-5) directly: eq. (4) is applied to
-the galaxy's own cold-gas disc density (`ColdGas` within a `DiskScaleRadius`
-sphere), scaled up by `FFBCloudClumping` to the density of the actual
-star-forming clumps, and FFB requires the resulting free-fall time to be
-shorter than the `FFBFeedbackDelayMyr` feedback delay (~1 Myr, eq. 3). The
+Dekel et al. (2023) criterion (their eqs. 3-5) directly, applying eq. (4) to
+the **post-shock shell** density `n_sh` (their eqs. 38-41) rather than to any
+disc density. Accreting gas is funnelled through a stream of radius
+`R_str = FFBStreamRadiusFraction * Rvir` at `Vvir`, so mass conservation
+(eq. 39) sets the pre-shock density `rho_str = Mdot_ac / (pi R_str^2 Vvir)`,
+which the shock compresses by `Mach^2` (eq. 38, `Mach = Vvir /
+FFBShellSoundSpeedKms`); `FFBCloudClumping` then scales that up to the
+star-forming clouds. FFB requires the resulting free-fall time to be shorter
+than the `FFBFeedbackDelayMyr` feedback delay (~1 Myr, eq. 3).
+
+`Mdot_ac` is SAGE26's own baryonic accretion onto the halo -- `infall_recipe()`'s
+`infallingGas` over the snapshot's `dt`, including the reionization modifier --
+not Dekel+23's analytic eq. 31 fitting formula, which would reproduce their
+eq. 62 threshold by construction and predict nothing. This criterion uses **no
+`ColdGas`**: the shell density is an inflow-flux density, not a reservoir
+density, and that is exactly where eq. 62's halo-mass dependence comes from.
+Dekel+23 sec. 8.2 is explicit that a *disc* density cannot substitute -- it
+"translates to a threshold in redshift with no explicit mass dependence", their
+eq. 63 giving `n_d ~ Mvir^0.05` -- which is why mode 8 is no longer a disc
+calculation. It applies to centrals only: `infallingGas` is the FoF group's
+budget, credited to the central, and a satellite has no cosmic-web stream of
+its own. Because it needs `Mdot_ac`, `determine_and_store_ffb_regime()` runs
+*after* `infall_recipe()` in `evolve_galaxies()`. The
 classification itself lives in `determine_and_store_ffb_regime()`; this
 function only consumes the `FFBRegime` flag.
 

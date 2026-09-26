@@ -536,15 +536,47 @@ struct params
     double FFBFeedbackDelayMyr; // t_fbk in Dekel+23 eq. 3: the delay before stellar winds/SNe become
                                 // effective in a low-Z starburst (~1 Myr fiducial). Used by
                                 // FeedbackFreeModeOn=8: FFB requires t_ff < t_fbk, where t_ff is eq. (4)
-                                // evaluated at the galaxy's cold-gas disc density (ColdGas within a
-                                // DiskScaleRadius sphere), boosted by FFBCloudClumping.
-    double FFBCloudClumping;   // c in Dekel+23 sec. 6/eq. 37: density enhancement of the star-forming
-                                // clumps above the galaxy's disc-averaged cold-gas density (c >= 1).
-                                // FeedbackFreeModeOn=8 multiplies the disc density n by c before
-                                // evaluating eq. (4); on millennium_noffb at z~8.5 the median disc
-                                // density is ~50 cm^-3 against n_fbk ~2.2e3 cm^-3 (eq. 5), so c ~ O(10)
-                                // is enough to bring typical halos across the threshold.
+                                // evaluated at the post-shock SHELL density n_sh (eqs. 38-41).
+    double FFBCloudClumping;   // c in Dekel+23 eq. 41: density contrast between the star-forming
+                                // clouds and the mean post-shock shell density (c >= 1).
+                                // FeedbackFreeModeOn=8 multiplies n_sh by c before evaluating eq. (4).
+                                // NOTE the fiducial is 1.0, NOT the c ~ 8 D23's Fig. 6 uses for their
+                                // *disc* threshold: in the shell scenario the Mach^2 shock compression
+                                // (~275x) already supplies the contrast the disc scenario needs c for,
+                                // and eq. 41's own coefficient is already ~n_fbk, so c = 1 reproduces
+                                // the eq. 62 threshold. Raising c to 8 here double-counts the
+                                // compression and drags the threshold mass down by ~1.1 dex.
+    double FFBCloudClumpingDisk; // c_disk in Dekel+23 eq. 49: density contrast between the star-forming
+                                // clouds and the mean disc density (c_disk >= 1). Used only by
+                                // FeedbackFreeModeOn=9, which multiplies the disc's mean density by
+                                // c_disk before evaluating eq. (4). Fiducial 1.0, NOT the c ~ 8 D23's
+                                // Fig. 6 uses for their *disc* threshold: in the shell scenario the
+                                // Mach^2 shock compression (~275x) already supplies the contrast the
+                                // disc scenario needs c for, and eq. 41's own coefficient is already
+                                // ~n_fbk, so c_disk = 1 reproduces the eq. 62 threshold. Raising
+                                // c_disk to 8 here double-counts the compression and drags the
+                                // threshold mass down by ~1.1 dex.
+    double FFBStreamRadiusFraction; // R_str/Rvir in Dekel+23 eq. 61: the cold stream's cross-sectional
+                                // radius as a fraction of the virial radius, through which the
+                                // accreting gas is funnelled (their fiducial 0.05). Sets the
+                                // pre-shock stream density via eq. 39, rho_str = Mdot_ac/(pi R_str^2 V_v).
+    double FFBShellSoundSpeedKms; // c_s of the post-shock gas [km/s], setting the Mach compression
+                                // M = V_v/c_s in eq. 38 (and hence the T_4^-1 term of eq. 41). D23 take
+                                // the shocked gas to cool rapidly to T ~ 10^4 K; 13 km/s reproduces
+                                // their quoted M ~ 15 at V_v ~ 200 km/s. NOTE this asserts D23's
+                                // rapid-cooling assumption -- SAGE26's own infall goes to the HOT
+                                // reservoir at T_vir (add_infall_to_hot(), model_infall.c).
     double FeedbackReheatingEpsilon;   /* SN mass-loading: reheated mass per unit stars formed [dimensionless] */
+    double FFBToomreQ;          // Q in Dekel+23 eq. 47/49, the disc's Toomre parameter. Sets the
+                                // fragmentation radius R_T = (pi/4) Q delta R_d and hence the clump
+                                // radius. Their fiducial 0.67. Used only by FeedbackFreeModeOn=9;
+                                // SAGE26 tracks no disc velocity dispersion, so this is a constant
+                                // rather than a computed quantity.
+    double FFBSigmaCritMsunPc2; // Sigma_crit in Dekel+23 eq. 9 [Msun/pc^2]: the surface density above
+                                // which radiation pressure cannot unbind a star-forming clump
+                                // (Fall+10; Grudic+18). NOTE this is NOT a free-fall criterion -- it is
+                                // separate physics from FFBFeedbackDelayMyr, and mode 9 requires BOTH.
+                                // D23 eq. 9 quotes ~3e3; their Fig. 6 draws 2e3.
     double FeedbackEjectionEfficiency; /* fraction of SN energy available to eject gas from the halo [dimensionless] */
     double RadioModeEfficiency;   /* radio-mode AGN heating efficiency [dimensionless] */
     double QuasarModeEfficiency;  /* quasar-mode BH accretion efficiency during mergers [dimensionless] */

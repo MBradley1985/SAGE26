@@ -110,6 +110,11 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->FFBThresholdSlope          = -6.2;
     run_params->FFBFeedbackDelayMyr        = 1.0;
     run_params->FFBCloudClumping           = 1.0;
+    run_params->FFBCloudClumpingDisk       = 8.0;
+    run_params->FFBStreamRadiusFraction    = 0.05; /* R_str/Rvir, Dekel+23 eq. 61 fiducial */
+    run_params->FFBShellSoundSpeedKms      = 13.0;
+    run_params->FFBToomreQ                 = 0.67;  /* Dekel+23 eq. 47 fiducial */
+    run_params->FFBSigmaCritMsunPc2        = 3000.0;
     run_params->ConcentrationOn            = 3;
     run_params->FeedbackFreeModeOn         = 1;
     run_params->FFBIgnoreRegime            = 1;  /* (hard-code once published)*/
@@ -231,6 +236,11 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("FFBThresholdSlope",          &(run_params->FFBThresholdSlope),          DOUBLE, 0);
     REG("FFBFeedbackDelayMyr",        &(run_params->FFBFeedbackDelayMyr),        DOUBLE, 0);
     REG("FFBCloudClumping",           &(run_params->FFBCloudClumping),           DOUBLE, 0);
+    REG("FFBCloudClumpingDisk",       &(run_params->FFBCloudClumpingDisk),       DOUBLE, 0);
+    REG("FFBStreamRadiusFraction",    &(run_params->FFBStreamRadiusFraction),    DOUBLE, 0);
+    REG("FFBShellSoundSpeedKms",      &(run_params->FFBShellSoundSpeedKms),      DOUBLE, 0);
+    REG("FFBToomreQ",                 &(run_params->FFBToomreQ),                 DOUBLE, 0);
+    REG("FFBSigmaCritMsunPc2",        &(run_params->FFBSigmaCritMsunPc2),        DOUBLE, 0);
     REG("RedshiftPowerLawExponent",   &(run_params->RedshiftPowerLawExponent),   DOUBLE, 0);
     REG("SNEnergyConservationOn",     &(run_params->SNEnergyConservationOn),     INT, 0);
     REG("MaxSNEnergyCoupling",        &(run_params->MaxSNEnergyCoupling),        DOUBLE, 0);
@@ -555,7 +565,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
             {"RegimeRandomMode",       run_params->RegimeRandomMode,       0, 1},
             {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
-            {"FeedbackFreeModeOn",     run_params->FeedbackFreeModeOn,     0, 8},
+            {"FeedbackFreeModeOn",     run_params->FeedbackFreeModeOn,     0, 11},
             {"FFBIgnoreRegime",        run_params->FFBIgnoreRegime,        0, 1},
             {"FFBRandomMode",          run_params->FFBRandomMode,          0, 1},
             {"ColdStreamCeilingOn",    run_params->ColdStreamCeilingOn,    0, 1},
@@ -633,10 +643,42 @@ int read_parameter_file(const char *fname, struct params *run_params)
         ABORT(EXIT_FAILURE);
     }
     if(run_params->FeedbackFreeModeOn == 8 && run_params->FFBCloudClumping < 1.0) {
-        fprintf(stderr, "Error: FeedbackFreeModeOn = 8 uses the Dekel+23 free-fall-time criterion, but\n"
-                        "FFBCloudClumping = %g; the clumping factor must be >= 1 (star-forming clumps are\n"
-                        "at least as dense as the halo's mean virial density).\n",
+        fprintf(stderr, "Error: FeedbackFreeModeOn = 8 uses the Dekel+23 shell free-fall-time criterion,\n"
+                        "but FFBCloudClumping = %g; the clumping factor must be >= 1 (star-forming clumps\n"
+                        "are denser than the mean post-shock shell, not less dense). Note the shell\n"
+                        "fiducial is 1.0, not the c ~ 8 Dekel+23 Fig. 6 uses for their *disc* threshold:\n"
+                        "the Mach^2 shock compression already supplies that contrast.\n",
                 run_params->FFBCloudClumping);
+        ABORT(EXIT_FAILURE);
+    }
+
+    if(run_params->FeedbackFreeModeOn == 8 && run_params->FFBStreamRadiusFraction <= 0.0) {
+        fprintf(stderr, "Error: FeedbackFreeModeOn = 8 needs a positive stream radius, but\n"
+                        "FFBStreamRadiusFraction = %g (Dekel+23 eq. 61 fiducial 0.05).\n",
+                run_params->FFBStreamRadiusFraction);
+        ABORT(EXIT_FAILURE);
+    }
+
+    if(run_params->FeedbackFreeModeOn == 8 && run_params->FFBShellSoundSpeedKms <= 0.0) {
+        fprintf(stderr, "Error: FeedbackFreeModeOn = 8 needs a positive post-shock sound speed, but\n"
+                        "FFBShellSoundSpeedKms = %g (fiducial 13 km/s, i.e. T ~ 10^4 K).\n",
+                run_params->FFBShellSoundSpeedKms);
+        ABORT(EXIT_FAILURE);
+    }
+
+    if((run_params->FeedbackFreeModeOn == 9 || run_params->FeedbackFreeModeOn == 10)
+       && run_params->FFBToomreQ <= 0.0) {
+        fprintf(stderr, "Error: FeedbackFreeModeOn = 9 uses the Dekel+23 disc scenario, but\n"
+                        "FFBToomreQ = %g; the Toomre parameter must be > 0 (fiducial 0.67).\n",
+                run_params->FFBToomreQ);
+        ABORT(EXIT_FAILURE);
+    }
+
+    if((run_params->FeedbackFreeModeOn == 9 || run_params->FeedbackFreeModeOn == 10)
+       && run_params->FFBSigmaCritMsunPc2 <= 0.0) {
+        fprintf(stderr, "Error: FeedbackFreeModeOn = 9 needs a positive clump surface-density\n"
+                        "threshold, but FFBSigmaCritMsunPc2 = %g (Dekel+23 eq. 9 fiducial 3e3).\n",
+                run_params->FFBSigmaCritMsunPc2);
         ABORT(EXIT_FAILURE);
     }
 

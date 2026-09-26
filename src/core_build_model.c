@@ -379,10 +379,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         determine_and_store_regime(ngal, galaxies, run_params);
     }
     
-    if (run_params->FeedbackFreeModeOn >= 1) {
-        determine_and_store_ffb_regime(ngal, Zcurr, galaxies, run_params);
-    }
-
     const double halo_age = run_params->Age[halo_snapnum];
     const double infallingGas = infall_recipe(centralgal, ngal, Zcurr, galaxies, run_params);
 
@@ -390,6 +386,19 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
     // Adaptive timesteps: at high-z, snapshot spacing can exceed dynamical time
     // so we use more substeps when needed
     const double deltaT_total = run_params->Age[galaxies[0].SnapNum] - halo_age;
+
+    /* Must run AFTER infall_recipe(): FeedbackFreeModeOn=8 is the Dekel+23
+     * post-shock shell criterion, and the shell density is built on the
+     * baryonic accretion rate Mdot_ac = infallingGas / deltaT_total (eq. 39),
+     * not on any reservoir mass. infall_recipe() only moves satellite
+     * reservoirs into the central and returns the FoF baryon budget -- it
+     * changes no Mvir/Rvir/Vvir/ColdGas the other FFB modes read, so running
+     * the classification here rather than before it leaves modes 1-7
+     * unchanged. */
+    if (run_params->FeedbackFreeModeOn >= 1) {
+        determine_and_store_ffb_regime(ngal, Zcurr, infallingGas, deltaT_total,
+                                       galaxies, run_params);
+    }
 
     /* t_dyn = Rvir [Mpc/h] / Vvir [km/s] * KM_PER_MPC [km/Mpc] gives t_dyn in seconds. */
     double t_dyn_seconds = (galaxies[centralgal].Rvir / (galaxies[centralgal].Vvir + 1e-10)) * KM_PER_MPC;
