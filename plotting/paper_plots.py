@@ -42,7 +42,7 @@ except ImportError:
 # ========================== CONFIGURATION ==========================
 
 # File paths
-PRIMARY_DIR = './output/millennium/'
+PRIMARY_DIR = './output/millennium_ffbmode11/'
 VANILLA_DIR = './output/millennium_vanilla/'
 NOFFB_DIR = './output/millennium_noffb/'
 NOCGM_DIR = './output/millennium_nocgm/'
@@ -58,7 +58,7 @@ FFB_BK25_FFB100_DIR = './output/millennium_ffb100_mbk/'
 FFB_NOSIGMOID_DIR = './output/millennium_nosigmoid/'
 # CGM_DYN_DIR = './output/millennium_cgmdyn/'
 # DISK_SMOOTH_DIR = './output/millennium_disk2/'
-MINIUCHUU_DIR = './output/microuchuu/'
+MINIUCHUU_DIR = './output/microuchuu_ffbmode11/'
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
 
