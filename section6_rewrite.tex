@@ -88,19 +88,23 @@ $\rho_{\mathrm{stream}}/\rho_{\mathrm{halo}} \sim
 \end{equation}
 
 where $\mathrm{M_*}(z)$ is the Press--Schechter clustering mass of each
-cosmology and $f \sim 3$. Streams penetrate where $\mathcal{R} < 1$. We adopt
-this criterion as a fraction rather than a verdict,
+cosmology and $f \sim 3$. Streams penetrate where $\mathcal{R} < 1$. Rather
+than applying a binary cut-off, we model the transition across the vicinity of
+the threshold in the same way as the feedback-free burst fraction of
+Section~13, taking
 
 \begin{equation}
-f_{\mathrm{stream}} = \left[ 1 +
-\mathcal{R}^{\,1/\Delta \log \mathcal{R}} \right]^{-1},
+f_{\mathrm{stream}}(\mathrm{M_{vir}}, z) = S
+\left[ \frac{-\log \mathcal{R}}{\Delta \log \mathcal{R}} \right],
 \label{eq:fstream}
 \end{equation}
 
-with $\Delta \log \mathcal{R} = 0.15$~dex, so $f_{\mathrm{stream}} = 1/2$ at the
-threshold. Because the two channels are weighted by $1 - f_{\mathrm{stream}}$
-and $f_{\mathrm{stream}}$, a finite width is what allows shocked and penetrating
-gas to coexist in one halo; a strict step would make them exclusive.
+where $S(x) = (1 + e^{-x})^{-1}$ is the sigmoid of Equation~39 and
+$\Delta \log \mathcal{R} = 0.065$~dex, so $f_{\mathrm{stream}} = 1/2$ at the
+threshold and approaches unity where streams penetrate freely. Because the two
+channels are weighted by $1 - f_{\mathrm{stream}}$ and $f_{\mathrm{stream}}$, a
+finite width is what allows shocked and penetrating gas to coexist in one halo;
+a strict step would make them exclusive.
 
 The mass and redshift behaviour then follows from Equation~\ref{eq:dbratio}
 rather than being imposed separately. Setting it to unity gives the stream
@@ -191,4 +195,20 @@ penetrate, and the inflow model of Section~3.1 applies instead.
 %    early return or flipped regime -- 1006 galaxies showed phantom streams
 %    at z = 1.08. Diagnostic only, but it is a saved output field.
 %
-% 7. Citation keys are guesses -- check against the .bib.
+% 7. SIGMOID: 0.065 dex IN THE TEXT vs 0.15 dex IN THE CODE -- not an error.
+%    The code writes f_stream = 1/(1 + 10^(logR/0.15)), a BASE-10 logistic, so
+%    "0.15 dex" there is a literal dex width. Section 13 / Li+24 eq. 3 define
+%    the house sigmoid S(x) = (1+e^-x)^-1, base e. Re-expressing the code's
+%    form in that S gives exactly S(-logR/0.065), since 0.15/ln(10) = 0.0651.
+%    Verified identical to machine precision over log R = -0.3 .. +0.3.
+%    The text therefore matches Section 13's notation with NO model change.
+%    If you would rather quote 0.15 dex in both sections, the code must switch
+%    to exp() -- but that widens the stream transition by ln(10) = 2.3x, from
+%    a 0.29 dex to a 0.66 dex 10-90% span, which IS a model change and would
+%    need recalibrating. Note the same ln(10) applies to Section 13 and to the
+%    regime sigmoid (model_regimes.c:133, exp with 0.1 dex): both are ~2.3x
+%    wider than their stated dex. Li+24 call their 0.15 dex "quite arbitrary",
+%    so this is a presentation issue, not a physics one -- but a reader WILL
+%    assume two "0.15 dex" sigmoids are the same width.
+%
+% 8. Citation keys are guesses -- check against the .bib.
