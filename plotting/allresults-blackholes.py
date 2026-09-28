@@ -1701,6 +1701,9 @@ def main():
     p.add_argument('--growth-snapshot', type=int, default=None,
                    help='Snapshot for the BH growth-channels plot (default: '
                         'the z=0 snapshot, independent of --snapshot).')
+    p.add_argument('--bhbulge-snapshot', type=int, default=None,
+                   help='Snapshot for the BH-bulge relationship plot (default: '
+                        'the z=0 snapshot, independent of --snapshot).')
     p.add_argument('-o', '--output-dir', default=None,
                    help='Output directory (default: <input_dir>/plots).')
     p.add_argument('--data-dir', default='./data/bh/',
@@ -1755,6 +1758,16 @@ def main():
         growth_snap_num = snapshot_for_redshift(0.0, redshifts, available) \
             if available else snap_num
 
+    if args.bhbulge_snapshot is not None:
+        bhbulge_snap_num = args.bhbulge_snapshot
+        if available and bhbulge_snap_num not in available:
+            print(f"Warning: bhbulge-snapshot {bhbulge_snap_num} not available; "
+                  f"using latest ({sim['latest_snapshot']}).")
+            bhbulge_snap_num = sim['latest_snapshot']
+    else:
+        bhbulge_snap_num = snapshot_for_redshift(0.0, redshifts, available) \
+            if available else snap_num
+
     # volumes
     volume_h3 = args.sim_volume if args.sim_volume is not None \
         else (sim['BoxSize'] ** 3) * fracvol          # (Mpc/h)^3
@@ -1776,6 +1789,8 @@ def main():
     print(f"  snapshot         : {snap_num}  (z = {z:.3f})")
     print(f"  growth-snapshot  : {growth_snap_num}  "
           f"(z = {get_redshift_from_snapshot(growth_snap_num, redshifts):.3f})")
+    print(f"  bhbulge-snapshot : {bhbulge_snap_num}  "
+          f"(z = {get_redshift_from_snapshot(bhbulge_snap_num, redshifts):.3f})")
     print(f"  Hubble_h         : {hubble_h}")
     print(f"  box size         : {sim['BoxSize']} Mpc/h   frac_vol = {fracvol:.4f}")
     print(f"  volume (rate fn) : {volume_h3:.4e} (Mpc/h)^3")
@@ -1807,7 +1822,7 @@ def main():
                                                   panel_z, args.edd_limited,
                                                   volume_h3, args.no_cuts)
     if not args.no_bhbulge:
-        plot_bh_bulge_relation(file_list, snap_num, hubble_h, output_dir,
+        plot_bh_bulge_relation(file_list, bhbulge_snap_num, hubble_h, output_dir,
                                redshifts=redshifts)
     if not args.no_bhmf:
         plot_bh_mass_function(file_list, hubble_h, volume_phys, redshifts,

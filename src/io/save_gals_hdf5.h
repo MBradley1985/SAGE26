@@ -42,6 +42,7 @@ struct HDF5_GALAXY_OUTPUT
      * always written -- not part of GALAXY_OUTPUT_FIELDS because of the extra
      * SimMaxSnaps dimension, same reasoning as SFHMassDisk/SFHMassBulge above) */
     float *RadioModeBHaccretionMass;
+    float *ColdAccretionBHaccretionMass;
     float *InstabilityDrivenBHaccretionMass;
     float *MergerDrivenBHaccretionMass;
     float *BHMergerMass;

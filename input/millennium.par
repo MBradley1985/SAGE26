@@ -51,7 +51,7 @@ SupernovaRecipeOn           1   %0: switch off; 1: original Croton et al. 2016
 ReionizationOn              1   %0: switch off
 DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
 
-CGMrecipeOn                 1   %0: switch off
+CGMrecipeOn                 0   %0: switch off
 FIREmodeOn                  1   %0: switch off
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
@@ -82,14 +82,15 @@ ReIncorporationFactor       0.15    %fraction of ejected mass reincorporated per
 
 RadioModeEfficiency         0.08    %AGN radio mode efficiency (AGNrecipeOn=2)
 QuasarModeEfficiency        0.005   %AGN quasar mode wind heating efficiency (AGNrecipeOn>0)
-BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during mergers (AGNrecipeOn>0)
+BlackHoleGrowthRate         0.030   %fraction of cold gas added to the BH during mergers (AGNrecipeOn>0)
 
+ColdAccretionBHEfficiency   1.0e-5    %Cold accretion (precipitation/CCA) BH efficiency (CGMRecipeOn=0)
 BHSeedMinHaloMass           0.86    %Minimum halo mass for seeding in 10^10 Msun/h (1.0 = 10^10 Msun/h)
 BHAccretionNorm             10.0    %The normalisation factor in front of BH Quasar Mode Accretion timescale (default =10)
 BHMassScalingIndex          0.5     %Scaling factor for the BH-Bulge Mass relation, used in the BH Quasar Mode Accretion timescale
 
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
-ThresholdSatDisruption      1.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption 1.0
+ThresholdSatDisruption      10.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption 1.0
 
 Yield                       0.025   %fraction of SF mass produced as metals
 RecycleFraction             0.43    %fraction of SF mass instantaneously recycled back to cold

@@ -134,6 +134,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->BlackHoleGrowthRate        = 0.015;
     run_params->RadioModeEfficiency        = 0.08;
     run_params->QuasarModeEfficiency       = 0.005;
+    run_params->ColdAccretionBHEfficiency  = 0.0;   /* off by default; CGMrecipeOn==0 rcool>Rvir channel only */
     run_params->Reionization_z0            = 8.0;
     run_params->Reionization_zr            = 7.0;
     run_params->ThresholdSatDisruption     = 1.0;
@@ -237,6 +238,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("BlackHoleGrowthRate",        &(run_params->BlackHoleGrowthRate),        DOUBLE, 0);
     REG("RadioModeEfficiency",        &(run_params->RadioModeEfficiency),        DOUBLE, 0);
     REG("QuasarModeEfficiency",       &(run_params->QuasarModeEfficiency),       DOUBLE, 0);
+    REG("ColdAccretionBHEfficiency",  &(run_params->ColdAccretionBHEfficiency),  DOUBLE, 0);
     REG("Reionization_z0",            &(run_params->Reionization_z0),            DOUBLE, 0);
     REG("Reionization_zr",            &(run_params->Reionization_zr),            DOUBLE, 0);
     REG("ThresholdSatDisruption",     &(run_params->ThresholdSatDisruption),     DOUBLE, 0);

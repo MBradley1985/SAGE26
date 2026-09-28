@@ -197,8 +197,9 @@ struct GALAXY
     float RcoolToRvir;           /* ratio of cooling radius to virial radius at last cooling evaluation */
 
     /* black hole growth tracking */
-    float RadioModeBHaccretionMass[ABSOLUTEMAXSNAPS]; 
-    float InstabilityDrivenBHaccretionMass[ABSOLUTEMAXSNAPS]; 
+    float RadioModeBHaccretionMass[ABSOLUTEMAXSNAPS];
+    float ColdAccretionBHaccretionMass[ABSOLUTEMAXSNAPS]; /* BH mass accreted via direct cold-accretion (precipitation/CCA) channel per snapshot [10^10 Msun/h] */
+    float InstabilityDrivenBHaccretionMass[ABSOLUTEMAXSNAPS];
     float MergerDrivenBHaccretionMass[ABSOLUTEMAXSNAPS]; 
     float BHMergerMass[ABSOLUTEMAXSNAPS];
 
@@ -561,6 +562,7 @@ struct params
     /* Black Hole settings */
     double RadioModeEfficiency;   /* radio-mode AGN heating efficiency [dimensionless] */
     double QuasarModeEfficiency;  /* quasar-mode BH accretion efficiency during mergers [dimensionless] */
+    double ColdAccretionBHEfficiency; /* fraction of rapidly-cooling (rcool>Rvir) hot-halo gas fed directly to the BH via cold accretion [dimensionless] */
     double BlackHoleGrowthRate;   /* BH growth normalisation per merger [dimensionless] */
     double BHAccretionNorm;
     double BHMassScalingIndex;
