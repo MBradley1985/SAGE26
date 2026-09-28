@@ -1,814 +1,344 @@
 #!/usr/bin/env python
 """
-SAGE26 Paper Plots
-==================
-Publication-quality figures for the SAGE26 paper.
+SAGE26 -- where satellite stars end up
+======================================
+
+Every satellite SAGE destroys is routed to exactly one of two places, decided by
+a single test in core_build_model.c once the disruption criterion has fired:
+
+    MergTime >  0   ->  disrupt_satellite_to_ICS()      stars become intracluster
+    MergTime <= 0   ->  deal_with_galaxy_merger()       stars land on the central
+
+The galaxy's last written record carries the verdict in ``mergeType``:
+    4        disrupted into the ICS
+    1        minor merger onto the central   (mass ratio <= ThreshMajorMerger)
+    2        major merger onto the central   (mass ratio >  ThreshMajorMerger)
+    0        still alive at this snapshot
+and that record still holds the satellite's pre-destruction ``StellarMass`` --
+the zeroing in model_mergers.c happens on the working copy, after the output
+copy is taken.  Walking every snapshot and collecting the non-zero mergeType
+records therefore gives a complete, time-resolved catalogue of the accreted
+stellar mass and its destination.  That catalogue is what this module is.
+
+Four figures:
+    1  which satellites go to the ICS and which to the BCG
+    2  how long they survive between infall and destruction
+    3  when the ICS is built, and out of how much satellite mass
+    4  when the BCG's accreted component is built, and out of how much
+
+Everything is the default (published) SAGE26 run -- no parameter sweeps.
 
 Usage:
-    python paper_plots.py              # Generate all plots
-    python paper_plots.py 1            # Generate plot 1 only
-    python paper_plots.py 1 3 5        # Generate plots 1, 3, 5
+    python plotting/ICS_plots.py               # all figures
+    python plotting/ICS_plots.py 1 3           # figures 1 and 3 only
+    python plotting/ICS_plots.py --refresh     # rebuild the event catalogue
 """
+
+import os
+import sys
 
 import h5py as h5
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-from matplotlib.collections import LineCollection
-from matplotlib.lines import Line2D
-from matplotlib.ticker import FuncFormatter, ScalarFormatter
-import os
-import numpy as np
-import sys
-from scipy import interpolate
-from scipy import stats
 from scipy.integrate import quad
-from scipy.ndimage import gaussian_filter
-from random import sample, seed
-import matplotlib.cm as cm
-import pandas as pd
 
 import warnings
 warnings.filterwarnings("ignore")
-try:
-    from astropy.table import Table
-    HAS_ASTROPY = True
-except ImportError:
-    HAS_ASTROPY = False
-    print("Warning: astropy not available, observational data will not be loaded")
-
 
 
 # ========================== CONFIGURATION ==========================
 
-# File paths
-PRIMARY_DIR = './output/microuchuu/'
-VANILLA_DIR = './output/microuchuu_vanilla/'
-# Comparison boxes.  MILLENNIUM_DIR is the same physics at 2.6x coarser particle
-# mass (8.6e8 vs 3.27e8 Msun/h), which makes it the resolution control for every
-# ICS statistic in this module.  MINIUCHUU_DIR shares microUchuu's particle mass
-# and buys cluster statistics, not resolution.
-MILLENNIUM_DIR = './output/millennium/'
-
-# ThresholdSatDisruption experiment: identical microUchuu runs differing only in
-# that parameter, which sets the Mvir-to-baryonic mass ratio below which a
-# satellite is merged or disrupted (core_build_model.c).  1.0 is the published
-# value.  Ordered low to high so the colour ramp reads with the parameter.
-THRESHOLD_RUNS = (
-    ('0.0', './output/microuchuu_thresh_0.0/'),
-    ('0.5', './output/microuchuu_thresh_0.5/'),
-    ('1.0', './output/microuchuu_thresh_1.0/'),
-    ('5.0', './output/microuchuu_thresh_5.0/'),
-)
-# Sequential ramp: the parameter is ordered, so the colours should be too.
-# Starts at a mid tone rather than near-white so every curve is legible on paper.
-THRESHOLD_COLOURS = {'0.0': '#9ecae1', '0.5': '#4292c6', '1.0': '#08519c', '5.0': '#f16913'}
-THRESHOLD_FIDUCIAL = '1.0'
-
-# MergerTimeFactor experiment.  This is the parameter that actually moves stellar
-# mass between the ICS and the BCG: core_build_model.c sends a satellite's stars
-# to the ICS when its subhalo is lost while MergTime > 0, and onto the central
-# once the clock has expired, so shortening the clock moves mass to the BCG.
-# 2.0 is the published value, hardcoded before it was promoted to a parameter.
-MERGERTIME_RUNS = (
-    ('0.25', './output/microuchuu_mtf_0.25/'),
-    ('0.5',  './output/microuchuu_mtf_0.5/'),
-    ('1.0',  './output/microuchuu_mtf_1.0/'),
-    ('2.0',  './output/microuchuu_mtf_2.0/'),
-)
-MERGERTIME_COLOURS = {'0.25': '#9ecae1', '0.5': '#4292c6', '1.0': '#08519c', '2.0': '#f16913'}
-MERGERTIME_FIDUCIAL = '2.0'
-MINIUCHUU_DIR  = './output/miniuchuu/'
-MODEL_FILE = 'model_0.hdf5'
+# The default SAGE26 run.  This module deliberately reads one box: the
+# parameter sweeps and the FFB variants are a different question.
+MODEL_DIR = './output/microuchuu/'
+OUTPUT_FORMAT = '.pdf'
 OBS_DIR = './data/'
 
-# Plotting (analysis choices — not simulation parameters)
-OUTPUT_FORMAT = '.pdf'
-
-SEED = 2222
-
-# Draw order: model 1-sigma bands sit beneath the observations (so they tint
-# rather than hide the markers), while the model lines sit on top of them.
-Z_MODEL_BAND = 2       # primary model band
-Z_MODEL_BAND_ALT = 3   # comparison model band
-Z_OBS = 5              # observational markers, error bars and fitted relations
-Z_MODEL_LINE = 10      # primary model line
-Z_MODEL_LINE_ALT = 11  # comparison model line
-
-# Analysis thresholds (not simulation parameters)
-SSFR_CUT = -11.0       # log10(sSFR/yr^-1) dividing quiescent from star-forming
-
-# Objects required in a bin before a median is drawn from it.  Every binned
-# statistic in this module takes its threshold from here, so raising it raises
-# all of them together.  10 suits the current test boxes at the cluster end;
-# the production volumes (a third of the 500/h Mpc Millennium, a third of the
-# 400/h Mpc miniUchuu) should hold of order 340 haloes above 10^14 at z = 0 and
-# comfortably support 20.
-#
-# No particle-count cut is applied at load time: every halo SAGE wrote is kept,
-# including ones sitting on a handful of particles.  Anything needing resolved
-# haloes only must say so itself, by cutting on 'Len'.
-MIN_COUNT = 5
-
-# Solar metallicity (Asplund et al. 2009)
-Z_SUN = 0.0134
-
-# IMF convention.
-#
-# SAGE26's RecycleFraction of 0.43 is a Chabrier instantaneous return fraction
-# (Salpeter gives ~0.3), so every model SFR and stellar mass in this module is on
-# a Chabrier scale.  Observational compilations quoted for a Salpeter IMF must
-# therefore be shifted DOWN by this amount before being compared with the model,
-# never up: a Salpeter fit converts the same light into ~1.7x more stellar mass.
-#
-# Getting the sign wrong on one dataset and not another puts two observational
-# curves on the same axes 0.2 dex apart, which is how a real ~0.2 dex model
-# excess at cosmic noon came to look like agreement with Madau & Dickinson and a
-# disagreement with COSMOS-Web (which is natively Chabrier and needs no shift).
-SALPETER_TO_CHABRIER_DEX = -0.24
-
-# Shift in dex applied to a log10 stellar mass, SFR, or volume density to bring it
-# from the named IMF onto the model's Chabrier scale.  Kroupa (2001) and Chabrier
-# (2003) differ by only ~0.04 dex; Bell & de Jong's "diet Salpeter" sits 0.15 dex
-# below true Salpeter, hence -0.24 + 0.15.  The same factor is used for masses and
-# SFRs: both scale with the mass-to-light ratio of the assumed IMF.
-IMF_TO_CHABRIER_DEX = {
-    'chabrier':      0.00,
-    'kroupa':       -0.04,
-    'salpeter':     SALPETER_TO_CHABRIER_DEX,
-    'diet-salpeter': SALPETER_TO_CHABRIER_DEX + 0.15,
-    'unknown':       0.00,
-}
-
-# Native IMF of every observational dataset this module plots on a stellar-mass or
-# SFR axis, with where that assignment comes from:
-#   'file' -- stated in the data file's own header. Authoritative.
-#   'lit'  -- from the paper, not recorded in the file. Worth spot-checking.
-#   None   -- not established. NO shift is applied and the dataset is listed by
-#             report_imf_audit() so it stays visible instead of silently wrong.
-# Datasets plotted only against gas mass, halo mass, velocity or magnitude are not
-# listed: no IMF enters those axes.
-OBS_IMF = {
-    # --- stated in the data file header ---
-    'Brinchmann+04':      ('kroupa',   'file'),
-    'Harvey+25':          ('kroupa',   'file'),
-    'Muzzin+13':          ('kroupa',   'file'),
-    'Santini+12':         ('salpeter', 'file'),
-    'Tremonti+04':        ('kroupa',   'file'),
-    'Andrews+13':         ('kroupa',   'file'),
-    'Kewley+08':          ('kroupa',   'file'),
-    'Gallazzi+05':        ('chabrier', 'file'),
-    'Lange+16':           ('chabrier', 'file'),
-    'COSMOS-Web':         ('chabrier', 'file'),
-    'CSFRD-from-SMD':     ('chabrier', 'file'),
-    'SMD (COSMOS-Web)':   ('chabrier', 'file'),
-    'xGASS gas ratios':   ('chabrier', 'file'),
-    # --- from the paper ---
-    'Madau+Dickinson 14': ('salpeter', 'lit'),
-    'Baldry+08':          ('chabrier', 'lit'),
-    'Baldry+12':          ('chabrier', 'lit'),
-    'Moffett+16':         ('chabrier', 'lit'),
-    'Wright+18':          ('chabrier', 'lit'),
-    'Thorne+21':          ('chabrier', 'lit'),
-    'Weaver+23':          ('chabrier', 'lit'),
-    'Song+16':            ('chabrier', 'lit'),
-    'Bellstedt+20':       ('chabrier', 'lit'),
-    'Bell+03':            ('diet-salpeter', 'lit'),
-    'Curti+20':           ('kroupa',   'lit'),
-    'Moster+13':          ('chabrier', 'lit'),
-    # --- not established: no shift applied, reported at run time ---
-    'Stefanon+21':        (None, None),
-    'Navarro-Carrera+23': (None, None),
-    'Weibel+24':          (None, None),
-    'Kikuchihara+20':     (None, None),
-    'Kikuchihara+20 SMD': (None, None),
-    'Papovich+23':        (None, None),
-    'Oesch+18':           (None, None),
-    'McLeod+24':          (None, None),
-    'Harikane+23':        (None, None),
-    'Terrazas+17':        (None, None),
-    'Kravtsov+18':        (None, None),
-    'Taylor+20':          (None, None),
-    'Romeo+20':           (None, None),
-    'Scott+13 BH-bulge':  (None, None),
-    'Outflow compilation': (None, None),
-    'Li+White 09':        (None, None),
-    'Bernardi+13':        (None, None),
-    'Moffett+16 total':   ('chabrier', 'lit'),
-}
-
-
-def imf_shift(dataset):
-    """
-    Dex to add to a log10 stellar mass / SFR from *dataset* to put it on the model's
-    Chabrier scale.  Returns 0.0 for datasets already Chabrier and for those whose IMF
-    is not established -- the latter are surfaced by report_imf_audit() rather than
-    silently guessed at.
-    """
-    imf, _ = OBS_IMF.get(dataset, (None, None))
-    if imf is None:
-        return 0.0
-    return IMF_TO_CHABRIER_DEX[imf]
-
-
-def report_imf_audit():
-    """Print which observational datasets are shifted onto Chabrier, and which cannot be."""
-    print('IMF audit (model is Chabrier; observations shifted onto that scale):')
-    shifted, native, unknown = [], [], []
-    for name, (imf, source) in sorted(OBS_IMF.items()):
-        if imf is None:
-            unknown.append(name)
-        elif IMF_TO_CHABRIER_DEX[imf] == 0.0:
-            native.append(f'{name} [{source}]')
-        else:
-            shifted.append(f'{name} {imf} {IMF_TO_CHABRIER_DEX[imf]:+.2f} dex [{source}]')
-    for line in shifted:
-        print(f'    shifted : {line}')
-    print(f'    already Chabrier ({len(native)}): ' + ', '.join(native))
-    if unknown:
-        print(f'    IMF NOT ESTABLISHED, no shift applied ({len(unknown)}):')
-        print('      ' + ', '.join(unknown))
-        print('      Add the IMF to OBS_IMF once confirmed against each paper.')
-
-# Solar mass in grams (for MASS_CONVERT derivation)
 _MSUN_CGS = 1.989e33
+_SEC_PER_GYR = 3.15576e16
+
+# Objects required in a bin before a median or a ratio is drawn from it.
+MIN_COUNT = 10
+
+# Figure 5 draws one marker per halo; cap the plotted cloud so the PDF stays
+# light, with a fixed seed so the figure is reproducible.
+MAX_SCATTER_POINTS = 2500
+SCATTER_SEED = 2222
+
+# Marker sizes for figure 5.  The model cloud is drawn semi-transparent so a
+# dense selection reads as shading while a sparse one stays legible as points.
+MODEL_MS, MODEL_ALPHA = 4.0, 0.30
+OBS_MS = 7.5
+
+# Draw order.
+Z_BAND = 2
+Z_OBS = 5
+Z_LINE = 10
+
+# The two destinations, and the colours they keep in every figure.
+DEST_ICS = 'ICS'
+DEST_BCG = 'BCG'
+COLOUR = {DEST_ICS: '#08519c', DEST_BCG: '#f16913'}
+DEST_LABEL = {
+    DEST_ICS: r'to ICS ($\mathtt{mergeType}=4$)',
+    DEST_BCG: r'to BCG ($\mathtt{mergeType}=1,2$)',
+}
+
+# Host-mass slices used wherever a figure splits by environment.  Chosen to
+# separate the regime where the ICS is a minor reservoir from the cluster
+# regime where it dominates.
+HOST_BINS = (
+    (11.0, 12.0, r'$10^{11}$--$10^{12}$'),
+    (12.0, 13.0, r'$12$--$13$'),
+    (13.0, 14.0, r'$13$--$14$'),
+    (14.0, 15.5, r'$>10^{14}$'),
+)
+HOST_BIN_COLOURS = ('#c6dbef', '#6baed6', '#2171b5', '#08306b')
+
+# Shared binning.
+MSTAR_BINS = np.arange(6.0, 12.01, 0.25)     # satellite stellar mass
+MVIR_BINS  = np.arange(10.5, 15.01, 0.25)    # host halo mass
 
 
-# --------------- HDF5 header reader ---------------
-
-import glob as _glob_early
-
-
-def _find_model_files_early(directory):
-    """Minimal file discovery used during module init (before full I/O helpers)."""
-    pattern = os.path.join(directory, 'model_*.hdf5')
-    files = sorted(_glob_early.glob(pattern))
-    if not files:
-        single = os.path.join(directory, MODEL_FILE)
-        if os.path.exists(single):
-            files = [single]
-    return files
-
-
-def _read_sim_header(directory):
-    """
-    Read simulation parameters from the HDF5 header of the first model
-    file found in *directory*.
-
-    Returns a dict of parameters, or ``None`` if no model files exist.
-    The ``volume_fraction`` key is the *total* fraction across all MPI
-    files (summed ``frac_volume_processed``).
-    """
-    files = _find_model_files_early(directory)
-    if not files:
-        return None
-
-    try:
-        with h5.File(files[0], 'r') as f:
-            sim = f['Header/Simulation']
-            runtime = f['Header/Runtime']
-
-            header = {
-                'hubble_h':       float(sim.attrs['hubble_h']),
-                'box_size':       float(sim.attrs['box_size']),
-                'omega_matter':   float(sim.attrs['omega_matter']),
-                'omega_lambda':   float(sim.attrs['omega_lambda']),
-                'last_snap_nr':   int(sim.attrs['LastSnapshotNr']),
-                'unit_mass_in_g': float(runtime.attrs['UnitMass_in_g']),
-                'baryon_frac':    float(runtime.attrs.get('BaryonFrac', 0.17)),
-                'redshifts':      list(f['Header/snapshot_redshifts'][:]),
-                'output_snaps':   list(f['Header/output_snapshots'][:]),
-            }
-
-        # Sum frac_volume_processed across all MPI files to get the total
-        total_fvp = 0.0
-        for fp in files:
-            with h5.File(fp, 'r') as f:
-                total_fvp += float(f['Header/Runtime'].attrs['frac_volume_processed'])
-        header['volume_fraction'] = total_fvp
-    except Exception as e:
-        print(f"Warning: could not read header from {directory}: {e}")
-        return None
-
-    return header
-
-
-def _snap_for_z(redshifts, target_z):
-    """
-    Return the snapshot index of the last output snapshot whose redshift
-    is >= *target_z*.  This reproduces the standard convention of choosing
-    the snapshot just above the target redshift (e.g. z=4.179 for target 4).
-    """
-    neg_z = -np.array(redshifts)          # make increasing for searchsorted
-    idx = int(np.searchsorted(neg_z, -target_z, side='right')) - 1
-    return max(idx, 0)
-
-
-def _snap_nearest_z(redshifts, target_z):
-    """
-    Return the snapshot index whose redshift is *closest* to *target_z*,
-    from either side.  Use this where panels are labelled by the round
-    target redshift, so the snapshot sits as near to it as the output
-    table allows.
-    """
-    return int(np.argmin(np.abs(np.array(redshifts) - target_z)))
-
-
-
-# --------------- Primary simulation parameters (from HDF5) ---------------
-
-_primary_hdr = _read_sim_header(PRIMARY_DIR)
-if _primary_hdr is not None:
-    HUBBLE_H         = _primary_hdr['hubble_h']
-    BOX_SIZE         = _primary_hdr['box_size']
-    VOLUME_FRACTION  = _primary_hdr['volume_fraction']
-    VOLUME           = (BOX_SIZE / HUBBLE_H)**3 * VOLUME_FRACTION  # Mpc^3
-    MASS_CONVERT     = _primary_hdr['unit_mass_in_g'] / _MSUN_CGS / HUBBLE_H
-    OMEGA_M          = _primary_hdr['omega_matter']
-    OMEGA_L          = _primary_hdr['omega_lambda']
-    BARYON_FRAC      = _primary_hdr['baryon_frac']
-    OMEGA_B          = BARYON_FRAC * OMEGA_M
-    SNAPSHOT         = f"Snap_{_primary_hdr['last_snap_nr']}"
-    REDSHIFTS        = _primary_hdr['redshifts']
-    OUTPUT_DIR       = os.path.join(PRIMARY_DIR, 'ICS_plots/')
-
-    # Snapshot aliases for key redshifts (derived from the redshift table)
-    SNAP_Z0  = _snap_for_z(REDSHIFTS, 0.0)
-    SNAP_Z1  = _snap_for_z(REDSHIFTS, 1.0)
-    SNAP_Z2  = _snap_for_z(REDSHIFTS, 2.0)
-    SNAP_Z3  = _snap_for_z(REDSHIFTS, 3.0)
-    SNAP_Z4  = _snap_for_z(REDSHIFTS, 4.0)
-    SNAP_Z5  = _snap_for_z(REDSHIFTS, 5.0)
-    SNAP_Z7  = _snap_for_z(REDSHIFTS, 7.0)
-    SNAP_Z10 = _snap_for_z(REDSHIFTS, 10.0)
-else:
-    # Fallback if primary HDF5 files are not available
-    print("Warning: could not read primary model header — using hardcoded defaults")
-    HUBBLE_H         = 0.73
-    BOX_SIZE         = 62.5
-    VOLUME_FRACTION  = 1.0
-    VOLUME           = (BOX_SIZE / HUBBLE_H)**3 * VOLUME_FRACTION
-    MASS_CONVERT     = 1.0e10 / HUBBLE_H
-    OMEGA_M          = 0.25
-    OMEGA_L          = 0.75
-    BARYON_FRAC      = 0.17
-    OMEGA_B          = 0.045
-    SNAPSHOT         = 'Snap_63'
-    REDSHIFTS        = [
-        127.000, 79.998, 50.000, 30.000, 19.916, 18.244, 16.725, 15.343,
-         14.086, 12.941, 11.897, 10.944, 10.073,  9.278,  8.550,  7.883,
-          7.272,  6.712,  6.197,  5.724,  5.289,  4.888,  4.520,  4.179,
-          3.866,  3.576,  3.308,  3.060,  2.831,  2.619,  2.422,  2.239,
-          2.070,  1.913,  1.766,  1.630,  1.504,  1.386,  1.276,  1.173,
-          1.078,  0.989,  0.905,  0.828,  0.755,  0.687,  0.624,  0.564,
-          0.509,  0.457,  0.408,  0.362,  0.320,  0.280,  0.242,  0.208,
-          0.175,  0.144,  0.116,  0.089,  0.064,  0.041,  0.020,  0.000,
-    ]
-    OUTPUT_DIR = './output/millennium/ICS_plots/'
-    SNAP_Z0  = 63
-    SNAP_Z1  = 39
-    SNAP_Z2  = 32
-    SNAP_Z3  = 27
-    SNAP_Z4  = 23
-    SNAP_Z5  = 20
-    SNAP_Z7  = 16
-    SNAP_Z10 = 12
-
-
-# --------------- miniUchuu simulation parameters (from HDF5) ---------------
-
-_miniuchuu_hdr = _read_sim_header(MINIUCHUU_DIR)
-if _miniuchuu_hdr is not None:
-    MINIUCHUU_HUBBLE_H        = _miniuchuu_hdr['hubble_h']
-    MINIUCHUU_BOX_SIZE        = _miniuchuu_hdr['box_size']
-    MINIUCHUU_VOLUME_FRACTION = _miniuchuu_hdr['volume_fraction']
-    MINIUCHUU_VOLUME          = (MINIUCHUU_BOX_SIZE / MINIUCHUU_HUBBLE_H)**3 * MINIUCHUU_VOLUME_FRACTION
-    MINIUCHUU_MASS_CONVERT    = _miniuchuu_hdr['unit_mass_in_g'] / _MSUN_CGS / MINIUCHUU_HUBBLE_H
-    MINIUCHUU_FIRST_SNAP      = min(_miniuchuu_hdr['output_snaps'])
-    MINIUCHUU_LAST_SNAP       = max(_miniuchuu_hdr['output_snaps'])
-    MINIUCHUU_REDSHIFTS       = _miniuchuu_hdr['redshifts']
-else:
-    # Fallback if miniUchuu HDF5 files are not available
-    MINIUCHUU_HUBBLE_H        = 0.677
-    MINIUCHUU_BOX_SIZE        = 400.0
-    MINIUCHUU_VOLUME_FRACTION = 0.3
-    MINIUCHUU_VOLUME          = (MINIUCHUU_BOX_SIZE / MINIUCHUU_HUBBLE_H)**3 * MINIUCHUU_VOLUME_FRACTION
-    MINIUCHUU_MASS_CONVERT    = 1.0e10 / MINIUCHUU_HUBBLE_H
-    MINIUCHUU_FIRST_SNAP      = 0
-    MINIUCHUU_LAST_SNAP       = 49
-    MINIUCHUU_REDSHIFTS       = [
-        13.9334, 12.67409, 11.50797, 10.44649, 9.480752, 8.58543, 7.77447,
-        7.032387, 6.344409, 5.721695, 5.153127, 4.629078, 4.26715, 3.929071,
-        3.610462, 3.314082, 3.128427, 2.951226, 2.77809, 2.616166, 2.458114,
-        2.309724, 2.16592, 2.027963, 1.8962, 1.770958, 1.65124, 1.535928,
-        1.426272, 1.321656, 1.220303, 1.124166, 1.031983, 0.9441787, 0.8597281,
-        0.779046, 0.7020205, 0.6282588, 0.5575475, 0.4899777, 0.4253644,
-        0.3640053, 0.3047063, 0.2483865, 0.1939743, 0.1425568, 0.09296665,
-        0.0455745, 0.02265383, 0.0001130128,
-    ]
-
-# Properties stored in HDF5 mass units (need MASS_CONVERT)
-_MASS_PROPS = frozenset({
-    'CentralMvir', 'Mvir', 'StellarMass', 'BulgeMass', 'BlackHoleMass',
-    'MetalsStellarMass', 'MetalsColdGas', 'MetalsEjectedMass',
-    'MetalsHotGas', 'MetalsCGMgas', 'ColdGas', 'HotGas', 'CGMgas',
-    'EjectedMass', 'H2gas', 'H1gas', 'IntraClusterStars',
-    'MergerBulgeMass', 'InstabilityBulgeMass',
-    'ICS_disrupt', 'ICS_accrete', 'MetalsIntraClusterStars',
-})
-
-# Default properties to load for the primary model
-_DEFAULT_PROPERTIES = [
-    'StellarMass', 'BulgeMass', 'ColdGas', 'HotGas', 'CGMgas',
-    'EjectedMass', 'H2gas', 'H1gas', 'BlackHoleMass',
-    'IntraClusterStars', 'CentralMvir', 'Mvir',
-    'MergerBulgeMass', 'InstabilityBulgeMass',
-    'MetalsStellarMass', 'MetalsColdGas', 'MetalsHotGas',
-    'MetalsEjectedMass', 'MetalsCGMgas', 'MetalsIntraClusterStars',
-    'ICS_disrupt', 'ICS_accrete',
-    'SfrDisk', 'SfrBulge', 'Vvir', 'Vmax', 'Rvir',
-    'DiskRadius', 'BulgeRadius',
-    'Type', 'CentralGalaxyIndex',
-    'Posx', 'Posy', 'Posz',
-    'OutflowRate', 'MassLoading', 'Cooling', 'Regime', 'CoolingRate'
-]
-
-# Properties to load for evolution (multi-snapshot) plots
-_EVOLUTION_PROPERTIES = [
-    'StellarMass', 'SfrDisk', 'SfrBulge', 'Mvir', 'Rvir',
-    'CGMgas', 'HotGas', 'MetalsStellarMass', 'DiskRadius', 'BulgeRadius',
-    'CoolingRate',
-    'FFBRegime', 'Regime', 'tcool_over_tff', 'tdeplete', 'tff',
-    'GalaxyIndex', 'Type',
-]
-
-
-# ========================== PLOTTING STYLE ==========================
-
-def setup_style():
-    """Configure matplotlib for publication-quality white-background plots."""
-    plt.style.use("./plotting/kieren_cohare_palatino_sty.mplstyle")
-
-
-def _tex_safe(s):
-    """Make label strings safe for both usetex and non-usetex modes."""
-    if not plt.rcParams.get('text.usetex', False):
-        s = s.replace(r"\'{e}", "\u00e9")   # é
-        s = s.replace(r'\&', '&')
-        s = s.replace(r'\%', '%')
-    return s
-
-
-# ========================== DATA I/O ==========================
-
+# ========================== SIMULATION HEADER ==========================
 
 def find_model_files(directory):
-    """
-    Find all model_*.hdf5 files in *directory*.
-
-    Returns a sorted list of absolute paths.  Falls back to the single
-    ``model_0.hdf5`` if no files match (backward-compatible).
-    """
-    return _find_model_files_early(directory)
-
-
-def model_files_exist(directory):
-    """Return True if at least one model HDF5 file exists in *directory*."""
-    return len(find_model_files(directory)) > 0
+    """All model_*.hdf5 files in *directory*, sorted.  Empty list if none."""
+    import glob
+    files = sorted(glob.glob(os.path.join(directory, 'model_*.hdf5')))
+    # model.hdf5 (no rank suffix) is a concatenation of the per-rank files and
+    # would double-count every event if it were picked up alongside them.
+    return [f for f in files if os.path.basename(f) != 'model.hdf5']
 
 
-def read_snap_from_files(filepaths, snap_key, properties, mass_convert=MASS_CONVERT):
-    """
-    Read *properties* from *snap_key* across multiple HDF5 files and
-    concatenate the results.
-
-    Parameters
-    ----------
-    filepaths : list of str
-        HDF5 file paths (e.g. from ``find_model_files``).
-    snap_key : str
-        Snapshot group name, e.g. ``'Snap_63'``.
-    properties : list of str
-        Dataset names to read.
-    mass_convert : float
-        Multiplicative factor applied to properties in ``_MASS_PROPS``.
-
-    Returns
-    -------
-    dict : property name -> numpy array (concatenated across files).
-           Empty dict if no file contains *snap_key*.
-    """
-    load_props = list(properties)
-
-    chunks = {prop: [] for prop in load_props}
-    found_snap = False
-
-    for fp in filepaths:
-        try:
-            with h5.File(fp, 'r') as f:
-                if snap_key not in f:
-                    continue
-                found_snap = True
-                grp = f[snap_key]
-                for prop in load_props:
-                    if prop in grp:
-                        chunks[prop].append(np.array(grp[prop]))
-        except Exception as e:
-            print(f"  Warning: could not read {fp}: {e}")
-            continue
-
-    if not found_snap:
-        return {}
-
-    data = {}
-    for prop in load_props:
-        if chunks[prop]:
-            arr = np.concatenate(chunks[prop])
-            if prop in _MASS_PROPS:
-                arr = arr * mass_convert
-            data[prop] = arr
-
-    return data
-
-
-def load_model(directory, filename=None, snapshot=SNAPSHOT,
-               properties=None):
-    """
-    Load galaxy properties from one or more model HDF5 files.
-
-    When SAGE is run with MPI each rank writes its own file
-    (``model_0.hdf5``, ``model_1.hdf5``, …).  This function automatically
-    discovers all such files and concatenates their datasets.
-
-    Parameters
-    ----------
-    directory : str
-        Path to the model output directory.
-    filename : str, optional
-        Kept for backward compatibility.  If given, only that single file
-        is read; otherwise every ``model_*.hdf5`` in *directory* is used.
-    snapshot : str
-        Snapshot key (e.g. ``'Snap_63'``).
-    properties : list of str, optional
-        Properties to load.  If *None*, loads ``_DEFAULT_PROPERTIES``.
-
-    Returns
-    -------
-    dict : property name -> numpy array (converted where applicable).
-    """
-    if properties is None:
-        properties = _DEFAULT_PROPERTIES
-
-    if filename is not None:
-        filepaths = [os.path.join(directory, filename)]
-    else:
-        filepaths = find_model_files(directory)
-
-    if not filepaths:
-        print(f"  Warning: no model files found in {directory}")
-        return {}
-
-    data = read_snap_from_files(filepaths, snapshot, properties)
-    if not data:
-        print(f"  Warning: {snapshot} not found in any file in {directory}")
-    return data
-
-
-def load_snapshots(directory, snaps, properties=None, filename=None):
-    """
-    Load multiple snapshots from one or more HDF5 files.
-
-    Parameters
-    ----------
-    directory : str
-        Path to model output directory.
-    snaps : list of int
-        Snapshot numbers to load.
-    properties : list of str, optional
-        Properties to load.  Defaults to ``_EVOLUTION_PROPERTIES``.
-    filename : str, optional
-        If given, only that single file is read; otherwise every
-        ``model_*.hdf5`` in *directory* is used.
-
-    Returns
-    -------
-    dict : {snap_num: {prop_name: numpy array}}
-    """
-    if properties is None:
-        properties = _EVOLUTION_PROPERTIES
-
-    if filename is not None:
-        filepaths = [os.path.join(directory, filename)]
-    else:
-        filepaths = find_model_files(directory)
-
-    if not filepaths:
-        print(f"  Warning: no model files found in {directory}")
-        return {}
-
-    snapdata = {}
-    for snap in snaps:
-        snap_key = f'Snap_{snap}'
-        data = read_snap_from_files(filepaths, snap_key, properties)
-        if data:
-            snapdata[snap] = data
-        else:
-            print(f"  Warning: {snap_key} not found, skipping.")
-
-    return snapdata
-
-def binned_percentiles(x, y, bins, percentiles=(16, 50, 84), min_count=MIN_COUNT):
-    """Compute binned percentiles of *y* as a function of *x*.
-
-    Parameters
-    ----------
-    x, y : array-like
-        Data arrays.
-    bins : array-like
-        Bin edges in x.
-    percentiles : tuple
-        Percentiles to compute (e.g. (16, 50, 84)).
-    min_count : int
-        Minimum number of points required in a bin.
-
-    Returns
-    -------
-    centers : array
-        Bin centers.
-    pct : array, shape (len(percentiles), nbins)
-        Percentiles per bin; NaN for bins with insufficient counts.
-    """
-    x = np.asarray(x)
-    y = np.asarray(y)
-    ok = np.isfinite(x) & np.isfinite(y)
-    x = x[ok]
-    y = y[ok]
-
-    centers = 0.5 * (bins[:-1] + bins[1:])
-    nbins = len(bins) - 1
-    pct = np.full((len(percentiles), nbins), np.nan)
-
-    for i in range(nbins):
-        m = (x >= bins[i]) & (x < bins[i + 1])
-        if np.sum(m) >= min_count:
-            pct[:, i] = np.percentile(y[m], percentiles)
-
-    return centers, pct
-
-
-def plot_binned_median_1sigma(
-    ax, x, y, bins, *, color, label, alpha=0.25, lw=3.0, ls='-', 
-    min_count=MIN_COUNT, zorder_fill=3, zorder_line=4):
-    """Plot a median line with a 16--84% (1\u03c3) shaded band."""
-    centers, pct = binned_percentiles(x, y, bins, percentiles=(16, 50, 84), min_count=min_count)
-    p16, p50, p84 = pct
-    valid = np.isfinite(p50) & np.isfinite(p16) & np.isfinite(p84)
-    if not np.any(valid):
+def read_sim_header(directory):
+    """Simulation parameters from the HDF5 header.  None if no model files."""
+    files = find_model_files(directory)
+    if not files:
         return None
 
-    ax.fill_between(centers[valid], p16[valid], p84[valid],
-                    color=color, alpha=alpha, lw=0.0, zorder=zorder_fill)
-    (line,) = ax.plot(centers[valid], p50[valid],
-                      color=color, lw=lw, ls=ls, label=label, zorder=zorder_line)
-    return line
+    with h5.File(files[0], 'r') as f:
+        sim, runtime = f['Header/Simulation'], f['Header/Runtime']
+        hdr = {
+            'hubble_h':       float(sim.attrs['hubble_h']),
+            'box_size':       float(sim.attrs['box_size']),
+            'omega_matter':   float(sim.attrs['omega_matter']),
+            'omega_lambda':   float(sim.attrs['omega_lambda']),
+            'particle_mass':  float(sim.attrs.get('particle_mass', np.nan)),
+            'last_snap_nr':   int(sim.attrs['LastSnapshotNr']),
+            'unit_mass_in_g': float(runtime.attrs['UnitMass_in_g']),
+            'unit_length_in_cm':   float(runtime.attrs['UnitLength_in_cm']),
+            'unit_velocity_in_cms': float(runtime.attrs['UnitVelocity_in_cm_per_s']),
+            'redshifts':      np.array(f['Header/snapshot_redshifts'][:]),
+            'output_snaps':   sorted(int(s) for s in f['Header/output_snapshots'][:]),
+            'merger_time_factor':     float(runtime.attrs.get('MergerTimeFactor', np.nan)),
+            'thresh_major_merger':    float(runtime.attrs.get('ThreshMajorMerger', np.nan)),
+            'thresh_sat_disruption':  float(runtime.attrs.get('ThresholdSatDisruption', np.nan)),
+            'track_ics_assembly':     int(runtime.attrs.get('TrackICSAssembly', 0)),
+        }
 
-def snap_to_redshift(snap):
-    """Return the redshift for a given snapshot number."""
-    return REDSHIFTS[snap]
+    total_fvp = 0.0
+    for fp in files:
+        with h5.File(fp, 'r') as f:
+            total_fvp += float(f['Header/Runtime'].attrs['frac_volume_processed'])
+    hdr['volume_fraction'] = total_fvp
+    hdr['files'] = files
+    return hdr
 
+
+HDR = read_sim_header(MODEL_DIR)
+if HDR is None:
+    sys.exit(f'No model_*.hdf5 found in {MODEL_DIR}')
+
+HUBBLE_H     = HDR['hubble_h']
+OMEGA_M      = HDR['omega_matter']
+OMEGA_L      = HDR['omega_lambda']
+REDSHIFTS    = HDR['redshifts']
+SNAPS        = HDR['output_snaps']
+LAST_SNAP    = HDR['last_snap_nr']
+MODEL_FILES  = HDR['files']
+VOLUME       = (HDR['box_size'] / HUBBLE_H) ** 3 * HDR['volume_fraction']   # Mpc^3
+MASS_CONVERT = HDR['unit_mass_in_g'] / _MSUN_CGS / HUBBLE_H                 # code -> Msun
+
+# consistent-trees collapses the FOF grouping at the very last snapshot of a
+# run: centrals drop by a third and the missing ones reappear as satellites of
+# something else.  Every halo-grouped z=0 quantity in this module is therefore
+# measured one snapshot earlier.  Destruction events are unaffected -- they are
+# read at the snapshot they fired on, and the last snapshot stamps none.
+Z0_SNAP = LAST_SNAP - 1
+
+OUTPUT_DIR = os.path.join(MODEL_DIR, 'ICS_plots/')
+# v2 adds the host Rvir/Vvir columns; the name is bumped so a stale v1
+# cache is rebuilt rather than silently loaded without them.
+CACHE_FILE = os.path.join(OUTPUT_DIR, 'satellite_events_v2.npz')
+
+
+# ========================== COSMIC TIME ==========================
 
 def cosmic_time_gyr(z):
-    """Age of the universe at redshift z, in Gyr."""
-    t_H = 977.8 / (HUBBLE_H * 100)  # Hubble time in Gyr
+    """Age of the universe at redshift *z*, in Gyr."""
+    t_H = 977.8 / (HUBBLE_H * 100.0)     # Hubble time in Gyr
 
     def integrand(zp):
-        return 1.0 / ((1 + zp) * np.sqrt(OMEGA_M * (1 + zp)**3 + OMEGA_L))
+        return 1.0 / ((1 + zp) * np.sqrt(OMEGA_M * (1 + zp) ** 3 + OMEGA_L))
 
     result, _ = quad(integrand, z, 1000.0)
     return t_H * result
 
-def stellarmass_within_halo(data, verbose=True):
-    """
-    All the stellar mass within each FOF halo: central + satellites + ICS.
 
-    Galaxies are grouped by ``CentralGalaxyIndex``.  SAGE builds that index from
-    the forest and file number (``core_save.c``), so it is unique across MPI
-    output files and groups never collide when several ``model_*.hdf5`` are
-    concatenated by ``load_model``.
+# Age of the universe at every snapshot, so the event catalogue can convert a
+# snapshot number to a time without re-integrating.
+AGE_AT_SNAP = np.array([cosmic_time_gyr(z) for z in REDSHIFTS])
+AGE_NOW = AGE_AT_SNAP[-1]
 
-    At output time all of a halo's intracluster light already sits on the FOF
-    central -- ``infall_recipe`` pools each satellite's ICS into the central and
-    zeroes the satellite's (``model_infall.c``) -- but the sum is taken over
-    every member anyway, so a satellite that has not yet been pooled still
-    counts once and only once.
-
-    Every halo SAGE wrote is included -- no particle-count cut is applied at
-    load time -- so the sums run over all group members, down to ones resting on
-    very few particles.  The stars of anything already merged or disrupted are
-    in ``ICS`` rather than ``Stars``.
-
-    Parameters
-    ----------
-    data : dict
-        A loaded model.  Needs 'StellarMass', 'IntraClusterStars', 'Mvir',
-        'Type' and 'CentralGalaxyIndex'.
-    verbose : bool
-        Report groups dropped for want of a resolved central.  Set False when
-        sweeping many snapshots, where the message is noise rather than news.
-
-    Returns
-    -------
-    dict of arrays, one element per FOF halo, all aligned and in ascending
-    CentralGalaxyIndex order:
-        'Mvir'        virial mass of the FOF halo (the central's Mvir) [Msun]
-        'Total'       Stars + ICS, i.e. every star in the halo [Msun]
-        'Stars'       central + satellite stellar mass, no ICS [Msun]
-        'ICS'         intracluster stars [Msun]
-        'Central'     the central galaxy's own stellar mass [Msun]
-        'Satellites'  summed satellite stellar mass [Msun]
-        'Ngal'        number of resolved galaxies in the halo
-    """
-    required = ('StellarMass', 'IntraClusterStars', 'Mvir', 'Type',
-                'CentralGalaxyIndex')
-    missing = [p for p in required if p not in data]
-    if missing:
-        raise KeyError('stellarmass_within_halo needs ' + ', '.join(missing)
-                       + ' -- load them with load_model(properties=[...]).')
-
-    cgi = data['CentralGalaxyIndex'].astype(np.int64)
-
-    # Remap CentralGalaxyIndex IDs to compact 0-based group indices
-    unique_ids, compact_idx = np.unique(cgi, return_inverse=True)
-    ngroups = len(unique_ids)
-
-    # Sum by halo using bincount — O(N), fully vectorized
-    stars = np.bincount(compact_idx, weights=data['StellarMass'], minlength=ngroups)
-    ics = np.bincount(compact_idx, weights=data['IntraClusterStars'], minlength=ngroups)
-    ngal = np.bincount(compact_idx, minlength=ngroups)
-
-    # The central defines the halo: its Mvir is the FOF mass (a satellite's Mvir
-    # is only its own subhalo), and its stellar mass is what the satellite total
-    # is measured against.
-    is_central = data['Type'] == 0
-    central_group = compact_idx[is_central]
-
-    mvir = np.full(ngroups, np.nan)
-    central_stars = np.zeros(ngroups)
-    mvir[central_group] = data['Mvir'][is_central]
-    central_stars[central_group] = data['StellarMass'][is_central]
-
-    # A group with no Type 0 member has no halo mass to bin against, so drop it
-    # rather than carry a NaN downstream.
-    keep = np.isfinite(mvir)
-    n_dropped = ngroups - int(np.count_nonzero(keep))
-    if n_dropped and verbose:
-        print(f'  stellarmass_within_halo: {n_dropped:,} of {ngroups:,} groups '
-              'have no resolved central, dropped')
-
-    return {
-        'Mvir':       mvir[keep],
-        'Total':      (stars + ics)[keep],
-        'Stars':      stars[keep],
-        'ICS':        ics[keep],
-        'Central':    central_stars[keep],
-        'Satellites': (stars - central_stars)[keep],
-        'Ngal':       ngal[keep],
-    }
+# Redshift width each snapshot stands for, used to spread scatter plots that
+# would otherwise stack every halo on a handful of exact snapshot redshifts.
+_SNAP_Z_SORTED = np.sort(REDSHIFTS)
+_SNAP_DZ_SORTED = np.gradient(_SNAP_Z_SORTED)
 
 
-# ========================== FIGURE UTILITIES ==========================
+def snap_to_age(snap):
+    """Age of the universe in Gyr at (possibly fractional) snapshot number."""
+    return np.interp(np.asarray(snap, dtype=float),
+                     np.arange(len(AGE_AT_SNAP)), AGE_AT_SNAP)
 
-def save_figure(fig, filepath):
-    """Save figure to disk."""
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    fig.savefig(filepath)
-    print(f'  Saved: {filepath}')
+
+# Every cosmic-time x-axis in this module runs with the present day on the
+# LEFT and lookback increasing to the right, so the figures read the way an
+# assembly history is usually discussed: "by z = 1 the ICS was already ...".
+def time_axis(ax):
+    """Apply the today-on-the-left convention to an axis whose x is cosmic time."""
+    ax.set_xlim(AGE_NOW, 0.0)
+
+
+def _z_axis(ax, zticks=(0, 0.2, 0.5, 1, 2, 3, 5, 8)):
+    """Put a redshift axis on top of an axis whose x is cosmic time in Gyr."""
+    top = ax.twiny()
+    top.set_xlim(ax.get_xlim())
+    ages = [cosmic_time_gyr(z) for z in zticks]
+    top.set_xticks(ages)
+    top.set_xticklabels([f'{z:g}' for z in zticks], fontsize=7.5)
+    top.set_xlabel(r'$z$', fontsize=8, labelpad=4)
+    return top
+
+
+# ========================== STYLE AND FIGURE UTILITIES ==========================
+
+# The house style is sized for a single full-width panel (20 pt axis labels on
+# an 8.34 x 6.25 in canvas).  Every figure here is a 2x2 or 1x3 grid, so the
+# type is scaled down by PANEL_FONT_SCALE and each panel is given roughly the
+# style's native aspect at PANEL_W x PANEL_H.  Typeface, usetex, tick style and
+# line weights are left exactly as the style sets them.
+PANEL_FONT_SCALE = 0.60
+PANEL_W, PANEL_H = 5.6, 4.5
+
+
+def setup_style():
+    plt.style.use("./plotting/kieren_cohare_palatino_sty.mplstyle")
+    f = PANEL_FONT_SCALE
+    plt.rcParams.update({
+        'font.size':        plt.rcParams['font.size'] * f,
+        'axes.labelsize':   plt.rcParams['axes.labelsize'] * f,
+        'axes.titlesize':   plt.rcParams['axes.titlesize'] * f,
+        'xtick.labelsize':  plt.rcParams['xtick.labelsize'] * f,
+        'ytick.labelsize':  plt.rcParams['ytick.labelsize'] * f,
+        'legend.fontsize':  plt.rcParams['legend.fontsize'] * f,
+        'xtick.major.size': 5.0, 'ytick.major.size': 5.0,
+        'xtick.minor.size': 3.0, 'ytick.minor.size': 3.0,
+        'xtick.major.pad':  4,
+        'axes.linewidth':   1.0,
+        # tight_layout is called explicitly; autolayout fights the twin axes
+        'figure.autolayout': False,
+    })
+
+
+def panel_grid(nrows, ncols, **kwargs):
+    """A figure whose panels each get the style's native proportions."""
+    return plt.subplots(nrows, ncols,
+                        figsize=(ncols * PANEL_W, nrows * PANEL_H), **kwargs)
+
+
+def _tex_safe(s):
+    """Make a label safe when usetex is off (the style file turns it on)."""
+    if not plt.rcParams.get('text.usetex', False):
+        s = s.replace(r'\&', '&').replace(r'\%', '%')
+    return s
+
+
+def save_figure(fig, name):
+    path = os.path.join(OUTPUT_DIR, name + OUTPUT_FORMAT)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fig.savefig(path)
+    print(f'  Saved: {path}')
     plt.close(fig)
 
 
-def _standard_legend(ax, loc='lower left', handles=None, labels=None, **kwargs):
-    """Apply consistent legend formatting with fully opaque handles."""
+def legend(ax, loc='best', **kwargs):
     kwargs.setdefault('frameon', False)
-    if handles is not None and labels is not None:
-        leg = ax.legend(handles, labels, loc=loc, numpoints=1,
-                        labelspacing=0.1, **kwargs)
-    else:
-        leg = ax.legend(loc=loc, numpoints=1, labelspacing=0.1, **kwargs)
+    kwargs.setdefault('fontsize', 7.5)
+    leg = ax.legend(loc=loc, numpoints=1, labelspacing=0.1, **kwargs)
     for lh in leg.legend_handles:
         lh.set_alpha(1)
     return leg
 
 
-# ========================== Observations ==========================
+def binned_median(x, y, bins, weights=None, min_count=MIN_COUNT):
+    """Bin centres and the 16/50/84th percentiles of *y*, NaN where too sparse."""
+    x, y = np.asarray(x), np.asarray(y)
+    ok = np.isfinite(x) & np.isfinite(y)
+    x, y = x[ok], y[ok]
+    centres = 0.5 * (bins[:-1] + bins[1:])
+    pct = np.full((3, len(bins) - 1), np.nan)
+    for i in range(len(bins) - 1):
+        m = (x >= bins[i]) & (x < bins[i + 1])
+        if m.sum() >= min_count:
+            pct[:, i] = np.percentile(y[m], (16, 50, 84))
+    return centres, pct
 
-# --------------- Intracluster light fraction against redshift ---------------
+
+def binned_weighted_median(x, y, w, bins, min_count=MIN_COUNT):
+    """Per-bin median of *y* weighted by *w* -- the epoch the mass, not the count, sees."""
+    x, y, w = np.asarray(x), np.asarray(y), np.asarray(w)
+    ok = np.isfinite(x) & np.isfinite(y) & (w > 0)
+    x, y, w = x[ok], y[ok], w[ok]
+    out = np.full(len(bins) - 1, np.nan)
+    for i in range(len(bins) - 1):
+        msk = (x >= bins[i]) & (x < bins[i + 1])
+        if msk.sum() >= min_count:
+            o = np.argsort(y[msk])
+            c = np.cumsum(w[msk][o]) / w[msk].sum()
+            out[i] = y[msk][o][np.searchsorted(c, 0.5)]
+    return 0.5 * (bins[:-1] + bins[1:]), out
+
+
+def plot_median_band(ax, x, y, bins, *, color, label=None, lw=2.6, ls='-',
+                     alpha=0.18, min_count=MIN_COUNT):
+    centres, (p16, p50, p84) = binned_median(x, y, bins, min_count=min_count)
+    ok = np.isfinite(p50)
+    if not ok.any():
+        return
+    ax.fill_between(centres[ok], p16[ok], p84[ok], color=color, alpha=alpha,
+                    lw=0, zorder=Z_BAND)
+    ax.plot(centres[ok], p50[ok], color=color, lw=lw, ls=ls, label=label,
+            zorder=Z_LINE)
+
+
+def binned_mass_fraction(x, mass, sel, bins, min_count=MIN_COUNT):
+    """Per-bin sum(mass[sel]) / sum(mass) -- a mass-weighted routing fraction."""
+    out = np.full(len(bins) - 1, np.nan)
+    for i in range(len(bins) - 1):
+        m = (x >= bins[i]) & (x < bins[i + 1])
+        tot = mass[m].sum()
+        if m.sum() >= min_count and tot > 0:
+            out[i] = mass[m & sel].sum() / tot
+    return 0.5 * (bins[:-1] + bins[1:]), out
+
+
+# ========================== OBSERVATIONS ==========================
 #
-# A digitised literature compilation, carried over unchanged from
-# plot_ics_observations() in random_plotting_scripts/BCG_ICS_fraction.py, where
-# it was assembled for this same comparison.  Values are fractions, not per cent.
-#
-# Two things to hold in mind before reading agreement or tension off these
-# points:
+# Digitised f_ICL-versus-redshift compilation.  Values are fractions, not per
+# cent.  Two things to hold in mind before reading agreement or tension off
+# these points:
 #
 #  * f_ICL is not one measurement.  Authors cut the ICL at different surface
 #    brightnesses and different radii, and disagree over whether the BCG belongs
@@ -817,234 +347,1098 @@ def _standard_legend(ax, loc='lower left', handles=None, labels=None, **kwargs):
 #    method, not physics.  No attempt is made here to homogenise them.
 #  * the model counts every intracluster star SAGE tracks, with no surface
 #    brightness limit at all, so f_ICS should sit at or above a
-#    surface-brightness-limited measurement rather than on top of it.
+#    surface-brightness-limited measurement rather than on top of it.  Cosmological
+#    dimming biases the high-redshift points low for the same reason.
 #
-# 'scale' separates cluster-scale hosts from group-scale samples so each lands
-# on the panel whose halo mass bin it actually belongs to.  'highlight' marks a
-# point worth drawing in its own right rather than folding into the compilation.
+# 'scale' separates cluster-scale hosts from group-scale samples so each is
+# drawn against the model line for the halo mass it actually belongs to.
 _ICL_FRACTION_OBS = (
-    dict(label='Spavone+20', scale='cluster', highlight=False,
-         note='Fornax, Fornax Deep Survey',
-         z=(0,),
-         f=(0.3408,)),
-    dict(label='Kluge+21', scale='cluster', highlight=False,
-         note='ICL and host cluster',
-         z=(0.03,),
-         f=(0.1792,)),
-    dict(label='Zibetti+05', scale='cluster', highlight=False,
-         note='stacked SDSS, z = 0.25',
-         z=(0.243,),
-         f=(0.1085,)),
-    dict(label='Feldmeier+04', scale='cluster', highlight=False,
-         note='deep CCD imaging',
-         z=(0.162, 0.162, 0.162, 0.185,),
-         f=(0.1521, 0.1215, 0.1026, 0.0731,)),
-    dict(label='Burke+15', scale='cluster', highlight=False,
-         note='CLASH',
+    dict(label='Spavone+20', scale='cluster', note='Fornax, Fornax Deep Survey',
+         z=(0,), f=(0.3408,)),
+    dict(label='Kluge+21', scale='cluster', note='ICL and host cluster',
+         z=(0.03,), f=(0.1792,)),
+    dict(label='Zibetti+05', scale='cluster', note='stacked SDSS',
+         z=(0.243,), f=(0.1085,)),
+    dict(label='Feldmeier+04', scale='cluster', note='deep CCD imaging',
+         z=(0.162, 0.162, 0.162, 0.185),
+         f=(0.1521, 0.1215, 0.1026, 0.0731)),
+    dict(label='Burke+15', scale='cluster', note='CLASH',
          z=(0.403, 0.387, 0.397, 0.339, 0.344, 0.342, 0.291, 0.225, 0.218,
-            0.213, 0.195, 0.177,),
+            0.213, 0.195, 0.177),
          f=(0.0259, 0.0271, 0.033, 0.0554, 0.0601, 0.0719, 0.1297, 0.125,
-            0.1627, 0.1804, 0.1686, 0.2311,)),
-    dict(label='Furnell+21', scale='cluster', highlight=False,
-         note='XCS-HSC, 0.1 < z < 0.5',
+            0.1627, 0.1804, 0.1686, 0.2311)),
+    dict(label='Furnell+21', scale='cluster', note='XCS-HSC',
          z=(0.144, 0.127, 0.122, 0.081, 0.225, 0.215, 0.256, 0.306, 0.261,
             0.294, 0.322, 0.342, 0.372, 0.337, 0.377, 0.329, 0.496, 0.425,
-            0.109,),
+            0.109),
          f=(0.3856, 0.3066, 0.3101, 0.2889, 0.2653, 0.2358, 0.2854, 0.2972,
             0.3255, 0.2748, 0.2759, 0.2665, 0.1981, 0.1887, 0.1545, 0.1533,
-            0.1132, 0.0967, 0.316,)),
-    dict(label='Montes & Trujillo 18', scale='cluster', highlight=False,
-         note='Frontier Fields',
-         z=(0.301, 0.39, 0.342, 0.537, 0.537, 0.37, 0.043,),
-         f=(0.0767, 0.0861, 0.1309, 0.066, 0.0578, 0.0483, 0.1085,)),
-    dict(label='Montes & Trujillo 18', scale='cluster', highlight=False,
+            0.1132, 0.0967, 0.316)),
+    dict(label=r'Montes \& Trujillo 18', scale='cluster', note='Frontier Fields',
+         z=(0.301, 0.39, 0.342, 0.537, 0.537, 0.37, 0.043),
+         f=(0.0767, 0.0861, 0.1309, 0.066, 0.0578, 0.0483, 0.1085)),
+    dict(label=r'Montes \& Trujillo 18b', scale='cluster',
          note='Frontier Fields, second estimate',
-         z=(0.534, 0.544, 0.367, 0.397, 0.342, 0.304, 0.048,),
-         f=(0.0153, 0, 0.0106, 0.0153, 0.0271, 0.033, 0.0861,)),
-    dict(label='Presotto+14', scale='cluster', highlight=False,
-         note='MACS J1206.2-0947',
-         z=(0.435,),
-         f=(0.1226,)),
-    dict(label='Presotto+14', scale='cluster', highlight=False,
-         note='MACS J1206.2-0947, second estimate',
-         z=(0.433,),
-         f=(0.0554,)),
-    dict(label='Ragusa+23', scale='cluster', highlight=False,
-         note='VEGAS, Antlia',
-         z=(0.05,),
-         f=(0.35,)),
-    dict(label='Burke+12', scale='cluster', highlight=False,
-         note='z ~ 1 clusters',
-         z=(0.947, 0.83, 0.795, 0.808, 1.223,),
-         f=(0.0142, 0.0259, 0.0377, 0.0153, 0.0236,)),
-    dict(label='Ko & Jee 18', scale='cluster', highlight=False,
-         note='ICL detected at z = 1.24',
-         z=(1.238,),
-         f=(0.0991,)),
-    dict(label='XLSSC 122 (JWST)', scale='cluster', highlight=True,
+         z=(0.534, 0.544, 0.367, 0.397, 0.342, 0.304, 0.048),
+         f=(0.0153, 0, 0.0106, 0.0153, 0.0271, 0.033, 0.0861)),
+    # two independent estimates for the same cluster, kept as separate points
+    dict(label='Presotto+14', scale='cluster', note='MACS J1206.2-0947',
+         z=(0.435, 0.433), f=(0.1226, 0.0554)),
+    dict(label='Ragusa+23', scale='cluster', note='VEGAS, Antlia',
+         z=(0.05,), f=(0.35,)),
+    dict(label='Burke+12', scale='cluster', note='z ~ 1 clusters',
+         z=(0.947, 0.83, 0.795, 0.808, 1.223),
+         f=(0.0142, 0.0259, 0.0377, 0.0153, 0.0236)),
+    dict(label=r'Ko \& Jee 18', scale='cluster', note='ICL detected at z = 1.24',
+         z=(1.238,), f=(0.0991,)),
+    dict(label='XLSSC 122 (JWST)', scale='cluster',
          note='the only constraint near z = 2',
-         z=(1.98,),
-         f=(0.17,)),
-    dict(label='Ragusa+23', scale='group', highlight=False,
-         note='VEGAS groups',
-         z=(0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
-            0.05, 0.05, 0.05, 0.05, 0.05,),
+         z=(1.98,), f=(0.17,)),
+    dict(label='Ragusa+23', scale='group', note='VEGAS groups',
+         z=(0.05,) * 16,
          f=(0.16, 0.05, 0.05, 0.17, 0.05, 0.27, 0.34, 0.17, 0.08, 0.35, 0.18,
-            0.07, 0.2, 0.22, 0.28, 0.3,)),
-    dict(label='Ahad+25', scale='group', highlight=False,
-         note='KiDS+GAMA groups',
-         z=(0.12, 0.12, 0.12, 0.18, 0.18, 0.18, 0.24, 0.24, 0.24,),
-         f=(0.16, 0.1, 0.04, 0.15, 0.12, 0.08, 0.13, 0.15, 0.05,)),
+            0.07, 0.2, 0.22, 0.28, 0.3)),
+    dict(label='Ahad+25', scale='group', note='KiDS+GAMA groups',
+         z=(0.12, 0.12, 0.12, 0.18, 0.18, 0.18, 0.24, 0.24, 0.24),
+         f=(0.16, 0.1, 0.04, 0.15, 0.12, 0.08, 0.13, 0.15, 0.05)),
 )
 
+# One marker per source, so a reader can tell which sample a point came from
+# rather than seeing an undifferentiated grey cloud.
+_OBS_MARKERS = ('o', 's', '^', 'v', 'D', 'P', 'X', '<', '>', 'h', '*', 'p', 'd')
 
-def load_icl_fraction_observations(scale='cluster'):
-    """
-    The f_ICL-versus-redshift compilation for hosts of a given *scale*.
 
-    Parameters
-    ----------
-    scale : {'cluster', 'group'}
-        Which host scale to return.  'cluster' is everything from Fornax
-        upwards; 'group' is the group-scale samples (Ragusa+23 VEGAS,
-        Ahad+25 KiDS+GAMA), which belong against the 12.5-13.5 panel rather
-        than the cluster one.
-
-    Returns
-    -------
-    list of dict, each with 'label', 'note', 'highlight', and 'z'/'f' arrays.
-    """
-    return [dict(o, z=np.asarray(o['z'], dtype=float),
-                    f=np.asarray(o['f'], dtype=float))
+def load_icl_fraction_observations(scale):
+    """The f_ICL compilation for hosts of a given *scale* ('cluster' or 'group')."""
+    return [dict(o, z=np.asarray(o['z'], float), f=np.asarray(o['f'], float))
             for o in _ICL_FRACTION_OBS if o['scale'] == scale]
 
 
-# ========================== Figures ==========================
-
-
-
-
-
-
-# ========================== ICL / BCG ==========================
+# ========================== THE EVENT CATALOGUE ==========================
 #
-# The three figures below test one mechanism against observations.  SAGE26
-# destroys a satellite into the ICS the moment its subhalo leaves the halo
-# catalogue, provided the dynamical-friction clock has not expired
-# (core_build_model.c: MergTime > 0 -> disrupt_satellite_to_ICS).  Measured on
-# microUchuu, that channel supplies 98.4 per cent of all intracluster stars, and
-# the mass is carried by well-resolved log M* ~ 10.3 satellites sitting in
-# subhaloes of ~590 particles -- objects whose subhalo loss signals a genuine
-# merger, not a resolution failure.
+# One row per destroyed satellite, across every snapshot of the run.
 #
-# The mechanism therefore predicts a *coupled* error, not a single offset:
-# stars that should have reached the BCG are in the ICS instead, so M_ICL is too
-# high and M_BCG too low by the same mass.  f_ICS alone cannot show this (it has
-# no surface-brightness limit in the model and so is expected to sit above the
-# observations anyway); the ICL-to-BCG ratio can.  The metallicity is the
-# control: it is set by which galaxies are destroyed, not by where their stars
-# are put, so it should already agree -- and any correction that fixes the ratio
-# must not break it.
+#   snap_dest     snapshot the destruction fired on
+#   merge_type    4 = to ICS, 1 = minor merger onto central, 2 = major merger
+#   sat_type      the satellite's Type at destruction (1 = has a subhalo)
+#   mstar         its stellar mass immediately before destruction [Msun]
+#   infall_mstar  its stellar mass when it first became a satellite [Msun]
+#   snap_infall   snapshot of that first infall (-1 if never recorded)
+#   host_mvir     Mvir of the central it was destroyed into [Msun]
+#   host_mstar    that central's stellar mass at the same snapshot [Msun]
+#
+# Reading is done file by file so the CentralGalaxyIndex -> central lookup stays
+# inside the file that wrote both records.
 
-# Literature ranges that are NOT digitised measurements.  They are drawn as
-# labelled bands so the model can be read against roughly the right place, and
-# they must be replaced with digitised data before publication.  Every one is
-# flagged at run time by report_indicative_ranges().
-_INDICATIVE_RANGES = {
-    'M_ICL/M_BCG': dict(
-        lo=1.0, hi=3.0,
-        source='Kluge+21; Montes 2022 (review)',
-        note='cluster-scale ICL-to-BCG mass ratio; definition-dependent'),
-    'Z_ICS': dict(
-        lo=0.4, hi=1.0,
-        source=r'Montes \& Trujillo 14, 18',
-        note='ICL metallicity from Frontier Fields colours, [Fe/H] ~ -0.4 to 0'),
-}
+_EVENT_FIELDS = ('snap_dest', 'merge_type', 'sat_type', 'mstar',
+                 'infall_mstar', 'snap_infall', 'host_mvir', 'host_mstar',
+                 'host_rvir', 'host_vvir')
 
 
-def report_indicative_ranges():
-    """Print every comparison band that is an eyeballed literature range, not data."""
-    print('Indicative literature ranges in use (NOT digitised -- replace before publication):')
-    for key, r in _INDICATIVE_RANGES.items():
-        print(f"    {key:14s} {r['lo']}--{r['hi']}  [{_tex_safe(r['source'])}]  {r['note']}")
+def build_event_catalogue(verbose=True, ctx=None):
+    """Walk every snapshot of every model file and collect the destruction events."""
+    files = MODEL_FILES if ctx is None else ctx['files']
+    snaps = SNAPS if ctx is None else ctx['snaps']
+    conv = MASS_CONVERT if ctx is None else ctx['mass_convert']
+    cols = {k: [] for k in _EVENT_FIELDS}
+    n_no_host = 0
+
+    for fp in files:
+        with h5.File(fp, 'r') as f:
+            for snap in snaps:
+                key = f'Snap_{snap}'
+                if key not in f:
+                    continue
+                g = f[key]
+                mt = g['mergeType'][:]
+                ev = mt != 0
+                if not ev.any():
+                    continue
+
+                gi  = g['GalaxyIndex'][:]
+                cgi = g['CentralGalaxyIndex'][:]
+                sm  = g['StellarMass'][:]
+                mv  = g['Mvir'][:]
+
+                # central lookup: GalaxyIndex is unique within a file
+                order = np.argsort(gi)
+                pos = np.searchsorted(gi, cgi[ev], sorter=order)
+                pos = np.clip(pos, 0, len(gi) - 1)
+                host = order[pos]
+                good = gi[host] == cgi[ev]
+                n_no_host += int((~good).sum())
+
+                rv, vv = g['Rvir'][:], g['Vvir'][:]
+                host_mvir  = np.where(good, mv[host], np.nan)
+                host_mstar = np.where(good, sm[host], np.nan)
+                host_rvir  = np.where(good, rv[host], np.nan)
+                host_vvir  = np.where(good, vv[host], np.nan)
+
+                cols['snap_dest'].append(np.full(ev.sum(), snap, dtype=np.int16))
+                cols['merge_type'].append(mt[ev].astype(np.int8))
+                cols['sat_type'].append(g['Type'][:][ev].astype(np.int8))
+                cols['mstar'].append(sm[ev] * conv)
+                cols['infall_mstar'].append(g['infallStellarMass'][:][ev] * conv)
+                cols['snap_infall'].append(g['TimeOfInfall'][:][ev])
+                cols['host_mvir'].append(host_mvir * conv)
+                cols['host_mstar'].append(host_mstar * conv)
+                cols['host_rvir'].append(host_rvir)
+                cols['host_vvir'].append(host_vvir)
+
+    ev = {k: np.concatenate(v) for k, v in cols.items()}
+    if verbose:
+        print(f'  {len(ev["snap_dest"]):,} destruction events across '
+              f'{len(snaps)} snapshots and {len(files)} files')
+        if n_no_host:
+            print(f'  warning: {n_no_host:,} events whose central was not found')
+    return ev
 
 
-def _halo_ics_from_data(data, verbose=False):
+def load_events(refresh=False, verbose=True, directory=None):
+    """The event catalogue, from the npz cache when it is newer than the model files."""
+    if directory is None or os.path.normpath(directory) == os.path.normpath(MODEL_DIR):
+        directory, ctx, cache = MODEL_DIR, None, CACHE_FILE
+        files = MODEL_FILES
+    else:
+        ctx = run_context(directory)
+        if ctx is None:
+            return None
+        files = ctx['files']
+        tag = os.path.basename(os.path.normpath(directory))
+        cache = os.path.join(OUTPUT_DIR, f'satellite_events_v2_{tag}.npz')
+
+    if not refresh and os.path.exists(cache):
+        if os.path.getmtime(cache) > max(os.path.getmtime(f) for f in files):
+            if verbose:
+                print(f'Reading event catalogue from {cache}')
+            z = np.load(cache)
+            return _derive({k: z[k] for k in _EVENT_FIELDS})
+
+    if verbose:
+        print(f'Building event catalogue from {directory}')
+    ev = build_event_catalogue(verbose=verbose, ctx=ctx)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    np.savez_compressed(cache, **ev)
+    if verbose:
+        print(f'  Cached: {cache}')
+    return _derive(ev)
+
+
+def _derive(ev):
+    """Add the columns that follow from the raw ones: destination and times."""
+    ev = dict(ev)
+    ev['to_ics'] = ev['merge_type'] == 4
+    ev['to_bcg'] = (ev['merge_type'] == 1) | (ev['merge_type'] == 2)
+
+    ev['t_dest'] = snap_to_age(ev['snap_dest'])
+    ev['z_dest'] = REDSHIFTS[ev['snap_dest']]
+
+    # TimeOfInfall is only trustworthy for a record written with Type != 0.
+    # save_gals_hdf5.c zero-fills every infall field (infallMvir, infallVmax,
+    # infallStellarMass, TimeOfInfall) when a galaxy is written as Type 0, so a
+    # central that is absorbed and destroyed inside a single timestep -- before
+    # its Type is reassigned -- comes out with TimeOfInfall == 0.  Taken at face
+    # value that reads as "fell in at the first snapshot" and hands the event a
+    # residence time equal to the entire age of the universe at its destruction.
+    # Those rows get a NaN residence time instead.  They are numerous but light:
+    # see report_catalogue() for the event and mass fractions excluded.
+    ev['infall_known'] = (ev['sat_type'] != 0) & (ev['snap_infall'] >= 0)
+    known = ev['infall_known']
+
+    safe = np.where(known, ev['snap_infall'], 0)
+    ev['t_infall'] = np.where(known, snap_to_age(safe), np.nan)
+    ev['z_infall'] = np.where(known, REDSHIFTS[safe.astype(int)], np.nan)
+    ev['t_res'] = ev['t_dest'] - ev['t_infall']
+
+    ev['log_mstar'] = np.log10(np.where(ev['mstar'] > 0, ev['mstar'], np.nan))
+    ev['log_host_mvir'] = np.log10(np.where(ev['host_mvir'] > 0, ev['host_mvir'], np.nan))
+    ev['mass_ratio'] = np.where(ev['host_mstar'] > 0, ev['mstar'] / ev['host_mstar'], np.nan)
+
+    # Host dynamical time at the moment of destruction.  Rvir is physical
+    # Mpc/h and Vvir is km/s (verified against sqrt(GM/R) for a 1.6e14 halo),
+    # so t_dyn = (Rvir/h)/Vvir in Mpc/(km/s), and 1 Mpc/(km/s) = 977.8 Gyr.
+    # This is the natural clock to measure a disruption timescale against: if
+    # satellites were destroyed on a crossing time, t_res/t_dyn would be ~1
+    # independent of mass, redshift and host.
+    with np.errstate(divide='ignore', invalid='ignore'):
+        ev['t_dyn'] = np.where(ev['host_vvir'] > 0,
+                               (ev['host_rvir'] / HUBBLE_H) / ev['host_vvir'] * 977.8,
+                               np.nan)
+    ev['t_res_over_tdyn'] = ev['t_res'] / ev['t_dyn']
+    ev['log_infall_mstar'] = np.log10(
+        np.where(ev['infall_mstar'] > 0, ev['infall_mstar'], np.nan))
+    return ev
+
+
+def report_catalogue(ev):
+    """Print the budget the four figures are all views of."""
+    ics, bcg = ev['to_ics'], ev['to_bcg']
+    m = ev['mstar']
+    tot = m[ics].sum() + m[bcg].sum()
+
+    print('Run:', MODEL_DIR)
+    print(f'  box {HDR["box_size"]:g} Mpc/h, {HDR["volume_fraction"]*100:.0f} per cent processed '
+          f'-> {VOLUME:.4g} Mpc^3;  m_p = {HDR["particle_mass"]:.4g} x 1e10 Msun/h')
+    print(f'  MergerTimeFactor = {HDR["merger_time_factor"]:g}, '
+          f'ThreshMajorMerger = {HDR["thresh_major_merger"]:g}, '
+          f'ThresholdSatDisruption = {HDR["thresh_sat_disruption"]:g}')
+    print(f'  z = 0 halo statistics taken at Snap_{Z0_SNAP} (z = {REDSHIFTS[Z0_SNAP]:.4f}), '
+          f'not Snap_{LAST_SNAP} -- see Z0_SNAP')
+    print()
+    print('Accreted stellar mass, by destination:')
+    for name, sel in ((DEST_ICS, ics), (DEST_BCG, bcg)):
+        print(f'  {name:4s}  {sel.sum():8,d} events   '
+              f'{m[sel].sum():.4g} Msun   ({m[sel].sum()/tot*100:5.1f} per cent of accreted)   '
+              f'median log M* = {np.nanmedian(ev["log_mstar"][sel]):.2f}')
+    minor, major = ev['merge_type'] == 1, ev['merge_type'] == 2
+    print(f'        of the BCG channel: {m[minor].sum()/m[bcg].sum()*100:.1f} per cent minor, '
+          f'{m[major].sum()/m[bcg].sum()*100:.1f} per cent major by mass')
+    print()
+    known = ev['infall_known']
+    print('Infall-to-destruction time:')
+    for name, sel in ((DEST_ICS, ics), (DEST_BCG, bcg)):
+        drop = sel & ~known
+        print(f'  {name:4s}  no usable TimeOfInfall for {drop.sum():,} events '
+              f'({drop.sum()/sel.sum()*100:.1f} per cent of events, '
+              f'{m[drop].sum()/m[sel].sum()*100:.1f} per cent of the mass) -- excluded')
+    for name, sel in ((DEST_ICS, ics), (DEST_BCG, bcg)):
+        s_ = sel & known
+        t, w = ev['t_res'][s_], m[s_]
+        o = np.argsort(t)
+        mw_med = t[o][np.searchsorted(np.cumsum(w[o]) / w.sum(), 0.5)]
+        print(f'  {name:4s}  per-event median {np.median(t):5.2f} Gyr '
+              f'(16--84 {np.percentile(t,16):.2f}--{np.percentile(t,84):.2f});   '
+              f'mass-weighted median {mw_med:5.2f} Gyr, mean {np.average(t, weights=w):.2f} Gyr')
+    print()
+    for name, sel in ((DEST_ICS, ics), (DEST_BCG, bcg)):
+        t50 = _half_mass_time(ev['t_dest'][sel], m[sel])
+        print(f'  {name} half of the accreted mass is in place by t = {t50:.2f} Gyr '
+              f'(z = {_z_at_age(t50):.2f})')
+
+
+def report_by_satellite_mass(ev):
+    """Routing and timing as a function of what kind of satellite was destroyed."""
+    m, ics, known = ev['mstar'], ev['to_ics'], ev['infall_known']
+    edges = [6.0, 8.0, 9.0, 10.0, 10.5, 11.0, 12.0]
+    print()
+    print('By satellite stellar mass at destruction:')
+    print('  log M*        events    M* accreted   to ICS   median t_res [Gyr]')
+    print('                                        (mass)    ICS     BCG')
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        b = (ev['log_mstar'] >= lo) & (ev['log_mstar'] < hi)
+        if not b.any():
+            continue
+        f = m[b & ics].sum() / m[b].sum()
+        t_i = ev['t_res'][b & ics & known]
+        t_b = ev['t_res'][b & ~ics & known]
+        med = lambda a: f'{np.median(a):5.2f}' if a.size >= MIN_COUNT else '    -'
+        print(f'  {lo:4.1f}--{hi:4.1f}  {b.sum():8,d}   {m[b].sum():.3e}   '
+              f'{f*100:5.1f}%   {med(t_i)}   {med(t_b)}')
+    print()
+
+
+def report_by_host_mass(ev):
+    """The same accounting per host halo, which is the axis the ICL literature uses."""
+    m, ics, known = ev['mstar'], ev['to_ics'], ev['infall_known']
+    print('By host halo mass at the time of destruction:')
+    print('  log Mvir      events    M* accreted   to ICS    t_res [Gyr]      half-mass epoch [Gyr]')
+    print('                                        (mass)    ICS     BCG      ICS     BCG')
+    for lo, hi, _ in HOST_BINS:
+        b = (ev['log_host_mvir'] >= lo) & (ev['log_host_mvir'] < hi)
+        if not b.any():
+            continue
+        f = m[b & ics].sum() / m[b].sum()
+        t_i, t_b = ev['t_res'][b & ics & known], ev['t_res'][b & ~ics & known]
+        med = lambda a: f'{np.median(a):5.2f}' if a.size >= MIN_COUNT else '    -'
+        h = lambda sel: (f'{_half_mass_time(ev["t_dest"][sel], m[sel]):5.2f}'
+                         if sel.sum() >= MIN_COUNT else '    -')
+        print(f'  {lo:4.1f}--{hi:4.1f}  {b.sum():8,d}   {m[b].sum():.3e}   '
+              f'{f*100:5.1f}%   {med(t_i)}   {med(t_b)}    {h(b & ics)}   {h(b & ~ics)}')
+    print()
+
+
+def report_assembly(ev):
+    """When each reservoir was laid down, and how fast it is still growing."""
+    m = ev['mstar']
+    print('Assembly of each reservoir (all hosts):')
+    for name, sel in ((DEST_ICS, ev['to_ics']), (DEST_BCG, ev['to_bcg'])):
+        t, w = ev['t_dest'][sel], m[sel]
+        o = np.argsort(t)
+        c = np.cumsum(w[o]) / w.sum()
+        q = {p: t[o][np.searchsorted(c, p)] for p in (0.1, 0.25, 0.5, 0.75, 0.9)}
+        print(f'  {name}: mass-weighted mean epoch {np.average(t, weights=w):.2f} Gyr '
+              f'(lookback {AGE_NOW - np.average(t, weights=w):.2f} Gyr)')
+        print('     ' + '  '.join(
+            f'{int(p*100)} per cent by {v:5.2f} Gyr (z={_z_at_age(v):.2f})'
+            for p, v in list(q.items())[::2]))
+        last2 = t > AGE_NOW - 2.0
+        print(f'     {w[last2].sum()/w.sum()*100:.1f} per cent of it deposited in the '
+              f'last 2 Gyr;  {w[t < 3.0].sum()/w.sum()*100:.1f} per cent before t = 3 Gyr')
+    print()
+
+
+def _half_mass_time(t, m):
+    o = np.argsort(t)
+    c = np.cumsum(m[o]) / m.sum()
+    return float(t[o][np.searchsorted(c, 0.5)])
+
+
+def _z_at_age(t):
+    """Invert the snapshot age table; adequate for annotating a figure."""
+    return float(np.interp(t, AGE_AT_SNAP, REDSHIFTS))
+
+
+# ========================== FIGURE 1: WHICH SATELLITES ==========================
+
+def plot_1_satellite_population(ev):
     """
-    Per-FOF-halo ICL/BCG table from an already-loaded snapshot.
+    Which satellites end up in the ICS and which end up in the BCG.
 
-    Extends stellarmass_within_halo() with the ICL metal mass, which is what the
-    metallicity figure needs.  Grouping is by CentralGalaxyIndex and the central
-    defines the halo, exactly as there.
-
-    Returns a dict of aligned arrays, one element per halo:
-        'Mvir'   FOF virial mass [Msun]        'ICS'    intracluster stars [Msun]
-        'Stars'  all galaxy stars, no ICL      'BCG'    central's stellar mass [Msun]
-        'MetalsICS'  ICL metal mass [Msun]     'Ngal'   galaxies in the halo
+    Top row: the raw distributions -- satellite stellar mass at destruction and
+    the halo mass of the host it was destroyed into, for each destination,
+    weighted by the mass each event delivers (the unweighted curves are drawn
+    behind in outline, since the two differ a great deal: the ICS is fed by many
+    small events and a few large ones).
+    Bottom row: the same information as a routing fraction, the share of
+    accreted stellar mass that goes to the ICS rather than the BCG, against
+    those two axes.  This is the panel that says which satellites the
+    dynamical-friction clock is still running for.
     """
-    need = ('StellarMass', 'IntraClusterStars', 'MetalsIntraClusterStars',
-            'Mvir', 'Type', 'CentralGalaxyIndex')
-    missing = [q for q in need if q not in data]
-    if missing:
-        raise KeyError('_halo_ics_from_data needs ' + ', '.join(missing))
+    print('Figure 1: the satellite population, split by destination')
+    ics, bcg, m = ev['to_ics'], ev['to_bcg'], ev['mstar']
 
-    cgi = data['CentralGalaxyIndex'].astype(np.int64)
-    _, idx = np.unique(cgi, return_inverse=True)
-    n = idx.max() + 1
+    fig, axes = panel_grid(2, 2)
 
-    stars  = np.bincount(idx, weights=data['StellarMass'], minlength=n)
-    ics    = np.bincount(idx, weights=data['IntraClusterStars'], minlength=n)
-    mics   = np.bincount(idx, weights=data['MetalsIntraClusterStars'], minlength=n)
-    ngal   = np.bincount(idx, minlength=n)
+    for ax, x, bins, xlabel in (
+            (axes[0, 0], ev['log_mstar'], MSTAR_BINS,
+             r'$\log_{10}(M_\star/{\rm M}_\odot)$ of the satellite'),
+            (axes[0, 1], ev['log_host_mvir'], MVIR_BINS,
+             r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$ of the host')):
+        for dest, sel in ((DEST_ICS, ics), (DEST_BCG, bcg)):
+            ok = sel & np.isfinite(x)
+            ax.hist(x[ok], bins=bins, weights=m[ok] / m[ok].sum(),
+                    color=COLOUR[dest], alpha=0.55, zorder=Z_LINE,
+                    label=DEST_LABEL[dest])
+            ax.hist(x[ok], bins=bins, weights=np.full(ok.sum(), 1.0 / ok.sum()),
+                    histtype='step', color=COLOUR[dest], lw=1.5, ls='--',
+                    zorder=Z_LINE + 1,
+                    label='   ' + dest + ', per event')
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel('fraction per bin')
+        ax.set_xlim(bins[0], bins[-1])
+        legend(ax, loc='upper left')
 
-    is_cen = data['Type'] == 0
-    mvir = np.full(n, np.nan)
-    bcg  = np.zeros(n)
-    mvir[idx[is_cen]] = data['Mvir'][is_cen]
-    bcg[idx[is_cen]]  = data['StellarMass'][is_cen]
+    for ax, x, bins, xlabel in (
+            (axes[1, 0], ev['log_mstar'], MSTAR_BINS,
+             r'$\log_{10}(M_\star/{\rm M}_\odot)$ of the satellite'),
+            (axes[1, 1], ev['log_host_mvir'], MVIR_BINS,
+             r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$ of the host')):
+        ok = np.isfinite(x)
+        c, frac = binned_mass_fraction(x[ok], m[ok], ics[ok], bins)
+        good = np.isfinite(frac)
+        ax.plot(c[good], frac[good], color=COLOUR[DEST_ICS], lw=2.8, zorder=Z_LINE,
+                label='mass-weighted')
+        # Within a 0.25 dex satellite-mass bin the two weightings are almost
+        # degenerate, so the dashed curve only separates in the host-mass panel.
+        c, fracn = binned_mass_fraction(x[ok], np.ones(ok.sum()), ics[ok], bins)
+        goodn = np.isfinite(fracn)
+        ax.plot(c[goodn], fracn[goodn], color=COLOUR[DEST_ICS], lw=1.5, ls='--',
+                zorder=Z_LINE, label='per event')
+        ax.axhline(0.5, color='0.55', lw=1.0, ls=':', zorder=1)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(r'$M_\star$ fraction routed to ICS')
+        ax.set_xlim(bins[0], bins[-1])
+        ax.set_ylim(0, 1)
+        legend(ax, loc='lower right')
 
-    keep = np.isfinite(mvir) & (mvir > 0)
-    if verbose and (n - keep.sum()):
-        print(f'  _halo_ics_from_data: dropped {n - int(keep.sum()):,} groups with no resolved central')
-    return dict(Mvir=mvir[keep], Stars=stars[keep], ICS=ics[keep],
-                MetalsICS=mics[keep], BCG=bcg[keep], Ngal=ngal[keep])
+    fig.tight_layout()
+    save_figure(fig, 'fig1_satellite_population')
 
 
-def halo_ics_table(directory, verbose=True):
+# ========================== FIGURE 2: TIMESCALES ==========================
+
+def plot_2_satellite_timescales(ev):
     """
-    Build the per-halo ICL/BCG table for *directory*, using that run's own header.
+    How long a satellite survives between infall and destruction, by destination.
 
-    Each model box carries its own hubble_h, unit mass and final snapshot, so the
-    mass conversion cannot be taken from the primary model -- reading it per
-    directory is what makes a microUchuu/Millennium comparison meaningful.
-    Returns None when the directory holds no model files.
+    The residence time is t(destruction) - t(TimeOfInfall), both read off the
+    snapshot table: the *realised* survival time that the dynamical-friction
+    clock and the disruption criterion together deliver, not the MergTime
+    estimated at infall.  A satellite reaches the ICS only while that clock is
+    still running, so the ICS is by construction the short-lived channel.
+
+    Per-event and mass-weighted statistics are both drawn throughout, because
+    for the BCG channel they disagree by an order of magnitude: it is fed by a
+    very large number of tiny galaxies that merge almost immediately and a small
+    number of massive ones that take several Gyr, and only the latter carry
+    mass.  Events whose record was written as Type 0 have no usable
+    TimeOfInfall (see _derive) and are excluded from every panel here.
     """
-    hdr = _read_sim_header(directory)
+    print('Figure 2: infall-to-destruction timescales')
+    ics, bcg, m = ev['to_ics'], ev['to_bcg'], ev['mstar']
+    known = ev['infall_known']
+
+    fig, axes = panel_grid(2, 2)
+
+    # (a) the distribution itself, both weightings
+    ax = axes[0, 0]
+    tbins = np.arange(0.0, 9.01, 0.3)
+    for dest, sel in ((DEST_ICS, ics), (DEST_BCG, bcg)):
+        s_ = sel & known
+        t, w = ev['t_res'][s_], m[s_]
+        ax.hist(t, bins=tbins, weights=w / w.sum(), color=COLOUR[dest],
+                alpha=0.55, zorder=Z_BAND, label=DEST_LABEL[dest] + ', mass-weighted')
+        ax.hist(t, bins=tbins, weights=np.full(t.size, 1.0 / t.size),
+                histtype='step', color=COLOUR[dest], lw=1.5, ls='--',
+                zorder=Z_LINE, label='   ' + dest + ', per event')
+        o = np.argsort(t)
+        mw = t[o][np.searchsorted(np.cumsum(w[o]) / w.sum(), 0.5)]
+        ax.axvline(mw, color=COLOUR[dest], lw=1.6, zorder=Z_LINE + 2)
+        ax.annotate(f'{mw:.2f} Gyr', (mw, 0.62), xycoords=('data', 'axes fraction'),
+                    textcoords='offset points', xytext=(4, 0), va='center',
+                    fontsize=7, color=COLOUR[dest])
+    ax.set_xlabel(r'$t_{\rm destruction} - t_{\rm infall}$ [Gyr]')
+    ax.set_ylabel(r'fraction per bin')
+    ax.set_xlim(0, tbins[-1])
+    legend(ax, loc='upper right')  # the distributions pile up against t = 0
+
+    # (b) and (c): against the satellite, and against its host.  Solid line and
+    # band are the per-event median and 16--84 spread; the dashed line is the
+    # mass-weighted median in the same bin.
+    for ax, x, bins, xlabel, loc in (
+            (axes[0, 1], ev['log_mstar'], MSTAR_BINS,
+             r'$\log_{10}(M_\star/{\rm M}_\odot)$ of the satellite', 'upper left'),
+            (axes[1, 0], ev['log_host_mvir'], MVIR_BINS,
+             r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$ of the host', 'upper left')):
+        for dest, sel in ((DEST_ICS, ics), (DEST_BCG, bcg)):
+            s_ = sel & known
+            plot_median_band(ax, x[s_], ev['t_res'][s_], bins, color=COLOUR[dest],
+                             label=DEST_LABEL[dest] + ', per event', min_count=50)
+            c, mw = binned_weighted_median(x[s_], ev['t_res'][s_], m[s_], bins,
+                                           min_count=50)
+            ok = np.isfinite(mw)
+            ax.plot(c[ok], mw[ok], color=COLOUR[dest], lw=1.8, ls='--',
+                    zorder=Z_LINE + 1, label='   ' + dest + ', mass-weighted')
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(r'$t_{\rm destruction} - t_{\rm infall}$ [Gyr]')
+        ax.set_xlim(bins[0], bins[-1])
+        ax.set_ylim(0, None)
+        legend(ax, loc=loc)
+
+    # (d) against when the satellite fell in.  The merging-time estimate scales
+    # with the host dynamical time, so a later infall should buy a longer clock;
+    # the hard ceiling is that a satellite cannot outlive the run.
+    ax = axes[1, 1]
+    abins = np.arange(0.0, AGE_NOW + 0.01, 0.5)
+    for dest, sel in ((DEST_ICS, ics), (DEST_BCG, bcg)):
+        s_ = sel & known
+        plot_median_band(ax, ev['t_infall'][s_], ev['t_res'][s_], abins,
+                         color=COLOUR[dest], label=DEST_LABEL[dest] + ', per event',
+                         min_count=50)
+        c, mw = binned_weighted_median(ev['t_infall'][s_], ev['t_res'][s_], m[s_],
+                                       abins, min_count=50)
+        ok = np.isfinite(mw)
+        ax.plot(c[ok], mw[ok], color=COLOUR[dest], lw=1.8, ls='--',
+                zorder=Z_LINE + 1, label='   ' + dest + ', mass-weighted')
+    ax.plot(abins, AGE_NOW - abins, color='0.5', lw=1.2, ls=':', zorder=1,
+            label=r'time remaining to $z=0$')
+    ax.set_xlabel(r'$t_{\rm infall}$ [Gyr]')
+    ax.set_ylabel(r'$t_{\rm destruction} - t_{\rm infall}$ [Gyr]')
+    time_axis(ax)
+    ax.set_ylim(0, None)
+    legend(ax, loc='upper left')
+    _z_axis(ax)
+
+    fig.tight_layout()
+    save_figure(fig, 'fig2_satellite_timescales')
+
+
+# ========================== FIGURES 3 AND 4: ASSEMBLY ==========================
+
+def _assembly_rate(t_dest, mass, snaps=None):
+    """
+    Mass deposited per snapshot interval, as a density rate.
+
+    Returns (t_mid, rate) with rate in Msun/yr/Mpc^3, the same units a cosmic
+    star-formation history is drawn in, so the two can be read against
+    each other.
+    """
+    edges = 0.5 * (AGE_AT_SNAP[:-1] + AGE_AT_SNAP[1:])
+    edges = np.concatenate(([AGE_AT_SNAP[0] - (edges[0] - AGE_AT_SNAP[0])],
+                            edges,
+                            [AGE_AT_SNAP[-1] + (AGE_AT_SNAP[-1] - edges[-1])]))
+    summed, _ = np.histogram(t_dest, bins=edges, weights=mass)
+    dt_yr = np.diff(edges) * 1e9
+    return AGE_AT_SNAP, summed / dt_yr / VOLUME
+
+
+def _plot_assembly(ev, sel, dest, filename, what):
+    """
+    When a reservoir is built out of destroyed satellites, and out of how much.
+
+    Left: the deposition rate density against cosmic time, in total and split by
+    the halo mass of the host receiving it, so the cluster-scale history can be
+    separated from the field.
+    Middle: the cumulative mass, absolute on the left axis and as a fraction on
+    the right, with the half-mass epoch marked.
+    Right: the mass-weighted mean deposition redshift against host halo mass --
+    one number per halo mass, saying how early that reservoir was laid down.
+    """
+    m = ev['mstar']
+    colour = COLOUR[dest]
+
+    fig, axes = panel_grid(1, 3)
+
+    # --- rate history ---
+    ax = axes[0]
+    t, rate = _assembly_rate(ev['t_dest'][sel], m[sel])
+    ok = rate > 0
+    ax.plot(t[ok], rate[ok], color=colour, lw=3.0, zorder=Z_LINE, label='all hosts')
+    for (lo, hi, lbl), c in zip(HOST_BINS, HOST_BIN_COLOURS):
+        s = sel & (ev['log_host_mvir'] >= lo) & (ev['log_host_mvir'] < hi)
+        if s.sum() < MIN_COUNT:
+            continue
+        t, r = _assembly_rate(ev['t_dest'][s], m[s])
+        ok = r > 0
+        ax.plot(t[ok], r[ok], color=c, lw=1.8, zorder=Z_LINE - 1,
+                label=r'$\log M_{\rm vir} = $ ' + lbl)
+    ax.set_yscale('log')
+    ax.set_xlabel('cosmic time [Gyr]')
+    ax.set_ylabel(what + r' rate $[{\rm M}_\odot\,{\rm yr}^{-1}\,{\rm Mpc}^{-3}]$')
+    time_axis(ax)
+    legend(ax, loc='lower left')
+    _z_axis(ax)
+
+    # --- cumulative ---
+    # Read right to left, with time running backwards: the curve rises from
+    # nothing at early times to the final reservoir at the present day.
+    ax = axes[1]
+    o = np.argsort(ev['t_dest'][sel])
+    t_s, m_s = ev['t_dest'][sel][o], m[sel][o]
+    total = m_s.sum() / VOLUME
+    # Fix the y unit to a round power of ten rather than let matplotlib park an
+    # offset "x10^n" in the top-left corner, where the redshift axis already is.
+    exp = int(np.floor(np.log10(total)))
+    ax.plot(t_s, np.cumsum(m_s) / VOLUME / 10.0 ** exp, color=colour, lw=3.0,
+            zorder=Z_LINE)
+    ax.set_xlabel('cosmic time [Gyr]')
+    ax.set_ylabel(what + rf' from satellites $[10^{{{exp}}}\,{{\rm M}}_\odot\,{{\rm Mpc}}^{{-3}}]$')
+    time_axis(ax)
+    ax.set_ylim(0, None)
+
+    frac = ax.twinx()
+    frac.set_ylim(0, 1)
+    frac.set_ylabel('fraction of the final mass')
+    cumfrac = np.cumsum(m_s) / m_s.sum()
+    for q, ls in ((0.5, '--'), (0.9, ':')):
+        tq = t_s[np.searchsorted(cumfrac, q)]
+        frac.axvline(tq, color=colour, ls=ls, lw=1.4, zorder=1)
+        # time runs backwards, so a marker at high t sits near the left spine
+        # and its label has to be placed on the inside
+        left_edge = tq > 0.75 * AGE_NOW
+        frac.annotate(rf'${q:.0%}$'.replace('%', r'\%') + f': {tq:.1f} Gyr, ' +
+                      rf'$z={_z_at_age(tq):.2f}$',
+                      (tq, q), textcoords='offset points',
+                      xytext=(6 if left_edge else -6, 0),
+                      ha='left' if left_edge else 'right', va='center',
+                      fontsize=7, color=colour)
+    # top right is empty: the curve is at zero there
+    ax.annotate(rf'total $= {total:.3g}\ {{\rm M}}_\odot\,{{\rm Mpc}}^{{-3}}$',
+                (0.97, 0.94), xycoords='axes fraction', va='top', ha='right',
+                fontsize=8, color=colour)
+    _z_axis(ax)
+
+    # --- mean deposition epoch vs host mass ---
+    ax = axes[2]
+    centres = 0.5 * (MVIR_BINS[:-1] + MVIR_BINS[1:])
+    mean_t = np.full(len(centres), np.nan)
+    half_t = np.full(len(centres), np.nan)
+    x = ev['log_host_mvir']
+    for i in range(len(centres)):
+        s = sel & (x >= MVIR_BINS[i]) & (x < MVIR_BINS[i + 1])
+        if s.sum() >= MIN_COUNT and m[s].sum() > 0:
+            mean_t[i] = np.average(ev['t_dest'][s], weights=m[s])
+            half_t[i] = _half_mass_time(ev['t_dest'][s], m[s])
+    ok = np.isfinite(mean_t)
+    ax.plot(centres[ok], mean_t[ok], 'o-', color=colour, lw=2.6, ms=5,
+            zorder=Z_LINE, label='mass-weighted mean epoch')
+    ax.plot(centres[ok], half_t[ok], 's--', color=colour, lw=1.6, ms=4,
+            alpha=0.7, zorder=Z_LINE, label='half-mass epoch')
+    ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$ of the host')
+    ax.set_ylabel(what + ' deposition epoch [Gyr]')
+    ax.set_xlim(MVIR_BINS[0], MVIR_BINS[-1])
+    ax.set_ylim(0, AGE_NOW)
+    legend(ax, loc='lower left')
+
+    right = ax.twinx()
+    right.set_ylim(ax.get_ylim())
+    zt = [0, 0.2, 0.5, 1, 2, 3, 5]
+    right.set_yticks([cosmic_time_gyr(z) for z in zt])
+    right.set_yticklabels([f'{z:g}' for z in zt])
+    right.set_ylabel(r'$z$', labelpad=2)
+
+    fig.tight_layout()
+    save_figure(fig, filename)
+
+
+def plot_3_ics_assembly(ev):
+    """When the ICS is built out of disrupted satellites, and out of how much mass."""
+    print('Figure 3: ICS assembly from disrupted satellites')
+    _plot_assembly(ev, ev['to_ics'], DEST_ICS, 'fig3_ICS_assembly', 'ICS')
+    _crosscheck_ics_total(ev)
+
+
+def plot_4_bcg_assembly(ev):
+    """When the BCG's accreted component is built, and out of how much satellite mass."""
+    print('Figure 4: BCG assembly from merged satellites')
+    _plot_assembly(ev, ev['to_bcg'], DEST_BCG, 'fig4_BCG_assembly', 'BCG accreted')
+
+
+def _crosscheck_ics_total(ev):
+    """
+    Check the event sum against SAGE's own two ICS accounting routes.
+
+    SAGE writes ICS_disrupt (stars stripped straight into this reservoir) and
+    ICS_sum_mt (the mass-weighted sum of m*t at deposition, in code time), with
+    the invariant ICS_disrupt + ICS_accrete == IntraClusterStars.  The summed
+    mergeType == 4 events should reproduce the total, and the mean assembly
+    lookback derived from ICS_sum_mt should match the catalogue's mean epoch.
+    Any disagreement means the catalogue is missing events.
+    """
+    if not HDR['track_ics_assembly']:
+        print('  TrackICSAssembly is off in this run; skipping the cross-check.')
+        return
+
+    d = _read_snap(Z0_SNAP, ['IntraClusterStars', 'ICS_disrupt', 'ICS_accrete',
+                             'ICS_sum_mt'])
+    if not d:
+        return
+    ics_tot = d['IntraClusterStars'].sum()
+    disrupt = d['ICS_disrupt'].sum()
+    accrete = d['ICS_accrete'].sum()
+    events = ev['mstar'][ev['to_ics'] & (ev['snap_dest'] <= Z0_SNAP)].sum()
+
+    # ICS_sum_mt is [code mass] * [code time], so the mass in the denominator
+    # has to be code mass too.  Code time is Myr/h -- core_init.c builds Age as
+    # time_to_present/Hubble with Hubble = H0/h -- so a lookback in Gyr is
+    # code_time * UnitLength/UnitVelocity / h.
+    unit_time_gyr = (HDR['unit_length_in_cm'] / HDR['unit_velocity_in_cms']
+                     / _SEC_PER_GYR / HUBBLE_H)
+    mean_lookback = (d['ICS_sum_mt'].sum() / (ics_tot / MASS_CONVERT)) * unit_time_gyr
+
+    sel = ev['to_ics'] & (ev['snap_dest'] <= Z0_SNAP)
+    cat_lookback = AGE_NOW - np.average(ev['t_dest'][sel], weights=ev['mstar'][sel])
+
+    # ICS_disrupt is NOT the number to compare the event sum against: when a
+    # central that already holds ICS is itself destroyed, its ICS_disrupt is
+    # re-booked as ICS_accrete on the new host (model_mergers.c), so the in-situ
+    # column only records the stars stripped into the reservoir that still owns
+    # them.  The conserved total is ICS_disrupt + ICS_accrete == IntraClusterStars,
+    # and that is what summing every mergeType == 4 event should reproduce.
+    print(f'  cross-check at Snap_{Z0_SNAP}:')
+    print(f'    total ICS                {ics_tot:.4g} Msun'
+          f'   (in-situ {disrupt/ics_tot*100:.1f} / carried in {accrete/ics_tot*100:.1f} per cent)')
+    print(f'    summed mergeType==4      {events:.4g} Msun'
+          f'   -> event sum / total ICS = {events/ics_tot:.4f}')
+    print(f'    mean assembly lookback   {mean_lookback:.2f} Gyr from ICS_sum_mt, '
+          f'{cat_lookback:.2f} Gyr from the event catalogue')
+
+
+def _read_snap(snap, props, files=None, mass_convert=None):
+    """
+    Read *props* at *snap* across a run's model files, mass fields converted.
+
+    Defaults to the primary run; pass *files* and *mass_convert* from
+    run_context() to read one of the comparison runs instead.
+    """
+    files = MODEL_FILES if files is None else files
+    mass_convert = MASS_CONVERT if mass_convert is None else mass_convert
+    mass_props = {'StellarMass', 'Mvir', 'IntraClusterStars', 'ICS_disrupt',
+                  'ICS_accrete', 'MetalsIntraClusterStars', 'BulgeMass',
+                  'infallStellarMass', 'CentralMvir'}
+    chunks = {p: [] for p in props}
+    for fp in files:
+        with h5.File(fp, 'r') as f:
+            key = f'Snap_{snap}'
+            if key not in f:
+                continue
+            for p in props:
+                if p in f[key]:
+                    chunks[p].append(np.array(f[key][p]))
+    out = {}
+    for p in props:
+        if chunks[p]:
+            a = np.concatenate(chunks[p])
+            out[p] = a * mass_convert if p in mass_props else a
+    return out
+
+
+# ========================== FIGURE 5: f_ICS vs REDSHIFT ==========================
+
+# Host-mass selections, chosen to match the two scales the compilation splits
+# into.  Note what a 100 Mpc/h box can carry here: it holds only ~16 haloes
+# above 10^14 at z = 0 and essentially none past z ~ 1.2, so the cluster cloud
+# is genuinely sparse and thins out to nothing well before the high-redshift
+# measurements.  Read it as a handful of individual objects, not a population.
+# A larger box is the only way to populate the cluster selection properly.
+# Host-mass selections, chosen to match the two scales the compilation splits
+# into, and drawn differently because the box supports very different
+# statistics at each.
+#
+#   cluster  one marker per halo, styled like an observed point, because a
+#            100 Mpc/h box holds only ~16 haloes above 10^14 at z = 0 and 178
+#            across all snapshots.  That is a handful of individual objects,
+#            not a population, and a median line would misrepresent it.
+#            The cloud thins to nothing by z ~ 0.75, well short of the
+#            high-redshift measurements; a larger box is the only fix.
+#   group    a median line, since the selection holds thousands of haloes per
+#            snapshot and individual points would swamp the figure.
+FICS_SELECTIONS = (
+    ('cluster', 14.0, 16.0, r'$\log_{10}M_{\rm vir} > 14$',
+     'scatter', '#08519c', '#08306b'),
+    ('group',   12.5, 13.5, r'$12.5 < \log_{10}M_{\rm vir} < 13.5$',
+     'median',  '#f16913', '#a63603'),
+)
+
+
+def run_context(directory):
+    """
+    Everything needed to read one run: its own files, mass conversion and
+    snapshot table.
+
+    Each run carries its own header, so the mass conversion and redshift table
+    are taken per directory rather than inherited from the primary run.  Here
+    all three runs are the same microUchuu box and the tables match, but
+    reading them per run is what keeps the comparison honest if that changes.
+    """
+    hdr = read_sim_header(directory)
     if hdr is None:
-        if verbose:
-            print(f'  No model files in {directory}, skipping.')
         return None
-    conv = hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h']
-    snap = hdr['last_snap_nr']
-    props = ['StellarMass', 'IntraClusterStars', 'MetalsIntraClusterStars',
-             'Mvir', 'Type', 'CentralGalaxyIndex']
-    data = read_snap_from_files(find_model_files(directory),
-                                f'Snap_{snap}', props,
-                                mass_convert=conv)
-    if not data:
-        return None
-    tab = _halo_ics_from_data(data)
-    tab['particle_mass'] = hdr.get('particle_mass', np.nan)
-    return tab
+    return dict(
+        files=hdr['files'],
+        mass_convert=hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h'],
+        redshifts=hdr['redshifts'],
+        snaps=hdr['output_snaps'],
+        last_snap=hdr['last_snap_nr'],
+        merger_time_factor=hdr['merger_time_factor'],
+    )
 
+
+def halo_fics_by_snapshot(verbose=True, ctx=None):
+    """
+    Per-FOF-halo f_ICS at every snapshot.
+
+    f_ICS = M_ICS / (M_ICS + sum of all galaxy stellar mass in the halo), with
+    haloes defined by CentralGalaxyIndex exactly as SAGE groups them.  At output
+    time infall_recipe has already pooled every satellite's ICS onto the FOF
+    central, so summing IntraClusterStars over the group is the halo total.
+
+    The final snapshot is skipped: consistent-trees collapses the FOF grouping
+    there (see Z0_SNAP), which would corrupt every group sum.
+
+    Returns a list of dicts with 'z', 'log_mvir' and 'fics', one per snapshot.
+    """
+    snaps = SNAPS if ctx is None else ctx['snaps']
+    last = LAST_SNAP if ctx is None else ctx['last_snap']
+    zz = REDSHIFTS if ctx is None else ctx['redshifts']
+    kw = {} if ctx is None else dict(files=ctx['files'],
+                                     mass_convert=ctx['mass_convert'])
+    out = []
+    for snap in snaps:
+        if snap >= last:
+            continue
+        d = _read_snap(snap, ['StellarMass', 'IntraClusterStars', 'Mvir',
+                              'Type', 'CentralGalaxyIndex'], **kw)
+        if not d or 'CentralGalaxyIndex' not in d:
+            continue
+        _, idx = np.unique(d['CentralGalaxyIndex'].astype(np.int64),
+                           return_inverse=True)
+        n = idx.max() + 1
+        stars = np.bincount(idx, weights=d['StellarMass'], minlength=n)
+        ics = np.bincount(idx, weights=d['IntraClusterStars'], minlength=n)
+
+        cen = d['Type'] == 0
+        mvir = np.full(n, np.nan)
+        mvir[idx[cen]] = d['Mvir'][cen]
+
+        total = stars + ics
+        keep = np.isfinite(mvir) & (mvir > 0) & (total > 0)
+        out.append(dict(z=float(zz[snap]), snap=snap,
+                        log_mvir=np.log10(mvir[keep]),
+                        fics=(ics / total)[keep]))
+    if verbose:
+        print(f'  f_ICS computed for {len(out)} snapshots')
+    return out
+
+
+def plot_5_fics_vs_redshift(ev=None):
+    """
+    f_ICS against redshift, against the observed ICL-fraction compilation.
+
+    One marker per halo, not a median line: every observed point is a single
+    cluster, so the like-for-like comparison is scatter against scatter.  A
+    median would compress the model into a line and hide the fact that the
+    halo-to-halo spread at fixed redshift is comparable to the spread between
+    published measurements.  The model cloud is subsampled to
+    MAX_SCATTER_POINTS per selection with a fixed seed so the PDF stays light;
+    the percentiles printed at run time are computed on the full sample.
+
+    The model applies no surface-brightness cut, counts intracluster stars all
+    the way to the virial radius, and includes satellite light in the
+    denominator; most of the measurements do none of those things.  The model
+    cloud is therefore expected to sit above the points, and the comparison is
+    about the redshift trend and the spread rather than the normalisation.
+    """
+    print('Figure 5: f_ICS vs redshift, against the observed compilation')
+    snaps = halo_fics_by_snapshot()
+    rng = np.random.default_rng(SCATTER_SEED)
+
+    fig, ax = plt.subplots(figsize=(PANEL_W * 1.6, PANEL_H * 1.25))
+
+    for scale, lo, hi, mlabel, style, colour, obs_colour in FICS_SELECTIONS:
+        zs, fs, med_z, med_f = [], [], [], []
+        for s_ in snaps:
+            w = (s_['log_mvir'] >= lo) & (s_['log_mvir'] < hi)
+            if not w.any():
+                continue
+            zs.append(np.full(int(w.sum()), s_['z']))
+            fs.append(s_['fics'][w])
+            if w.sum() >= MIN_COUNT:
+                med_z.append(s_['z'])
+                med_f.append(np.median(s_['fics'][w]))
+        if not zs:
+            print(f'  no haloes in the {scale} selection')
+            continue
+        zs, fs = np.concatenate(zs), np.concatenate(fs)
+
+        near = zs < 0.3
+        p16, p50, p84 = np.percentile(fs[near], (16, 50, 84))
+        print(f'  {scale:8s} {zs.size:,} haloes over {len(snaps)} snapshots;  '
+              f'at z < 0.3: f_ICS = {p50:.3f} (16--84: {p16:.3f}--{p84:.3f}), '
+              f'{near.sum():,} haloes')
+
+        if style == 'median':
+            o = np.argsort(med_z)
+            ax.plot(np.asarray(med_z)[o], np.asarray(med_f)[o], '-',
+                    color=colour, lw=3.0, zorder=Z_LINE,
+                    label=f'SAGE26 {scale} median, ' + mlabel)
+        else:
+            # Snapshots are discrete, so the raw cloud is a set of vertical
+            # stripes.  Spread each snapshot's haloes across the redshift
+            # interval that snapshot stands for.  This moves markers along the
+            # z axis only; no f_ICS value is altered.
+            width = np.interp(zs, _SNAP_Z_SORTED, _SNAP_DZ_SORTED)
+            zs_plot = zs + rng.uniform(-0.4, 0.4, zs.size) * width
+            show = np.arange(zs.size)
+            if zs.size > MAX_SCATTER_POINTS:
+                show = rng.choice(zs.size, MAX_SCATTER_POINTS, replace=False)
+            # Same shape and size as an observed point, but solid-filled: fill
+            # is what separates model from measurement throughout this figure.
+            ax.plot(zs_plot[show], fs[show], 'o', ms=OBS_MS, mfc=colour,
+                    mec='white', mew=0.6, alpha=0.85, ls='none', zorder=Z_LINE,
+                    label=f'SAGE26 {scale} haloes, ' + mlabel)
+
+        # Observations take the colour of the scale they belong to, so a reader
+        # can tell at a glance which model curve a point should be read against.
+        for i, o_ in enumerate(load_icl_fraction_observations(scale)):
+            ax.plot(o_['z'], o_['f'], _OBS_MARKERS[i % len(_OBS_MARKERS)],
+                    ms=OBS_MS, mfc='white', mew=1.3, mec=obs_colour,
+                    color=obs_colour, ls='none', zorder=Z_OBS,
+                    label=f"{o_['label']} ({scale})")
+
+    ax.set_xlabel(r'redshift $z$')
+    ax.set_ylabel(r'$f_{\rm ICS} = M_{\rm ICS}/M_{\star,\rm halo}$')
+    ax.set_xlim(-0.05, 2.2)
+    ax.set_ylim(0, 1.0)
+    legend(ax, loc='upper left', ncol=2, fontsize=6.5,
+           columnspacing=1.0, handletextpad=0.4)
+    fig.tight_layout()
+    save_figure(fig, 'fig5_fICS_vs_redshift')
+
+
+# ============ FIGURE 6: CLUSTER f_ICS FOR THE ROUTING EXTREMES ============
+#
+# Two runs that bracket the routing question, identical to the default in every
+# other respect.  MergerTimeFactor scales the dynamical-friction clock, and the
+# clock's sign at the moment a satellite is destroyed is the only thing that
+# decides destination (core_build_model.c: MergTime > 0 -> ICS, else BCG).
+#
+#   alpha = 0     the clock is zero from the start, so it has always expired:
+#                 every destroyed satellite merges onto the central.  Exactly
+#                 0.00 per cent of accreted stellar mass reaches the ICS.
+#   alpha = 1000  the clock never runs out inside a Hubble time, so essentially
+#                 everything disrupts.  99.19 per cent, not 100: two paths
+#                 bypass the factor entirely and always merge -- a satellite
+#                 subhalo below MinNumPartSatHalo = 10 particles, for which
+#                 estimate_merging_time returns -1, and a galaxy dropping
+#                 straight from Type 0 to orphan, which is handed MergTime = 0
+#                 in core_build_model.c.
+#
+# The default run is drawn as well, faintly: it is what the two extremes
+# bracket, and without it the figure has no reference point.
+# alpha = 0 and alpha = 1000 are the two limits; 0.25/0.5/1.0 fill the interior
+# so the figure shows whether any physical value of the parameter reaches the
+# observed cluster fractions.  Greens and reds mark the two extremes, the blue
+# ramp is the physical range, and 2.0 is the published value.
+ROUTING_RUNS = (
+    (0.0,    './output/microuchuu_allBCG/',    '#4daf4a', 's'),
+    (0.25,   './output/microuchuu_mtf_0.25/',  '#a6bddb', 'v'),
+    (0.5,    './output/microuchuu_mtf_0.5/',   '#67a9cf', '<'),
+    (1.0,    './output/microuchuu_mtf_1.0/',   '#3182bd', '>'),
+    (2.0,    MODEL_DIR,                        '#08519c', 'o'),
+    (1000.0, './output/microuchuu_allICS/',    '#e41a1c', '^'),
+)
+ROUTING_FIDUCIAL = 2.0
+
+
+def report_routing_budget():
+    """
+    Where the accreted stellar mass goes in each run, and whether the total is
+    even conserved.
+
+    The three columns that matter are the last three.  Re-routing satellites
+    ought to move mass between M_ICS and the galaxies without changing their
+    sum, and it does not: the disruption gate tests
+    currentMvir / (M* + ColdGas), so mass kept on a galaxy instead of being
+    dumped into the ICS raises that galaxy's own baryon count, trips the gate
+    earlier, and changes when satellites die.  f_ICS therefore responds to
+    alpha through the denominator as well as the numerator, and the runs are
+    not a clean re-routing of a fixed budget.
+    """
+    print('Routing budget and mass closure, clusters above 10^14 at '
+          f'Snap_{Z0_SNAP}:')
+    print('  alpha      N      M_ICS      M*,gal      total     f_ICS')
+    for alpha, directory, _, _ in ROUTING_RUNS:
+        ctx = run_context(directory)
+        if ctx is None:
+            print(f'  {alpha:<7g} {directory} missing')
+            continue
+        d = _read_snap(Z0_SNAP, ['StellarMass', 'IntraClusterStars', 'Mvir',
+                                 'Type', 'CentralGalaxyIndex'],
+                       files=ctx['files'], mass_convert=ctx['mass_convert'])
+        _, idx = np.unique(d['CentralGalaxyIndex'].astype(np.int64),
+                           return_inverse=True)
+        n = idx.max() + 1
+        stars = np.bincount(idx, weights=d['StellarMass'], minlength=n)
+        ics = np.bincount(idx, weights=d['IntraClusterStars'], minlength=n)
+        cen = d['Type'] == 0
+        mvir = np.full(n, np.nan)
+        mvir[idx[cen]] = d['Mvir'][cen]
+        w = np.isfinite(mvir) & (mvir > 1e14)
+        tot = ics[w].sum() + stars[w].sum()
+        print(f'  {alpha:<7g} {int(w.sum()):4d}  {ics[w].sum():.4e}  '
+              f'{stars[w].sum():.4e}  {tot:.4e}  {ics[w].sum()/tot:7.3f}')
+    print()
+
+
+def plot_6_routing_fics_vs_redshift(ev=None):
+    """
+    Cluster-scale f_ICS against redshift for the two routing extremes.
+
+    Same construction as figure 5 -- one marker per halo above 10^14, styled
+    like an observed point, solid-filled to separate model from measurement --
+    but groups are dropped and the model content is the alpha = 0 and
+    alpha = 1000 runs instead of the default alone.
+
+    The point of the figure is that the observed cluster points do not sit at
+    either extreme, so the ICL fraction is not a question of whether satellites
+    disrupt but of how long the clock runs before they do.
+    """
+    print('Figure 6: cluster f_ICS vs redshift across the MergerTimeFactor sweep')
+    report_routing_budget()
+    lo, hi = 14.0, 16.0
+    rng = np.random.default_rng(SCATTER_SEED)
+
+    fig, ax = plt.subplots(figsize=(PANEL_W * 1.6, PANEL_H * 1.25))
+
+    for alpha, directory, colour, marker in ROUTING_RUNS:
+        ctx = run_context(directory)
+        if ctx is None:
+            print(f'  {directory} missing, skipping alpha = {alpha:g}')
+            continue
+        is_fid = alpha == ROUTING_FIDUCIAL
+        snaps = halo_fics_by_snapshot(verbose=False, ctx=ctx)
+
+        zs, fs, med_z, med_f = [], [], [], []
+        for s_ in snaps:
+            w = (s_['log_mvir'] >= lo) & (s_['log_mvir'] < hi)
+            if not w.any():
+                continue
+            zs.append(np.full(int(w.sum()), s_['z']))
+            fs.append(s_['fics'][w])
+            if w.sum() >= MIN_COUNT:
+                med_z.append(s_['z'])
+                med_f.append(np.median(s_['fics'][w]))
+        if not zs:
+            print(f'  no haloes above 10^14 at alpha = {alpha:g}')
+            continue
+        zs, fs = np.concatenate(zs), np.concatenate(fs)
+
+        near = zs < 0.3
+        p16, p50, p84 = np.percentile(fs[near], (16, 50, 84))
+        print(f'  alpha = {ctx["merger_time_factor"]:<7g} '
+              f'{zs.size:4,d} haloes;  z < 0.3: f_ICS = {p50:.3f} '
+              f'(16--84: {p16:.3f}--{p84:.3f})')
+
+        width = np.interp(zs, _SNAP_Z_SORTED, _SNAP_DZ_SORTED)
+        zs_plot = zs + rng.uniform(-0.4, 0.4, zs.size) * width
+        show = np.arange(zs.size)
+        if zs.size > MAX_SCATTER_POINTS:
+            show = rng.choice(zs.size, MAX_SCATTER_POINTS, replace=False)
+        ax.plot(zs_plot[show], fs[show], marker, ms=OBS_MS * 0.8, mfc=colour,
+                mec='white', mew=0.4, ls='none', alpha=0.45,
+                zorder=Z_LINE + (1 if is_fid else 0),
+                label=rf'$\alpha = {alpha:g}$' +
+                      (' (published)' if is_fid else ''))
+        # Six clouds overlap heavily; a thin median guide makes the ordering in
+        # alpha readable without hiding the halo-to-halo scatter underneath.
+        if med_z:
+            o = np.argsort(med_z)
+            ax.plot(np.asarray(med_z)[o], np.asarray(med_f)[o], '-',
+                    color=colour, lw=2.6 if is_fid else 1.8,
+                    zorder=Z_LINE + 5 + (1 if is_fid else 0),
+                    solid_capstyle='round')
+
+    for i, o_ in enumerate(load_icl_fraction_observations('cluster')):
+        ax.plot(o_['z'], o_['f'], _OBS_MARKERS[i % len(_OBS_MARKERS)],
+                ms=OBS_MS, mfc='white', mew=1.3, mec='k', color='k',
+                ls='none', zorder=Z_OBS, label=f"{o_['label']}")
+
+    ax.set_xlabel(r'redshift $z$')
+    ax.set_ylabel(r'$f_{\rm ICS} = M_{\rm ICS}/M_{\star,\rm halo}$')
+    ax.set_xlim(-0.05, 2.2)
+    ax.set_ylim(0, 1.0)
+    # the top-right quadrant is empty: no cluster survives past z ~ 1.2
+    legend(ax, loc='upper right', ncol=2, fontsize=6.5,
+           columnspacing=1.0, handletextpad=0.4,
+           title=r'SAGE26 MergerTimeFactor $\alpha$ / observed clusters')
+    fig.tight_layout()
+    save_figure(fig, 'fig6_fICS_routing_extremes')
+
+
+# ============ FIGURE 7: BCG STELLAR MASS -- HALO MASS ============
 
 def load_bcg_halo_observations():
     """
-    Kravtsov+18 stellar mass -- halo mass, the BCG end of the SMHM relation.
+    Kravtsov+18 central stellar mass against halo mass.
 
-    Same three files and columns as paper_plots.py.  Stellar masses pass through
-    imf_shift(), which is currently a no-op for Kravtsov+18 (IMF not established,
-    see report_imf_audit()).  Returns None if the files are absent.
+    Three digitised files, column 0 = log10 Mhalo, column 1 = log10 Mcen.
+
+    Two things about this dataset decide how it must be compared, and both cut
+    the same way:
+
+      * Kravtsov+18 assume a Chabrier (2003) IMF, the same scale SAGE26's
+        RecycleFraction puts the model on, so NO IMF shift is applied and none
+        is needed.  (An earlier version of this module listed the IMF as "not
+        established"; it is Chabrier.)
+      * their BCG masses are Sersic fits integrated over many hundred kpc and
+        extrapolated to infinity, so they INCLUDE the intracluster light.  The
+        like-for-like model quantity is therefore M*,BCG + M_ICS, not the
+        central's stellar mass alone.  Comparing these points against SAGE26's
+        bare central understates the model by ~0.7 dex at 10^14 and is simply
+        the wrong comparison.
+
+    Returns None if the files are absent.
     """
     mvir, mstar = [], []
     for fname in ('morphology/ETGs_Kravtsov18.dat',
@@ -1054,759 +1448,669 @@ def load_bcg_halo_observations():
         if os.path.exists(path):
             d = np.atleast_2d(np.loadtxt(path))
             mvir.append(d[:, 0])
-            mstar.append(d[:, 1] + imf_shift('Kravtsov+18'))
+            mstar.append(d[:, 1])
     if not mvir:
         return None
     return dict(mvir=np.concatenate(mvir), mstar=np.concatenate(mstar))
 
 
-def _obs_fracs(scale, zmax=0.3):
-    """Low-redshift f_ICL values from the compilation, for a horizontal band."""
-    vals = []
-    for o in load_icl_fraction_observations(scale):
-        vals.append(o['f'][o['z'] <= zmax])
-    vals = np.concatenate(vals) if vals else np.array([])
-    vals = vals[vals > 0]
-    return vals
+def _bcg_table(ctx):
+    """Central stellar mass, ICS and Mvir per FOF halo at Z0_SNAP for one run."""
+    d = _read_snap(Z0_SNAP, ['StellarMass', 'IntraClusterStars', 'Mvir',
+                             'Type', 'CentralGalaxyIndex'],
+                   files=ctx['files'], mass_convert=ctx['mass_convert'])
+    _, idx = np.unique(d['CentralGalaxyIndex'].astype(np.int64),
+                       return_inverse=True)
+    n = idx.max() + 1
+    ics = np.bincount(idx, weights=d['IntraClusterStars'], minlength=n)
+    cen = d['Type'] == 0
+    mvir = np.full(n, np.nan)
+    bcg = np.zeros(n)
+    mvir[idx[cen]] = d['Mvir'][cen]
+    bcg[idx[cen]] = d['StellarMass'][cen]
+    keep = np.isfinite(mvir) & (mvir > 0) & (bcg > 0)
+    return dict(mvir=mvir[keep], bcg=bcg[keep], ics=ics[keep])
 
 
-# Halo-mass bins shared by all three figures.
-_ICL_BINS = np.arange(11.5, 15.01, 0.25)
+def plot_7_bcg_halo_mass(ev=None):
+    """
+    BCG stellar mass against halo mass across the MergerTimeFactor sweep.
 
-# Where each observational sample's hosts actually live, used to place the
-# horizontal bands rather than stretching them across the whole axis.
-_CLUSTER_MASS_RANGE = (14.0, 15.0)
-_GROUP_MASS_RANGE   = (12.5, 13.5)
+    The test that matters for figure 6: lowering alpha to reach the observed
+    cluster ICL fractions also moves stellar mass out of the ICS and onto the
+    central, so it cannot be judged on f_ICS alone.
 
+    Left panel is the central's own stellar mass, which is what SAGE calls the
+    BCG and excludes the ICS.  Right panel adds the halo's entire ICS to the
+    central.
 
-def _stacked(x, num, den, bins, min_count=MIN_COUNT):
-    """Per-bin stacked ratio sum(num)/sum(den) -- the observers' way of averaging."""
-    out = np.full(len(bins) - 1, np.nan)
-    for i in range(len(bins) - 1):
-        m = (x >= bins[i]) & (x < bins[i + 1])
-        if m.sum() >= min_count and den[m].sum() > 0:
-            out[i] = num[m].sum() / den[m].sum()
-    return 0.5 * (bins[:-1] + bins[1:]), out
+    THE RIGHT PANEL IS THE LIKE-FOR-LIKE COMPARISON.  Kravtsov+18's masses are
+    extrapolated Sersic fits that already contain the intracluster light (see
+    load_bcg_halo_observations), so the bare central in the left panel is not
+    the quantity they measured.  The left panel is kept because it is what
+    changes with alpha and because a surface-brightness-limited measurement
+    would sit between the two, but a deficit read off the left panel alone is
+    an artefact of comparing different things.
 
+    Both model and data are on a Chabrier IMF, so no shift is applied.
+    """
+    print('Figure 7: BCG stellar mass -- halo mass across the sweep')
+    obs = load_bcg_halo_observations()
 
+    fig, axes = panel_grid(1, 2)
+    bins = np.arange(11.0, 15.01, 0.25)
 
-# ========================== THRESHOLD EXPERIMENT ==========================
-#
-# ThresholdSatDisruption gates the merger/disruption test in
-# core_build_model.c:
-#
-#     currentMvir = Mvir - deltaMvir * (1 - (step+1)/steps)
-#     if (galaxyBaryons == 0 || currentMvir/galaxyBaryons <= ThresholdSatDisruption)
-#
-# For a type 1 satellite this decides whether the galaxy is destroyed at all.
-# For an orphan it does not: SAGE sets an orphan's Mvir to 0 and deltaMvir to
-# -Mvir_prev, so currentMvir ramps to exactly 0 on the final substep and the
-# test passes for any positive threshold.  Varying the parameter therefore
-# changes only *which substep* an orphan's event fires on, which shifts the
-# MergTime > 0 test (disrupt to ICS) against MergTime <= 0 (merge onto the
-# central) by at most one snapshot's deltaT.  These two figures measure how much
-# of a lever that actually is.
-
-
-def _sweep_tables(runs):
-    """Per-halo tables for each run in a parameter sweep that exists on disk."""
-    out = []
-    for value, directory in runs:
-        if not model_files_exist(directory):
-            print(f'  {directory} missing, skipping {value}')
+    for alpha, directory, colour, marker in ROUTING_RUNS:
+        ctx = run_context(directory)
+        if ctx is None:
+            print(f'  {directory} missing, skipping alpha = {alpha:g}')
             continue
-        tab = halo_ics_table(directory)
-        if tab is not None:
-            out.append((value, tab))
-    return out
+        t = _bcg_table(ctx)
+        lm = np.log10(t['mvir'])
+        is_fid = alpha == ROUTING_FIDUCIAL
+        lw = 3.0 if is_fid else 1.9
+        label = rf'$\alpha = {alpha:g}$' + (' (published)' if is_fid else '')
+
+        for ax, y in ((axes[0], t['bcg']), (axes[1], t['bcg'] + t['ics'])):
+            c, pct = binned_median(lm, np.log10(y), bins, min_count=MIN_COUNT)
+            ok = np.isfinite(pct[1])
+            ax.plot(c[ok], pct[1][ok], '-', color=colour, lw=lw,
+                    zorder=Z_LINE + (1 if is_fid else 0),
+                    label=label if ax is axes[0] else None)
+
+        # one number to quote: the cluster end
+        w = lm >= 14.0
+        if w.sum() >= 5:
+            print(f'  alpha = {alpha:<7g} log M*,BCG at M_vir > 1e14: '
+                  f'{np.median(np.log10(t["bcg"][w])):.2f}   '
+                  f'BCG+ICS: {np.median(np.log10((t["bcg"] + t["ics"])[w])):.2f}')
+
+    for ax, title in ((axes[0], r'central only ($M_{\star,\rm BCG}$)'),
+                      (axes[1], r'central $+$ all halo ICS')):
+        if obs is not None:
+            ax.plot(obs['mvir'], obs['mstar'], 'o', ms=5, mfc='white',
+                    mec='k', mew=1.1, ls='none', zorder=Z_OBS,
+                    label='Kravtsov+18' if ax is axes[1] else None)
+        ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
+        ax.set_xlim(11.0, 15.2)
+        ax.set_ylim(9.0, 13.0)
+        ax.set_title(title, fontsize=9)
+    axes[0].set_ylabel(r'$\log_{10}(M_\star/{\rm M}_\odot)$ of the central')
+    legend(axes[0], loc='upper left')
+    legend(axes[1], loc='upper left')
+
+    fig.tight_layout()
+    save_figure(fig, 'fig7_BCG_halo_mass')
 
 
-def _plot_sweep(runs, colours, fiducial, param, symbol, quantity, filename):
+# ============ FIGURE 8: THE ICS / BCG TRADE-OFF ============
+#
+# MergerTimeFactor moves one budget between two reservoirs, so neither f_ICS
+# nor the BCG mass constrains it on its own -- figures 6 and 7 pull in opposite
+# directions.  These two panels are the pair that does constrain it:
+#
+#   left   M_ICS / M_BCG, the ratio.  Every alpha that raises the ICS lowers
+#          the BCG by the same stars, so the ratio moves roughly twice as fast
+#          as either quantity and is the sharpest discriminator available.
+#   right  M_BCG + M_ICS, the sum.  Invariant to the routing by construction,
+#          so it tests whether the model has the right total stellar mass in
+#          cluster centres independently of where the boundary is drawn.
+#
+# A model that matches the right panel but misses the left has a boundary
+# problem; one that misses both has a mass problem.
+
+# Indicative literature range, NOT a digitised measurement.  Drawn as a labelled
+# band so the model can be read against roughly the right place; it must be
+# replaced with digitised data before publication, and report_indicative_range()
+# says so at run time.
+_ICL_BCG_RATIO_RANGE = dict(
+    lo=1.0, hi=3.0,
+    source=r'Kluge+21; Montes 2022 (review)',
+    note='cluster-scale ICL-to-BCG mass ratio; strongly definition-dependent')
+
+
+def report_indicative_range():
+    """Flag the one comparison band that is an eyeballed range, not data."""
+    r = _ICL_BCG_RATIO_RANGE
+    print(f'  NOTE: the M_ICS/M_BCG band ({r["lo"]}--{r["hi"]}) is an indicative '
+          f'literature range')
+    print(f'        [{r["source"]}], not digitised data -- {r["note"]}')
+
+
+def plot_8_ics_bcg_tradeoff(ev=None):
     """
-    One parameter sweep, one quantity, median with a 16-84 per cent band.
+    The ICS-to-BCG ratio and the ICS-plus-BCG sum, across the alpha sweep.
 
-    *quantity* is 'fics' for M_ICS over every star in the FOF halo, or 'bcg' for
-    the central's stellar mass.  Both are drawn against halo mass on the shared
-    _ICL_BINS, with the fiducial run drawn heavier so it reads out of the set.
+    Left: M_ICS / M_BCG per halo, median per bin, against the indicative
+    cluster range of 1--3.  Right: the summed central-plus-ICS stellar mass
+    against Kravtsov+18, whose aperture already includes the ICL and so is the
+    correct target for the sum rather than for the central alone.
+
+    The sum is NOT invariant to alpha -- it spans 11.96 to 12.27 dex at
+    M_vir > 10^14 across the sweep, a factor of two -- so it constrains the
+    model, it does not merely absorb the routing.  It is simply far less
+    sensitive than the split, which moves by a factor of seven in ratio over
+    the same range.
+
+    Both model and data are on a Chabrier IMF, so no shift is applied.
     """
-    tabs = _sweep_tables(runs)
-    if not tabs:
-        print(f'  No runs found for {param}; nothing to plot.')
-        return
+    print('Figure 8: the ICS/BCG trade-off across the sweep')
+    report_indicative_range()
+    obs = load_bcg_halo_observations()
 
-    fig, ax = plt.subplots(figsize=(6.6, 4.8))
-    for value, t in tabs:
-        if quantity == 'fics':
-            total = t['ICS'] + t['Stars']
-            ok = (total > 0) & (t['Mvir'] > 0)
-            y = (t['ICS'] / total)[ok]
+    fig, axes = panel_grid(1, 2)
+    bins = np.arange(11.0, 15.01, 0.25)
+
+    print('  alpha    median M_ICS/M_BCG (>1e14)   median log(M_BCG+M_ICS) (>1e14)')
+    for alpha, directory, colour, marker in ROUTING_RUNS:
+        ctx = run_context(directory)
+        if ctx is None:
+            print(f'  {directory} missing, skipping alpha = {alpha:g}')
+            continue
+        t = _bcg_table(ctx)
+        lm = np.log10(t['mvir'])
+        is_fid = alpha == ROUTING_FIDUCIAL
+        lw = 3.0 if is_fid else 1.9
+        label = rf'$\alpha = {alpha:g}$' + (' (published)' if is_fid else '')
+        z = Z_LINE + (1 if is_fid else 0)
+
+        # left: the ratio.  alpha = 0 puts no stars in the ICS at all, so the
+        # ratio is identically zero and cannot be drawn on a log axis; it is
+        # reported in the printout instead of being silently dropped.
+        ratio = np.where(t['bcg'] > 0, t['ics'] / t['bcg'], np.nan)
+        good = np.isfinite(ratio) & (ratio > 0)
+        if good.sum() >= MIN_COUNT:
+            c, pct = binned_median(lm[good], np.log10(ratio[good]), bins,
+                                   min_count=MIN_COUNT)
+            ok = np.isfinite(pct[1])
+            axes[0].plot(c[ok], 10.0 ** pct[1][ok], '-', color=colour, lw=lw,
+                         zorder=z, label=label)
         else:
-            ok = (t['BCG'] > 0) & (t['Mvir'] > 0)
-            y = np.log10(t['BCG'][ok])
-        is_fid = (value == fiducial)
-        plot_binned_median_1sigma(
-            ax, np.log10(t['Mvir'][ok]), y, _ICL_BINS,
-            color=colours[value],
-            label=rf'${symbol} = {value}$' + (' (fiducial)' if is_fid else ''),
-            lw=3.2 if is_fid else 2.0, alpha=0.18,
-            zorder_line=Z_MODEL_LINE + (1 if is_fid else 0),
-            zorder_fill=Z_MODEL_BAND)
+            axes[0].plot([], [], '-', color=colour, lw=lw, label=label)
 
-    ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
-    if quantity == 'fics':
-        ax.set_ylabel(r'$f_{\rm ICS} = M_{\rm ICS}/M_{\star,\rm halo}$')
-        ax.set_ylim(0, 0.8)
-    else:
-        ax.set_ylabel(r'$\log_{10}(M_{\star,\rm BCG}/{\rm M}_\odot)$')
-        ax.set_ylim(9.0, 12.5)
-    ax.set_xlim(11.5, 15.0)
-    _standard_legend(ax, loc='upper left', fontsize=8, title=param)
-    fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, filename + OUTPUT_FORMAT))
+        # right: the sum
+        c, pct = binned_median(lm, np.log10(t['bcg'] + t['ics']), bins,
+                               min_count=MIN_COUNT)
+        ok = np.isfinite(pct[1])
+        axes[1].plot(c[ok], pct[1][ok], '-', color=colour, lw=lw, zorder=z)
 
+        w = lm >= 14.0
+        if w.sum() >= 5:
+            r = np.median(ratio[w & good]) if (w & good).sum() >= 5 else 0.0
+            print(f'  {alpha:<7g}  {r:>22.2f}   '
+                  f'{np.median(np.log10((t["bcg"] + t["ics"])[w])):>28.2f}')
 
-def plot_1_threshold_ics_fraction(*_):
-    """f_ICS against halo mass for each ThresholdSatDisruption value."""
-    print('Plot 1: f_ICS vs halo mass for each ThresholdSatDisruption')
-    _plot_sweep(THRESHOLD_RUNS, THRESHOLD_COLOURS, THRESHOLD_FIDUCIAL,
-                'ThresholdSatDisruption', r'\theta', 'fics',
-                'threshold_fICS_vs_halomass')
+    r = _ICL_BCG_RATIO_RANGE
+    axes[0].axhspan(r['lo'], r['hi'], color='0.4', alpha=0.16, lw=0, zorder=1,
+                    label=_tex_safe(r['source']) + ' (indicative)')
+    axes[0].set_yscale('log')
+    axes[0].set_ylim(0.02, 30)
+    axes[0].set_ylabel(r'$M_{\rm ICS}/M_{\star,\rm BCG}$')
+    axes[0].set_title('the boundary: ICS-to-BCG ratio', fontsize=9)
+    legend(axes[0], loc='upper left', ncol=2)
 
+    if obs is not None:
+        axes[1].plot(obs['mvir'], obs['mstar'], 'o', ms=5, mfc='white',
+                     mec='k', mew=1.1, ls='none', zorder=Z_OBS,
+                     label='Kravtsov+18')
+    axes[1].set_ylim(9.0, 13.0)
+    axes[1].set_ylabel(r'$\log_{10}[(M_{\star,\rm BCG} + M_{\rm ICS})/{\rm M}_\odot]$')
+    axes[1].set_title('the total: BCG $+$ ICS', fontsize=9)
+    legend(axes[1], loc='upper left')
 
-def plot_2_threshold_bcg_mass(*_):
-    """BCG stellar mass against halo mass for each ThresholdSatDisruption value."""
-    print('Plot 2: BCG stellar mass vs halo mass for each ThresholdSatDisruption')
-    _plot_sweep(THRESHOLD_RUNS, THRESHOLD_COLOURS, THRESHOLD_FIDUCIAL,
-                'ThresholdSatDisruption', r'\theta', 'bcg',
-                'threshold_BCG_vs_halomass')
-
-
-def plot_3_mergertime_ics_fraction(*_):
-    """f_ICS against halo mass for each MergerTimeFactor value."""
-    print('Plot 3: f_ICS vs halo mass for each MergerTimeFactor')
-    _plot_sweep(MERGERTIME_RUNS, MERGERTIME_COLOURS, MERGERTIME_FIDUCIAL,
-                'MergerTimeFactor', r'\alpha', 'fics',
-                'mergertime_fICS_vs_halomass')
-
-
-def plot_4_mergertime_bcg_mass(*_):
-    """BCG stellar mass against halo mass for each MergerTimeFactor value."""
-    print('Plot 4: BCG stellar mass vs halo mass for each MergerTimeFactor')
-    _plot_sweep(MERGERTIME_RUNS, MERGERTIME_COLOURS, MERGERTIME_FIDUCIAL,
-                'MergerTimeFactor', r'\alpha', 'bcg',
-                'mergertime_BCG_vs_halomass')
-
-
-def load_z0_stellar_mass_functions():
-    """
-    Observed z ~ 0 stellar mass functions, on the model's mass and volume units.
-
-    Li & White (2009), SDSS DR7: the file quotes stellar mass in Msun/h^2 and
-    number density per (Mpc/h)^3 for h = 0.73, so masses shift by -2log10(h) and
-    densities by +3log10(h).  It reaches log M* = 11.84, which is why it is here
-    -- it is the only z ~ 0 set in data/smf that covers the massive end.
-
-    Moffett+16 (GAMA), summed over its four morphological classes; its coverage
-    stops near log M* ~ 11.1 because the classes go undefined beyond it.
-
-    MISSING and relevant: Bernardi et al. (2013) redid the SDSS massive end with
-    Sersic/SerExp photometry and found it well above Li & White, whose model
-    magnitudes underestimate the largest galaxies.  A model sitting above Li &
-    White at log M* > 11.5 should not be called discrepant until Bernardi+13 is
-    digitised into data/smf/ and added here.  Neither set has an established IMF
-    in this module -- see report_imf_audit().
-    """
-    out = {}
-    path = os.path.join(OBS_DIR, 'smf/SMF_Li2009.dat')
-    if os.path.exists(path):
-        d = np.genfromtxt(path, comments='#')
-        d = d[np.isfinite(d[:, 0])]
-        h_li = 0.73
-        out['Li+White 09'] = dict(
-            mass=d[:, 0] - 2.0 * np.log10(h_li) + imf_shift('Li+White 09'),
-            logphi=d[:, 1] + 3.0 * np.log10(h_li),
-            elo=np.abs(d[:, 2]), ehi=np.abs(d[:, 3]))
-
-    path = os.path.join(OBS_DIR, 'smf/gama_smf_morph.ecsv')
-    if os.path.exists(path):
-        d = np.genfromtxt(path, comments='#')
-        d = d[np.isfinite(d[:, 0])]
-        tot = np.sum(10**d[:, [1, 3, 5, 7]], axis=1)
-        ok = np.isfinite(tot) & (tot > 0)
-        out['Moffett+16 total'] = dict(
-            mass=d[ok, 0] + imf_shift('Moffett+16 total'),
-            logphi=np.log10(tot[ok]), elo=None, ehi=None)
-    return out
-
-
-def plot_5_mergertime_smf(*_):
-    """
-    z ~ 0 stellar mass function across the MergerTimeFactor sweep.
-
-    Shortening the dynamical-friction clock does not only move stars from the
-    ICS to the BCG -- it changes when every satellite merges, so the mass
-    function has to be checked before the f_ICS result can be believed.  The
-    right panel zooms on log M* > 10.5, where mass arriving on centrals shows up
-    and where the model has least room to move.
-    """
-    print('Plot 5: z=0 stellar mass function across the MergerTimeFactor sweep')
-    obs = load_z0_stellar_mass_functions()
-    bins = np.arange(8.0, 12.61, 0.2)
-    cen = 0.5 * (bins[:-1] + bins[1:])
-
-    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.6))
-    for value, directory in MERGERTIME_RUNS:
-        if not model_files_exist(directory):
-            continue
-        hdr = _read_sim_header(directory)
-        conv = hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h']
-        vol = (hdr['box_size'] / hdr['hubble_h'])**3 * hdr['volume_fraction']
-        data = read_snap_from_files(find_model_files(directory),
-                                    f"Snap_{hdr['last_snap_nr']}",
-                                    ['StellarMass'], mass_convert=conv)
-        if not data:
-            continue
-        sm = data['StellarMass']
-        n, _ = np.histogram(np.log10(sm[sm > 0]), bins=bins)
-        good = n > 0
-        is_fid = (value == MERGERTIME_FIDUCIAL)
-        for ax in axes:
-            ax.plot(cen[good], np.log10((n / vol / 0.2)[good]),
-                    color=MERGERTIME_COLOURS[value],
-                    lw=3.2 if is_fid else 2.0,
-                    label=rf'$\alpha = {value}$' + (' (fiducial)' if is_fid else ''),
-                    zorder=Z_MODEL_LINE + (1 if is_fid else 0))
-
-    markers = {'Li+White 09': ('o', '0.25'), 'Moffett+16 total': ('s', '0.5')}
-    for name, o in obs.items():
-        mk, col = markers.get(name, ('^', '0.4'))
-        for ax in axes:
-            if o['elo'] is not None:
-                ax.errorbar(o['mass'], o['logphi'], yerr=[o['elo'], o['ehi']],
-                            fmt=mk, ms=4, color=col, mfc='none', mew=0.9,
-                            elinewidth=0.8, capsize=0, label=_tex_safe(name),
-                            zorder=Z_OBS)
-            else:
-                ax.plot(o['mass'], o['logphi'], mk, ms=4, color=col, mfc='none',
-                        mew=0.9, label=_tex_safe(name), zorder=Z_OBS)
-
-    axes[0].set_xlim(8.0, 12.5); axes[0].set_ylim(-6.0, 0.0)
-    axes[0].set_title('full range', fontsize=9)
-    axes[1].set_xlim(10.5, 12.5); axes[1].set_ylim(-6.0, -1.5)
-    axes[1].set_title('massive end', fontsize=9)
     for ax in axes:
-        ax.set_xlabel(r'$\log_{10}(M_\star/{\rm M}_\odot)$')
-        ax.set_ylabel(r'$\log_{10}(\phi\,/\,{\rm Mpc^{-3}\,dex^{-1}})$')
-        _standard_legend(ax, loc='lower left', fontsize=7.5)
+        ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
+        ax.set_xlim(11.0, 15.2)
+
     fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'mergertime_SMF' + OUTPUT_FORMAT))
+    save_figure(fig, 'fig8_ICS_BCG_tradeoff')
 
 
-def load_highz_stellar_mass_functions():
+# ============ FIGURE 9: THE TIMESCALES THAT BUILD THE ICS ============
+#
+# External benchmarks.  Both are theoretical, from hydrodynamical simulations,
+# because there is no direct observational measurement of how long a satellite
+# survives before its stars become intracluster -- the observable is the light
+# that is already there, not the clock that put it there.
+#
+# Brown et al. 2024 (Horizon-AGN, arXiv:2409.10607) is the sharpest available
+# comparison because it reports the *infall* stellar masses of ICL progenitors,
+# which is exactly what infallStellarMass records here:
+#   -- half the stacked, not-pre-processed ICL comes from progenitors with
+#      infall stellar mass within half a dex of log M* = 10.94 (+0.13 -0.07)
+#   -- ~90 per cent comes from galaxies infalling above 10^9 Msun
+# They also note the standard theoretical expectation, that the vast majority
+# of z = 0 ICL was still bound in galaxies at z ~ 1.
+HZAGN = dict(
+    label='Horizon-AGN (Brown+24)',
+    log_peak=10.94, log_peak_err=(0.07, 0.13), half_dex=0.5,
+    log_90pc=9.0, z_mostly_in_galaxies=1.0)
+
+
+def plot_9_ics_timescales(ev):
     """
-    Observed stellar mass functions in redshift bins, on the model's units.
+    The clocks that set when and out of what the ICS is built.
 
-    Muzzin+13 (UltraVISTA, h = 0.7, Kroupa) and Wright+18 (GAMA/G10-COSMOS,
-    h = 0.7, Chabrier, quoted per 0.25 dex bin and corrected here).  Both pass
-    through imf_shift().  Returns a list of dicts with 'z', 'mass', 'logphi'
-    and 'label'.
+    (a) The three timescales an ICS star passes through, mass-weighted: how
+        long its galaxy survived after infall, how long ago it was deposited,
+        and the total time since its galaxy first fell in.  These are not
+        independent -- the first two sum to the third -- but plotting them
+        together shows which dominates.
+    (b) The residence time divided by the host's dynamical time, Rvir/Vvir at
+        the moment of destruction.  This is the internal benchmark: a pure
+        crossing-time process would sit at 1 with no mass dependence.
+    (c) Residence time against infall stellar mass, with the Horizon-AGN band
+        that dominates ICL production marked, so the timescale can be read at
+        the mass that actually matters.
+    (d) Cumulative ICS mass against progenitor infall stellar mass, directly
+        against the two Horizon-AGN numbers.
     """
-    out = []
-    path = os.path.join(OBS_DIR, 'smf/SMF_Muzzin2013.dat')
-    if os.path.exists(path):
-        h_m, bins = 0.7, {}
-        for line in open(path):
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            q = line.split()
-            if len(q) < 5:
-                continue
-            zl, zh, ms, lp = float(q[0]), float(q[1]), float(q[2]), float(q[4])
-            if lp < -10:
-                continue
-            bins.setdefault((zl, zh), {'m': [], 'lp': []})
-            bins[(zl, zh)]['m'].append(ms + imf_shift('Muzzin+13'))
-            bins[(zl, zh)]['lp'].append(np.log10(10**lp * (h_m / HUBBLE_H)**3))
-        for (zl, zh), v in bins.items():
-            out.append(dict(z=0.5 * (zl + zh), mass=np.array(v['m']),
-                            logphi=np.array(v['lp']), label='Muzzin+13'))
+    print('Figure 9: ICS timescales and the mass that carries them')
+    ics = ev['to_ics'] & ev['infall_known']
+    m = ev['mstar']
 
-    path = os.path.join(OBS_DIR, 'smf/Wright18_CombinedSMF.dat')
-    if os.path.exists(path):
-        h_w, bins = 0.7, {}
-        for line in open(path):
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            q = line.split()
-            if len(q) < 6:
-                continue
-            mz, ms, ly = float(q[0]), float(q[1]), float(q[2])
-            if ly < -10 or not np.isfinite(ly):
-                continue
-            bins.setdefault(mz, {'m': [], 'lp': []})
-            bins[mz]['m'].append(ms + imf_shift('Wright+18'))
-            bins[mz]['lp'].append(np.log10(10**(ly + np.log10(1.0 / 0.25))
-                                           * (h_w / HUBBLE_H)**3))
-        for mz, v in bins.items():
-            out.append(dict(z=mz, mass=np.array(v['m']),
-                            logphi=np.array(v['lp']), label='Wright+18'))
-    return out
+    fig, axes = panel_grid(2, 2)
 
+    # --- (a) the three clocks ---
+    ax = axes[0, 0]
+    clocks = (
+        (ev['t_res'], r'$t_{\rm destr} - t_{\rm infall}$ (survival)', '#08519c'),
+        (AGE_NOW - ev['t_dest'], r'$t_{\rm now} - t_{\rm destr}$ (since deposition)', '#e41a1c'),
+        (AGE_NOW - ev['t_infall'], r'$t_{\rm now} - t_{\rm infall}$ (since infall)', '#4daf4a'),
+    )
+    bins = np.arange(0, 13.01, 0.4)
+    for vals, label, colour in clocks:
+        v, w = vals[ics], m[ics]
+        ok = np.isfinite(v)
+        o = np.argsort(v[ok])
+        med = v[ok][o][np.searchsorted(np.cumsum(w[ok][o]) / w[ok].sum(), 0.5)]
+        ax.hist(v[ok], bins=bins, weights=w[ok] / w[ok].sum(), histtype='step',
+                color=colour, lw=2.0, zorder=Z_LINE,
+                label=label + rf'  (med ${med:.2f}$ Gyr)')
+        ax.axvline(med, color=colour, ls=':', lw=1.2, zorder=Z_BAND)
+    ax.set_xlabel('timescale [Gyr]')
+    ax.set_ylabel(r'fraction of ICS mass per bin')
+    ax.set_xlim(0, bins[-1])
+    legend(ax, loc='upper right')
 
-def plot_6_mergertime_smf_evolution(*_):
-    """
-    Stellar mass function at z ~ 0.43, 1.22 and 2.46 across the MergerTimeFactor
-    sweep.
+    # --- (b) in units of the host dynamical time ---
+    ax = axes[1, 0]
+    r = ev['t_res_over_tdyn']
+    ok = ics & np.isfinite(r) & (r > 0)
+    rb = np.logspace(-1, 1.2, 40)
+    ax.hist(r[ok], bins=rb, weights=m[ok] / m[ok].sum(), color='#08519c',
+            alpha=0.6, zorder=Z_LINE, label='mass-weighted')
+    ax.hist(r[ok], bins=rb, weights=np.full(int(ok.sum()), 1.0 / ok.sum()),
+            histtype='step', color='0.3', lw=1.6, zorder=Z_LINE + 1,
+            label='per event')
+    o = np.argsort(r[ok])
+    mw = r[ok][o][np.searchsorted(np.cumsum(m[ok][o]) / m[ok].sum(), 0.5)]
+    ax.axvline(1.0, color='0.4', ls='--', lw=1.4, zorder=1,
+               label=r'one crossing time')
+    ax.axvline(mw, color='#08519c', ls='-', lw=1.8, zorder=Z_LINE + 2,
+               label=rf'mass-weighted median $= {mw:.2f}\,t_{{\rm dyn}}$')
+    ax.set_xscale('log')
+    ax.set_xlabel(r'$(t_{\rm destr}-t_{\rm infall})\,/\,t_{\rm dyn}$,'
+                  r'  $t_{\rm dyn}=R_{\rm vir}/V_{\rm vir}$')
+    ax.set_ylabel(r'fraction per bin')
+    legend(ax, loc='upper left')
+    print(f'  residence time / host dynamical time: mass-weighted median '
+          f'{mw:.2f}, per-event median {np.median(r[ok]):.2f}')
 
-    Shortening the dynamical-friction clock assembles centrals earlier, so the
-    same change that raises the z = 0 massive end should push the higher-redshift
-    massive end -- where the model runs short of the data -- in the opposite
-    direction.  That is the trade this figure is for.
-    """
-    print('Plot 6: stellar mass function evolution across the MergerTimeFactor sweep')
-    obs = load_highz_stellar_mass_functions()
-    bins = np.arange(8.0, 12.61, 0.2)
-    cen = 0.5 * (bins[:-1] + bins[1:])
-    panels = [(40, 0.43), (30, 1.22), (20, 2.46)]
+    # --- (c) residence time vs infall mass ---
+    ax = axes[0, 1]
+    mb = np.arange(6.0, 12.01, 0.25)
+    x = ev['log_infall_mstar']
+    sel = ics & np.isfinite(x)
+    plot_median_band(ax, x[sel], ev['t_res'][sel], mb, color='#08519c',
+                     label='per event', min_count=50)
+    c, mwm = binned_weighted_median(x[sel], ev['t_res'][sel], m[sel], mb,
+                                    min_count=50)
+    good = np.isfinite(mwm)
+    ax.plot(c[good], mwm[good], '--', color='#08519c', lw=1.8,
+            zorder=Z_LINE + 1, label='mass-weighted')
+    lo = HZAGN['log_peak'] - HZAGN['half_dex']
+    hi = HZAGN['log_peak'] + HZAGN['half_dex']
+    ax.axvspan(lo, hi, color='#e41a1c', alpha=0.13, lw=0, zorder=1,
+               label=HZAGN['label'] + '\nhalf the ICL comes from here')
+    ax.axvline(HZAGN['log_peak'], color='#e41a1c', ls=':', lw=1.4, zorder=2)
+    ax.set_xlabel(r'$\log_{10}(M_\star/{\rm M}_\odot)$ at infall')
+    ax.set_ylabel(r'$t_{\rm destr} - t_{\rm infall}$ [Gyr]')
+    ax.set_xlim(mb[0], mb[-1])
+    ax.set_ylim(0, None)
+    legend(ax, loc='upper left')
 
-    fig, axes = plt.subplots(1, 3, figsize=(14.5, 4.5))
-    for ax, (snap, z_model) in zip(axes, panels):
-        for value, directory in MERGERTIME_RUNS:
-            if not model_files_exist(directory):
-                continue
-            hdr = _read_sim_header(directory)
-            conv = hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h']
-            vol = (hdr['box_size'] / hdr['hubble_h'])**3 * hdr['volume_fraction']
-            data = read_snap_from_files(find_model_files(directory), f'Snap_{snap}',
-                                        ['StellarMass'], mass_convert=conv)
-            if not data:
-                continue
-            sm = data['StellarMass']
-            n, _ = np.histogram(np.log10(sm[sm > 0]), bins=bins)
-            good = n > 0
-            is_fid = (value == MERGERTIME_FIDUCIAL)
-            ax.plot(cen[good], np.log10((n / vol / 0.2)[good]),
-                    color=MERGERTIME_COLOURS[value], lw=3.2 if is_fid else 2.0,
-                    label=rf'$\alpha = {value}$' + (' (fiducial)' if is_fid else ''),
-                    zorder=Z_MODEL_LINE + (1 if is_fid else 0))
+    # --- (d) where the ICS mass comes from, vs Horizon-AGN ---
+    ax = axes[1, 1]
+    xi, wi = x[sel], m[sel]
+    o = np.argsort(xi)
+    cum = np.cumsum(wi[o]) / wi.sum()
+    ax.plot(xi[o], cum, '-', color='#08519c', lw=3.0, zorder=Z_LINE,
+            label='SAGE26 cumulative ICS mass')
+    ax.axvspan(lo, hi, color='#e41a1c', alpha=0.13, lw=0, zorder=1,
+               label=HZAGN['label'] + r': half the ICL from $\pm0.5$ dex here')
+    ax.axvline(HZAGN['log_peak'], color='#e41a1c', ls=':', lw=1.4, zorder=2)
+    ax.axvline(HZAGN['log_90pc'], color='#e41a1c', ls='--', lw=1.4, zorder=2,
+               label=r'Horizon-AGN: $90$ per cent above $10^9$')
+    f_band = float(np.interp(hi, xi[o], cum) - np.interp(lo, xi[o], cum))
+    f_above9 = float(1.0 - np.interp(HZAGN['log_90pc'], xi[o], cum))
+    med = float(xi[o][np.searchsorted(cum, 0.5)])
+    for y, txt in ((0.42, rf'SAGE26 median $= {med:.2f}$'),
+                   (0.30, rf'in band: ${f_band*100:.0f}$ per cent (HZ-AGN $50$)'),
+                   (0.18, rf'above $10^9$: ${f_above9*100:.0f}$ per cent (HZ-AGN $90$)')):
+        ax.annotate(txt, (0.97, y), xycoords=('axes fraction', 'data'),
+                    fontsize=7.5, color='#08519c', va='center', ha='right')
+    ax.axhline(0.5, color='0.6', lw=1.0, ls=':', zorder=1)
+    ax.set_xlabel(r'$\log_{10}(M_\star/{\rm M}_\odot)$ at infall')
+    ax.set_ylabel('cumulative fraction of ICS mass')
+    ax.set_xlim(mb[0], mb[-1])
+    ax.set_ylim(0, 1)
+    legend(ax, loc='upper left')   # the curve and the annotations own the rest
 
-        mk = {'Muzzin+13': ('^', '0.25'), 'Wright+18': ('s', '0.5')}
-        for o in obs:
-            if abs(o['z'] - z_model) > 0.35:
-                continue
-            m, c = mk.get(o['label'], ('o', '0.4'))
-            ax.plot(o['mass'], o['logphi'], m, ms=4, color=c, mfc='none', mew=0.9,
-                    zorder=Z_OBS, label=f"{o['label']} ($z={o['z']:.2f}$)")
+    print(f'  ICS progenitor infall mass: median log M* = {med:.2f};  '
+          f'{f_band*100:.0f} per cent from the Horizon-AGN band '
+          f'({lo:.2f}--{hi:.2f}), {f_above9*100:.0f} per cent above 10^9')
+    print(f'  Horizon-AGN (Brown+24) finds 50 and 90 per cent respectively')
 
-        ax.set_title(rf'$z \simeq {z_model:.2f}$ (Snap {snap})', fontsize=9)
-        ax.set_xlabel(r'$\log_{10}(M_\star/{\rm M}_\odot)$')
-        ax.set_ylabel(r'$\log_{10}(\phi\,/\,{\rm Mpc^{-3}\,dex^{-1}})$')
-        ax.set_xlim(9.0, 12.5); ax.set_ylim(-6.0, -1.0)
-        _standard_legend(ax, loc='lower left', fontsize=7)
     fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'mergertime_SMF_evolution' + OUTPUT_FORMAT))
+    save_figure(fig, 'fig9_ICS_timescales')
 
 
-def _plot_sweep_redshift(runs, colours, fiducial, param, symbol, filename,
-                         mvir_min=10**13.5):
+# ============ FIGURE 10: ICS BUILD-UP TIMESCALES vs MergerTimeFactor ============
+
+def plot_10_ics_timescale_sweep(ev=None):
     """
-    f_ICS against redshift for one parameter sweep, cluster-scale haloes.
+    The two timescales of ICS build-up, across the MergerTimeFactor sweep.
 
-    Stacked rather than median: sum(M_ICS)/sum(M_star) over every halo above
-    *mvir_min* in each snapshot.  At these masses there are only tens of haloes
-    per snapshot, so a median would be noisy and a stack is also closer to what
-    an observational compilation reports.  The observed cluster f_ICL points are
-    overlaid for scale -- with the caveat that the model applies no
-    surface-brightness limit and so should sit at or above them, and that
-    cosmological dimming biases the high-redshift measurements low.
+    Left: how long an ICS progenitor survives between infall and disruption.
+    This is the clock alpha scales directly, so the curves should march to the
+    right with alpha -- and where they stop is the model's answer to "how long
+    does a satellite last".
+
+    Right: when the resulting ICS mass is actually laid down, as a fraction of
+    each run's own z = 0 total.  Normalising each run to itself is deliberate:
+    the runs differ enormously in how much ICS they make (alpha = 0 makes none
+    at all and is omitted from both panels), and the question here is timing,
+    not amount.
+
+    Everything is mass-weighted, since the ICS budget is carried by a small
+    number of massive progenitors and the per-event view says something quite
+    different (see figure 2).
     """
-    fig, ax = plt.subplots(figsize=(6.6, 4.8))
-    plotted = False
-    for value, directory in runs:
-        if not model_files_exist(directory):
-            print(f'  {directory} missing, skipping {value}')
-            continue
-        hdr = _read_sim_header(directory)
-        conv = hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h']
-        files = find_model_files(directory)
-        zs, fs = [], []
-        for snap in sorted(hdr['output_snaps']):
-            data = read_snap_from_files(
-                files, f'Snap_{snap}',
-                ['StellarMass', 'IntraClusterStars', 'MetalsIntraClusterStars',
-                 'Mvir', 'Type', 'CentralGalaxyIndex'], mass_convert=conv)
-            if not data:
-                continue
-            t = _halo_ics_from_data(data)
-            w = (t['Mvir'] > mvir_min) & ((t['ICS'] + t['Stars']) > 0)
-            if w.sum() < 3:
-                continue
-            zs.append(hdr['redshifts'][snap])
-            fs.append(t['ICS'][w].sum() / (t['ICS'][w].sum() + t['Stars'][w].sum()))
-        if not zs:
-            continue
-        order = np.argsort(zs)
-        zs = np.asarray(zs)[order]; fs = np.asarray(fs)[order]
-        is_fid = (value == fiducial)
-        ax.plot(zs, fs, '-', color=colours[value], lw=3.2 if is_fid else 2.0,
-                label=rf'${symbol} = {value}$' + (' (fiducial)' if is_fid else ''),
-                zorder=Z_MODEL_LINE + (1 if is_fid else 0))
-        plotted = True
+    print('Figure 10: ICS build-up timescales across the sweep')
+    fig, axes = panel_grid(1, 2)
+    tbins = np.arange(0, 8.01, 0.3)
 
-    if not plotted:
-        print(f'  No runs found for {param}; nothing to plot.')
+    print('  alpha   survival: mass-wtd / per-event [Gyr]   half-mass epoch')
+    for alpha, directory, colour, marker in ROUTING_RUNS:
+        if alpha == 0:
+            continue                      # no ICS at all: nothing to time
+        e = load_events(verbose=False, directory=directory)
+        if e is None:
+            print(f'  {directory} missing, skipping alpha = {alpha:g}')
+            continue
+        ics = e['to_ics']
+        m = e['mstar']
+        is_fid = alpha == ROUTING_FIDUCIAL
+        lw = 3.0 if is_fid else 1.9
+        label = rf'$\alpha = {alpha:g}$' + (' (published)' if is_fid else '')
+        z = Z_LINE + (1 if is_fid else 0)
+
+        # left: survival time, mass-weighted
+        sel = ics & e['infall_known']
+        t, w = e['t_res'][sel], m[sel]
+        axes[0].hist(t, bins=tbins, weights=w / w.sum(), histtype='step',
+                     color=colour, lw=lw, zorder=z, label=label)
+        o = np.argsort(t)
+        med = t[o][np.searchsorted(np.cumsum(w[o]) / w.sum(), 0.5)]
+
+        # right: cumulative ICS mass, each run normalised to its own total
+        td, wd = e['t_dest'][ics], m[ics]
+        o2 = np.argsort(td)
+        cum = np.cumsum(wd[o2]) / wd.sum()
+        axes[1].plot(td[o2], cum, '-', color=colour, lw=lw, zorder=z, label=label)
+        t50 = td[o2][np.searchsorted(cum, 0.5)]
+        print(f'  {alpha:<7g} {med:>14.2f} {np.median(t):>9.2f}     '
+              f'{t50:>8.2f} / z = {_z_at_age(t50):.2f}   '
+              f'(ICS = {wd.sum()/ (m[e["to_ics"]].sum() + m[e["to_bcg"]].sum()) * 100:.1f} per cent of accreted)')
+
+    axes[0].set_xlabel(r'$t_{\rm destruction} - t_{\rm infall}$ [Gyr]')
+    axes[0].set_ylabel('fraction of ICS mass per bin')
+    axes[0].set_xlim(0, tbins[-1])
+    axes[0].set_title('how long the progenitor survives', fontsize=9)
+    legend(axes[0], loc='upper right')
+
+    axes[1].axhline(0.5, color='0.6', lw=1.0, ls=':', zorder=1)
+    axes[1].set_xlabel('cosmic time [Gyr]')
+    axes[1].set_ylabel('cumulative ICS mass / its own $z=0$ total')
+    time_axis(axes[1])
+    axes[1].set_ylim(0, 1)
+    axes[1].set_title('when the ICS is laid down', fontsize=9)
+    legend(axes[1], loc='lower left')   # the curve occupies the top left
+    _z_axis(axes[1])
+
+    fig.tight_layout()
+    save_figure(fig, 'fig10_ICS_timescales_vs_alpha')
+
+
+# ============ FIGURE 11: THE ThresholdSatDisruption SWEEP ============
+#
+# The test of the diagnosis in figure 10 and the routing analysis: the ICS is
+# bloated not because alpha is wrong but because the disruption gate fires
+# ~5x sooner than the dynamical-friction clock it is racing.  The gate is
+#
+#     currentMvir / (M* + ColdGas) <= ThresholdSatDisruption
+#
+# so LOWERING the threshold makes the test harder to pass and satellites
+# survive longer.  If the diagnosis is right, lowering it should do four things
+# at once, and all four are drawn here:
+#   1  satellites live longer                      (panel a)
+#   2  more of them survive to z = 0               (panel b)
+#   3  f_ICS falls and the BCG grows               (panels b, c)
+#   4  the BCG moves towards Kravtsov+18           (panel d)
+# If instead only f_ICS moves and the satellite fraction does not, the gate is
+# not the lever and the diagnosis is wrong.
+#
+# All runs are the default microUchuu with MergerTimeFactor fixed at 2.0.
+THRESHOLD_RUNS = (
+    (0.01, './output/microuchuu_tsd_0.01/', '#fee0d2', 'v'),
+    (0.1,  './output/microuchuu_tsd_0.1/',  '#fc9272', '<'),
+    (0.3,  './output/microuchuu_tsd_0.3/',  '#ef3b2c', '>'),
+    (1.0,  MODEL_DIR,                       '#08519c', 'o'),
+    (3.0,  './output/microuchuu_tsd_3.0/',  '#54278f', '^'),
+)
+THRESHOLD_FIDUCIAL = 1.0
+
+
+def _cluster_budget(ctx, mvir_min=1e14):
+    """BCG / satellite / ICS stellar mass summed over cluster haloes at Z0_SNAP."""
+    d = _read_snap(Z0_SNAP, ['StellarMass', 'IntraClusterStars', 'Mvir',
+                             'Type', 'CentralGalaxyIndex'],
+                   files=ctx['files'], mass_convert=ctx['mass_convert'])
+    _, idx = np.unique(d['CentralGalaxyIndex'].astype(np.int64),
+                       return_inverse=True)
+    n = idx.max() + 1
+    cen = d['Type'] == 0
+    mvir = np.full(n, np.nan)
+    mvir[idx[cen]] = d['Mvir'][cen]
+    big = np.isfinite(mvir) & (mvir > mvir_min)
+    inbig = big[idx]
+    ics = np.bincount(idx, weights=d['IntraClusterStars'], minlength=n)[big].sum()
+    return dict(
+        nhalo=int(big.sum()),
+        bcg=float(d['StellarMass'][inbig & cen].sum()),
+        sat=float(d['StellarMass'][inbig & ~cen].sum()),
+        ics=float(ics))
+
+
+def plot_11_threshold_sweep(ev=None):
+    """
+    ThresholdSatDisruption at fixed MergerTimeFactor = 2: does the gate move
+    what alpha could not?
+    """
+    print('Figure 11: the ThresholdSatDisruption sweep at fixed alpha = 2')
+    fig, axes = panel_grid(2, 2)
+    tbins = np.arange(0, 8.01, 0.3)
+    mb = np.arange(11.0, 15.01, 0.25)
+
+    rows = []
+    for thr, directory, colour, marker in THRESHOLD_RUNS:
+        ctx = run_context(directory)
+        if ctx is None:
+            print(f'  {directory} missing, skipping threshold = {thr:g}')
+            continue
+        is_fid = thr == THRESHOLD_FIDUCIAL
+        lw = 3.0 if is_fid else 1.9
+        label = rf'$\theta = {thr:g}$' + (' (published)' if is_fid else '')
+        z = Z_LINE + (1 if is_fid else 0)
+
+        e = load_events(verbose=False, directory=directory)
+        b = _cluster_budget(ctx)
+        tot = b['bcg'] + b['sat'] + b['ics']
+
+        # (a) survival time of ICS progenitors
+        sel = e['to_ics'] & e['infall_known']
+        t, w = e['t_res'][sel], e['mstar'][sel]
+        if t.size:
+            axes[0, 0].hist(t, bins=tbins, weights=w / w.sum(), histtype='step',
+                            color=colour, lw=lw, zorder=z, label=label)
+            o = np.argsort(t)
+            t50 = t[o][np.searchsorted(np.cumsum(w[o]) / w.sum(), 0.5)]
+        else:
+            t50 = np.nan
+
+        # (d) BCG -- halo mass
+        tb = _bcg_table(ctx)
+        c, pct = binned_median(np.log10(tb['mvir']), np.log10(tb['bcg']), mb,
+                               min_count=MIN_COUNT)
+        ok = np.isfinite(pct[1])
+        axes[1, 1].plot(c[ok], pct[1][ok], '-', color=colour, lw=lw, zorder=z,
+                        label=label)
+
+        im = e['mstar'][e['to_ics']].sum()
+        bm = e['mstar'][e['to_bcg']].sum()
+        rows.append(dict(thr=thr, colour=colour, marker=marker, t50=t50,
+                         fbcg=b['bcg'] / tot, fsat=b['sat'] / tot,
+                         fics=b['ics'] / tot,
+                         ratio=b['ics'] / b['bcg'] if b['bcg'] > 0 else np.nan,
+                         routed=im / (im + bm), tot=tot, **b))
+
+    if not rows:
+        print('  no threshold runs found')
         plt.close(fig)
         return
 
-    for o in load_icl_fraction_observations('cluster'):
-        ax.plot(o['z'], o['f'], 'o', ms=4, mfc='none', color='0.45', mew=0.9,
-                zorder=Z_OBS)
-    ax.plot([], [], 'o', ms=4, mfc='none', color='0.45', mew=0.9,
-            label='observed clusters (compilation)')
+    thr = np.array([r['thr'] for r in rows])
+    print('  theta   routed->ICS  survival[Gyr]  f_BCG  f_sat  f_ICS  ICS/BCG  '
+          'log M*_BCG_tot')
+    for r in rows:
+        print(f'  {r["thr"]:<7g} {r["routed"]*100:9.1f}%  {r["t50"]:11.2f}  '
+              f'{r["fbcg"]:6.3f} {r["fsat"]:6.3f} {r["fics"]:6.3f} '
+              f'{r["ratio"]:8.2f}  {np.log10(r["bcg"] * 1):.3f}')
 
-    ax.set_xlabel(r'redshift $z$')
-    ax.set_ylabel(r'$f_{\rm ICS} = M_{\rm ICS}/M_{\star,\rm halo}$'
-                  '\n' r'($M_{\rm vir} > 10^{13.5}\,{\rm M}_\odot$, stacked)')
-    ax.set_xlim(-0.05, 2.7)
-    ax.set_ylim(0, 0.75)
-    _standard_legend(ax, loc='upper right', fontsize=8, title=param)
-    fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, filename + OUTPUT_FORMAT))
+    axes[0, 0].set_xlabel(r'$t_{\rm destruction} - t_{\rm infall}$ [Gyr]')
+    axes[0, 0].set_ylabel('fraction of ICS mass per bin')
+    axes[0, 0].set_xlim(0, tbins[-1])
+    axes[0, 0].set_title('1. do satellites live longer?', fontsize=9)
+    legend(axes[0, 0], loc='upper right')
 
+    # (b) the three-way budget
+    ax = axes[0, 1]
+    for key, lbl, c_, mk in (('fbcg', 'BCG', '#08519c', 'o'),
+                             ('fsat', 'satellites', '#4daf4a', 's'),
+                             ('fics', 'ICS', '#e41a1c', '^')):
+        ax.plot(thr, [r[key] for r in rows], mk + '-', color=c_, lw=2.2, ms=6,
+                zorder=Z_LINE, label=lbl)
+    ax.axvline(THRESHOLD_FIDUCIAL, color='0.5', ls=':', lw=1.2, zorder=1)
+    ax.set_xscale('log')
+    ax.set_xlabel(r'ThresholdSatDisruption $\theta$')
+    ax.set_ylabel(r'share of cluster stellar mass ($M_{\rm vir}>10^{14}$)')
+    ax.set_ylim(0, 1)
+    ax.set_title('2--3. where the cluster mass sits', fontsize=9)
+    legend(ax, loc='upper left')
 
-def plot_7_threshold_ics_redshift(*_):
-    """f_ICS against redshift for each ThresholdSatDisruption value."""
-    print('Plot 7: f_ICS vs redshift for each ThresholdSatDisruption')
-    _plot_sweep_redshift(THRESHOLD_RUNS, THRESHOLD_COLOURS, THRESHOLD_FIDUCIAL,
-                         'ThresholdSatDisruption', r'\theta',
-                         'threshold_fICS_vs_redshift')
+    # (c) f_ICS and the ICS/BCG ratio against their comparisons
+    ax = axes[1, 0]
+    ax.plot(thr, [r['fics'] for r in rows], 'o-', color='#e41a1c', lw=2.4,
+            ms=6, zorder=Z_LINE, label=r'$f_{\rm ICS}$ (stacked)')
+    f = np.array([o['f'] for o in load_icl_fraction_observations('cluster')
+                  for o in [o]], dtype=object)
+    allf = np.concatenate([o['f'][o['z'] <= 0.3]
+                           for o in load_icl_fraction_observations('cluster')])
+    allf = allf[allf > 0]
+    if allf.size:
+        ax.axhspan(allf.min(), allf.max(), color='0.4', alpha=0.16, lw=0,
+                   zorder=1, label=r'observed clusters ($z<0.3$)')
+    ax2 = ax.twinx()
+    ax2.plot(thr, [r['ratio'] for r in rows], 's--', color='#08519c', lw=2.0,
+             ms=5, zorder=Z_LINE, label=r'$M_{\rm ICS}/M_{\rm BCG}$')
+    ax2.axhspan(1.0, 3.0, color='#08519c', alpha=0.10, lw=0, zorder=1)
+    ax2.set_ylabel(r'$M_{\rm ICS}/M_{\rm BCG}$  (indicative $1$--$3$ shaded)',
+                   color='#08519c')
+    ax2.set_yscale('log')
+    ax.axvline(THRESHOLD_FIDUCIAL, color='0.5', ls=':', lw=1.2, zorder=1)
+    ax.set_xscale('log')
+    ax.set_xlabel(r'ThresholdSatDisruption $\theta$')
+    ax.set_ylabel(r'$f_{\rm ICS}$', color='#e41a1c')
+    ax.set_ylim(0, 0.8)
+    ax.set_title(r'3. $f_{\rm ICS}$ and the ICS-to-BCG ratio', fontsize=9)
+    legend(ax, loc='lower right')
 
-
-def plot_8_mergertime_ics_redshift(*_):
-    """f_ICS against redshift for each MergerTimeFactor value."""
-    print('Plot 8: f_ICS vs redshift for each MergerTimeFactor')
-    _plot_sweep_redshift(MERGERTIME_RUNS, MERGERTIME_COLOURS, MERGERTIME_FIDUCIAL,
-                         'MergerTimeFactor', r'\alpha',
-                         'mergertime_fICS_vs_redshift')
-
-
-# ========================== PAPER FIGURES ==========================
-#
-# Four figures carrying the argument that SAGE26's ICL fraction is set by a
-# dynamical-friction timescale rather than by disruption physics:
-#   1  the criterion is inert, the timescale is not
-#   2  the same, against redshift and the observed compilation
-#   3  what the timescale does to the accreted-mass budget
-#   4  what the model already gets right
-
-
-def plot_1_fics_vs_halomass(*_):
-    """
-    f_ICS against halo mass: the nominal disruption criterion beside the
-    dynamical-friction timescale.
-
-    Left: ThresholdSatDisruption, which compares Mvir/(M*+M_cold) and is the
-    parameter named for disruption.  An orphan's Mvir is set to zero, so the test
-    passes for any positive value and the curves barely separate.
-    Right: MergerTimeFactor, which does not appear in any disruption criterion
-    and moves f_ICS by a factor of four.
-    """
-    print('Plot 1: f_ICS vs halo mass -- inert criterion vs active timescale')
-    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.6), sharey=True)
-
-    for ax, (runs, colours, fid, param, sym) in zip(axes, (
-            (THRESHOLD_RUNS, THRESHOLD_COLOURS, THRESHOLD_FIDUCIAL,
-             r'ThresholdSatDisruption $\theta$', r'\theta'),
-            (MERGERTIME_RUNS, MERGERTIME_COLOURS, MERGERTIME_FIDUCIAL,
-             r'MergerTimeFactor $\alpha$', r'\alpha'))):
-        for value, t in _sweep_tables(runs):
-            total = t['ICS'] + t['Stars']
-            ok = (total > 0) & (t['Mvir'] > 0)
-            is_fid = (value == fid)
-            plot_binned_median_1sigma(
-                ax, np.log10(t['Mvir'][ok]), (t['ICS'] / total)[ok], _ICL_BINS,
-                color=colours[value],
-                label=rf'${sym} = {value}$' + (' (published)' if is_fid else ''),
-                lw=3.2 if is_fid else 2.0, alpha=0.18,
-                zorder_line=Z_MODEL_LINE + (1 if is_fid else 0),
-                zorder_fill=Z_MODEL_BAND)
-        f = _obs_fracs('cluster')
-        if f.size:
-            ax.fill_between(_CLUSTER_MASS_RANGE, f.min(), f.max(), color='0.35',
-                            alpha=0.28, lw=0, zorder=Z_OBS,
-                            label=r'observed clusters ($z<0.3$)')
-        ax.set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
-        ax.set_xlim(11.5, 15.0); ax.set_ylim(0, 0.8)
-        ax.set_title(param, fontsize=9)
-        _standard_legend(ax, loc='upper left', fontsize=7.5)
-    axes[0].set_ylabel(r'$f_{\rm ICS} = M_{\rm ICS}/M_{\star,\rm halo}$')
-    fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'fig1_fICS_criterion_vs_timescale' + OUTPUT_FORMAT))
-
-
-def _routing_budget(directory):
-    """
-    Stellar mass removed from satellites, split by destination.
-
-    Every galaxy SAGE destroys is stamped with a mergeType on its last written
-    record: 4 for disruption into the ICS, 1 or 2 for a merger onto the central.
-    Summing the stellar mass of each over all available snapshots gives the
-    accreted-mass budget and how it was routed.  Returns (M_to_ICS, M_to_central).
-    """
-    hdr = _read_sim_header(directory)
-    if hdr is None:
-        return None
-    conv = hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h']
-    files = find_model_files(directory)
-    to_ics = to_cen = 0.0
-    snaps = sorted(hdr['output_snaps'])
-    for snap in snaps[:-1]:          # the final snapshot stamps nothing
-        d = read_snap_from_files(files, f'Snap_{snap}', ['StellarMass', 'mergeType'],
-                                 mass_convert=conv)
-        if not d or 'mergeType' not in d:
-            continue
-        mt, sm = d['mergeType'], d['StellarMass']
-        to_ics += sm[mt == 4].sum()
-        to_cen += sm[(mt == 1) | (mt == 2)].sum()
-    return to_ics, to_cen
-
-
-def plot_3_ics_routing(*_):
-    """
-    What the merger-time clock does to the accreted stellar-mass budget.
-
-    Left: the fraction of all stellar mass removed from satellites that SAGE
-    routes into the ICS rather than onto the central, as a function of
-    MergerTimeFactor.  The same galaxies die at the same moments at every alpha
-    -- only the destination changes.
-    Right: the cluster-scale f_ICS that results, against the observed range.
-    """
-    print('Plot 3: accreted stellar-mass routing vs MergerTimeFactor')
-    alphas, frac, fics = [], [], []
-    for value, directory in MERGERTIME_RUNS:
-        if not model_files_exist(directory):
-            continue
-        budget = _routing_budget(directory)
-        if budget is None or sum(budget) <= 0:
-            continue
-        t = halo_ics_table(directory)
-        lm = np.log10(t['Mvir']); tot = t['ICS'] + t['Stars']
-        w = (lm >= 14.0) & (lm < 14.5) & (tot > 0)
-        alphas.append(float(value))
-        frac.append(budget[0] / sum(budget))
-        fics.append(np.median((t['ICS'] / tot)[w]) if w.sum() >= 5 else np.nan)
-    if not alphas:
-        print('  No MergerTimeFactor runs found; nothing to plot.')
-        return
-    o = np.argsort(alphas)
-    alphas = np.asarray(alphas)[o]; frac = np.asarray(frac)[o]; fics = np.asarray(fics)[o]
-
-    from matplotlib.ticker import NullLocator
-
-    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.4))
-    for ax, y, ylab, ytop in (
-            (axes[0], frac, 'fraction of accreted $M_\\star$\nrouted to the ICS', 1.0),
-            (axes[1], fics, r'$f_{\rm ICS}$ ($10^{14}$--$10^{14.5}\,{\rm M}_\odot$)', 0.5)):
-        ax.plot(alphas, y, 'o-', color='#08519c', lw=2.4, ms=7, zorder=Z_MODEL_LINE)
-        for a, v in zip(alphas, y):
-            if np.isfinite(v):
-                ax.annotate(f'{v:.2f}', (a, v), textcoords='offset points',
-                            xytext=(0, 9), ha='center', fontsize=7.5, color='#08519c')
-        ax.axvline(float(MERGERTIME_FIDUCIAL), color='0.5', ls=':', lw=1.2, zorder=1)
-        ax.annotate('published', (float(MERGERTIME_FIDUCIAL), ytop * 0.06),
-                    textcoords='offset points', xytext=(-5, 0), rotation=90,
-                    fontsize=7, color='0.4', va='bottom', ha='right')
-        ax.set_xscale('log')
-        # the sweep values are the only ticks worth showing; the decade minor
-        # ticks a log axis adds by default collide with them
-        ax.xaxis.set_minor_locator(NullLocator())
-        ax.set_xticks(alphas); ax.set_xticklabels([f'{a:g}' for a in alphas])
-        ax.set_xlim(alphas.min() * 0.8, alphas.max() * 1.25)
-        ax.set_xlabel(r'MergerTimeFactor $\alpha$')
-        ax.set_ylabel(ylab)
-        ax.set_ylim(0, ytop)
-    f = _obs_fracs('cluster')
-    if f.size:
-        axes[1].axhspan(f.min(), f.max(), color='0.35', alpha=0.25, lw=0, zorder=1,
-                        label=r'observed clusters ($z<0.3$)')
-        _standard_legend(axes[1], loc='upper left', fontsize=7.5)
-    fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'fig3_ICS_routing_vs_alpha' + OUTPUT_FORMAT))
-
-
-def plot_4_ics_properties(*_):
-    """
-    What SAGE26 already gets right about the ICL.
-
-    Left: ICL metallicity against halo mass.  Contini+14 and Werner+26 both find
-    the bulk of ICL stars are subsolar, and the model agrees without tuning.
-    Right: the stellar mass of the galaxies supplying the ICS, weighted by the
-    mass each contributes.  Contini+14 identify M* > 10^10.5 satellites as the
-    major contributors and Werner+26's Fig. 8 puts ICL progenitors at the same
-    scale; the model picks out the same population.  Both panels use the
-    published alpha, since neither quantity is what alpha changes.
-    """
-    print('Plot 4: ICL metallicity and progenitor mass at the published alpha')
-    directory = dict(MERGERTIME_RUNS)[MERGERTIME_FIDUCIAL]
-    if not model_files_exist(directory):
-        print(f'  {directory} missing; nothing to plot.')
-        return
-    hdr = _read_sim_header(directory)
-    conv = hdr['unit_mass_in_g'] / _MSUN_CGS / hdr['hubble_h']
-    files = find_model_files(directory)
-
-    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.4))
-
-    t = halo_ics_table(directory)
-    ok = t['ICS'] > 0
-    plot_binned_median_1sigma(
-        axes[0], np.log10(t['Mvir'][ok]), (t['MetalsICS'][ok] / t['ICS'][ok]) / Z_SUN,
-        _ICL_BINS, color='#08519c', label=r'SAGE26 ($\alpha=2.0$)', lw=3.0, alpha=0.2,
-        zorder_line=Z_MODEL_LINE, zorder_fill=Z_MODEL_BAND)
-    axes[0].axhspan(0.0, 1.0, color='0.4', alpha=0.13, lw=0, zorder=1,
-                    label=r'subsolar (Contini+14; Werner+26)')
-    axes[0].axhline(1.0, color='0.45', lw=1.0, ls=':', zorder=2)
-    axes[0].set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
-    axes[0].set_ylabel(r'$Z_{\rm ICL}/Z_\odot$')
-    axes[0].set_xlim(11.5, 15.0); axes[0].set_ylim(0, 1.4)
-    _standard_legend(axes[0], loc='lower right', fontsize=7.5)
-
-    # progenitor masses: the stellar mass of every galaxy stamped mergeType == 4
-    masses, weights = [], []
-    snaps = sorted(hdr['output_snaps'])
-    for snap in snaps[:-1]:
-        d = read_snap_from_files(files, f'Snap_{snap}', ['StellarMass', 'mergeType'],
-                                 mass_convert=conv)
-        if not d or 'mergeType' not in d:
-            continue
-        sm = d['StellarMass'][d['mergeType'] == 4]
-        sm = sm[sm > 0]
-        masses.append(np.log10(sm)); weights.append(sm)
-    if masses:
-        lm = np.concatenate(masses); w = np.concatenate(weights)
-        bins = np.arange(6.0, 12.01, 0.25)
-        axes[1].hist(lm, bins=bins, weights=w / w.sum(), color='#08519c',
-                     alpha=0.75, zorder=Z_MODEL_LINE,
-                     label='mass-weighted')
-        axes[1].hist(lm, bins=bins, weights=np.full_like(w, 1.0 / len(w)),
-                     histtype='step', color='0.3', lw=1.6, zorder=Z_MODEL_LINE + 1,
-                     label='event-weighted')
-        order = np.argsort(lm)
-        cw = np.cumsum(w[order]) / w.sum()
-        med = lm[order][np.searchsorted(cw, 0.5)]
-        axes[1].axvspan(10.5, 12.0, color='0.35', alpha=0.20, lw=0, zorder=0,
-                        label=r'Contini+14 major contributors ($>10^{10.5}$)')
-        axes[1].axvline(med, color='#08519c', ls='--', lw=1.6, zorder=Z_MODEL_LINE + 2)
-        axes[1].annotate(rf'mass-weighted median $= {med:.2f}$', (med, 1.0),
-                         xycoords=('data', 'axes fraction'),
-                         textcoords='offset points', xytext=(-6, -12),
-                         ha='right', va='top', fontsize=7.5, color='#08519c')
-    axes[1].set_xlabel(r'$\log_{10}(M_\star/{\rm M}_\odot)$ of the disrupted galaxy')
-    axes[1].set_ylabel('fraction per bin')
-    axes[1].set_xlim(6.0, 12.0)
-    _standard_legend(axes[1], loc='upper left', fontsize=7.5)
+    obs = load_bcg_halo_observations()
+    if obs is not None:
+        axes[1, 1].plot(obs['mvir'], obs['mstar'], 'o', ms=5, mfc='white',
+                        mec='k', mew=1.1, ls='none', zorder=Z_OBS,
+                        label='Kravtsov+18')
+    axes[1, 1].set_xlabel(r'$\log_{10}(M_{\rm vir}/{\rm M}_\odot)$')
+    axes[1, 1].set_ylabel(r'$\log_{10}(M_{\star,\rm BCG}/{\rm M}_\odot)$')
+    axes[1, 1].set_xlim(11.0, 15.2)
+    axes[1, 1].set_ylim(9.0, 13.0)
+    axes[1, 1].set_title('4. does the BCG reach Kravtsov+18?', fontsize=9)
+    legend(axes[1, 1], loc='upper left')
 
     fig.tight_layout()
-    save_figure(fig, os.path.join(OUTPUT_DIR, 'fig4_ICL_metallicity_and_progenitors' + OUTPUT_FORMAT))
-
-
-def plot_2_fics_vs_redshift(*_):
-    """f_ICS against redshift for the MergerTimeFactor sweep (paper Fig. 2)."""
-    print('Plot 2: f_ICS vs redshift, MergerTimeFactor sweep')
-    _plot_sweep_redshift(MERGERTIME_RUNS, MERGERTIME_COLOURS, MERGERTIME_FIDUCIAL,
-                         r'MergerTimeFactor $\alpha$', r'\alpha',
-                         'fig2_fICS_vs_redshift')
+    save_figure(fig, 'fig11_threshold_sweep')
 
 
 # ========================== MAIN ==========================
 
-# Registry of plot functions
-# z=0 plots take (primary, vanilla); evolution plots take (snapdata)
-Z0_PLOTS = {}
-
-EVOLUTION_PLOTS = {}
-
-# Plot 2 reads three simulations across many snapshots, each with its own
-# snapshot numbering and mass units, so it does its own loading.
-# Paper figures 1-4 carry the argument; 5-9 are the supporting checks.
-STANDALONE_PLOTS = {
-    1: plot_1_fics_vs_halomass,
-    2: plot_2_fics_vs_redshift,
-    3: plot_3_ics_routing,
-    4: plot_4_ics_properties,
-    5: plot_4_mergertime_bcg_mass,
-    6: plot_5_mergertime_smf,
-    7: plot_6_mergertime_smf_evolution,
-    8: plot_2_threshold_bcg_mass,
-    9: plot_7_threshold_ics_redshift,
+PLOTS = {
+    1: plot_1_satellite_population,
+    2: plot_2_satellite_timescales,
+    3: plot_3_ics_assembly,
+    4: plot_4_bcg_assembly,
+    5: plot_5_fics_vs_redshift,
+    6: plot_6_routing_fics_vs_redshift,
+    7: plot_7_bcg_halo_mass,
+    8: plot_8_ics_bcg_tradeoff,
+    9: plot_9_ics_timescales,
+    10: plot_10_ics_timescale_sweep,
+    11: plot_11_threshold_sweep,
 }
-
-ALL_PLOTS = {**Z0_PLOTS, **EVOLUTION_PLOTS, **STANDALONE_PLOTS}
 
 
 def main():
-    seed(SEED)
-    np.random.seed(SEED)
+    np.random.seed(2222)
     setup_style()
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    report_imf_audit()
+
+    args = [a for a in sys.argv[1:] if not a.startswith('-')]
+    refresh = '--refresh' in sys.argv
+
+    ev = load_events(refresh=refresh)
     print()
-    report_indicative_ranges()
-    print()
+    report_catalogue(ev)
+    report_by_satellite_mass(ev)
+    report_by_host_mass(ev)
+    report_assembly(ev)
 
-    # Determine which plots to generate
-    if len(sys.argv) > 1:
-        plot_nums = [int(x) for x in sys.argv[1:]]
-    else:
-        plot_nums = sorted(ALL_PLOTS.keys())
-
-    need_z0 = any(n in Z0_PLOTS for n in plot_nums)
-    need_evo = any(n in EVOLUTION_PLOTS for n in plot_nums)
-
-    primary = vanilla = snapdata = None
-
-    # Load z=0 data only if needed
-    if need_z0:
-        print('Loading primary model from', PRIMARY_DIR)
-        primary = load_model(PRIMARY_DIR)
-        print(f'  {len(primary["StellarMass"]):,} galaxies loaded')
-
-        print('Loading vanilla model from', VANILLA_DIR)
-        vanilla = load_model(VANILLA_DIR,
-                             properties=['StellarMass', 'SfrDisk', 'SfrBulge',
-                                         'ColdGas', 'MetalsColdGas',
-                                         'BlackHoleMass', 'BulgeMass',
-                                         'HotGas', 'CGMgas', 'EjectedMass',
-                                         'IntraClusterStars', 'CentralGalaxyIndex',
-                                         'Mvir', 'Vvir', 'CoolingRate', 'Regime', 'Type'])
-        print(f'  {len(vanilla["StellarMass"]):,} galaxies loaded')
-        print()
-
-    # Load multi-snapshot data only if needed
-    if need_evo:
-        key_snaps = [SNAP_Z0, SNAP_Z1, SNAP_Z2, SNAP_Z3, SNAP_Z4, SNAP_Z5, SNAP_Z10]
-        sfh_snaps = list(range(8, 64))
-        all_snaps = sorted(set(key_snaps + sfh_snaps))
-
-        print(f'Loading {len(all_snaps)} snapshots from', PRIMARY_DIR)
-        snapdata = load_snapshots(PRIMARY_DIR, all_snaps)
-        print(f'  {len(snapdata)} snapshots loaded')
-        print()
-
-    # Generate requested plots
-    for num in plot_nums:
-        if num in Z0_PLOTS:
-            Z0_PLOTS[num](primary, vanilla)
-        elif num in EVOLUTION_PLOTS:
-            EVOLUTION_PLOTS[num](snapdata)
-        elif num in STANDALONE_PLOTS:
-            STANDALONE_PLOTS[num]()
+    nums = [int(a) for a in args] if args else sorted(PLOTS)
+    for n in nums:
+        if n in PLOTS:
+            PLOTS[n](ev)
         else:
-            print(f'Warning: Plot {num} not defined, skipping.')
+            print(f'Warning: figure {n} is not defined, skipping.')
         print()
-
     print('Done.')
 
 

@@ -52,6 +52,8 @@ ReionizationOn              1   %0: switch off
 DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
 
 CGMrecipeOn                 1   %0: switch off
+ColdStreamCeilingOn         1   %0: (Mvir/Mshock)^-4/3 (1+z)/2 w. hard z_crit cut; 1: Dekel & Birnboim 2006 eq39 threshold; 2: as 0 w. smoothed gate; 3: as 2 w. DB06 mass dependence (f_stream=1/R, ceiling tracks M*(z))
+StreamZCritWidth            0.2
 FIREmodeOn                  1   %0: switch off
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
@@ -78,7 +80,7 @@ FFBMaxEfficiency            0.2     %0.2 fits observations best, 1.0 is theoreti
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)
 FeedbackEjectionEfficiency  0.3     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
 
-ReIncorporationFactor       0.15    %fraction of ejected mass reincorporated per dynamical time to hot
+ReIncorporationFactor       0.19    %fraction of ejected mass reincorporated per dynamical time to hot
 
 RadioModeEfficiency         0.08    %AGN radio mode efficiency (AGNrecipeOn=2)
 QuasarModeEfficiency        0.005   %AGN quasar mode wind heating efficiency (AGNrecipeOn>0)

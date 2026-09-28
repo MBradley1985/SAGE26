@@ -102,7 +102,12 @@ velocity-thresholded recipe scaled by `ReIncorporationFactor`:
 reincorporated = (Vvir / Vcrit - 1) * EjectedMass * dt / t_dyn
 ```
 
-where `t_dyn = Rvir / Vvir` and `Vcrit = 445.48 km/s * ReIncorporationFactor`.
+where `t_dyn = Rvir / Vvir` and `Vcrit = 354.26 km/s * ReIncorporationFactor`.
+The constant is `V_SN/sqrt(2)`, the halo virial velocity at which the escape
+velocity `sqrt(2)*Vvir` matches the supernova ejecta velocity `V_SN = 501 km/s`
+(Paper I eq. 11). An earlier version used `V_SN = 630 km/s`, giving `445.48`;
+`ReIncorporationFactor` was `0.15` against that constant and is `0.19` against
+this one, which preserves the effective threshold to better than 1%.
 The function only fires when `Vvir > Vcrit`, so low-mass halos do not
 recover ejected material -- this is the mechanism that lets SN feedback
 permanently quench faint galaxies.
@@ -141,7 +146,7 @@ hot reservoir and are skipped.
 | `Reionization_z0` | Reionization onset redshift. |
 | `Reionization_zr` | Reionization completion redshift. |
 | `BaryonFrac` | Universal baryon fraction f_b = Omega_b / Omega_m. |
-| `ReIncorporationFactor` | Sets `Vcrit` for the reincorporation cutoff. Larger values delay reincorporation in low-mass halos. |
+| `ReIncorporationFactor` | Sets `Vcrit` for the reincorporation cutoff (`Vcrit = 354.26 km/s * factor`). Larger values delay reincorporation in low-mass halos. Default `0.19`. |
 | `CGMrecipeOn` | Routes infall, reincorporation, and satellite CGM by regime when set. |
 | `TrackICSAssembly` | Records satellite-derived ICS mass into `ICS_accrete` for the central. |
 

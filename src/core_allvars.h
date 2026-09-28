@@ -488,14 +488,41 @@ struct params
     int32_t    FIREmodeOn;
     int32_t    RegimeRandomMode;     // 0: fresh random draw each snapshot (default, original behaviour); 1: use the persistent RegimeRandom assigned at galaxy creation (deterministic regime evolution driven by mass)
     int32_t    ColdStreamCeilingOn;  // How the cold-stream fraction f_stream is set.
-                                  // 0: SAGE26 choice (default) -- a smooth fraction
+                                  // 0: the form submitted in Paper I -- a smooth fraction
                                   //    (Mvir/Mshock)^(-4/3) (1+z)/2 with a hard z_crit cut
                                   //    for M > Mshock.  Streams and the quasi-static flow
                                   //    coexist; no counterpart in D&B06.
-                                  // 1: Dekel & Birnboim (2006) eq. 39 as published -- the
-                                  //    threshold R < 1, so f_stream is 1 or 0 and z_crit
-                                  //    and the Mstream ceiling emerge from eqs 40-41.
+                                  //    NOTE: this is the reciprocal of their eq. 38, the
+                                  //    *spherical infall* ratio, not eq. 39, the *stream*
+                                  //    ratio.  It omits the stream density enhancement
+                                  //    (f Mstar/Mvir)^(2/3), so streams shut off near
+                                  //    10^12 Msun at every epoch instead of tracking Mstar(z).
+                                  // 1: FIDUCIAL.  Dekel & Birnboim (2006) eq. 39 as published
+                                  //    -- the threshold (tcool/tcomp)_stream < 1, so f_stream
+                                  //    is 1 or 0 and both z_crit (their eq. 41) and the
+                                  //    Mstream ceiling (their eq. 40) emerge rather than being
+                                  //    imposed.  A STREAM_TRANSITION_WIDTH_DEX sigmoid across
+                                  //    the threshold keeps f_stream continuous; nothing else
+                                  //    is added to their result.  Needs no Z_CRIT_DB06.
+                                  // 2: as 0, but the z_crit cut is a sigmoid in z of width
+                                  //    StreamZCritWidth rather than a step, so f_stream is
+                                  //    continuous across z_crit.  Mass dependence unchanged.
+                                  // 3: as 2, but carrying D&B06's own mass dependence --
+                                  //    f_stream = 1/R from their eq. 39, so the net slope is
+                                  //    Mvir^(-2/3) and the ceiling tracks Mstar(z) rather than
+                                  //    sitting near 10^12 Msun at every epoch.
     double     StreamMassFactor;  // f in Dekel & Birnboim (2006) eqs 40-41; order a few, they use 3.
+    double     StreamThresholdWidthDex;  // Width in dex of the logistic across the D&B06 eq. 39
+                                  // threshold, ColdStreamCeilingOn == 1 only.  Default 0.15.
+                                  // Setting 0 gives their criterion exactly -- a step, f_stream
+                                  // strictly 1 or 0 -- but then the two accretion channels are
+                                  // mutually exclusive, since they are weighted by f_stream and
+                                  // (1 - f_stream).  A non-zero width is what lets a halo carry
+                                  // cold streams and a radiative cooling flow at the same time,
+                                  // which is the behaviour D&B06 describe ("shocks heat part of
+                                  // the gas") even though their criterion itself is a step.
+    double     StreamZCritWidth;  // Delta z of the ColdStreamCeilingOn == 2 sigmoid about z_crit.
+                                  // -> 0 recovers the mode 0 step.
     double     GasDiskRadiusFactor; // chi: ratio of the atomic-gas scale length to the stellar/H2
                                   // scale length, applied in the HI ionisation truncation only.
                                   // 1.0 = cospatial (default, published behaviour); observed disks

@@ -42,7 +42,7 @@ except ImportError:
 # ========================== CONFIGURATION ==========================
 
 # File paths
-PRIMARY_DIR = './output/millennium_ffbmode11/'
+PRIMARY_DIR = './output/millennium/'
 VANILLA_DIR = './output/millennium_vanilla/'
 NOFFB_DIR = './output/millennium_noffb/'
 NOCGM_DIR = './output/millennium_nocgm/'
@@ -58,7 +58,7 @@ FFB_BK25_FFB100_DIR = './output/millennium_ffb100_mbk/'
 FFB_NOSIGMOID_DIR = './output/millennium_nosigmoid/'
 # CGM_DYN_DIR = './output/millennium_cgmdyn/'
 # DISK_SMOOTH_DIR = './output/millennium_disk2/'
-MINIUCHUU_DIR = './output/microuchuu_ffbmode11/'
+MINIUCHUU_DIR = './output/microuchuu/'
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
 
@@ -10977,7 +10977,7 @@ def _plot_mdot_panels(x_prop, x_label, xlim, xbins, output_name,
                     c, med, p25, p75 = binned_median(log_x[pos], log_mc, xbins)
                     valid = np.isfinite(med)
                     ax.plot(c[valid], med[valid], color='C3', lw=2.2,
-                            label=r'$\dot{M}_{\rm cool}$')
+                            label=r'$\dot{m}_{\rm cool}$')
                     ax.fill_between(c[valid], p25[valid], p75[valid],
                                     color='C3', alpha=0.2)
 
@@ -10990,7 +10990,7 @@ def _plot_mdot_panels(x_prop, x_label, xlim, xbins, output_name,
                     c, med, p25, p75 = binned_median(log_x[pos], log_ms, xbins)
                     valid = np.isfinite(med)
                     ax.plot(c[valid], med[valid], color='C0', lw=2.2,
-                            label=r'$\dot{M}_{\rm stream}$')
+                            label=r'$\dot{m}_{\rm stream}$')
                     ax.fill_between(c[valid], p25[valid], p75[valid],
                                     color='C0', alpha=0.2)
 
@@ -10998,7 +10998,7 @@ def _plot_mdot_panels(x_prop, x_label, xlim, xbins, output_name,
             ax.set_xlim(*xlim)
             ax.text(0.05, 0.92, zlabel, transform=ax.transAxes, va='top')
             # ax.tick_params(axis='y')  # Use style sheet for y-axis ticks
-            ax.set_ylim(-1, 3.5)
+            ax.set_ylim(-3, 4.5)
 
             if idx == 0:
                 _standard_legend(ax, loc='lower right')

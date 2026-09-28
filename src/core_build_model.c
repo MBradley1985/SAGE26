@@ -37,7 +37,38 @@
 #include "model_infall.h"
 #include "model_reincorporation.h"
 #include "model_starformation_and_feedback.h"
+
 #include "model_cooling_heating.h"
+
+/* ----------------------------------------------------------------------------
+ * TEMPORARY DIAGNOSTIC -- satellite destruction trace.
+ *
+ * Dumps one CSV row per destruction event with the values the disruption test
+ * actually sees at the moment it fires, so the trigger can be identified from
+ * outside.  Inert unless the environment variable SAGE_DISRUPT_LOG is set to a
+ * path prefix; a normal run never opens a file and never takes the branch.
+ * Remove this block and its two call sites when the question is answered.
+ * -------------------------------------------------------------------------- */
+static FILE *sage_disrupt_log = NULL;
+static int sage_disrupt_log_tried = 0;
+
+static FILE *get_disrupt_log(const int task)
+{
+    if(sage_disrupt_log_tried) return sage_disrupt_log;
+    sage_disrupt_log_tried = 1;
+    const char *prefix = getenv("SAGE_DISRUPT_LOG");
+    if(prefix == NULL || prefix[0] == '\0') return NULL;
+    char path[2048];
+    snprintf(path, sizeof(path), "%s.%d.csv", prefix, task);
+    sage_disrupt_log = fopen(path, "w");
+    if(sage_disrupt_log != NULL) {
+        fprintf(sage_disrupt_log,
+                "snap,step,steps,type,gate_zero_baryons,mvir,deltamvir,"
+                "currentmvir,baryons,ratio,mergtime,stellarmass,coldgas,len,dest\n");
+    }
+    return sage_disrupt_log;
+}
+
 
 
 static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals, struct halo_data *halos,
@@ -507,6 +538,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 // or for satellites with no baryonic mass (they don't grow and will otherwise hang around forever)
                 double currentMvir = galaxies[p].Mvir - galaxies[p].deltaMvir * (1.0 - ((double)step + 1.0) / (double)effective_steps);
                 double galaxyBaryons = galaxies[p].StellarMass + galaxies[p].ColdGas;
+                const int gate_zero_baryons = (galaxyBaryons == 0.0);   /* DIAGNOSTIC */
                 if((galaxyBaryons == 0.0) || (galaxyBaryons > 0.0 && (currentMvir / galaxyBaryons <= run_params->ThresholdSatDisruption))) {
 
                     int merger_centralgal = galaxies[p].Type==1 ? centralgal:galaxies[p].CentralGal;
@@ -520,6 +552,21 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                     if(isfinite(galaxies[p].MergTime)) {
                         // Time at which this event occurs (same formula used for mergers)
                         const double event_time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
+                        /* DIAGNOSTIC: record what the test saw, before the
+                           destruction routines zero the galaxy's fields. */
+                        FILE *dlog = get_disrupt_log(run_params->ThisTask);
+                        if(dlog != NULL) {
+                            fprintf(dlog,
+                                    "%d,%d,%d,%d,%d,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%d,%d\n",
+                                    galaxies[p].SnapNum, step, effective_steps,
+                                    galaxies[p].Type, gate_zero_baryons,
+                                    galaxies[p].Mvir, galaxies[p].deltaMvir,
+                                    currentMvir, galaxyBaryons,
+                                    galaxyBaryons > 0.0 ? currentMvir / galaxyBaryons : -1.0,
+                                    galaxies[p].MergTime, galaxies[p].StellarMass,
+                                    galaxies[p].ColdGas, galaxies[p].Len,
+                                    galaxies[p].MergTime > 0.0 ? 4 : 1);
+                        }
                         // disruption has occurred!
                         if(galaxies[p].MergTime > 0.0) {
                             disrupt_satellite_to_ICS(merger_centralgal, p, event_time, galaxies, run_params);

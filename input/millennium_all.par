@@ -85,7 +85,7 @@ FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Ma
 FeedbackEjectionEfficiency  0.3     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
 MaxSNEnergyCoupling         2.0     %cap on the effective coupling eps_eff = FeedbackEjectionEfficiency * f_FIRE when SNEnergyConservationOn=1; 2.0 = E_FB <= all the SN energy, 1.0 = <= half
 
-ReIncorporationFactor       0.15    %fraction of ejected mass reincorporated per dynamical time to hot
+ReIncorporationFactor       0.19    %fraction of ejected mass reincorporated per dynamical time to hot
 
 RadioModeEfficiency         0.08    %AGN radio mode efficiency (AGNrecipeOn=2)
 QuasarModeEfficiency        0.005   %AGN quasar mode wind heating efficiency (AGNrecipeOn>0)

@@ -126,9 +126,11 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
-    run_params->ReIncorporationFactor      = 0.15;
-    run_params->ColdStreamCeilingOn        = 0;     /* SAGE26 smooth f_stream; 1 = D&B06 eq. 40 threshold */ /* (remove once published)*/
+    run_params->ReIncorporationFactor      = 0.19;
+    run_params->ColdStreamCeilingOn        = 1;     /* fiducial: D&B06 eq. 39 stream criterion; 0 = submitted form (their eq. 38); 2/3 see core_allvars.h */ /* (remove once published)*/
     run_params->StreamMassFactor           = 3.0;   /* Dekel & Birnboim (2006) adopt f = 3 */ /* (remove once published)*/
+    run_params->StreamThresholdWidthDex    = 0.15;  /* logistic across the D&B06 eq. 39 threshold; 0 = their step */ /* (remove once published)*/
+    run_params->StreamZCritWidth           = 0.2;   /* Delta z of the mode 2 sigmoid about z_crit */ /* (remove once published)*/
     run_params->GasDiskRadiusFactor        = 1.0;   /* chi = 1.0: atomic disk cospatial with the stellar disk (published behaviour) */
     run_params->MShockMsun                 = 6.0e11;
     run_params->EnergySN                   = 1.0e51;
@@ -214,6 +216,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("ReIncorporationFactor",      &(run_params->ReIncorporationFactor),      DOUBLE, 0);
     REG("ColdStreamCeilingOn",        &(run_params->ColdStreamCeilingOn),        INT,    0);
     REG("StreamMassFactor",           &(run_params->StreamMassFactor),           DOUBLE, 0);
+    REG("StreamThresholdWidthDex",    &(run_params->StreamThresholdWidthDex),    DOUBLE, 0);
+    REG("StreamZCritWidth",           &(run_params->StreamZCritWidth),           DOUBLE, 0);
     REG("GasDiskRadiusFactor",        &(run_params->GasDiskRadiusFactor),        DOUBLE, 0);
     REG("MShockMsun",                 &(run_params->MShockMsun),                 DOUBLE, 0);
     REG("EnergySN",                   &(run_params->EnergySN),                   DOUBLE, 0);
@@ -568,7 +572,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"FeedbackFreeModeOn",     run_params->FeedbackFreeModeOn,     0, 11},
             {"FFBIgnoreRegime",        run_params->FFBIgnoreRegime,        0, 1},
             {"FFBRandomMode",          run_params->FFBRandomMode,          0, 1},
-            {"ColdStreamCeilingOn",    run_params->ColdStreamCeilingOn,    0, 1},
+            {"ColdStreamCeilingOn",    run_params->ColdStreamCeilingOn,    0, 3},
             {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 3},
             {"H2DiskAreaOption",       run_params->H2DiskAreaOption,       0, 2},
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},

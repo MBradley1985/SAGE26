@@ -237,6 +237,15 @@ def shell_density(mdot_msun_per_gyr, rvir_cm, vvir_kms, clumping=1.0,
         return clumping * rho_str * mach_sq / (MU_NEUTRAL * PROTON_MASS_G)
 
 
+def pct_label(text):
+    """Percent signs need escaping under usetex and must NOT be escaped without
+    it.  The shared style sheet sets text.usetex=True, but this script is often
+    copied somewhere that sheet is not, where a literal backslash would show up
+    in the legend.  Decide at draw time rather than assuming.
+    """
+    return text.replace('%', r'\%') if plt.rcParams.get('text.usetex') else text
+
+
 def read_shell_inputs(directory, zmin, zmax):
     """(z, log10 Mvir, Vvir, Rvir_cm, Mdot_ac) for every central in a run.
 
@@ -915,8 +924,8 @@ def make_threshold_figure(outdir, zmin, zmax):
                 ax.plot(zb, lo, ls=ls, color=colour, lw=1.0, alpha=0.8, zorder=1)
                 ax.plot(zb, hi, ls=ls, color=colour, lw=1.0, alpha=0.8, zorder=1)
                 handles[key] = Line2D([], [], color=colour, ls=ls, lw=6, alpha=0.45,
-                                      label=f'{short}: no threshold '
-                                            r'(16--84\% band)')
+                                      label=pct_label(f'{short}: no threshold '
+                                                      '(16-84% band)'))
             elif np.count_nonzero(pop['ffb'] == 1):
                 # Too few to characterise at all -- say so rather than omit it.
                 ax.plot(pop['z'][pop['ffb'] == 1], pop['logmv'][pop['ffb'] == 1],
@@ -936,7 +945,6 @@ def make_threshold_figure(outdir, zmin, zmax):
             print(f'  threshold figure: no {noffb}, skipping the mode-8 curve '
                   f'for {label}')
             continue
-        hdr = header(noffb)
         z, logmv, vvir, rvir, mdot = read_shell_inputs(noffb, zmin, zmax)
         n_sh = shell_density(mdot, rvir, vvir, clumping=1.0)
         short, colour, _mk = MODE_STYLE['mode8']
