@@ -10382,8 +10382,9 @@ def plot_23c_ffb_fraction_bk25():
 def _feedback_params(directory=PRIMARY_DIR):
     """Feedback parameters straight from the run header, so the analytic curves
     cannot drift from the model that produced the points."""
-    fallback = dict(eps_disk=2.9, eps_halo=0.3, alpha_z=1.25, eta_sn=5.0e-3,
-                    energy_sn=1.0e51, eps_max=2.0, sn_bound=1, reheat_bound=1)
+    fallback = dict(eps_disk=2.9, eps_halo=0.3, alpha_z=FIRE_REDSHIFT_EXPONENT,
+                    eta_sn=5.0e-3, energy_sn=1.0e51,
+                    eps_max=MAX_SN_ENERGY_COUPLING, sn_bound=1, reheat_bound=1)
     files = _find_model_files_early(directory)
     if not files:
         return fallback
@@ -10392,7 +10393,7 @@ def _feedback_params(directory=PRIMARY_DIR):
         get = lambda k, d: (float(r[k]) if k in r else d)
         return dict(eps_disk=get('FeedbackReheatingEpsilon', 2.9),
                     eps_halo=get('FeedbackEjectionEfficiency', 0.3),
-                    alpha_z=get('RedshiftPowerLawExponent', 1.25),
+                    alpha_z=FIRE_REDSHIFT_EXPONENT,
                     eta_sn=get('EtaSN', 5.0e-3),
                     energy_sn=get('EnergySN', 1.0e51),
                     # The SN energy bound is hardcoded on in the model, and the
@@ -10414,6 +10415,10 @@ MAX_SN_ENERGY_COUPLING = 2.0
 # power-law slopes of the wind loading factor. Matches FIRE_V_CRIT_KMS in
 # src/model_starformation_and_feedback.c.
 FIRE_V_CRIT = 60.0
+
+# FIRE redshift scaling of the wind loading factor, eta ~ (1+z)^alpha. Matches
+# FIRE_REDSHIFT_EXPONENT in src/model_starformation_and_feedback.c.
+FIRE_REDSHIFT_EXPONENT = 1.25
 FIRE_BETA_LOW = -3.2
 FIRE_BETA_HIGH = -1.0
 

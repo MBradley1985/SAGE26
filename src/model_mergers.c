@@ -55,6 +55,10 @@ static const double STARBURST_MASS_POWER = 0.7;
  * model_starformation_and_feedback.c. */
 static const double FIRE_V_CRIT_KMS = 60.0;  /* km/s */
 
+/* FIRE (Muratov et al. 2015) redshift scaling of the wind loading factor,
+ * eta ~ (1+z)^alpha.  Same value as in model_starformation_and_feedback.c. */
+static const double FIRE_REDSHIFT_EXPONENT = 1.25;
+
 /* Krumholz & Dekel (2011) characteristic halo mass for metal enrichment scaling:
  * FracZleaveDisk ~ exp(-Mvir / KD11_METAL_HALO_MASS) in code units (10^10 Msun/h).
  * Same constant used in model_starformation_and_feedback.c. */
@@ -694,7 +698,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
             const double v_term = (vc_floored < FIRE_V_CRIT_KMS)
                 ? pow(vc_floored / FIRE_V_CRIT_KMS, -3.2)
                 : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
-            fire_scaling = pow(1.0 + z_fire, run_params->RedshiftPowerLawExponent) * v_term;
+            fire_scaling = pow(1.0 + z_fire, FIRE_REDSHIFT_EXPONENT) * v_term;
         }
     }
 

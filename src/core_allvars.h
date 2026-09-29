@@ -511,7 +511,7 @@ struct params
     double ThreshMajorMerger;     /* mass ratio above which a merger is 'major' [dimensionless] */
     double BaryonFrac;            /* cosmic baryon fraction Omega_b/Omega_m [dimensionless] */
     double SfrEfficiency;         /* SF efficiency per dynamical time [dimensionless] */
-    double FFBMaxEfficiency;      /* maximum SF efficiency in the feedback-free burst regime [dimensionless] */
+    double EnhancedSFEfficiency;  /* maximum SF efficiency in the feedback-free burst regime [dimensionless] */
     double FeedbackReheatingEpsilon;   /* SN mass-loading: reheated mass per unit stars formed [dimensionless] */
     double FeedbackEjectionEfficiency; /* fraction of SN energy available to eject gas from the halo [dimensionless] */
     double RadioModeEfficiency;   /* radio-mode AGN heating efficiency [dimensionless] */
@@ -527,7 +527,6 @@ struct params
                                      (clock expired). 2.0 reproduces the published SAGE16/SAGE26
                                      behaviour [dimensionless] */
     double SubstepResolution;        // global multiplier on the adaptive substep count (floor STEPS and cap MAX_STEPS both scale by this); default 1.0. Runtime knob for convergence / N-invariance testing without recompiling.
-    double RedshiftPowerLawExponent; /* exponent of the (1+z) term in the FIRE mass-loading scaling (Muratov+15); default 1.25 */
 
     int32_t KarpovModeOn;  // 0 = off (default, published behaviour); 1 = Karpov+2020 supernova feedback model (mdot_outflow = eta_SN * SFR, no energy budget, no cooling flow, no precipitation threshold, no cold streams)
     /* code unit definitions (set from parameter file; all other unit fields derived from these) */

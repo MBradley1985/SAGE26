@@ -101,8 +101,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->H2RadialRMaxFactor         = 5.0;
     run_params->CGMrecipeOn                = 1;
     run_params->FIREmodeOn                 = 1;
-    run_params->RedshiftPowerLawExponent   = 1.25;
-    run_params->FFBMaxEfficiency           = 0.2;
+    run_params->EnhancedSFEfficiency       = 0.2;
     run_params->ConcentrationOn            = 3;
     run_params->EnhancedStarFormationOn    = 1;
     run_params->BulgeSizeOn                = 3;
@@ -206,8 +205,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("ThresholdSatDisruption",     &(run_params->ThresholdSatDisruption),     DOUBLE, 0);
     REG("MergerTimeFactor",           &(run_params->MergerTimeFactor),           DOUBLE, 0);
     REG("H2RadialRMaxFactor",         &(run_params->H2RadialRMaxFactor),         DOUBLE, 0);
-    REG("FFBMaxEfficiency",           &(run_params->FFBMaxEfficiency),           DOUBLE, 0);
-    REG("RedshiftPowerLawExponent",   &(run_params->RedshiftPowerLawExponent),   DOUBLE, 0);
+    REG("EnhancedSFEfficiency",       &(run_params->EnhancedSFEfficiency),       DOUBLE, 0);
     REG("KarpovModeOn",               &(run_params->KarpovModeOn),               INT, 0);
 
 #undef REG

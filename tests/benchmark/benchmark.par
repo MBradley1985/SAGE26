@@ -45,7 +45,7 @@ EnhancedStarFormationOn          1   %0: off; 1: Li+24 mass threshold w. sigmoid
 SaveFullSFH                 1
 
 SfrEfficiency               0.05
-FFBMaxEfficiency            0.2
+EnhancedSFEfficiency            0.2
 FeedbackReheatingEpsilon    2.9
 FeedbackEjectionEfficiency  0.5
 ReIncorporationFactor       0.15

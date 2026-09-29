@@ -74,6 +74,10 @@ static const double SOMERVILLE25_SIGMA_CRIT = 30.0 / (M_PI * 4.302e-3);  /* Msun
  * two power-law slopes of the wind loading factor (their eq. 11, Table 1). */
 static const double FIRE_V_CRIT_KMS = 60.0;  /* km/s */
 
+/* FIRE (Muratov et al. 2015) redshift scaling of the wind loading factor:
+ * eta ~ (1+z)^alpha with alpha = 1.25 (their eq. 8). */
+static const double FIRE_REDSHIFT_EXPONENT = 1.25;
+
 /* Krumholz & Dekel (2011) eq. 22 characteristic halo mass for metal enrichment.
  * FracZleaveDisk ~ exp(-Mvir / KD11_METAL_HALO_MASS) in code units (10^10 Msun/h).
  * Same constant used in model_mergers.c. */
@@ -745,7 +749,7 @@ if(run_params->FIREmodeOn == 1 && run_params->SupernovaRecipeOn == 1) {
         const double v_term = (vc_floored < FIRE_V_CRIT_KMS)
             ? pow(vc_floored / FIRE_V_CRIT_KMS, -3.2)
             : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
-        fire_scaling = pow(1.0 + z_fire, run_params->RedshiftPowerLawExponent) * v_term;
+        fire_scaling = pow(1.0 + z_fire, FIRE_REDSHIFT_EXPONENT) * v_term;
     }
 }
 
@@ -912,7 +916,7 @@ if(run_params->SupernovaRecipeOn == 1 && run_params->FIREmodeOn == 1) {
     const double vc = galaxies[p].Vvir;
     if(vc > 0.0 && z >= 0.0) {
         const double vc_floored = (vc < 1.0) ? 1.0 : vc;
-        const double z_term     = pow(1.0 + z, run_params->RedshiftPowerLawExponent);
+        const double z_term     = pow(1.0 + z, FIRE_REDSHIFT_EXPONENT);
         const double v_term     = (vc_floored < FIRE_V_CRIT_KMS) ?
             pow(vc_floored / FIRE_V_CRIT_KMS, -3.2) : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
         fire_scaling = z_term * v_term;
@@ -1301,7 +1305,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
        isnan(reff) || isinf(reff) || isnan(tdyn) || isinf(tdyn)) {
         stars = 0.0;
     } else if(tdyn > 0.0 && gas_for_sf > 0.0) {
-        const double epsilon_ffb = run_params->FFBMaxEfficiency;
+        const double epsilon_ffb = run_params->EnhancedSFEfficiency;
         strdot = epsilon_ffb * gas_for_sf / tdyn;
 
         if(isnan(strdot) || isinf(strdot) || strdot < 0.0) {

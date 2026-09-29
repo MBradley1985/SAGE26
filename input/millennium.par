@@ -55,7 +55,7 @@ CGMrecipeOn                 1   %0: switch off
 FIREmodeOn                  1   %0: switch off
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
-EnhancedStarFormationOn          1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: BK25 acceleration threshold w. log-normal c scatter
+EnhancedStarFormationOn     1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: BK25 acceleration threshold w. log-normal c scatter
 
 SaveFullSFH                 0   %0: switch off
 KarpovModeOn                0   %0: switch off
@@ -65,7 +65,7 @@ KarpovModeOn                0   %0: switch off
 %------------------------------------------
 
 SfrEfficiency               0.05    %efficiency of SF; unused for SFprescription=3,6
-FFBMaxEfficiency            0.2     %0.2 fits observations best, 1.0 is theoretical maximum
+EnhancedSFEfficiency        0.2     %0.2 fits observations best, 1.0 is theoretical maximum
 
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)
 FeedbackEjectionEfficiency  0.3     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
