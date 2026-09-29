@@ -1302,7 +1302,6 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2RadialIntegrationOn", run_params->H2RadialIntegrationOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2RadialNBins", run_params->H2RadialNBins, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2RadialRMaxFactor", run_params->H2RadialRMaxFactor, H5T_NATIVE_DOUBLE);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RegimeRandomMode", run_params->RegimeRandomMode, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ConcentrationOn", run_params->ConcentrationOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SaveFullSFH", run_params->SaveFullSFH, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "StarburstColdGasOn", run_params->StarburstColdGasOn, H5T_NATIVE_INT);
@@ -1312,8 +1311,6 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FFBMaxEfficiency", run_params->FFBMaxEfficiency, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FFBConcSigma", run_params->FFBConcSigma, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FFBThresholdSlope", run_params->FFBThresholdSlope, H5T_NATIVE_DOUBLE);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FFBIgnoreRegime", run_params->FFBIgnoreRegime, H5T_NATIVE_INT);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FFBRandomMode", run_params->FFBRandomMode, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "MShockMsun", run_params->MShockMsun, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FeedbackReheatingEpsilon", run_params->FeedbackReheatingEpsilon, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FeedbackEjectionEfficiency", run_params->FeedbackEjectionEfficiency, H5T_NATIVE_DOUBLE);
@@ -1332,8 +1329,6 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "EnergySN", run_params->EnergySN, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "EtaSN", run_params->EtaSN, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RedshiftPowerLawExponent", run_params->RedshiftPowerLawExponent, H5T_NATIVE_DOUBLE);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SNEnergyConservationOn", run_params->SNEnergyConservationOn, H5T_NATIVE_INT);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "MaxSNEnergyCoupling", run_params->MaxSNEnergyCoupling, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "BaryonFrac", run_params->BaryonFrac, H5T_NATIVE_DOUBLE);
 
     /* Numerical resolution and forest decomposition.  Not physics, but the

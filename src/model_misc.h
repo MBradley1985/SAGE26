@@ -23,6 +23,13 @@ extern "C" {
     #include "model_halo_properties.h"
     #include "model_regimes.h"
 
+    /* Cap on the effective supernova coupling eps_eff = FeedbackEjectionEfficiency
+     * * f_FIRE, and on the equivalent reheating budget.  2.0 means the feedback
+     * energy may not exceed E_FB = m_* eta_SN E_SN, i.e. the entire supernova
+     * budget released by the stars driving the outflow; 1.0 would cap it at half.
+     * This is an energy-conservation bound rather than a tuning knob. */
+    static const double MAX_SN_ENERGY_COUPLING = 2.0;
+
     /*
      * Divisors for the per-substep Sfr* accumulators.
      *
@@ -103,20 +110,16 @@ extern "C" {
      * exceeds 2, i.e. the ejection term spends more than the total supernova energy
      * m_* eta_SN E_SN released by the stars that drive it.
      *
-     * With SNEnergyConservationOn = 1 the coupling is capped at MaxSNEnergyCoupling
-     * (default 2.0, i.e. E_FB <= the whole SN budget; 1.0 caps it at half).  This is
-     * an energy-conservation bound, not a tuning knob -- it constrains the model to
+     * The coupling is therefore capped at MAX_SN_ENERGY_COUPLING.  This is an
+     * energy-conservation bound, not a tuning knob -- it constrains the model to
      * the energy actually available rather than truncating the empirical FIRE
      * mass-loading scaling, which is applied unmodified in eta_reheat.
-     *
-     * The bound is on by default.  Setting SNEnergyConservationOn = 0 restores the
-     * unbounded coupling of the earlier published SAGE26 behaviour.
      */
     static inline double sn_energy_coupling(const double fire_scaling, const struct params *run_params)
     {
         const double eps_eff = run_params->FeedbackEjectionEfficiency * fire_scaling;
-        if(run_params->SNEnergyConservationOn && eps_eff > run_params->MaxSNEnergyCoupling) {
-            return run_params->MaxSNEnergyCoupling;
+        if(eps_eff > MAX_SN_ENERGY_COUPLING) {
+            return MAX_SN_ENERGY_COUPLING;
         }
         return eps_eff;
     }
@@ -132,19 +135,17 @@ extern "C" {
      * reheating cost 0.5*eta_reheat*V_vir^2 -- the same convention as E_lift --
      * grows linearly with V_vir and is unbounded.
      *
-     * With SNEnergyConservationOn = 1 the mass loading is capped so that this
-     * cost cannot exceed the same MaxSNEnergyCoupling budget used for the
-     * ejection term.  The bound is on by default; setting
-     * SNEnergyConservationOn = 0 restores the unbounded mass loading.
+     * The mass loading is therefore capped so that this cost cannot exceed the
+     * same MAX_SN_ENERGY_COUPLING budget used for the ejection term.
      */
     static inline double capped_eta_reheat(const double eta_reheat, const double vvir,
                                            const struct params *run_params)
     {
-        if(!run_params->SNEnergyConservationOn || vvir <= 0.0) {
+        if(vvir <= 0.0) {
             return eta_reheat;
         }
         const double esn_per_mass = run_params->EtaSNcode * run_params->EnergySNcode;
-        const double eta_max = run_params->MaxSNEnergyCoupling * esn_per_mass / (vvir * vvir);
+        const double eta_max = MAX_SN_ENERGY_COUPLING * esn_per_mass / (vvir * vvir);
         return (eta_reheat > eta_max) ? eta_max : eta_reheat;
     }
 

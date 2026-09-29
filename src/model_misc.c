@@ -73,6 +73,20 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].Type = 0;
     galaxies[p].Regime = -1;
     galaxies[p].FFBRegime = 0;
+    /* DO NOT REMOVE these two draws, even though nothing reads the values.
+     *
+     * They were the per-galaxy quantiles used by the old FFBRandomMode=1 and
+     * RegimeRandomMode=1 paths.  Both modes are gone -- the FFB and CGM/hot
+     * classifications now always draw fresh from rand() each snapshot -- so
+     * the fields are write-only.  But rand() is a single global stream shared
+     * with those classifications, so dropping two calls per galaxy shifts
+     * every subsequent draw and changes the classification of unrelated
+     * galaxies.  Measured: deleting these two lines drifts 3194 of the 5252
+     * millennium baseline datasets.
+     *
+     * Removing them is therefore a physics change, not a cleanup.  If they
+     * ever do go, it must be a labelled fix: commit with a re-captured
+     * baseline (see docs/developer/STYLE_COMMITS.md section 4). */
     galaxies[p].FFBRandom = (float)rand() / (float)RAND_MAX;
     galaxies[p].RegimeRandom = (float)rand() / (float)RAND_MAX;
     galaxies[p].Concentration = 0.0;

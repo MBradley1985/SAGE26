@@ -21,13 +21,12 @@ Usage
     python plotting/ablation_series.py --run      # run any missing variants first
     python plotting/ablation_series.py --run --force   # re-run every variant
     python plotting/ablation_series.py --with rps      # add an optional ablation
-    python plotting/ablation_series.py --with rps --with snecons
     python plotting/ablation_series.py --no-sage16     # drop the SAGE16 reference
 
 The figure covers the four ingredients the paper's headline claim rests on: FIRE
 stellar feedback, H2-based star formation, the two-regime CGM and the FFB mode, plus
-a joint run with all four disabled together.  Ram-pressure stripping and the SN energy
-bound are available through --with but are off by default: neither is part of those
+a joint run with all four disabled together.  Ram-pressure stripping is available
+through --with but is off by default: it is not part of those
 claims.
 
 Must be run from the repository root (paths are relative, as in the .par files).
@@ -210,12 +209,6 @@ OPTIONAL_VARIANTS = {
         'label': r'no ram-pressure stripping', 'switch': ('RamPressureStrippingOn', 0),
         'color': '#8C564B', 'ls': (0, (5, 1.5, 1.5, 1.5, 1.5, 1.5)),
         'lw': 2.4, 'zorder': 10,
-    },
-    'snecons': {
-        'key': 'nosnecons', 'par': 'input/millennium_nosnecons.par',
-        'out': './output/millennium_nosnecons/',
-        'label': r'no SN energy bound', 'switch': ('SNEnergyConservationOn', 0),
-        'color': '#17A2B8', 'ls': (0, (2, 1, 5, 1)), 'lw': 2.4, 'zorder': 10,
     },
     # Ablations of the precipitation criterion itself, inside the two-regime CGM
     # rather than against it: 'nocgm' above removes the CGM machinery entirely,

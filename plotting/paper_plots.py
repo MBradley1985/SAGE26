@@ -10394,16 +10394,20 @@ def _feedback_params(directory=PRIMARY_DIR):
                     alpha_z=get('RedshiftPowerLawExponent', 1.25),
                     eta_sn=get('EtaSN', 5.0e-3),
                     energy_sn=get('EnergySN', 1.0e51),
-                    eps_max=get('MaxSNEnergyCoupling', 2.0),
-                    sn_bound=int(get('SNEnergyConservationOn', 1)),
-                    # capped_eta_reheat() in src/model_misc.h gates the mass-loading
-                    # cap on SNEnergyConservationOn, the same switch as the ejection
-                    # coupling -- there is no separate ReheatEnergyConservationOn.
-                    # Reading one would silently default to 0 and draw analytic
-                    # curves without a cap the model does apply, which shows up as
-                    # a spurious offset at high V_vir and high z.
-                    reheat_bound=int(get('SNEnergyConservationOn', 1)))
+                    # The SN energy bound is hardcoded on in the model, and the
+                    # cap is MAX_SN_ENERGY_COUPLING in src/model_misc.h. Both the
+                    # ejection coupling and the reheating mass loading use it --
+                    # there is no separate reheating switch, and drawing the
+                    # analytic curves without the cap leaves a spurious offset at
+                    # high V_vir and high z.
+                    eps_max=MAX_SN_ENERGY_COUPLING,
+                    sn_bound=1,
+                    reheat_bound=1)
 
+
+# Cap on the effective SN coupling, applied to both the ejection term and the
+# reheating mass loading. Matches MAX_SN_ENERGY_COUPLING in src/model_misc.h.
+MAX_SN_ENERGY_COUPLING = 2.0
 
 # FIRE (Muratov et al. 2015) critical circular velocity separating the two
 # power-law slopes of the wind loading factor. Matches FIRE_V_CRIT_KMS in
@@ -12928,8 +12932,7 @@ def plot_99_referee_diagnostics():
         with _h5.File(find_model_files(PRIMARY_DIR)[0], 'r') as _f:
             _rt = dict(_f['Header/Runtime'].attrs)
         _keys = ('FIREmodeOn', 'SFprescription', 'CGMrecipeOn', 'EnhancedStarFormationOn',
-                 'CGMDensityProfile', 'PrecipCriterionOn', 'RegimeRandomMode',
-                 'FFBRandomMode', 'SNEnergyConservationOn', 'MaxSNEnergyCoupling',
+                 'CGMDensityProfile', 'PrecipCriterionOn',
                  'FeedbackReheatingEpsilon', 'FeedbackEjectionEfficiency',
                  'EtaSN', 'EnergySN', 'RamPressureStrippingOn')
         print('#   runtime  ' + ', '.join(f'{k}={_rt[k]}' for k in _keys if k in _rt))
@@ -13089,7 +13092,7 @@ def plot_99_referee_diagnostics():
     head('4. Mass loading and the energy bound',
          'Major 2(c),(g) and sub-point B1 -- the p17 rewrite')
     esn = 5.0e-3 * 1.0e51                # eta_SN * E_SN, erg per Msun
-    cap = 2.0                            # MaxSNEnergyCoupling
+    cap = MAX_SN_ENERGY_COUPLING
     msun_g = 1.989e33
     for s in snaps:
         g = data.get(s)

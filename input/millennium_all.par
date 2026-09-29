@@ -52,14 +52,10 @@ ReionizationOn              1   %0: switch off
 DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
 
 CGMrecipeOn                 1   %0: switch off
-RegimeRandomMode            0   %0: fresh random draw each snapshot (original; borderline-mass galaxies thrash between regimes); 1: use persistent RegimeRandom assigned at galaxy creation (regime evolves smoothly with Mvir)
 FIREmodeOn                  1   %0: switch off
-SNEnergyConservationOn      1   %1: bound BOTH the reheating and ejection terms by the SN energy available (default; FIREmodeOn=1 only); 0: off, unbounded
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
 EnhancedStarFormationOn          1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: BK25 acceleration threshold w. log-normal c scatter
-FFBIgnoreRegime             1   %0: restrict FFB to CGM-regime (Regime=0) halos; 1: apply Li+24/BK25 criteria regardless of halo regime
-FFBRandomMode               0   %0: fresh random draw each snapshot; 1: persistent FFBRandom assigned at galaxy creation
 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 SaveFullSFH                 0   %0: switch off
@@ -82,7 +78,6 @@ RedshiftPowerLawExponent    1.25    %alpha for (1+z)^alpha in mass loading calcu
 
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)
 FeedbackEjectionEfficiency  0.3     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
-MaxSNEnergyCoupling         2.0     %cap on the effective coupling eps_eff = FeedbackEjectionEfficiency * f_FIRE when SNEnergyConservationOn=1; 2.0 = E_FB <= all the SN energy, 1.0 = <= half
 
 ReIncorporationFactor       0.19    %fraction of ejected mass reincorporated per dynamical time to hot
 

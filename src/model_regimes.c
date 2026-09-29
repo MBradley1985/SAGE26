@@ -75,14 +75,10 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
             // Smoothly varies from 0 (well below Mshock) to 1 (well above Mshock)
             const double hot_fraction = 1.0 / (1.0 + exp(-x));
 
-            // RegimeRandomMode=1: reuse the persistent RegimeRandom draw from
-            // galaxy creation, so the regime evolves deterministically with
-            // Mvir relative to a fixed per-galaxy quantile and never thrashes
-            // for borderline-mass centrals.
-            // RegimeRandomMode=0: fresh draw each snapshot (original behaviour).
-            const double random_uniform = (run_params->RegimeRandomMode == 1)
-                ? (double)galaxies[p].RegimeRandom
-                : (double)rand() / (double)RAND_MAX;
+            // A fresh draw each snapshot: a borderline-mass central is
+            // re-tested against the sigmoid every timestep rather than being
+            // held to one quantile fixed at creation.
+            const double random_uniform = (double)rand() / (double)RAND_MAX;
             new_regime = (random_uniform < hot_fraction) ? 1 : 0;
         }
 
@@ -145,7 +141,6 @@ static double inverse_normal_cdf(double p)
  *        drawn from the halo's own persistent quantile, so the threshold is
  *        sharp per halo but smooth across the population.
  *
- * Only centrals in the eligible regime are considered (see FFBIgnoreRegime).
  * All galaxies are marked non-FFB when EnhancedStarFormationOn == 0.
  */
 void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
@@ -174,19 +169,14 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
     for(int p = 0; p < ngal; p++) {
         if(galaxies[p].mergeType > 0) continue;
 
-        // By default, only CGM-regime halos are eligible for FFB.
-        // FFBIgnoreRegime=1 removes this restriction, letting the Li+24/BK25
-        // criteria apply regardless of halo regime.
-        if(galaxies[p].Regime == 1 && !run_params->FFBIgnoreRegime) {
-            galaxies[p].FFBRegime = 0;
-            continue;
-        }
+        // The Li+24 / BK25 criteria apply regardless of the halo's CGM/hot
+        // regime: FFB is set by the burst's own density and feedback timescale,
+        // not by whether the halo carries a virial shock.
 
-        // FFBRandomMode=1: reuse the persistent draw assigned at galaxy creation.
-        // FFBRandomMode=0: fresh draw each snapshot (no memory across timesteps).
-        const double draw = (run_params->FFBRandomMode == 1)
-            ? (double)galaxies[p].FFBRandom
-            : (double)rand() / (double)RAND_MAX;
+        // A fresh draw each snapshot, with no memory across timesteps, so a
+        // halo sitting near the threshold moves in and out of FFB rather than
+        // being locked to one quantile fixed at creation.
+        const double draw = (double)rand() / (double)RAND_MAX;
 
         if(run_params->EnhancedStarFormationOn == 1) {
             // Li et al. 2024 mass-based method (original)
@@ -207,9 +197,9 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
             // The Ishiyama+21 table gives the mean concentration; individual halos
             // scatter around it following p(c)dc ~ exp(-(ln c - ln c0)^2 / 2sigma_c^2) d(ln c)
             // with sigma_c ~ 0.2 (Jing 2000; Bullock+01; Dolag+04).
-            // The persistent FFBRandom draws a fixed quantile for each halo,
-            // giving a deterministic scattered concentration and thus a smooth
-            // FFb transition across the halo population.
+            // Each halo draws its own concentration quantile, giving a smooth
+            // FFB transition across the halo population rather than a single
+            // sharp mass threshold.
             const double Mvir = galaxies[p].Mvir;
             const double Rvir = galaxies[p].Rvir;
 

@@ -428,70 +428,120 @@ void test_ffb_mode0_all_normal()
     ASSERT_EQUAL_INT(0, gals[2].FFBRegime, "Galaxy 2: FFBRegime=0 when mode off");
 }
 
-void test_ffb_mode1_respects_persistent_random()
+void test_ffb_mode1_sigmoid_limits()
 {
-    BEGIN_TEST("EnhancedStarFormationOn=1 uses FFBRandom (persistent)");
+    BEGIN_TEST("EnhancedStarFormationOn=1 follows the Li+24 sigmoid");
 
     struct params rp;
     init_millennium_params(&rp);
-    rp.EnhancedStarFormationOn  = 1;
+    rp.EnhancedStarFormationOn = 1;
     rp.FFBConcSigma        = 0.0;
-    rp.FFBRandomMode       = 1;  /* use persistent FFBRandom, not rand() */
 
-    double z = 10.0;
-    double M_thresh = calculate_ffb_threshold_mass(z, &rp);
+    const double z = 10.0;
+    const double M_thresh = calculate_ffb_threshold_mass(z, &rp);
 
-    /* Galaxy exactly at threshold: f_ffb = 0.5 */
+    /* The draw is now always fresh from rand(), so a single galaxy's outcome
+     * at the threshold is not predictable.  The limits are: far above the
+     * threshold f_ffb -> 1 and every draw succeeds; far below it f_ffb -> 0
+     * and none do.  Both hold for any draw, so they are testable directly. */
+    srand(12345);
+
     struct GALAXY gal;
-    memset(&gal, 0, sizeof(struct GALAXY));
-    gal.Mvir = M_thresh;
-    gal.Rvir = 0.1;
-    gal.Regime = 0;  /* not in hot regime, eligible for FFB */
+    for(int i = 0; i < 50; i++) {
+        memset(&gal, 0, sizeof(struct GALAXY));
+        gal.Mvir = M_thresh * 100.0;   /* f_ffb indistinguishable from 1 */
+        gal.Rvir = 0.1;
+        determine_and_store_ffb_regime(1, z, &gal, &rp);
+        if(gal.FFBRegime != 1) {
+            ASSERT_EQUAL_INT(1, gal.FFBRegime, "Halo far above threshold is always FFB");
+            break;
+        }
+    }
+    ASSERT_EQUAL_INT(1, gal.FFBRegime, "Halo far above threshold is always FFB");
 
-    /* Low random → should be FFB (random < 0.5) */
-    gal.FFBRandom = 0.1f;
-    determine_and_store_ffb_regime(1, z, &gal, &rp);
-    ASSERT_EQUAL_INT(1, gal.FFBRegime, "FFBRandom=0.1 < f_ffb=0.5 → FFB");
-
-    /* High random → should NOT be FFB (random > 0.5) */
-    gal.FFBRandom = 0.9f;
-    determine_and_store_ffb_regime(1, z, &gal, &rp);
-    ASSERT_EQUAL_INT(0, gal.FFBRegime, "FFBRandom=0.9 > f_ffb=0.5 → normal");
-
-    /* Deterministic: same random gives same result */
-    gal.FFBRandom = 0.1f;
-    determine_and_store_ffb_regime(1, z, &gal, &rp);
-    int first = gal.FFBRegime;
-    determine_and_store_ffb_regime(1, z, &gal, &rp);
-    int second = gal.FFBRegime;
-    ASSERT_EQUAL_INT(first, second,
-                     "Same FFBRandom gives same result (deterministic)");
+    for(int i = 0; i < 50; i++) {
+        memset(&gal, 0, sizeof(struct GALAXY));
+        gal.Mvir = M_thresh * 0.01;    /* f_ffb indistinguishable from 0 */
+        gal.Rvir = 0.1;
+        determine_and_store_ffb_regime(1, z, &gal, &rp);
+        if(gal.FFBRegime != 0) {
+            ASSERT_EQUAL_INT(0, gal.FFBRegime, "Halo far below threshold is never FFB");
+            break;
+        }
+    }
+    ASSERT_EQUAL_INT(0, gal.FFBRegime, "Halo far below threshold is never FFB");
 }
 
-void test_ffb_hot_regime_excluded()
+void test_ffb_same_seed_reproduces()
 {
-    BEGIN_TEST("Hot-regime galaxies excluded from FFB");
+    BEGIN_TEST("FFB classification reproduces under the same rand() seed");
+
+    struct params rp;
+    init_millennium_params(&rp);
+    rp.EnhancedStarFormationOn = 1;
+    rp.FFBConcSigma        = 0.0;
+
+    const double z = 10.0;
+    const double M_thresh = calculate_ffb_threshold_mass(z, &rp);
+
+    /* Draws come from the global rand() stream, so reproducibility is a
+     * property of the seed rather than of any per-galaxy stored quantile. */
+    const int N = 64;
+    struct GALAXY gals[64];
+    int first[64];
+
+    for(int pass = 0; pass < 2; pass++) {
+        srand(99);
+        memset(gals, 0, sizeof(gals));
+        for(int i = 0; i < N; i++) {
+            gals[i].Mvir = M_thresh;   /* right at f_ffb = 0.5 */
+            gals[i].Rvir = 0.1;
+        }
+        determine_and_store_ffb_regime(N, z, gals, &rp);
+        if(pass == 0) {
+            for(int i = 0; i < N; i++) first[i] = gals[i].FFBRegime;
+        } else {
+            int mismatches = 0;
+            for(int i = 0; i < N; i++) {
+                if(first[i] != gals[i].FFBRegime) mismatches++;
+            }
+            ASSERT_EQUAL_INT(0, mismatches, "Same seed gives the same classification");
+        }
+    }
+
+    /* At the threshold the sigmoid is 0.5, so both outcomes must appear. */
+    int n_ffb = 0;
+    for(int i = 0; i < N; i++) n_ffb += gals[i].FFBRegime;
+    ASSERT_GREATER_THAN((double)n_ffb, 0.0, "Some threshold halos are FFB");
+    ASSERT_LESS_THAN((double)n_ffb, (double)N, "Not all threshold halos are FFB");
+}
+
+void test_ffb_regime_does_not_gate()
+{
+    BEGIN_TEST("FFB applies regardless of the halo's CGM/hot regime");
 
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn = 1;
     rp.FFBConcSigma       = 0.0;
 
-    double z = 10.0;
-    double M_thresh = calculate_ffb_threshold_mass(z, &rp);
+    const double z = 10.0;
+    const double M_thresh = calculate_ffb_threshold_mass(z, &rp);
+
+    /* The old FFBIgnoreRegime=0 behaviour excluded hot-regime haloes; the
+     * published setting was 1 and is now the only behaviour, so a hot-regime
+     * halo well above the threshold must still be classified FFB. */
+    srand(2024);
 
     struct GALAXY gal;
     memset(&gal, 0, sizeof(struct GALAXY));
-    gal.Mvir = M_thresh * 10.0;  /* well above threshold */
+    gal.Mvir = M_thresh * 100.0;
     gal.Rvir = 0.5;
-    gal.FFBRandom = 0.01f;       /* very low random → would be FFB */
-    gal.Regime = 1;              /* but in hot CGM regime */
+    gal.Regime = 1;              /* hot regime */
 
     determine_and_store_ffb_regime(1, z, &gal, &rp);
-    ASSERT_EQUAL_INT(0, gal.FFBRegime, "Hot-regime galaxy is not FFB");
+    ASSERT_EQUAL_INT(1, gal.FFBRegime, "Hot-regime halo above threshold is FFB");
 }
-
-
 
 void test_ffb_merged_galaxies_skipped()
 {
@@ -561,46 +611,43 @@ void test_ffb_mode2_basic_threshold()
 
 void test_ffb_mode2_scatter_splits_identical_halos()
 {
-    BEGIN_TEST("EnhancedStarFormationOn=2 scatter causes different FFBRegime for identical halos");
+    BEGIN_TEST("EnhancedStarFormationOn=2 scatter spreads g_max across identical halos");
 
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn = 2;
     rp.FFBConcSigma       = 0.2;  /* sigma_c = 0.2 in ln(c) */
-    rp.FFBRandomMode      = 1;    /* use the persistent FFBRandom, not rand() */
 
-    /* Two identical halos near the BK25 threshold with different FFBRandom.
-       With scatter, FFBRandom maps to different concentration quantiles,
-       so one may end up above g_crit and the other below.
-       Use a halo mass near the threshold at z=10 (logM ~ 11). */
-    struct GALAXY gals[2];
+    /* Every halo here is identical, so without scatter they would all share
+     * one g_max and one FFBRegime.  Each now draws its own concentration
+     * quantile from rand(), which is exactly what turns the sharp BK25
+     * threshold into a smooth transition across the population. */
+    srand(7);
+
+    const int N = 64;
+    struct GALAXY gals[64];
     memset(gals, 0, sizeof(gals));
-
-    for(int i = 0; i < 2; i++) {
-        gals[i].Mvir = 10.0;    /* 10^11 Msun/h */
+    for(int i = 0; i < N; i++) {
+        gals[i].Mvir = 10.0;    /* 10^11 Msun/h, near the threshold at z=10 */
         gals[i].Rvir = 0.015;   /* ~15 kpc/h */
-        gals[i].Regime = 0;
     }
-    /* FFBRandom=0.01 → ~2.3σ below mean → lower c → lower g_max
-       FFBRandom=0.99 → ~2.3σ above mean → higher c → higher g_max */
-    gals[0].FFBRandom = 0.01f;
-    gals[1].FFBRandom = 0.99f;
 
-    determine_and_store_ffb_regime(1, 10.0, &gals[0], &rp);
-    determine_and_store_ffb_regime(1, 10.0, &gals[1], &rp);
+    determine_and_store_ffb_regime(N, 10.0, gals, &rp);
 
-    /* Both should have valid g_max */
-    ASSERT_GREATER_THAN(gals[0].g_max, 0.0, "g_max stored for low-scatter galaxy");
-    ASSERT_GREATER_THAN(gals[1].g_max, 0.0, "g_max stored for high-scatter galaxy");
+    double gmin = gals[0].g_max, gmax = gals[0].g_max;
+    int n_ffb = 0;
+    for(int i = 0; i < N; i++) {
+        if(gals[i].g_max < gmin) gmin = gals[i].g_max;
+        if(gals[i].g_max > gmax) gmax = gals[i].g_max;
+        n_ffb += gals[i].FFBRegime;
+    }
 
-    /* High-scatter galaxy should have higher g_max (higher c → higher g_max) */
-    ASSERT_GREATER_THAN(gals[1].g_max, gals[0].g_max,
-                        "Higher FFBRandom (higher c quantile) gives higher g_max");
+    ASSERT_GREATER_THAN(gmin, 0.0, "Every halo gets a positive g_max");
+    ASSERT_GREATER_THAN(gmax, gmin, "Scatter spreads g_max across identical halos");
 
-    printf("  g_max[u=0.01] = %.4e (regime=%d), g_max[u=0.99] = %.4e (regime=%d)\n",
-           gals[0].g_max, gals[0].FFBRegime, gals[1].g_max, gals[1].FFBRegime);
+    printf("  g_max range [%.4e, %.4e] over %d identical halos, %d FFB\n",
+           gmin, gmax, N, n_ffb);
 }
-
 
 void test_ffb_mode2_zero_sigma_matches_table_concentration()
 {
@@ -640,35 +687,33 @@ void test_ffb_mode2_zero_sigma_matches_table_concentration()
 
 void test_ffb_mode2_deterministic()
 {
-    BEGIN_TEST("EnhancedStarFormationOn=2 is deterministic (same FFBRandom → same result)");
+    BEGIN_TEST("EnhancedStarFormationOn=2 reproduces under the same rand() seed");
 
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn = 2;
     rp.FFBConcSigma       = 0.2;
-    rp.FFBRandomMode      = 1;  /* use persistent FFBRandom, not rand() */
 
     /* Use a moderately sized halo so g_max stays within float range */
-    struct GALAXY gal;
-    memset(&gal, 0, sizeof(struct GALAXY));
-    gal.Mvir = 1.0;     /* 10^10 Msun/h */
-    gal.Rvir = 0.05;    /* 50 kpc/h */
-    gal.Regime = 0;
-    gal.FFBRandom = 0.42f;
+    struct GALAXY gal1, gal2;
 
-    determine_and_store_ffb_regime(1, 5.0, &gal, &rp);
-    int regime1 = gal.FFBRegime;
-    double gmax1 = gal.g_max;
+    srand(31337);
+    memset(&gal1, 0, sizeof(struct GALAXY));
+    gal1.Mvir = 1.0;     /* 10^10 Msun/h */
+    gal1.Rvir = 0.05;    /* 50 kpc/h */
+    determine_and_store_ffb_regime(1, 5.0, &gal1, &rp);
 
-    /* Call again — same FFBRandom should give identical result */
-    determine_and_store_ffb_regime(1, 5.0, &gal, &rp);
-    int regime2 = gal.FFBRegime;
-    double gmax2 = gal.g_max;
+    /* Re-seeding replays the same draw, so the result must be identical. */
+    srand(31337);
+    memset(&gal2, 0, sizeof(struct GALAXY));
+    gal2.Mvir = 1.0;
+    gal2.Rvir = 0.05;
+    determine_and_store_ffb_regime(1, 5.0, &gal2, &rp);
 
-    ASSERT_EQUAL_INT(regime1, regime2,
-                     "Same FFBRandom gives same FFBRegime");
-    ASSERT_EQUAL_DOUBLE((double)gmax1, (double)gmax2,
-                        "Same FFBRandom gives same g_max");
+    ASSERT_EQUAL_INT(gal1.FFBRegime, gal2.FFBRegime,
+                     "Same seed gives same FFBRegime");
+    ASSERT_EQUAL_DOUBLE((double)gal1.g_max, (double)gal2.g_max,
+                        "Same seed gives same g_max");
 }
 
 
@@ -708,8 +753,9 @@ int main()
 
     /* FFB regime determination */
     test_ffb_mode0_all_normal();
-    test_ffb_mode1_respects_persistent_random();
-    test_ffb_hot_regime_excluded();
+    test_ffb_mode1_sigmoid_limits();
+    test_ffb_same_seed_reproduces();
+    test_ffb_regime_does_not_gate();
     test_ffb_merged_galaxies_skipped();
     test_ffb_mode2_basic_threshold();
     test_ffb_mode2_scatter_splits_identical_halos();

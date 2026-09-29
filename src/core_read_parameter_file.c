@@ -100,18 +100,13 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->H2RadialNBins              = 25;
     run_params->H2RadialRMaxFactor         = 5.0;
     run_params->CGMrecipeOn                = 1;
-    run_params->RegimeRandomMode           = 0;   /* default: fresh draw each snapshot (published behaviour); 1 makes the regime persistent per galaxy */ /* (hard-code once published)*/
     run_params->FIREmodeOn                 = 1;
     run_params->RedshiftPowerLawExponent   = 1.25;
-    run_params->SNEnergyConservationOn     = 1;   /* default: on -- neither the reheating nor the ejection term may spend more than the SN energy available */ /* (hard-code once published)*/
-    run_params->MaxSNEnergyCoupling        = 2.0; /* cap on eps_halo * f_FIRE: E_FB <= m_* eta_SN E_SN (the whole SN budget) */ /* (hard-code once published)*/
     run_params->FFBMaxEfficiency           = 0.2;
     run_params->FFBConcSigma               = 0.2;
     run_params->FFBThresholdSlope          = -6.2;
     run_params->ConcentrationOn            = 3;
     run_params->EnhancedStarFormationOn    = 1;
-    run_params->FFBIgnoreRegime            = 1;  /* (hard-code once published)*/
-    run_params->FFBRandomMode              = 0;   /* default: fresh draw each snapshot (published behaviour) -- galaxies move in and out of FFB, sustaining a transient low-z FFB population. 1 fixes each galaxy's quantile at creation, which removes both. */ /* (hard-code once published)*/
     run_params->BulgeSizeOn                = 3;
     run_params->SaveFullSFH                = 0;
     run_params->StarburstColdGasOn         = 1;
@@ -135,7 +130,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->ThresholdSatDisruption     = 1.0;
     run_params->MergerTimeFactor           = 2.0;   /* published value; hardcoded until now */
     run_params->Exponent_Forest_Dist_Scheme = 0.7;
-    run_params->KarpovModeOn              = 0; /* 0: full Karpov+2023 recipe, 1: low-metallicity floor (Z/Z_sun = 0.01) for reheated and ejected gas */
+    run_params->KarpovModeOn               = 0; /* 0: full Karpov+2023 recipe, 1: low-metallicity floor (Z/Z_sun = 0.01) for reheated and ejected gas */
 
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
 #define REG(tag, addr, type, req) do {         \
@@ -182,12 +177,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("SFprescription",        &(run_params->SFprescription),       INT, 0);
     REG("AGNrecipeOn",           &(run_params->AGNrecipeOn),          INT, 0);
     REG("CGMrecipeOn",           &(run_params->CGMrecipeOn),          INT, 0);
-    REG("RegimeRandomMode",      &(run_params->RegimeRandomMode),     INT, 0);
     REG("FIREmodeOn",            &(run_params->FIREmodeOn),           INT, 0);
     REG("ConcentrationOn",       &(run_params->ConcentrationOn),      INT, 0);
     REG("EnhancedStarFormationOn", &(run_params->EnhancedStarFormationOn), INT, 0);
-    REG("FFBIgnoreRegime",       &(run_params->FFBIgnoreRegime),      INT, 0);
-    REG("FFBRandomMode",         &(run_params->FFBRandomMode),        INT, 0);
     REG("BulgeSizeOn",           &(run_params->BulgeSizeOn),          INT, 0);
     REG("SaveFullSFH",           &(run_params->SaveFullSFH),          INT, 0);
     REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
@@ -220,8 +212,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("FFBConcSigma",               &(run_params->FFBConcSigma),               DOUBLE, 0);
     REG("FFBThresholdSlope",          &(run_params->FFBThresholdSlope),          DOUBLE, 0);
     REG("RedshiftPowerLawExponent",   &(run_params->RedshiftPowerLawExponent),   DOUBLE, 0);
-    REG("SNEnergyConservationOn",     &(run_params->SNEnergyConservationOn),     INT, 0);
-    REG("MaxSNEnergyCoupling",        &(run_params->MaxSNEnergyCoupling),        DOUBLE, 0);
     REG("KarpovModeOn",               &(run_params->KarpovModeOn),               INT, 0);
 
 #undef REG
@@ -541,17 +531,13 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"DiskInstabilityOn",      run_params->DiskInstabilityOn,      0, 1},
             {"CGMrecipeOn",            run_params->CGMrecipeOn,            0, 1},
             {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
-            {"RegimeRandomMode",       run_params->RegimeRandomMode,       0, 1},
             {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
             {"EnhancedStarFormationOn", run_params->EnhancedStarFormationOn, 0, 2},
-            {"FFBIgnoreRegime",        run_params->FFBIgnoreRegime,        0, 1},
-            {"FFBRandomMode",          run_params->FFBRandomMode,          0, 1},
             {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 3},
             {"H2DiskAreaOption",       run_params->H2DiskAreaOption,       0, 2},
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
-            {"SNEnergyConservationOn", run_params->SNEnergyConservationOn, 0, 1},
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {
@@ -577,11 +563,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
         ABORT(EXIT_FAILURE);
     }
     
-    if(run_params->SNEnergyConservationOn && run_params->MaxSNEnergyCoupling <= 0.0) {
-        fprintf(stderr, "Error: MaxSNEnergyCoupling = %g is not valid; it must be > 0 when SNEnergyConservationOn = 1.\n",
-                run_params->MaxSNEnergyCoupling);
-        ABORT(EXIT_FAILURE);
-    }
     if(run_params->SubstepResolution <= 0.0) {
         fprintf(stderr, "Error: SubstepResolution = %g is not valid; it must be > 0.\n",
                 run_params->SubstepResolution);
