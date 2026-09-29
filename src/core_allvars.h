@@ -487,10 +487,6 @@ struct params
     int32_t    CGMrecipeOn;
     int32_t    FIREmodeOn;
     int32_t    RegimeRandomMode;     // 0: fresh random draw each snapshot (default, original behaviour); 1: use the persistent RegimeRandom assigned at galaxy creation (deterministic regime evolution driven by mass)
-    double     GasDiskRadiusFactor; // chi: ratio of the atomic-gas scale length to the stellar/H2
-                                  // scale length, applied in the HI ionisation truncation only.
-                                  // 1.0 = cospatial (default, published behaviour); observed disks
-                                  // have chi ~ 1.5-2.
     double     MShockMsun;   // Dekel & Birnboim (2006) virial-shock stability mass [Msun].
                              // Sets which of two baryon cycles a halo follows, so it is a
                              // physics parameter rather than a constant; exposed for the
@@ -508,7 +504,6 @@ struct params
                                           // 1 = additionally save the per-snapshot SFHMassDisk/SFHMassBulge
                                           // histories. Those accumulate stellar mass, not rate, so they are
                                           // correct at any substep count (unlike the Sfr* rate bins).
-    int32_t    TrackICSAssembly;          // 0 = off, 1 = track in-situ/ex-situ ICS (ICS_disrupt, ICS_accrete, ICS_sum_mt)
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 
     /* baryonic physics calibration parameters */

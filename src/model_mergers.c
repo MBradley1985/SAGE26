@@ -472,7 +472,7 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     // of every snapshot, so galaxies[p].ICS is almost always 0 here -- but it is
     // not guaranteed to be, since a satellite can acquire ICS mid-snapshot by
     // hosting a disruption of its own before merging.
-    if(run_params->TrackICSAssembly && galaxies[p].ICS > 0.0) {
+    if(galaxies[p].ICS > 0.0) {
         galaxies[t].ICS_accrete += galaxies[p].ICS;
         // Inherit the mass-weighted deposit-time accumulator so the mean assembly
         // time reflects when these stars were originally stripped, not when the
@@ -835,8 +835,8 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
  * (intra-cluster stars) reservoir.
  *
  * Transfers all stellar mass, metals, and gas from the satellite to the
- * central's ICS and hot/CGM reservoirs.  Optionally tracks disruption time
- * and mass if TrackICSAssembly is set.
+ * central's ICS and hot/CGM reservoirs, and records the disruption time and
+ * mass into the ICS assembly accumulators.
  */
 void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double time, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -862,7 +862,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     // These stars become unbound here and now, so `time` (the lookback time of
     // this event) is the correct deposit time for the m*t accumulator -- unlike
     // the accreted channel above, which inherits the satellite's own history.
-    if(run_params->TrackICSAssembly && galaxies[gal].StellarMass > 0.0) {
+    if(galaxies[gal].StellarMass > 0.0) {
         galaxies[centralgal].ICS_disrupt += galaxies[gal].StellarMass;
         galaxies[centralgal].ICS_sum_mt += galaxies[gal].StellarMass * time;
     }
@@ -874,7 +874,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     // This ICS was formed elsewhere (by disruption in the satellite's own halo) and
     // is only being carried in here -- so ICS_accrete records where a packet came
     // from, not how it was made.
-    if(run_params->TrackICSAssembly && galaxies[gal].ICS > 0.0) {
+    if(galaxies[gal].ICS > 0.0) {
         galaxies[centralgal].ICS_accrete += galaxies[gal].ICS;
         // Inherit satellite's mass-weighted deposit-time accumulator so the
         // mean ICS-assembly time reflects when the stars were *originally* stripped,

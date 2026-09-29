@@ -43,7 +43,6 @@ FIREmodeOn                  1
 ConcentrationOn             3
 FeedbackFreeModeOn          1
 SaveFullSFH                 1
-TrackICSAssembly            1
 
 SfrEfficiency               0.05
 FFBMaxEfficiency            0.2

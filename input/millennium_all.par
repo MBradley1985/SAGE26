@@ -63,7 +63,6 @@ FFBRandomMode               0   %0: fresh random draw each snapshot; 1: persiste
 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 SaveFullSFH                 0   %0: switch off
-TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
 StarburstColdGasOn          1   %0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 
 SubstepResolution           1.0   %multiplier on the adaptive substep count (scales the STEPS floor and MAX_STEPS cap); 1.0 = unscaled

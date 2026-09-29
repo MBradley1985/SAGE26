@@ -121,13 +121,11 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->FFBRandomMode              = 0;   /* default: fresh draw each snapshot (published behaviour) -- galaxies move in and out of FFB, sustaining a transient low-z FFB population. 1 fixes each galaxy's quantile at creation, which removes both. */ /* (hard-code once published)*/
     run_params->BulgeSizeOn                = 3;
     run_params->SaveFullSFH                = 0;
-    run_params->TrackICSAssembly           = 1;
     run_params->StarburstColdGasOn         = 1;
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
     run_params->ReIncorporationFactor      = 0.19;
-    run_params->GasDiskRadiusFactor        = 1.0;   /* chi = 1.0: atomic disk cospatial with the stellar disk (published behaviour) */
     run_params->MShockMsun                 = 6.0e11;
     run_params->EnergySN                   = 1.0e51;
     run_params->EtaSN                      = 5.0e-3;
@@ -199,7 +197,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("FFBRandomMode",         &(run_params->FFBRandomMode),        INT, 0);
     REG("BulgeSizeOn",           &(run_params->BulgeSizeOn),          INT, 0);
     REG("SaveFullSFH",           &(run_params->SaveFullSFH),          INT, 0);
-    REG("TrackICSAssembly",      &(run_params->TrackICSAssembly),     INT, 0);
     REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
     REG("SubstepResolution",     &(run_params->SubstepResolution),     DOUBLE, 0);
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
@@ -210,7 +207,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("ThreshMajorMerger",          &(run_params->ThreshMajorMerger),          DOUBLE, 0);
     REG("RecycleFraction",            &(run_params->RecycleFraction),            DOUBLE, 0);
     REG("ReIncorporationFactor",      &(run_params->ReIncorporationFactor),      DOUBLE, 0);
-    REG("GasDiskRadiusFactor",        &(run_params->GasDiskRadiusFactor),        DOUBLE, 0);
     REG("MShockMsun",                 &(run_params->MShockMsun),                 DOUBLE, 0);
     REG("EnergySN",                   &(run_params->EnergySN),                   DOUBLE, 0);
     REG("EtaSN",                      &(run_params->EtaSN),                      DOUBLE, 0);
@@ -568,7 +564,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"H2DiskAreaOption",       run_params->H2DiskAreaOption,       0, 2},
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
-            {"TrackICSAssembly",       run_params->TrackICSAssembly,       0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"SNEnergyConservationOn", run_params->SNEnergyConservationOn, 0, 1},
         };
@@ -596,12 +591,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
         ABORT(EXIT_FAILURE);
     }
     
-    if(run_params->GasDiskRadiusFactor <= 0.0) {
-        fprintf(stderr, "Error: GasDiskRadiusFactor = %g is not valid; it must be > 0.\n",
-                run_params->GasDiskRadiusFactor);
-        ABORT(EXIT_FAILURE);
-    }
-
     if(run_params->SNEnergyConservationOn && run_params->MaxSNEnergyCoupling <= 0.0) {
         fprintf(stderr, "Error: MaxSNEnergyCoupling = %g is not valid; it must be > 0 when SNEnergyConservationOn = 1.\n",
                 run_params->MaxSNEnergyCoupling);
