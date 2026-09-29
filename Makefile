@@ -206,12 +206,19 @@ ifeq ($(DO_CHECKS), 1)
     CCFLAGS += $(HDF5_INCL)
   endif
 
-  GIT_FOUND := $(shell git --version 2>/dev/null)
-  ifdef GIT_FOUND
-    OPTS += -DGITREF_STR='"$(shell git show-ref --head | head -n 1 | cut -d " " -f 1)"'
-  else
-    OPTS += -DGITREF_STR='""'
+  # Resolve git explicitly: the first `git` on PATH under make's shell may be a
+  # broken/wrong-architecture binary (e.g. an Intel Homebrew git on Apple Silicon),
+  # in which case `git --version` silently fails and the SHA comes back empty.
+  GIT_EXE := $(shell for g in git /opt/homebrew/bin/git /usr/bin/git; do \
+                       if $$g --version >/dev/null 2>&1; then echo $$g; break; fi; \
+                     done)
+  ifneq ($(GIT_EXE),)
+    GITREF := $(shell $(GIT_EXE) show-ref --head 2>/dev/null | head -n 1 | cut -d " " -f 1)
   endif
+  ifeq ($(strip $(GITREF)),)
+    GITREF := unknown
+  endif
+  OPTS += -DGITREF_STR='"$(GITREF)"'
 
   ifdef USE-MPI
     MPI_LINK_FLAGS:=$(firstword $(shell $(CC) --showme:link 2>/dev/null))
@@ -308,6 +315,11 @@ else
 endif
 
 # Byte-for-byte output regression against the committed baseline manifests.
-# Requires a serial (non-MPI) build: make clean && make USE-MPI=
-regression: $(EXEC)
+# The harness refuses an MPI-linked binary, and object files do not record which
+# configuration produced them, so this rebuilds serially from scratch instead of
+# depending on $(EXEC) and inheriting whatever happens to be current. Note that
+# it leaves a serial build behind: run plain `make` afterwards to get MPI back.
+regression:
+	$(MAKE) clean
+	$(MAKE) USE-MPI= $(EXEC)
 	./tests/regression_baseline.sh

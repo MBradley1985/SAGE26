@@ -128,12 +128,9 @@ flag is only acted on when `CGMrecipeOn = 1`.
 The assignment is **stochastic**: a sigmoid in `log10(Mvir / M_shock)` of
 width 0.1 dex gives the probability of the hot regime, and a uniform draw
 decides. So `Regime` is not a deterministic function of mass, and haloes
-near `M_shock` can be either. With `RegimeRandomMode = 0` the draw is
-repeated every snapshot, so a borderline halo may flip between snapshots;
-with `RegimeRandomMode = 1` it reuses the galaxy's persistent `RegimeRandom`
-quantile, so the regime changes only as `Mvir` does. Bear this in mind when
-splitting a population on `Regime` -- it is a probabilistic label, not a mass
-cut.
+near `M_shock` can be either. The draw is repeated every snapshot, so a
+borderline halo may flip between snapshots. Bear this in mind when splitting
+a population on `Regime` -- it is a probabilistic label, not a mass cut.
 
 ### `FFBRegime` -- feedback-free burst classification
 
@@ -142,7 +139,7 @@ cut.
 | 0 | Normal halo (standard star formation + SN feedback). |
 | 1 | FFB halo (Li+2024 / Boylan-Kolchin+2025 starburst path; disk-instability check skipped, SN feedback still applied). |
 
-Only set when `FeedbackFreeModeOn = 1`.
+Only set when `EnhancedStarFormationOn > 0`.
 
 ## Galaxy property reference
 
@@ -183,7 +180,7 @@ section below) and the unit actually written.
 | `Vmax` | km / s | Maximum circular velocity of this galaxy's halo. |
 | `VelDisp` | km / s | Velocity dispersion of this galaxy's halo. |
 | `Concentration` | -- | NFW halo concentration from the Ishiyama+21 c-M relation (set when `ConcentrationOn = 1`). |
-| `g_max` | code units (UnitLength / UnitTime^2) | Peak NFW gravitational acceleration used for the Boylan-Kolchin (2025) feedback-free-burst threshold (HDF5 dtype: float64). Set per snapshot by the BK25 `FeedbackFreeModeOn` methods and reset to 0 for non-FFB haloes; not a running maximum across snapshots, and unrelated to CGM cooling. |
+| `g_max` | code units (UnitLength / UnitTime^2) | Peak NFW gravitational acceleration used for the Boylan-Kolchin (2025) feedback-free-burst threshold (HDF5 dtype: float64). Set per snapshot by `EnhancedStarFormationOn = 2` (the BK25 method) and reset to 0 for non-FFB haloes; not a running maximum across snapshots, and unrelated to CGM cooling. |
 
 ### Baryonic reservoirs
 
@@ -282,7 +279,7 @@ just before infall:
 |-------|-------|-------------|
 | `FFBRegime` | -- | FFB classification flag (see flag table above). |
 
-### ICS assembly tracking (`TrackICSAssembly = 1`)
+### ICS assembly tracking
 
 These three fields accumulate per-channel deposits into the ICS so
 that the mean assembly time can be reconstructed downstream:
@@ -302,9 +299,7 @@ Mean ICS assembly lookback for a given galaxy:
 The result is in code-time units; multiply by
 `UnitTime_in_Megayears` (read from the HDF5 header) to convert to Myr.
 
-These fields are always present in both writers, but they only
-accumulate when `TrackICSAssembly = 1`. With the parameter off, they
-remain at zero.
+These fields are always present in both writers and always accumulate.
 
 ## Cumulative star formation history (`SaveFullSFH = 1`)
 
@@ -353,10 +348,9 @@ array-of-structs.
 | `FileNameGalaxies` | Filename stem; final names are `<stem>_<filenr>` (binary) or `<stem>_<filenr>.hdf5` (HDF5), plus `<stem>.hdf5` master. |
 | `NumOutputs` | Number of snapshots to write, followed by a `->` line listing them in the parameter file. `-1` writes every snapshot. Each selected snap becomes either its own binary file or a `Snap_<N>` HDF5 group. |
 | `SaveFullSFH` | Enables the cumulative `SFHMassDisk` / `SFHMassBulge` 2-D HDF5 datasets. |
-| `TrackICSAssembly` | Activates accumulation into `ICS_disrupt`, `ICS_accrete`, `ICS_sum_mt`. |
 | `ConcentrationOn` | Populates the `Concentration` field (otherwise 0). |
 | `CGMrecipeOn` | Populates `CGMgas`, `MetalsCGMgas`, `tcool`, `tff`, `RcoolToRvir`, `mdot_cool`, `mdot_stream`. With it off, these stay at their initialised values. `Regime` is written either way (the classifier always runs) but is only acted on when this is 1; `CoolingRate` is populated on both paths. |
-| `FeedbackFreeModeOn` | Populates `FFBRegime`. |
+| `EnhancedStarFormationOn` | Populates `FFBRegime`, and `g_max` in mode 2. |
 
 See [`parameters.md`](parameters.md) for full parameter descriptions
 and defaults.

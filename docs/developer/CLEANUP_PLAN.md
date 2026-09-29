@@ -41,7 +41,7 @@ See [REGRESSION_BASELINE.md](REGRESSION_BASELINE.md) for the full spec.
 
 ## Phase 1 — Rubric and style guidelines
 
-- [ ] Fill in [RUBRIC.md](RUBRIC.md) — define what we evaluate exemplar codebases against.
+- [ ] Fill in a rubric — define what we evaluate exemplar codebases against.
 - [ ] Score exemplars 1–5 per rubric line. Start with [shark](https://github.com/ICRAR/shark). Add 1–2 more if useful (candidates: meraxes, l-galaxies, galform).
 - [ ] Use the rubric scores to identify what our own style guides should cover. Don't write rules we can't motivate.
 - [ ] Draft each `STYLE_*.md`. Keep them tight — bounce between models, prune ruthlessly, don't over-engineer.

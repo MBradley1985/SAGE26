@@ -55,6 +55,10 @@ static const double STARBURST_MASS_POWER = 0.7;
  * model_starformation_and_feedback.c. */
 static const double FIRE_V_CRIT_KMS = 60.0;  /* km/s */
 
+/* FIRE (Muratov et al. 2015) redshift scaling of the wind loading factor,
+ * eta ~ (1+z)^alpha.  Same value as in model_starformation_and_feedback.c. */
+static const double FIRE_REDSHIFT_EXPONENT = 1.25;
+
 /* Krumholz & Dekel (2011) characteristic halo mass for metal enrichment scaling:
  * FracZleaveDisk ~ exp(-Mvir / KD11_METAL_HALO_MASS) in code units (10^10 Msun/h).
  * Same constant used in model_starformation_and_feedback.c. */
@@ -73,7 +77,14 @@ static double calculate_merger_remnant_radius(const struct GALAXY *g1, const str
  * for a satellite entering mother_halo.
  *
  * Uses the Binney & Tremaine (1987) dynamical friction formula scaled by
- * MergerTimeFactor.  Returns the merger time in code units (Myr/h).
+ * run_params->MergerTimeFactor (default 2.0, the published value).
+ *
+ * This timescale decides more than when a satellite merges.  When a satellite's
+ * subhalo is lost from the tree, core_build_model.c sends its stars to the ICS
+ * if the clock is still running (MergTime > 0) and onto the central if it has
+ * expired -- so MergerTimeFactor sets the split of accreted stellar mass between
+ * the intracluster component and the BCG.  Returns the merger time in code units
+ * (Myr/h).
  */
 double estimate_merging_time(const int sat_halo, const int mother_halo, const int ngal, struct halo_data *halos, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -92,7 +103,7 @@ double estimate_merging_time(const int sat_halo, const int mother_halo, const in
     const double SatelliteRadius = get_virial_radius(mother_halo, halos, run_params);
 
     if(SatelliteMass > 0.0 && coulomb > 0.0 && halos[sat_halo].Len >= MinNumPartSatHalo) {
-        mergtime = 2.0 *
+        mergtime = run_params->MergerTimeFactor *
             1.17 * SatelliteRadius * SatelliteRadius * get_virial_velocity(mother_halo, halos, run_params) / (coulomb * run_params->G * SatelliteMass);
     } else {
         mergtime = -1.0;
@@ -465,7 +476,7 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     // of every snapshot, so galaxies[p].ICS is almost always 0 here -- but it is
     // not guaranteed to be, since a satellite can acquire ICS mid-snapshot by
     // hosting a disruption of its own before merging.
-    if(run_params->TrackICSAssembly && galaxies[p].ICS > 0.0) {
+    if(galaxies[p].ICS > 0.0) {
         galaxies[t].ICS_accrete += galaxies[p].ICS;
         // Inherit the mass-weighted deposit-time accumulator so the mean assembly
         // time reflects when these stars were originally stripped, not when the
@@ -687,7 +698,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
             const double v_term = (vc_floored < FIRE_V_CRIT_KMS)
                 ? pow(vc_floored / FIRE_V_CRIT_KMS, -3.2)
                 : pow(vc_floored / FIRE_V_CRIT_KMS, -1.0);
-            fire_scaling = pow(1.0 + z_fire, run_params->RedshiftPowerLawExponent) * v_term;
+            fire_scaling = pow(1.0 + z_fire, FIRE_REDSHIFT_EXPONENT) * v_term;
         }
     }
 
@@ -828,8 +839,8 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
  * (intra-cluster stars) reservoir.
  *
  * Transfers all stellar mass, metals, and gas from the satellite to the
- * central's ICS and hot/CGM reservoirs.  Optionally tracks disruption time
- * and mass if TrackICSAssembly is set.
+ * central's ICS and hot/CGM reservoirs, and records the disruption time and
+ * mass into the ICS assembly accumulators.
  */
 void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double time, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -855,7 +866,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     // These stars become unbound here and now, so `time` (the lookback time of
     // this event) is the correct deposit time for the m*t accumulator -- unlike
     // the accreted channel above, which inherits the satellite's own history.
-    if(run_params->TrackICSAssembly && galaxies[gal].StellarMass > 0.0) {
+    if(galaxies[gal].StellarMass > 0.0) {
         galaxies[centralgal].ICS_disrupt += galaxies[gal].StellarMass;
         galaxies[centralgal].ICS_sum_mt += galaxies[gal].StellarMass * time;
     }
@@ -867,7 +878,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     // This ICS was formed elsewhere (by disruption in the satellite's own halo) and
     // is only being carried in here -- so ICS_accrete records where a packet came
     // from, not how it was made.
-    if(run_params->TrackICSAssembly && galaxies[gal].ICS > 0.0) {
+    if(galaxies[gal].ICS > 0.0) {
         galaxies[centralgal].ICS_accrete += galaxies[gal].ICS;
         // Inherit satellite's mass-weighted deposit-time accumulator so the
         // mean ICS-assembly time reflects when the stars were *originally* stripped,

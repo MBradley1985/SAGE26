@@ -98,15 +98,13 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
                 // the satellite's own halo) and is now being brought in.  Note this
                 // runs every snapshot for every satellite, so ICS that a progenitor
                 // group built in-situ is re-booked as accreted once it falls in.
-                if(run_params->TrackICSAssembly) {
-                    galaxies[centralgal].ICS_accrete += galaxies[i].ICS;
-                    // Inherit the satellite's mass-weighted deposit-time accumulator
-                    galaxies[centralgal].ICS_sum_mt += galaxies[i].ICS_sum_mt;
-                    // Zero out satellite's history (absorbed into central's accretion channel)
-                    galaxies[i].ICS_disrupt = 0.0;
-                    galaxies[i].ICS_accrete = 0.0;
-                    galaxies[i].ICS_sum_mt = 0.0;
-                }
+                galaxies[centralgal].ICS_accrete += galaxies[i].ICS;
+                // Inherit the satellite's mass-weighted deposit-time accumulator
+                galaxies[centralgal].ICS_sum_mt += galaxies[i].ICS_sum_mt;
+                // Zero out satellite's history (absorbed into central's accretion channel)
+                galaxies[i].ICS_disrupt = 0.0;
+                galaxies[i].ICS_accrete = 0.0;
+                galaxies[i].ICS_sum_mt = 0.0;
             }
             galaxies[i].ICS = galaxies[i].MetalsICS = 0.0;
 

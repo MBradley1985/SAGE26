@@ -21,8 +21,8 @@ start of each snapshot any satellite ICS is transferred to the central
 |-------|-------|---------|
 | `ICS` | 10^10 M_sun/h | Current intracluster stellar mass on this central. |
 | `MetalsICS` | 10^10 M_sun/h | Metal mass in the ICS reservoir. |
-| `ICS_disrupt` | 10^10 M_sun/h | Cumulative stellar mass *disrupted* into ICS via `disrupt_satellite_to_ICS()`. Only populated when `TrackICSAssembly = 1`. |
-| `ICS_accrete` | 10^10 M_sun/h | Cumulative ICS mass *inherited* from satellites that already carried their own ICS (i.e. former group centrals that fell in). Only populated when `TrackICSAssembly = 1`. |
+| `ICS_disrupt` | 10^10 M_sun/h | Cumulative stellar mass *disrupted* into ICS via `disrupt_satellite_to_ICS()`. |
+| `ICS_accrete` | 10^10 M_sun/h | Cumulative ICS mass *inherited* from satellites that already carried their own ICS (i.e. former group centrals that fell in). |
 | `ICS_sum_mt` | 10^10 M_sun/h * code time | Mass-weighted accumulator: sum over all ICS deposition events of `delta_M * t_deposit`. Used to derive the mean assembly lookback as `ICS_sum_mt / (ICS_disrupt + ICS_accrete)`. |
 
 The split between `ICS_disrupt` and `ICS_accrete` lets you decompose the
@@ -51,8 +51,7 @@ This makes the FoF central own all of the group's ICS by construction --
 which is what you want for plotting (no need to integrate over satellites
 when measuring a central's ICS).
 
-If `TrackICSAssembly = 1` and an incoming satellite carried ICS, the
-amount is recorded in the central's `ICS_accrete` accumulator and the
+If an incoming satellite carried ICS, the amount is recorded in the central's `ICS_accrete` accumulator and the
 satellite's `ICS_sum_mt` is added to the central's. This preserves the
 deposition history of stars that were stripped in an earlier host before
 this halo absorbed them.
@@ -78,7 +77,7 @@ baryonic fields are then zeroed.
 `DynamicDisruptionSplit`, `FractionDisruptedToICS`, `DisruptionSplitAlpha`
 and `DisruptionSplitCref`. Those parameters no longer exist.)
 
-When `TrackICSAssembly = 1`, this event contributes:
+This event contributes:
 
 - `ICS_disrupt += new_ICS_from_stripping`
 - `ICS_sum_mt += new_ICS_from_stripping * time` (with `time` in code units, the substep midpoint)
@@ -155,7 +154,6 @@ but worth knowing when computing population statistics.
 
 | Parameter | Effect |
 |-----------|--------|
-| `TrackICSAssembly` | 0 disables `ICS_disrupt` / `ICS_accrete` / `ICS_sum_mt` tracking; the `ICS` field itself is always tracked. |
 | `ThresholdSatDisruption` | Satellite is disrupted when `Mvir / baryonic mass` falls below this, which is what triggers the transfer described above. |
 
 See [`parameters.md`](../parameters.md) for full descriptions and defaults.

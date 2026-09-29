@@ -36,6 +36,7 @@ yy*
 *.hdf5
 *.csv
 *.par
+*.tex
 
 # sage_analysis Package Stuff #
 *.egg-info

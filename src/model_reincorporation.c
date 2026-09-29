@@ -26,11 +26,12 @@
  * -------------------------------------------------------------------------*/
 
 /* Critical velocity for gas reincorporation.
- * SN ejecta leave the disk at V_SN ~ 630 km/s; a halo can retain the gas when
+ * SN ejecta leave the disk at V_SN ~ 501 km/s; a halo can retain the gas when
  * its escape velocity (V_esc = sqrt(2)*V_vir) exceeds V_SN, i.e. when
- * V_vir > V_SN / sqrt(2) ~ 445.48 km/s.  Scaled further by
+ * V_vir > V_SN / sqrt(2) ~ 354.53 km/s.  Scaled further by
  * ReIncorporationFactor in the parameter file. */
-static const double REINC_VCRIT_KMS = 445.48;  /* km/s */
+// static const double REINC_VCRIT_KMS = 445.48;  /* km/s */
+static const double REINC_VCRIT_KMS = 354.53;  /* km/s */
 
 /*
  * reincorporate_gas -- move ejected gas back into the hot reservoir for one
@@ -44,7 +45,7 @@ void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *gal
 {
     const double Vcrit = REINC_VCRIT_KMS * run_params->ReIncorporationFactor;
 
-    if(galaxies[centralgal].Vvir > Vcrit && galaxies[centralgal].Rvir > 0.0) {
+    if(Vcrit > 0.0 && galaxies[centralgal].Vvir > Vcrit && galaxies[centralgal].Rvir > 0.0) {
         // Note: Vvir > Vcrit already ensures Vvir > 0, so Rvir/Vvir is safe
         double reincorporated =
             ( galaxies[centralgal].Vvir / Vcrit - 1.0 ) *

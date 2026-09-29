@@ -25,7 +25,7 @@ OutputFormat      sage_hdf5 % sets the desired output format. Either 'sage_binar
 %------------------------------------------
 
 TreeName              trees_063   % assumes the trees are named TreeName.n where n is the file number
-TreeType              lhalo_binary % 'genesis_lhalo_hdf5', 'lhalo_binary', 'consistentrees_ascii', 'consistentrees_hdf5', 'lhalo_ascii', 'lhalo_hdf5'
+TreeType              lhalo_binary % 'lhalo_binary', 'lhalo_hdf5', 'consistent_trees_ascii', 'consistent_trees_hdf5', 'genesis_hdf5', 'gadget4_hdf5'
 NumSimulationTreeFiles 8 % Number of files the trees are split over. This can be different to `FirstFile` -> `LastFile` range.
 
 %SimulationDir      /<absolute>/<root>/<path>/sage-home/sage-model/input/millennium/trees/
@@ -52,18 +52,13 @@ ReionizationOn              1   %0: switch off
 DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
 
 CGMrecipeOn                 1   %0: switch off
-RegimeRandomMode            0   %0: fresh random draw each snapshot (original; borderline-mass galaxies thrash between regimes); 1: use persistent RegimeRandom assigned at galaxy creation (regime evolves smoothly with Mvir)
 FIREmodeOn                  1   %0: switch off
-SNEnergyConservationOn      1   %1: bound BOTH the reheating and ejection terms by the SN energy available (default; FIREmodeOn=1 only); 0: off, unbounded
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
-FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 conc); 3: BK25 (ConcentrationOn method); 4: BK25 + log-normal c scatter; 5: Li+24 sharp; 6: Li+24 sigmoid + H2 SF; 7: BK25 log-normal c scatter + H2 SF
-FFBIgnoreRegime             1   %0: restrict FFB to CGM-regime (Regime=0) halos; 1: apply Li+24/BK25 criteria regardless of halo regime
-FFBRandomMode               0   %0: fresh random draw each snapshot; 1: persistent FFBRandom assigned at galaxy creation
+EnhancedStarFormationOn     1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: BK25 acceleration threshold w. log-normal c scatter
 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 SaveFullSFH                 0   %0: switch off
-TrackICSAssembly            1   %0: switch off; 1: track ICS_disrupt and ICS_accrete
 StarburstColdGasOn          1   %0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 
 SubstepResolution           1.0   %multiplier on the adaptive substep count (scales the STEPS floor and MAX_STEPS cap); 1.0 = unscaled
@@ -76,16 +71,13 @@ H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1:
 %------------------------------------------
 
 SfrEfficiency               0.05    %efficiency of SF; unused for SFprescription=3,6
-FFBMaxEfficiency            0.2     %0.2 fits observations best, 1.0 is theoretical maximum
-FFBConcSigma                0.2     %sigma_c for log-normal concentration scatter in ln(c) (FeedbackFreeModeOn=4); ~0.2 (Jing 2000, Bullock+01)
+EnhancedSFEfficiency        0.2     %0.2 fits observations best, 1.0 is theoretical maximum
 
-RedshiftPowerLawExponent    1.25    %alpha for (1+z)^alpha in mass loading calculation (FIREmodeOn=1)
 
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)
 FeedbackEjectionEfficiency  0.3     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
-MaxSNEnergyCoupling         2.0     %cap on the effective coupling eps_eff = FeedbackEjectionEfficiency * f_FIRE when SNEnergyConservationOn=1; 2.0 = E_FB <= all the SN energy, 1.0 = <= half
 
-ReIncorporationFactor       0.15    %fraction of ejected mass reincorporated per dynamical time to hot
+ReIncorporationFactor       0.19    %fraction of ejected mass reincorporated per dynamical time to hot
 
 RadioModeEfficiency         0.08    %AGN radio mode efficiency (AGNrecipeOn=2)
 QuasarModeEfficiency        0.005   %AGN quasar mode wind heating efficiency (AGNrecipeOn>0)
@@ -93,6 +85,7 @@ BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during
 
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
 ThresholdSatDisruption      1.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption
+MergerTimeFactor            2.0     %multiplies the dynamical-friction merger time; sets whether a satellite's clock is still running when its subhalo is lost, and so whether its stars go to the ICS (running) or the central (expired). 2.0 = published
 
 Yield                       0.025   %fraction of SF mass produced as metals
 RecycleFraction             0.43    %fraction of SF mass instantaneously recycled back to cold

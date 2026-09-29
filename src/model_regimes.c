@@ -4,7 +4,8 @@
  * determine_and_store_regime() implements the Dekel & Birnboim (2006)
  * shock-mass criterion; determine_and_store_ffb_regime() implements the
  * Li+24 and BK25 feedback-free burst thresholds with optional lognormal
- * concentration scatter.
+ * concentration scatter, plus the Dekel+23 free-fall-time/density criterion
+ * (eqs. 3-5) evaluated directly from the galaxy's own CGM free-fall time.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -34,6 +35,21 @@ static const double PC_IN_CM              =  3.08568e18;
 /* Boylan-Kolchin (2025) Table 1: critical gravitational acceleration for FFB.
  * Units: M_sun / pc^2 (pre-multiplication by G to get acceleration). */
 static const double BK25_G_CRIT_MSUN_PC2 = 3100.0;
+
+/* Width of the log-normal scatter in halo concentration, sigma_c in ln(c),
+ * applied to the BK25 threshold.  0.2 is the measured spread at fixed halo
+ * mass (Jing 2000; Bullock et al. 2001; Dolag et al. 2004).  It is what turns
+ * the sharp acceleration threshold into a smooth transition across the halo
+ * population. */
+static const double FFB_CONC_SIGMA = 0.2;
+
+/* Exponent n in the Li et al. (2024) eq. 2 threshold mass,
+ * M_v,ffb / 10^10.8 Msun ~ ((1+z)/10)^n.  Their value is -6.2.  The 10^10.8
+ * normalisation is pinned at z = 9, where (1+z)/10 = 1, so the exponent
+ * pivots the threshold about that redshift rather than shifting it wholesale. */
+static const double FFB_THRESHOLD_SLOPE = -6.2;
+
+
 
 
 /*
@@ -72,14 +88,10 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
             // Smoothly varies from 0 (well below Mshock) to 1 (well above Mshock)
             const double hot_fraction = 1.0 / (1.0 + exp(-x));
 
-            // RegimeRandomMode=1: reuse the persistent RegimeRandom draw from
-            // galaxy creation, so the regime evolves deterministically with
-            // Mvir relative to a fixed per-galaxy quantile and never thrashes
-            // for borderline-mass centrals.
-            // RegimeRandomMode=0: fresh draw each snapshot (original behaviour).
-            const double random_uniform = (run_params->RegimeRandomMode == 1)
-                ? (double)galaxies[p].RegimeRandom
-                : (double)rand() / (double)RAND_MAX;
+            // A fresh draw each snapshot: a borderline-mass central is
+            // re-tested against the sigmoid every timestep rather than being
+            // held to one quantile fixed at creation.
+            const double random_uniform = (double)rand() / (double)RAND_MAX;
             new_regime = (random_uniform < hot_fraction) ? 1 : 0;
         }
 
@@ -131,16 +143,25 @@ static double inverse_normal_cdf(double p)
 /*
  * Classify galaxies as feedback-free burst (FFB) or normal mode.
  *
- * When FeedbackFreeModeOn > 0, evaluates each central galaxy against the FFB
- * mass and redshift criteria (Li+2024) and sets galaxies[p].FFBmode.
- * Uses a lognormal scatter (via inverse_normal_cdf) around the threshold when
- * the scatter mode is enabled. Skips all galaxies when FFBmodeOn == 0.
+ * When EnhancedStarFormationOn > 0, evaluates each central galaxy against the
+ * selected FFB criterion and sets galaxies[p].FFBRegime:
+ *
+ *   1 -- Li et al. (2024) mass threshold with their eq. 3 sigmoid.  A halo is
+ *        FFB with probability f_ffb(Mvir, z), realised against a uniform draw,
+ *        so the transition is smooth across the population.
+ *   2 -- Boylan-Kolchin (2025) acceleration threshold, g_max > g_crit, with
+ *        log-normal scatter applied to the halo concentration.  The scatter is
+ *        drawn from the halo's own persistent quantile, so the threshold is
+ *        sharp per halo but smooth across the population.
+ *
+ * All galaxies are marked non-FFB when EnhancedStarFormationOn == 0.
  */
-void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct GALAXY *galaxies,
+void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
+                                     struct GALAXY *galaxies,
                                      const struct params *run_params)
 {
     // Only apply FFB if the mode is enabled
-    if(run_params->FeedbackFreeModeOn == 0) {
+    if(run_params->EnhancedStarFormationOn == 0) {
         // FFB mode disabled - mark all galaxies as normal
         for(int p = 0; p < ngal; p++) {
             galaxies[p].FFBRegime = 0;
@@ -148,11 +169,10 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
         return;
     }
 
-    // Pre-compute g_crit in code units for BK25 modes (constant, doesn't depend on galaxy)
+    // Pre-compute g_crit in code units for the BK25 mode (constant, doesn't depend on galaxy)
     // g_crit/G = 3100 M_sun/pc^2 (Boylan-Kolchin 2025, Table 1)
     double g_crit = 0.0;
-    if(run_params->FeedbackFreeModeOn == 2 || run_params->FeedbackFreeModeOn == 3 ||
-       run_params->FeedbackFreeModeOn == 4 || run_params->FeedbackFreeModeOn == 7) {
+    if(run_params->EnhancedStarFormationOn == 2) {
         const double Msun_code = SOLAR_MASS / run_params->UnitMass_in_g;
         const double pc_code = PC_IN_CM / run_params->UnitLength_in_cm;
         g_crit = run_params->G * BK25_G_CRIT_MSUN_PC2 * Msun_code / (pc_code * pc_code) / run_params->Hubble_h;
@@ -162,21 +182,16 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
     for(int p = 0; p < ngal; p++) {
         if(galaxies[p].mergeType > 0) continue;
 
-        // By default, only CGM-regime halos are eligible for FFB.
-        // FFBIgnoreRegime=1 removes this restriction, letting the Li+24/BK25
-        // criteria apply regardless of halo regime.
-        if(galaxies[p].Regime == 1 && !run_params->FFBIgnoreRegime) {
-            galaxies[p].FFBRegime = 0;
-            continue;
-        }
+        // The Li+24 / BK25 criteria apply regardless of the halo's CGM/hot
+        // regime: FFB is set by the burst's own density and feedback timescale,
+        // not by whether the halo carries a virial shock.
 
-        // FFBRandomMode=1: reuse the persistent draw assigned at galaxy creation.
-        // FFBRandomMode=0: fresh draw each snapshot (no memory across timesteps).
-        const double draw = (run_params->FFBRandomMode == 1)
-            ? (double)galaxies[p].FFBRandom
-            : (double)rand() / (double)RAND_MAX;
+        // A fresh draw each snapshot, with no memory across timesteps, so a
+        // halo sitting near the threshold moves in and out of FFB rather than
+        // being locked to one quantile fixed at creation.
+        const double draw = (double)rand() / (double)RAND_MAX;
 
-        if(run_params->FeedbackFreeModeOn == 1) {
+        if(run_params->EnhancedStarFormationOn == 1) {
             // Li et al. 2024 mass-based method (original)
             const double Mvir = galaxies[p].Mvir;
 
@@ -190,52 +205,14 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
             } else {
                 galaxies[p].FFBRegime = 0;  // Normal halo
             }
-        } else if(run_params->FeedbackFreeModeOn == 2) {
-            // Boylan-Kolchin 2025 acceleration-based method (Ishiyama+21 lookup table concentration)
-            // FFB regime when g_max > g_crit (sharp cutoff)
-            const double g_max = calculate_gmax_BK25(p, Zcurr, galaxies, run_params);
-
-            galaxies[p].g_max = g_max;
-
-            if(g_max > g_crit) {
-                galaxies[p].FFBRegime = 1;  // FFB halo - above critical acceleration
-            } else {
-                galaxies[p].FFBRegime = 0;  // Normal halo
-            }
-        } else if(run_params->FeedbackFreeModeOn == 3) {
-            // BK25 acceleration-based method using galaxy's stored concentration
-            // (Vmax/Vvir with infall freeze when ConcentrationOn=3)
-            const double Mvir = galaxies[p].Mvir;
-            const double Rvir = galaxies[p].Rvir;
-
-            if(Mvir <= 0.0 || Rvir <= 0.0) {
-                galaxies[p].FFBRegime = 0;
-                galaxies[p].g_max = 0.0;
-                continue;
-            }
-
-            double c = (double)galaxies[p].Concentration;
-            if(c < 1.0) c = 1.0;
-
-            const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
-            const double mu_c = log(1.0 + c) - c / (1.0 + c);
-            const double g_max = (g_vir / mu_c) * (c * c / 2.0);
-
-            galaxies[p].g_max = g_max;
-
-            if(g_max > g_crit) {
-                galaxies[p].FFBRegime = 1;  // FFB halo - above critical acceleration
-            } else {
-                galaxies[p].FFBRegime = 0;  // Normal halo
-            }
-        } else if(run_params->FeedbackFreeModeOn == 4) {
+        } else if(run_params->EnhancedStarFormationOn == 2) {
             // BK25 acceleration-based with log-normal concentration scatter.
             // The Ishiyama+21 table gives the mean concentration; individual halos
             // scatter around it following p(c)dc ~ exp(-(ln c - ln c0)^2 / 2sigma_c^2) d(ln c)
             // with sigma_c ~ 0.2 (Jing 2000; Bullock+01; Dolag+04).
-            // The persistent FFBRandom draws a fixed quantile for each halo,
-            // giving a deterministic scattered concentration and thus a smooth
-            // FFb transition across the halo population.
+            // Each halo draws its own concentration quantile, giving a smooth
+            // FFB transition across the halo population rather than a single
+            // sharp mass threshold.
             const double Mvir = galaxies[p].Mvir;
             const double Rvir = galaxies[p].Rvir;
 
@@ -252,74 +229,16 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr, struct G
             if(c < 1.0) c = 1.0;
 
             // Apply log-normal scatter: ln(c) ~ Normal(ln(c_mean), sigma_c)
-            if(run_params->FFBConcSigma > 0.0) {
+            {
                 double u = draw;
                 if(u < 1.0e-6) u = 1.0e-6;
                 if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
                 const double z_normal = inverse_normal_cdf(u);
-                c = c * exp(run_params->FFBConcSigma * z_normal);
+                c = c * exp(FFB_CONC_SIGMA * z_normal);
                 if(c < 1.0) c = 1.0;
             }
 
             // g_max with scattered concentration (BK25 Eq. 4)
-            const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
-            const double mu_c = log(1.0 + c) - c / (1.0 + c);
-            const double g_max = (g_vir / mu_c) * (c * c / 2.0);
-
-            galaxies[p].g_max = g_max;
-
-            if(g_max > g_crit) {
-                galaxies[p].FFBRegime = 1;  // FFB halo
-            } else {
-                galaxies[p].FFBRegime = 0;  // Normal halo
-            }
-        } else if(run_params->FeedbackFreeModeOn == 5) {
-            // Li et al. 2024 mass-based method with hard cutoff (no sigmoid)
-            // FFB regime when Mvir > Mvir_ffb (sharp threshold)
-            const double Mvir = galaxies[p].Mvir;
-            const double Mvir_ffb = calculate_ffb_threshold_mass(Zcurr, run_params);
-
-            if(Mvir > Mvir_ffb) {
-                galaxies[p].FFBRegime = 1;  // FFB halo - above threshold mass
-            } else {
-                galaxies[p].FFBRegime = 0;  // Normal halo
-            }
-        } else if(run_params->FeedbackFreeModeOn == 6) {
-            // Li+24 sigmoid + H2-based SF (same regime detection as mode 1)
-            const double Mvir = galaxies[p].Mvir;
-            const double f_ffb = calculate_ffb_fraction(Mvir, Zcurr, run_params);
-            const double random_uniform = draw;
-
-            if(random_uniform < f_ffb) {
-                galaxies[p].FFBRegime = 1;  // FFB halo
-            } else {
-                galaxies[p].FFBRegime = 0;  // Normal halo
-            }
-        } else if(run_params->FeedbackFreeModeOn == 7) {
-            // BK25 log-normal c scatter + H2-based SF (same regime detection as mode 4)
-            const double Mvir = galaxies[p].Mvir;
-            const double Rvir = galaxies[p].Rvir;
-
-            if(Mvir <= 0.0 || Rvir <= 0.0) {
-                galaxies[p].FFBRegime = 0;
-                galaxies[p].g_max = 0.0;
-                continue;
-            }
-
-            const double Mvir_Msun_h = Mvir * 1.0e10;
-            const double logM = log10(Mvir_Msun_h);
-            double c = interpolate_concentration_ishiyama21(logM, Zcurr, run_params);
-            if(c < 1.0) c = 1.0;
-
-            if(run_params->FFBConcSigma > 0.0) {
-                double u = draw;
-                if(u < 1.0e-6) u = 1.0e-6;
-                if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
-                const double z_normal = inverse_normal_cdf(u);
-                c = c * exp(run_params->FFBConcSigma * z_normal);
-                if(c < 1.0) c = 1.0;
-            }
-
             const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
             const double mu_c = log(1.0 + c) - c / (1.0 + c);
             const double g_max = (g_vir / mu_c) * (c * c / 2.0);
@@ -353,10 +272,7 @@ double calculate_ffb_threshold_mass(const double z, const struct params *run_par
 
     const double h = run_params->Hubble_h;
     const double z_norm = (1.0 + z) / 10.0;
-    /* FFBThresholdSlope defaults to -6.2 (Li+24). The 10^10.8 normalisation is
-     * pinned at z = 9, where z_norm = 1, so changing the slope pivots the
-     * threshold about that redshift rather than shifting it wholesale. */
-    const double log_Mvir_ffb_code = 0.8 + log10(h) + run_params->FFBThresholdSlope * log10(z_norm);
+    const double log_Mvir_ffb_code = 0.8 + log10(h) + FFB_THRESHOLD_SLOPE * log10(z_norm);
 
     return pow(10.0, log_Mvir_ffb_code);
 }
@@ -365,14 +281,14 @@ double calculate_ffb_threshold_mass(const double z, const struct params *run_par
  * Fraction of galaxies in the FFB regime at (Mvir, z) via Li+2024 eq. (3).
  *
  * Returns a sigmoid value in [0, 1] that rises sharply as Mvir approaches
- * the FFB threshold; returns 0 when FeedbackFreeModeOn == 0.
+ * the FFB threshold; returns 0 when EnhancedStarFormationOn == 0.
  */
 double calculate_ffb_fraction(const double Mvir, const double z, const struct params *run_params)
 {
     // Calculate the fraction of galaxies in FFB regime
     // Uses smooth sigmoid transition from Li et al. 2024, equation (3)
     
-    if (run_params->FeedbackFreeModeOn == 0) {
+    if (run_params->EnhancedStarFormationOn == 0) {
         return 0.0;
     }
 
@@ -388,50 +304,4 @@ double calculate_ffb_fraction(const double Mvir, const double z, const struct pa
     const double f_ffb = 1.0 / (1.0 + exp(-x));
 
     return f_ffb;
-}
-
-/*
- * Maximum NFW gravitational acceleration g_max (Boylan-Kolchin 2025).
- *
- * Computes g_vir = G*M_vir/R_vir^2 and then the NFW peak factor from the
- * halo concentration, returning g_max in CGS units (cm/s^2).  Used as the
- * FFB feedback threshold in the FeedbackFreeModeOn == 4 prescription.
- */
-double calculate_gmax_BK25(const int p, const double z, const struct GALAXY *galaxies,
-                            const struct params *run_params)
-{
-    // Boylan-Kolchin 2025: maximum NFW gravitational acceleration
-    //
-    // g_vir = G * M_vir / R_vir^2                                (Eq. 2)
-    // g_max = (g_vir / mu(c)) * (c^2 / 2)                         (Eq. 4)
-    // where mu(x) = ln(1+x) - x/(1+x)
-    //
-    // Always uses the Ishiyama+21 lookup table concentration for the FFB
-    // threshold, even when ConcentrationOn=2 (Vmax/Vvir).  The BK25 threshold
-    // is derived from average halo properties; using individual scatter would
-    // produce spurious FFB activation at low redshift.
-    //
-    // Returns g_max in code units (UnitLength / UnitTime^2)
-
-    const double Mvir = galaxies[p].Mvir;  // code mass units (10^10 M_sun / h)
-    const double Rvir = galaxies[p].Rvir;  // code length units (Mpc / h)
-
-    if(Mvir <= 0.0 || Rvir <= 0.0) {
-        return 0.0;
-    }
-
-    // g_vir = G * M_vir / R_vir^2  (code units)
-    const double g_vir = run_params->G * Mvir / (Rvir * Rvir);
-
-    // Always use the lookup table concentration for the FFB determination
-    const double Mvir_Msun_h = Mvir * 1.0e10;
-    const double logM = log10(Mvir_Msun_h);
-    double c = interpolate_concentration_ishiyama21(logM, z, run_params);
-    if(c < 1.0) c = 1.0;
-
-    // mu(c) = ln(1+c) - c/(1+c)
-    const double mu_c = log(1.0 + c) - c / (1.0 + c);
-
-    // g_max = (g_vir / mu(c)) * (c^2 / 2)   [BK25 Eq. 4]
-    return (g_vir / mu_c) * (c * c / 2.0);
 }

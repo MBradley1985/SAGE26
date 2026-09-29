@@ -8,7 +8,7 @@ committed baseline exactly — every HDF5 dataset bit-identical.
 
 | System | Entry point | Build required | What it hashes |
 |---|---|---|---|
-| Dataset-level baseline (primary) | `make regression` or `tests/regression_baseline.sh` | serial (`make clean && make USE-MPI=`) | SHA-256 of every dataset in every `model*.hdf5` (~5,444 datasets for mini-Millennium), plus file-level hashes and smoke statistics |
+| Dataset-level baseline (primary) | `make regression` or `tests/regression_baseline.sh` | serial (`make clean && make USE-MPI=`) | SHA-256 of every dataset in every `model*.hdf5` (5252 datasets for mini-Millennium), plus file-level hashes and smoke statistics |
 | Binary checksum benchmark | `tests/run_benchmark_test.sh verify` | MPI (`make clean && make`) | SHA-256 of the 64 `sage_binary` output files from `tests/benchmark/benchmark.par` |
 
 The dataset-level system is the release gate. The binary benchmark
@@ -54,7 +54,8 @@ compared dataset by dataset.
 ## Option-combination coverage
 
 The physics option matrix (8 SF prescriptions x FIRE x FFB x CGM x AGN x
-H2 options x ...) is far larger than what any baseline can cover.
+H2 options x ...) is still larger than what any baseline can cover, though
+the pre-release toggle removals have shrunk it considerably.
 Out-of-range flag values and physically meaningless combinations are
 rejected at startup by `read_parameter_file()`; everything else runs, but
 **only the combinations exercised by a baseline carry a bit-identical
@@ -62,14 +63,15 @@ guarantee**:
 
 | Config | Exercises |
 |---|---|
-| `input/millennium.par` (default sweep) | SFprescription=1 (BR06), AGNrecipeOn=2 (Bondi), CGMrecipeOn=1, FIREmodeOn=1, FeedbackFreeModeOn=1 (Li+24 sigmoid), HDF5 output |
+| `input/millennium.par` (default sweep) | SFprescription=1 (BR06), AGNrecipeOn=2 (Bondi), CGMrecipeOn=1, FIREmodeOn=1, EnhancedStarFormationOn=1 (Li+24 sigmoid), HDF5 output |
 | `input/microuchuu.par` (release spot check) | same physics on Uchuu100 trees: CGM + FFB + FIRE at higher resolution |
 | `input/millennium_all.par` (`tests/baseline/millennium_all/`) | extended output-field coverage |
 | `tests/benchmark/benchmark.par` | `sage_binary` output writer, MPI build |
 
 Changes to code paths outside this coverage (other SF prescriptions, AGN
-recipes 0/1/3, FFB modes 2-7, ...) are guarded only by the unit tests in
-`tests/`; treat them with proportionally more suspicion during review.
+recipes 0/1/3, `EnhancedStarFormationOn=2`, ...) are guarded only by the unit
+tests in `tests/`; treat them with proportionally more suspicion during
+review.
 
 ## Determinism
 

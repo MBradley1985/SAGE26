@@ -1173,15 +1173,16 @@ def ffb_fraction_mbk25(Mvir_msun, z, sigma_c=0.2):
     FFB when g_max > g_crit = G * 3100 M_sun / pc^2  (BK25 Table 1).
 
     With sigma_c > 0, concentration scatters log-normally around the Ishiyama+21
-    mean (matching FeedbackFreeModeOn=4 in the C code):
+    mean (matching EnhancedStarFormationOn=2 in the C code):
         f_ffb(M, z) = P(c > c_thresh) = norm.sf((ln c_thresh - ln c_mean) / sigma_c)
-    With sigma_c = 0, returns a sharp step function (FeedbackFreeModeOn=2).
+    With sigma_c = 0, returns a sharp step function (the unscattered threshold).
 
     Parameters
     ----------
     Mvir_msun : array_like  Halo virial mass [M_sun].
     z         : float       Redshift.
-    sigma_c   : float       Log-normal scatter in ln(c); 0.2 matches BK25 mode 4.
+    sigma_c   : float       Log-normal scatter in ln(c); 0.2 matches FFB_CONC_SIGMA
+                            in src/model_regimes.c.
     """
     from scipy.optimize import brentq
     from scipy.stats import norm as _snorm
@@ -5903,7 +5904,8 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
 
     Each panel is annotated with its model name in the bottom-right corner.
     Line style encodes the burst regime rather than the galaxy sample: solid
-    where FFBRegime==1 ("With bursts"), dashed where it is 0 ("No bursts").
+    where FFBRegime==1 (the panel's bursting galaxies), dashed where it is 0
+    ("Normal galaxies").
     The transition-marker legend entry is only drawn for panels that actually
     contain an FFB -> non-FFB crossing inside the plotted time range.
     """
@@ -5939,19 +5941,44 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
 
     fig, axes = plt.subplots(2, 1, figsize=(8, 10), sharex=True)
 
-    t_min_all = []
+    # The figure is drawn directly against redshift.  The old cosmic-time cap of
+    # 1 Gyr becomes a redshift floor, taken from the snapshots themselves so the
+    # two axes describe exactly the same range of the run.
     t_max = 1.0
 
-    for ax, cfg in zip(axes, panels):
+    import matplotlib.lines as mlines
+
+    # Both panels share one x-axis, so the limits have to be known before
+    # anything is gated against them: a marker tested only against its own
+    # panel's snapshot range can pass and still land outside the shared limits,
+    # which would draw the legend entry for a line the reader cannot see.
+    panel_tracks = []
+    z_lo_all, z_hi_all = [], []
+    for cfg in panels:
         tracks = _sfh_transition_tracks(cfg['data'] or {}, needed_snaps,
                                         ffb_gal_ids, norm_gal_ids)
+        z_in_range = []
+        if tracks is not None:
+            z_in_range = [REDSHIFTS[s] for s in tracks['cosmic_times']
+                          if tracks['cosmic_times'][s] <= t_max]
+            if z_in_range:
+                z_lo_all.append(min(z_in_range))
+                z_hi_all.append(max(z_in_range))
+        panel_tracks.append((cfg, tracks, z_in_range))
+
+    z_lo = min(z_lo_all) if z_lo_all else 0.0
+    z_hi = max(z_hi_all) if z_hi_all else 1.0
+
+    for ax, (cfg, tracks, z_in_range) in zip(axes, panel_tracks):
         if tracks is None:
             print(f"  No usable galaxies for the {cfg['tag']} panel.")
             ax.text(0.5, 0.5, f"No {cfg['tag']} data", transform=ax.transAxes,
                     ha='center', va='center', color='0.5')
             continue
 
-        t_min_all.append(min(tracks['cosmic_times'].values()))
+        z_of_snap = {s: REDSHIFTS[s] for s in tracks['cosmic_times']}
+        if not z_in_range:
+            continue
 
         burst_label_done = quiet_label_done = False
         for gid in tracks['plot_ids']:
@@ -5963,34 +5990,44 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
                            key=lambda x: x[0])
 
             for k in range(len(pairs) - 1):
-                t0, sfr0, r0, _ = pairs[k]
-                t1, sfr1, _, _  = pairs[k + 1]
+                _t0, sfr0, r0, s0 = pairs[k]
+                _t1, sfr1, _r1, s1 = pairs[k + 1]
+                z0, z1 = z_of_snap[s0], z_of_snap[s1]
 
                 lbl = None
                 if r0 == 1 and not burst_label_done:
-                    lbl = 'With bursts'
+                    lbl = f"{cfg['tag']} galaxies"
                     burst_label_done = True
                 elif r0 == 0 and not quiet_label_done:
-                    lbl = 'No bursts'
+                    lbl = 'Normal galaxies'
                     quiet_label_done = True
 
-                ax.plot([t0, t1], [sfr0, sfr1],
+                ax.plot([z0, z1], [sfr0, sfr1],
                         '-' if r0 == 1 else '--',
                         color=cfg['color'] if r0 == 1 else 'firebrick',
                         alpha=1.0, lw=2.2, label=lbl, zorder=2)
 
         # Transition markers, and the matching legend entry only if any land
-        # inside the plotted range.
-        drew_transition = False
+        # inside the plotted range.  The test is against the figure's shared
+        # limits and is two-sided, so the legend entry appears exactly when a
+        # marker is visible.  A marker sitting on a limit draws on the spine and
+        # reads as absent, so it is reported rather than silently counted.
+        drew_transition = 0
         for gid in tracks['ffb_ids']:
             if gid not in tracks['transition']:
                 continue
-            t_trans, _ = tracks['transition'][gid]
-            if not (min(tracks['cosmic_times'].values()) <= t_trans <= t_max):
+            _t_trans, z_trans = tracks['transition'][gid]
+            if not (z_lo <= z_trans <= z_hi):
                 continue
-            ax.axvline(t_trans, color='goldenrod', ls='--', lw=1.2,
+            ax.axvline(z_trans, color='goldenrod', ls='--', lw=1.2,
                        alpha=0.85, zorder=4)
-            drew_transition = True
+            drew_transition += 1
+            if z_trans in (z_lo, z_hi):
+                print(f"    {cfg['tag']}: transition for {gid} sits on the "
+                      f'z = {z_trans:.2f} axis limit and will draw on the spine')
+        n_out = len(tracks['transition']) - drew_transition
+        print(f"    {cfg['tag']}: {drew_transition} transition marker(s) drawn"
+              + (f', {n_out} outside the plotted range' if n_out else ''))
 
         ax.set_ylabel(r'$\log_{10}\,\mathrm{SFR}\;[M_{\odot}\,\mathrm{yr}^{-1}]$')
         ax.set_yscale('log')
@@ -6000,20 +6037,24 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
         ax.text(0.98, 0.04, cfg['tag'], transform=ax.transAxes,
                 ha='right', va='bottom', fontsize=20, zorder=10)
 
-        import matplotlib.lines as mlines
-
-        handles, labels = ax.get_legend_handles_labels()
+        # Fixed legend order in every panel — bursting sample, controls, then
+        # the transition marker — regardless of which line happened to be drawn
+        # first.
+        by_label = dict(zip(*reversed(ax.get_legend_handles_labels())))
+        order = [f"{cfg['tag']} galaxies", 'Normal galaxies']
+        handles = [by_label[l] for l in order if l in by_label]
+        labels  = [l for l in order if l in by_label]
         if drew_transition:
-            handles = handles + [mlines.Line2D([], [], color='goldenrod',
-                                               ls='--', lw=1.5)]
-            labels  = labels + [cfg['trans_label']]
+            handles.append(mlines.Line2D([], [], color='goldenrod',
+                                         ls='--', lw=1.5))
+            labels.append(cfg['trans_label'])
         if labels:
             _standard_legend(ax, loc='upper left',
                              handles=handles, labels=labels)
 
-    t_min = min(t_min_all) if t_min_all else 0.0
-    axes[0].set_xlim(t_min, t_max)
-    axes[1].set_xlabel('Cosmic time [Gyr]')
+    if z_lo_all:
+        axes[0].set_xlim(z_lo, z_hi)
+    axes[1].set_xlabel('Redshift')
 
     # The panels butt together, so the top panel's lowest decade label and the
     # bottom panel's highest would print on top of each other.  Keep every tick
@@ -6029,18 +6070,6 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
         _ax.set_yticks(_ticks)
         _ax.set_yticklabels(_decade_labels(_blank))
         _ax.set_ylim(1e-3, 1e5)
-
-    # Redshift axis on the top panel only.
-    ax_top = axes[0].twiny()
-    z_ticks = [10, 8, 6, 5, 4, 3, 2.5, 2, 1.5, 1]
-    t_ticks = [cosmic_time_gyr(z) for z in z_ticks]
-    xlim = axes[0].get_xlim()
-    z_ticks_f = [z for z, t in zip(z_ticks, t_ticks) if xlim[0] <= t <= xlim[1]]
-    t_ticks_f = [t for t in t_ticks if xlim[0] <= t <= xlim[1]]
-    ax_top.set_xlim(xlim)
-    ax_top.set_xticks(t_ticks_f)
-    ax_top.set_xticklabels([str(z) for z in z_ticks_f])
-    ax_top.set_xlabel('Redshift')
 
     fig.tight_layout()
     fig.subplots_adjust(hspace=0.0)
@@ -6140,8 +6169,8 @@ def plot_13_ffb_vs_redshift(snapdata):
         ax.axvline(np.log10(M_thresh), color=color, ls=':', alpha=1.0, lw=1)
 
         # MBK25 theoretical curve (log-normal concentration scatter, sigma_c=0.2)
-        f_mbk25 = ffb_fraction_mbk25(Mvir, actual_z, sigma_c=0.2)
-        ax.plot(log_Mvir, f_mbk25, color=color, lw=2, ls='--', alpha=0.8)
+        # f_mbk25 = ffb_fraction_mbk25(Mvir, actual_z, sigma_c=0.2)
+        # ax.plot(log_Mvir, f_mbk25, color=color, lw=2, ls='--', alpha=0.8)
 
         # Li+24 simulation data — circles
         if snap_idx in snapdata:
@@ -10353,8 +10382,9 @@ def plot_23c_ffb_fraction_bk25():
 def _feedback_params(directory=PRIMARY_DIR):
     """Feedback parameters straight from the run header, so the analytic curves
     cannot drift from the model that produced the points."""
-    fallback = dict(eps_disk=2.9, eps_halo=0.3, alpha_z=1.25, eta_sn=5.0e-3,
-                    energy_sn=1.0e51, eps_max=2.0, sn_bound=1, reheat_bound=1)
+    fallback = dict(eps_disk=2.9, eps_halo=0.3, alpha_z=FIRE_REDSHIFT_EXPONENT,
+                    eta_sn=5.0e-3, energy_sn=1.0e51,
+                    eps_max=MAX_SN_ENERGY_COUPLING, sn_bound=1, reheat_bound=1)
     files = _find_model_files_early(directory)
     if not files:
         return fallback
@@ -10363,24 +10393,32 @@ def _feedback_params(directory=PRIMARY_DIR):
         get = lambda k, d: (float(r[k]) if k in r else d)
         return dict(eps_disk=get('FeedbackReheatingEpsilon', 2.9),
                     eps_halo=get('FeedbackEjectionEfficiency', 0.3),
-                    alpha_z=get('RedshiftPowerLawExponent', 1.25),
+                    alpha_z=FIRE_REDSHIFT_EXPONENT,
                     eta_sn=get('EtaSN', 5.0e-3),
                     energy_sn=get('EnergySN', 1.0e51),
-                    eps_max=get('MaxSNEnergyCoupling', 2.0),
-                    sn_bound=int(get('SNEnergyConservationOn', 1)),
-                    # capped_eta_reheat() in src/model_misc.h gates the mass-loading
-                    # cap on SNEnergyConservationOn, the same switch as the ejection
-                    # coupling -- there is no separate ReheatEnergyConservationOn.
-                    # Reading one would silently default to 0 and draw analytic
-                    # curves without a cap the model does apply, which shows up as
-                    # a spurious offset at high V_vir and high z.
-                    reheat_bound=int(get('SNEnergyConservationOn', 1)))
+                    # The SN energy bound is hardcoded on in the model, and the
+                    # cap is MAX_SN_ENERGY_COUPLING in src/model_misc.h. Both the
+                    # ejection coupling and the reheating mass loading use it --
+                    # there is no separate reheating switch, and drawing the
+                    # analytic curves without the cap leaves a spurious offset at
+                    # high V_vir and high z.
+                    eps_max=MAX_SN_ENERGY_COUPLING,
+                    sn_bound=1,
+                    reheat_bound=1)
 
+
+# Cap on the effective SN coupling, applied to both the ejection term and the
+# reheating mass loading. Matches MAX_SN_ENERGY_COUPLING in src/model_misc.h.
+MAX_SN_ENERGY_COUPLING = 2.0
 
 # FIRE (Muratov et al. 2015) critical circular velocity separating the two
 # power-law slopes of the wind loading factor. Matches FIRE_V_CRIT_KMS in
 # src/model_starformation_and_feedback.c.
 FIRE_V_CRIT = 60.0
+
+# FIRE redshift scaling of the wind loading factor, eta ~ (1+z)^alpha. Matches
+# FIRE_REDSHIFT_EXPONENT in src/model_starformation_and_feedback.c.
+FIRE_REDSHIFT_EXPONENT = 1.25
 FIRE_BETA_LOW = -3.2
 FIRE_BETA_HIGH = -1.0
 
@@ -10884,6 +10922,57 @@ _MDOT_SNAP_PANELS = [
 _MDOT_PROPS = ['Mvir', 'Vvir', 'Type', 'mdot_cool', 'mdot_stream']
 
 
+def _mstream_ceiling_x(z, x_prop, mvir_msun, vvir):
+    """x-axis position of the Dekel & Birnboim (2006) stream ceiling.
+
+    Their eq. 40 gives Mstream = Mshock^2 / (f M_*(z)), the halo mass at which
+    (t_cool/t_comp)_stream = 1 and so f_stream = 1/2.  That is where the two
+    accretion channels should cross, which makes it the one threshold worth
+    drawing on these panels.
+
+    For an Mvir x-axis the position is just log10(Mstream).  For a Vvir axis
+    the mass is mapped through the panel's own haloes rather than an analytic
+    virial relation, so the marker inherits the simulation's cosmology and
+    overdensity convention instead of a second, possibly inconsistent, one.
+
+    Returns None when the ceiling falls outside the sampled halo range, which
+    is the normal case at low z where Mstream drops far below the resolution
+    limit.
+    """
+    try:
+        mstar = 10.0 ** interpolate_clustering_mass_py(z)
+        rt = _read_runtime_attrs(PRIMARY_DIR)
+        mshock = float(rt.get('MShockMsun', 6.0e11))
+        m_ceil = mshock * mshock / (DB06_STREAM_MASS_FACTOR * mstar)
+    except Exception:
+        return None
+
+    if not np.isfinite(m_ceil) or m_ceil <= 0:
+        return None
+    if x_prop == 'Mvir':
+        return np.log10(m_ceil)
+
+    ok = (mvir_msun > 0) & (vvir > 0)
+    if ok.sum() < 50:
+        return None
+    lm, lv = np.log10(mvir_msun[ok]), np.log10(vvir[ok])
+    lm_ceil = np.log10(m_ceil)
+    if lm_ceil < lm.min() or lm_ceil > lm.max():
+        return None
+    # Median log Vvir per log Mvir bin, then interpolate at the ceiling.
+    edges = np.arange(lm.min(), lm.max() + 0.2, 0.2)
+    idx = np.digitize(lm, edges) - 1
+    cen, med = [], []
+    for i in range(len(edges) - 1):
+        m = idx == i
+        if m.sum() >= 10:
+            cen.append(0.5 * (edges[i] + edges[i + 1]))
+            med.append(np.median(lv[m]))
+    if len(cen) < 2:
+        return None
+    return float(np.interp(lm_ceil, cen, med))
+
+
 def _plot_mdot_panels(x_prop, x_label, xlim, xbins, output_name,
                       upper_axis=None):
     """
@@ -10910,6 +10999,23 @@ def _plot_mdot_panels(x_prop, x_label, xlim, xbins, output_name,
     print('  panels: ' + ', '.join(
         f'{lbl} (Snap_{s}, z={REDSHIFTS[s]:.3f})'
         for s, lbl in _MDOT_SNAP_PANELS))
+
+    # miniUchuu comparison, drawn dashed with no shading so the two simulations
+    # stay separable where the curves overlap (same convention as Fig. 6).  Its
+    # snapshot grid differs from Millennium's, so each panel's target redshift
+    # is mapped into the miniUchuu table independently -- reusing the primary
+    # snapshot number would silently compare different epochs.
+    have_mu = model_files_exist(MINIUCHUU_DIR)
+    if have_mu:
+        mu_snaps = [_snap_nearest_z(MINIUCHUU_REDSHIFTS, z)
+                    for z in _MDOT_Z_TARGETS]
+        mu_data = load_snapshots(MINIUCHUU_DIR, mu_snaps, _MDOT_PROPS)
+        print('  miniUchuu: ' + ', '.join(
+            f'z={zt:.0f} -> Snap_{s} (z={MINIUCHUU_REDSHIFTS[s]:.3f})'
+            for zt, s in zip(_MDOT_Z_TARGETS, mu_snaps)))
+    else:
+        mu_snaps, mu_data = [], {}
+        print(f'  miniUchuu: no model files in {MINIUCHUU_DIR}, skipping')
 
     nrows = len(_MDOT_SNAP_PANELS)
 
@@ -10949,7 +11055,7 @@ def _plot_mdot_panels(x_prop, x_label, xlim, xbins, output_name,
                     c, med, p25, p75 = binned_median(log_x[pos], log_mc, xbins)
                     valid = np.isfinite(med)
                     ax.plot(c[valid], med[valid], color='C3', lw=2.2,
-                            label=r'$\dot{M}_{\rm cool}$')
+                            label=r'$\dot{m}_{\rm cool}$')
                     ax.fill_between(c[valid], p25[valid], p75[valid],
                                     color='C3', alpha=0.2)
 
@@ -10962,18 +11068,55 @@ def _plot_mdot_panels(x_prop, x_label, xlim, xbins, output_name,
                     c, med, p25, p75 = binned_median(log_x[pos], log_ms, xbins)
                     valid = np.isfinite(med)
                     ax.plot(c[valid], med[valid], color='C0', lw=2.2,
-                            label=r'$\dot{M}_{\rm stream}$')
+                            label=r'$\dot{m}_{\rm stream}$')
                     ax.fill_between(c[valid], p25[valid], p75[valid],
                                     color='C0', alpha=0.2)
+
+            # miniUchuu, medians only.  Left unlabelled so the colour legend
+            # stays two entries; the linestyle is keyed separately below.
+            if have_mu and mu_snaps[idx] in mu_data:
+                d2 = mu_data[mu_snaps[idx]]
+                x2 = d2[x_prop]
+                central2 = (d2.get('Type', np.zeros_like(x2)) == 0) & (x2 > 0)
+                log_x2 = np.log10(x2[central2])
+
+                for key2, col2 in (('mdot_cool', 'C3'), ('mdot_stream', 'C0')):
+                    arr2 = d2.get(key2)
+                    if arr2 is None:
+                        continue
+                    a2 = arr2[central2]
+                    pos2 = a2 > 0
+                    if np.sum(pos2) == 0:
+                        continue
+                    c2, med2, _, _ = binned_median(log_x2[pos2],
+                                                   np.log10(a2[pos2]), xbins)
+                    valid2 = np.isfinite(med2)
+                    ax.plot(c2[valid2], med2[valid2], color=col2, lw=1.8,
+                            ls='--')
+
+            # D&B06 stream ceiling: f_stream = 1/2 here, so the two channels
+            # should cross on this line.
+            x_ceil = _mstream_ceiling_x(REDSHIFTS[snap], x_prop,
+                                        d['Mvir'], d['Vvir'])
+            if x_ceil is not None and xlim[0] < x_ceil < xlim[1]:
+                ax.axvline(x_ceil, color='0.35', ls=':', lw=1.6, zorder=1)
 
             ax.set_ylabel(r'$\log_{10}\,\dot{m}_{\mathrm{cool}}\ [M_{\odot}\,\mathrm{yr}^{-1}]$')
             ax.set_xlim(*xlim)
             ax.text(0.05, 0.92, zlabel, transform=ax.transAxes, va='top')
             # ax.tick_params(axis='y')  # Use style sheet for y-axis ticks
-            ax.set_ylim(-1, 3.5)
+            ax.set_ylim(-3, 4.0)
 
             if idx == 0:
-                _standard_legend(ax, loc='lower right')
+                handles, labels = ax.get_legend_handles_labels()
+                if have_mu:
+                    handles += [Line2D([], [], color='0.35', lw=2.2, ls='-'),
+                                Line2D([], [], color='0.35', lw=1.8, ls='--')]
+                    labels += ['Millennium', 'miniUchuu']
+                handles.append(Line2D([], [], color='0.35', ls=':', lw=1.6))
+                labels.append(r'$M_{\rm stream}$')
+                _standard_legend(ax, loc='lower right',
+                                 handles=handles, labels=labels)
 
         axes[-1].set_xlabel(x_label)
         ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
@@ -11068,6 +11211,12 @@ _MSTAR_UCHUU = np.array([
     1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000])
 
 
+# Factor f relating the stream width to the clustering mass M_*(z) in
+# Dekel & Birnboim (2006) eqs 40-41.  Hardcoded in the model as
+# DB06_STREAM_MASS_FACTOR in src/model_cooling_heating.c; kept in step here.
+DB06_STREAM_MASS_FACTOR = 3.0
+
+
 def interpolate_clustering_mass_py(z):
     """log10 M_*(z) in Msun, selected by Omega as the model code does."""
     table = _MSTAR_UCHUU if abs(OMEGA_M - 0.3089) < 0.01 else _MSTAR_MILL
@@ -11084,19 +11233,17 @@ def print_mdot_panel_stats(x_prop='Vvir'):
       M_stream     Dekel & Birnboim (2006) ceiling Mshock^2/(f Mstar), and
                    whether the stream window above Mshock is open
 
-    The header echoes ColdStreamCeilingOn and StreamMassFactor from the run so
-    it is unambiguous which prescription produced the figure.
+    The header echoes Mshock from the run and the hardcoded stream mass factor
+    so it is unambiguous which prescription produced the figure.
     """
     props = _MDOT_PROPS + ['Regime']
     snap_nums = [s for s, _ in _MDOT_SNAP_PANELS]
     snapdata = load_snapshots(PRIMARY_DIR, snap_nums, props)
 
     rt = _read_runtime_attrs(PRIMARY_DIR)
-    ceiling = rt.get('ColdStreamCeilingOn', '?')
-    fstream_f = rt.get('StreamMassFactor', '?')
     mshock = rt.get('MShockMsun', 6.0e11)
-    print('\n  cold-stream diagnostics  (ColdStreamCeilingOn=%s, StreamMassFactor=%s, '
-          'Mshock=%.2e)' % (ceiling, fstream_f, mshock))
+    print('\n  cold-stream diagnostics  (DB06 eq. 39 threshold, f=%s, '
+          'Mshock=%.2e)' % (DB06_STREAM_MASS_FACTOR, mshock))
 
     xlabel = 'log Vvir' if x_prop == 'Vvir' else 'log Mvir'
     for snap, zlabel in _MDOT_SNAP_PANELS:
@@ -11115,12 +11262,11 @@ def print_mdot_panel_stats(x_prop='Vvir'):
             print('    %-9s too few hot-regime centrals' % zlabel)
             continue
 
-        # DB06 ceiling for context, whichever prescription is running.
+        # DB06 ceiling for context.
         window = ''
         try:
             mstar = 10.0 ** interpolate_clustering_mass_py(z)
-            f_fac = float(fstream_f) if fstream_f != '?' else 3.0
-            m_ceil = mshock * mshock / (f_fac * mstar)
+            m_ceil = mshock * mshock / (DB06_STREAM_MASS_FACTOR * mstar)
             window = ('M_stream=%.2e (%.2f Mshock, %s)'
                       % (m_ceil, m_ceil / mshock,
                          'open' if m_ceil > mshock else 'closed'))
@@ -12791,9 +12937,8 @@ def plot_99_referee_diagnostics():
         import h5py as _h5
         with _h5.File(find_model_files(PRIMARY_DIR)[0], 'r') as _f:
             _rt = dict(_f['Header/Runtime'].attrs)
-        _keys = ('FIREmodeOn', 'SFprescription', 'CGMrecipeOn', 'FeedbackFreeModeOn',
-                 'CGMDensityProfile', 'PrecipCriterionOn', 'RegimeRandomMode',
-                 'FFBRandomMode', 'SNEnergyConservationOn', 'MaxSNEnergyCoupling',
+        _keys = ('FIREmodeOn', 'SFprescription', 'CGMrecipeOn', 'EnhancedStarFormationOn',
+                 'CGMDensityProfile', 'PrecipCriterionOn',
                  'FeedbackReheatingEpsilon', 'FeedbackEjectionEfficiency',
                  'EtaSN', 'EnergySN', 'RamPressureStrippingOn')
         print('#   runtime  ' + ', '.join(f'{k}={_rt[k]}' for k in _keys if k in _rt))
@@ -12953,7 +13098,7 @@ def plot_99_referee_diagnostics():
     head('4. Mass loading and the energy bound',
          'Major 2(c),(g) and sub-point B1 -- the p17 rewrite')
     esn = 5.0e-3 * 1.0e51                # eta_SN * E_SN, erg per Msun
-    cap = 2.0                            # MaxSNEnergyCoupling
+    cap = MAX_SN_ENERGY_COUPLING
     msun_g = 1.989e33
     for s in snaps:
         g = data.get(s)

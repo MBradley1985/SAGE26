@@ -17,10 +17,9 @@ optional parameters take the listed default if omitted.
 |-----------|------|----------|---------|-------------|
 | `FileNameGalaxies` | string | yes | — | Base name for output files (e.g. `model` → `model_0.hdf5`). |
 | `OutputDir` | string | yes | — | Directory for galaxy output. Created if absent. |
-| `OutputFormat` | string | no | `sage_hdf5` | `sage_hdf5` or `sage_binary`. |
+| `OutputFormat` | string | no | `sage_hdf5` | `sage_hdf5`, `sage_binary`, or `lhalo_binary_output`. The last converts any supported input tree format to lhalo-binary and writes no galaxy catalogue. |
 | `NumOutputs` | int | no | `-1` | Number of snapshot outputs; `-1` = all snapshots. |
-| `SaveFullSFH` | 0/1 | no | `1` | Store per-snapshot SFR history arrays (`SFHMassDisk`, `SFHMassBulge`). |
-| `TrackICSAssembly` | 0/1 | no | `1` | Record satellite disruption contributions to ICS (`ICS_disrupt`, `ICS_accrete`). |
+| `SaveFullSFH` | 0/1 | no | `0` | Store per-snapshot SFR history arrays (`SFHMassDisk`, `SFHMassBulge`). |
 
 ---
 
@@ -28,7 +27,7 @@ optional parameters take the listed default if omitted.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `TreeType` | string | yes | — | Merger tree format: `lhalo_binary`, `lhalo_hdf5`, `consistent_trees_ascii`, `consistent_trees_hdf5`, `genesis_lhalo_hdf5`, `gadget4_hdf5`. |
+| `TreeType` | string | yes | — | Merger tree format: `lhalo_binary`, `lhalo_hdf5`, `consistent_trees_ascii`, `consistent_trees_hdf5`, `genesis_hdf5`, `gadget4_hdf5`. |
 | `TreeName` | string | yes | — | Tree file basename (files are named `TreeName.N`). |
 | `SimulationDir` | string | yes | — | Directory containing tree files. |
 | `FileWithSnapList` | string | yes | — | File listing snapshot scale factors, one per line. |
@@ -65,13 +64,9 @@ optional parameters take the listed default if omitted.
 | `ReionizationOn` | 0/1 | no | `1` | Reionization suppression of infall: 0=off; 1=Kravtsov+04 analytic fit. |
 | `DiskInstabilityOn` | 0/1 | no | `1` | Disk instability: 0=off; 1=Toomre criterion drives bulge and BH growth. |
 | `CGMrecipeOn` | 0/1 | no | `1` | Two-regime CGM model: 0=off (classical C16 cooling only, including its rapid cold-accretion branch at `r_cool > R_vir`); 1=on. |
-| `RegimeRandomMode` | 0/1 | no | `0` | Source of the random draw in the CGM/hot regime sigmoid: 0=a fresh uniform draw each snapshot (default), so a borderline-mass central can flip regime between snapshots; 1=the persistent `RegimeRandom` quantile assigned at galaxy creation, so the regime evolves deterministically with `Mvir` and never thrashes. |
-| `ColdStreamCeilingOn` | 0/1 | no | `0` | How the Dekel & Birnboim cold-stream fraction `f_stream` is set in the hot regime. 0=the SAGE26 smooth fraction `(Mvir/Mshock)^(-4/3) (1+z)/2` with a hard cut below `z_crit` for `Mvir > Mshock` (default); 1=DB06 eq. 40 as published, the ceiling `Mstream = Mshock^2/(f Mstar)`, making `f_stream` exactly 1 or 0. See [Cooling and AGN heating](physics/cooling_and_heating.md). |
 | `KarpovModeOn` | 0/1 | no | `0` | Metallicity of SN-reheated and ejected gas: 0=the full Karpov+23 recipe; 1=a low-metallicity floor at `Z/Z_sun = 0.01`. Only acts when the reheating/ejection path computes a metallicity for the outflow. |
 | `FIREmodeOn` | 0/1 | no | `1` | FIRE stellar feedback: 0=off; 1=on. |
-| `SNEnergyConservationOn` | 0/1 | no | `1` | Bound both supernova feedback terms by the energy actually available: 0=off (recovers the unbounded behaviour); 1=on (default). Caps the ejection coupling at `MaxSNEnergyCoupling` and the mass loading at `MaxSNEnergyCoupling * eta_SN E_SN / V_vir^2`, using the same `0.5*eta*V_vir^2` cost convention as `E_lift`, so the model cannot spend more energy than the supernovae release. Only acts when `FIREmodeOn=1`. |
-| `MaxSNEnergyCoupling` | double | no | `2.0` | Cap applied to `eps_eff` when `SNEnergyConservationOn=1`. `2.0` means `E_FB <= m_* eta_SN E_SN` (all of the SN energy); `1.0` caps it at half. Bounds the *energy*, not the empirical FIRE mass loading, which is applied unmodified in `eta_reheat`. |
-| `FeedbackFreeModeOn` | int | no | `1` | Feedback-free burst galaxies: 0=off; 1=Li+24 sigmoid; 2=BK25 (Ishiyama+21 c); 3=BK25 (ConcentrationOn method); 4=BK25 + log-normal c scatter; 5=Li+24 sharp; 6=Li+24 sigmoid + H₂ SF; 7=BK25 log-normal c scatter + H₂ SF. |
+| `EnhancedStarFormationOn` | int | no | `1` | Feedback-free burst (FFB) galaxies: 0=off; 1=Li+24 mass threshold with their eq. 3 sigmoid, so a halo is FFB with probability `f_ffb(Mvir, z)`; 2=Boylan-Kolchin (2025) acceleration threshold `g_max > g_crit`, with log-normal scatter applied to the halo concentration. Both apply to centrals regardless of the halo's CGM/hot regime, and both draw fresh from the shared `rand()` stream each snapshot. See [Star formation and feedback](physics/starformation_and_feedback.md). |
 | `ConcentrationOn` | int | no | `3` | Halo concentration method: 0=off; 1=Ishiyama+21 table; 2=V_max/V_vir; 3=V_max/V_vir with infall freeze for satellites. |
 | `BulgeSizeOn` | int | no | `3` | Bulge radius model: 0=off; 1=Shen+2003 eq.33; 2=Shen+2003 eq.32; 3=Tonini+2016 (separate merger and instability channels, mass-weighted average). |
 | `StarburstColdGasOn` | 0/1 | no | `1` | Include cold gas contribution during merger starbursts. |
@@ -83,12 +78,7 @@ optional parameters take the listed default if omitted.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `FFBMaxEfficiency` | double | no | `0.2` | Maximum star formation efficiency during FFB bursts. `0.2` matches observations; `1.0` is the theoretical maximum. |
-| `FFBConcSigma` | double | no | `0.2` | Log-normal scatter in halo concentration used by `FeedbackFreeModeOn=4,7` (dex). |
-| `FFBIgnoreRegime` | 0/1 | no | `1` | Apply FFB criterion regardless of CGM regime classification. |
-| `FFBThresholdSlope` | double | no | `-6.2` | Slope of the Li+24 FFB halo-mass threshold, `log10 Mvir_ffb = 10.8 + slope * log10((1+z)/10)`. The `10^10.8 Msun` normalisation is pinned at `z = 9`, so changing the slope pivots the threshold about that redshift rather than shifting it wholesale. |
-| `FFBRandomMode` | 0/1 | no | `0` | Where the FFB draw comes from when it is compared against the Li+24 fraction `f_ffb(M_vir, z)`: 0=a fresh uniform draw each snapshot (default); 1=the persistent `FFBRandom` assigned at galaxy creation. Both compare against the same sigmoid — the difference is temporal. With 0 a galaxy re-enters the lottery every snapshot, so it moves in and out of FFB and a transient low-redshift FFB population persists; with 1 each galaxy holds a fixed quantile, so once `f_ffb` falls below it the galaxy leaves FFB permanently and both the oscillation and the low-z population disappear. |
-| `RedshiftPowerLawExponent` | double | no | `1.25` | Exponent alpha of the `(1+z)^alpha` term in the FIRE mass-loading scaling `eta_reheat = FeedbackReheatingEpsilon * (1+z)^alpha * (V_vir/60 km/s)^beta` (Muratov+15). Used only when `FIREmodeOn=1`. |
+| `EnhancedSFEfficiency` | double | no | `0.2` | Maximum star formation efficiency during FFB bursts. `0.2` matches observations; `1.0` is the theoretical maximum. |
 
 ---
 
@@ -96,7 +86,7 @@ optional parameters take the listed default if omitted.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `H2DiskAreaOption` | int | no | `1` | Disk area for H₂ surface density: 1=π r_disk²; 2=π (3 r_disk)²; 3=2π r_disk². |
+| `H2DiskAreaOption` | int | no | `1` | Disk area for H₂ surface density: 0=π r_s²; 1=π (3 r_s)²; 2=2π r_s² (central Σ₀). |
 | `H2RadialIntegrationOn` | 0/1 | no | `1` | Use radial ring integration for H₂ fraction (more accurate, slower). |
 | `H2RadialNBins` | int | no | `25` | Number of radial bins for the ring integration. |
 | `H2RadialRMaxFactor` | double | no | `5.0` | Outer integration radius as a multiple of the disk scale radius. |
@@ -113,12 +103,6 @@ optional parameters take the listed default if omitted.
 | `RecycleFraction` | dimensionless | `0.43` | Fraction of stellar mass instantaneously recycled to cold gas. |
 | `Yield` | dimensionless | `0.025` | Fraction of stellar mass returned as metals. |
 | `FracZleaveDisk` | dimensionless | `0.0` | Fraction of newly produced metals transferred directly to hot gas. |
-
-### Disk sizes
-
-| Parameter | Units | Default | Description |
-|-----------|-------|---------|-------------|
-| `GasDiskRadiusFactor` | dimensionless | `1.0` | `chi`: ratio of the atomic-gas scale length to the stellar/H2 scale length, applied **only** in the HI ionisation truncation. 1.0 = cospatial (published behaviour); observed disks have `chi ~ 1.5-2`. Independent of `DiskRadiusOn`. Raising it spreads the same HI over a larger area so more of it falls below `SIGMA_HI_CRIT`, without touching the H2 midplane pressure (H2 is central and shielded, which is why one radius should not set both). A modest lever: `chi = 1.7` moves the ionised fraction from 0.13 to 0.28 at the median surface density. |
 
 ### Supernova feedback
 
@@ -143,19 +127,19 @@ optional parameters take the listed default if omitted.
 |-----------|-------|---------|-------------|
 | `ThreshMajorMerger` | dimensionless | `0.3` | Mass ratio above which a merger is classified as major. |
 | `ThresholdSatDisruption` | dimensionless | `1.0` | M_vir-to-baryonic mass ratio below which a satellite is disrupted rather than merged. |
+| `MergerTimeFactor` | dimensionless | `2.0` | Scales the Binney & Tremaine (1987) dynamical-friction merger timescale. It also sets how accreted stellar mass splits between the intracluster component and the BCG: when a satellite's subhalo is lost from the tree, its stars go to the ICS if the clock is still running (`MergTime > 0`) and onto the central if it has expired. |
 
 ### Gas cycling
 
 | Parameter | Units | Default | Description |
 |-----------|-------|---------|-------------|
-| `ReIncorporationFactor` | dimensionless | `0.15` | Fraction of ejected mass reincorporated per dynamical time. |
+| `ReIncorporationFactor` | dimensionless | `0.19` | Scales the reincorporation velocity threshold: `Vcrit = 354.26 km/s * ReIncorporationFactor`, so it is not a mass fraction despite the name. Reincorporation runs only where `Vvir > Vcrit`, at a rate `(Vvir/Vcrit - 1) * EjectedMass / t_dyn`. The `354.26 = V_SN/sqrt(2)` follows from `V_SN = 501 km/s` (Paper I eq. 11, from `eta_SN = 5e-3 Msun^-1` and `E_SN = 1e51 erg`). An earlier version used `V_SN = 630 km/s`, giving `445.48`, and `0.15` was fitted against that; `0.19` restores the same effective threshold (`445.48*0.15 = 66.8` vs `354.26*0.19 = 67.3 km/s`) with the correct `V_SN`. |
 
 ### Cooling and cold streams
 
 | Parameter | Units | Default | Description |
 |-----------|-------|---------|-------------|
 | `MShockMsun` | Msun | `6.0e11` | Dekel & Birnboim (2006) virial-shock stability mass. Used twice: it sets the CGM/hot regime classification in `determine_and_store_regime()`, and it sets the cold-stream criterion in `cooling_recipe_hot()`. Both must see the same value, so change it here rather than in either site. |
-| `StreamMassFactor` | dimensionless | `3.0` | The factor `f` in DB06 eqs 40-41, relating the stream width to the clustering mass `M_*(z)`; they adopt 3. Used by both `ColdStreamCeilingOn` branches. Note that the hardcoded `Z_CRIT_DB06 = 1.2` used by the `ColdStreamCeilingOn = 0` branch was derived from `f = 3`, `MShockMsun = 6e11` and the Millennium cosmology, so it must be recomputed if either of these changes. |
 
 ### Reionization
 
@@ -164,8 +148,7 @@ optional parameters take the listed default if omitted.
 | `Reionization_z0` | — | `8.0` | Characteristic redshift for reionization suppression (Kravtsov+04). |
 | `Reionization_zr` | — | `7.0` | Width parameter for reionization suppression. |
 
-See the **FFB parameters** section above for `FFBMaxEfficiency`,
-`FFBConcSigma`, and `RedshiftPowerLawExponent`.
+See the **FFB parameters** section above for `EnhancedSFEfficiency`.
 
 ---
 
@@ -197,3 +180,43 @@ retune and would show more simulation-consistent behaviour, at higher compute co
 |-----------|------|----------|---------|-------------|
 | `ForestDistributionScheme` | string | no | `generic_power_in_nhalos` | How forests are distributed over MPI tasks: `uniform_in_forests`, `linear_in_nhalos`, `quadratic_in_nhalos`, `exponent_in_nhalos`, `generic_power_in_nhalos`. |
 | `ExponentForestDistributionScheme` | double | no | `0.7` | Exponent for `exponent_in_nhalos` or `generic_power_in_nhalos` schemes. |
+
+---
+
+## Removed parameters
+
+SAGE26 was developed with a wide set of switches so alternative prescriptions
+could be compared. For release, the prescriptions the papers use are the only
+ones the code carries, and their parameters are gone.
+
+**An unrecognised tag is a startup error, not a warning.** A parameter file
+written against an earlier version will abort with
+`Tag 'X' not allowed or multiply defined` until the lines below are deleted.
+
+Values that are still meaningful physical constants now live as named
+constants in the source, cited at their definition. They are listed here so a
+reader who goes looking for a knob can find where it went.
+
+| Removed parameter | Fate |
+|---|---|
+| `ColdStreamCeilingOn` | Dekel & Birnboim (2006) eq. 39 (the former mode 1) is the only cold-stream prescription. |
+| `StreamMassFactor` | `DB06_STREAM_MASS_FACTOR = 3.0` in [`src/model_cooling_heating.c`](../src/model_cooling_heating.c). |
+| `StreamThresholdWidthDex` | `STREAM_THRESHOLD_WIDTH_DEX = 0.15` in [`src/model_cooling_heating.c`](../src/model_cooling_heating.c). |
+| `StreamZCritWidth` | Removed with the smoothed-gate modes. |
+| `TrackICSAssembly` | Always on: `ICS_disrupt`, `ICS_accrete` and `ICS_sum_mt` are always accumulated. |
+| `GasDiskRadiusFactor` | `GAS_DISK_RADIUS_FACTOR = 1.0` in [`src/model_starformation_and_feedback.c`](../src/model_starformation_and_feedback.c). |
+| `FeedbackFreeModeOn` | Renamed `EnhancedStarFormationOn`, with modes reduced to 0/1/2. The old mode 4 (BK25 with log-normal concentration scatter) is now mode 2; old modes 2, 3, 5, 6, 7 and 8-11 are gone. |
+| `FFBMaxEfficiency` | Renamed `EnhancedSFEfficiency`. Still tunable. |
+| `FFBConcSigma` | `FFB_CONC_SIGMA = 0.2` in [`src/model_regimes.c`](../src/model_regimes.c). |
+| `FFBThresholdSlope` | `FFB_THRESHOLD_SLOPE = -6.2` in [`src/model_regimes.c`](../src/model_regimes.c). |
+| `FFBIgnoreRegime` | Always on: the FFB criteria apply whatever the halo's CGM/hot regime. |
+| `FFBRandomMode` | Always a fresh draw each snapshot. |
+| `RegimeRandomMode` | Always a fresh draw each snapshot. |
+| `FFBFeedbackDelayMyr`, `FFBCloudClumping`, `FFBCloudClumpingDisk`, `FFBStreamRadiusFraction`, `FFBShellSoundSpeedKms`, `FFBToomreQ`, `FFBSigmaCritMsunPc2` | Removed with the Dekel+23 shell and disc criteria (old FFB modes 8-11). |
+| `SNEnergyConservationOn` | Always on: both the reheating and the ejection term are bounded by the supernova energy available. |
+| `MaxSNEnergyCoupling` | `MAX_SN_ENERGY_COUPLING = 2.0` in [`src/model_misc.h`](../src/model_misc.h). |
+| `RedshiftPowerLawExponent` | `FIRE_REDSHIFT_EXPONENT = 1.25`, defined in both [`src/model_starformation_and_feedback.c`](../src/model_starformation_and_feedback.c) and [`src/model_mergers.c`](../src/model_mergers.c). |
+
+The same names are also gone from the `Header/Runtime` attributes of the HDF5
+output, which records tunable parameters. Analysis scripts that read them
+should use the constants above instead.

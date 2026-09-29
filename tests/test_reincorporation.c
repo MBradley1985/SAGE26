@@ -4,7 +4,8 @@
  *
  * Tests the reincorporation of gas from the ejected reservoir back into
  * the hot/CGM gas phase. This process occurs when the halo escape velocity
- * exceeds the supernova ejecta velocity (630 km/s).
+ * exceeds the supernova ejecta velocity (V_SN = 501 km/s, giving
+ * V_crit = V_SN/sqrt(2) = 354.53 km/s).
  *
  * Key physics tested:
  * - Reincorporation rate dependence on Vvir and EjectedMass
@@ -35,13 +36,17 @@ void test_reincorporation_velocity_threshold() {
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
+    /* V_SN^2 in code units: eta_SN = 5e-3 Msun^-1, E_SN = 1e51 erg
+     * -> V_SN = 501.38 km/s, so Vcrit = V_SN/sqrt(2) = 354.53 km/s. */
+    run_params.EtaSNcode = 1.0;
+    run_params.EnergySNcode = 501.38 * 501.38;
     run_params.CGMrecipeOn = 1;
     run_params.ReIncorporationFactor = 1.0;
     
     const double dt = 0.01;  // Gyr
     
     // Test 1: Vvir < Vcrit -> no reincorporation
-    gal[0].Vvir = 400.0;
+    gal[0].Vvir = 300.0;
     gal[0].Rvir = 200.0;
     gal[0].EjectedMass = 1.0;
     gal[0].MetalsEjectedMass = 0.02;
@@ -80,10 +85,14 @@ void test_reincorporation_rate_scaling() {
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
+    /* V_SN^2 in code units: eta_SN = 5e-3 Msun^-1, E_SN = 1e51 erg
+     * -> V_SN = 501.38 km/s, so Vcrit = V_SN/sqrt(2) = 354.53 km/s. */
+    run_params.EtaSNcode = 1.0;
+    run_params.EnergySNcode = 501.38 * 501.38;
     run_params.CGMrecipeOn = 1;
     run_params.ReIncorporationFactor = 1.0;
     
-    const double Vcrit = 445.48;
+    const double Vcrit = 501.38 / M_SQRT2;  /* V_SN/sqrt(2), V_SN = 501.38 km/s */
     const double dt = 0.01;
     
     // Galaxy 1: Vvir = 500 km/s
@@ -129,6 +138,10 @@ void test_reincorporation_timescale() {
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
+    /* V_SN^2 in code units: eta_SN = 5e-3 Msun^-1, E_SN = 1e51 erg
+     * -> V_SN = 501.38 km/s, so Vcrit = V_SN/sqrt(2) = 354.53 km/s. */
+    run_params.EtaSNcode = 1.0;
+    run_params.EnergySNcode = 501.38 * 501.38;
     run_params.CGMrecipeOn = 1;
     run_params.ReIncorporationFactor = 1.0;
     
@@ -172,6 +185,10 @@ void test_metal_conservation_reincorporation() {
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
+    /* V_SN^2 in code units: eta_SN = 5e-3 Msun^-1, E_SN = 1e51 erg
+     * -> V_SN = 501.38 km/s, so Vcrit = V_SN/sqrt(2) = 354.53 km/s. */
+    run_params.EtaSNcode = 1.0;
+    run_params.EnergySNcode = 501.38 * 501.38;
     run_params.CGMrecipeOn = 1;
     run_params.ReIncorporationFactor = 1.0;
     
@@ -215,6 +232,10 @@ void test_regime_dependent_reincorporation() {
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
+    /* V_SN^2 in code units: eta_SN = 5e-3 Msun^-1, E_SN = 1e51 erg
+     * -> V_SN = 501.38 km/s, so Vcrit = V_SN/sqrt(2) = 354.53 km/s. */
+    run_params.EtaSNcode = 1.0;
+    run_params.EnergySNcode = 501.38 * 501.38;
     run_params.CGMrecipeOn = 1;
     run_params.ReIncorporationFactor = 1.0;
     
@@ -269,6 +290,10 @@ void test_reincorporation_factor() {
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
+    /* V_SN^2 in code units: eta_SN = 5e-3 Msun^-1, E_SN = 1e51 erg
+     * -> V_SN = 501.38 km/s, so Vcrit = V_SN/sqrt(2) = 354.53 km/s. */
+    run_params.EtaSNcode = 1.0;
+    run_params.EnergySNcode = 501.38 * 501.38;
     run_params.CGMrecipeOn = 1;
     
     double dt = 0.01;
@@ -313,6 +338,10 @@ void test_ejection_reincorporation_cycle() {
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
+    /* V_SN^2 in code units: eta_SN = 5e-3 Msun^-1, E_SN = 1e51 erg
+     * -> V_SN = 501.38 km/s, so Vcrit = V_SN/sqrt(2) = 354.53 km/s. */
+    run_params.EtaSNcode = 1.0;
+    run_params.EnergySNcode = 501.38 * 501.38;
     run_params.CGMrecipeOn = 1;
     run_params.ReIncorporationFactor = 1.0;
     
@@ -371,6 +400,10 @@ void test_reincorporation_mass_limit() {
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
+    /* V_SN^2 in code units: eta_SN = 5e-3 Msun^-1, E_SN = 1e51 erg
+     * -> V_SN = 501.38 km/s, so Vcrit = V_SN/sqrt(2) = 354.53 km/s. */
+    run_params.EtaSNcode = 1.0;
+    run_params.EnergySNcode = 501.38 * 501.38;
     run_params.CGMrecipeOn = 1;
     run_params.ReIncorporationFactor = 1.0;
     

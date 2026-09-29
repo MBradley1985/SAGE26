@@ -25,10 +25,10 @@ of halo properties. Test trees for the
 |---------|-----------|-----------|
 | Two-regime CGM model with self-regulating precipitation | `CGMrecipeOn` | Dekel & Birnboim (2006), Voit (2015) |
 | FIRE stellar feedback | `FIREmodeOn` | Muratov et al. (2015) |
-| Feedback-free burst galaxies | `FeedbackFreeModeOn` | Li et al. (2024), Boylan-Kolchin (2025) |
-| 7 H2 star formation prescriptions | `SFprescription` | BR06, KMT09, KD12, K13, GD14, S25 |
+| Feedback-free burst galaxies | `EnhancedStarFormationOn` | Li et al. (2024), Boylan-Kolchin (2025) |
+| 8 star formation prescriptions, 6 of them H2-based | `SFprescription` | BR06, S25, KD12, KMT09, K13, GD14 |
 | Separate merger/instability bulge tracking | `BulgeSizeOn` | Tonini et al. (2016) |
-| ICS assembly tracking | `TrackICSAssembly` | — |
+| ICS assembly tracking | always on | — |
 | Full star formation history arrays | `SaveFullSFH` | — |
 | Concentration | `ConcentrationOn` | Ishiyama+21 lookup table, Vmax/Vvir, Vmax/Vvir with subhalo infall freeze |
 | ConsistentTrees, Genesis, Gadget-4 tree readers | `TreeType` | — |
@@ -52,12 +52,17 @@ of halo properties. Test trees for the
 ```bash
 git clone https://github.com/MBradley1985/SAGE26.git
 cd SAGE26
-make                   # serial build -- produces ./sage and libsage.so
-make USE-MPI=yes       # MPI-parallel build (switches compiler to mpicc)
-make USE-HDF5=yes      # enable HDF5 support
+make                   # default build -- produces ./sage and libsage.so
+make USE-MPI=          # serial build (no mpicc needed)
+make USE-HDF5=         # build without HDF5 tree reading and output
 make MEM-CHECK=yes     # address/UB sanitizers for debugging (gcc only)
 make clean             # remove all build artefacts
 ```
+
+**MPI and HDF5 are on by default** (`USE-MPI` and `USE-HDF5` at the top of the
+Makefile), so a plain `make` needs `mpicc` and the HDF5 libraries on your path.
+Set a switch to empty to turn it off, as above -- `USE-MPI=yes` is already the
+default and does nothing. The regression baseline requires the serial build.
 
 ---
 
@@ -133,7 +138,7 @@ Each regime uses a dedicated cooling recipe.
 
 | Parameter | Values | Effect |
 |-----------|--------|--------|
-| `CGMrecipeOn` | 0/1 | 0=off (classical C16 cooling only); 1=on. Carr+2022 exact copy. |
+| `CGMrecipeOn` | 0/1 | 0=off (classical C16 cooling only); 1=on, following Carr et al. (2023). |
 
 
 ### Adaptive time integration (`SubstepResolution`)
@@ -154,13 +159,13 @@ cap) rather than a fixed count.
 | 0 | Off |
 | 1 | Muratov+2015 FIRE mass loading |
 
-### Feedback-free burst galaxies (`FeedbackFreeModeOn`)
+### Feedback-free burst galaxies (`EnhancedStarFormationOn`)
 
 | Value | Mode |
 |-------|------|
 | 0 | Off |
-| 1 | Li+2024 sigmoid |
-| 2 | Boylan-Kolchin+2025 (Ishiyama+21 concentration) |
+| 1 | Li+2024 mass threshold with their eq. 3 sigmoid |
+| 2 | Boylan-Kolchin+2025 acceleration threshold, log-normal concentration scatter |
 
 ### Halo concentration (`ConcentrationOn`)
 
@@ -175,7 +180,7 @@ cap) rather than a fixed count.
 
 | Parameter | Values | Effect |
 |-----------|--------|--------|
-| `H2DiskAreaOption` | 1–3 | Disk area for H2 surface density: 1=π r_disk²; 2=π (3 r_disk)²; 3=2π r_disk² |
+| `H2DiskAreaOption` | 0–2 | Disk area for H2 surface density: 0=π r_s²; 1=π (3 r_s)²; 2=2π r_s² |
 | `H2RadialIntegrationOn` | 0/1 | Radial ring integration for H2 fraction (slower, more accurate) |
 | `H2RadialNBins` | int | Number of radial bins for ring integration |
 
@@ -183,20 +188,22 @@ cap) rather than a fixed count.
 
 | Parameter | Values | Effect |
 |-----------|--------|--------|
-| `TrackICSAssembly` | 0/1 | Record satellite disruption / accretion contributions to ICS |
+| `MergerTimeFactor` | double | Scales the dynamical-friction merger timescale, and with it the split of accreted stellar mass between the ICS and the BCG |
+
+ICS assembly tracking (`ICS_disrupt`, `ICS_accrete`, `ICS_sum_mt`) is always on.
 
 ### Output
 
 | Parameter | Values | Effect |
 |-----------|--------|--------|
-| `OutputFormat` | string | `sage_hdf5` or `sage_binary` |
+| `OutputFormat` | string | `sage_hdf5`, `sage_binary`, or `lhalo_binary_output` to convert the input trees to lhalo-binary instead of running the model |
 | `SaveFullSFH` | 0/1 | Track per-snapshot SFR history arrays |
 | `NumOutputs` | int | Number of snapshot outputs; `-1` = all snapshots |
 
 ### Supported tree formats (`TreeType`)
 
 `lhalo_binary`, `lhalo_hdf5`, `consistent_trees_ascii`, `consistent_trees_hdf5`,
-`genesis_lhalo_hdf5`, `gadget4_hdf5`
+`genesis_hdf5`, `gadget4_hdf5`
 
 ---
 
@@ -209,17 +216,26 @@ cd tests && make quick              # single fastest check
 bash tests/run_integration_tests.sh # full integration test (slower)
 ```
 
-The regression baseline checks that output is bit-identical across 5444 datasets:
+The regression baseline checks that every one of the 5252 output datasets is
+bit-identical to the committed reference. It needs the serial build, and note
+that `make tests` relinks `sage` through its `$(EXEC)` dependency, so build in
+this order:
 
 ```bash
+make clean && make USE-MPI=      # serial build
 bash tests/regression_baseline.sh
 ```
 
-After any physics change, recapture the baseline with:
+After an intentional physics change, recapture the baseline in the same commit
+and say so in the message (see
+[docs/developer/STYLE_COMMITS.md](docs/developer/STYLE_COMMITS.md)):
 
 ```bash
 python3 tests/regression_baseline.py capture input/millennium.par
 ```
+
+See [docs/developer/REGRESSION_BASELINE.md](docs/developer/REGRESSION_BASELINE.md)
+for the full policy.
 
 ---
 

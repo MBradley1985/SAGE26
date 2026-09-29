@@ -146,10 +146,10 @@ Refs: see CHANGELOG.md entry for Phase 2.
 ### Good (a docs-only commit)
 
 ```text
-docs: add parameter reference for new FFB switches
+docs: add parameter reference for the H2 radial integration switches
 
-Adds FeedbackFreeModeOn entries 6 and 7 to docs/parameters.md following
-the table format established in Phase 3.
+Adds H2RadialIntegrationOn, H2RadialNBins and H2RadialRMaxFactor to
+docs/parameters.md following the table format established in Phase 3.
 ```
 
 ### Bad (do not do this)
