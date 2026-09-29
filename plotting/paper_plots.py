@@ -10912,6 +10912,58 @@ _MDOT_SNAP_PANELS = [
 _MDOT_PROPS = ['Mvir', 'Vvir', 'Type', 'mdot_cool', 'mdot_stream']
 
 
+def _mstream_ceiling_x(z, x_prop, mvir_msun, vvir):
+    """x-axis position of the Dekel & Birnboim (2006) stream ceiling.
+
+    Their eq. 40 gives Mstream = Mshock^2 / (f M_*(z)), the halo mass at which
+    (t_cool/t_comp)_stream = 1 and so f_stream = 1/2.  That is where the two
+    accretion channels should cross, which makes it the one threshold worth
+    drawing on these panels.
+
+    For an Mvir x-axis the position is just log10(Mstream).  For a Vvir axis
+    the mass is mapped through the panel's own haloes rather than an analytic
+    virial relation, so the marker inherits the simulation's cosmology and
+    overdensity convention instead of a second, possibly inconsistent, one.
+
+    Returns None when the ceiling falls outside the sampled halo range, which
+    is the normal case at low z where Mstream drops far below the resolution
+    limit.
+    """
+    try:
+        mstar = 10.0 ** interpolate_clustering_mass_py(z)
+        rt = _read_runtime_attrs(PRIMARY_DIR)
+        mshock = float(rt.get('MShockMsun', 6.0e11))
+        f_fac = float(rt.get('StreamMassFactor', 3.0))
+        m_ceil = mshock * mshock / (f_fac * mstar)
+    except Exception:
+        return None
+
+    if not np.isfinite(m_ceil) or m_ceil <= 0:
+        return None
+    if x_prop == 'Mvir':
+        return np.log10(m_ceil)
+
+    ok = (mvir_msun > 0) & (vvir > 0)
+    if ok.sum() < 50:
+        return None
+    lm, lv = np.log10(mvir_msun[ok]), np.log10(vvir[ok])
+    lm_ceil = np.log10(m_ceil)
+    if lm_ceil < lm.min() or lm_ceil > lm.max():
+        return None
+    # Median log Vvir per log Mvir bin, then interpolate at the ceiling.
+    edges = np.arange(lm.min(), lm.max() + 0.2, 0.2)
+    idx = np.digitize(lm, edges) - 1
+    cen, med = [], []
+    for i in range(len(edges) - 1):
+        m = idx == i
+        if m.sum() >= 10:
+            cen.append(0.5 * (edges[i] + edges[i + 1]))
+            med.append(np.median(lv[m]))
+    if len(cen) < 2:
+        return None
+    return float(np.interp(lm_ceil, cen, med))
+
+
 def _plot_mdot_panels(x_prop, x_label, xlim, xbins, output_name,
                       upper_axis=None):
     """
@@ -10938,6 +10990,23 @@ def _plot_mdot_panels(x_prop, x_label, xlim, xbins, output_name,
     print('  panels: ' + ', '.join(
         f'{lbl} (Snap_{s}, z={REDSHIFTS[s]:.3f})'
         for s, lbl in _MDOT_SNAP_PANELS))
+
+    # miniUchuu comparison, drawn dashed with no shading so the two simulations
+    # stay separable where the curves overlap (same convention as Fig. 6).  Its
+    # snapshot grid differs from Millennium's, so each panel's target redshift
+    # is mapped into the miniUchuu table independently -- reusing the primary
+    # snapshot number would silently compare different epochs.
+    have_mu = model_files_exist(MINIUCHUU_DIR)
+    if have_mu:
+        mu_snaps = [_snap_nearest_z(MINIUCHUU_REDSHIFTS, z)
+                    for z in _MDOT_Z_TARGETS]
+        mu_data = load_snapshots(MINIUCHUU_DIR, mu_snaps, _MDOT_PROPS)
+        print('  miniUchuu: ' + ', '.join(
+            f'z={zt:.0f} -> Snap_{s} (z={MINIUCHUU_REDSHIFTS[s]:.3f})'
+            for zt, s in zip(_MDOT_Z_TARGETS, mu_snaps)))
+    else:
+        mu_snaps, mu_data = [], {}
+        print(f'  miniUchuu: no model files in {MINIUCHUU_DIR}, skipping')
 
     nrows = len(_MDOT_SNAP_PANELS)
 
@@ -10994,14 +11063,51 @@ def _plot_mdot_panels(x_prop, x_label, xlim, xbins, output_name,
                     ax.fill_between(c[valid], p25[valid], p75[valid],
                                     color='C0', alpha=0.2)
 
+            # miniUchuu, medians only.  Left unlabelled so the colour legend
+            # stays two entries; the linestyle is keyed separately below.
+            if have_mu and mu_snaps[idx] in mu_data:
+                d2 = mu_data[mu_snaps[idx]]
+                x2 = d2[x_prop]
+                central2 = (d2.get('Type', np.zeros_like(x2)) == 0) & (x2 > 0)
+                log_x2 = np.log10(x2[central2])
+
+                for key2, col2 in (('mdot_cool', 'C3'), ('mdot_stream', 'C0')):
+                    arr2 = d2.get(key2)
+                    if arr2 is None:
+                        continue
+                    a2 = arr2[central2]
+                    pos2 = a2 > 0
+                    if np.sum(pos2) == 0:
+                        continue
+                    c2, med2, _, _ = binned_median(log_x2[pos2],
+                                                   np.log10(a2[pos2]), xbins)
+                    valid2 = np.isfinite(med2)
+                    ax.plot(c2[valid2], med2[valid2], color=col2, lw=1.8,
+                            ls='--')
+
+            # D&B06 stream ceiling: f_stream = 1/2 here, so the two channels
+            # should cross on this line.
+            x_ceil = _mstream_ceiling_x(REDSHIFTS[snap], x_prop,
+                                        d['Mvir'], d['Vvir'])
+            if x_ceil is not None and xlim[0] < x_ceil < xlim[1]:
+                ax.axvline(x_ceil, color='0.35', ls=':', lw=1.6, zorder=1)
+
             ax.set_ylabel(r'$\log_{10}\,\dot{m}_{\mathrm{cool}}\ [M_{\odot}\,\mathrm{yr}^{-1}]$')
             ax.set_xlim(*xlim)
             ax.text(0.05, 0.92, zlabel, transform=ax.transAxes, va='top')
             # ax.tick_params(axis='y')  # Use style sheet for y-axis ticks
-            ax.set_ylim(-3, 4.5)
+            ax.set_ylim(-3, 4.0)
 
             if idx == 0:
-                _standard_legend(ax, loc='lower right')
+                handles, labels = ax.get_legend_handles_labels()
+                if have_mu:
+                    handles += [Line2D([], [], color='0.35', lw=2.2, ls='-'),
+                                Line2D([], [], color='0.35', lw=1.8, ls='--')]
+                    labels += ['Millennium', 'miniUchuu']
+                handles.append(Line2D([], [], color='0.35', ls=':', lw=1.6))
+                labels.append(r'$M_{\rm stream}$')
+                _standard_legend(ax, loc='lower right',
+                                 handles=handles, labels=labels)
 
         axes[-1].set_xlabel(x_label)
         ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))

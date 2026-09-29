@@ -52,8 +52,6 @@ ReionizationOn              1   %0: switch off
 DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
 
 CGMrecipeOn                 1   %0: switch off
-ColdStreamCeilingOn         1   %0: (Mvir/Mshock)^-4/3 (1+z)/2 w. hard z_crit cut; 1: Dekel & Birnboim 2006 eq39 threshold; 2: as 0 w. smoothed gate; 3: as 2 w. DB06 mass dependence (f_stream=1/R, ceiling tracks M*(z))
-StreamZCritWidth            0.2
 FIREmodeOn                  1   %0: switch off
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
@@ -61,14 +59,6 @@ FeedbackFreeModeOn          1   %0: off; 1: Li+24 sigmoid; 2: BK25 (Ishiyama+21 
 
 SaveFullSFH                 0   %0: switch off
 KarpovModeOn                0   %0: switch off
-
-FFBFeedbackDelayMyr         1.0
-FFBCloudClumping            1.0 
-FFBCloudClumpingDisk        8.0 
-FFBStreamRadiusFraction     0.05 
-FFBShellSoundSpeedKms       13
-FFBToomreQ                  0.67
-FFBSigmaCritMsunPc2         3000
 
 %------------------------------------------
 %----- SAGE model parameters --------------
@@ -88,7 +78,6 @@ BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during
 
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
 ThresholdSatDisruption      1.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption
-MergerTimeFactor            2.0     %multiplies the dynamical-friction merger time; sets whether a satellite's clock is still running when its subhalo is lost, and so whether its stars go to the ICS (running) or the central (expired). 2.0 = published
 
 Yield                       0.025   %fraction of SF mass produced as metals
 RecycleFraction             0.43    %fraction of SF mass instantaneously recycled back to cold

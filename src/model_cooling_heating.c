@@ -285,6 +285,28 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
                     if(exponent < -300.0) exponent = -300.0;
                     f_stream = 1.0 / (1.0 + pow(10.0, exponent));
                 }
+
+                /* D&B06 attach a condition to their eq. 40: the ceiling
+                 * Mstream = Mshock^2/(f Mstar) holds only while f Mstar <
+                 * Mshock.  Testing ratio < 1 is algebraically the same as
+                 * testing Mvir < Mstream, so without this the ceiling is
+                 * applied at every epoch, including below z_crit where it
+                 * lies outside its stated domain.  Their rule there is
+                 * instead "cold streams exist only for M < Mshock" (p. 11),
+                 * which is what is imposed here.
+                 *
+                 * This is a necessary condition, not a sufficient one: below
+                 * Mshock f_stream is still whatever the criterion gives, so
+                 * streams are never switched on by this, only off.
+                 *
+                 * Note it reintroduces a discontinuity at z_crit for haloes
+                 * near Mshock -- f_stream ~ 0.5 just above, 0 just below --
+                 * because the sigmoid leaves a residual tail that the hard
+                 * condition truncates.  That is D&B06's own regime boundary
+                 * rather than an imposed redshift cut, but it is a step. */
+                if(fMstar >= M_shock && mass_ratio > 1.0) {
+                    f_stream = 0.0;
+                }
             } else if(run_params->ColdStreamCeilingOn == 2) {
                 // Mode 0's fraction with the shut-off smoothed.  The mass
                 // dependence is untouched, so this is a one-knob change from
