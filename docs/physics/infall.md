@@ -44,9 +44,9 @@ The function also performs the per-snapshot satellite-to-central transfers:
 
 - **Satellite EjectedMass** is reassigned to the central (centrals own the
   full ejected reservoir of the FoF group).
-- **Satellite ICS** is added to the central's ICS; if `TrackICSAssembly`
-  is on, the mass-weighted assembly history is also inherited and the
-  contribution is recorded as accretion.
+- **Satellite ICS** is added to the central's ICS; the mass-weighted
+  assembly history is inherited with it and the contribution is recorded
+  as accretion.
 - **Satellite CGMgas** is summed into the central's appropriate reservoir:
   `CGMgas` if the central is in Regime 0, `HotGas` if it is in Regime 1
   (or unconditionally `HotGas` if `CGMrecipeOn` is off).
@@ -148,7 +148,6 @@ hot reservoir and are skipped.
 | `BaryonFrac` | Universal baryon fraction f_b = Omega_b / Omega_m. |
 | `ReIncorporationFactor` | Sets `Vcrit` for the reincorporation cutoff (`Vcrit = 354.26 km/s * factor`). Larger values delay reincorporation in low-mass halos. Default `0.19`. |
 | `CGMrecipeOn` | Routes infall, reincorporation, and satellite CGM by regime when set. |
-| `TrackICSAssembly` | Records satellite-derived ICS mass into `ICS_accrete` for the central. |
 
 See [`parameters.md`](../parameters.md) for full descriptions and defaults.
 

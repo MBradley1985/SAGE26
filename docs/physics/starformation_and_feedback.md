@@ -14,7 +14,7 @@ substep ordering.
 
 The function executes the following block once per galaxy per substep:
 
-1. **FFB early exit.** If `FeedbackFreeModeOn >= 1` and the galaxy is in FFB
+1. **FFB early exit.** If `EnhancedStarFormationOn >= 1` and the galaxy is in FFB
    regime (`FFBRegime == 1`, set in `core_build_model.c`), control jumps to
    `starformation_ffb()` and the standard SF/feedback path is skipped.
 2. **Compute the SFR** via the prescription selected by `SFprescription`
@@ -89,7 +89,7 @@ Replaces the fixed coefficients with the Muratov et al. (2015) velocity-
 and redshift-dependent scaling:
 
 ```
-fire_scaling = (1 + z)^RedshiftPowerLawExponent * (V_vir / V_crit)^beta
+fire_scaling = (1 + z)^FIRE_REDSHIFT_EXPONENT * (V_vir / V_crit)^beta
 ```
 
 with `V_crit = 60 km/s` and the broken-power-law exponent
@@ -133,22 +133,19 @@ FeedbackEjectionEfficiency * fire_scaling` inherits the
 `(1+z)^alpha (V_vir/60)^beta` scaling and is unbounded in itself, so `E_FB`
 would otherwise exceed the total SN energy `stars * eta_SN * E_SN` released by
 the stars driving it (that happens when `eps_eff > 2`).
-`SNEnergyConservationOn`, on by default, caps `eps_eff` at
-`MaxSNEnergyCoupling` (default 2.0 -- the whole SN budget; 1.0 caps it at
-half).  The bound applies to the energy only; the empirical FIRE mass loading
-in `eta_reheat` is left untouched.  Setting `SNEnergyConservationOn = 0`
-restores the unbounded coupling of the earlier published behaviour.
+`eps_eff` is therefore capped at `MAX_SN_ENERGY_COUPLING` (2.0 -- the whole
+SN budget).  The bound applies to the energy only; the empirical FIRE mass
+loading in `eta_reheat` is left untouched.
 
-**The reheating term has its own optional bound.** `mdot_reheat = eta_reheat * mdot_*`
-carries no energy check by default. Where the model ejects, the total energy
-spent is exactly `E_FB` and is bounded by `SNEnergyConservationOn`; the residual
-is the non-ejecting regime (`V_vir` above the 161 km/s ejection threshold), where
-the reheating cost `0.5 * eta_reheat * V_vir^2` grows linearly with `V_vir`.
-`SNEnergyConservationOn` governs both terms: it caps `eta_reheat` so that cost
-cannot exceed the same `MaxSNEnergyCoupling` budget used for the ejection
-coupling. It uses the `E_lift` cost convention, so the two equations agree about
-what reheating costs. Default on; set to 0 to recover the unbounded behaviour
-for both terms.
+**The reheating term is bounded the same way.** `mdot_reheat = eta_reheat * mdot_*`
+carries no energy check of its own. Where the model ejects, the total energy
+spent is exactly `E_FB` and is already bounded above; the residual is the
+non-ejecting regime (`V_vir` above the 161 km/s ejection threshold), where the
+reheating cost `0.5 * eta_reheat * V_vir^2` grows linearly with `V_vir`.
+`eta_reheat` is therefore capped so that cost cannot exceed the same
+`MAX_SN_ENERGY_COUPLING` budget used for the ejection coupling. It uses the
+`E_lift` cost convention, so the two equations agree about what reheating
+costs.
 
 Note that `Vvir` in the output catalogue is the *instantaneous* virial velocity,
 recomputed at output time, whereas the feedback is evaluated with the
@@ -205,7 +202,7 @@ set directly by the FFB efficiency rather than the usual Kauffmann
 threshold:
 
 ```
-SFR = FFBMaxEfficiency * gas_for_sf / t_dyn
+SFR = EnhancedSFEfficiency * ColdGas / t_dyn
 ```
 
 The "feedback-free" label refers to the **physical regime**, not to the
@@ -235,31 +232,26 @@ Everything else still runs:
 - Metal production and routing via the same Krumholz & Dekel (2011)
   Eq. 22 factor, regime-aware to `MetalsCGMgas` or `MetalsHotGas`.
 
-`gas_for_sf` is either the full `ColdGas` (modes 1-5, 8) or the molecular
-fraction `H2gas` (modes 6-7). For H2 modes the H2 calculation is run
-inline using whichever underlying SFprescription (BR06, KD12, KMT09,
-K13, GD14) is set.
+FFB bursts form stars out of the full `ColdGas` reservoir and leave
+`H2gas = 0`.
 
-The eight sub-modes of `FeedbackFreeModeOn` (1-8) control which threshold
-classifies a galaxy as FFB-eligible (Li+2024 mass threshold vs
-Boylan-Kolchin+2025 acceleration threshold vs Dekel+2023 free-fall-time
-threshold, sigmoid vs sharp, concentration source). Mode 8 evaluates the
-Dekel et al. (2023) criterion (their eqs. 3-5) directly, applying eq. (4) to
-the **post-shock shell** density `n_sh` (their eqs. 38-41) rather than to any
-disc density. Accreting gas is funnelled through a stream of radius
-`R_str = FFBStreamRadiusFraction * Rvir` at `Vvir`, so mass conservation
-(eq. 39) sets the pre-shock density `rho_str = Mdot_ac / (pi R_str^2 Vvir)`,
-which the shock compresses by `Mach^2` (eq. 38, `Mach = Vvir /
-FFBShellSoundSpeedKms`); `FFBCloudClumping` then scales that up to the
-star-forming clouds. FFB requires the resulting free-fall time to be shorter
-than the `FFBFeedbackDelayMyr` feedback delay (~1 Myr, eq. 3).
+`EnhancedStarFormationOn` selects which threshold classifies a galaxy as
+FFB-eligible:
 
-`Mdot_ac` is SAGE26's own baryonic accretion onto the halo -- `infall_recipe()`'s
-`infallingGas` over the snapshot's `dt`, including the reionization modifier --
-not Dekel+23's analytic eq. 31 fitting formula, which would reproduce their
-eq. 62 threshold by construction and predict nothing. This criterion uses **no
-`ColdGas`**: the shell density is an inflow-flux density, not a reservoir
-density, and that is exactly where eq. 62's halo-mass dependence comes from.
+- **Mode 1 (Li+2024).** The halo-mass threshold of their eq. 2,
+  `M_v,ffb / 10^10.8 Msun ~ ((1+z)/10)^FFB_THRESHOLD_SLOPE`, converted to a
+  probability by their eq. 3 sigmoid over 0.15 dex. A uniform draw decides the
+  outcome, so the transition is smooth across the population.
+- **Mode 2 (Boylan-Kolchin 2025).** The acceleration threshold
+  `g_max > g_crit`, with `g_max = (g_vir / mu(c)) (c^2 / 2)` from their eq. 4
+  and `g_crit / G = 3100 Msun/pc^2` from their Table 1. The concentration comes
+  from the Ishiyama+21 table with log-normal scatter of width `FFB_CONC_SIGMA`
+  applied per halo, which is what turns the sharp threshold into a smooth
+  transition across the population. `g_max` is written to the output.
+
+Both apply to centrals regardless of the halo's CGM/hot regime, and both draw
+fresh from the shared `rand()` stream each snapshot, so a halo near the
+threshold moves in and out of FFB between snapshots.
 Dekel+23 sec. 8.2 is explicit that a *disc* density cannot substitute -- it
 "translates to a threshold in redshift with no explicit mass dependence", their
 eq. 63 giving `n_d ~ Mvir^0.05` -- which is why mode 8 is no longer a disc
@@ -293,10 +285,8 @@ function only consumes the `FFBRegime` flag.
 | `Yield`, `RecycleFraction` | Metal yield and instantaneous recycling fraction. |
 | `FracZleaveDisk` | Fraction of new metals that leave the disk (modulated by halo mass). |
 | `FIREmodeOn` | Switch to FIRE/Muratov+15 reheating and ejection. |
-| `RedshiftPowerLawExponent` | Redshift exponent in the FIRE scaling. |
-| `FeedbackFreeModeOn` | FFB regime classification mode (0-8); 0 disables the FFB path. |
-| `FFBMaxEfficiency` | SF efficiency in FFB mode. |
-| `FFBFeedbackDelayMyr`, `FFBCloudClumping` | Dekel+23 free-fall-time criterion parameters, mode 8 only. |
+| `EnhancedStarFormationOn` | FFB regime classification mode (0-2); 0 disables the FFB path. |
+| `EnhancedSFEfficiency` | SF efficiency in FFB mode. |
 | `H2DiskAreaOption`, `H2RadialIntegrationOn`, `H2RadialNBins`, `H2RadialRMaxFactor` | H2 surface-density geometry. |
 | `DiskInstabilityOn` | Run the Toomre check after SF. |
 

@@ -25,10 +25,10 @@ of halo properties. Test trees for the
 |---------|-----------|-----------|
 | Two-regime CGM model with self-regulating precipitation | `CGMrecipeOn` | Dekel & Birnboim (2006), Voit (2015) |
 | FIRE stellar feedback | `FIREmodeOn` | Muratov et al. (2015) |
-| Feedback-free burst galaxies | `FeedbackFreeModeOn` | Li et al. (2024), Boylan-Kolchin (2025) |
+| Feedback-free burst galaxies | `EnhancedStarFormationOn` | Li et al. (2024), Boylan-Kolchin (2025) |
 | 7 H2 star formation prescriptions | `SFprescription` | BR06, KMT09, KD12, K13, GD14, S25 |
 | Separate merger/instability bulge tracking | `BulgeSizeOn` | Tonini et al. (2016) |
-| ICS assembly tracking | `TrackICSAssembly` | — |
+| ICS assembly tracking | always on | — |
 | Full star formation history arrays | `SaveFullSFH` | — |
 | Concentration | `ConcentrationOn` | Ishiyama+21 lookup table, Vmax/Vvir, Vmax/Vvir with subhalo infall freeze |
 | ConsistentTrees, Genesis, Gadget-4 tree readers | `TreeType` | — |
@@ -154,14 +154,13 @@ cap) rather than a fixed count.
 | 0 | Off |
 | 1 | Muratov+2015 FIRE mass loading |
 
-### Feedback-free burst galaxies (`FeedbackFreeModeOn`)
+### Feedback-free burst galaxies (`EnhancedStarFormationOn`)
 
 | Value | Mode |
 |-------|------|
 | 0 | Off |
-| 1 | Li+2024 sigmoid |
-| 2 | Boylan-Kolchin+2025 (Ishiyama+21 concentration) |
-| 8 | Dekel+2023 free-fall-time criterion (eqs. 3-5) |
+| 1 | Li+2024 mass threshold with their eq. 3 sigmoid |
+| 2 | Boylan-Kolchin+2025 acceleration threshold, log-normal concentration scatter |
 
 ### Halo concentration (`ConcentrationOn`)
 
@@ -176,7 +175,7 @@ cap) rather than a fixed count.
 
 | Parameter | Values | Effect |
 |-----------|--------|--------|
-| `H2DiskAreaOption` | 1–3 | Disk area for H2 surface density: 1=π r_disk²; 2=π (3 r_disk)²; 3=2π r_disk² |
+| `H2DiskAreaOption` | 0–2 | Disk area for H2 surface density: 0=π r_s²; 1=π (3 r_s)²; 2=2π r_s² |
 | `H2RadialIntegrationOn` | 0/1 | Radial ring integration for H2 fraction (slower, more accurate) |
 | `H2RadialNBins` | int | Number of radial bins for ring integration |
 
@@ -184,7 +183,9 @@ cap) rather than a fixed count.
 
 | Parameter | Values | Effect |
 |-----------|--------|--------|
-| `TrackICSAssembly` | 0/1 | Record satellite disruption / accretion contributions to ICS |
+| `MergerTimeFactor` | double | Scales the dynamical-friction merger timescale, and with it the split of accreted stellar mass between the ICS and the BCG |
+
+ICS assembly tracking (`ICS_disrupt`, `ICS_accrete`, `ICS_sum_mt`) is always on.
 
 ### Output
 
