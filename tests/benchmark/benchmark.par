@@ -41,7 +41,7 @@ DiskInstabilityOn           1
 CGMrecipeOn                 1
 FIREmodeOn                  1
 ConcentrationOn             3
-FeedbackFreeModeOn          1
+EnhancedStarFormationOn          1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: BK25 acceleration threshold w. log-normal c scatter
 SaveFullSFH                 1
 
 SfrEfficiency               0.05

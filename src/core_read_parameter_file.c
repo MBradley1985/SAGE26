@@ -108,15 +108,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->FFBMaxEfficiency           = 0.2;
     run_params->FFBConcSigma               = 0.2;
     run_params->FFBThresholdSlope          = -6.2;
-    run_params->FFBFeedbackDelayMyr        = 1.0;
-    run_params->FFBCloudClumping           = 1.0;
-    run_params->FFBCloudClumpingDisk       = 8.0;
-    run_params->FFBStreamRadiusFraction    = 0.05; /* R_str/Rvir, Dekel+23 eq. 61 fiducial */
-    run_params->FFBShellSoundSpeedKms      = 13.0;
-    run_params->FFBToomreQ                 = 0.67;  /* Dekel+23 eq. 47 fiducial */
-    run_params->FFBSigmaCritMsunPc2        = 3000.0;
     run_params->ConcentrationOn            = 3;
-    run_params->FeedbackFreeModeOn         = 1;
+    run_params->EnhancedStarFormationOn    = 1;
     run_params->FFBIgnoreRegime            = 1;  /* (hard-code once published)*/
     run_params->FFBRandomMode              = 0;   /* default: fresh draw each snapshot (published behaviour) -- galaxies move in and out of FFB, sustaining a transient low-z FFB population. 1 fixes each galaxy's quantile at creation, which removes both. */ /* (hard-code once published)*/
     run_params->BulgeSizeOn                = 3;
@@ -192,7 +185,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("RegimeRandomMode",      &(run_params->RegimeRandomMode),     INT, 0);
     REG("FIREmodeOn",            &(run_params->FIREmodeOn),           INT, 0);
     REG("ConcentrationOn",       &(run_params->ConcentrationOn),      INT, 0);
-    REG("FeedbackFreeModeOn",    &(run_params->FeedbackFreeModeOn),   INT, 0);
+    REG("EnhancedStarFormationOn", &(run_params->EnhancedStarFormationOn), INT, 0);
     REG("FFBIgnoreRegime",       &(run_params->FFBIgnoreRegime),      INT, 0);
     REG("FFBRandomMode",         &(run_params->FFBRandomMode),        INT, 0);
     REG("BulgeSizeOn",           &(run_params->BulgeSizeOn),          INT, 0);
@@ -226,13 +219,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("FFBMaxEfficiency",           &(run_params->FFBMaxEfficiency),           DOUBLE, 0);
     REG("FFBConcSigma",               &(run_params->FFBConcSigma),               DOUBLE, 0);
     REG("FFBThresholdSlope",          &(run_params->FFBThresholdSlope),          DOUBLE, 0);
-    REG("FFBFeedbackDelayMyr",        &(run_params->FFBFeedbackDelayMyr),        DOUBLE, 0);
-    REG("FFBCloudClumping",           &(run_params->FFBCloudClumping),           DOUBLE, 0);
-    REG("FFBCloudClumpingDisk",       &(run_params->FFBCloudClumpingDisk),       DOUBLE, 0);
-    REG("FFBStreamRadiusFraction",    &(run_params->FFBStreamRadiusFraction),    DOUBLE, 0);
-    REG("FFBShellSoundSpeedKms",      &(run_params->FFBShellSoundSpeedKms),      DOUBLE, 0);
-    REG("FFBToomreQ",                 &(run_params->FFBToomreQ),                 DOUBLE, 0);
-    REG("FFBSigmaCritMsunPc2",        &(run_params->FFBSigmaCritMsunPc2),        DOUBLE, 0);
     REG("RedshiftPowerLawExponent",   &(run_params->RedshiftPowerLawExponent),   DOUBLE, 0);
     REG("SNEnergyConservationOn",     &(run_params->SNEnergyConservationOn),     INT, 0);
     REG("MaxSNEnergyCoupling",        &(run_params->MaxSNEnergyCoupling),        DOUBLE, 0);
@@ -557,7 +543,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
             {"RegimeRandomMode",       run_params->RegimeRandomMode,       0, 1},
             {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
-            {"FeedbackFreeModeOn",     run_params->FeedbackFreeModeOn,     0, 11},
+            {"EnhancedStarFormationOn", run_params->EnhancedStarFormationOn, 0, 2},
             {"FFBIgnoreRegime",        run_params->FFBIgnoreRegime,        0, 1},
             {"FFBRandomMode",          run_params->FFBRandomMode,          0, 1},
             {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 3},
@@ -604,65 +590,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
     /* Option combinations that would run but produce physically meaningless
        output are rejected here instead of failing silently mid-run. */
-    if((run_params->FeedbackFreeModeOn == 6 || run_params->FeedbackFreeModeOn == 7)
-       && !sf_prescription_tracks_h2(run_params->SFprescription)) {
-        fprintf(stderr, "Error: FeedbackFreeModeOn = %d selects H2-based FFB star formation, but\n"
-                        "SFprescription = %d does not track H2 (only prescriptions other than 0 and 2 do).\n"
-                        "FFB bursts would form zero stars. Choose an H2-tracking SFprescription or an\n"
-                        "FFB mode in [1, 5].\n",
-                run_params->FeedbackFreeModeOn, run_params->SFprescription);
-        ABORT(EXIT_FAILURE);
-    }
-    if((run_params->FeedbackFreeModeOn == 4 || run_params->FeedbackFreeModeOn == 7)
-       && run_params->FFBConcSigma <= 0.0) {
-        fprintf(stderr, "Error: FeedbackFreeModeOn = %d uses log-normal concentration scatter, but\n"
+    if(run_params->EnhancedStarFormationOn == 2 && run_params->FFBConcSigma <= 0.0) {
+        fprintf(stderr, "Error: EnhancedStarFormationOn = 2 uses log-normal concentration scatter, but\n"
                         "FFBConcSigma = %g; the scatter width must be > 0 (typical ~0.2).\n",
-                run_params->FeedbackFreeModeOn, run_params->FFBConcSigma);
-        ABORT(EXIT_FAILURE);
-    }
-    if(run_params->FeedbackFreeModeOn == 8 && run_params->FFBFeedbackDelayMyr <= 0.0) {
-        fprintf(stderr, "Error: FeedbackFreeModeOn = 8 uses the Dekel+23 free-fall-time criterion, but\n"
-                        "FFBFeedbackDelayMyr = %g; the feedback delay must be > 0 (fiducial ~1 Myr, eq. 3).\n",
-                run_params->FFBFeedbackDelayMyr);
-        ABORT(EXIT_FAILURE);
-    }
-    if(run_params->FeedbackFreeModeOn == 8 && run_params->FFBCloudClumping < 1.0) {
-        fprintf(stderr, "Error: FeedbackFreeModeOn = 8 uses the Dekel+23 shell free-fall-time criterion,\n"
-                        "but FFBCloudClumping = %g; the clumping factor must be >= 1 (star-forming clumps\n"
-                        "are denser than the mean post-shock shell, not less dense). Note the shell\n"
-                        "fiducial is 1.0, not the c ~ 8 Dekel+23 Fig. 6 uses for their *disc* threshold:\n"
-                        "the Mach^2 shock compression already supplies that contrast.\n",
-                run_params->FFBCloudClumping);
-        ABORT(EXIT_FAILURE);
-    }
-
-    if(run_params->FeedbackFreeModeOn == 8 && run_params->FFBStreamRadiusFraction <= 0.0) {
-        fprintf(stderr, "Error: FeedbackFreeModeOn = 8 needs a positive stream radius, but\n"
-                        "FFBStreamRadiusFraction = %g (Dekel+23 eq. 61 fiducial 0.05).\n",
-                run_params->FFBStreamRadiusFraction);
-        ABORT(EXIT_FAILURE);
-    }
-
-    if(run_params->FeedbackFreeModeOn == 8 && run_params->FFBShellSoundSpeedKms <= 0.0) {
-        fprintf(stderr, "Error: FeedbackFreeModeOn = 8 needs a positive post-shock sound speed, but\n"
-                        "FFBShellSoundSpeedKms = %g (fiducial 13 km/s, i.e. T ~ 10^4 K).\n",
-                run_params->FFBShellSoundSpeedKms);
-        ABORT(EXIT_FAILURE);
-    }
-
-    if((run_params->FeedbackFreeModeOn == 9 || run_params->FeedbackFreeModeOn == 10)
-       && run_params->FFBToomreQ <= 0.0) {
-        fprintf(stderr, "Error: FeedbackFreeModeOn = 9 uses the Dekel+23 disc scenario, but\n"
-                        "FFBToomreQ = %g; the Toomre parameter must be > 0 (fiducial 0.67).\n",
-                run_params->FFBToomreQ);
-        ABORT(EXIT_FAILURE);
-    }
-
-    if((run_params->FeedbackFreeModeOn == 9 || run_params->FeedbackFreeModeOn == 10)
-       && run_params->FFBSigmaCritMsunPc2 <= 0.0) {
-        fprintf(stderr, "Error: FeedbackFreeModeOn = 9 needs a positive clump surface-density\n"
-                        "threshold, but FFBSigmaCritMsunPc2 = %g (Dekel+23 eq. 9 fiducial 3e3).\n",
-                run_params->FFBSigmaCritMsunPc2);
+                run_params->FFBConcSigma);
         ABORT(EXIT_FAILURE);
     }
 

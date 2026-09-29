@@ -492,7 +492,7 @@ struct params
                              // physics parameter rather than a constant; exposed for the
                              // sensitivity test requested in referee Major Comment 9.
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation, 3: hybrid (Vmax/Vvir, infall-frozen for satellites)
-    int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF, 8: Dekel+23 free-fall-time/density criterion (eqs. 3-5)
+    int32_t    EnhancedStarFormationOn;  // Feedback-free burst mode. 0: off; 1: Li+24 mass threshold with their eq. 3 sigmoid; 2: BK25 acceleration threshold with log-normal concentration scatter
     int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too
     int32_t    FFBRandomMode;       // 0: draw a fresh random each snapshot (DEFAULT, published behaviour -- galaxies move in and out of FFB); 1: use the persistent FFBRandom assigned at galaxy creation (FFB status fixed per galaxy)
     int32_t    BulgeSizeOn;   // 0: off; 1: Shen+03 eq. 33; 2: Shen+03 eq. 32 two-regime; 3: Tonini+16 separate merger/instability bulges
@@ -519,50 +519,7 @@ struct params
     double FFBThresholdSlope; // exponent n in M_vir,FFB ~ ((1+z)/10)^n; -6.2 (Li+24) is the default. The
                               // normalisation is pinned at z=9, so varying this pivots the threshold about
                               // that redshift; used to test whether the slope is degenerate with alpha_FFB.
-    double FFBFeedbackDelayMyr; // t_fbk in Dekel+23 eq. 3: the delay before stellar winds/SNe become
-                                // effective in a low-Z starburst (~1 Myr fiducial). Used by
-                                // FeedbackFreeModeOn=8: FFB requires t_ff < t_fbk, where t_ff is eq. (4)
-                                // evaluated at the post-shock SHELL density n_sh (eqs. 38-41).
-    double FFBCloudClumping;   // c in Dekel+23 eq. 41: density contrast between the star-forming
-                                // clouds and the mean post-shock shell density (c >= 1).
-                                // FeedbackFreeModeOn=8 multiplies n_sh by c before evaluating eq. (4).
-                                // NOTE the fiducial is 1.0, NOT the c ~ 8 D23's Fig. 6 uses for their
-                                // *disc* threshold: in the shell scenario the Mach^2 shock compression
-                                // (~275x) already supplies the contrast the disc scenario needs c for,
-                                // and eq. 41's own coefficient is already ~n_fbk, so c = 1 reproduces
-                                // the eq. 62 threshold. Raising c to 8 here double-counts the
-                                // compression and drags the threshold mass down by ~1.1 dex.
-    double FFBCloudClumpingDisk; // c_disk in Dekel+23 eq. 49: density contrast between the star-forming
-                                // clouds and the mean disc density (c_disk >= 1). Used only by
-                                // FeedbackFreeModeOn=9, which multiplies the disc's mean density by
-                                // c_disk before evaluating eq. (4). Fiducial 1.0, NOT the c ~ 8 D23's
-                                // Fig. 6 uses for their *disc* threshold: in the shell scenario the
-                                // Mach^2 shock compression (~275x) already supplies the contrast the
-                                // disc scenario needs c for, and eq. 41's own coefficient is already
-                                // ~n_fbk, so c_disk = 1 reproduces the eq. 62 threshold. Raising
-                                // c_disk to 8 here double-counts the compression and drags the
-                                // threshold mass down by ~1.1 dex.
-    double FFBStreamRadiusFraction; // R_str/Rvir in Dekel+23 eq. 61: the cold stream's cross-sectional
-                                // radius as a fraction of the virial radius, through which the
-                                // accreting gas is funnelled (their fiducial 0.05). Sets the
-                                // pre-shock stream density via eq. 39, rho_str = Mdot_ac/(pi R_str^2 V_v).
-    double FFBShellSoundSpeedKms; // c_s of the post-shock gas [km/s], setting the Mach compression
-                                // M = V_v/c_s in eq. 38 (and hence the T_4^-1 term of eq. 41). D23 take
-                                // the shocked gas to cool rapidly to T ~ 10^4 K; 13 km/s reproduces
-                                // their quoted M ~ 15 at V_v ~ 200 km/s. NOTE this asserts D23's
-                                // rapid-cooling assumption -- SAGE26's own infall goes to the HOT
-                                // reservoir at T_vir (add_infall_to_hot(), model_infall.c).
     double FeedbackReheatingEpsilon;   /* SN mass-loading: reheated mass per unit stars formed [dimensionless] */
-    double FFBToomreQ;          // Q in Dekel+23 eq. 47/49, the disc's Toomre parameter. Sets the
-                                // fragmentation radius R_T = (pi/4) Q delta R_d and hence the clump
-                                // radius. Their fiducial 0.67. Used only by FeedbackFreeModeOn=9;
-                                // SAGE26 tracks no disc velocity dispersion, so this is a constant
-                                // rather than a computed quantity.
-    double FFBSigmaCritMsunPc2; // Sigma_crit in Dekel+23 eq. 9 [Msun/pc^2]: the surface density above
-                                // which radiation pressure cannot unbind a star-forming clump
-                                // (Fall+10; Grudic+18). NOTE this is NOT a free-fall criterion -- it is
-                                // separate physics from FFBFeedbackDelayMyr, and mode 9 requires BOTH.
-                                // D23 eq. 9 quotes ~3e3; their Fig. 6 draws 2e3.
     double FeedbackEjectionEfficiency; /* fraction of SN energy available to eject gas from the halo [dimensionless] */
     double RadioModeEfficiency;   /* radio-mode AGN heating efficiency [dimensionless] */
     double QuasarModeEfficiency;  /* quasar-mode BH accretion efficiency during mergers [dimensionless] */

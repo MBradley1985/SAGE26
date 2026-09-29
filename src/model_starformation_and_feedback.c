@@ -997,7 +997,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // ========================================================================
     // CHECK FOR FFB REGIME - EARLY EXIT IF FFB
     // ========================================================================
-    if(run_params->FeedbackFreeModeOn >= 1 && galaxies[p].FFBRegime == 1) {
+    if(run_params->EnhancedStarFormationOn >= 1 && galaxies[p].FFBRegime == 1) {
         // This is a Feedback-Free Burst halo
         // Use specialized FFB star formation (no feedback)
         starformation_ffb(p, centralgal, dt, step, galaxies, run_params);
@@ -1250,7 +1250,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
 /*
  * Feedback-free burst (FFB) star formation (Li et al. 2024).
  *
- * Triggered when FeedbackFreeModeOn > 0 and FFBRegime==1. Computes a burst
+ * Triggered when EnhancedStarFormationOn > 0 and FFBRegime==1. Computes a burst
  * SFR from cold gas (or H2 for modes 6/7) and runs standard SN feedback,
  * updating StellarMass, SFR history, and cold gas per substep. Metal
  * production and CGM/HotGas routing follow the main SF path.
@@ -1270,83 +1270,10 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     tdyn = (reff > 0.0 && galaxies[p].Vvir > 0.0) ? reff / galaxies[p].Vvir : 0.0;
 
     // ========================================================================
-    // H2 CALCULATION -- only for FeedbackFreeModeOn=6/7 (H2-based FFB SF modes).
-    // All other FFB modes use ColdGas for SF and leave H2gas = 0.
+    // FFB bursts form stars straight out of ColdGas and leave H2gas = 0.
     // H1 is derived immediately after.
     // ========================================================================
-    const int uses_h2 = (run_params->FeedbackFreeModeOn == 6 || run_params->FeedbackFreeModeOn == 7);
     galaxies[p].H2gas = 0.0;
-
-    if(uses_h2 && galaxies[p].ColdGas > 0.0 && galaxies[p].DiskScaleRadius > 0.0) {
-        const float h     = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
-        const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
-        const int sfpres  = run_params->SFprescription;
-        const int has_h2  = sf_prescription_tracks_h2(sfpres);
-
-        if(rs_pc > 0.0 && has_h2) {
-            if(run_params->H2RadialIntegrationOn) {
-                // Unified radial integration path -- handles all H2 prescriptions internally
-                calculate_molecular_fraction_radial_integration(p, galaxies, run_params, NULL);
-            } else {
-                // Single-slab path
-                float disk_area_pc2;
-                if(run_params->H2DiskAreaOption == 0)
-                    disk_area_pc2 = M_PI * pow(rs_pc, 2);
-                else if(run_params->H2DiskAreaOption == 1)
-                    disk_area_pc2 = M_PI * pow(3.0 * rs_pc, 2);
-                else
-                    disk_area_pc2 = 2.0 * M_PI * pow(rs_pc, 2);
-
-                if(disk_area_pc2 > 0.0) {
-                    const float Sigma_gas = (CODE_MASS_TO_MSUN(galaxies[p].ColdGas, h)) / disk_area_pc2;
-
-                    if(sf_prescription_is_br06(sfpres)) {
-                        // BR06
-                        const float Sigma_star = CODE_MASS_TO_MSUN(galaxies[p].StellarMass - galaxies[p].BulgeMass, h) / disk_area_pc2;
-                        galaxies[p].H2gas = calculate_molecular_fraction_BR06(Sigma_gas, Sigma_star, rs_pc)
-                                            * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-
-                    } else if(sfpres == 4) {
-                        // KD12
-                        const double met = (galaxies[p].ColdGas > 0.0) ?
-                            galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
-                        galaxies[p].H2gas = calculate_H2_fraction_KD12(Sigma_gas, met, 5.0f)
-                                            * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-
-                    } else if(sfpres == 5) {
-                        // KMT09
-                        float met_abs = (galaxies[p].ColdGas > 0.0) ?
-                            galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
-                        float Z_prime = (met_abs > 0.0f) ? met_abs / 0.02f : 0.0f;
-                        const float tau_c = 0.066f * 3.0f * Z_prime * Sigma_gas;
-                        const float chi = 0.77f * (1.0f + 3.1f * powf(Z_prime, 0.365f));
-                        const float s = (tau_c > 1e-10f) ?
-                            logf(1.0f + 0.6f*chi + 0.01f*chi*chi) / (0.6f*tau_c) : 100.0f;
-                        float f_H2 = (s < 2.0f) ? 1.0f - (3.0f*s)/(4.0f+s) : 0.0f;
-                        if(f_H2 < 0.0f) f_H2 = 0.0f;
-                        if(f_H2 > 1.0f) f_H2 = 1.0f;
-                        galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-
-                    } else if(sfpres == 6) {
-                        // K13: two-phase molecular fraction
-                        const double Z_gas = (galaxies[p].ColdGas > 0.0) ?
-                            galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
-                        const double f_H2_2p = calculate_H2_fraction_K13(Sigma_gas, Z_gas, 5.0);
-                        galaxies[p].H2gas = f_H2_2p * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-
-                    } else if(sfpres == 7) {
-                        // GD14
-                        const double met_abs = (galaxies[p].ColdGas > 0.0) ?
-                            galaxies[p].MetalsColdGas / galaxies[p].ColdGas : 0.0;
-                        const double f_H2 = calculate_H2_fraction_GD14(Sigma_gas, met_abs, rs_pc);
-                        galaxies[p].H2gas = f_H2 * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
-                    }
-                }
-            }
-        }
-    }
-
-    if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) { galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC; clamp_count_h2_cap++; }
 
     // HI = atomic remainder after H2, with the ionisation cut applied to the
     // remainder only -- matching the non-FFB path.
@@ -1363,7 +1290,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     // ========================================================================
     // SELECT GAS RESERVOIR FOR FFB STAR FORMATION
     // ========================================================================
-    const double gas_for_sf = uses_h2 ? galaxies[p].H2gas : galaxies[p].ColdGas;
+    const double gas_for_sf = galaxies[p].ColdGas;
 
     // ========================================================================
     // COMPUTE STAR FORMATION RATE

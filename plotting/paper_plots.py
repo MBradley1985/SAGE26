@@ -1173,9 +1173,9 @@ def ffb_fraction_mbk25(Mvir_msun, z, sigma_c=0.2):
     FFB when g_max > g_crit = G * 3100 M_sun / pc^2  (BK25 Table 1).
 
     With sigma_c > 0, concentration scatters log-normally around the Ishiyama+21
-    mean (matching FeedbackFreeModeOn=4 in the C code):
+    mean (matching EnhancedStarFormationOn=2 in the C code):
         f_ffb(M, z) = P(c > c_thresh) = norm.sf((ln c_thresh - ln c_mean) / sigma_c)
-    With sigma_c = 0, returns a sharp step function (FeedbackFreeModeOn=2).
+    With sigma_c = 0, returns a sharp step function (the unscattered threshold).
 
     Parameters
     ----------
@@ -12927,7 +12927,7 @@ def plot_99_referee_diagnostics():
         import h5py as _h5
         with _h5.File(find_model_files(PRIMARY_DIR)[0], 'r') as _f:
             _rt = dict(_f['Header/Runtime'].attrs)
-        _keys = ('FIREmodeOn', 'SFprescription', 'CGMrecipeOn', 'FeedbackFreeModeOn',
+        _keys = ('FIREmodeOn', 'SFprescription', 'CGMrecipeOn', 'EnhancedStarFormationOn',
                  'CGMDensityProfile', 'PrecipCriterionOn', 'RegimeRandomMode',
                  'FFBRandomMode', 'SNEnergyConservationOn', 'MaxSNEnergyCoupling',
                  'FeedbackReheatingEpsilon', 'FeedbackEjectionEfficiency',
