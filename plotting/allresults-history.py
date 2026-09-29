@@ -4,6 +4,7 @@ import h5py as h5
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import re
 import sys
 import argparse
 import glob
@@ -39,6 +40,88 @@ plt.rcParams['legend.edgecolor'] = 'black'
 
 
 # ==================================================================
+
+DEFAULT_INPUT = './output/millennium/model_*.hdf5'
+
+
+def _natural_key(path):
+    """Sort model_2.hdf5 before model_10.hdf5 rather than after it."""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', path)]
+
+
+def _expand_master(filepath):
+    """
+    Replace a master index file with the per-core files it links to.
+
+    SAGE also writes a small model.hdf5 next to model_0.hdf5, model_1.hdf5, ... whose
+    Core_N groups are external links to those files. It carries no Snap_ groups of its
+    own but does claim frac_volume_processed = 1.0, so feeding it in alongside the real
+    files would double the summed volume and halve every mass function. Expand it to
+    what it points at; drop anything else that holds no snapshots.
+    """
+    try:
+        with h5.File(filepath, 'r') as f:
+            if any(key.startswith('Snap_') for key in f.keys()):
+                return [filepath]
+            base = os.path.dirname(os.path.abspath(filepath))
+            linked = []
+            for key in f.keys():
+                link = f.get(key, getlink=True)
+                if isinstance(link, h5.ExternalLink):
+                    target = os.path.normpath(os.path.join(base, link.filename))
+                    if os.path.isfile(target):
+                        linked.append(target)
+    except (OSError, KeyError) as exc:
+        print(f"  Warning: could not read {filepath} ({exc}); skipping it")
+        return []
+
+    if linked:
+        print(f"  {os.path.basename(filepath)} is a master index; using its "
+              f"{len(linked)} linked files instead")
+    else:
+        print(f"  Warning: {filepath} contains no snapshots; skipping it")
+    return linked
+
+
+def resolve_input_files(patterns):
+    """
+    Turn the positional argument(s) into a sorted, de-duplicated list of model files.
+
+    Accepts any mix of: a directory (all model_*.hdf5 inside it), a single .hdf5 file,
+    a quoted glob pattern, or -- because an unquoted glob is expanded by the shell
+    before argparse ever sees it -- many already-expanded file paths at once.
+    """
+    if not patterns:
+        patterns = [DEFAULT_INPUT]
+
+    files = []
+    for pattern in patterns:
+        if os.path.isdir(pattern):
+            matches = glob.glob(os.path.join(pattern, 'model_*.hdf5'))
+            if not matches:  # some runs write a single unnumbered model file
+                matches = glob.glob(os.path.join(pattern, '*.hdf5'))
+        elif glob.has_magic(pattern):
+            matches = glob.glob(pattern)
+        elif os.path.isfile(pattern):
+            matches = [pattern]
+        else:
+            # A bare prefix such as output/millennium/model -> model*.hdf5
+            matches = glob.glob(pattern + '*.hdf5')
+        for m in matches:
+            if os.path.isfile(m):
+                files.extend(_expand_master(m))
+
+    # De-duplicate on the resolved path so overlapping patterns can't double-count a
+    # file -- VolumeFraction is summed over the list, so a repeat would inflate the volume.
+    seen = set()
+    unique = []
+    for f in sorted(files, key=_natural_key):
+        key = os.path.realpath(f)
+        if key not in seen:
+            seen.add(key)
+            unique.append(f)
+    return unique
+
 
 def get_script_dir():
     """Get the directory where this script is located"""
@@ -104,15 +187,18 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s "output/millennium/model_*.hdf5"
-  %(prog)s "output/millennium/model_*.hdf5" --first-snap 10 --last-snap 63
-  %(prog)s "output/millennium/model_*.hdf5" -o my_plots/
+  %(prog)s output/millennium/                    # every model_*.hdf5 in the directory
+  %(prog)s output/millennium/model_*.hdf5       # quoted or unquoted, both work
+  %(prog)s output/millennium/ --first-snap 10 --last-snap 63
+  %(prog)s output/millennium/ -o my_plots/
         """
     )
 
-    parser.add_argument('input_pattern', nargs='?',
-                        default='./output/millennium/model_*.hdf5',
-                        help='Path pattern to model HDF5 files (default: ./output/millennium/model_*.hdf5)')
+    parser.add_argument('input_pattern', nargs='*', default=[],
+                        metavar='INPUT',
+                        help='Model HDF5 file(s), a directory of them, or a glob pattern. '
+                             'An unquoted glob that the shell expands into many paths works too. '
+                             f'(default: {DEFAULT_INPUT})')
 
     parser.add_argument('--first-snap', type=int, default=None,
                         help='First snapshot to read (default: earliest available)')
@@ -141,12 +227,11 @@ if __name__ == '__main__':
     # Determine paths and find files
     script_dir = get_script_dir()
     
-    # Use glob to find all files matching the pattern
-    file_list = glob.glob(args.input_pattern)
-    file_list.sort() # Ensure consistent ordering
+    # Resolve the positional argument(s) into the full list of model files
+    file_list = resolve_input_files(args.input_pattern)
 
     if not file_list:
-        print(f"Error: No files found matching: {args.input_pattern}")
+        print(f"Error: No files found matching: {' '.join(args.input_pattern) or DEFAULT_INPUT}")
         sys.exit(1)
 
     print(f"Found {len(file_list)} model files.")

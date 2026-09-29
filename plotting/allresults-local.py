@@ -19,6 +19,7 @@ Writes: <OutputDir>/*.pdf  (one file per diagnostic figure)
 import argparse
 import glob
 import os
+import re
 import sys
 import warnings
 from collections import defaultdict
@@ -90,6 +91,88 @@ plt.rcParams['legend.edgecolor'] = 'black'
 
 
 # ==================================================================
+
+DEFAULT_INPUT = './output/millennium/model_*.hdf5'
+
+
+def _natural_key(path):
+    """Sort model_2.hdf5 before model_10.hdf5 rather than after it."""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', path)]
+
+
+def _expand_master(filepath):
+    """
+    Replace a master index file with the per-core files it links to.
+
+    SAGE also writes a small model.hdf5 next to model_0.hdf5, model_1.hdf5, ... whose
+    Core_N groups are external links to those files. It carries no Snap_ groups of its
+    own but does claim frac_volume_processed = 1.0, so feeding it in alongside the real
+    files would double the summed volume and halve every mass function. Expand it to
+    what it points at; drop anything else that holds no snapshots.
+    """
+    try:
+        with h5.File(filepath, 'r') as f:
+            if any(key.startswith('Snap_') for key in f.keys()):
+                return [filepath]
+            base = os.path.dirname(os.path.abspath(filepath))
+            linked = []
+            for key in f.keys():
+                link = f.get(key, getlink=True)
+                if isinstance(link, h5.ExternalLink):
+                    target = os.path.normpath(os.path.join(base, link.filename))
+                    if os.path.isfile(target):
+                        linked.append(target)
+    except (OSError, KeyError) as exc:
+        print(f"  Warning: could not read {filepath} ({exc}); skipping it")
+        return []
+
+    if linked:
+        print(f"  {os.path.basename(filepath)} is a master index; using its "
+              f"{len(linked)} linked files instead")
+    else:
+        print(f"  Warning: {filepath} contains no snapshots; skipping it")
+    return linked
+
+
+def resolve_input_files(patterns):
+    """
+    Turn the positional argument(s) into a sorted, de-duplicated list of model files.
+
+    Accepts any mix of: a directory (all model_*.hdf5 inside it), a single .hdf5 file,
+    a quoted glob pattern, or -- because an unquoted glob is expanded by the shell
+    before argparse ever sees it -- many already-expanded file paths at once.
+    """
+    if not patterns:
+        patterns = [DEFAULT_INPUT]
+
+    files = []
+    for pattern in patterns:
+        if os.path.isdir(pattern):
+            matches = glob.glob(os.path.join(pattern, 'model_*.hdf5'))
+            if not matches:  # some runs write a single unnumbered model file
+                matches = glob.glob(os.path.join(pattern, '*.hdf5'))
+        elif glob.has_magic(pattern):
+            matches = glob.glob(pattern)
+        elif os.path.isfile(pattern):
+            matches = [pattern]
+        else:
+            # A bare prefix such as output/millennium/model -> model*.hdf5
+            matches = glob.glob(pattern + '*.hdf5')
+        for m in matches:
+            if os.path.isfile(m):
+                files.extend(_expand_master(m))
+
+    # De-duplicate on the resolved path so overlapping patterns can't double-count a
+    # file -- VolumeFraction is summed over the list, so a repeat would inflate the volume.
+    seen = set()
+    unique = []
+    for f in sorted(files, key=_natural_key):
+        key = os.path.realpath(f)
+        if key not in seen:
+            seen.add(key)
+            unique.append(f)
+    return unique
+
 
 def get_script_dir():
     """Get the directory where this script is located"""
@@ -171,15 +254,17 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s output/millennium/model_0.hdf5
-  %(prog)s output/millennium/model_0.hdf5 --snapshot 63
-  %(prog)s output/millennium/model_0.hdf5 -s 58
+  %(prog)s output/millennium/                   # every model_*.hdf5 in the directory
+  %(prog)s output/millennium/model_*.hdf5       # quoted or unquoted, both work
+  %(prog)s output/millennium/model_0.hdf5 -s 58 # one file, one snapshot
         """
     )
 
-    parser.add_argument('input_pattern', nargs='?',
-                        default='./output/millennium/model_*.hdf5',
-                        help='Path pattern to model HDF5 files (default: ./output/millennium/model_*.hdf5)')
+    parser.add_argument('input_pattern', nargs='*', default=[],
+                        metavar='INPUT',
+                        help='Model HDF5 file(s), a directory of them, or a glob pattern. '
+                             'An unquoted glob that the shell expands into many paths works too. '
+                             f'(default: {DEFAULT_INPUT})')
 
     parser.add_argument('-s', '--snapshot', type=int, default=None,
                         help='Snapshot number to plot (default: latest available)')
@@ -205,12 +290,11 @@ if __name__ == '__main__':
     # Determine paths and find files
     script_dir = get_script_dir()
     
-    # Use glob to find all files matching the pattern
-    file_list = glob.glob(args.input_pattern)
-    file_list.sort() # Ensure consistent ordering
+    # Resolve the positional argument(s) into the full list of model files
+    file_list = resolve_input_files(args.input_pattern)
 
     if not file_list:
-        print(f"Error: No files found matching: {args.input_pattern}")
+        print(f"Error: No files found matching: {' '.join(args.input_pattern) or DEFAULT_INPUT}")
         sys.exit(1)
 
     print(f"Found {len(file_list)} model files.")
@@ -1086,6 +1170,75 @@ if __name__ == '__main__':
     plt.tight_layout()
     
     outputFile = OutputDir + 'BulgeMassFraction' + OutputFormat
+    plt.savefig(outputFile)  # Save the figure
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
+# -------------------------------------------------------
+
+    print('Plotting the bulge-to-total ratio')
+
+    plt.figure()  # New figure
+
+    w = np.where(StellarMass > 0.0)[0]
+    mass = np.log10(StellarMass[w])
+    BtoT = BulgeMass[w] / StellarMass[w]
+    BtoT_merger = MergerBulgeMass[w] / StellarMass[w]
+    BtoT_instab = InstabilityBulgeMass[w] / StellarMass[w]
+
+    binwidth = 0.25
+    bin_edges = np.arange(8.0, 12.5 + binwidth, binwidth)
+    bin_centres = bin_edges[:-1] + binwidth / 2.0
+    digitized = np.digitize(mass, bin_edges)
+
+    # Median B/T with the 16-84 percentile spread, plus the mean split into the
+    # merger-driven and disc-instability-driven bulge components. The two
+    # components are means rather than medians so that they add to the mean B/T.
+    BtoT_med = np.full(len(bin_centres), np.nan)
+    BtoT_lo = np.full(len(bin_centres), np.nan)
+    BtoT_hi = np.full(len(bin_centres), np.nan)
+    merger_ave = np.full(len(bin_centres), np.nan)
+    instab_ave = np.full(len(bin_centres), np.nan)
+
+    for i in range(len(bin_centres)):
+        sel = digitized == i + 1
+        if np.sum(sel) < 10:  # too few galaxies for a meaningful percentile
+            continue
+        BtoT_med[i] = np.median(BtoT[sel])
+        BtoT_lo[i], BtoT_hi[i] = np.percentile(BtoT[sel], [16.0, 84.0])
+        merger_ave[i] = np.mean(BtoT_merger[sel])
+        instab_ave[i] = np.mean(BtoT_instab[sel])
+
+    good = np.isfinite(BtoT_med)
+    plt.fill_between(bin_centres[good], BtoT_lo[good], BtoT_hi[good],
+        facecolor='k', alpha=0.2, label='Model 16-84th percentile')
+    plt.plot(bin_centres[good], BtoT_med[good], 'k-', lw=2, label='Model median')
+    plt.plot(bin_centres[good], merger_ave[good], '--', color='firebrick', lw=1.5,
+        label='Mean merger-driven')
+    plt.plot(bin_centres[good], instab_ave[good], '-.', color='royalblue', lw=1.5,
+        label='Mean instability-driven')
+
+    # Moffett et al. (2016) GAMA bulge mass fractions
+    moffett = read_obs_data(os.path.join(DataDir, 'morphology'), 'Moffet16.dat')
+    if moffett is not None:
+        obs_mass = moffett[:, 0] + imf_shift('chabrier')
+        plt.errorbar(obs_mass, moffett[:, 1],
+            yerr=[moffett[:, 1] - moffett[:, 2], moffett[:, 3] - moffett[:, 1]],
+            fmt='o', ms=4, color='darkorange', mfc='darkorange', ecolor='darkorange',
+            elinewidth=1, capsize=2, zorder=5, label='Moffett et al. (2016)')
+
+    plt.axis([8.0, 12.5, 0.0, 1.05])
+    plt.ylabel(r'$M_{\mathrm{bulge}} / M_{\mathrm{stars}}$')  # Set the y...
+    plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')  # and the x-axis labels
+
+    leg = plt.legend(loc='upper left', numpoints=1, labelspacing=0.1)
+    leg.draw_frame(False)  # Don't want a box frame
+    for t in leg.get_texts():  # Reduce the size of the text
+            t.set_fontsize('medium')
+
+    plt.tight_layout()
+
+    outputFile = OutputDir + 'BulgeToTotal' + OutputFormat
     plt.savefig(outputFile)  # Save the figure
     print('Saved file to', outputFile, '\n')
     plt.close()
