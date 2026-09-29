@@ -1180,14 +1180,14 @@ if __name__ == '__main__':
 
     plt.figure()  # New figure
 
-    w = np.where(StellarMass > 0.0)[0]
+    w = np.where((StellarMass > 0.0) & (BulgeMass > 0.0))[0]
     mass = np.log10(StellarMass[w])
     BtoT = BulgeMass[w] / StellarMass[w]
     BtoT_merger = MergerBulgeMass[w] / StellarMass[w]
     BtoT_instab = InstabilityBulgeMass[w] / StellarMass[w]
 
     binwidth = 0.25
-    bin_edges = np.arange(8.0, 12.5 + binwidth, binwidth)
+    bin_edges = np.arange(8.5, 12.5 + binwidth, binwidth)
     bin_centres = bin_edges[:-1] + binwidth / 2.0
     digitized = np.digitize(mass, bin_edges)
 
@@ -1202,7 +1202,7 @@ if __name__ == '__main__':
 
     for i in range(len(bin_centres)):
         sel = digitized == i + 1
-        if np.sum(sel) < 10:  # too few galaxies for a meaningful percentile
+        if np.sum(sel) < 5:  # too few galaxies for a meaningful percentile
             continue
         BtoT_med[i] = np.median(BtoT[sel])
         BtoT_lo[i], BtoT_hi[i] = np.percentile(BtoT[sel], [16.0, 84.0])
@@ -1218,6 +1218,8 @@ if __name__ == '__main__':
     plt.plot(bin_centres[good], instab_ave[good], '-.', color='royalblue', lw=1.5,
         label='Mean instability-driven')
 
+    plt.scatter(mass, BtoT, color='k', s=0.5, zorder=10, alpha=0.45)  # points on top of lines
+
     # Moffett et al. (2016) GAMA bulge mass fractions
     moffett = read_obs_data(os.path.join(DataDir, 'morphology'), 'Moffet16.dat')
     if moffett is not None:
@@ -1227,7 +1229,7 @@ if __name__ == '__main__':
             fmt='o', ms=4, color='darkorange', mfc='darkorange', ecolor='darkorange',
             elinewidth=1, capsize=2, zorder=5, label='Moffett et al. (2016)')
 
-    plt.axis([8.0, 12.5, 0.0, 1.05])
+    plt.axis([8.5, 12.5, 0.0, 1.05])
     plt.ylabel(r'$M_{\mathrm{bulge}} / M_{\mathrm{stars}}$')  # Set the y...
     plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')  # and the x-axis labels
 
