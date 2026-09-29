@@ -1041,9 +1041,9 @@ if __name__ == '__main__':
     mass = np.log10(StellarMass[w])
     sSFR = np.log10((SfrDisk[w] + SfrBulge[w]) / StellarMass[w])
     
-    binwidth = 0.2
+    binwidth = 0.5
     shift = binwidth/2.0
-    mass_range = np.arange(8.5-shift, 12.0+shift, binwidth)
+    mass_range = np.arange(8.5-shift, 12.5+shift, binwidth)
     bins = len(mass_range)
     
     fBulge_ave = np.zeros(bins)
