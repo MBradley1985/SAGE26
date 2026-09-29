@@ -80,61 +80,29 @@ static const double VIRIAL_TEMP_COEFF = 35.9;  /* K (km/s)^-2 */
  * hot-mode shock heating is efficient.  Settable as MShockMsun in the parameter
  * file; must be the same value model_regimes.c uses to classify regimes. */
 
-/* Critical redshift below which cold streams are suppressed in M > Mshock halos.
- * De Lucia & Blaizot (2006) estimate z_crit ~ 1-2; we adopt the midpoint. */
-static const double Z_CRIT_DB06 = 1.5;
-
-/* Width, in dex, of the smooth transition about the Dekel & Birnboim (2006)
- * stream criterion (t_cool/t_comp)_stream = 1 when ColdStreamCeilingOn == 1.
- * The criterion is a bifurcation -- streams penetrate or they do not -- so the
- * sigmoid exists only to keep f_stream continuous across it, not to blend the
- * two accretion channels over a wide mass range.  At 0.5 dex it did the latter:
- * f_stream sat between 0.1 and 0.9 over M = 10^11-10^13 at z = 0-2, where both
- * the cold-stream and hot-halo terms fire at once and, near f_stream ~ 0.3,
- * deliver equal mass (the hot term's rate coefficient is rcool/2Rvir ~ 0.45 for
- * the median hot-regime halo).  0.15 dex confines the blend to a factor ~2 in
- * the stream ratio either side of the threshold. */
-static const double STREAM_TRANSITION_WIDTH_DEX = 0.15;
-
-/*
- * Smoothed form of the low-redshift stream shut-off used by ColdStreamCeilingOn
- * 2 and 3.  The published gate is "f_stream = 0 if (z < z_crit && Mvir >
- * Mshock)", a step in *both* arguments: in z at z_crit for any halo above the
- * shock mass, and in mass at Mshock for any z below z_crit.  Each step becomes
- * a logistic here, combined so that every limit of the step version survives:
+/* Dekel & Birnboim (2006) cold-stream criterion, eqs 39-41.
  *
- *   z >> z_crit            -> s_z = 1            -> S = 1  (no suppression)
- *   z << z_crit, M >> Msh  -> s_z = 0, g_m = 1   -> S = 0  (streams off)
- *   z << z_crit, M << Msh  -> s_z = 0, g_m = 0   -> S = 1  (unsuppressed)
+ * DB06_STREAM_MASS_FACTOR is the factor f relating the stream width to the
+ * clustering mass Mstar(z) in their eqs 40-41.  It is order a few; they adopt
+ * 3, which is the value used here.
  *
- * A zero width reverts both gates to steps, reproducing the published
- * behaviour exactly rather than merely closely.
- */
-static double stream_suppression_gate(const double z, const double mass_ratio, const double width)
-{
-    double s_z, g_m;
-
-    if(width <= 0.0) {
-        s_z = (z >= Z_CRIT_DB06) ? 1.0 : 0.0;
-        g_m = (mass_ratio > 1.0) ? 1.0 : 0.0;
-    } else {
-        double e_z = -(z - Z_CRIT_DB06) / width;
-        if(e_z > 300.0) e_z = 300.0;
-        if(e_z < -300.0) e_z = -300.0;
-        s_z = 1.0 / (1.0 + exp(e_z));
-
-        if(mass_ratio > 0.0) {
-            double e_m = -log10(mass_ratio) / STREAM_TRANSITION_WIDTH_DEX;
-            if(e_m > 300.0) e_m = 300.0;
-            if(e_m < -300.0) e_m = -300.0;
-            g_m = 1.0 / (1.0 + pow(10.0, e_m));
-        } else {
-            g_m = 0.0;
-        }
-    }
-
-    return s_z + (1.0 - s_z) * (1.0 - g_m);
-}
+ * STREAM_THRESHOLD_WIDTH_DEX is the width, in dex, of a logistic across their
+ * eq. 39 threshold (t_cool/t_comp)_stream = 1.  Their criterion is a
+ * bifurcation -- streams penetrate or they do not -- so the sigmoid exists
+ * only to keep f_stream continuous across it, not to blend the two accretion
+ * channels over a wide mass range.  Zero width would give the criterion
+ * exactly, a step with f_stream strictly 1 or 0, but because the two channels
+ * are weighted by f_stream and (1 - f_stream) a step makes them mutually
+ * exclusive; a non-zero width is what lets one halo carry cold streams and a
+ * radiative cooling flow at once, the behaviour DB06 describe ("shocks heat
+ * part of the gas").  At 0.5 dex the blend was far too wide: f_stream sat
+ * between 0.1 and 0.9 over M = 10^11-10^13 at z = 0-2, where both terms fire
+ * at once and, near f_stream ~ 0.3, deliver equal mass (the hot term's rate
+ * coefficient is rcool/2Rvir ~ 0.45 for the median hot-regime halo).  0.15 dex
+ * confines the blend to a factor ~2 in the stream ratio either side of the
+ * threshold. */
+static const double DB06_STREAM_MASS_FACTOR    = 3.0;
+static const double STREAM_THRESHOLD_WIDTH_DEX = 0.15;  /* dex */
 
 /* Cold-cloud AGN accretion (AGNrecipeOn == 3): BH triggers when its mass exceeds
  * this fraction of the sonic-radius enclosed virial mass, and accretes at this
@@ -236,123 +204,64 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             // All halos here are in the hot regime (have virial shocks)
             const double z = run_params->ZZ[galaxies[gal].SnapNum];
             
-            // D&B06 eqs 39-41: stream penetration factor f_stream.
-            // Mass suppression (M/Mshock)^(-4/3) -- halos well above the shock
-            // threshold host weaker cold streams. Redshift factor (1+z)/(1+1)
-            // enhances streams at high-z where cooling is more efficient.
+            // D&B06 eqs 39-41: stream penetration factor f_stream.  The
+            // shock mass Mshock sets the scale a halo is measured against;
+            // mass_ratio = Mvir/Mshock recurs throughout the criterion below.
             const double M_shock = MSUN_TO_CODE_MASS(run_params->MShockMsun, run_params->Hubble_h);
             const double mass_ratio = galaxies[gal].Mvir / M_shock;
 
-            // Redshift enhancement: normalized to z=1 following D&B06 eq 40
-            const double z_factor = (1.0 + z) / (1.0 + 1.0);
+            // Dekel & Birnboim (2006) eqs 39-41.  Their eq. 39 compares the
+            // cooling and compression times within the stream,
+            //     R = (f Mstar/Mvir)^(2/3) (Mvir/Mshock)^(4/3),
+            // streams penetrating where R < 1.  The redshift dependence
+            // enters through the clustering mass Mstar(z) rather than an
+            // explicit (1+z) factor, and the shut-off is automatic: their
+            // eq. 41 defines z_crit by f Mstar(z_crit) = Mshock, which is
+            // exactly where R = 1 at Mvir = Mshock.  No redshift cut is
+            // imposed, so f_stream is continuous everywhere.
+            const double Mstar = MSUN_TO_CODE_MASS(pow(10.0, interpolate_clustering_mass(z, run_params)),
+                                                   run_params->Hubble_h);
+            const double fMstar = DB06_STREAM_MASS_FACTOR * Mstar;
+            const double ratio = pow(fMstar / galaxies[gal].Mvir, 2.0/3.0)
+                               * pow(mass_ratio, 4.0/3.0);
 
             double f_stream;
-            if(run_params->ColdStreamCeilingOn == 1) {
-                // Dekel & Birnboim (2006) eqs 39-41.  Their eq. 39 compares the
-                // cooling and compression times within the stream,
-                //     R = (f Mstar/Mvir)^(2/3) (Mvir/Mshock)^(4/3),
-                // streams penetrating where R < 1.  The redshift dependence
-                // enters through the clustering mass Mstar(z) rather than an
-                // explicit (1+z) factor, and the shut-off is automatic: their
-                // eq. 41 defines z_crit by f Mstar(z_crit) = Mshock, which is
-                // exactly where R = 1 at Mvir = Mshock.  No redshift cut is
-                // imposed, so f_stream is continuous everywhere.
-                // const double Mstar = pow(10.0, interpolate_clustering_mass(z, run_params));
-                const double Mstar = MSUN_TO_CODE_MASS(pow(10.0, interpolate_clustering_mass(z, run_params)),
-                                                       run_params->Hubble_h);
-                const double fMstar = run_params->StreamMassFactor * Mstar;
-                const double ratio = pow(fMstar / galaxies[gal].Mvir, 2.0/3.0)
-                                   * pow(mass_ratio, 4.0/3.0);
-                if(ratio <= 0.0) {
-                    f_stream = 1.0;
-                } else if(run_params->StreamThresholdWidthDex <= 0.0) {
-                    // D&B06 as published: the criterion is a bifurcation, so
-                    // f_stream is strictly 1 or 0.  Nothing is added to their
-                    // result.  f_stream is then discontinuous where the ratio
-                    // crosses unity, i.e. at Mstream (their eq. 40) and, for
-                    // a halo above Mshock, at z_crit (their eq. 41).
-                    f_stream = (ratio < 1.0) ? 1.0 : 0.0;
-                } else {
-                    // Optional smoothing across the threshold.  The width is
-                    // quoted in dex, so the logistic must be base 10 for it to
-                    // mean what it says.  Feeding a dex argument to exp()
-                    // instead widened it by ln(10) -- f_stream = 1/(1 + R^0.869)
-                    // rather than 1/(1 + R^(1/W)) -- a 10%-to-90% span of 2.2
-                    // dex at the old 0.5 dex setting, which is what parked
-                    // f_stream near 0.5 across most of the halo population.
-                    double exponent = log10(ratio) / run_params->StreamThresholdWidthDex;
-                    if(exponent > 300.0) exponent = 300.0;
-                    if(exponent < -300.0) exponent = -300.0;
-                    f_stream = 1.0 / (1.0 + pow(10.0, exponent));
-                }
-
-                /* D&B06 attach a condition to their eq. 40: the ceiling
-                 * Mstream = Mshock^2/(f Mstar) holds only while f Mstar <
-                 * Mshock.  Testing ratio < 1 is algebraically the same as
-                 * testing Mvir < Mstream, so without this the ceiling is
-                 * applied at every epoch, including below z_crit where it
-                 * lies outside its stated domain.  Their rule there is
-                 * instead "cold streams exist only for M < Mshock" (p. 11),
-                 * which is what is imposed here.
-                 *
-                 * This is a necessary condition, not a sufficient one: below
-                 * Mshock f_stream is still whatever the criterion gives, so
-                 * streams are never switched on by this, only off.
-                 *
-                 * Note it reintroduces a discontinuity at z_crit for haloes
-                 * near Mshock -- f_stream ~ 0.5 just above, 0 just below --
-                 * because the sigmoid leaves a residual tail that the hard
-                 * condition truncates.  That is D&B06's own regime boundary
-                 * rather than an imposed redshift cut, but it is a step. */
-                if(fMstar >= M_shock && mass_ratio > 1.0) {
-                    f_stream = 0.0;
-                }
-            } else if(run_params->ColdStreamCeilingOn == 2) {
-                // Mode 0's fraction with the shut-off smoothed.  The mass
-                // dependence is untouched, so this is a one-knob change from
-                // the published model; see stream_suppression_gate().
-                f_stream = pow(mass_ratio, -4.0/3.0) * z_factor;
-                f_stream *= stream_suppression_gate(z, mass_ratio, run_params->StreamZCritWidth);
-            } else if(run_params->ColdStreamCeilingOn == 3) {
-                // Mode 0 corrected to carry D&B06's own mass dependence.
-                //
-                // Their eq. 39 penetration parameter is
-                //     R = (f Mstar/Mvir)^(2/3) (Mvir/Mshock)^(4/3),
-                // streams penetrating where R < 1, so the natural continuous
-                // generalisation of that binary test is f_stream = 1/R:
-                //     1/R = (Mvir/Mshock)^(-4/3) (Mvir/(f Mstar))^(2/3).
-                //
-                // Mode 0 keeps the first factor but replaces the second with
-                // (1+z)/2.  That substitution silently discards a Mvir^(2/3),
-                // steepening the net mass slope from -2/3 to -4/3 and pinning
-                // the shut-off near 10^12 Msun at every epoch instead of
-                // letting it track Mstar(z).  By z = 5 the two differ by more
-                // than three orders of magnitude in the mass at which streams
-                // are lost.  Here the discarded factor is restored, so
-                // f_stream = 1 exactly out to D&B06's own ceiling,
-                //     Mstream = Mshock^2 / (f Mstar),
-                // which is where 1/R = 1, and falls as Mvir^(-2/3) above it.
-                const double Mstar = MSUN_TO_CODE_MASS(pow(10.0, interpolate_clustering_mass(z, run_params)),
-                                                       run_params->Hubble_h);
-                const double fMstar = run_params->StreamMassFactor * Mstar;
-                if(fMstar > 0.0 && galaxies[gal].Mvir > 0.0) {
-                    f_stream = pow(mass_ratio, -4.0/3.0)
-                             * pow(galaxies[gal].Mvir / fMstar, 2.0/3.0);
-                } else {
-                    f_stream = 1.0;
-                }
-                // The ceiling already shuts streams down as Mstar(z) grows
-                // toward low z, so the explicit gate is a backstop rather than
-                // the primary mechanism, but it is retained for continuity
-                // with modes 0 and 2 and to keep z_crit an explicit parameter.
-                f_stream *= stream_suppression_gate(z, mass_ratio, run_params->StreamZCritWidth);
-            } else if(z < Z_CRIT_DB06 && mass_ratio > 1.0) {
-                // D&B06 eq 41: below z_crit cold streams are suppressed in
-                // M > Mshock halos.  Hard cutoff; published behaviour.
-                f_stream = 0.0;
+            if(ratio <= 0.0) {
+                f_stream = 1.0;
             } else {
-                // High-z regime: streams can penetrate
-                f_stream = pow(mass_ratio, -4.0/3.0) * z_factor;
+                // Smoothing across the threshold.  The width is quoted in dex,
+                // so the logistic must be base 10 for it to mean what it says.
+                // Feeding a dex argument to exp() instead widened it by ln(10)
+                // -- f_stream = 1/(1 + R^0.869) rather than 1/(1 + R^(1/W)) --
+                // a 10%-to-90% span of 2.2 dex at the old 0.5 dex setting,
+                // which is what parked f_stream near 0.5 across most of the
+                // halo population.
+                double exponent = log10(ratio) / STREAM_THRESHOLD_WIDTH_DEX;
+                if(exponent > 300.0) exponent = 300.0;
+                if(exponent < -300.0) exponent = -300.0;
+                f_stream = 1.0 / (1.0 + pow(10.0, exponent));
+            }
+
+            /* D&B06 attach a condition to their eq. 40: the ceiling
+             * Mstream = Mshock^2/(f Mstar) holds only while f Mstar <
+             * Mshock.  Testing ratio < 1 is algebraically the same as
+             * testing Mvir < Mstream, so without this the ceiling is
+             * applied at every epoch, including below z_crit where it
+             * lies outside its stated domain.  Their rule there is
+             * instead "cold streams exist only for M < Mshock" (p. 11),
+             * which is what is imposed here.
+             *
+             * This is a necessary condition, not a sufficient one: below
+             * Mshock f_stream is still whatever the criterion gives, so
+             * streams are never switched on by this, only off.
+             *
+             * Note it reintroduces a discontinuity at z_crit for haloes
+             * near Mshock -- f_stream ~ 0.5 just above, 0 just below --
+             * because the sigmoid leaves a residual tail that the hard
+             * condition truncates.  That is D&B06's own regime boundary
+             * rather than an imposed redshift cut, but it is a step. */
+            if(fMstar >= M_shock && mass_ratio > 1.0) {
+                f_stream = 0.0;
             }
             
             // Ensure physical bounds

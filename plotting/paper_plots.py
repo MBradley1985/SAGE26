@@ -10933,8 +10933,7 @@ def _mstream_ceiling_x(z, x_prop, mvir_msun, vvir):
         mstar = 10.0 ** interpolate_clustering_mass_py(z)
         rt = _read_runtime_attrs(PRIMARY_DIR)
         mshock = float(rt.get('MShockMsun', 6.0e11))
-        f_fac = float(rt.get('StreamMassFactor', 3.0))
-        m_ceil = mshock * mshock / (f_fac * mstar)
+        m_ceil = mshock * mshock / (DB06_STREAM_MASS_FACTOR * mstar)
     except Exception:
         return None
 
@@ -11202,6 +11201,12 @@ _MSTAR_UCHUU = np.array([
     1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000])
 
 
+# Factor f relating the stream width to the clustering mass M_*(z) in
+# Dekel & Birnboim (2006) eqs 40-41.  Hardcoded in the model as
+# DB06_STREAM_MASS_FACTOR in src/model_cooling_heating.c; kept in step here.
+DB06_STREAM_MASS_FACTOR = 3.0
+
+
 def interpolate_clustering_mass_py(z):
     """log10 M_*(z) in Msun, selected by Omega as the model code does."""
     table = _MSTAR_UCHUU if abs(OMEGA_M - 0.3089) < 0.01 else _MSTAR_MILL
@@ -11218,19 +11223,17 @@ def print_mdot_panel_stats(x_prop='Vvir'):
       M_stream     Dekel & Birnboim (2006) ceiling Mshock^2/(f Mstar), and
                    whether the stream window above Mshock is open
 
-    The header echoes ColdStreamCeilingOn and StreamMassFactor from the run so
-    it is unambiguous which prescription produced the figure.
+    The header echoes Mshock from the run and the hardcoded stream mass factor
+    so it is unambiguous which prescription produced the figure.
     """
     props = _MDOT_PROPS + ['Regime']
     snap_nums = [s for s, _ in _MDOT_SNAP_PANELS]
     snapdata = load_snapshots(PRIMARY_DIR, snap_nums, props)
 
     rt = _read_runtime_attrs(PRIMARY_DIR)
-    ceiling = rt.get('ColdStreamCeilingOn', '?')
-    fstream_f = rt.get('StreamMassFactor', '?')
     mshock = rt.get('MShockMsun', 6.0e11)
-    print('\n  cold-stream diagnostics  (ColdStreamCeilingOn=%s, StreamMassFactor=%s, '
-          'Mshock=%.2e)' % (ceiling, fstream_f, mshock))
+    print('\n  cold-stream diagnostics  (DB06 eq. 39 threshold, f=%s, '
+          'Mshock=%.2e)' % (DB06_STREAM_MASS_FACTOR, mshock))
 
     xlabel = 'log Vvir' if x_prop == 'Vvir' else 'log Mvir'
     for snap, zlabel in _MDOT_SNAP_PANELS:
@@ -11249,12 +11252,11 @@ def print_mdot_panel_stats(x_prop='Vvir'):
             print('    %-9s too few hot-regime centrals' % zlabel)
             continue
 
-        # DB06 ceiling for context, whichever prescription is running.
+        # DB06 ceiling for context.
         window = ''
         try:
             mstar = 10.0 ** interpolate_clustering_mass_py(z)
-            f_fac = float(fstream_f) if fstream_f != '?' else 3.0
-            m_ceil = mshock * mshock / (f_fac * mstar)
+            m_ceil = mshock * mshock / (DB06_STREAM_MASS_FACTOR * mstar)
             window = ('M_stream=%.2e (%.2f Mshock, %s)'
                       % (m_ceil, m_ceil / mshock,
                          'open' if m_ceil > mshock else 'closed'))
