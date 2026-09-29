@@ -5,7 +5,6 @@
  * halo concentration calculations added in SAGE26:
  * - Li+24 sigmoid-based FFB classification (mode 1)
  * - BK25 g_max with log-normal concentration scatter (mode 2)
- * - FFBRandom persistent random number
  * - Concentration methods (Ishiyama+21 table, Vmax/Vvir, infall freeze)
  * - EnhancedStarFormationOn modes 0-2
  */
@@ -36,10 +35,6 @@ static void init_millennium_params(struct params *rp)
            * rp->UnitMass_in_g * rp->UnitTime_in_s * rp->UnitTime_in_s;
     rp->EnergySNcode = rp->EnergySN / rp->UnitMass_in_g
                      / rp->UnitVelocity_in_cm_per_s / rp->UnitVelocity_in_cm_per_s;
-    /* memset above zeroes every parameter, so any default that lives in
-     * core_read_parameter_file.c rather than the struct must be restored here.
-     * FFBThresholdSlope = -6.2 is the Li+24 value (see set_defaults()). */
-    rp->FFBThresholdSlope = -6.2;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -102,7 +97,6 @@ void test_ffb_sigmoid_midpoint()
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn  = 1;
-    rp.FFBConcSigma        = 0.0;
 
     double z = 10.0;
     double M_thresh = calculate_ffb_threshold_mass(z, &rp);
@@ -118,7 +112,6 @@ void test_ffb_sigmoid_symmetry()
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn  = 1;
-    rp.FFBConcSigma        = 0.0;
 
     double z = 10.0;
     double M_thresh = calculate_ffb_threshold_mass(z, &rp);
@@ -142,7 +135,6 @@ void test_ffb_sigmoid_monotonic()
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn  = 1;
-    rp.FFBConcSigma        = 0.0;
 
     double z = 10.0;
     double M_thresh = calculate_ffb_threshold_mass(z, &rp);
@@ -174,7 +166,6 @@ void test_ffb_invalid_mass()
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn  = 1;
-    rp.FFBConcSigma        = 0.0;
 
     double f_zero = calculate_ffb_fraction(0.0, 10.0, &rp);
     double f_neg  = calculate_ffb_fraction(-1.0, 10.0, &rp);
@@ -435,7 +426,6 @@ void test_ffb_mode1_sigmoid_limits()
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn = 1;
-    rp.FFBConcSigma        = 0.0;
 
     const double z = 10.0;
     const double M_thresh = calculate_ffb_threshold_mass(z, &rp);
@@ -479,7 +469,6 @@ void test_ffb_same_seed_reproduces()
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn = 1;
-    rp.FFBConcSigma        = 0.0;
 
     const double z = 10.0;
     const double M_thresh = calculate_ffb_threshold_mass(z, &rp);
@@ -523,7 +512,6 @@ void test_ffb_regime_does_not_gate()
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn = 1;
-    rp.FFBConcSigma       = 0.0;
 
     const double z = 10.0;
     const double M_thresh = calculate_ffb_threshold_mass(z, &rp);
@@ -550,7 +538,6 @@ void test_ffb_merged_galaxies_skipped()
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn = 1;
-    rp.FFBConcSigma       = 0.0;
 
     double z = 10.0;
     double M_thresh = calculate_ffb_threshold_mass(z, &rp);
@@ -559,7 +546,6 @@ void test_ffb_merged_galaxies_skipped()
     memset(&gal, 0, sizeof(struct GALAXY));
     gal.Mvir = M_thresh * 10.0;
     gal.Rvir = 0.1;
-    gal.FFBRandom = 0.01f;
     gal.Regime = 0;
     gal.mergeType = 1;            /* merged */
     gal.FFBRegime = 99;           /* sentinel value */
@@ -578,7 +564,10 @@ void test_ffb_mode2_basic_threshold()
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn = 2;
-    rp.FFBConcSigma       = 0.0;  /* no scatter → deterministic, same as mode 2 */
+
+    /* Both halos sit orders of magnitude from g_crit, so the concentration
+     * scatter (a factor <2.6 in c either way) cannot flip either verdict. */
+    srand(101);
 
     /* Massive halo at high z: g_max >> g_crit → FFB */
     struct GALAXY gal_big;
@@ -586,11 +575,10 @@ void test_ffb_mode2_basic_threshold()
     gal_big.Mvir = 100.0;   /* 10^12 Msun/h */
     gal_big.Rvir = 0.02;    /* very compact */
     gal_big.Regime = 0;
-    gal_big.FFBRandom = 0.5f;
 
     determine_and_store_ffb_regime(1, 10.0, &gal_big, &rp);
     ASSERT_EQUAL_INT(1, gal_big.FFBRegime,
-                     "Massive halo at z=10 is FFB (σ_c=0)");
+                     "Massive halo at z=10 is FFB");
 
     /* Small halo at low z: g_max << g_crit → not FFB */
     struct GALAXY gal_small;
@@ -598,11 +586,10 @@ void test_ffb_mode2_basic_threshold()
     gal_small.Mvir = 0.1;   /* 10^9 Msun/h */
     gal_small.Rvir = 0.03;
     gal_small.Regime = 0;
-    gal_small.FFBRandom = 0.5f;
 
     determine_and_store_ffb_regime(1, 0.0, &gal_small, &rp);
     ASSERT_EQUAL_INT(0, gal_small.FFBRegime,
-                     "Small halo at z=0 is not FFB (σ_c=0)");
+                     "Small halo at z=0 is not FFB");
 
     /* g_max is stored */
     ASSERT_GREATER_THAN(gal_big.g_max, 0.0,
@@ -616,7 +603,6 @@ void test_ffb_mode2_scatter_splits_identical_halos()
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn = 2;
-    rp.FFBConcSigma       = 0.2;  /* sigma_c = 0.2 in ln(c) */
 
     /* Every halo here is identical, so without scatter they would all share
      * one g_max and one FFBRegime.  Each now draws its own concentration
@@ -649,40 +635,63 @@ void test_ffb_mode2_scatter_splits_identical_halos()
            gmin, gmax, N, n_ffb);
 }
 
-void test_ffb_mode2_zero_sigma_matches_table_concentration()
+void test_ffb_mode2_gmax_brackets_table_concentration()
 {
-    BEGIN_TEST("EnhancedStarFormationOn=2 with sigma_c=0 uses the raw Ishiyama+21 concentration");
+    BEGIN_TEST("EnhancedStarFormationOn=2 scatters g_max about the Ishiyama+21 value");
 
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn = 2;
-    rp.FFBConcSigma            = 0.0;  /* no scatter: c is the table value */
-
-    struct GALAXY gal;
-    memset(&gal, 0, sizeof(struct GALAXY));
-    gal.Mvir = 100.0;
-    gal.Rvir = 0.05;
-    gal.Regime = 0;
-    gal.FFBRandom = 0.5f;  /* any value, since sigma_c=0 ignores it */
 
     const double z = 10.0;
-    determine_and_store_ffb_regime(1, z, &gal, &rp);
+    const int N = 200;
 
-    /* BK25 eqs. 2 and 4 evaluated directly on the table concentration:
-     *   g_vir = G Mvir / Rvir^2,  g_max = (g_vir / mu(c)) (c^2 / 2),
-     *   mu(x) = ln(1+x) - x/(1+x). */
-    const double Mvir = gal.Mvir;
-    const double Rvir = gal.Rvir;
+    /* The scatter is always applied now, so g_max cannot be compared against a
+     * single expected number.  It is still pinned: c = c_table * exp(sigma_c *
+     * probit(u)) with u clamped to [1e-6, 1-1e-6], so probit(u) is bounded by
+     * +/-4.7534 and g_max must lie between the values BK25 eq. 4 gives at the
+     * two extreme concentrations.  Both sides of the table value must also be
+     * populated, which is what shows the scatter is centred on it. */
+    const double PROBIT_CLAMP = 4.753424308822899;   /* probit(1 - 1e-6) */
+    const double SIGMA_C = 0.2;
+
+    struct GALAXY gals[200];
+    memset(gals, 0, sizeof(gals));
+    for(int i = 0; i < N; i++) {
+        gals[i].Mvir = 100.0;
+        gals[i].Rvir = 0.05;
+    }
+
+    srand(4242);
+    determine_and_store_ffb_regime(N, z, gals, &rp);
+
+    const double Mvir = gals[0].Mvir;
+    const double Rvir = gals[0].Rvir;
     const double logM = log10(Mvir * 1.0e10);
-    double c = interpolate_concentration_ishiyama21(logM, z, &rp);
-    if(c < 1.0) c = 1.0;
+    double c_table = interpolate_concentration_ishiyama21(logM, z, &rp);
+    if(c_table < 1.0) c_table = 1.0;
     const double g_vir = rp.G * Mvir / (Rvir * Rvir);
-    const double mu_c = log(1.0 + c) - c / (1.0 + c);
-    const double expected = (g_vir / mu_c) * (c * c / 2.0);
 
-    const double rel_diff = fabs(gal.g_max - expected) / (expected + 1e-30);
-    ASSERT_LESS_THAN(rel_diff, 1e-12,
-                     "g_max matches BK25 eq. 4 on the unscattered concentration");
+    /* g_max(c) = (g_vir / mu(c)) * (c^2 / 2), monotonically increasing in c. */
+    double c_lo = c_table * exp(-SIGMA_C * PROBIT_CLAMP);
+    if(c_lo < 1.0) c_lo = 1.0;
+    const double c_hi = c_table * exp(SIGMA_C * PROBIT_CLAMP);
+    const double g_lo = (g_vir / (log(1.0 + c_lo) - c_lo / (1.0 + c_lo))) * (c_lo * c_lo / 2.0);
+    const double g_hi = (g_vir / (log(1.0 + c_hi) - c_hi / (1.0 + c_hi))) * (c_hi * c_hi / 2.0);
+    const double g_table = (g_vir / (log(1.0 + c_table) - c_table / (1.0 + c_table)))
+                           * (c_table * c_table / 2.0);
+
+    int out_of_range = 0, below = 0, above = 0;
+    for(int i = 0; i < N; i++) {
+        if(gals[i].g_max < g_lo || gals[i].g_max > g_hi) out_of_range++;
+        if(gals[i].g_max < g_table) below++;
+        if(gals[i].g_max > g_table) above++;
+    }
+
+    ASSERT_EQUAL_INT(0, out_of_range,
+                     "Every g_max lies within the clamped log-normal range");
+    ASSERT_GREATER_THAN((double)below, 0.0, "Some halos scatter below the table value");
+    ASSERT_GREATER_THAN((double)above, 0.0, "Some halos scatter above the table value");
 }
 
 void test_ffb_mode2_deterministic()
@@ -692,7 +701,6 @@ void test_ffb_mode2_deterministic()
     struct params rp;
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn = 2;
-    rp.FFBConcSigma       = 0.2;
 
     /* Use a moderately sized halo so g_max stays within float range */
     struct GALAXY gal1, gal2;
@@ -759,7 +767,7 @@ int main()
     test_ffb_merged_galaxies_skipped();
     test_ffb_mode2_basic_threshold();
     test_ffb_mode2_scatter_splits_identical_halos();
-    test_ffb_mode2_zero_sigma_matches_table_concentration();
+    test_ffb_mode2_gmax_brackets_table_concentration();
     test_ffb_mode2_deterministic();
 
     END_TEST_SUITE();

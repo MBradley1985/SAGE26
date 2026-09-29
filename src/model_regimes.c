@@ -36,6 +36,19 @@ static const double PC_IN_CM              =  3.08568e18;
  * Units: M_sun / pc^2 (pre-multiplication by G to get acceleration). */
 static const double BK25_G_CRIT_MSUN_PC2 = 3100.0;
 
+/* Width of the log-normal scatter in halo concentration, sigma_c in ln(c),
+ * applied to the BK25 threshold.  0.2 is the measured spread at fixed halo
+ * mass (Jing 2000; Bullock et al. 2001; Dolag et al. 2004).  It is what turns
+ * the sharp acceleration threshold into a smooth transition across the halo
+ * population. */
+static const double FFB_CONC_SIGMA = 0.2;
+
+/* Exponent n in the Li et al. (2024) eq. 2 threshold mass,
+ * M_v,ffb / 10^10.8 Msun ~ ((1+z)/10)^n.  Their value is -6.2.  The 10^10.8
+ * normalisation is pinned at z = 9, where (1+z)/10 = 1, so the exponent
+ * pivots the threshold about that redshift rather than shifting it wholesale. */
+static const double FFB_THRESHOLD_SLOPE = -6.2;
+
 
 
 
@@ -216,12 +229,12 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
             if(c < 1.0) c = 1.0;
 
             // Apply log-normal scatter: ln(c) ~ Normal(ln(c_mean), sigma_c)
-            if(run_params->FFBConcSigma > 0.0) {
+            {
                 double u = draw;
                 if(u < 1.0e-6) u = 1.0e-6;
                 if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
                 const double z_normal = inverse_normal_cdf(u);
-                c = c * exp(run_params->FFBConcSigma * z_normal);
+                c = c * exp(FFB_CONC_SIGMA * z_normal);
                 if(c < 1.0) c = 1.0;
             }
 
@@ -259,10 +272,7 @@ double calculate_ffb_threshold_mass(const double z, const struct params *run_par
 
     const double h = run_params->Hubble_h;
     const double z_norm = (1.0 + z) / 10.0;
-    /* FFBThresholdSlope defaults to -6.2 (Li+24). The 10^10.8 normalisation is
-     * pinned at z = 9, where z_norm = 1, so changing the slope pivots the
-     * threshold about that redshift rather than shifting it wholesale. */
-    const double log_Mvir_ffb_code = 0.8 + log10(h) + run_params->FFBThresholdSlope * log10(z_norm);
+    const double log_Mvir_ffb_code = 0.8 + log10(h) + FFB_THRESHOLD_SLOPE * log10(z_norm);
 
     return pow(10.0, log_Mvir_ffb_code);
 }

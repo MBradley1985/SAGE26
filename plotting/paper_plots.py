@@ -1181,7 +1181,8 @@ def ffb_fraction_mbk25(Mvir_msun, z, sigma_c=0.2):
     ----------
     Mvir_msun : array_like  Halo virial mass [M_sun].
     z         : float       Redshift.
-    sigma_c   : float       Log-normal scatter in ln(c); 0.2 matches BK25 mode 4.
+    sigma_c   : float       Log-normal scatter in ln(c); 0.2 matches FFB_CONC_SIGMA
+                            in src/model_regimes.c.
     """
     from scipy.optimize import brentq
     from scipy.stats import norm as _snorm

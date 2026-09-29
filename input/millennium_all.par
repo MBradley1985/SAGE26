@@ -72,7 +72,6 @@ H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1:
 
 SfrEfficiency               0.05    %efficiency of SF; unused for SFprescription=3,6
 FFBMaxEfficiency            0.2     %0.2 fits observations best, 1.0 is theoretical maximum
-FFBConcSigma                0.2     %sigma_c for log-normal concentration scatter in ln(c) (EnhancedStarFormationOn=2); ~0.2 (Jing 2000, Bullock+01)
 
 RedshiftPowerLawExponent    1.25    %alpha for (1+z)^alpha in mass loading calculation (FIREmodeOn=1)
 
