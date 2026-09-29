@@ -8,7 +8,7 @@ committed baseline exactly — every HDF5 dataset bit-identical.
 
 | System | Entry point | Build required | What it hashes |
 |---|---|---|---|
-| Dataset-level baseline (primary) | `make regression` or `tests/regression_baseline.sh` | serial (`make clean && make USE-MPI=`) | SHA-256 of every dataset in every `model*.hdf5` (~5,444 datasets for mini-Millennium), plus file-level hashes and smoke statistics |
+| Dataset-level baseline (primary) | `make regression` or `tests/regression_baseline.sh` | serial (`make clean && make USE-MPI=`) | SHA-256 of every dataset in every `model*.hdf5` (5252 datasets for mini-Millennium), plus file-level hashes and smoke statistics |
 | Binary checksum benchmark | `tests/run_benchmark_test.sh verify` | MPI (`make clean && make`) | SHA-256 of the 64 `sage_binary` output files from `tests/benchmark/benchmark.par` |
 
 The dataset-level system is the release gate. The binary benchmark

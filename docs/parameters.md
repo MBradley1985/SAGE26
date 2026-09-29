@@ -17,7 +17,7 @@ optional parameters take the listed default if omitted.
 |-----------|------|----------|---------|-------------|
 | `FileNameGalaxies` | string | yes | — | Base name for output files (e.g. `model` → `model_0.hdf5`). |
 | `OutputDir` | string | yes | — | Directory for galaxy output. Created if absent. |
-| `OutputFormat` | string | no | `sage_hdf5` | `sage_hdf5` or `sage_binary`. |
+| `OutputFormat` | string | no | `sage_hdf5` | `sage_hdf5`, `sage_binary`, or `lhalo_binary_output`. The last converts any supported input tree format to lhalo-binary and writes no galaxy catalogue. |
 | `NumOutputs` | int | no | `-1` | Number of snapshot outputs; `-1` = all snapshots. |
 | `SaveFullSFH` | 0/1 | no | `0` | Store per-snapshot SFR history arrays (`SFHMassDisk`, `SFHMassBulge`). |
 
@@ -27,7 +27,7 @@ optional parameters take the listed default if omitted.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `TreeType` | string | yes | — | Merger tree format: `lhalo_binary`, `lhalo_hdf5`, `consistent_trees_ascii`, `consistent_trees_hdf5`, `genesis_lhalo_hdf5`, `gadget4_hdf5`. |
+| `TreeType` | string | yes | — | Merger tree format: `lhalo_binary`, `lhalo_hdf5`, `consistent_trees_ascii`, `consistent_trees_hdf5`, `genesis_hdf5`, `gadget4_hdf5`. |
 | `TreeName` | string | yes | — | Tree file basename (files are named `TreeName.N`). |
 | `SimulationDir` | string | yes | — | Directory containing tree files. |
 | `FileWithSnapList` | string | yes | — | File listing snapshot scale factors, one per line. |
