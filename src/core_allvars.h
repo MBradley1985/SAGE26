@@ -109,8 +109,6 @@ struct GALAXY
     int32_t   Type;       /* 0=central; 1=satellite with subhalo; 2=orphan satellite; 3=merged (dead) */
     int32_t   Regime;     /* 0=CGM-dominated (cold-flow/precipitation); 1=hot-halo (classical); set by determine_and_store_regime() */
     int32_t   FFBRegime;  /* 0=standard SF; 1=feedback-free burst active; set by determine_and_store_ffb_regime() */
-    float     FFBRandom;  /* unused; drawn at galaxy creation to keep the shared rand() stream in step -- see init_galaxy() */
-    float     RegimeRandom; /* unused; drawn at galaxy creation to keep the shared rand() stream in step -- see init_galaxy() */
 
     int32_t   GalaxyNr;   /* index within the current forest's galaxy array */
     int32_t   CentralGal; /* index of the FOF central galaxy in the current galaxy array */
