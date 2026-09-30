@@ -329,6 +329,77 @@ if __name__ == '__main__':
 
     Concentration = read_hdf(file_list, Snapshot, 'Concentration')
 
+# -------------------------------------------------------
+
+    print('Plotting the bulge-to-total ratio')
+
+    plt.figure()  # New figure
+
+    w = np.where((StellarMass > 0.0) & (BulgeMass > 0.0))[0]
+    mass = np.log10(StellarMass[w])
+    BtoT = BulgeMass[w] / StellarMass[w]
+    BtoT_merger = MergerBulgeMass[w] / StellarMass[w]
+    BtoT_instab = InstabilityBulgeMass[w] / StellarMass[w]
+
+    binwidth = 0.25
+    bin_edges = np.arange(8.5, 12.5 + binwidth, binwidth)
+    bin_centres = bin_edges[:-1] + binwidth / 2.0
+    digitized = np.digitize(mass, bin_edges)
+
+    # Median B/T with the 16-84 percentile spread, plus the mean split into the
+    # merger-driven and disc-instability-driven bulge components. The two
+    # components are means rather than medians so that they add to the mean B/T.
+    BtoT_med = np.full(len(bin_centres), np.nan)
+    BtoT_lo = np.full(len(bin_centres), np.nan)
+    BtoT_hi = np.full(len(bin_centres), np.nan)
+    merger_ave = np.full(len(bin_centres), np.nan)
+    instab_ave = np.full(len(bin_centres), np.nan)
+
+    for i in range(len(bin_centres)):
+        sel = digitized == i + 1
+        if np.sum(sel) < 5:  # too few galaxies for a meaningful percentile
+            continue
+        BtoT_med[i] = np.median(BtoT[sel])
+        BtoT_lo[i], BtoT_hi[i] = np.percentile(BtoT[sel], [16.0, 84.0])
+        merger_ave[i] = np.mean(BtoT_merger[sel])
+        instab_ave[i] = np.mean(BtoT_instab[sel])
+
+    good = np.isfinite(BtoT_med)
+    plt.fill_between(bin_centres[good], BtoT_lo[good], BtoT_hi[good],
+        facecolor='k', alpha=0.2, label='Model 16-84th percentile')
+    plt.plot(bin_centres[good], BtoT_med[good], 'k-', lw=2, label='Model median')
+    plt.plot(bin_centres[good], merger_ave[good], '--', color='firebrick', lw=1.5,
+        label='Mean merger-driven')
+    plt.plot(bin_centres[good], instab_ave[good], '-.', color='royalblue', lw=1.5,
+        label='Mean instability-driven')
+
+    plt.scatter(mass, BtoT, color='k', s=0.5, zorder=10, alpha=0.45)  # points on top of lines
+
+    # Moffett et al. (2016) GAMA bulge mass fractions
+    moffett = read_obs_data(os.path.join(DataDir, 'morphology'), 'Moffet16.dat')
+    if moffett is not None:
+        obs_mass = moffett[:, 0] + imf_shift('chabrier')
+        plt.errorbar(obs_mass, moffett[:, 1],
+            yerr=[moffett[:, 1] - moffett[:, 2], moffett[:, 3] - moffett[:, 1]],
+            fmt='o', ms=4, color='darkorange', mfc='darkorange', ecolor='darkorange',
+            elinewidth=1, capsize=2, zorder=5, label='Moffett et al. (2016)')
+
+    plt.axis([8.5, 12.5, 0.0, 1.05])
+    plt.ylabel(r'$M_{\mathrm{bulge}} / M_{\mathrm{stars}}$')  # Set the y...
+    plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')  # and the x-axis labels
+
+    leg = plt.legend(loc='upper left', numpoints=1, labelspacing=0.1)
+    leg.draw_frame(False)  # Don't want a box frame
+    for t in leg.get_texts():  # Reduce the size of the text
+            t.set_fontsize('medium')
+
+    plt.tight_layout()
+
+    outputFile = OutputDir + 'BulgeToTotal' + OutputFormat
+    plt.savefig(outputFile)  # Save the figure
+    print('Saved file to', outputFile, '\n')
+    plt.close()
+
 
 # --------------------------------------------------------
 

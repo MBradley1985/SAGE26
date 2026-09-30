@@ -64,7 +64,8 @@ static FILE *get_disrupt_log(const int task)
     if(sage_disrupt_log != NULL) {
         fprintf(sage_disrupt_log,
                 "snap,step,steps,type,gate_zero_baryons,mvir,deltamvir,"
-                "currentmvir,baryons,ratio,mergtime,stellarmass,coldgas,len,dest\n");
+                "currentmvir,baryons,ratio,mergtime,stellarmass,coldgas,len,dest,"
+                "snap_infall,event_time,age_infall\n");
     }
     return sage_disrupt_log;
 }
@@ -557,7 +558,8 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                         FILE *dlog = get_disrupt_log(run_params->ThisTask);
                         if(dlog != NULL) {
                             fprintf(dlog,
-                                    "%d,%d,%d,%d,%d,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%d,%d\n",
+                                    "%d,%d,%d,%d,%d,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%d,%d,"
+                                    "%.6e,%.6e,%.6e\n",
                                     galaxies[p].SnapNum, step, effective_steps,
                                     galaxies[p].Type, gate_zero_baryons,
                                     galaxies[p].Mvir, galaxies[p].deltaMvir,
@@ -565,7 +567,14 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                                     galaxyBaryons > 0.0 ? currentMvir / galaxyBaryons : -1.0,
                                     galaxies[p].MergTime, galaxies[p].StellarMass,
                                     galaxies[p].ColdGas, galaxies[p].Len,
-                                    galaxies[p].MergTime > 0.0 ? 4 : 1);
+                                    galaxies[p].MergTime > 0.0 ? 4 : 1,
+                                    /* TEMPORARY: the clock's starting value --
+                                       the dynamical-friction time this satellite
+                                       was handed -- is recovered in post as
+                                       MergTime + (age_infall - event_time). */
+                                    (double) galaxies[p].TimeOfInfall, event_time,
+                                    galaxies[p].TimeOfInfall >= 0.0f ?
+                                        run_params->Age[(int)(galaxies[p].TimeOfInfall + 0.5f)] : -1.0);
                         }
                         // disruption has occurred!
                         if(galaxies[p].MergTime > 0.0) {
