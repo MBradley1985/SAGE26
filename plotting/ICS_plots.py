@@ -673,7 +673,7 @@ def scan_run(hdr, verbose=True):
     # global budgets and the BCG of groups and clusters, at every snapshot
     rho_star = np.zeros(nsnap)                  # Msun / Mpc^3, galaxies
     rho_ics = np.zeros(nsnap)                   # Msun / Mpc^3, intracluster
-    bcg_cl = np.full((3, nsnap), np.nan)        # 16/50/84 of M_BCG, clusters
+    bcg_cl = np.full((3, nsnap), np.nan)        # 16/50/84 of m_BCG, clusters
     bcg_gr = np.full((3, nsnap), np.nan)
     missing_optional = set()
     # ICS mass function counts: (snapshot, halo-mass bin + 'all', ICS bin)
@@ -2654,7 +2654,7 @@ def report_kimmig(runs):
     if n <= 40:
         print()
         print(f'  every host, {alpha_label(alpha_f).replace("$", "")} '
-              f'(log Mvir, z_form, f_ICL+BCG, f_ICS, log M_BCG, log M12, f_sub)')
+              f'(log Mvir, z_form, f_ICL+BCG, f_ICS, log m_BCG, log M12, f_sub)')
         z0 = Kf['z0']
         tot = z0['m_bcg'] + z0['m_ics'] + z0['m_sat']
         for i in np.argsort(-z0['mhost']):
@@ -2848,9 +2848,9 @@ def report_budget(scans):
             with np.errstate(invalid='ignore', divide='ignore'):
                 print(f'    a = {alpha:<5g} N = {sel.sum():>7,d}')
                 print(f'      f_ICS = ICS/(ICS+all stars)  {_pct_str(ic[sel] / (ic[sel] + st[sel]))}')
-                print(f'      log M_BCG                   {_pct_str(np.log10(bcg[sel]), ".2f")}')
-                print(f'      log (M_BCG + m_ICS)         {_pct_str(np.log10(bcg[sel] + ic[sel]), ".2f")}')
-                print(f'      m_ICS / M_BCG               {_pct_str(ic[sel] / bcg[sel], ".2f")}')
+                print(f'      log m_BCG                   {_pct_str(np.log10(bcg[sel]), ".2f")}')
+                print(f'      log (m_BCG + m_ICS)         {_pct_str(np.log10(bcg[sel] + ic[sel]), ".2f")}')
+                print(f'      m_ICS / m_BCG               {_pct_str(ic[sel] / bcg[sel], ".2f")}')
                 print(f'      BCG share of all stars      {_pct_str(bcg[sel] / (st[sel] + ic[sel]))}')
                 print(f'      satellite share             {_pct_str((st[sel] - bcg[sel]) / (st[sel] + ic[sel]))}')
                 print(f'      BCG bulge-to-total          {_pct_str(s["h_bcg_bulge"][sel] / bcg[sel])}')
@@ -2858,7 +2858,7 @@ def report_budget(scans):
                       f'satellites {(st[sel] - bcg[sel]).sum():.3e} Msun')
 
     print()
-    print('C. Median f_ICS and log M_BCG in bins of log Mvir; dBCG = shift against '
+    print('C. Median f_ICS and log m_BCG in bins of log Mvir; dBCG = shift against '
           f'alpha = {FIDUCIAL:g} [dex]')
     edges = (11.5, 12.0, 12.5, 13.0, 13.5, 14.0, 14.5, 16.0)
     head = f'{"log Mvir":<12}{"N":>8}' + ''.join(
@@ -2910,15 +2910,15 @@ def report_budget(scans):
                   f'bookkeeping closes to {tot / ic[sel].sum():.4f}')
 
     print()
-    print('E. Evolution: global ICS share, median halo f_ICS, median log M_BCG')
+    print('E. Evolution: global ICS share, median halo f_ICS, median log m_BCG')
     zs = (0.0, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0)
     for name, key, fn in (
             ('ICS share of all stars', None,
              lambda s, k: s['rho_ics'][k] / (s['rho_ics'][k] + s['rho_star'][k])),
             ('f_ICS, clusters (median)', None, lambda s, k: s['fics_cl'][1, k]),
             ('f_ICS, groups (median)', None, lambda s, k: s['fics_gr'][1, k]),
-            ('log M_BCG, clusters', None, lambda s, k: np.log10(s['bcg_cl'][1, k])),
-            ('log M_BCG, groups', None, lambda s, k: np.log10(s['bcg_gr'][1, k])),
+            ('log m_BCG, clusters', None, lambda s, k: np.log10(s['bcg_cl'][1, k])),
+            ('log m_BCG, groups', None, lambda s, k: np.log10(s['bcg_gr'][1, k])),
             ('N clusters', None, lambda s, k: float(s['n_cl'][k])),
             ('N groups', None, lambda s, k: float(s['n_gr'][k]))):
         print(f'  {name}')
