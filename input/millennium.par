@@ -58,7 +58,6 @@ ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vv
 EnhancedStarFormationOn     1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: BK25 acceleration threshold w. log-normal c scatter
 
 SaveFullSFH                 0   %0: switch off
-KarpovModeOn                0   %0: switch off
 
 %------------------------------------------
 %----- SAGE model parameters --------------
