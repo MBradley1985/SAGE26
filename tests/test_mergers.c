@@ -66,6 +66,7 @@ void test_merger_timescale() {
     run_params.Omega = 0.3;
     run_params.OmegaLambda = 0.7;
     run_params.PartMass = 0.01;  // 10^10 Msun/h per particle
+    run_params.MergerTimeFactor = 2.0;  // published default; scales the whole timescale
     
     // Initialize redshift array (simplified - just need entry at snap 30)
     for(int i = 0; i < 64; i++) {
@@ -119,6 +120,7 @@ void test_merger_timescale_scaling() {
     run_params.Omega = 0.3;
     run_params.OmegaLambda = 0.7;
     run_params.PartMass = 0.01;
+    run_params.MergerTimeFactor = 2.0;  // published default; scales the whole timescale
     
     for(int i = 0; i < 64; i++) {
         run_params.ZZ[i] = 2.0 * (63 - i) / 63.0;

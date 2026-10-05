@@ -29,11 +29,8 @@ hot_fraction = 1 / (1 + exp(-log10(Mvir / M_shock) / 0.1))
 Regime       = (random_uniform < hot_fraction) ? 1 : 0
 ```
 
-`RegimeRandomMode` controls the draw: `0` redraws every snapshot (original
-behaviour, so borderline-mass centrals can flip regime between snapshots);
-`1` reuses the persistent per-galaxy `RegimeRandom` quantile assigned at
-galaxy creation, so the regime evolves deterministically with `Mvir` and
-never thrashes.
+The draw is fresh every snapshot, so a borderline-mass central is re-tested
+against the sigmoid at each timestep and can flip regime between snapshots.
 
 - **Regime 0 (CGM):** below `M_shock`. Cooling proceeds via the Carr et al.
   (2023) bulk formula on the `CGMgas` reservoir.
@@ -41,9 +38,9 @@ never thrashes.
   classical Croton+06 isothermal recipe on the `HotGas` reservoir, with a
   Dekel & Birnboim cold-stream fraction splitting the flow.
 
-Note that the cold-stream criterion (`Z_CRIT_DB06`, `StreamMassFactor`) plays
-no part in this classification -- it acts *within* the hot regime, in
-`cooling_recipe_hot()`. Regime 0 galaxies have no cold-stream term at all.
+Note that the cold-stream criterion plays no part in this classification --
+it acts *within* the hot regime, in `cooling_recipe_hot()`. Regime 0 galaxies
+have no cold-stream term at all.
 
 `determine_and_store_regime()` is called unconditionally from
 `core_build_model.c`, but `Regime` is only consumed when `CGMrecipeOn = 1`.
@@ -120,33 +117,13 @@ With `CGMrecipeOn = 0`, `core_build_model.c` instead calls `cooling_recipe()`
 
 ### The cold-stream fraction `f_stream`
 
-Set by `ColdStreamCeilingOn`. Both forms are built from the Dekel & Birnboim
-(2006) ingredients: the shock mass `M_shock` (`MShockMsun`), the clustering
-mass `M_*(z)` from `interpolate_clustering_mass()`, and the factor
-`f = StreamMassFactor` (default 3, as they adopt).
+Built from the Dekel & Birnboim (2006) ingredients: the shock mass `M_shock`
+(`MShockMsun`), the clustering mass `M_*(z)` from
+`interpolate_clustering_mass()`, and the factor `f = DB06_STREAM_MASS_FACTOR`
+(3, as they adopt).
 
-**`ColdStreamCeilingOn = 0` (default)** -- a smooth fraction:
-
-```
-f_stream = (Mvir / M_shock)^(-4/3) * (1 + z) / 2,   clamped to [0, 1]
-f_stream = 0                                        for z < Z_CRIT_DB06 and Mvir > M_shock
-```
-
-This is a **SAGE26 prescription motivated by** DB06 rather than one of their
-results: the `(M/M_shock)^(-4/3)` suppression is the reciprocal of the halo
-ratio in their eq. 38, and the explicit `(1 + z)` factor has no counterpart
-in their work (their redshift dependence enters through `M_*(z)`). DB06's
-equations predict *whether* streams penetrate, not what fraction of the
-corona they carry.
-
-`Z_CRIT_DB06 = 1.2` is not a free parameter: DB06 eq. 41 defines it by
-`f M_*(z_crit) = M_shock`, which for `f = 3`, `MShockMsun = 6e11` and the
-Millennium/WMAP1 `M_*(z)` table solves to 1.20. It is tied to that cosmology
-and shock mass -- the Uchuu/Planck15 table gives 1.01 -- and is hardcoded, so
-it must be recomputed if either changes.
-
-**`ColdStreamCeilingOn = 1`** -- DB06 eq. 40 as published, a threshold rather
-than a fraction, so `f_stream` is exactly 1 or 0:
+SAGE26 uses DB06 eq. 39 as published -- a threshold rather than a fraction, so
+`f_stream` is exactly 1 or 0:
 
 ```
 M_stream = M_shock^2 / (f M_*)        for f M_* < M_shock   (eq. 40)
@@ -154,17 +131,36 @@ M_max    = M_stream, or M_shock if f M_* > M_shock          (their low-z limit)
 f_stream = (Mvir < M_max) ? 1 : 0
 ```
 
-This is the inversion of their eq. 39 test `R < 1` and reproduces it exactly.
-Both limits of eq. 40 follow from the one test, and the crossover is derived
-from `f M_*(z) = M_shock`, so this path needs no hardcoded `z_crit` and
-self-adjusts to cosmology and `MShockMsun`.
+Equivalently, their eq. 39 compares the cooling and compression times within
+the stream,
 
-Because `f_stream` is binary here, the hot-halo and stream channels are
-mutually exclusive -- one of `mdot_cool` / `mdot_stream` is always exactly
-zero -- and a halo crossing the ceiling jumps by the full `2 R_vir / r_cool`
-factor in a single snapshot. DB06's threshold is genuinely discontinuous, so
-this is faithful to the paper; the smooth default trades that fidelity for
-continuity.
+```
+R = (f M_* / Mvir)^(2/3) * (Mvir / M_shock)^(4/3)
+```
+
+with streams penetrating where `R < 1`. The redshift dependence enters through
+`M_*(z)` rather than an explicit `(1+z)` factor, and the shut-off is
+automatic: their eq. 41 defines `z_crit` by `f M_*(z_crit) = M_shock`, which is
+exactly where `R = 1` at `Mvir = M_shock`. Both limits of eq. 40 follow from
+the one test, so this needs no hardcoded `z_crit` and self-adjusts to
+cosmology and `MShockMsun`.
+
+`STREAM_THRESHOLD_WIDTH_DEX` (0.15 dex, in
+[`src/model_cooling_heating.c`](../../src/model_cooling_heating.c)) smooths the
+threshold: `f_stream = [1 + R^(1/W)]^-1`, so `f_stream = 1/2` at `R = 1`. A
+zero width would give the published step exactly. The width barely moves the
+predictions (<1.2% in total stellar mass, SMF differences inside Poisson
+noise) but it decides whether the two channels can run together: they are
+weighted by `f_stream` and `1 - f_stream`, so a step makes them mutually
+exclusive -- measured coexistence is exactly zero at every redshift. With the
+sigmoid, the fraction of shocked haloes where each channel supplies >10% of
+the inflow peaks near 50% at z ~ 1.2, which is the regime DB06 describe when
+streams reach the disc in haloes where "shocks heat part of the gas".
+
+DB06 attach a condition to their eq. 40: the ceiling holds only while
+`f M_* < M_shock`. Below that, their rule is instead that cold streams exist
+only for `Mvir < M_shock`, which is imposed as a necessary condition -- it can
+switch streams off but never on.
 
 ## `cooling_recipe_cgm()` -- Regime 0 (Carr et al. 2023 bulk cooling)
 
@@ -298,9 +294,6 @@ because it has to move mass out of two different reservoirs.
 |-----------|--------|
 | `CGMrecipeOn` | 0 disables the two-regime split entirely (pure Croton+06 hot-halo cooling); 1 enables it. |
 | `MShockMsun` | Dekel & Birnboim shock mass in Msun (default 6e11). Sets both the regime classification and the cold-stream criterion. |
-| `RegimeRandomMode` | 0 redraws the regime every snapshot; 1 uses the persistent per-galaxy quantile (deterministic in `Mvir`). |
-| `ColdStreamCeilingOn` | 0 the SAGE26 smooth `f_stream` (default); 1 the DB06 eq. 40 threshold. |
-| `StreamMassFactor` | `f` in DB06 eqs 40-41 (default 3). Used by both `f_stream` forms. |
 | `AGNrecipeOn` | Radio-mode BH accretion recipe: 0 off, 1 empirical, 2 Bondi-Hoyle, 3 cold-cloud. |
 | `RadioModeEfficiency` | Overall scaling on radio-mode accretion. |
 | `QuasarModeEfficiency` | Used by the merger-driven AGN path -- see [Mergers and disruption](mergers_and_disruptions.md). |

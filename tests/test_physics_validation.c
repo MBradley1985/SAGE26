@@ -266,7 +266,7 @@ void test_ffb_efficiency_bounds() {
     
     struct params run_params;
     memset(&run_params, 0, sizeof(struct params));
-    run_params.FFBMaxEfficiency = 0.5;  // 50% efficiency
+    run_params.EnhancedSFEfficiency = 0.5;  // 50% efficiency
     run_params.RecycleFraction = 0.43;
     
     gal.ColdGas = 1.0;

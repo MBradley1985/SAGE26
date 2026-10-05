@@ -209,7 +209,7 @@ ICS reservoir. The function:
    machinery and those parameters have been removed; `get_halo_concentration()`
    survives and is still used elsewhere, e.g. by the FFB and disk-size models.)
 
-4. **Records assembly history** if `TrackICSAssembly = 1`:
+4. **Records assembly history**:
    `ICS_disrupt` accumulates the satellite stellar mass newly disrupted
    into ICS; `ICS_accrete` accumulates ICS that the satellite already
    carried in. `ICS_sum_mt` tracks the mass-weighted deposit time so that
@@ -245,7 +245,6 @@ by any code path), 4 (disrupted to ICS).
 | `ThresholdSatDisruption` | M_vir/baryon threshold below which a satellite is eligible for an event. |
 | `StarburstColdGasOn` | 0 forces the burst to recompute H2 from current ColdGas; 1 uses the stored value. |
 | `BulgeSizeOn` | Bulge radius model (0 off, 1-2 Shen+2003, 3 Tonini+2016 multi-channel). |
-| `TrackICSAssembly` | Record `ICS_disrupt` and `ICS_accrete` assembly history. |
 | `SFprescription` | Used to pick the H2 recipe in the burst when `StarburstColdGasOn = 0`. |
 | `FIREmodeOn` | Applies FIRE scaling to burst SN feedback if enabled. |
 

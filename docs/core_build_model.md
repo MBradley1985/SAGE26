@@ -46,7 +46,7 @@ a substep loop that contains two inner per-galaxy loops.
 |---|------|-------|
 | 1 | Halo concentration (if `ConcentrationOn > 0`) | `get_halo_concentration()` |
 | 2 | CGM regime classification (if `CGMrecipeOn`) | `determine_and_store_regime()` |
-| 3 | FFB regime classification (if `FeedbackFreeModeOn`) | `determine_and_store_ffb_regime()` |
+| 3 | FFB regime classification (if `EnhancedStarFormationOn`) | `determine_and_store_ffb_regime()` |
 | 4 | Compute the total infalling gas for the snapshot interval | `infall_recipe()` |
 | 5 | Choose `effective_steps` (the adaptive sub-step count) | inline in `evolve_galaxies` |
 

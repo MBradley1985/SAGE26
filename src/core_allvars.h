@@ -109,8 +109,6 @@ struct GALAXY
     int32_t   Type;       /* 0=central; 1=satellite with subhalo; 2=orphan satellite; 3=merged (dead) */
     int32_t   Regime;     /* 0=CGM-dominated (cold-flow/precipitation); 1=hot-halo (classical); set by determine_and_store_regime() */
     int32_t   FFBRegime;  /* 0=standard SF; 1=feedback-free burst active; set by determine_and_store_ffb_regime() */
-    float     FFBRandom;  /* persistent random number for sigmoid-based FFB determination (drawn at galaxy creation) */
-    float     RegimeRandom; /* persistent random number for sigmoid-based CGM/Hot regime determination (drawn at galaxy creation; used when RegimeRandomMode==1) */
 
     int32_t   GalaxyNr;   /* index within the current forest's galaxy array */
     int32_t   CentralGal; /* index of the FOF central galaxy in the current galaxy array */
@@ -509,28 +507,12 @@ struct params
     int32_t    DiskInstabilityOn;
     int32_t    CGMrecipeOn;
     int32_t    FIREmodeOn;
-    int32_t    RegimeRandomMode;     // 0: fresh random draw each snapshot (default, original behaviour); 1: use the persistent RegimeRandom assigned at galaxy creation (deterministic regime evolution driven by mass)
-    int32_t    ColdStreamCeilingOn;  // How the cold-stream fraction f_stream is set.
-                                  // 0: SAGE26 choice (default) -- a smooth fraction
-                                  //    (Mvir/Mshock)^(-4/3) (1+z)/2 with a hard z_crit cut
-                                  //    for M > Mshock.  Streams and the quasi-static flow
-                                  //    coexist; no counterpart in D&B06.
-                                  // 1: Dekel & Birnboim (2006) eq. 39 as published -- the
-                                  //    threshold R < 1, so f_stream is 1 or 0 and z_crit
-                                  //    and the Mstream ceiling emerge from eqs 40-41.
-    double     StreamMassFactor;  // f in Dekel & Birnboim (2006) eqs 40-41; order a few, they use 3.
-    double     GasDiskRadiusFactor; // chi: ratio of the atomic-gas scale length to the stellar/H2
-                                  // scale length, applied in the HI ionisation truncation only.
-                                  // 1.0 = cospatial (default, published behaviour); observed disks
-                                  // have chi ~ 1.5-2.
     double     MShockMsun;   // Dekel & Birnboim (2006) virial-shock stability mass [Msun].
                              // Sets which of two baryon cycles a halo follows, so it is a
                              // physics parameter rather than a constant; exposed for the
                              // sensitivity test requested in referee Major Comment 9.
     int32_t    ConcentrationOn;   // 0: off, 1: Ishiyama+21 lookup table, 2: Vmax/Vvir from simulation, 3: hybrid (Vmax/Vvir, infall-frozen for satellites)
-    int32_t    FeedbackFreeModeOn;  // 0: off, 1: Li+24 mass sigmoid, 2: BK25 sharp, 3: BK25 stored-c sharp, 4: BK25 log-normal c scatter, 5: Li+24 mass sharp (no sigmoid), 6: Li+24 sigmoid + H2 SF, 7: BK25 log-normal c scatter + H2 SF
-    int32_t    FFBIgnoreRegime;     // 0: FFB restricted to CGM-regime (Regime=0) halos; 1: allow FFB in hot-regime halos too
-    int32_t    FFBRandomMode;       // 0: draw a fresh random each snapshot (DEFAULT, published behaviour -- galaxies move in and out of FFB); 1: use the persistent FFBRandom assigned at galaxy creation (FFB status fixed per galaxy)
+    int32_t    EnhancedStarFormationOn;  // Feedback-free burst mode. 0: off; 1: Li+24 mass threshold with their eq. 3 sigmoid; 2: BK25 acceleration threshold with log-normal concentration scatter
     int32_t    BulgeSizeOn;   // 0: off; 1: Shen+03 eq. 33; 2: Shen+03 eq. 32 two-regime; 3: Tonini+16 separate merger/instability bulges
     int32_t    H2DiskAreaOption;          // 0 = pi*r_s^2, 1 = pi*(3*r_s)^2, 2 = 2*pi*r_s^2 (central Sigma_0)
     int32_t    H2RadialIntegrationOn;     // 0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk
@@ -540,7 +522,6 @@ struct params
                                           // 1 = additionally save the per-snapshot SFHMassDisk/SFHMassBulge
                                           // histories. Those accumulate stellar mass, not rate, so they are
                                           // correct at any substep count (unlike the Sfr* rate bins).
-    int32_t    TrackICSAssembly;          // 0 = off, 1 = track in-situ/ex-situ ICS (ICS_disrupt, ICS_accrete, ICS_sum_mt)
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 
     /* baryonic physics calibration parameters */
@@ -551,11 +532,7 @@ struct params
     double ThreshMajorMerger;     /* mass ratio above which a merger is 'major' [dimensionless] */
     double BaryonFrac;            /* cosmic baryon fraction Omega_b/Omega_m [dimensionless] */
     double SfrEfficiency;         /* SF efficiency per dynamical time [dimensionless] */
-    double FFBMaxEfficiency;      /* maximum SF efficiency in the feedback-free burst regime [dimensionless] */
-    double FFBConcSigma;      // sigma_c for log-normal concentration scatter (ln c); typical ~0.2 (Jing 2000, Bullock+01)
-    double FFBThresholdSlope; // exponent n in M_vir,FFB ~ ((1+z)/10)^n; -6.2 (Li+24) is the default. The
-                              // normalisation is pinned at z=9, so varying this pivots the threshold about
-                              // that redshift; used to test whether the slope is degenerate with alpha_FFB.
+    double EnhancedSFEfficiency;  /* maximum SF efficiency in the feedback-free burst regime [dimensionless] */
     double FeedbackReheatingEpsilon;   /* SN mass-loading: reheated mass per unit stars formed [dimensionless] */
     double FeedbackEjectionEfficiency; /* fraction of SN energy available to eject gas from the halo [dimensionless] */
 
@@ -584,10 +561,13 @@ struct params
     double DisruptionSplitAlpha;     // Base exponent for mass-ratio dependence of ICL fraction (DynamicDisruptionSplit>=1)
     double DisruptionSplitCref;      // Reference concentration for concentration weighting (DynamicDisruptionSplit=2)
 
+    double MergerTimeFactor;      /* multiplies the Binney & Tremaine dynamical-friction merger time.
+                                     Sets how long a satellite's merging clock runs, and so whether it
+                                     still has time left when its subhalo is lost -- which decides
+                                     whether its stars go to the ICS (clock running) or onto the central
+                                     (clock expired). 2.0 reproduces the published SAGE16/SAGE26
+                                     behaviour [dimensionless] */
     double SubstepResolution;        // global multiplier on the adaptive substep count (floor STEPS and cap MAX_STEPS both scale by this); default 1.0. Runtime knob for convergence / N-invariance testing without recompiling.
-    double RedshiftPowerLawExponent; /* exponent of the (1+z) term in the FIRE mass-loading scaling (Muratov+15); default 1.25 */
-    int32_t SNEnergyConservationOn;  // 1 = bound the FIRE ejection energy by the supernova energy actually available (DEFAULT); 0 = off (unbounded coupling, the pre-2026 published behaviour). Only acts when FIREmodeOn == 1.
-    double MaxSNEnergyCoupling;      // cap on the effective coupling eps_eff = FeedbackEjectionEfficiency * f_FIRE when SNEnergyConservationOn == 1; default 2.0, i.e. E_FB <= m_* eta_SN E_SN (all of the SN energy). 1.0 caps at half.
 
     int32_t KarpovModeOn;  // 0 = off (default, published behaviour); 1 = Karpov+2020 supernova feedback model (mdot_outflow = eta_SN * SFR, no energy budget, no cooling flow, no precipitation threshold, no cold streams)
     /* code unit definitions (set from parameter file; all other unit fields derived from these) */
