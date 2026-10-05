@@ -242,6 +242,42 @@ static int scenario_disk_dominated_unlimited(const struct GALAXY *gal, int eddty
     return (bulge_frac < 0.3) ? 0 : 1;
 }
 
+// A SUSTAINED early-universe exemption rather than a single event (cf.
+// scenario_first_event_unlimited, scheme 3). Every merger/instability event
+// for this galaxy runs unlimited as long as z > EarlyUniverseZCut; once the
+// galaxy's current redshift drops below the cutoff, every later event is
+// capped as normal. Tests the same "early universe permits unimpeded
+// growth" idea as scheme 3, but as a time window instead of one lucky
+// burst. Ported from the bh_investigation sandbox ("EarlyWindow"): at
+// BlackHoleGrowthRate=0.06 it reproduces R2's high-z LRD-like f_BH fraction
+// (~0.06) while causing somewhat less z=0 BH-bulge relation offset once
+// combined with a longer reincorporation time -- see bh_investigation/
+// GROWTH_STORIES.md and the "persistent/delayed-recovery" discussion there.
+static int scenario_early_universe_unlimited(const struct GALAXY *gal, const struct params *run_params)
+{
+    const double z = run_params->ZZ[gal->SnapNum];
+    return (z > run_params->EarlyUniverseZCut) ? 0 : 1;
+}
+
+// Exempts merger/instability events whose host is STILL below
+// LowMassHostThreshold in StellarMass at event time. LRD hosts are observed
+// to be unusually compact and low-mass while caught accreting (Kocevski+23,
+// Labbe+23: M_star~1e8-1e10 Msun). Growing a BH to any appreciable absolute
+// mass while M_star is still small mechanically produces a high f_BH =
+// M_BH/M_star as an OUTCOME of the exempted event, rather than requiring an
+// already-elevated f_BH as a precondition (gating on CURRENT f_BH was tried
+// in the sandbox and found inert: the galaxies that cross an f_BH threshold
+// under normal capping turn out to be gas-poor/quenched, with no further
+// accretion demand for an exemption to act on). Ported from the
+// bh_investigation sandbox ("LowMassHost"): at BlackHoleGrowthRate=0.06 it
+// matches R2's high-z LRD-like f_BH fraction while causing measurably less
+// z=0 BH-bulge relation offset than R2 (+0.175 vs +0.267 dex in sandbox
+// mini-Millennium testing) -- see bh_investigation/GROWTH_STORIES.md.
+static int scenario_lowmass_host_unlimited(const struct GALAXY *gal, const struct params *run_params)
+{
+    return (gal->StellarMass < run_params->LowMassHostThreshold) ? 0 : 1;
+}
+
 double effective_bh_growth_rate(const struct GALAXY *gal, const struct params *run_params)
 {
     double rate = run_params->BlackHoleGrowthRate;
@@ -280,6 +316,8 @@ int accretion_scenario(int scenario_id, const struct GALAXY *gal,
         case 7: return scenario_minor_merger_unlimited(gal, mass_ratio, run_params);
         case 8: return scenario_major_merger_unlimited(gal, mass_ratio, run_params);
         case 9: return scenario_disk_dominated_unlimited(gal, eddtype, run_params);
+        case 11: return scenario_early_universe_unlimited(gal, run_params);
+        case 13: return scenario_lowmass_host_unlimited(gal, run_params);
         default: return run_params->EddingtonLimitOn;         // safe fallback
     }
 }

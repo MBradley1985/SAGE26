@@ -543,7 +543,12 @@ struct params
     double BlackHoleGrowthRate;   /* BH growth normalisation per merger [dimensionless] */
     double BHAccretionNorm;
     double BHMassScalingIndex;
-    double FirstEventGrowthBoost; 
+    double FirstEventGrowthBoost;
+    double EarlyUniverseZCut; /* used by AGNAccretionScheme=11: unlimited accretion for z > EarlyUniverseZCut,
+                                  capped below it (a sustained early-universe window, vs scheme 3's single event). */
+    double LowMassHostThreshold; /* used by AGNAccretionScheme=13: unlimited accretion for merger/instability
+                                     events whose host StellarMass is below this (code units, 1e10 Msun/h) at
+                                     event time -- produces high f_BH as an outcome rather than a precondition. */
 
     double BHSeedMinHaloMass; // Minimum halo mass for seeding in units of 10^10 Msun/h
 

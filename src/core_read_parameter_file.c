@@ -139,6 +139,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->BHMassScalingIndex = 0.5;
     run_params->AGNAccretionScheme = 0; // Default to no change in Accretion Scheme
     run_params->FirstEventGrowthBoost = 1.0; // Default: no effect (decoupled R2 growth-rate boost)
+    run_params->EarlyUniverseZCut = 4.0;    // Default threshold for AGNAccretionScheme=11 (unused unless selected)
+    run_params->LowMassHostThreshold = 0.1; // Default: 1e9 Msun/h, typical LRD host scale (unused unless scheme=13)
 
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
 #define REG(tag, addr, type, req) do {         \
@@ -205,6 +207,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("BHMassScalingIndex",    &(run_params->BHMassScalingIndex),   DOUBLE, 0);
     REG("AGNAccretionScheme",    &(run_params->AGNAccretionScheme),   INT, 0);
     REG("FirstEventGrowthBoost", &(run_params->FirstEventGrowthBoost),DOUBLE, 0);
+    REG("EarlyUniverseZCut",    &(run_params->EarlyUniverseZCut),    DOUBLE, 0);
+    REG("LowMassHostThreshold", &(run_params->LowMassHostThreshold), DOUBLE, 0);
 
 
     /* ---- Optional: model parameters ---- */

@@ -59,11 +59,11 @@ EnhancedStarFormationOn     1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: 
 
 SaveFullSFH                 0   %0: switch off
 
-EddingtonLimitOn            1   %0: No forced limit; 1: All accretion EddLimited
+EddingtonLimitOn            0   %0: No forced limit; 1: All accretion EddLimited
 AGNDynamicAccretionOn       1   %0: default to dt; 1: Use tdyn 
 BHExsituGrowthOn            0   %0: default to no exsitu growth; 1:Consider Exsitu growth
 BlackHoleSeedingOn          2   %0: No forced seeding; 1: Light Seeding; 2: Heavy Seeding
-AGNAccretionScheme          3   %0: default (global EddingtonLimitOn); 1: disk only; 2: merger only; 3: first event; 4: small halo; 5: massive halo; 6: conc/bulge; 7: minor merger; 8: major merger; 9: disk dominated
+AGNAccretionScheme          0   %0: default (global EddingtonLimitOn); 1: disk only; 2: merger only; 3: first event; 4: small halo; 5: massive halo; 6: conc/bulge; 7: minor merger; 8: major merger; 9: disk dominated; 11: early-universe window; 13: low-mass host
      
 
 %------------------------------------------
@@ -76,14 +76,16 @@ EnhancedSFEfficiency        0.2     %0.2 fits observations best, 1.0 is theoreti
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)
 FeedbackEjectionEfficiency  0.3     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
 
-ReIncorporationFactor       0.19    %fraction of ejected mass reincorporated per dynamical time to hot
+ReIncorporationFactor       0.19    %fraction of ejected mass reincorporated per dynamical time to hot 0.19
 
-RadioModeEfficiency         0.08    %AGN radio mode efficiency (AGNrecipeOn=2)
+RadioModeEfficiency         0.02    %AGN radio mode efficiency (AGNrecipeOn=2)
 QuasarModeEfficiency        0.005   %AGN quasar mode wind heating efficiency (AGNrecipeOn>0)
-BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during mergers (AGNrecipeOn>0)
-FirstEventGrowthBoost       2.0     %situational boost factor for BH growth rate (default=1.0)
+BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during mergers (AGNrecipeOn>0) 0.015
+FirstEventGrowthBoost       1.0     %situational boost factor for BH growth rate (default=1.0)
+EarlyUniverseZCut           4.0     %AGNAccretionScheme=11: unlimited accretion for z > this cutoff (default=4.0)
+LowMassHostThreshold        0.1     %AGNAccretionScheme=13: unlimited accretion while host StellarMass is below this, 10^10 Msun/h (default=0.1)
 
-ColdAccretionBHEfficiency   1.0e-5       %Cold accretion (precipitation/CCA) BH efficiency (CGMRecipeOn=0) : 1.0e-5
+ColdAccretionBHEfficiency   0      %Cold accretion (precipitation/CCA) BH efficiency (CGMRecipeOn=0) : 1.0e-5
 BHSeedMinHaloMass           0.86    %Minimum halo mass for seeding in 10^10 Msun/h (1.0 = 10^10 Msun/h)
 BHAccretionNorm             10.0    %The normalisation factor in front of BH Quasar Mode Accretion timescale (default =10)
 BHMassScalingIndex          0.5     %Scaling factor for the BH-Bulge Mass relation, used in the BH Quasar Mode Accretion timescale

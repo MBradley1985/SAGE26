@@ -121,6 +121,8 @@ optional parameters take the listed default if omitted.
 | `QuasarModeEfficiency` | dimensionless | `0.005` | AGN quasar-mode wind heating efficiency (AGNrecipeOn > 0). |
 | `BlackHoleGrowthRate` | dimensionless | `0.015` | Fraction of cold gas accreted onto the BH during mergers (AGNrecipeOn > 0). |
 | `FirstEventGrowthBoost` | dimensionless | `1.0` | Multiplier on `BlackHoleGrowthRate` applied only to the qualifying first quasar-mode event under `AGNAccretionScheme=3` (requires `EddingtonLimitOn=1`); every later, capped event uses the unmodified rate. `1.0` = no effect. Decouples the R2 growth-rate boost from a global `BlackHoleGrowthRate` change -- see `bh_investigation/FINDINGS.md`. |
+| `EarlyUniverseZCut` | redshift | `4.0` | Used by `AGNAccretionScheme=11` ("EarlyWindow"): every merger/instability event for a galaxy runs unlimited (uncapped by Eddington) as long as its current redshift `z > EarlyUniverseZCut`; capped as normal once `z` drops below the cutoff. A sustained early-universe exemption window, vs. scheme 3's single lucky event. No effect unless `AGNAccretionScheme=11` and `EddingtonLimitOn=1`. |
+| `LowMassHostThreshold` | `10^10 Msun/h` | `0.1` | Used by `AGNAccretionScheme=13` ("LowMassHost"): exempts merger/instability events whose host `StellarMass` is still below this value at event time. Produces high `M_BH/M_star` as an outcome of the exempted event rather than requiring it as a precondition. No effect unless `AGNAccretionScheme=13` and `EddingtonLimitOn=1`. |
 
 ### Mergers
 
