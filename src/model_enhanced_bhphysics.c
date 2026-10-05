@@ -242,6 +242,30 @@ static int scenario_disk_dominated_unlimited(const struct GALAXY *gal, int eddty
     return (bulge_frac < 0.3) ? 0 : 1;
 }
 
+double effective_bh_growth_rate(const struct GALAXY *gal, const struct params *run_params)
+{
+    double rate = run_params->BlackHoleGrowthRate;
+
+    // Decouples the "first quasar-mode event unlimited" scenario (R2,
+    // AGNAccretionScheme=3) from a global BlackHoleGrowthRate boost. Boosting
+    // BlackHoleGrowthRate globally inflates both the one special unlimited
+    // burst AND every ordinary capped event afterward -- the latter is what
+    // actually sets the z=0 relation, since it's the bulk of post-burst
+    // growth. This applies the boost only to the qualifying first event
+    // itself (same condition scenario_first_event_unlimited() uses:
+    // !QuasarModeEventOccurred), leaving every later, capped event at the
+    // true fiducial rate. Gated on the same EddingtonLimitOn+
+    // AGNAccretionScheme==3 combination R2 requires, not a freestanding
+    // switch, so it can't silently create a "not yet capped" regime under a
+    // different scenario where the boost wouldn't be undone by a cap at all.
+    if(run_params->EddingtonLimitOn && run_params->AGNAccretionScheme == 3 &&
+       !gal->QuasarModeEventOccurred) {
+        rate *= run_params->FirstEventGrowthBoost;
+    }
+
+    return rate;
+}
+
 int accretion_scenario(int scenario_id, const struct GALAXY *gal,
                         int eddtype, double mass_ratio, const struct params *run_params)
 {

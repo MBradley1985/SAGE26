@@ -136,6 +136,7 @@ optional parameters take the listed default if omitted.
 | `RadioModeEfficiency` | dimensionless | `0.08` | AGN radio-mode heating efficiency (AGNrecipeOn=2). |
 | `QuasarModeEfficiency` | dimensionless | `0.005` | AGN quasar-mode wind heating efficiency (AGNrecipeOn > 0). |
 | `BlackHoleGrowthRate` | dimensionless | `0.015` | Fraction of cold gas accreted onto the BH during mergers (AGNrecipeOn > 0). |
+| `FirstEventGrowthBoost` | dimensionless | `1.0` | Multiplier on `BlackHoleGrowthRate` applied only to the qualifying first quasar-mode event under `AGNAccretionScheme=3` (requires `EddingtonLimitOn=1`); every later, capped event uses the unmodified rate. `1.0` = no effect. Decouples the R2 growth-rate boost from a global `BlackHoleGrowthRate` change -- see `bh_investigation/FINDINGS.md`. |
 
 ### Mergers
 

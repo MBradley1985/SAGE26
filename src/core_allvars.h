@@ -566,6 +566,7 @@ struct params
     double BlackHoleGrowthRate;   /* BH growth normalisation per merger [dimensionless] */
     double BHAccretionNorm;
     double BHMassScalingIndex;
+    double FirstEventGrowthBoost; 
 
     double BHSeedMinHaloMass; // Minimum halo mass for seeding in units of 10^10 Msun/h
 

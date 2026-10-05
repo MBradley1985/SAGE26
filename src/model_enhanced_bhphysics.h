@@ -27,6 +27,16 @@ extern "C" {
     
     int accretion_scenario(int scenario_id, const struct GALAXY *gal, int eddtype, double mass_ratio, const struct params *run_params);
 
+    /* Effective merger/instability BlackHoleGrowthRate for this galaxy: the base
+     * rate, boosted by FirstEventGrowthBoost when this galaxy is about to
+     * experience its qualifying first quasar-mode event under
+     * AGNAccretionScheme=3 (requires EddingtonLimitOn=1). Returns
+     * run_params->BlackHoleGrowthRate unchanged when FirstEventGrowthBoost==1.0
+     * (the default) or the scenario/condition doesn't apply -- every event
+     * after the first uses the unmodified fiducial rate, decoupling the R2
+     * growth-rate boost from a global BlackHoleGrowthRate change. */
+    double effective_bh_growth_rate(const struct GALAXY *gal, const struct params *run_params);
+
 #ifdef __cplusplus
 }
 #endif

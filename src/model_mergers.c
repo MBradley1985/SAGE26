@@ -474,7 +474,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     double BHaccrete_demanded = 0.0;
     double bh_accretiontime = dt;
     if(run_params->AGNrecipeOn && cold_gas > 0.0 && bh_can_grow) {
-        BHaccrete_demanded = run_params->BlackHoleGrowthRate * mass_ratio /
+        BHaccrete_demanded = effective_bh_growth_rate(&galaxies[merger_centralgal], run_params) * mass_ratio /
             (1.0 + SQR(BH_GROWTH_V_KMS / galaxies[merger_centralgal].Vvir)) * cold_gas;
         if(BHaccrete_demanded < 0.0) BHaccrete_demanded = 0.0;
 
@@ -648,7 +648,7 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
             BHaccrete = BHaccrete_in;
         } else {
             // Legacy path: compute the demand internally.
-            BHaccrete = run_params->BlackHoleGrowthRate * mass_ratio /
+            BHaccrete = effective_bh_growth_rate(&galaxies[merger_centralgal], run_params) * mass_ratio /
                 (1.0 + SQR(BH_GROWTH_V_KMS / galaxies[merger_centralgal].Vvir)) * galaxies[merger_centralgal].ColdGas;
         }
 
