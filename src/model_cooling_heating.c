@@ -205,25 +205,25 @@ double cooling_recipe_hot(const int gal, const int halo_snapnum, const double dt
                 // factor 2 at rcool = Rvir; that is the published behaviour.
                 coolingGas = galaxies[gal].HotGas / tcool * dt;
 
-                // Uncomment for the cold accretion onto the BH (rcool > Rvir) channel. 
-                // Cold accretion onto the BH: rcool > Rvir 
-                double coldAccretionMass = run_params->ColdAccretionBHEfficiency * coolingGas;
+                // Uncomment for the cold accretion onto the BH (rcool > Rvir) channel.
+                // Cold accretion onto the BH: rcool > Rvir
+                // double coldAccretionMass = run_params->ColdAccretionBHEfficiency * coolingGas;
 
-                double coldAccretionRate = eddington_limited_accretion_rate(
-                    coldAccretionMass / dt, 1, galaxies[gal].BlackHoleMass, halo_snapnum, 0,
-                    run_params, galaxies[gal].BHAccretionType, galaxies[gal].BHMaxaccretionRate,
-                    galaxies[gal].BHEddingtonRateLimit, galaxies[gal].BHMassatAccretion);
-                coldAccretionMass = coldAccretionRate * dt;
-                if(coldAccretionMass > coolingGas) coldAccretionMass = coolingGas;
+                // double coldAccretionRate = eddington_limited_accretion_rate(
+                //     coldAccretionMass / dt, 1, galaxies[gal].BlackHoleMass, halo_snapnum, 0,
+                //     run_params, galaxies[gal].BHAccretionType, galaxies[gal].BHMaxaccretionRate,
+                //     galaxies[gal].BHEddingtonRateLimit, galaxies[gal].BHMassatAccretion);
+                // coldAccretionMass = coldAccretionRate * dt;
+                // if(coldAccretionMass > coolingGas) coldAccretionMass = coolingGas;
 
-                if(coldAccretionMass > 0.0) {
-                    const double metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);
-                    galaxies[gal].BlackHoleMass             += coldAccretionMass;
-                    galaxies[gal].ColdAccretionBHaccretionMass[halo_snapnum] += coldAccretionMass;
-                    galaxies[gal].HotGas                    -= coldAccretionMass;
-                    galaxies[gal].MetalsHotGas               -= metallicity * coldAccretionMass;
-                    coolingGas                                -= coldAccretionMass;
-                }
+                // if(coldAccretionMass > 0.0) {
+                //     const double metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);
+                //     galaxies[gal].BlackHoleMass             += coldAccretionMass;
+                //     galaxies[gal].ColdAccretionBHaccretionMass[halo_snapnum] += coldAccretionMass;
+                //     galaxies[gal].HotGas                    -= coldAccretionMass;
+                //     galaxies[gal].MetalsHotGas               -= metallicity * coldAccretionMass;
+                //     coolingGas                                -= coldAccretionMass;
+                // }
             } else {
                 // Quasi-static cooling flow.
                 coolingGas = (galaxies[gal].HotGas / galaxies[gal].Rvir) * (rcool / (2.0 * tcool)) * dt;
