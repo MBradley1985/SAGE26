@@ -507,9 +507,9 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
             // The Ishiyama+21 table gives the mean concentration; individual halos
             // scatter around it following p(c)dc ~ exp(-(ln c - ln c0)^2 / 2sigma_c^2) d(ln c)
             // with sigma_c ~ 0.2 (Jing 2000; Bullock+01; Dolag+04).
-            // The persistent FFBRandom draws a fixed quantile for each halo,
-            // giving a deterministic scattered concentration and thus a smooth
-            // FFb transition across the halo population.
+            // The draw (fresh each snapshot, or the persistent FFBRandom when
+            // FFBRandomMode=1) sets each halo's concentration quantile, giving a
+            // smooth FFB transition across the halo population.
             const double Mvir = galaxies[p].Mvir;
             const double Rvir = galaxies[p].Rvir;
 
@@ -527,7 +527,11 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
 
             // Apply log-normal scatter: ln(c) ~ Normal(ln(c_mean), sigma_c)
             if(run_params->FFBConcSigma > 0.0) {
-                double u = draw;
+                // A high concentration favours FFB, so the quantile is 1 - draw:
+                // a low draw then favours FFB here exactly as it does in the
+                // Li+24 modes (1, 6), and a halo sits at the same quantile under
+                // either criterion.
+                double u = 1.0 - draw;
                 if(u < 1.0e-6) u = 1.0e-6;
                 if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
                 const double z_normal = inverse_normal_cdf(u);
@@ -586,7 +590,11 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
             if(c < 1.0) c = 1.0;
 
             if(run_params->FFBConcSigma > 0.0) {
-                double u = draw;
+                // A high concentration favours FFB, so the quantile is 1 - draw:
+                // a low draw then favours FFB here exactly as it does in the
+                // Li+24 modes (1, 6), and a halo sits at the same quantile under
+                // either criterion.
+                double u = 1.0 - draw;
                 if(u < 1.0e-6) u = 1.0e-6;
                 if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
                 const double z_normal = inverse_normal_cdf(u);

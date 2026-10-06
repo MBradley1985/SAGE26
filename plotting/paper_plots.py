@@ -1249,6 +1249,27 @@ def mbk25_threshold_mass_msun(z, c):
     return (M_kg / 1.989e30).squeeze()
 
 
+def mbk25_threshold_median_c(z):
+    """
+    MBK25 threshold mass [M_sun] at the median concentration, and that concentration.
+
+    c depends on M and M on c, so the pair is solved self-consistently at *z*.
+    Returns (M_thr, c_med).
+    """
+    c = 3.3
+    M = float(np.atleast_1d(mbk25_threshold_mass_msun(z, c)))
+    for _ in range(20):
+        c_new = float(np.atleast_1d(_c_ishiyama21(np.array([M]), z)))
+        if not np.isfinite(c_new) or c_new <= 1.0:
+            break
+        M_new = float(np.atleast_1d(mbk25_threshold_mass_msun(z, c_new)))
+        if abs(np.log10(M_new) - np.log10(M)) < 1e-4:
+            M, c = M_new, c_new
+            break
+        M, c = M_new, c_new
+    return M, c
+
+
 def mbk25_threshold_concentration(Mvir_msun, z):
     """
     Threshold concentration c_thresh such that a halo of mass *Mvir_msun* at
@@ -4288,7 +4309,7 @@ def plot_11d_ffb_histograms_combined(snapdata):
       - Li+24 non-FFB galaxies (firebrick) — baseline population
       - Li+24 FFB galaxies (black)
       - MBK25 FFB galaxies (mediumpurple)
-    (a) SFR, (b) Metallicity, (c) Disk Radius.
+    (a) SFR, (b) Metallicity.
     """
     print('Plot 11d: Combined FFB property histograms at z~10')
 
@@ -4341,7 +4362,7 @@ def plot_11d_ffb_histograms_combined(snapdata):
             return nbins
         return np.linspace(lo, hi, nbins + 1)
 
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 6))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 
     # ----- Panel (a): Star Formation Rate -----
     def _logSFR(d, w):
@@ -4388,34 +4409,12 @@ def plot_11d_ffb_histograms_combined(snapdata):
     ax2.set_ylim(0, ax2.get_ylim()[1] * 1.35)
     ax2.set_xlim(-2, -0.5)
 
-    # ----- Panel (c): Disk Radius (raw DiskRadius in kpc) -----
-    def _logRdisk(d, w):
-        if len(w) == 0:
-            return np.array([])
-        rd = d['DiskRadius'][w]
-        rd = rd[rd > 0]
-        return np.log10((rd / HUBBLE_H) * 1e3)  # kpc
-    Rd_norm = _logRdisk(d_noffb, w_normal)
-    Rd_li = _logRdisk(d_li, w_ffb_li)
-    Rd_bk = _logRdisk(d_bk, w_ffb_bk)
-    edges_c = common_edges([Rd_norm, Rd_li, Rd_bk])
-    if len(Rd_norm) > 0:
-        ax3.hist(Rd_norm, bins=edges_c, **hist_kwargs_norm)
-    if len(Rd_li) > 0:
-        ax3.hist(Rd_li, bins=edges_c, **hist_kwargs_li)
-    if len(Rd_bk) > 0:
-        ax3.hist(Rd_bk, bins=edges_c, **hist_kwargs_bk)
-    ax3.set_xlabel(r'$\log_{10}(R_{\mathrm{disk}}\ [\mathrm{kpc}])$')
-    ax3.set_ylabel('Normalized Count')
-    ax3.set_ylim(0, ax3.get_ylim()[1] * 1.35)
-
     # ----- Terminal stats for all panels and models -----
     _print_ffb_hist_stats(
         f'FFBPropertiesHistograms_Combined (z={REDSHIFTS[snap]:.1f})',
         panels=[
             (r'log10 SFR [Msun/yr]',   {'No FFB': sfr_norm, 'FFB galaxies': sfr_li, 'MBK25 galaxies': sfr_bk}),
             (r'log10 Z*/Zsun',          {'No FFB': Z_norm,   'FFB galaxies': Z_li,   'MBK25 galaxies': Z_bk}),
-            (r'log10 Rdisk [kpc]',      {'No FFB': Rd_norm,  'FFB galaxies': Rd_li,  'MBK25 galaxies': Rd_bk}),
         ])
 
     fig.tight_layout()
@@ -5749,36 +5748,86 @@ def plot_12e_sfh_ffb_transitions_mbk25(snapdata):
 
 # ============ PLOT 12f: SFH TRANSITIONS, FFB + MBK25 STACKED ============
 
-def _sfh_transition_sample(reference_snapdata, snaps, control_sources=()):
+_MATCH_PROPERTIES = ['Posx', 'Posy', 'Posz', 'Mvir', 'Type', 'GalaxyIndex']
+
+
+def _match_centrals_by_position(ref, other, box_size, sep_tol=1e-3, mvir_rtol=1e-3):
     """
-    Choose the galaxies the stacked transition figure follows, as GalaxyIndex values.
+    Pair the centrals of two runs that sit on the same halo, at one snapshot.
 
-    The N most massive bursting centrals at z ~ 10 in *reference_snapdata*, plus a
-    never-bursting central mass-matched to each.  Identified by GalaxyIndex rather than
-    row index so the *same* galaxies can be tracked through a second run: both runs walk
-    the same merger trees and index galaxies identically, so a GalaxyIndex names the same
-    object in each.  Selecting per panel instead leaves the two panels showing different
-    galaxies, and any difference between them is then a mix of the burst prescription and
-    the change of sample.
+    *ref* and *other* are single-snapshot dicts holding _MATCH_PROPERTIES.  Runs of
+    different models on the same simulation share the halo catalogue, so a central's
+    position and Mvir are those of its host halo and agree between the runs; the
+    galaxy, and so its GalaxyIndex, need not.  Matching by halo rather than by
+    GalaxyIndex is what an observer comparing two predictions for one object would do.
 
-    A control galaxy must never burst in *any* of *control_sources* -- the reference run
-    plus whatever other runs the figure overlays.  Screening against the reference alone
-    would admit galaxies that stay quiet under one prescription but burst under the
-    other, putting burst histories into a sample drawn as "no bursts".
+    A pair is kept when each central is the other's nearest neighbour (periodic box),
+    they lie within *sep_tol* [Mpc/h] of each other and their Mvir agree to *mvir_rtol*.
 
-    Returns (ffb_gal_ids, norm_gal_ids), or None if the reference has no bursting
-    centrals at z ~ 10.
+    Returns {ref GalaxyIndex: other GalaxyIndex}.
     """
+    from scipy.spatial import cKDTree
+
+    def _centrals(d):
+        w = np.where(d['Type'] == 0)[0]
+        pos = np.mod(np.column_stack([d['Posx'][w], d['Posy'][w], d['Posz'][w]])
+                     .astype(np.float64), box_size)
+        pos[pos >= box_size] -= box_size      # mod can round up onto the boundary
+        return w, pos
+
+    w_ref, pos_ref = _centrals(ref)
+    w_oth, pos_oth = _centrals(other)
+    if len(w_ref) == 0 or len(w_oth) == 0:
+        return {}
+
+    sep, j = cKDTree(pos_oth, boxsize=box_size).query(pos_ref)
+    _, back = cKDTree(pos_ref, boxsize=box_size).query(pos_oth)
+
+    i = np.arange(len(w_ref))
+    keep = ((back[j] == i) & (sep <= sep_tol)
+            & np.isclose(ref['Mvir'][w_ref], other['Mvir'][w_oth[j]], rtol=mvir_rtol))
+
+    gid_ref = ref['GalaxyIndex'][w_ref[keep]].astype(np.int64)
+    gid_oth = other['GalaxyIndex'][w_oth[j[keep]]].astype(np.int64)
+    print(f'  position match: {keep.sum()} of {len(w_ref)} reference centrals '
+          f'paired with a central in the other run')
+    return dict(zip(gid_ref.tolist(), gid_oth.tolist()))
+
+
+def _sfh_transition_sample(runs, snaps, id_maps):
+    """
+    Choose the galaxies the stacked transition figure follows, as GalaxyIndex values
+    in each run.
+
+    The N most massive bursting centrals at z ~ 10 in runs[0], plus a never-bursting
+    central mass-matched to each.  Every galaxy is paired once, at z ~ 10, with the
+    central on the same halo in each other run (id_maps[k-1] maps runs[0] GalaxyIndex
+    to runs[k] GalaxyIndex, from _match_centrals_by_position), and each run then
+    follows its own galaxy by its own GalaxyIndex.  All panels therefore show the
+    same objects, and any difference between them is the burst prescription rather
+    than a change of sample.  Only centrals paired in every run are eligible.
+
+    A control galaxy must never burst in *any* run, each run checked under its own
+    GalaxyIndex.  Screening against the reference alone would admit galaxies that
+    stay quiet under one prescription but burst under the other, putting burst
+    histories into a sample drawn as "no bursts".
+
+    Returns a list, one (ffb_gal_ids, norm_gal_ids) per run with entries aligned
+    across runs, or None if the reference has no paired bursting centrals at z ~ 10.
+    """
+    reference_snapdata = runs[0]
     if SNAP_Z10 not in reference_snapdata:
         return None
 
     d = reference_snapdata[SNAP_Z10]
+    gids = d['GalaxyIndex'].astype(np.int64)
+    paired = np.array([all(int(g) in m for m in id_maps) for g in gids], dtype=bool)
 
     w_ffb = np.where(
-        (d['StellarMass'] > 0) & (d['FFBRegime'] == 1) & (d['Type'] == 0)
+        (d['StellarMass'] > 0) & (d['FFBRegime'] == 1) & (d['Type'] == 0) & paired
     )[0]
     w_normal = np.where(
-        (d['StellarMass'] > 0) & (d['FFBRegime'] == 0) & (d['Type'] == 0)
+        (d['StellarMass'] > 0) & (d['FFBRegime'] == 0) & (d['Type'] == 0) & paired
     )[0]
 
     if len(w_ffb) == 0:
@@ -5787,22 +5836,29 @@ def _sfh_transition_sample(reference_snapdata, snaps, control_sources=()):
     N_track    = min(10, len(w_ffb))
     mass_order = np.argsort(d['StellarMass'][w_ffb])[::-1]
     ffb_idx    = w_ffb[mass_order[:N_track]]
-    ffb_gal_ids = d['GalaxyIndex'][ffb_idx]
 
-    ever_ffb_gids = set()
-    for source in control_sources:
+    # The GalaxyIndex values that ever burst, collected separately for each run.
+    ever_ffb = []
+    for source in runs:
+        ever = set()
         for s in snaps:
             if s not in source:
                 continue
             sd = source[s]
-            w_e = np.where(sd['FFBRegime'] == 1)[0]
-            ever_ffb_gids.update(sd['GalaxyIndex'][w_e].astype(int))
+            ever.update(sd['GalaxyIndex'][sd['FFBRegime'] == 1].astype(int).tolist())
+        ever_ffb.append(ever)
 
-    never_ffb_mask = np.array([int(d['GalaxyIndex'][i]) not in ever_ffb_gids
-                                for i in w_normal])
-    w_never_ffb = w_normal[never_ffb_mask]
+    id_maps_all = [None] + list(id_maps)
 
-    norm_gal_ids = np.array([], dtype=np.int64)
+    def _never_bursts(g):
+        g = int(g)
+        return all((g if m is None else m[g]) not in ever
+                   for m, ever in zip(id_maps_all, ever_ffb))
+
+    w_never_ffb = w_normal[np.array([_never_bursts(gids[i]) for i in w_normal],
+                                    dtype=bool)]
+
+    norm_idx = np.array([], dtype=np.int64)
     if len(w_never_ffb) > 0:
         norm_masses = d['StellarMass'][w_never_ffb]
         matched_norm_idx, used = [], set()
@@ -5812,10 +5868,17 @@ def _sfh_transition_sample(reference_snapdata, snaps, control_sources=()):
                     matched_norm_idx.append(w_never_ffb[j])
                     used.add(j)
                     break
-        if matched_norm_idx:
-            norm_gal_ids = d['GalaxyIndex'][np.array(matched_norm_idx)]
+        norm_idx = np.array(matched_norm_idx, dtype=np.int64)
 
-    return ffb_gal_ids, norm_gal_ids
+    ref_ffb, ref_norm = gids[ffb_idx], gids[norm_idx]
+    out = []
+    for m in id_maps_all:
+        if m is None:
+            out.append((ref_ffb, ref_norm))
+        else:
+            out.append((np.array([m[int(g)] for g in ref_ffb], dtype=np.int64),
+                        np.array([m[int(g)] for g in ref_norm], dtype=np.int64)))
+    return out
 
 
 def _sfh_transition_tracks(source_snapdata, snaps, ffb_gal_ids, norm_gal_ids):
@@ -5823,9 +5886,10 @@ def _sfh_transition_tracks(source_snapdata, snaps, ffb_gal_ids, norm_gal_ids):
     Follow the SFR and FFBRegime of the galaxies named by *ffb_gal_ids* and
     *norm_gal_ids* across `snaps` in one run.
 
-    The ids come from _sfh_transition_sample() and are held fixed across every run the
-    figure overlays, so each panel draws the same galaxies.  A galaxy missing from a
-    snapshot of this run simply contributes no point there.
+    The ids come from _sfh_transition_sample() and are this run's own GalaxyIndex
+    values for galaxies paired by halo position across the runs the figure overlays,
+    so each panel draws the same objects.  A galaxy missing from a snapshot of this
+    run simply contributes no point there.
 
     Returns None if the source has no usable snapshots, otherwise a dict with the tracks,
     the plotting order, the FFB->non-FFB transition times and the cosmic-time lookup.
@@ -5923,27 +5987,36 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
          'trans_label': 'MBK25 → non-MBK25 transition'},
     ]
 
-    # One sample for the whole figure, selected on the FFB run and then followed by
-    # GalaxyIndex through the MBK25 run as well.  Both panels therefore show the same
-    # galaxies, so what differs between them is the burst prescription alone.  The
-    # controls are screened against both runs, so a galaxy drawn as "no bursts" never
-    # bursts under either.
-    sample = _sfh_transition_sample(
-        snapdata or {}, needed_snaps,
-        control_sources=[d for d in (snapdata, mbk25_snapdata) if d])
+    # One sample for the whole figure, selected on the FFB run.  Each galaxy is paired
+    # once, at z ~ 10, with the MBK25 central on the same halo (by position), and each
+    # run then follows its own galaxy by its own GalaxyIndex.  Both panels therefore
+    # show the same objects, so what differs between them is the burst prescription
+    # alone.  The controls are screened against both runs, so a galaxy drawn as
+    # "no bursts" never bursts under either.
+    runs, id_maps = [snapdata or {}], []
+    if mbk25_snapdata:
+        ref_pos = load_snapshots(PRIMARY_DIR, [SNAP_Z10], _MATCH_PROPERTIES).get(SNAP_Z10)
+        oth_pos = load_snapshots(FFB_BK25_SMOOTH_DIR, [SNAP_Z10],
+                                 _MATCH_PROPERTIES).get(SNAP_Z10)
+        if ref_pos is not None and oth_pos is not None:
+            runs.append(mbk25_snapdata)
+            id_maps.append(_match_centrals_by_position(ref_pos, oth_pos, BOX_SIZE))
+        else:
+            print('  z ~ 10 positions unavailable; MBK25 panel will be empty.')
+    sample = _sfh_transition_sample(runs, needed_snaps, id_maps)
     if sample is None:
         print('  No bursting centrals at z ~ 10 in the FFB run; nothing to track.')
         return
-    ffb_gal_ids, norm_gal_ids = sample
-    print(f'  tracking {len(ffb_gal_ids)} bursting and {len(norm_gal_ids)} control '
+    sample += [(np.array([], dtype=np.int64),) * 2] * (len(panels) - len(sample))
+    print(f'  tracking {len(sample[0][0])} bursting and {len(sample[0][1])} control '
           f'galaxies, identical in both panels')
 
     fig, axes = plt.subplots(2, 1, figsize=(8, 10), sharex=True)
 
-    # The figure is drawn directly against redshift.  The old cosmic-time cap of
-    # 1 Gyr becomes a redshift floor, taken from the snapshots themselves so the
-    # two axes describe exactly the same range of the run.
-    t_max = 1.0
+    # The figure is drawn directly against redshift, down to z = 5.  No snapshot
+    # sits at z = 5 exactly, so the axis is cut there and the segment to the next
+    # snapshot below (z = 4.89) runs to the edge.
+    z_min = 5.0
 
     import matplotlib.lines as mlines
 
@@ -5953,15 +6026,15 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
     # which would draw the legend entry for a line the reader cannot see.
     panel_tracks = []
     z_lo_all, z_hi_all = [], []
-    for cfg in panels:
+    for cfg, (ffb_gal_ids, norm_gal_ids) in zip(panels, sample):
         tracks = _sfh_transition_tracks(cfg['data'] or {}, needed_snaps,
                                         ffb_gal_ids, norm_gal_ids)
         z_in_range = []
         if tracks is not None:
             z_in_range = [REDSHIFTS[s] for s in tracks['cosmic_times']
-                          if tracks['cosmic_times'][s] <= t_max]
+                          if REDSHIFTS[s] >= z_min]
             if z_in_range:
-                z_lo_all.append(min(z_in_range))
+                z_lo_all.append(z_min)
                 z_hi_all.append(max(z_in_range))
         panel_tracks.append((cfg, tracks, z_in_range))
 
@@ -6048,7 +6121,7 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
                                          ls='--', lw=1.5))
             labels.append(cfg['trans_label'])
         if labels:
-            _standard_legend(ax, loc='upper left',
+            _standard_legend(ax, loc='upper right',
                              handles=handles, labels=labels)
 
     if z_lo_all:
@@ -12506,10 +12579,9 @@ def plot_36_selection_thresholds_mz():
     """
     Two-panel comparison of the FFB selection thresholds in the (z, M_vir) plane.
 
-    Left  (MBK25):  threshold mass locus g_max(M, z, c) = g_crit for several fixed
-                    concentrations c, with the selected FFB centrals from the
-                    mode-4 (c-scatter) run scattered on top and colour-coded by
-                    their Ishiyama+21 mean concentration.
+    Left  (MBK25):  threshold mass locus g_max(M, z, c) = g_crit at the median
+                    concentration c = 3.2, with the selected FFB centrals from the
+                    mode-4 (c-scatter) run scattered on top.
     Right (Li+24 / Dekel): the Eq.-1 threshold line M_ffb(z) plus a sigmoid-scatter
                     envelope (f_ffb = 0.1 -> 0.9), with the Li+24 sigmoid-selected
                     FFB centrals scattered on top.
@@ -12517,7 +12589,6 @@ def plot_36_selection_thresholds_mz():
     The point is to show the two selections pick out the same region of the
     (z, M_vir) plane.
     """
-    import matplotlib as mpl
 
     print('Plot 36: selection thresholds in the M-z plane')
 
@@ -12562,48 +12633,31 @@ def plot_36_selection_thresholds_mz():
     z_mbk, m_mbk = _dilute(z_mbk, m_mbk)
     z_dek, m_dek = _dilute(z_dek, m_dek)
 
-    # Three columns: the two selection panels, then the overplotted threshold
-    # curves with a small residual strip beneath them.  The first two panels
-    # span both rows so all three read at a comparable size.
-    # constrained_layout rather than tight_layout: the first two panels span
-    # both rows, which tight_layout lays out badly (it clips the x labels).
-    fig = plt.figure(figsize=(15.5, 5.0), constrained_layout=True)
-    gs = fig.add_gridspec(2, 3, height_ratios=[4.0, 1.0])
-    # constrained_layout ignores the gridspec hspace/wspace; set them on the
-    # layout engine instead.
-    fig.get_layout_engine().set(w_pad=0.01, h_pad=0.01, wspace=0.02, hspace=0.0)
-    axL = fig.add_subplot(gs[:, 0])
-    axR = fig.add_subplot(gs[:, 1], sharey=axL)
-    axM = fig.add_subplot(gs[0, 2], sharey=axL)
-    axD = fig.add_subplot(gs[1, 2], sharex=axM)
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(10.5, 5.0), sharey=True,
+                                   constrained_layout=True)
 
     # ---------------- Left panel: MBK25 ----------------
-    c_lines = [3.0, 4.0, 5.0, 6.0, 7.0]
-    cmap = mpl.cm.coolwarm
-    cnorm = mpl.colors.Normalize(vmin=min(c_lines), vmax=max(c_lines))
-
-    # Scatter selected galaxies, colour-coded by the threshold concentration at
-    # which they enter the FFB regime -- i.e. the fixed-c line they sit on.
+    # The threshold drawn at the median concentration, c = 3.2 (the median-c
+    # threshold solved self-consistently below stays within 3.19-3.27 over
+    # 6 < z < 12).
+    C_MEDIAN = 3.2
     if len(m_mbk):
-        c_mbk = np.atleast_1d(mbk25_threshold_concentration(m_mbk, z_mbk))
-        axL.scatter(z_mbk, np.log10(m_mbk), c=c_mbk, cmap=cmap, norm=cnorm,
-                    s=6, alpha=0.55, edgecolors='none', rasterized=True,
-                    zorder=1)
+        axL.scatter(z_mbk, np.log10(m_mbk), s=6, alpha=0.45, color='0.45',
+                    edgecolors='none', rasterized=True, zorder=1)
 
-    for c in c_lines:
-        M_thr = mbk25_threshold_mass_msun(z_grid, c)
-        axL.plot(z_grid, np.log10(M_thr), lw=2.0, color=cmap(cnorm(c)),
-                 zorder=3)
+    axL.plot(z_grid, np.log10(mbk25_threshold_mass_msun(z_grid, C_MEDIAN)),
+             lw=2.2, color='mediumpurple', zorder=3)
 
     axL.set_xlabel(r'Redshift $z$')
     axL.set_ylabel(r'$\log_{10}\ M_{\rm vir}\ [M_\odot]$')
 
-    # Legend: scatter proxy plus one entry per concentration line.
     from matplotlib.lines import Line2D
-    mbk_handles = [Line2D([], [], marker='o', linestyle='none', color='0.35',
-                          markersize=4, label='MBK25 galaxies')]
-    mbk_handles += [Line2D([], [], color=cmap(cnorm(c)), lw=2.0,
-                           label=fr'$c={c:g}$') for c in c_lines]
+    mbk_handles = [
+        Line2D([], [], marker='o', linestyle='none', color='0.35',
+               markersize=4, label='MBK25 galaxies'),
+        Line2D([], [], color='mediumpurple', lw=2.2,
+               label=fr'$M_{{\rm MBK25}}(z)$, $c={C_MEDIAN:g}$'),
+    ]
     axL.legend(handles=mbk_handles, loc='upper right', frameon=False, fontsize=8)
 
     # ---------------- Right panel: Li+24 / Dekel ----------------
@@ -12629,60 +12683,20 @@ def plot_36_selection_thresholds_mz():
     ]
     axR.legend(handles=dek_handles, loc='upper right', frameon=False, fontsize=8)
 
-    # Common x and y limits and ticks for both panels.
+    # Common limits for both panels, one redshift tick per unit.
     for ax in (axL, axR):
         ax.set_xlim(z_grid.min(), z_grid.max())
         ax.set_ylim(9.5, 13.5)
-
-    # One redshift tick per unit on every panel; axD inherits from axM via sharex.
-    for ax in (axL, axR, axM, axD):
-        ax.set_xlim(z_grid.min(), z_grid.max())
         ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
         ax.xaxis.set_minor_locator(plt.NullLocator())
 
-    # ------------- Middle panel: the two thresholds overplotted -------------
+    # ---------- The two thresholds compared (diagnostics only) ----------
     # MBK25 threshold at the *median* concentration.  c depends on M, and M on
     # c, so solve the pair self-consistently at each redshift.
-    def _mbk_threshold_median_c(z):
-        c = 3.3
-        M = float(np.atleast_1d(mbk25_threshold_mass_msun(z, c)))
-        for _ in range(20):
-            c_new = float(np.atleast_1d(_c_ishiyama21(np.array([M]), z)))
-            if not np.isfinite(c_new) or c_new <= 1.0:
-                break
-            M_new = float(np.atleast_1d(mbk25_threshold_mass_msun(z, c_new)))
-            if abs(np.log10(M_new) - np.log10(M)) < 1e-4:
-                M, c = M_new, c_new
-                break
-            M, c = M_new, c_new
-        return M, c
-
-    M_mbk_med, c_med = np.array([_mbk_threshold_median_c(z) for z in z_grid]).T
+    M_mbk_med, c_med = np.array([mbk25_threshold_median_c(z) for z in z_grid]).T
     log_mbk = np.log10(M_mbk_med)
 
-    axM.plot(z_grid, log_line, lw=2.4, color='firebrick',
-             label=r'$M_{\rm vir,FFB}(z)$  (Li+24)')
-    axM.plot(z_grid, log_mbk, lw=2.4, color='mediumpurple', ls='--',
-             label=r'$M_{\rm vir,MBK25}(z)$  (median $c$)')
-    axM.fill_between(z_grid, log_line - logit * delta_log_M,
-                     log_line + logit * delta_log_M, color='firebrick',
-                     alpha=0.15, lw=0.0)
-    axM.axvspan(6.0, 12.0, color='0.85', alpha=0.45, zorder=0)
-    axM.legend(loc='lower left', frameon=False, fontsize=8)
-    axM.tick_params(labelbottom=False)
-
-    # ------------------------- Residual sub-panel -------------------------
     resid = log_mbk - log_line
-    axD.axhline(0.0, color='0.4', lw=1.0)
-    axD.axvspan(6.0, 12.0, color='0.85', alpha=0.45, zorder=0)
-    axD.plot(z_grid, resid, lw=2.2, color='k')
-    axD.set_xlabel(r'Redshift $z$')
-    axD.set_ylabel(r'$\Delta \log_{10} M$', fontsize=9)
-    axD.set_xlim(z_grid.min(), z_grid.max())
-    lim = max(0.12, 1.2 * np.nanmax(np.abs(resid)))
-    axD.set_ylim(-lim, lim)
-    axD.tick_params(labelsize=8)
-    axD.yaxis.set_major_locator(plt.MaxNLocator(3))
 
     # ------------------------------ diagnostics ------------------------------
     inb = (z_grid >= 6.0) & (z_grid <= 12.0)
@@ -12731,22 +12745,6 @@ def plot_36_selection_thresholds_mz():
     print('    implied sigma_ln c            : %.3f   (adopted %.2f -> differ by %.1f%%)'
           % (sig_lnc_implied, sig_lnc_adopted,
              100.0 * abs(sig_lnc_implied - sig_lnc_adopted) / sig_lnc_adopted))
-
-    # constrained_layout ignores the gridspec hspace, so it leaves a gap between
-    # the third-column panel and its residual strip.  Let it settle the overall
-    # spacing first (which is what stops the x labels being clipped), then freeze
-    # the layout and slide the residual up flush against the panel above.
-    fig.canvas.draw()
-    try:
-        fig.set_layout_engine('none')
-    except AttributeError:          # matplotlib < 3.6
-        fig.set_constrained_layout(False)
-    pL = axL.get_position()
-    pM, pD = axM.get_position(), axD.get_position()
-    h_tot = pL.y1 - pL.y0                 # full height of the first two panels
-    h_res = h_tot / 5.0                   # residual share, matching height_ratios
-    axM.set_position([pM.x0, pL.y0 + h_res, pM.width, h_tot - h_res])
-    axD.set_position([pD.x0, pL.y0, pD.width, h_res])
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
                 'Selection_Thresholds_Mz' + OUTPUT_FORMAT))
@@ -12903,6 +12901,448 @@ def plot_37_cgm_census():
     fig.tight_layout()
     outputFile = os.path.join(OUTPUT_DIR, 'CGMCensus' + OUTPUT_FORMAT)
     save_figure(fig, outputFile)
+
+
+def plot_98_ffb_referee_diagnostics():
+    """Print every number the FFB / MBK25 discussion needs.  Draws nothing.
+
+    Written for the large boxes, where the low-redshift tail of the FFB fraction
+    (Plot 23c) holds enough galaxies to characterise.  Point PRIMARY_DIR,
+    FFB_BK25_SMOOTH_DIR and NOFFB_DIR at the Li+24, MBK25 and no-FFB runs of the
+    same simulation and run `python paper_plots.py 98`.
+
+      [1] run configuration
+      [2] threshold masses versus redshift, in M_sun and in particles
+      [3] FFB counts and fractions per snapshot, observed against the sum of
+          the selection probabilities
+      [4] high-redshift resolution: halo particle counts against the threshold
+      [5] FFB fraction against halo mass relative to the threshold
+      [6] tail statistics: observed against expected in bins of probability
+      [7] halo matching and selection overlap between the two runs
+      [8] random-draw alignment between the runs, recovered from MBK25 g_max
+      [9] H2 in FFB galaxies
+      [10] the low-redshift FFB population: abundance, persistence, properties,
+           and the same haloes in the no-FFB run
+
+    Galaxies are paired between runs by halo position (_match_centrals_by_position
+    criteria: within 1 kpc/h, Mvir equal to 0.1 per cent), never by GalaxyIndex
+    across runs.  GalaxyIndex is used only to follow a galaxy within one run.
+    """
+    from scipy.spatial import cKDTree
+    from scipy.stats import poisson
+
+    print()
+    print('#' * 78)
+    print('# FFB / MBK25 REFEREE DIAGNOSTICS')
+    print('#' * 78)
+
+    def head(title):
+        print()
+        print('=' * 78)
+        print(title)
+        print('=' * 78)
+
+    runs = [('Li+24', PRIMARY_DIR), ('MBK25', FFB_BK25_SMOOTH_DIR)]
+    for name, d in runs:
+        if not model_files_exist(d):
+            print(f'  {name} output not found in {d}; nothing to do.')
+            return
+    have_noffb = model_files_exist(NOFFB_DIR)
+
+    # ------------------------------------------------------------------ [1]
+    head('[1] Run configuration')
+    cfg = {}
+    for name, d in runs + ([('no-FFB', NOFFB_DIR)] if have_noffb else []):
+        hdr = _read_sim_header(d)
+        with h5.File(find_model_files(d)[0], 'r') as f:
+            rt = dict(f['Header/Runtime'].attrs)
+            sim = dict(f['Header/Simulation'].attrs)
+        m_part = float(sim.get('particle_mass', np.nan)) * MASS_CONVERT
+        vol = (hdr['box_size'] / hdr['hubble_h'])**3 * hdr['volume_fraction']
+        g_code = np.nan
+        if all(k in rt for k in ('UnitLength_in_cm', 'UnitMass_in_g',
+                                 'UnitVelocity_in_cm_per_s')):
+            t_unit = rt['UnitLength_in_cm'] / rt['UnitVelocity_in_cm_per_s']
+            g_code = (6.672e-8 / rt['UnitLength_in_cm']**3 * rt['UnitMass_in_g']
+                      * t_unit**2)
+        # dev names the switch FeedbackFreeModeOn (Li+24 = 1/6, MBK25 with c
+        # scatter = 4/7); main names it EnhancedStarFormationOn (1 / 2).
+        mode_key = ('FeedbackFreeModeOn' if 'FeedbackFreeModeOn' in rt
+                    else 'EnhancedStarFormationOn')
+        cfg[name] = dict(dir=d, vol=vol, m_part=m_part, g_code=g_code,
+                         mode_key=mode_key, mode=int(rt.get(mode_key, -1)),
+                         gate=int(rt.get('FFBIgnoreRegime', 1)) == 0,
+                         persistent=int(rt.get('FFBRandomMode', 0)) == 1,
+                         sigma_c=float(rt.get('FFBConcSigma', 0.2)))
+        print(f'  {name:7s} {d}')
+        print(f'          {mode_key}={cfg[name]["mode"]}  '
+              f'FFBIgnoreRegime={int(rt.get("FFBIgnoreRegime", 1))}  '
+              f'FFBRandomMode={int(rt.get("FFBRandomMode", 0))}  '
+              f'FFBConcSigma={cfg[name]["sigma_c"]:g}')
+        print(f'          box={hdr["box_size"]:g} Mpc/h  h={hdr["hubble_h"]}  '
+              f'volume={vol:.3e} Mpc^3  m_part={m_part:.3e} Msun')
+    li_ok = (1, 6)
+    mb_ok = (4, 7) if cfg['MBK25']['mode_key'] == 'FeedbackFreeModeOn' else (2,)
+    if cfg['Li+24']['mode'] not in li_ok or cfg['MBK25']['mode'] not in mb_ok:
+        print(f'  WARNING: expected Li+24 mode in {li_ok} and MBK25 mode in {mb_ok}.')
+    gate = {n: cfg[n]['gate'] for n, _ in runs}
+    if any(gate.values()):
+        print('  FFBIgnoreRegime = 0 in at least one run: only CGM-regime (Regime = 0)')
+        print('  haloes are eligible there, and every expectation below is summed over')
+        print('  eligible centrals only.')
+    if any(cfg[n]['persistent'] for n, _ in runs):
+        print('  FFBRandomMode = 1 in at least one run: each galaxy keeps one draw for')
+        print('  life, so [10] persistence measures that, not a fresh draw per snapshot.')
+    sigma_c = cfg['MBK25']['sigma_c']
+    m_part = cfg['Li+24']['m_part']
+    g_code = cfg['MBK25']['g_code']
+    if not np.isfinite(g_code):
+        g_code = 43.0071     # G in (Mpc/h, km/s, 1e10 Msun/h) code units
+
+    snaps = [s for s in range(len(REDSHIFTS)) if REDSHIFTS[s] <= 15.5]
+    snaps.sort(key=lambda s: -REDSHIFTS[s])
+
+    # Selection probabilities.  ffb_fraction_mbk25 root-finds per halo, far too
+    # slow for a large box, so both curves are tabulated per snapshot on a fine
+    # log-mass grid and interpolated.
+    lm_grid = np.arange(8.0, 16.51, 0.01)
+
+    def prob_tables(z):
+        with np.errstate(all='ignore'):
+            p_li = ffb_fraction(10**lm_grid, z)
+            p_mb = np.nan_to_num(ffb_fraction_mbk25(10**lm_grid, z, sigma_c=sigma_c))
+        return p_li, p_mb
+
+    def p_of(table, mvir):
+        out = np.zeros(len(mvir))
+        ok = mvir > 0
+        out[ok] = np.interp(np.log10(mvir[ok]), lm_grid, table)
+        return out
+
+    # ------------------------------------------------------------------ [2]
+    head('[2] Threshold masses (log10 Msun) and the same in particles')
+    print(f'  {"z":>5} {"Li+24":>7} {"MBK25":>7} {"c_med":>6} {"MBK-Li":>7} '
+          f'{"1sig c":>7} | {"N_p Li":>9} {"N_p MBK":>9}')
+    for z in (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0):
+        m_li = ffb_threshold_mass_msun(z)
+        m_mb, c_med = mbk25_threshold_median_c(z)
+        m_1s = float(np.atleast_1d(mbk25_threshold_mass_msun(z, c_med * np.exp(0.2))))
+        print(f'  {z:5.1f} {np.log10(m_li):7.2f} {np.log10(m_mb):7.2f} {c_med:6.2f} '
+              f'{np.log10(m_mb / m_li):+7.2f} {np.log10(m_1s / m_mb):+7.2f} | '
+              f'{m_li / m_part:9.3g} {m_mb / m_part:9.3g}')
+    print('  1sig c: shift of the MBK25 threshold mass for a +1 sigma (0.2 in ln c)'
+          ' concentration.')
+
+    # ---------------------------------------------- pass 1 over snapshots
+    props1 = ['FFBRegime', 'Type', 'Mvir', 'Len', 'GalaxyIndex', 'ColdGas', 'H2gas',
+              'Regime']
+    p_edges = np.array([0, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1.0001])
+    r_edges = np.array([-1.5, -0.6, -0.3, -0.15, 0.0, 0.15, 0.3, 0.6, 1.5])
+    per_snap = {n: [] for n, _ in runs}
+    tail = {n: np.zeros((len(p_edges) - 1, 3)) for n, _ in runs}      # N, exp, obs
+    ratio = {n: np.zeros((len(r_edges) - 1, 2)) for n, _ in runs}     # N, obs
+    reso = {n: [] for n, _ in runs}
+    h2 = {n: np.zeros(4, dtype=np.int64) for n, _ in runs}
+    ffb_ids = {n: {} for n, _ in runs}          # snap -> set(GalaxyIndex), z <= 4.6
+    p_tabs = {}
+
+    print()
+    print('  reading snapshots ...')
+    for s in snaps:
+        z = REDSHIFTS[s]
+        p_tabs[s] = prob_tables(z)
+        thr_li = ffb_threshold_mass_msun(z)
+        for k, (name, d) in enumerate(runs):
+            g = load_snapshots(d, [s], props1).get(s)
+            if g is None or len(g['Type']) == 0:
+                per_snap[name].append((s, z, 0, 0, 0, 0, 0.0))
+                continue
+            ffb = g['FFBRegime'] == 1
+            cen = g['Type'] == 0
+            p = p_of(p_tabs[s][k], g['Mvir'][cen])
+            if gate[name]:
+                p[g['Regime'][cen] == 1] = 0.0      # hot-regime haloes are ineligible
+            per_snap[name].append((s, z, len(ffb), ffb.sum(), cen.sum(),
+                                   (ffb & cen).sum(), p.sum()))
+
+            if z <= 6.0:
+                b = np.digitize(p, p_edges) - 1
+                for i in range(len(p_edges) - 1):
+                    m = b == i
+                    tail[name][i] += (m.sum(), p[m].sum(), ffb[cen][m].sum())
+            if 6.0 <= z <= 10.5:
+                mv = g['Mvir'][cen]
+                ok = mv > 0
+                r = np.log10(mv[ok] / thr_li)
+                b = np.digitize(r, r_edges) - 1
+                for i in range(len(r_edges) - 1):
+                    m = b == i
+                    ratio[name][i] += (m.sum(), ffb[cen][ok][m].sum())
+            if z >= 9.9 and cen.any():
+                mvp = g['Mvir'][cen] / m_part
+                reso[name].append((s, z, cen.sum(), g['Len'][cen].min(),
+                                   np.median(g['Len'][cen]), mvp.min(), np.median(mvp),
+                                   (~ffb[cen]).sum(),
+                                   mvp[~ffb[cen]].max() if (~ffb[cen]).any() else 0.0))
+            h2[name] += (ffb.sum(), (ffb & (g['H2gas'] > 0)).sum(),
+                         (~ffb & cen & (g['ColdGas'] > 0)).sum(),
+                         (~ffb & cen & (g['ColdGas'] > 0) & (g['H2gas'] > 0)).sum())
+            if z <= 4.6:
+                ffb_ids[name][s] = set(g['GalaxyIndex'][ffb].astype(np.int64).tolist())
+
+    # ------------------------------------------------------------------ [3]
+    head('[3] FFB counts per snapshot.  frac_all is Plot 23c (all galaxies); '
+         'exp_cen = sum of P over centrals')
+    print(f'  {"z":>6} | {"Li: N_FFB":>9} {"frac_all":>9} {"n[Mpc^-3]":>10} '
+          f'{"cen":>6} {"exp_cen":>8} | {"MBK: N_FFB":>10} {"frac_all":>9} '
+          f'{"n[Mpc^-3]":>10} {"cen":>6} {"exp_cen":>8}')
+    for a, b in zip(per_snap['Li+24'], per_snap['MBK25']):
+        if a[3] == 0 and b[3] == 0 and a[6] < 0.05 and b[6] < 0.05:
+            continue
+        cols = []
+        for (s, z, n_all, n_ffb, n_cen, n_ffbc, e), name in ((a, 'Li+24'), (b, 'MBK25')):
+            frac = n_ffb / n_all if n_all else np.nan
+            cols.append(f'{n_ffb:9d} {frac:9.2e} {n_ffb / cfg[name]["vol"]:10.2e} '
+                        f'{n_ffbc:6d} {e:8.1f}')
+        print(f'  {a[1]:6.2f} | ' + ' | '.join(cols))
+
+    # ------------------------------------------------------------------ [4]
+    head('[4] High-redshift resolution (z >= 10): centrals, particle counts, '
+         'and the threshold in particles')
+    for name, _ in runs:
+        print(f'  {name}')
+        print(f'    {"z":>6} {"Ncen":>7} {"minLen":>6} {"medLen":>6} {"minMvir/mp":>10} '
+              f'{"medMvir/mp":>10} {"thr/mp":>7} {"non-FFB":>7} {"max Mvir/mp":>11}')
+        for s, z, n, lmin, lmed, mmin, mmed, nn, mmax in reso[name]:
+            thr = (ffb_threshold_mass_msun(z) if name == 'Li+24'
+                   else mbk25_threshold_median_c(z)[0]) / m_part
+            print(f'    {z:6.2f} {n:7d} {lmin:6d} {lmed:6.0f} {mmin:10.1f} {mmed:10.1f} '
+                  f'{thr:7.1f} {nn:7d} {mmax:11.1f}')
+    for npart in (20, 50, 100):
+        zz = np.linspace(4.0, 20.0, 1601)
+        mt = np.array([ffb_threshold_mass_msun(z) for z in zz])
+        above = zz[mt >= npart * m_part]
+        print(f'  Li+24 threshold holds >= {npart:3d} particles for z <= '
+              f'{above.max():.2f}' if len(above) else
+              f'  Li+24 threshold never holds {npart} particles')
+
+    # ------------------------------------------------------------------ [5]
+    head('[5] FFB fraction of centrals against log10(Mvir / M_thr,Li), 6 <= z <= 10.5')
+    print('  bins:  ' + ' '.join(f'[{lo:+.2f},{hi:+.2f})'
+                                 for lo, hi in zip(r_edges[:-1], r_edges[1:])))
+    for name, _ in runs:
+        row = ' '.join(f'{(o / n if n else np.nan):5.2f} (n={int(n):d})'
+                       for n, o in ratio[name])
+        print(f'  {name:6s} {row}')
+
+    # ------------------------------------------------------------------ [6]
+    head('[6] Tail statistics, centrals at z <= 6: observed FFB against the sum '
+         'of P, in bins of P')
+    for name, _ in runs:
+        print(f'  {name}')
+        for (lo, hi), (n, e, o) in zip(zip(p_edges[:-1], p_edges[1:]), tail[name]):
+            pv = poisson.sf(o - 1, e) if o > e else poisson.cdf(o, e)
+            print(f'    P in [{lo:7.0e},{hi:7.0e}): N={int(n):10d}  expected {e:9.2f}  '
+                  f'observed {int(o):6d}  (one-sided p = {pv:.2g})')
+        n, e, o = tail[name].sum(axis=0)
+        print(f'    total: expected {e:.1f}, observed {int(o)}')
+
+    # ------------------------------------------------------------------ [7]
+    head('[7] Halo matching and selection overlap (centrals, matched by position)')
+    print(f'  {"z":>6} {"Li":>6} {"MBK":>6} {"unmatched":>9} {"gid same":>8} | '
+          f'{"both/either":>11} {"both/Li":>7} {"both/MBK":>8} | '
+          f'{"exp aligned":>11} {"exp indep":>9}')
+    pos_props = _MATCH_PROPERTIES + ['FFBRegime', 'Regime']
+
+    def _cen_pos(g):
+        w = np.where(g['Type'] == 0)[0]
+        pos = np.mod(np.column_stack([g['Posx'][w], g['Posy'][w], g['Posz'][w]])
+                     .astype(np.float64), BOX_SIZE)
+        pos[pos >= BOX_SIZE] -= BOX_SIZE
+        return w, pos
+
+    def _partner(src, w_src, sub, pos_src, dst, w_dst, tree_dst):
+        """Index into dst for each src row in *sub*, -1 where no halo partner."""
+        sep, j = tree_dst.query(pos_src[sub])
+        ok = (sep <= 1e-3) & np.isclose(src['Mvir'][w_src[sub]],
+                                        dst['Mvir'][w_dst[j]], rtol=1e-3)
+        return np.where(ok, w_dst[j], -1)
+
+    for s in snaps:
+        z = REDSHIFTS[s]
+        if z > 13.5:
+            continue
+        a = load_snapshots(PRIMARY_DIR, [s], pos_props).get(s)
+        b = load_snapshots(FFB_BK25_SMOOTH_DIR, [s], pos_props).get(s)
+        if a is None or b is None:
+            continue
+        wa, pa = _cen_pos(a)
+        wb, pb = _cen_pos(b)
+        fa = a['FFBRegime'][wa] == 1
+        fb = b['FFBRegime'][wb] == 1
+        if not (fa.any() or fb.any()):
+            continue
+        ia = _partner(a, wa, np.where(fa)[0], pa, b, wb, cKDTree(pb, boxsize=BOX_SIZE))
+        ib = _partner(b, wb, np.where(fb)[0], pb, a, wa, cKDTree(pa, boxsize=BOX_SIZE))
+        unmatched = int((ia < 0).sum() + (ib < 0).sum())
+        both = int((b['FFBRegime'][ia[ia >= 0]] == 1).sum())
+        either = int(fa.sum() + fb.sum() - both)
+        gid_same = np.mean(np.concatenate([
+            a['GalaxyIndex'][wa[fa]][ia >= 0] == b['GalaxyIndex'][ia[ia >= 0]],
+            b['GalaxyIndex'][wb[fb]][ib >= 0] == a['GalaxyIndex'][ib[ib >= 0]]]))
+        pl = p_of(p_tabs[s][0], a['Mvir'][wa])
+        pm = p_of(p_tabs[s][1], a['Mvir'][wa])
+        if gate['Li+24']:
+            pl[a['Regime'][wa] == 1] = 0.0
+        if gate['MBK25']:
+            pm[a['Regime'][wa] == 1] = 0.0
+        j_al = np.minimum(pl, pm).sum() / (pl.sum() + pm.sum() - np.minimum(pl, pm).sum())
+        j_in = (pl * pm).sum() / (pl.sum() + pm.sum() - (pl * pm).sum())
+        print(f'  {z:6.2f} {int(fa.sum()):6d} {int(fb.sum()):6d} {unmatched:9d} '
+              f'{gid_same:8.3f} | {both / either:11.2f} '
+              f'{both / max(fa.sum(), 1):7.2f} {both / max(fb.sum(), 1):8.2f} | '
+              f'{j_al:11.2f} {j_in:9.2f}')
+    print('  exp aligned / exp indep: overlap the probabilities imply if each halo sits at')
+    print('  the same quantile under both criteria / if the two draws are independent.')
+
+    # ------------------------------------------------------------------ [8]
+    head('[8] Random-draw alignment: is a halo given the same draw in both runs?')
+    print('  u_c is recovered from MBK25 g_max (c from g_max / g_vir, then the normal')
+    print('  quantile of ln(c / c_mean) / FFBConcSigma).  The current code draws c at')
+    print('  1 - draw, so Li+24 FFB should equal [1 - u_c < f_Li] for every halo near')
+    print('  the threshold.')
+    mu = lambda c: np.log1p(c) - c / (1.0 + c)
+    from scipy.optimize import brentq as _brentq
+    from scipy.stats import norm as _norm
+    for z_t in (12.0, 10.0, 8.0, 6.0):
+        s = _snap_nearest_z(REDSHIFTS, z_t)
+        z = REDSHIFTS[s]
+        a = load_snapshots(PRIMARY_DIR, [s], pos_props).get(s)
+        b = load_snapshots(FFB_BK25_SMOOTH_DIR, [s], pos_props + ['Rvir', 'g_max']).get(s)
+        if a is None or b is None:
+            continue
+        wa, pa = _cen_pos(a)
+        wb, pb = _cen_pos(b)
+        f_li_b = ffb_fraction(np.maximum(b['Mvir'][wb], 1.0), z)
+        sub = np.where((f_li_b > 0.05) & (f_li_b < 0.95) & (b['Rvir'][wb] > 0))[0]
+        if len(sub) == 0:
+            continue
+        jb = _partner(b, wb, sub, pb, a, wa, cKDTree(pa, boxsize=BOX_SIZE))
+        keep = jb >= 0
+        sub, jb = sub[keep], jb[keep]
+        rows = wb[sub]
+        m_raw = b['Mvir'][rows] / MASS_CONVERT
+        r_raw = b['Rvir'][rows]
+        target = b['g_max'][rows] / (g_code * m_raw / r_raw**2)
+        c = np.array([_brentq(lambda x, t=t: x * x / (2.0 * mu(x)) - t, 1.0, 1e3)
+                      if (1.0 / (2.0 * mu(1.0)) < t < 1e6 / (2.0 * mu(1e3))) else np.nan
+                      for t in target])
+        u_c = _norm.cdf(np.log(c / _c_ishiyama21(b['Mvir'][rows], z)) / sigma_c)
+        li = a['FFBRegime'][jb] == 1
+        f_li = f_li_b[sub]
+        ok = np.isfinite(u_c)
+        if gate['Li+24']:
+            ok &= a['Regime'][jb] == 0      # gated haloes never reach the draw
+        agree_new = np.mean(li[ok] == ((1.0 - u_c[ok]) < f_li[ok]))
+        agree_old = np.mean(li[ok] == (u_c[ok] < f_li[ok]))
+        print(f'  z={z:5.2f}  N={ok.sum():6d}   Li FFB == [1-u_c < f_Li]: {agree_new:.3f}'
+              f'    (old convention [u_c < f_Li]: {agree_old:.3f})')
+
+    # ------------------------------------------------------------------ [9]
+    head('[9] H2 in FFB galaxies (all snapshots z <= 15.5)')
+    for name, _ in runs:
+        n_f, n_f_h2, n_c, n_c_h2 = h2[name]
+        print(f'  {name}: FFB galaxies with H2 > 0: {n_f_h2} / {n_f};   non-FFB centrals '
+              f'with cold gas and H2 > 0: {n_c_h2} / {n_c}')
+    print('  starformation_ffb() sets H2gas = 0 and forms stars from ColdGas directly.')
+
+    # ----------------------------------------------------------------- [10]
+    head('[10] Low-redshift FFB population (z <= 4.5)')
+    for name, _ in runs:
+        ids = ffb_ids[name]
+        ss = sorted(ids, key=lambda s: -REDSHIFTS[s])
+        n_tot = sum(len(ids[s]) for s in ss)
+        prev = sum(len(ids[s] & ids[ss[k - 1]]) for k, s in enumerate(ss) if k > 0)
+        allg = set().union(*ids.values()) if ids else set()
+        per_gal = [sum(g in ids[s] for s in ss) for g in allg]
+        print(f'  {name}: {n_tot} FFB galaxy-snapshots, {len(allg)} distinct galaxies; '
+              f'also FFB at the previous snapshot: {prev}; snapshots per galaxy: '
+              f'mean {np.mean(per_gal) if per_gal else 0:.2f}, '
+              f'max {max(per_gal) if per_gal else 0}')
+
+    props10 = _MATCH_PROPERTIES + ['FFBRegime', 'StellarMass', 'ColdGas', 'H2gas',
+                                   'H1gas', 'HotGas', 'CGMgas', 'BlackHoleMass',
+                                   'SfrDisk', 'SfrBulge', 'Regime']
+    z_bins = [(0.0, 0.5), (0.5, 1.0), (1.0, 1.5), (1.5, 2.0), (2.0, 3.0), (3.0, 4.6)]
+    for k, (name, d) in enumerate(runs):
+        rec = []
+        for s in ffb_ids[name]:
+            if not ffb_ids[name][s]:
+                continue
+            z = REDSHIFTS[s]
+            g = load_snapshots(d, [s], props10).get(s)
+            w = np.where(g['FFBRegime'] == 1)[0]
+            n_part = {}
+            if have_noffb:
+                nf = load_snapshots(NOFFB_DIR, [s], props10).get(s)
+                if nf is not None:
+                    wg, pg = _cen_pos(g)
+                    wn, pn = _cen_pos(nf)
+                    cen_ffb = np.where(g['FFBRegime'][wg] == 1)[0]
+                    if len(cen_ffb) and len(wn):
+                        jn = _partner(g, wg, cen_ffb, pg, nf, wn,
+                                      cKDTree(pn, boxsize=BOX_SIZE))
+                        n_part = {int(wg[c]): int(j) for c, j in zip(cen_ffb, jn) if j >= 0}
+            thr = (ffb_threshold_mass_msun(z) if name == 'Li+24'
+                   else mbk25_threshold_median_c(z)[0])
+            p = p_of(p_tabs[s][k], g['Mvir'][w])
+            for i, pi in zip(w, p):
+                j = n_part.get(int(i))
+                nfv = ((nf['ColdGas'][j], nf['HotGas'][j], nf['BlackHoleMass'][j],
+                        nf['SfrDisk'][j] + nf['SfrBulge'][j]) if j is not None
+                       else (np.nan,) * 4)
+                rec.append((z, int(g['Type'][i]), g['Mvir'][i], g['Mvir'][i] / thr, pi,
+                            g['StellarMass'][i], g['ColdGas'][i], g['H2gas'][i],
+                            g['H1gas'][i], g['HotGas'][i], g['BlackHoleMass'][i],
+                            g['SfrDisk'][i] + g['SfrBulge'][i], int(g['Regime'][i])) + nfv)
+        if not rec:
+            print(f'\n  {name}: no FFB galaxies at z <= 4.5')
+            continue
+        R = np.array(rec, dtype=float)
+        L = lambda x: np.log10(np.where(x > 0, x, np.nan))
+        print(f'\n  {name}: medians by redshift (masses log10 Msun, SFR Msun/yr; '
+              f'"noFFB" = same halo in the no-FFB run)')
+        print(f'    {"z":>9} {"N":>5} {"cen":>4} {"logMvir":>7} {"dThr":>6} {"P":>8} '
+              f'{"hot":>4} {"M*":>6} {"Mcold":>6} {"H2>0":>4} {"Mhot":>6} {"MBH":>6} '
+              f'{"SFR":>7} | {"noFFB:Mcold":>11} {"Mhot":>6} {"MBH":>6} {"SFR":>7}')
+        for lo, hi in z_bins:
+            m = (R[:, 0] >= lo) & (R[:, 0] < hi)
+            if not m.any():
+                continue
+            r = R[m]
+            md = lambda col, log=True: np.nanmedian(L(r[:, col]) if log else r[:, col])
+            print(f'    {lo:3.1f}-{hi:3.1f} {m.sum():5d} {np.mean(r[:, 1] == 0):4.2f} '
+                  f'{md(2):7.2f} {md(3):+6.2f} {md(4, False):8.1e} '
+                  f'{np.mean(r[:, 12] == 1):4.2f} {md(5):6.2f} {md(6):6.2f} '
+                  f'{np.mean(r[:, 7] > 0):4.2f} {md(9):6.2f} {md(10):6.2f} '
+                  f'{md(11, False):7.1f} | {md(13):11.2f} {md(14):6.2f} {md(15):6.2f} '
+                  f'{md(16, False):7.1f}')
+        print(f'    dThr = log10(Mvir / M_thr) for this run\'s own threshold; '
+              f'cen, hot, H2>0 are fractions.')
+        order = np.argsort(R[:, 0])[:15]
+        print(f'\n  {name}: the {len(order)} lowest-redshift FFB galaxies')
+        print(f'    {"z":>5} {"T":>1} {"logMvir":>7} {"dThr":>6} {"P":>8} {"M*":>6} '
+              f'{"Mcold":>6} {"MH2":>6} {"MHI":>6} {"Mhot":>6} {"MBH":>6} {"SFR":>7} '
+              f'{"Rg":>2} | {"noFFB:Mcold":>11} {"Mhot":>6} {"MBH":>6} {"SFR":>7}')
+        for r in R[order]:
+            f = lambda x: f'{np.log10(x):6.2f}' if x > 0 else '     -'
+            print(f'    {r[0]:5.2f} {int(r[1]):1d} {np.log10(r[2]):7.2f} '
+                  f'{np.log10(r[3]):+6.2f} {r[4]:8.1e} {f(r[5])} {f(r[6])} {f(r[7])} '
+                  f'{f(r[8])} {f(r[9])} {f(r[10])} {r[11]:7.1f} {int(r[12]):2d} | '
+                  f'{f(r[13]):>11} {f(r[14])} {f(r[15])} {r[16]:7.1f}')
+
+    print()
+    print('END FFB / MBK25 REFEREE DIAGNOSTICS')
 
 
 def plot_99_referee_diagnostics():
@@ -13982,6 +14422,7 @@ STANDALONE_PLOTS = {
     38: plot_38_hi_mass_function_recipes,
     39: plot_39_gas_mass_functions_stacked,
     40: plot_40_gas_mass_functions_stacked_recipes,
+    98: plot_98_ffb_referee_diagnostics,
     99: plot_99_referee_diagnostics,
 }
 
