@@ -151,8 +151,12 @@ static double inverse_normal_cdf(double p)
  *        so the transition is smooth across the population.
  *   2 -- Boylan-Kolchin (2025) acceleration threshold, g_max > g_crit, with
  *        log-normal scatter applied to the halo concentration.  The scatter is
- *        drawn from the halo's own persistent quantile, so the threshold is
- *        sharp per halo but smooth across the population.
+ *        set by the same per-snapshot uniform draw as mode 1, so the threshold
+ *        is sharp per halo but smooth across the population.
+ *
+ * Both modes read the draw in the same sense: a low draw favours FFB.  A halo
+ * therefore sits at the same quantile under either criterion, and the two
+ * select the same haloes wherever their FFB probabilities agree.
  *
  * All galaxies are marked non-FFB when EnhancedStarFormationOn == 0.
  */
@@ -228,9 +232,11 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
             double c = interpolate_concentration_ishiyama21(logM, Zcurr, run_params);
             if(c < 1.0) c = 1.0;
 
-            // Apply log-normal scatter: ln(c) ~ Normal(ln(c_mean), sigma_c)
+            // Apply log-normal scatter: ln(c) ~ Normal(ln(c_mean), sigma_c).
+            // A high concentration favours FFB, so the quantile is 1 - draw: a
+            // low draw then favours FFB here exactly as it does in mode 1.
             {
-                double u = draw;
+                double u = 1.0 - draw;
                 if(u < 1.0e-6) u = 1.0e-6;
                 if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
                 const double z_normal = inverse_normal_cdf(u);

@@ -4,7 +4,7 @@
 
 FileNameGalaxies   model
 %OutputDir         /<absolute>/<root>/<path>/sage-model/output/millennium/
-OutputDir          output/millennium/
+OutputDir          output/millennium_mbk_smooth/
 
 FirstFile         0
 LastFile          7
@@ -55,7 +55,7 @@ CGMrecipeOn                 1   %0: switch off
 FIREmodeOn                  1   %0: switch off
 
 ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
-EnhancedStarFormationOn     1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: BK25 acceleration threshold w. log-normal c scatter
+EnhancedStarFormationOn     2   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: BK25 acceleration threshold w. log-normal c scatter
 
 SaveFullSFH                 0   %0: switch off
 
