@@ -399,6 +399,24 @@ static int ffb_free_fall_ok(const double n, const int p, const struct GALAXY *ga
 }
 
 /*
+ * Uniform deviate in (0, 1) fixed by a halo's MostBoundID and the snapshot.
+ *
+ * SplitMix64 (Steele, Lea & Flood 2014) mixes the two into 64 well-scrambled
+ * bits; the top 53 become a double.  Adding one half keeps the result off 0
+ * and 1, which inverse_normal_cdf() cannot take.  The same halo at the same
+ * snapshot gets the same value in every run on the same trees.
+ */
+static double halo_uniform(const long long most_bound_id, const int snapnum)
+{
+    uint64_t x = (uint64_t)most_bound_id ^ ((uint64_t)(uint32_t)snapnum * 0x9E3779B97F4A7C15ULL);
+    x += 0x9E3779B97F4A7C15ULL;
+    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    x = (x ^ (x >> 27)) * 0x94D049BB133111EBULL;
+    x ^= x >> 31;
+    return ((double)(x >> 11) + 0.5) * (1.0 / 9007199254740992.0);   /* 2^-53 */
+}
+
+/*
  * Classify galaxies as feedback-free burst (FFB) or normal mode.
  *
  * When FeedbackFreeModeOn > 0, evaluates each central galaxy against the FFB
@@ -407,8 +425,17 @@ static int ffb_free_fall_ok(const double n, const int p, const struct GALAXY *ga
  * galaxies[p].FFBRegime.  Uses a lognormal scatter (via inverse_normal_cdf)
  * around the threshold when the scatter mode is enabled.  Skips all galaxies
  * when FFBmodeOn == 0.
+ *
+ * With FFBRandomMode=0 the per-snapshot draw is a hash of the host halo's
+ * MostBoundID and the snapshot (halo_uniform), not the next rand() value.
+ * Runs on the same merger trees therefore give a halo the same draw under
+ * every criterion, so Li+24 (modes 1, 6) and BK25 (modes 4, 7) select the
+ * same haloes wherever their probabilities agree.  A rand() stream cannot do
+ * this: its position depends on how many galaxies each run has created,
+ * merged or disrupted, which differs between runs once their physics does.
  */
 void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
+                                     const int snapnum,
                                      const double infallingGas, const double dt,
                                      struct GALAXY *galaxies,
                                      const struct params *run_params)
@@ -445,10 +472,16 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
         }
 
         // FFBRandomMode=1: reuse the persistent draw assigned at galaxy creation.
-        // FFBRandomMode=0: fresh draw each snapshot (no memory across timesteps).
-        const double draw = (run_params->FFBRandomMode == 1)
-            ? (double)galaxies[p].FFBRandom
-            : (double)rand() / (double)RAND_MAX;
+        // FFBRandomMode=0: fresh draw each snapshot (no memory across timesteps),
+        // keyed on the halo and snapshot.  The rand() call is kept and discarded
+        // so every other random draw in the model stays where it was.
+        double draw;
+        if(run_params->FFBRandomMode == 1) {
+            draw = (double)galaxies[p].FFBRandom;
+        } else {
+            (void)rand();
+            draw = halo_uniform(galaxies[p].MostBoundID, snapnum);
+        }
 
         if(run_params->FeedbackFreeModeOn == 1) {
             // Li et al. 2024 mass-based method (original)

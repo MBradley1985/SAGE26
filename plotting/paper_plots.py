@@ -12903,6 +12903,858 @@ def plot_37_cgm_census():
     save_figure(fig, outputFile)
 
 
+# ================= PLOTS F AND G: STELLAR MASS VS REDSHIFT AGAINST JWST =================
+#
+# Copied verbatim from random_plotting_scripts/ffb_paper_plots.py (plots F and G and
+# the helpers they use).  The aliases below map that script's names onto this one's.
+
+import glob
+import matplotlib.lines as mlines
+
+LI24_DIR     = PRIMARY_DIR
+MBK25_DIR    = FFB_BK25_SMOOTH_DIR
+SMF_OBS_DIR  = os.path.join(OBS_DIR, 'smf')
+SIZE_OBS_DIR = os.path.join(OBS_DIR, 'SizesAndAM')
+
+
+def _find_model_files(directory):
+    files = sorted(glob.glob(os.path.join(directory, 'model_*.hdf5')))
+    if not files:
+        single = os.path.join(directory, 'model_0.hdf5')
+        if os.path.exists(single):
+            files = [single]
+    return files
+
+
+def read_snap(directory, snap, properties, min_particles=None):
+    """
+    Read properties for a single snapshot, concatenated across MPI files.
+    Halos with Len < min_particles (default MIN_PARTICLES) are removed.
+    """
+    if min_particles is None:
+        min_particles = MIN_PARTICLES
+    # Always load Len for the resolution cut
+    load_props = list(properties)
+    caller_wants_len = 'Len' in load_props
+    if not caller_wants_len:
+        load_props.append('Len')
+
+    files = _find_model_files(directory)
+    if not files:
+        return {}
+    snap_key = f'Snap_{snap}'
+    chunks = {p: [] for p in load_props}
+    found = False
+    for fp in files:
+        try:
+            with h5.File(fp, 'r') as f:
+                if snap_key not in f:
+                    continue
+                found = True
+                grp = f[snap_key]
+                for p in load_props:
+                    if p in grp:
+                        chunks[p].append(np.array(grp[p]))
+        except Exception as e:
+            print(f"  Warning: {fp}: {e}")
+    if not found:
+        return {}
+
+    # Concatenate all chunks
+    data = {}
+    for p in load_props:
+        if chunks[p]:
+            arr = np.concatenate(chunks[p])
+            data[p] = arr * MASS_CONVERT if p in _MASS_PROPS else arr
+
+    # Apply resolution cut
+    if 'Len' in data:
+        mask = data['Len'] >= min_particles
+        data = {p: arr[mask] for p, arr in data.items()}
+
+    # Drop Len if the caller didn't ask for it
+    if not caller_wants_len:
+        data.pop('Len', None)
+
+    return data
+
+
+_Z_RANGE = (4.0, 15.0)
+
+
+def _ffb_snaps():
+    """Snapshot indices covering _Z_RANGE, ordered high-z to low-z."""
+    return [i for i, z in enumerate(REDSHIFTS) if _Z_RANGE[0] <= z <= _Z_RANGE[1]]
+
+
+def _load_epochs():
+    """
+    Load EPOCHS photometric catalog and return a filtered DataFrame.
+    Keeps galaxies with certain_by_eye=True, z > 4, and a valid stellar mass.
+    Columns used:
+      zbest                       — photometric redshift
+      stellar_mass_pipes_zgauss   — log10(M_star / M_sun) from Bagpipes
+      stellar_mass_pipes_l1/u1_zgauss — 1-sigma lower/upper uncertainties
+    """
+    path = os.path.join(SMF_OBS_DIR, 'EPOCHS.csv')
+    if not os.path.exists(path):
+        print(f'  Warning: EPOCHS catalog not found at {path}')
+        return None
+    df = pd.read_csv(path)
+    mask = (
+        (df['certain_by_eye'] == True) &
+        (df['zbest'] > 4.0) &
+        df['stellar_mass_pipes_zgauss'].notna()
+    )
+    return df[mask].copy()
+
+
+# --- Empirical EPOCHS stellar-mass completeness floor -----------------------
+#
+# EPOCHS is flux-limited, so its stellar-mass distribution is truncated from
+# below by the detection limit rather than by any physical cut.  To compare
+# the simulation against it on the same footing we derive an empirical floor
+# directly from the catalogue: in each redshift bin, the Nth percentile of the
+# observed log M* distribution.  This is a *derived* limit -- EPOCHS.csv ships
+# no published completeness column -- so it should be quoted as such.
+#
+# 10th percentile is the default: the highest-z bins hold only ~20-40 galaxies,
+# where the 5th percentile is set by one or two objects.
+EPOCHS_FLOOR_PCT   = 10.0
+EPOCHS_FLOOR_EDGES = [6.5, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 19.0]
+EPOCHS_FLOOR_MIN_N = 15      # bins with fewer galaxies are dropped as too noisy
+
+# Fallback floor if the catalogue is unavailable (the previous hard-coded value).
+MSTAR_FLOOR_FALLBACK = 1e7   # M_sun
+
+
+def _epochs_mass_floor(verbose=True):
+    """
+    Derive an empirical stellar-mass completeness floor from EPOCHS.
+
+    Returns a callable z -> log10(M_star_floor / M_sun), linearly interpolated
+    between bin centres and held flat outside the range spanned by the
+    catalogue.  Returns None if EPOCHS is unavailable, in which case callers
+    should fall back to MSTAR_FLOOR_FALLBACK.
+
+    Note the flat extrapolation below the lowest EPOCHS bin: the catalogue
+    starts at z ~ 6.5 while these plots span z = 4-15, so the floor over
+    z = 4-6.5 is an assumption, not a measurement.
+    """
+    ep = _load_epochs()
+    if ep is None or len(ep) == 0:
+        return None
+
+    z_all = ep['zbest'].to_numpy()
+    m_all = ep['stellar_mass_pipes_zgauss'].to_numpy()
+
+    z_cen, m_flr = [], []
+    for lo, hi in zip(EPOCHS_FLOOR_EDGES[:-1], EPOCHS_FLOOR_EDGES[1:]):
+        sel = (z_all >= lo) & (z_all < hi)
+        n = int(sel.sum())
+        if n < EPOCHS_FLOOR_MIN_N:
+            if verbose and n > 0:
+                print(f'    z=[{lo:4.1f},{hi:4.1f}) N={n:<4d} -- dropped (N < {EPOCHS_FLOOR_MIN_N})')
+            continue
+        floor = float(np.percentile(m_all[sel], EPOCHS_FLOOR_PCT))
+        # Bin centre weighted by the galaxies actually in the bin, so a bin
+        # whose objects pile up at one edge is not mis-placed.
+        z_cen.append(float(np.median(z_all[sel])))
+        m_flr.append(floor)
+        if verbose:
+            print(f'    z=[{lo:4.1f},{hi:4.1f}) N={n:<4d} '
+                  f'z_med={z_cen[-1]:5.2f}  floor=10^{floor:.2f}')
+
+    if len(z_cen) < 2:
+        print('  Warning: too few EPOCHS bins to build a floor; using fallback.')
+        return None
+
+    z_cen = np.array(z_cen)
+    m_flr = np.array(m_flr)
+
+    def floor_at(z):
+        # np.interp clamps to the end values outside the range, which is the
+        # flat extrapolation documented above.
+        return np.interp(z, z_cen, m_flr)
+
+    return floor_at
+
+
+# ========================== PLOT F ==========================
+
+# Spectroscopically confirmed JWST galaxies with reliable stellar mass estimates.
+# Sources: Curtis-Lake+23 (JADES), Bunker+23 (GN-z11), Carniani+24 (GS-z14-0),
+#          Finkelstein+23 (Maisie's), Harikane+22, Robertson+23.
+_JWST_SPEC = [
+    # (label,              z,     log10_Mstar, err_dex)
+    ('GN-z11',            10.60,  9.1,        0.3),
+    ('GS-z10-0',          10.38,  7.9,        0.3),
+    ("Maisie's",          12.00,  8.5,        0.4),
+    ('GS-z11-0',          11.70,  8.9,        0.3),
+    ('GS-z12-0',          12.63,  8.4,        0.3),
+    ('GS-z13-0',          13.20,  7.8,        0.4),
+    ('GS-z14-0',          14.32,  8.6,        0.4),
+]
+
+
+def plot_F_mstar_ffb_scatter():
+    """
+    Stellar mass vs redshift for all resolved central galaxies
+    (Len >= MIN_PARTICLES) above the EPOCHS empirical completeness floor.
+
+    The mass floor applied to the models is derived per redshift bin from the
+    EPOCHS catalogue itself (see _epochs_mass_floor) rather than being a fixed
+    value, so the model medians are truncated at the observed completeness
+    limit.  Falls back to a flat MSTAR_FLOOR_FALLBACK if EPOCHS is unavailable.
+    The floor is applied to the model selection only; nothing about the plotted
+    observations is altered.
+
+    Non-FFB galaxies: diluted grey background.
+    Li+24 FFB galaxies: red.
+    MBK25 FFB galaxies: purple.
+
+    Overlaid: EPOCHS photometric catalog and notable JWST spec-z discoveries.
+    """
+    print('Plot F: stellar mass vs redshift (FFB median lines)')
+
+    props = ['StellarMass', 'FFBRegime', 'Type']
+    snaps = _ffb_snaps()
+    MIN_N = 1    # minimum galaxies per snapshot to plot a point
+
+    print('  Deriving EPOCHS empirical mass floor '
+          f'(p{EPOCHS_FLOOR_PCT:g} per redshift bin):')
+    floor_at = _epochs_mass_floor()
+    if floor_at is None:
+        print(f'    EPOCHS unavailable -- falling back to a flat '
+              f'{MSTAR_FLOOR_FALLBACK:.1e} M_sun floor.')
+        def floor_at(z):
+            # Array-safe so the same callable works for scalars and grids.
+            return np.full_like(np.asarray(z, dtype=float),
+                                np.log10(MSTAR_FLOOR_FALLBACK))
+
+    def _percentiles(ms_arr):
+        log_m = np.log10(ms_arr)
+        return (np.percentile(log_m, 50),
+                np.percentile(log_m, 16),
+                np.percentile(log_m, 84))
+
+    z_bg,  med_bg,  lo_bg,  hi_bg  = [], [], [], []
+    z_li,  med_li,  lo_li,  hi_li  = [], [], [], []
+    z_mbk, med_mbk, lo_mbk, hi_mbk = [], [], [], []
+
+    for snap in snaps:
+        zz = REDSHIFTS[snap]
+        # Same floor for every model at this redshift.
+        MSTAR_FLOOR = 10.0 ** float(floor_at(zz))
+
+        d_li = read_snap(LI24_DIR, snap, props)
+        if d_li and 'StellarMass' in d_li:
+            c      = d_li['Type'] == 0
+            ms     = d_li['StellarMass'][c]
+            ffb    = d_li['FFBRegime'][c]
+            ms_ffb = ms[(ms > MSTAR_FLOOR) & (ffb == 1)]
+            if len(ms_ffb) >= MIN_N:
+                med, lo, hi = _percentiles(ms_ffb)
+                z_li.append(zz); med_li.append(med)
+                lo_li.append(lo); hi_li.append(hi)
+
+        d_noffb = read_snap(NOFFB_DIR, snap, ['StellarMass', 'Type'])
+        if d_noffb and 'StellarMass' in d_noffb:
+            c       = d_noffb['Type'] == 0
+            ms_nffb = d_noffb['StellarMass'][c]
+            ms_nffb = ms_nffb[ms_nffb > MSTAR_FLOOR]
+            if len(ms_nffb) >= MIN_N:
+                med, lo, hi = _percentiles(ms_nffb)
+                z_bg.append(zz); med_bg.append(med)
+                lo_bg.append(lo); hi_bg.append(hi)
+
+        d_mbk = read_snap(MBK25_DIR, snap, props)
+        if d_mbk and 'StellarMass' in d_mbk:
+            c   = d_mbk['Type'] == 0
+            ms  = d_mbk['StellarMass'][c]
+            ffb = d_mbk['FFBRegime'][c]
+            ok  = ms > MSTAR_FLOOR
+            ms_ffb = ms[ok][ffb[ok] == 1]
+            if len(ms_ffb) >= MIN_N:
+                med, lo, hi = _percentiles(ms_ffb)
+                z_mbk.append(zz); med_mbk.append(med)
+                lo_mbk.append(lo); hi_mbk.append(hi)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    def _plot_band(zs, meds, los, his, color, label, zorder):
+        zs   = np.array(zs);   meds = np.array(meds)
+        los  = np.array(los);  his  = np.array(his)
+        ax.plot(zs, meds, color=color, lw=2, zorder=zorder, label=label)
+        ax.fill_between(zs, los, his, color=color, alpha=0.2, zorder=zorder - 1)
+
+    if z_bg:
+        _plot_band(z_bg,  med_bg,  lo_bg,  hi_bg,  'firebrick',  'No FFB/MBK25 model',   zorder=2)
+    if z_li:
+        _plot_band(z_li,  med_li,  lo_li,  hi_li,  'black',  'FFB galaxies', zorder=4)
+    if z_mbk:
+        _plot_band(z_mbk, med_mbk, lo_mbk, hi_mbk, 'mediumpurple',     'MBK25 galaxies', zorder=6)
+
+    # EPOCHS photometric catalog
+    epochs = _load_epochs()
+    if epochs is not None:
+        in_range = (
+            (epochs['zbest'] >= _Z_RANGE[0]) &
+            (epochs['zbest'] <= _Z_RANGE[1])
+        )
+        ep = epochs[in_range]
+        ax.scatter(ep['zbest'], ep['stellar_mass_pipes_zgauss'],
+                   s=4, color="#656262", marker='o', alpha=0.2,
+                   linewidths=0.3, edgecolors='k',
+                   zorder=7)
+
+    # Baggen+23 individual JWST disk galaxies (z=6.5–8.8)
+    _baggen_path = os.path.join(SIZE_OBS_DIR, 'baggen_disk_2023.ecsv')
+    if os.path.exists(_baggen_path):
+        df_b = pd.read_csv(_baggen_path, comment='#', sep=r'\s+')
+        in_range = (df_b['z_phot'] >= _Z_RANGE[0]) & (df_b['z_phot'] <= _Z_RANGE[1])
+        df_b = df_b[in_range]
+        if len(df_b) > 0:
+            ax.scatter(df_b['z_phot'], df_b['log_M_star'],
+                       s=18, color='darkorange', marker='D', alpha=0.85,
+                       linewidths=0.5, edgecolors='k', zorder=8)
+
+    # Casey+24 photometric galaxies (z=9.2–14.4, COSMOS-Web)
+    _casey_path = os.path.join(SIZE_OBS_DIR, 'casey_disk_2024.ecsv')
+    if os.path.exists(_casey_path):
+        df_c = pd.read_csv(_casey_path, comment='#', sep=r'\s+')
+        in_range = (df_c['z_phot_BAGPIPES'] >= _Z_RANGE[0]) & (df_c['z_phot_BAGPIPES'] <= _Z_RANGE[1])
+        df_c = df_c[in_range]
+        if len(df_c) > 0:
+            log_m  = np.log10(df_c['M_star'])
+            log_eu = np.log10(df_c['M_star'] + df_c['M_star_err_up']) - log_m
+            ax.errorbar(df_c['z_phot_BAGPIPES'], log_m, yerr=log_eu,
+                        fmt='s', color='dodgerblue', markersize=5,
+                        markeredgecolor='k', markeredgewidth=0.5,
+                        ecolor='dodgerblue', elinewidth=1.0, capsize=2,
+                        zorder=8)
+
+    # Sun+24 individual JWST galaxies (z=4.4–6.5)
+    _sun_path = os.path.join(SIZE_OBS_DIR, 'sun_disk_2024.ecsv')
+    if os.path.exists(_sun_path):
+        df_s = pd.read_csv(_sun_path, comment='#', sep=r'\s+')
+        in_range = (df_s['z'] >= _Z_RANGE[0]) & (df_s['z'] <= _Z_RANGE[1])
+        df_s = df_s[in_range]
+        if len(df_s) > 0:
+            ax.errorbar(df_s['z'], df_s['log_M_star'], yerr=df_s['log_M_star_err'],
+                        fmt='^', color='seagreen', markersize=6,
+                        markeredgecolor='k', markeredgewidth=0.5,
+                        ecolor='seagreen', elinewidth=1.0, capsize=2,
+                        zorder=8)
+
+    # Notable JWST spectroscopic galaxies
+    _above = {"Maisie's", "GS-z11-0"}  # label those above the point, others below
+    for name, z, logm, err in _JWST_SPEC:
+        ax.errorbar(z, logm, yerr=err,
+                    fmt='*', color='gold', markersize=11,
+                    markeredgecolor='k', markeredgewidth=0.6,
+                    ecolor='gold', elinewidth=1.2, capsize=2, zorder=8)
+        if name in _above:
+            ax.annotate(name, xy=(z, logm), xytext=(0, 8),
+                        textcoords='offset points', fontsize=10, fontweight='bold',
+                        ha='center', va='bottom', color="#0E0C0C", zorder=9)
+        else:
+            ax.annotate(name, xy=(z, logm), xytext=(0, -8),
+                        textcoords='offset points', fontsize=10, fontweight='bold',
+                        ha='center', va='top', color="#0E0C0C", zorder=9)
+
+    _standard_legend(ax, loc='upper left', fontsize='small')
+
+    ax.set_xlabel(r'Redshift')
+    ax.set_ylabel(r'$\log_{10}\,m_\star\ [M_\odot]$')
+    ax.set_xlim(_Z_RANGE[0], _Z_RANGE[1])
+    ax.set_ylim(6.5, 12.5)
+
+    fig.tight_layout()
+    save_figure(fig, os.path.join(OUTPUT_DIR, 'F_mstar_ffb_scatter' + OUTPUT_FORMAT))
+
+
+# ========================== PLOT G ==========================
+#
+# Number-density-matched alternative to Plot F.
+#
+# Plot F compares a model *median* against flux-limited JWST detections.  Those
+# are not the same statistic: the observed points are the most massive objects
+# recovered from a survey volume of 10^5-10^6 Mpc^3, while the model median is
+# taken over a box of 6x10^5 Mpc^3 (mini-Millennium) or 3x10^8 Mpc^3
+# (Millennium-500).  Worse, a median taken above a mass floor mostly measures
+# the floor when the mass function is steep, which compresses the separation
+# between the three models.
+#
+# The fix is to compare at fixed cumulative comoving number density: for each
+# model, report the stellar mass m* such that n(> m*) equals a chosen value.
+# This is the statistic Boylan-Kolchin (2025) uses in his Fig. 5, so it also
+# makes the figure directly comparable to the paper being implemented.
+
+# Cumulative comoving number densities, rarest first.  Only those reachable in
+# the simulated volume (>= _ND_MIN_COUNT galaxies) are drawn.
+_ND_TARGETS   = [1e-6, 1e-5, 1e-4, 1e-3]
+_ND_MIN_COUNT = 10
+
+# The single density drawn in the figure.  10^-5 Mpc^-3 is roughly what the
+# deep JWST fields probe (see _report_survey_densities); if the box is too
+# small to reach it, the rarest reachable density is used instead and the
+# substitution is reported.  Every reachable density is still tabulated.
+_ND_PLOT_TARGET = 1e-5
+
+# Particle cut for this measurement only.  The global MIN_PARTICLES = 50 is too
+# aggressive here: at z = 10 the FFB threshold sits near 40 particles in
+# Millennium-500, so a 50-particle cut removes the haloes the figure is about
+# and truncates the sample before rank n*V is reached, which stops the curves
+# at z ~ 10 for no physical reason.
+_ND_MIN_PARTICLES = 20
+
+# (directory, snap, n) -> why that point could not be measured.
+_ND_TRUNCATION = {}
+
+# Approximate survey areas, used only to report the number density each survey
+# probes.  Nothing in the figure depends on these.
+_SURVEY_AREAS_ARCMIN2 = {
+    'JADES-Deep':  45.0,
+    'CEERS':      100.0,
+    'COSMOS-Web': 1944.0,   # 0.54 deg^2
+}
+
+_BOX_VOLUME_CACHE = {}
+
+
+def _box_geometry(directory):
+    """
+    (box side [Mpc/h], hubble_h, processed volume fraction) from the header.
+
+    A run restricted to a subset of tree files covers only part of the box, so
+    the number density n = k / V must divide by the volume actually processed,
+    not by the full box.  SAGE records this as `frac_volume_processed`; if the
+    attribute is missing, fall back to (LastFile - FirstFile + 1) / num files.
+    """
+    if directory in _BOX_VOLUME_CACHE:
+        return _BOX_VOLUME_CACHE[directory]
+    box = hh = None
+    frac = 1.0
+    files = _find_model_files(directory)
+    if files:
+        try:
+            with h5.File(files[0], 'r') as f:
+                sim = f['Header/Simulation'].attrs
+                run = f['Header/Runtime'].attrs
+                box = float(sim['box_size'])
+                hh  = float(sim['hubble_h'])
+                if 'frac_volume_processed' in run:
+                    frac = float(run['frac_volume_processed'])
+                elif all(k in run for k in ('FirstFile', 'LastFile')) \
+                        and 'num_simulation_tree_files' in sim:
+                    n_tot = float(sim['num_simulation_tree_files'])
+                    if n_tot > 0:
+                        frac = (float(run['LastFile']) -
+                                float(run['FirstFile']) + 1.0) / n_tot
+                if not (0.0 < frac <= 1.0):
+                    print(f'  Warning: implausible volume fraction {frac} in '
+                          f'{directory}; treating as 1.0')
+                    frac = 1.0
+        except Exception as e:
+            print(f'  Warning: could not read box geometry from {directory}: {e}')
+    _BOX_VOLUME_CACHE[directory] = (box, hh, frac)
+    return box, hh, frac
+
+
+def _box_size_mpc_h(directory):
+    """Box side length [Mpc/h] from the HDF5 header, or None."""
+    return _box_geometry(directory)[0]
+
+
+def _box_volume_mpc3(directory):
+    """Comoving volume actually processed by the run [Mpc^3]."""
+    box, hh, frac = _box_geometry(directory)
+    if not box or not hh:
+        return None
+    return (box / hh) ** 3 * frac
+
+
+def _mstar_at_number_density(directory, snap, n_targets,
+                             centrals_only=False, min_count=_ND_MIN_COUNT):
+    """
+    log10 m* at fixed cumulative comoving number density.
+
+    Returns {n_target: (log10 m*, log10 m*_lo, log10 m*_hi)}.
+
+    The uncertainty is a delete-one jackknife over the 8 octants of the box,
+    which captures cosmic variance as well as shot noise.  Pure Poisson error
+    on the cumulative rank is negligible here -- at n = 1e-5 in a 500 Mpc/h box
+    the rank is ~3200, so sqrt(k)/k is under 2 per cent and the band would be
+    invisible -- while the octant-to-octant scatter is what a survey of that
+    volume would actually see.
+
+    A target is omitted when it corresponds to fewer than `min_count` galaxies,
+    or to more galaxies than the sample contains: in the latter case the
+    density lies below where the particle cut truncates the sample, so it is
+    not measurable rather than merely noisy.  `_ND_TRUNCATION` records why, so
+    the caller can report it instead of the curve silently stopping.
+
+    All galaxies are used, not only centrals and not only those in the
+    efficient mode, because that is what a survey counts.
+    """
+    vol = _box_volume_mpc3(directory)
+    if not vol:
+        return {}
+    props = ['StellarMass', 'Type', 'Posx', 'Posy', 'Posz']
+    d = read_snap(directory, snap, props, min_particles=_ND_MIN_PARTICLES)
+    if not d or 'StellarMass' not in d:
+        return {}
+
+    keep = d['StellarMass'] > 0
+    if centrals_only and 'Type' in d:
+        keep &= d['Type'] == 0
+    ms = d['StellarMass'][keep]
+    if ms.size < min_count:
+        return {}
+
+    # Octant label for the jackknife, if positions are available.  With a
+    # partial-volume run the octants are unequal, so the jackknife is only
+    # approximate there; the caller warns.
+    oct_id = None
+    if all(p in d for p in ('Posx', 'Posy', 'Posz')):
+        box = _box_size_mpc_h(directory)
+        if box:
+            half = box / 2.0
+            oct_id = ((d['Posx'][keep] % box >= half).astype(int) +
+                      2 * (d['Posy'][keep] % box >= half).astype(int) +
+                      4 * (d['Posz'][keep] % box >= half).astype(int))
+
+    def _mstar_at(mass_arr, volume, k):
+        """log10 m* at rank k in a sample of `mass_arr` occupying `volume`."""
+        if mass_arr.size < 1 or k < 1 or k > mass_arr.size:
+            return np.nan
+        srt = np.sort(mass_arr)[::-1]
+        rk  = np.arange(1, srt.size + 1)
+        return float(np.interp(np.log10(k), np.log10(rk), np.log10(srt)))
+
+    out = {}
+    for nt in n_targets:
+        k = nt * vol
+        if k < min_count:
+            _ND_TRUNCATION[(directory, snap, nt)] = (
+                f'needs {k:.0f} galaxies, below the {min_count}-object floor')
+            continue
+        if k > ms.size:
+            _ND_TRUNCATION[(directory, snap, nt)] = (
+                f'needs rank {k:.0f} but only {ms.size} galaxies survive the '
+                f'{_ND_MIN_PARTICLES}-particle cut')
+            continue
+
+        centre = _mstar_at(ms, vol, k)
+        lo = hi = np.nan
+
+        if oct_id is not None:
+            sub = []
+            for o in range(8):
+                m_sub = ms[oct_id != o]
+                v_sub = vol * 7.0 / 8.0
+                v_val = _mstar_at(m_sub, v_sub, nt * v_sub)
+                if np.isfinite(v_val):
+                    sub.append(v_val)
+            if len(sub) == 8:
+                sub = np.array(sub)
+                # delete-one jackknife: sigma^2 = (N-1)/N * sum (x_i - xbar)^2
+                sigma = np.sqrt(7.0 / 8.0 * np.sum((sub - sub.mean()) ** 2))
+                lo, hi = centre - sigma, centre + sigma
+
+        if not np.isfinite(lo):      # no positions: fall back to Poisson
+            sk = np.sqrt(k)
+            lo = _mstar_at(ms, vol, min(k + sk, ms.size))
+            hi = _mstar_at(ms, vol, max(k - sk, 1.0))
+
+        out[nt] = (centre, lo, hi)
+    return out
+
+
+def _report_survey_densities():
+    """Print the number density each survey probes; astropy optional."""
+    try:
+        from astropy.cosmology import Planck18 as _cos
+        import astropy.units as _u
+    except Exception:
+        print('  (astropy unavailable -- skipping survey volume table)')
+        return
+    sr_per_arcmin2 = (1.0 / 60.0 * np.pi / 180.0) ** 2
+    print('  Number density probed by each survey (one object per volume):')
+    for z0, z1 in [(6.5, 7.5), (9.5, 10.5), (13.5, 14.5)]:
+        dV = (_cos.comoving_volume(z1) - _cos.comoving_volume(z0)).to(_u.Mpc ** 3).value
+        per_arcmin2 = dV * sr_per_arcmin2 / (4.0 * np.pi)
+        row = f'    z = {z0:.1f}-{z1:.1f}: '
+        row += '  '.join(
+            f'{name} n = {1.0 / (per_arcmin2 * area):.1e}'
+            for name, area in _SURVEY_AREAS_ARCMIN2.items())
+        print(row)
+
+
+def plot_G_mstar_vs_z_ndensity():
+    """
+    Stellar mass at fixed cumulative comoving number density vs redshift.
+
+    Number-density-matched counterpart to Plot F.  One curve per model at the
+    density _ND_PLOT_TARGET, shaded with the 1-sigma Poisson uncertainty on the
+    cumulative count.  The observations are the same as in Plot F and are
+    unchanged.
+
+    Reading the figure: a survey covering volume V can find one object at
+    n = 1/V, so the plotted density is chosen to match the rarity the JWST
+    surveys actually probe (n ~ 10^-5 Mpc^-3 in the deep fields).  A model
+    reproduces an observed galaxy when its curve at the matching density passes
+    through that point -- not when its median does.
+    """
+    print('Plot G: stellar mass at fixed comoving number density')
+
+    # MBK25 is drawn as a thick solid line and Li+24 dashed on top of it: the
+    # two agree to ~0.01 dex at every redshift, so a single style would hide
+    # one curve completely and read as a missing model.
+    models = [
+        {'label': 'MBK25 galaxies',     'dir': MBK25_DIR, 'color': 'mediumpurple',
+         'ls': '-',  'lw': 3.4, 'z': 5},
+        {'label': 'FFB galaxies',       'dir': LI24_DIR,  'color': 'black',
+         'ls': '--', 'lw': 1.9, 'z': 6},
+        {'label': 'No FFB/MBK25 model', 'dir': NOFFB_DIR, 'color': 'firebrick',
+         'ls': '-',  'lw': 2.4, 'z': 5},
+    ]
+    snaps = _ffb_snaps()
+    print(f'    particle cut for this figure: Len >= {_ND_MIN_PARTICLES}')
+
+    for m in models:
+        v = _box_volume_mpc3(m['dir'])
+        if v:
+            _, _, frac = _box_geometry(m['dir'])
+            note = '' if frac >= 0.999 else f'  [{100 * frac:.1f}% of the box]'
+            print(f"    {m['label']:20s} V = {v:.3e} Mpc^3  "
+                  f"(1 object -> n = {1.0 / v:.2e} Mpc^-3){note}")
+            if frac < 0.999:
+                print('      partial volume: the octant jackknife is '
+                      'approximate for this run')
+    _report_survey_densities()
+
+    # --- gather curves --------------------------------------------------
+    # (model label, n) -> (z, logm, logm_lo, logm_hi)
+    curves = {}
+    for m in models:
+        if not _find_model_files(m['dir']):
+            print(f"  Skipping {m['label']}: no files in {m['dir']}")
+            continue
+        per_n = {nt: ([], [], [], []) for nt in _ND_TARGETS}
+        for snap in snaps:
+            res = _mstar_at_number_density(m['dir'], snap, _ND_TARGETS)
+            for nt, (logm, lo, hi) in res.items():
+                per_n[nt][0].append(REDSHIFTS[snap])
+                per_n[nt][1].append(logm)
+                per_n[nt][2].append(lo)
+                per_n[nt][3].append(hi)
+        for nt, cols in per_n.items():
+            if len(cols[0]) >= 3:
+                curves[(m['label'], nt)] = tuple(np.array(c) for c in cols)
+
+    reachable = sorted({nt for (_, nt) in curves})
+    if not reachable:
+        print('  No number density is reachable in this volume -- nothing to plot.')
+        return
+    unreachable = [nt for nt in _ND_TARGETS if nt not in reachable]
+    if unreachable:
+        print('  Not reachable in this volume (fewer than '
+              f'{_ND_MIN_COUNT} galaxies): '
+              + ', '.join(f'{nt:.0e}' for nt in unreachable)
+              + ' Mpc^-3 -- run the 500 Mpc/h box for these.')
+
+    # Draw a single density: the JWST-matched one when the box reaches it,
+    # otherwise the rarest it can.
+    if _ND_PLOT_TARGET in reachable:
+        plot_n = _ND_PLOT_TARGET
+    else:
+        plot_n = reachable[0]
+        print(f'  n = {_ND_PLOT_TARGET:.0e} Mpc^-3 is out of reach here; '
+              f'plotting n = {plot_n:.0e} Mpc^-3 instead.')
+
+    # No figsize: inherit 8.34 x 6.25 from kieren_cohare_palatino_sty.mplstyle,
+    # matching the single-panel figures in paper_plots.py.
+    fig, ax = plt.subplots()
+
+    for m in models:
+        key = (m['label'], plot_n)
+        if key not in curves:
+            continue
+        zs, lm, lo, hi = curves[key]
+        o = np.argsort(zs)
+        ax.plot(zs[o], lm[o], color=m['color'], lw=m['lw'], ls=m['ls'],
+                zorder=m['z'] + 1)
+        ax.fill_between(zs[o], lo[o], hi[o], color=m['color'],
+                        alpha=0.2, lw=0, zorder=m['z'])
+
+    # Why does each curve stop where it does?
+    stops = []
+    for m in models:
+        key = (m['label'], plot_n)
+        if key not in curves:
+            continue
+        z_hi = curves[key][0].max()
+        reasons = [(REDSHIFTS[s], why) for (dd, s, nt), why
+                   in _ND_TRUNCATION.items()
+                   if dd == m['dir'] and nt == plot_n and REDSHIFTS[s] > z_hi]
+        if reasons:
+            z_next, why = min(reasons, key=lambda t: t[0])
+            stops.append(f"    {m['label']:20s} stops at z = {z_hi:.2f}; "
+                         f"at z = {z_next:.2f} it {why}")
+    if stops:
+        print(f'  Curve limits at n = {plot_n:.0e} Mpc^-3:')
+        print('\n'.join(stops))
+
+    # --- observations: identical to Plot F ------------------------------
+    epochs = _load_epochs()
+    if epochs is not None:
+        in_range = ((epochs['zbest'] >= _Z_RANGE[0]) &
+                    (epochs['zbest'] <= _Z_RANGE[1]))
+        ep = epochs[in_range]
+        ax.scatter(ep['zbest'], ep['stellar_mass_pipes_zgauss'],
+                   s=4, color="#656262", marker='o', alpha=0.2,
+                   linewidths=0.3, edgecolors='k', zorder=7)
+
+    _baggen_path = os.path.join(SIZE_OBS_DIR, 'baggen_disk_2023.ecsv')
+    if os.path.exists(_baggen_path):
+        df_b = pd.read_csv(_baggen_path, comment='#', sep=r'\s+')
+        df_b = df_b[(df_b['z_phot'] >= _Z_RANGE[0]) & (df_b['z_phot'] <= _Z_RANGE[1])]
+        if len(df_b) > 0:
+            ax.scatter(df_b['z_phot'], df_b['log_M_star'],
+                       s=18, color='darkorange', marker='D', alpha=0.85,
+                       linewidths=0.5, edgecolors='k', zorder=8)
+
+    _casey_path = os.path.join(SIZE_OBS_DIR, 'casey_disk_2024.ecsv')
+    if os.path.exists(_casey_path):
+        df_c = pd.read_csv(_casey_path, comment='#', sep=r'\s+')
+        df_c = df_c[(df_c['z_phot_BAGPIPES'] >= _Z_RANGE[0]) &
+                    (df_c['z_phot_BAGPIPES'] <= _Z_RANGE[1])]
+        if len(df_c) > 0:
+            log_m  = np.log10(df_c['M_star'])
+            log_eu = np.log10(df_c['M_star'] + df_c['M_star_err_up']) - log_m
+            ax.errorbar(df_c['z_phot_BAGPIPES'], log_m, yerr=log_eu,
+                        fmt='s', color='dodgerblue', markersize=5,
+                        markeredgecolor='k', markeredgewidth=0.5,
+                        ecolor='dodgerblue', elinewidth=1.0, capsize=2, zorder=8)
+
+    _sun_path = os.path.join(SIZE_OBS_DIR, 'sun_disk_2024.ecsv')
+    if os.path.exists(_sun_path):
+        df_s = pd.read_csv(_sun_path, comment='#', sep=r'\s+')
+        df_s = df_s[(df_s['z'] >= _Z_RANGE[0]) & (df_s['z'] <= _Z_RANGE[1])]
+        if len(df_s) > 0:
+            ax.errorbar(df_s['z'], df_s['log_M_star'], yerr=df_s['log_M_star_err'],
+                        fmt='^', color='seagreen', markersize=6,
+                        markeredgecolor='k', markeredgewidth=0.5,
+                        ecolor='seagreen', elinewidth=1.0, capsize=2, zorder=8)
+
+    _above = {"Maisie's", "GS-z11-0"}
+    for name, z, logm, err in _JWST_SPEC:
+        ax.errorbar(z, logm, yerr=err, fmt='*', color='gold', markersize=11,
+                    markeredgecolor='k', markeredgewidth=0.6,
+                    ecolor='gold', elinewidth=1.2, capsize=2, zorder=8)
+        dy, va = (8, 'bottom') if name in _above else (-8, 'top')
+        ax.annotate(name, xy=(z, logm), xytext=(0, dy),
+                    textcoords='offset points', fontsize=10, fontweight='bold',
+                    ha='center', va=va, color="#0E0C0C", zorder=9)
+
+    # --- legend: one entry per model ------------------------------------
+    handles = [mlines.Line2D([], [], color=m['color'], lw=m['lw'],
+                             ls=m['ls'], label=m['label'])
+               for m in models if (m['label'], plot_n) in curves]
+    _standard_legend(ax, loc='upper left', handles=handles,
+                     labels=[h.get_label() for h in handles])
+
+    ax.set_xlabel(r'Redshift')
+    ax.set_ylabel(r'$\log_{10}\,m_\star\ [M_\odot]$')
+    ax.set_xlim(_Z_RANGE[0], _Z_RANGE[1])
+    ax.set_ylim(6.5, 12.5)
+
+    fig.tight_layout()
+    save_figure(fig, os.path.join(OUTPUT_DIR, 'G_mstar_vs_z_ndensity' + OUTPUT_FORMAT))
+
+    # --- quotable numbers ------------------------------------------------
+    print('\n  log10 m* at fixed cumulative number density:')
+    header = '    {:>6s}'.format('z') + ''.join(
+        f'{m["label"][:9]:>11s}' for m in models)
+    for nt in reachable:
+        marker = '  <- plotted' if nt == plot_n else ''
+        print(f'   n = {nt:.0e} Mpc^-3{marker}')
+        print(header)
+        zs_all = sorted({z for key, val in curves.items()
+                         if key[1] == nt for z in val[0]}, reverse=True)
+        for z in zs_all:
+            row = f'    {z:6.2f}'
+            vals = {}
+            for m in models:
+                key = (m['label'], nt)
+                if key not in curves:
+                    row += f'{"--":>11s}'
+                    continue
+                zs, lm, lo, hi = curves[key]
+                i = np.argmin(np.abs(zs - z))
+                if abs(zs[i] - z) > 0.05:
+                    row += f'{"--":>11s}'
+                    continue
+                vals[m['label']] = lm[i]
+                row += f'{lm[i]:11.2f}'
+            if 'FFB galaxies' in vals and 'No FFB/MBK25 model' in vals:
+                row += (f'   (FFB - noFFB = '
+                        f'{vals["FFB galaxies"] - vals["No FFB/MBK25 model"]:+.2f} dex)')
+            print(row)
+
+
+def _ffb_lean_read(directory, snap, props, rows=None, row_props=()):
+    """
+    Read *props* for every resolved galaxy at *snap*, and *row_props* only for the
+    rows that rows(data) selects.
+
+    Built for plot 98 on the large boxes, where reading every property of every
+    galaxy at every snapshot takes hours: the full catalogue is read only for a
+    few narrow columns, and everything else is read by row index for the handful
+    of galaxies that need it.  The MIN_PARTICLES cut and the mass conversion match
+    read_snap_from_files().  rows() sees the converted *props* of one file.
+
+    Returns (data, row_data), or (None, None) if no file holds the snapshot.
+    """
+    key = f'Snap_{snap}'
+    out = {p: [] for p in props}
+    rout = {p: [] for p in row_props}
+    found = False
+    for fp in find_model_files(directory):
+        with h5.File(fp, 'r') as f:
+            if key not in f:
+                continue
+            found = True
+            g = f[key]
+            if 'Len' not in g or g['Len'].shape[0] == 0:
+                continue
+            keep = g['Len'][:] >= MIN_PARTICLES
+            d = {}
+            for p in props:
+                arr = g[p][:][keep]
+                d[p] = arr * MASS_CONVERT if p in _MASS_PROPS else arr
+                out[p].append(d[p])
+            if row_props:
+                m = rows(d) if rows is not None else np.ones(keep.sum(), dtype=bool)
+                idx = np.flatnonzero(keep)[m]
+                # h5py point selection is slow for long index lists, so a large
+                # selection reads the column whole and indexes it in memory.
+                whole = len(idx) > 0.02 * len(keep)
+                for p in row_props:
+                    if len(idx) == 0:
+                        arr = np.empty(0, dtype=g[p].dtype)
+                    else:
+                        arr = g[p][:][idx] if whole else g[p][idx]
+                    rout[p].append(arr * MASS_CONVERT if p in _MASS_PROPS else arr)
+    if not found:
+        return None, None
+    cat = lambda v: np.concatenate(v) if v else np.empty(0)
+    return ({p: cat(v) for p, v in out.items()},
+            {p: cat(v) for p, v in rout.items()})
+
+
 def plot_98_ffb_referee_diagnostics():
     """Print every number the FFB / MBK25 discussion needs.  Draws nothing.
 
@@ -12924,9 +13776,15 @@ def plot_98_ffb_referee_diagnostics():
       [10] the low-redshift FFB population: abundance, persistence, properties,
            and the same haloes in the no-FFB run
 
-    Galaxies are paired between runs by halo position (_match_centrals_by_position
-    criteria: within 1 kpc/h, Mvir equal to 0.1 per cent), never by GalaxyIndex
-    across runs.  GalaxyIndex is used only to follow a galaxy within one run.
+    Only FFBRegime and Type (plus Mvir where an expectation is computed) are read
+    for every galaxy; everything else is read by row for the FFB galaxies alone
+    (_ffb_lean_read).  The expectations of [3] and [6] are computed at every
+    snapshot above z = 3.9 and at z = 3, 2, 1.5, 1, 0.5, 0 below it, which is
+    where the full-catalogue Mvir read is expensive.
+
+    Galaxies are paired between runs by halo position (within 1 kpc/h, Mvir equal
+    to 0.1 per cent), never by GalaxyIndex across runs.  GalaxyIndex is used only
+    to follow a galaxy within one run.
     """
     from scipy.spatial import cKDTree
     from scipy.stats import poisson
@@ -12980,7 +13838,8 @@ def plot_98_ffb_referee_diagnostics():
               f'FFBRandomMode={int(rt.get("FFBRandomMode", 0))}  '
               f'FFBConcSigma={cfg[name]["sigma_c"]:g}')
         print(f'          box={hdr["box_size"]:g} Mpc/h  h={hdr["hubble_h"]}  '
-              f'volume={vol:.3e} Mpc^3  m_part={m_part:.3e} Msun')
+              f'volume={vol:.3e} Mpc^3  m_part={m_part:.3e} Msun  '
+              f'files={len(find_model_files(d))}')
     li_ok = (1, 6)
     mb_ok = (4, 7) if cfg['MBK25']['mode_key'] == 'FeedbackFreeModeOn' else (2,)
     if cfg['Li+24']['mode'] not in li_ok or cfg['MBK25']['mode'] not in mb_ok:
@@ -12989,7 +13848,7 @@ def plot_98_ffb_referee_diagnostics():
     if any(gate.values()):
         print('  FFBIgnoreRegime = 0 in at least one run: only CGM-regime (Regime = 0)')
         print('  haloes are eligible there, and every expectation below is summed over')
-        print('  eligible centrals only.')
+        print('  eligible centrals only (the Li+24 run\'s Regime is used for both).')
     if any(cfg[n]['persistent'] for n, _ in runs):
         print('  FFBRandomMode = 1 in at least one run: each galaxy keeps one draw for')
         print('  life, so [10] persistence measures that, not a fresh draw per snapshot.')
@@ -13001,6 +13860,11 @@ def plot_98_ffb_referee_diagnostics():
 
     snaps = [s for s in range(len(REDSHIFTS)) if REDSHIFTS[s] <= 15.5]
     snaps.sort(key=lambda s: -REDSHIFTS[s])
+    lowz_mvir = {_snap_nearest_z(REDSHIFTS, z) for z in (3.0, 2.0, 1.5, 1.0, 0.5, 0.0)}
+    h2_snaps = {_snap_nearest_z(REDSHIFTS, z) for z in (10.0, 6.0, 3.0)}
+
+    def needs_mvir(s):
+        return REDSHIFTS[s] >= 3.9 or s in lowz_mvir
 
     # Selection probabilities.  ffb_fraction_mbk25 root-finds per halo, far too
     # slow for a large box, so both curves are tabulated per snapshot on a fine
@@ -13019,6 +13883,21 @@ def plot_98_ffb_referee_diagnostics():
         out[ok] = np.interp(np.log10(mvir[ok]), lm_grid, table)
         return out
 
+    def wrap(pos):
+        pos = np.mod(pos.astype(np.float64), BOX_SIZE)
+        pos[pos >= BOX_SIZE] -= BOX_SIZE
+        return pos
+
+    def pair(pos_a, m_a, pos_b, m_b):
+        """Index into b for each a, -1 where no halo partner (periodic box)."""
+        if len(pos_a) == 0 or len(pos_b) == 0:
+            return np.full(len(pos_a), -1)
+        sep, j = cKDTree(wrap(pos_b), boxsize=BOX_SIZE).query(wrap(pos_a))
+        ok = (sep <= 1e-3) & np.isclose(m_a, m_b[j], rtol=1e-3)
+        return np.where(ok, j, -1)
+
+    xyz = lambda r: np.column_stack([r['Posx'], r['Posy'], r['Posz']])
+
     # ------------------------------------------------------------------ [2]
     head('[2] Threshold masses (log10 Msun) and the same in particles')
     print(f'  {"z":>5} {"Li+24":>7} {"MBK25":>7} {"c_med":>6} {"MBK-Li":>7} '
@@ -13034,8 +13913,6 @@ def plot_98_ffb_referee_diagnostics():
           ' concentration.')
 
     # ---------------------------------------------- pass 1 over snapshots
-    props1 = ['FFBRegime', 'Type', 'Mvir', 'Len', 'GalaxyIndex', 'ColdGas', 'H2gas',
-              'Regime']
     p_edges = np.array([0, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1.0001])
     r_edges = np.array([-1.5, -0.6, -0.3, -0.15, 0.0, 0.15, 0.3, 0.6, 1.5])
     per_snap = {n: [] for n, _ in runs}
@@ -13043,8 +13920,11 @@ def plot_98_ffb_referee_diagnostics():
     ratio = {n: np.zeros((len(r_edges) - 1, 2)) for n, _ in runs}     # N, obs
     reso = {n: [] for n, _ in runs}
     h2 = {n: np.zeros(4, dtype=np.int64) for n, _ in runs}
-    ffb_ids = {n: {} for n, _ in runs}          # snap -> set(GalaxyIndex), z <= 4.6
+    ffb_rows = {n: {} for n, _ in runs}     # snap -> FFB rows (all types)
+    j_pred = {}                             # snap -> (sum pl, sum pm, sum min, sum prod)
     p_tabs = {}
+    row_props = ['GalaxyIndex', 'Type', 'Mvir', 'Posx', 'Posy', 'Posz', 'H2gas']
+    is_ffb = lambda d: d['FFBRegime'] == 1
 
     print()
     print('  reading snapshots ...')
@@ -13053,42 +13933,59 @@ def plot_98_ffb_referee_diagnostics():
         p_tabs[s] = prob_tables(z)
         thr_li = ffb_threshold_mass_msun(z)
         for k, (name, d) in enumerate(runs):
-            g = load_snapshots(d, [s], props1).get(s)
+            props = ['FFBRegime', 'Type']
+            if needs_mvir(s):
+                props += ['Mvir'] + (['Regime'] if any(gate.values()) else [])
+            if z >= 9.9:
+                props += ['Len']
+            if s in h2_snaps:
+                props += ['ColdGas', 'H2gas']
+            g, rw = _ffb_lean_read(d, s, props, rows=is_ffb, row_props=row_props)
             if g is None or len(g['Type']) == 0:
-                per_snap[name].append((s, z, 0, 0, 0, 0, 0.0))
+                per_snap[name].append((s, z, 0, 0, 0, 0, np.nan))
                 continue
+            ffb_rows[name][s] = rw
             ffb = g['FFBRegime'] == 1
             cen = g['Type'] == 0
-            p = p_of(p_tabs[s][k], g['Mvir'][cen])
-            if gate[name]:
-                p[g['Regime'][cen] == 1] = 0.0      # hot-regime haloes are ineligible
+            e = np.nan
+            if needs_mvir(s):
+                p = p_of(p_tabs[s][k], g['Mvir'][cen])
+                hot = (g['Regime'][cen] == 1) if any(gate.values()) else None
+                if gate[name]:
+                    p[hot] = 0.0      # hot-regime haloes are ineligible
+                e = p.sum()
+                if k == 0:
+                    pm = p_of(p_tabs[s][1], g['Mvir'][cen])
+                    if gate['MBK25']:
+                        pm[hot] = 0.0
+                    mn = np.minimum(p, pm)
+                    j_pred[s] = (p.sum(), pm.sum(), mn.sum(), (p * pm).sum())
+                if z <= 6.0:
+                    b = np.digitize(p, p_edges) - 1
+                    for i in range(len(p_edges) - 1):
+                        m = b == i
+                        tail[name][i] += (m.sum(), p[m].sum(), ffb[cen][m].sum())
+                if 6.0 <= z <= 10.5:
+                    mv = g['Mvir'][cen]
+                    ok = mv > 0
+                    r = np.log10(mv[ok] / thr_li)
+                    b = np.digitize(r, r_edges) - 1
+                    for i in range(len(r_edges) - 1):
+                        m = b == i
+                        ratio[name][i] += (m.sum(), ffb[cen][ok][m].sum())
             per_snap[name].append((s, z, len(ffb), ffb.sum(), cen.sum(),
-                                   (ffb & cen).sum(), p.sum()))
-
-            if z <= 6.0:
-                b = np.digitize(p, p_edges) - 1
-                for i in range(len(p_edges) - 1):
-                    m = b == i
-                    tail[name][i] += (m.sum(), p[m].sum(), ffb[cen][m].sum())
-            if 6.0 <= z <= 10.5:
-                mv = g['Mvir'][cen]
-                ok = mv > 0
-                r = np.log10(mv[ok] / thr_li)
-                b = np.digitize(r, r_edges) - 1
-                for i in range(len(r_edges) - 1):
-                    m = b == i
-                    ratio[name][i] += (m.sum(), ffb[cen][ok][m].sum())
+                                   (ffb & cen).sum(), e))
             if z >= 9.9 and cen.any():
                 mvp = g['Mvir'][cen] / m_part
                 reso[name].append((s, z, cen.sum(), g['Len'][cen].min(),
                                    np.median(g['Len'][cen]), mvp.min(), np.median(mvp),
                                    (~ffb[cen]).sum(),
                                    mvp[~ffb[cen]].max() if (~ffb[cen]).any() else 0.0))
-            h2[name] += (ffb.sum(), (ffb & (g['H2gas'] > 0)).sum(),
-                         (~ffb & cen & (g['ColdGas'] > 0)).sum(),
-                         (~ffb & cen & (g['ColdGas'] > 0) & (g['H2gas'] > 0)).sum())
-            if z <= 4.6:
-                ffb_ids[name][s] = set(g['GalaxyIndex'][ffb].astype(np.int64).tolist())
+            h2[name][:2] += (len(rw['H2gas']), (rw['H2gas'] > 0).sum())
+            if s in h2_snaps:
+                nc = ~ffb & cen & (g['ColdGas'] > 0)
+                h2[name][2:] += (nc.sum(), (nc & (g['H2gas'] > 0)).sum())
+        print(f'    z = {z:6.2f} done')
 
     # ------------------------------------------------------------------ [3]
     head('[3] FFB counts per snapshot.  frac_all is Plot 23c (all galaxies); '
@@ -13097,14 +13994,16 @@ def plot_98_ffb_referee_diagnostics():
           f'{"cen":>6} {"exp_cen":>8} | {"MBK: N_FFB":>10} {"frac_all":>9} '
           f'{"n[Mpc^-3]":>10} {"cen":>6} {"exp_cen":>8}')
     for a, b in zip(per_snap['Li+24'], per_snap['MBK25']):
-        if a[3] == 0 and b[3] == 0 and a[6] < 0.05 and b[6] < 0.05:
+        if a[3] == 0 and b[3] == 0 and not (a[6] >= 0.05 or b[6] >= 0.05):
             continue
         cols = []
         for (s, z, n_all, n_ffb, n_cen, n_ffbc, e), name in ((a, 'Li+24'), (b, 'MBK25')):
             frac = n_ffb / n_all if n_all else np.nan
+            es = f'{e:8.1f}' if np.isfinite(e) else f'{"-":>8}'
             cols.append(f'{n_ffb:9d} {frac:9.2e} {n_ffb / cfg[name]["vol"]:10.2e} '
-                        f'{n_ffbc:6d} {e:8.1f}')
+                        f'{n_ffbc:6d} {es}')
         print(f'  {a[1]:6.2f} | ' + ' | '.join(cols))
+    print('  exp_cen "-": not computed below z = 3.9 except at z = 3, 2, 1.5, 1, 0.5, 0.')
 
     # ------------------------------------------------------------------ [4]
     head('[4] High-redshift resolution (z >= 10): centrals, particle counts, '
@@ -13138,6 +14037,7 @@ def plot_98_ffb_referee_diagnostics():
     # ------------------------------------------------------------------ [6]
     head('[6] Tail statistics, centrals at z <= 6: observed FFB against the sum '
          'of P, in bins of P')
+    print('  (every snapshot for 3.9 <= z <= 6; z = 3, 2, 1.5, 1, 0.5, 0 below that)')
     for name, _ in runs:
         print(f'  {name}')
         for (lo, hi), (n, e, o) in zip(zip(p_edges[:-1], p_edges[1:]), tail[name]):
@@ -13149,59 +14049,38 @@ def plot_98_ffb_referee_diagnostics():
 
     # ------------------------------------------------------------------ [7]
     head('[7] Halo matching and selection overlap (centrals, matched by position)')
-    print(f'  {"z":>6} {"Li":>6} {"MBK":>6} {"unmatched":>9} {"gid same":>8} | '
+    s10 = _snap_nearest_z(REDSHIFTS, 10.0)
+    full = [_ffb_lean_read(d, s10, _MATCH_PROPERTIES)[0] for _, d in runs]
+    if all(x is not None for x in full):
+        print(f'  full match of every central at z = {REDSHIFTS[s10]:.2f}:')
+        _match_centrals_by_position(full[0], full[1], BOX_SIZE)
+    del full
+    print(f'  {"z":>6} {"Li":>7} {"MBK":>7} {"gid same":>8} | '
           f'{"both/either":>11} {"both/Li":>7} {"both/MBK":>8} | '
           f'{"exp aligned":>11} {"exp indep":>9}')
-    pos_props = _MATCH_PROPERTIES + ['FFBRegime', 'Regime']
-
-    def _cen_pos(g):
-        w = np.where(g['Type'] == 0)[0]
-        pos = np.mod(np.column_stack([g['Posx'][w], g['Posy'][w], g['Posz'][w]])
-                     .astype(np.float64), BOX_SIZE)
-        pos[pos >= BOX_SIZE] -= BOX_SIZE
-        return w, pos
-
-    def _partner(src, w_src, sub, pos_src, dst, w_dst, tree_dst):
-        """Index into dst for each src row in *sub*, -1 where no halo partner."""
-        sep, j = tree_dst.query(pos_src[sub])
-        ok = (sep <= 1e-3) & np.isclose(src['Mvir'][w_src[sub]],
-                                        dst['Mvir'][w_dst[j]], rtol=1e-3)
-        return np.where(ok, w_dst[j], -1)
-
     for s in snaps:
         z = REDSHIFTS[s]
-        if z > 13.5:
+        if z > 13.5 or s not in ffb_rows['Li+24'] or s not in ffb_rows['MBK25']:
             continue
-        a = load_snapshots(PRIMARY_DIR, [s], pos_props).get(s)
-        b = load_snapshots(FFB_BK25_SMOOTH_DIR, [s], pos_props).get(s)
-        if a is None or b is None:
+        ra, rb = ffb_rows['Li+24'][s], ffb_rows['MBK25'][s]
+        ca, cb = ra['Type'] == 0, rb['Type'] == 0
+        na, nb = int(ca.sum()), int(cb.sum())
+        if na + nb == 0:
             continue
-        wa, pa = _cen_pos(a)
-        wb, pb = _cen_pos(b)
-        fa = a['FFBRegime'][wa] == 1
-        fb = b['FFBRegime'][wb] == 1
-        if not (fa.any() or fb.any()):
-            continue
-        ia = _partner(a, wa, np.where(fa)[0], pa, b, wb, cKDTree(pb, boxsize=BOX_SIZE))
-        ib = _partner(b, wb, np.where(fb)[0], pb, a, wa, cKDTree(pa, boxsize=BOX_SIZE))
-        unmatched = int((ia < 0).sum() + (ib < 0).sum())
-        both = int((b['FFBRegime'][ia[ia >= 0]] == 1).sum())
-        either = int(fa.sum() + fb.sum() - both)
-        gid_same = np.mean(np.concatenate([
-            a['GalaxyIndex'][wa[fa]][ia >= 0] == b['GalaxyIndex'][ia[ia >= 0]],
-            b['GalaxyIndex'][wb[fb]][ib >= 0] == a['GalaxyIndex'][ib[ib >= 0]]]))
-        pl = p_of(p_tabs[s][0], a['Mvir'][wa])
-        pm = p_of(p_tabs[s][1], a['Mvir'][wa])
-        if gate['Li+24']:
-            pl[a['Regime'][wa] == 1] = 0.0
-        if gate['MBK25']:
-            pm[a['Regime'][wa] == 1] = 0.0
-        j_al = np.minimum(pl, pm).sum() / (pl.sum() + pm.sum() - np.minimum(pl, pm).sum())
-        j_in = (pl * pm).sum() / (pl.sum() + pm.sum() - (pl * pm).sum())
-        print(f'  {z:6.2f} {int(fa.sum()):6d} {int(fb.sum()):6d} {unmatched:9d} '
-              f'{gid_same:8.3f} | {both / either:11.2f} '
-              f'{both / max(fa.sum(), 1):7.2f} {both / max(fb.sum(), 1):8.2f} | '
-              f'{j_al:11.2f} {j_in:9.2f}')
+        j = pair(xyz(ra)[ca], ra['Mvir'][ca], xyz(rb)[cb], rb['Mvir'][cb])
+        both = int((j >= 0).sum())
+        either = na + nb - both
+        gid_same = (np.mean(ra['GalaxyIndex'][ca][j >= 0] ==
+                            rb['GalaxyIndex'][cb][j[j >= 0]]) if both else np.nan)
+        if s in j_pred:
+            sl, sm, smin, sprod = j_pred[s]
+            pred = (f'{smin / (sl + sm - smin):11.2f} '
+                    f'{sprod / (sl + sm - sprod):9.2f}')
+        else:
+            pred = f'{"-":>11} {"-":>9}'
+        print(f'  {z:6.2f} {na:7d} {nb:7d} {gid_same:8.3f} | {both / either:11.2f} '
+              f'{both / max(na, 1):7.2f} {both / max(nb, 1):8.2f} | {pred}')
+    print('  both = FFB centrals of the two runs on the same halo (position + Mvir).')
     print('  exp aligned / exp indep: overlap the probabilities imply if each halo sits at')
     print('  the same quantile under both criteria / if the two draws are independent.')
 
@@ -13217,49 +14096,55 @@ def plot_98_ffb_referee_diagnostics():
     for z_t in (12.0, 10.0, 8.0, 6.0):
         s = _snap_nearest_z(REDSHIFTS, z_t)
         z = REDSHIFTS[s]
-        a = load_snapshots(PRIMARY_DIR, [s], pos_props).get(s)
-        b = load_snapshots(FFB_BK25_SMOOTH_DIR, [s], pos_props + ['Rvir', 'g_max']).get(s)
-        if a is None or b is None:
+        near = lambda d, lo, hi: ((d['Type'] == 0) & (d['Mvir'] > 0) &
+                                  (lambda f: (f > lo) & (f < hi))(
+                                      ffb_fraction(np.maximum(d['Mvir'], 1.0), z)))
+        _, rb = _ffb_lean_read(FFB_BK25_SMOOTH_DIR, s, ['Type', 'Mvir'],
+                               rows=lambda d: near(d, 0.05, 0.95),
+                               row_props=['Posx', 'Posy', 'Posz', 'Mvir', 'Rvir',
+                                          'g_max'])
+        _, ra = _ffb_lean_read(PRIMARY_DIR, s, ['Type', 'Mvir'],
+                               rows=lambda d: near(d, 0.01, 0.99),
+                               row_props=['Posx', 'Posy', 'Posz', 'Mvir',
+                                          'FFBRegime', 'Regime'])
+        if rb is None or ra is None or len(rb['Mvir']) == 0:
             continue
-        wa, pa = _cen_pos(a)
-        wb, pb = _cen_pos(b)
-        f_li_b = ffb_fraction(np.maximum(b['Mvir'][wb], 1.0), z)
-        sub = np.where((f_li_b > 0.05) & (f_li_b < 0.95) & (b['Rvir'][wb] > 0))[0]
-        if len(sub) == 0:
-            continue
-        jb = _partner(b, wb, sub, pb, a, wa, cKDTree(pa, boxsize=BOX_SIZE))
+        rb = {k: v[rb['Rvir'] > 0] for k, v in rb.items()}
+        jb = pair(xyz(rb), rb['Mvir'], xyz(ra), ra['Mvir'])
         keep = jb >= 0
-        sub, jb = sub[keep], jb[keep]
-        rows = wb[sub]
-        m_raw = b['Mvir'][rows] / MASS_CONVERT
-        r_raw = b['Rvir'][rows]
-        target = b['g_max'][rows] / (g_code * m_raw / r_raw**2)
+        if not keep.any():
+            continue
+        m_raw = rb['Mvir'][keep] / MASS_CONVERT
+        r_raw = rb['Rvir'][keep]
+        target = rb['g_max'][keep] / (g_code * m_raw / r_raw**2)
         c = np.array([_brentq(lambda x, t=t: x * x / (2.0 * mu(x)) - t, 1.0, 1e3)
                       if (1.0 / (2.0 * mu(1.0)) < t < 1e6 / (2.0 * mu(1e3))) else np.nan
                       for t in target])
-        u_c = _norm.cdf(np.log(c / _c_ishiyama21(b['Mvir'][rows], z)) / sigma_c)
-        li = a['FFBRegime'][jb] == 1
-        f_li = f_li_b[sub]
+        u_c = _norm.cdf(np.log(c / _c_ishiyama21(rb['Mvir'][keep], z)) / sigma_c)
+        li = ra['FFBRegime'][jb[keep]] == 1
+        f_li = ffb_fraction(rb['Mvir'][keep], z)
         ok = np.isfinite(u_c)
         if gate['Li+24']:
-            ok &= a['Regime'][jb] == 0      # gated haloes never reach the draw
+            ok &= ra['Regime'][jb[keep]] == 0      # gated haloes never reach the draw
         agree_new = np.mean(li[ok] == ((1.0 - u_c[ok]) < f_li[ok]))
         agree_old = np.mean(li[ok] == (u_c[ok] < f_li[ok]))
         print(f'  z={z:5.2f}  N={ok.sum():6d}   Li FFB == [1-u_c < f_Li]: {agree_new:.3f}'
               f'    (old convention [u_c < f_Li]: {agree_old:.3f})')
 
     # ------------------------------------------------------------------ [9]
-    head('[9] H2 in FFB galaxies (all snapshots z <= 15.5)')
+    head('[9] H2 in FFB galaxies')
+    zs_h2 = ', '.join(f'{REDSHIFTS[s]:.1f}' for s in sorted(h2_snaps, key=lambda s: -REDSHIFTS[s]))
     for name, _ in runs:
         n_f, n_f_h2, n_c, n_c_h2 = h2[name]
-        print(f'  {name}: FFB galaxies with H2 > 0: {n_f_h2} / {n_f};   non-FFB centrals '
-              f'with cold gas and H2 > 0: {n_c_h2} / {n_c}')
+        print(f'  {name}: FFB galaxies with H2 > 0: {n_f_h2} / {n_f} (all z <= 15.5);   '
+              f'non-FFB centrals with cold gas and H2 > 0: {n_c_h2} / {n_c} (z = {zs_h2})')
     print('  starformation_ffb() sets H2gas = 0 and forms stars from ColdGas directly.')
 
     # ----------------------------------------------------------------- [10]
     head('[10] Low-redshift FFB population (z <= 4.5)')
     for name, _ in runs:
-        ids = ffb_ids[name]
+        ids = {s: set(r['GalaxyIndex'].astype(np.int64).tolist())
+               for s, r in ffb_rows[name].items() if REDSHIFTS[s] <= 4.6}
         ss = sorted(ids, key=lambda s: -REDSHIFTS[s])
         n_tot = sum(len(ids[s]) for s in ss)
         prev = sum(len(ids[s] & ids[ss[k - 1]]) for k, s in enumerate(ss) if k > 0)
@@ -13270,38 +14155,42 @@ def plot_98_ffb_referee_diagnostics():
               f'mean {np.mean(per_gal) if per_gal else 0:.2f}, '
               f'max {max(per_gal) if per_gal else 0}')
 
-    props10 = _MATCH_PROPERTIES + ['FFBRegime', 'StellarMass', 'ColdGas', 'H2gas',
-                                   'H1gas', 'HotGas', 'CGMgas', 'BlackHoleMass',
-                                   'SfrDisk', 'SfrBulge', 'Regime']
+    props10 = ['Type', 'Mvir', 'Posx', 'Posy', 'Posz', 'StellarMass', 'ColdGas',
+               'H2gas', 'H1gas', 'HotGas', 'CGMgas', 'BlackHoleMass', 'SfrDisk',
+               'SfrBulge', 'Regime']
+    nf_props = ['Posx', 'Posy', 'Posz', 'Mvir', 'ColdGas', 'HotGas',
+                'BlackHoleMass', 'SfrDisk', 'SfrBulge']
     z_bins = [(0.0, 0.5), (0.5, 1.0), (1.0, 1.5), (1.5, 2.0), (2.0, 3.0), (3.0, 4.6)]
     for k, (name, d) in enumerate(runs):
         rec = []
-        for s in ffb_ids[name]:
-            if not ffb_ids[name][s]:
-                continue
+        for s, r0 in ffb_rows[name].items():
             z = REDSHIFTS[s]
-            g = load_snapshots(d, [s], props10).get(s)
-            w = np.where(g['FFBRegime'] == 1)[0]
-            n_part = {}
-            if have_noffb:
-                nf = load_snapshots(NOFFB_DIR, [s], props10).get(s)
-                if nf is not None:
-                    wg, pg = _cen_pos(g)
-                    wn, pn = _cen_pos(nf)
-                    cen_ffb = np.where(g['FFBRegime'][wg] == 1)[0]
-                    if len(cen_ffb) and len(wn):
-                        jn = _partner(g, wg, cen_ffb, pg, nf, wn,
-                                      cKDTree(pn, boxsize=BOX_SIZE))
-                        n_part = {int(wg[c]): int(j) for c, j in zip(cen_ffb, jn) if j >= 0}
+            if z > 4.6 or len(r0['Type']) == 0:
+                continue
+            _, g = _ffb_lean_read(d, s, ['FFBRegime'], rows=is_ffb, row_props=props10)
+            nf = None
+            cen = g['Type'] == 0
+            if have_noffb and cen.any():
+                # The no-FFB partner is found among centrals of exactly the same
+                # Mvir (a halo property, identical across runs), so positions are
+                # read only for those candidates rather than for every central.
+                mv = np.unique(g['Mvir'][cen])
+                _, nf = _ffb_lean_read(NOFFB_DIR, s, ['Type', 'Mvir'],
+                                       rows=lambda q: (q['Type'] == 0) &
+                                                      np.isin(q['Mvir'], mv),
+                                       row_props=nf_props)
+            jn = np.full(len(g['Type']), -1)
+            if nf is not None and len(nf['Mvir']):
+                jn[cen] = pair(xyz(g)[cen], g['Mvir'][cen], xyz(nf), nf['Mvir'])
             thr = (ffb_threshold_mass_msun(z) if name == 'Li+24'
                    else mbk25_threshold_median_c(z)[0])
-            p = p_of(p_tabs[s][k], g['Mvir'][w])
-            for i, pi in zip(w, p):
-                j = n_part.get(int(i))
+            p = p_of(p_tabs[s][k], g['Mvir'])
+            for i in range(len(g['Type'])):
+                j = jn[i]
                 nfv = ((nf['ColdGas'][j], nf['HotGas'][j], nf['BlackHoleMass'][j],
-                        nf['SfrDisk'][j] + nf['SfrBulge'][j]) if j is not None
+                        nf['SfrDisk'][j] + nf['SfrBulge'][j]) if j >= 0
                        else (np.nan,) * 4)
-                rec.append((z, int(g['Type'][i]), g['Mvir'][i], g['Mvir'][i] / thr, pi,
+                rec.append((z, int(g['Type'][i]), g['Mvir'][i], g['Mvir'][i] / thr, p[i],
                             g['StellarMass'][i], g['ColdGas'][i], g['H2gas'][i],
                             g['H1gas'][i], g['HotGas'][i], g['BlackHoleMass'][i],
                             g['SfrDisk'][i] + g['SfrBulge'][i], int(g['Regime'][i])) + nfv)
@@ -14352,20 +15241,20 @@ def plot_59_baryon_cooling_combined(primary, vanilla):
 # Registry of plot functions
 # z=0 plots take (primary, vanilla); evolution plots take (snapdata)
 Z0_PLOTS = {
-    31: plot_1_stellar_mass_function_ssfr_s,
-    30: plot_1_stellar_mass_function_ssfr_q,
-    32: plot_1_stellar_mass_function_ssfr_combined,
-    2: plot_2_baryon_fraction,
-    3: plot_3_gas_metallicity_vs_stellar_mass,
-    4: plot_4_bh_bulge_mass,
-    5: plot_5_stellar_halo_mass,
-    51: plot_5b_stellar_halo_mass_ratio,
-    6: plot_6_bulge_mass_size,
-    61: plot_6b_bulge_mass_size_median,
-    15: plot_15_sfr_vs_stellar_mass,
-    24: plot_24_mass_loading_vs_velocity,
-    58: plot_58_coolingrate_vs_mvir,
-    59: plot_59_baryon_cooling_combined,
+    # 31: plot_1_stellar_mass_function_ssfr_s,
+    # 30: plot_1_stellar_mass_function_ssfr_q,
+    # 32: plot_1_stellar_mass_function_ssfr_combined,
+    # 2: plot_2_baryon_fraction,
+    # 3: plot_3_gas_metallicity_vs_stellar_mass,
+    # 4: plot_4_bh_bulge_mass,
+    # 5: plot_5_stellar_halo_mass,
+    # 51: plot_5b_stellar_halo_mass_ratio,
+    # 6: plot_6_bulge_mass_size,
+    # 61: plot_6b_bulge_mass_size_median,
+    # 15: plot_15_sfr_vs_stellar_mass,
+    # 24: plot_24_mass_loading_vs_velocity,
+    # 58: plot_58_coolingrate_vs_mvir,
+    # 59: plot_59_baryon_cooling_combined,
 }
 
 EVOLUTION_PLOTS = {
@@ -14392,38 +15281,40 @@ EVOLUTION_PLOTS = {
 }
 
 STANDALONE_PLOTS = {
-    14: plot_14_density_evolution,
+    # 14: plot_14_density_evolution,
     142: plot_14c_density_evolution_mbk25,
-    141: plot_14b_density_evolution_methods,
-    16: plot_16_sfrd_history,
-    17: plot_17_smd_history,
+    # 141: plot_14b_density_evolution_methods,
+    # 16: plot_16_sfrd_history,
+    # 17: plot_17_smd_history,
     18: plot_18_smf_redshift_grid,
-    181: plot_18b_smf_redshift_grid_wide,
-    19: plot_19_smf_ffb_grid,
+    # 181: plot_18b_smf_redshift_grid_wide,
+    # 19: plot_19_smf_ffb_grid,
     192: plot_19c_smf_ffb_grid_mbk25,
-    191: plot_19b_smf_ffb_methods_grid,
-    20: plot_20_smf_lowz_grid,
-    21: plot_21_smf_lowz_lowmass_grid,
-    22: plot_22_regime_histogram,
+    # 191: plot_19b_smf_ffb_methods_grid,
+    # 20: plot_20_smf_lowz_grid,
+    # 21: plot_21_smf_lowz_lowmass_grid,
+    # 22: plot_22_regime_histogram,
     23: plot_23_ffb_histogram,
     231: plot_23b_ffb_histogram_bk25,
     232: plot_23c_ffb_fraction_bk25,
-    25: plot_25_hi_mass_ratio,
-    26: plot_26_h2_mass_ratio,
-    27: plot_27_cold_gas_mass_ratio,
-    28: plot_28_mdot_vs_mvir,
-    29: plot_29_mdot_vs_vvir,
-    32: plot_32_hi_mass_function,
-    33: plot_33_h2_mass_function,
-    34: plot_34_hi_mass_function_primary_uchuu,
-    35: plot_35_h2_mass_function_primary_uchuu,
+    # 25: plot_25_hi_mass_ratio,
+    # 26: plot_26_h2_mass_ratio,
+    # 27: plot_27_cold_gas_mass_ratio,
+    # 28: plot_28_mdot_vs_mvir,
+    # 29: plot_29_mdot_vs_vvir,
+    # 32: plot_32_hi_mass_function,
+    # 33: plot_33_h2_mass_function,
+    # 34: plot_34_hi_mass_function_primary_uchuu,
+    # 35: plot_35_h2_mass_function_primary_uchuu,
     36: plot_36_selection_thresholds_mz,
-    37: plot_37_cgm_census,
-    38: plot_38_hi_mass_function_recipes,
-    39: plot_39_gas_mass_functions_stacked,
-    40: plot_40_gas_mass_functions_stacked_recipes,
+    # 37: plot_37_cgm_census,
+    # 38: plot_38_hi_mass_function_recipes,
+    # 39: plot_39_gas_mass_functions_stacked,
+    # 40: plot_40_gas_mass_functions_stacked_recipes,
+    41: plot_F_mstar_ffb_scatter,
+    42: plot_G_mstar_vs_z_ndensity,
     98: plot_98_ffb_referee_diagnostics,
-    99: plot_99_referee_diagnostics,
+    # 99: plot_99_referee_diagnostics,
 }
 
 ALL_PLOTS = {**Z0_PLOTS, **EVOLUTION_PLOTS, **STANDALONE_PLOTS}

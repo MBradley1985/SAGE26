@@ -518,7 +518,7 @@ void test_ffb_mode0_all_normal()
         gals[i].FFBRegime = 1;  /* pre-set to 1 to verify it gets cleared */
     }
 
-    determine_and_store_ffb_regime(3, 10.0, 0.0, 1.0, gals, &rp);
+    determine_and_store_ffb_regime(3, 10.0, 0, 0.0, 1.0, gals, &rp);
 
     ASSERT_EQUAL_INT(0, gals[0].FFBRegime, "Galaxy 0: FFBRegime=0 when mode off");
     ASSERT_EQUAL_INT(0, gals[1].FFBRegime, "Galaxy 1: FFBRegime=0 when mode off");
@@ -547,19 +547,19 @@ void test_ffb_mode1_respects_persistent_random()
 
     /* Low random → should be FFB (random < 0.5) */
     gal.FFBRandom = 0.1f;
-    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0, 0.0, 1.0, &gal, &rp);
     ASSERT_EQUAL_INT(1, gal.FFBRegime, "FFBRandom=0.1 < f_ffb=0.5 → FFB");
 
     /* High random → should NOT be FFB (random > 0.5) */
     gal.FFBRandom = 0.9f;
-    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0, 0.0, 1.0, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "FFBRandom=0.9 > f_ffb=0.5 → normal");
 
     /* Deterministic: same random gives same result */
     gal.FFBRandom = 0.1f;
-    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0, 0.0, 1.0, &gal, &rp);
     int first = gal.FFBRegime;
-    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0, 0.0, 1.0, &gal, &rp);
     int second = gal.FFBRegime;
     ASSERT_EQUAL_INT(first, second,
                      "Same FFBRandom gives same result (deterministic)");
@@ -584,7 +584,7 @@ void test_ffb_hot_regime_excluded()
     gal.FFBRandom = 0.01f;       /* very low random → would be FFB */
     gal.Regime = 1;              /* but in hot CGM regime */
 
-    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0, 0.0, 1.0, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "Hot-regime galaxy is not FFB");
 }
 
@@ -603,7 +603,7 @@ void test_ffb_mode2_gmax_threshold()
     gal_big.Rvir = 0.05;    /* compact → high g_max */
     gal_big.Regime = 0;
 
-    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gal_big, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, 0.0, 1.0, &gal_big, &rp);
 
     /* Small halo at low z: should NOT be FFB */
     struct GALAXY gal_small;
@@ -612,7 +612,7 @@ void test_ffb_mode2_gmax_threshold()
     gal_small.Rvir = 0.03;
     gal_small.Regime = 0;
 
-    determine_and_store_ffb_regime(1, 0.0, 0.0, 1.0, &gal_small, &rp);
+    determine_and_store_ffb_regime(1, 0.0, 0, 0.0, 1.0, &gal_small, &rp);
 
     ASSERT_EQUAL_INT(1, gal_big.FFBRegime,   "Massive compact halo at z=10 is FFB");
     ASSERT_EQUAL_INT(0, gal_small.FFBRegime,  "Small halo at z=0 is not FFB");
@@ -659,8 +659,8 @@ void test_ffb_mode3_uses_stored_concentration()
                         "Higher concentration → higher g_max");
 
     /* Verify determine_and_store_ffb_regime runs without crashing */
-    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gals[0], &rp);
-    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gals[1], &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, 0.0, 1.0, &gals[0], &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, 0.0, 1.0, &gals[1], &rp);
 
     printf("  g_max(c=20) = %.4e,  g_max(c=2) = %.4e (double precision)\n",
            gmax_hi, gmax_lo);
@@ -687,7 +687,7 @@ void test_ffb_merged_galaxies_skipped()
     gal.mergeType = 1;            /* merged */
     gal.FFBRegime = 99;           /* sentinel value */
 
-    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0, 0.0, 1.0, &gal, &rp);
 
     /* mergeType > 0 is skipped, so FFBRegime should be untouched */
     ASSERT_EQUAL_INT(99, gal.FFBRegime,
@@ -711,7 +711,7 @@ void test_ffb_mode4_basic_threshold()
     gal_big.Regime = 0;
     gal_big.FFBRandom = 0.5f;
 
-    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gal_big, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, 0.0, 1.0, &gal_big, &rp);
     ASSERT_EQUAL_INT(1, gal_big.FFBRegime,
                      "Massive halo at z=10 is FFB (σ_c=0)");
 
@@ -723,7 +723,7 @@ void test_ffb_mode4_basic_threshold()
     gal_small.Regime = 0;
     gal_small.FFBRandom = 0.5f;
 
-    determine_and_store_ffb_regime(1, 0.0, 0.0, 1.0, &gal_small, &rp);
+    determine_and_store_ffb_regime(1, 0.0, 0, 0.0, 1.0, &gal_small, &rp);
     ASSERT_EQUAL_INT(0, gal_small.FFBRegime,
                      "Small halo at z=0 is not FFB (σ_c=0)");
 
@@ -740,6 +740,7 @@ void test_ffb_mode4_scatter_splits_identical_halos()
     init_millennium_params(&rp);
     rp.FeedbackFreeModeOn = 4;
     rp.FFBConcSigma       = 0.2;  /* σ_c = 0.2 in ln(c) */
+    rp.FFBRandomMode      = 1;    /* read FFBRandom, so the two draws differ */
 
     /* Two identical halos near the BK25 threshold with different FFBRandom.
        With scatter, FFBRandom maps to different concentration quantiles,
@@ -753,21 +754,23 @@ void test_ffb_mode4_scatter_splits_identical_halos()
         gals[i].Rvir = 0.015;   /* ~15 kpc/h */
         gals[i].Regime = 0;
     }
-    /* FFBRandom=0.01 → ~2.3σ below mean → lower c → lower g_max
-       FFBRandom=0.99 → ~2.3σ above mean → higher c → higher g_max */
+    /* The concentration quantile is 1 - FFBRandom, so a low draw favours FFB
+       as it does in the Li+24 modes:
+       FFBRandom=0.01 → quantile 0.99, ~2.3σ above mean → higher c → higher g_max
+       FFBRandom=0.99 → quantile 0.01, ~2.3σ below mean → lower c → lower g_max */
     gals[0].FFBRandom = 0.01f;
     gals[1].FFBRandom = 0.99f;
 
-    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gals[0], &rp);
-    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gals[1], &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, 0.0, 1.0, &gals[0], &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, 0.0, 1.0, &gals[1], &rp);
 
     /* Both should have valid g_max */
     ASSERT_GREATER_THAN(gals[0].g_max, 0.0, "g_max stored for low-scatter galaxy");
     ASSERT_GREATER_THAN(gals[1].g_max, 0.0, "g_max stored for high-scatter galaxy");
 
-    /* High-scatter galaxy should have higher g_max (higher c → higher g_max) */
-    ASSERT_GREATER_THAN(gals[1].g_max, gals[0].g_max,
-                        "Higher FFBRandom (higher c quantile) gives higher g_max");
+    /* The low-draw galaxy has the higher concentration, so the higher g_max */
+    ASSERT_GREATER_THAN(gals[0].g_max, gals[1].g_max,
+                        "Lower FFBRandom (higher c quantile) gives higher g_max");
 
     printf("  g_max[u=0.01] = %.4e (regime=%d), g_max[u=0.99] = %.4e (regime=%d)\n",
            gals[0].g_max, gals[0].FFBRegime, gals[1].g_max, gals[1].FFBRegime);
@@ -796,12 +799,12 @@ void test_ffb_mode4_zero_sigma_matches_mode2()
 
     /* Mode 2: BK25 with Ishiyama+21 table, hard cutoff */
     rp.FeedbackFreeModeOn = 2;
-    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gal_m2, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, 0.0, 1.0, &gal_m2, &rp);
 
     /* Mode 4: BK25 with Ishiyama+21 table + scatter, but σ_c = 0 */
     rp.FeedbackFreeModeOn = 4;
     rp.FFBConcSigma       = 0.0;
-    determine_and_store_ffb_regime(1, 10.0, 0.0, 1.0, &gal_m4, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, 0.0, 1.0, &gal_m4, &rp);
 
     ASSERT_EQUAL_INT(gal_m2.FFBRegime, gal_m4.FFBRegime,
                      "Same FFBRegime when σ_c = 0");
@@ -830,12 +833,12 @@ void test_ffb_mode4_deterministic()
     gal.Regime = 0;
     gal.FFBRandom = 0.42f;
 
-    determine_and_store_ffb_regime(1, 5.0, 0.0, 1.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, 5.0, 0, 0.0, 1.0, &gal, &rp);
     int regime1 = gal.FFBRegime;
     double gmax1 = gal.g_max;
 
     /* Call again — same FFBRandom should give identical result */
-    determine_and_store_ffb_regime(1, 5.0, 0.0, 1.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, 5.0, 0, 0.0, 1.0, &gal, &rp);
     int regime2 = gal.FFBRegime;
     double gmax2 = gal.g_max;
 
@@ -843,6 +846,91 @@ void test_ffb_mode4_deterministic()
                      "Same FFBRandom gives same FFBRegime");
     ASSERT_EQUAL_DOUBLE((double)gmax1, (double)gmax2,
                         "Same FFBRandom gives same g_max");
+}
+
+void test_ffb_fresh_draw_keyed_on_halo()
+{
+    BEGIN_TEST("FFBRandomMode=0 draw depends on the halo and snapshot, not the rand() stream");
+
+    struct params rp;
+    init_millennium_params(&rp);
+    rp.FeedbackFreeModeOn = 4;
+    rp.FFBConcSigma       = 0.2;
+    rp.FFBRandomMode      = 0;  /* fresh draw each snapshot, keyed on the halo */
+
+    struct GALAXY gal;
+    memset(&gal, 0, sizeof(struct GALAXY));
+    gal.Mvir = 1.0;
+    gal.Rvir = 0.05;
+    gal.Regime = 0;
+    gal.MostBoundID = 123456789LL;
+
+    determine_and_store_ffb_regime(1, 5.0, 30, 0.0, 1.0, &gal, &rp);
+    const double gmax1 = gal.g_max;
+
+    /* Move the rand() stream on, as a run with different galaxy counts would */
+    for(int i = 0; i < 1000; i++) (void)rand();
+    determine_and_store_ffb_regime(1, 5.0, 30, 0.0, 1.0, &gal, &rp);
+    ASSERT_EQUAL_DOUBLE(gmax1, (double)gal.g_max,
+                        "Same halo and snapshot give the same draw after rand() has advanced");
+
+    gal.MostBoundID = 987654321LL;
+    determine_and_store_ffb_regime(1, 5.0, 30, 0.0, 1.0, &gal, &rp);
+    ASSERT_TRUE(gal.g_max != gmax1, "A different halo gets a different draw");
+
+    gal.MostBoundID = 123456789LL;
+    determine_and_store_ffb_regime(1, 5.0, 31, 0.0, 1.0, &gal, &rp);
+    ASSERT_TRUE(gal.g_max != gmax1, "The same halo gets a new draw at the next snapshot");
+}
+
+void test_ffb_li24_and_bk25_select_the_same_haloes()
+{
+    BEGIN_TEST("Li+24 (mode 1) and BK25 scatter (mode 4) share each halo's draw");
+
+    struct params rp;
+    init_millennium_params(&rp);
+    rp.FFBConcSigma  = 0.2;
+    rp.FFBRandomMode = 0;
+
+    /* Haloes at the Li+24 threshold mass at z = 10, where both selection
+       probabilities are near one half.  Rvir follows the 200c definition:
+       R^3 = 2 G M / (200 H^2), with H in km/s per Mpc/h. */
+    const double z = 10.0;
+    const double M = calculate_ffb_threshold_mass(z, &rp);
+    const double E2 = 0.25 * pow(1.0 + z, 3.0) + 0.75;
+    const double H2 = 100.0 * 100.0 * E2;
+    /* G in code units (Mpc/h, km/s, 10^10 Msun/h).  Computed here rather than
+       taken from rp.G: init_millennium_params divides by one power of the unit
+       length, not three, which cancels in g_max/g_crit but not in R. */
+    const double G_code = GRAVITY / pow(rp.UnitLength_in_cm, 3.0)
+                        * rp.UnitMass_in_g * rp.UnitTime_in_s * rp.UnitTime_in_s;
+    const double R = cbrt(2.0 * G_code * M / (200.0 * H2));
+
+    const int n = 2000;
+    int agree = 0, n_li = 0, n_bk = 0;
+    for(int i = 0; i < n; i++) {
+        struct GALAXY gal;
+        memset(&gal, 0, sizeof(struct GALAXY));
+        gal.Mvir = M;
+        gal.Rvir = R;
+        gal.Regime = 0;
+        gal.MostBoundID = 1000003LL * (i + 1);
+
+        rp.FeedbackFreeModeOn = 1;
+        determine_and_store_ffb_regime(1, z, 12, 0.0, 1.0, &gal, &rp);
+        const int li = gal.FFBRegime;
+        rp.FeedbackFreeModeOn = 4;
+        determine_and_store_ffb_regime(1, z, 12, 0.0, 1.0, &gal, &rp);
+        const int bk = gal.FFBRegime;
+
+        n_li += li; n_bk += bk; agree += (li == bk);
+    }
+    printf("  Li+24 selects %d, BK25 selects %d, agree on %d of %d haloes\n",
+           n_li, n_bk, agree, n);
+    ASSERT_TRUE(n_li > n / 4 && n_li < 3 * n / 4, "Li+24 selects about half at its threshold");
+    /* Independent draws would agree on about half; a shared draw agrees on
+       all but the haloes between the two probabilities. */
+    ASSERT_TRUE(agree > (8 * n) / 10, "The two criteria agree on more than 80% of haloes");
 }
 
 void test_ffb_mode5_hard_threshold()
@@ -863,7 +951,7 @@ void test_ffb_mode5_hard_threshold()
     gal_above.Rvir = 0.1;
     gal_above.Regime = 0;
 
-    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal_above, &rp);
+    determine_and_store_ffb_regime(1, z, 0, 0.0, 1.0, &gal_above, &rp);
     ASSERT_EQUAL_INT(1, gal_above.FFBRegime,
                      "Halo above M_thresh is FFB");
 
@@ -874,7 +962,7 @@ void test_ffb_mode5_hard_threshold()
     gal_below.Rvir = 0.1;
     gal_below.Regime = 0;
 
-    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal_below, &rp);
+    determine_and_store_ffb_regime(1, z, 0, 0.0, 1.0, &gal_below, &rp);
     ASSERT_EQUAL_INT(0, gal_below.FFBRegime,
                      "Halo below M_thresh is not FFB");
 }
@@ -898,17 +986,17 @@ void test_ffb_mode5_ignores_random()
     gal.Regime = 0;
 
     gal.FFBRandom = 0.01f;
-    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0, 0.0, 1.0, &gal, &rp);
     ASSERT_EQUAL_INT(1, gal.FFBRegime, "FFB with FFBRandom=0.01");
 
     gal.FFBRandom = 0.99f;
-    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0, 0.0, 1.0, &gal, &rp);
     ASSERT_EQUAL_INT(1, gal.FFBRegime, "FFB with FFBRandom=0.99 (ignored)");
 
     /* Halo below threshold: also ignores FFBRandom */
     gal.Mvir = M_thresh * 0.5;
     gal.FFBRandom = 0.01f;
-    determine_and_store_ffb_regime(1, z, 0.0, 1.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, z, 0, 0.0, 1.0, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "Not FFB below threshold regardless of FFBRandom");
 }
 
@@ -951,10 +1039,10 @@ void test_ffb_mode8_accretion_triggers_ffb()
     struct GALAXY gal;
     init_mode8_galaxy(&gal);
 
-    determine_and_store_ffb_regime(1, 10.0, MODE8_LOW, MODE8_DT, &gal, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, MODE8_LOW, MODE8_DT, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "Low accretion: shell t_ff is not below t_fbk");
 
-    determine_and_store_ffb_regime(1, 10.0, MODE8_HIGH, MODE8_DT, &gal, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, MODE8_HIGH, MODE8_DT, &gal, &rp);
     ASSERT_EQUAL_INT(1, gal.FFBRegime, "High accretion: shell t_ff drops below t_fbk");
 }
 
@@ -977,8 +1065,8 @@ void test_ffb_mode8_uses_no_cold_gas()
     gal_gasrich.ColdGas = 10.0f;
     gal_gasrich.DiskScaleRadius = 1.0e-5f;   /* extremely compact disc */
 
-    determine_and_store_ffb_regime(1, 10.0, MODE8_HIGH, MODE8_DT, &gal_gasless, &rp);
-    determine_and_store_ffb_regime(1, 10.0, MODE8_HIGH, MODE8_DT, &gal_gasrich, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, MODE8_HIGH, MODE8_DT, &gal_gasless, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, MODE8_HIGH, MODE8_DT, &gal_gasrich, &rp);
     ASSERT_EQUAL_INT(gal_gasless.FFBRegime, gal_gasrich.FFBRegime,
                      "ColdGas and DiskScaleRadius do not affect the shell criterion");
 }
@@ -1000,12 +1088,12 @@ void test_ffb_mode8_compact_halo_more_likely_ffb()
 
     struct GALAXY gal_big;
     init_mode8_galaxy(&gal_big);
-    determine_and_store_ffb_regime(1, 10.0, infall, MODE8_DT, &gal_big, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, infall, MODE8_DT, &gal_big, &rp);
 
     struct GALAXY gal_compact;
     init_mode8_galaxy(&gal_compact);
     gal_compact.Rvir = (float)(MODE8_RVIR / 2.0);
-    determine_and_store_ffb_regime(1, 10.0, infall, MODE8_DT, &gal_compact, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, infall, MODE8_DT, &gal_compact, &rp);
 
     ASSERT_EQUAL_INT(0, gal_big.FFBRegime, "Full-size halo does not reach n_fbk");
     ASSERT_EQUAL_INT(1, gal_compact.FFBRegime, "Compact halo's denser stream does");
@@ -1024,11 +1112,11 @@ void test_ffb_mode8_feedback_delay_monotonic()
     init_mode8_galaxy(&gal);
 
     rp.FFBFeedbackDelayMyr = 1.0e-3;
-    determine_and_store_ffb_regime(1, 10.0, MODE8_LOW, MODE8_DT, &gal, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, MODE8_LOW, MODE8_DT, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "Vanishingly small t_fbk: never FFB");
 
     rp.FFBFeedbackDelayMyr = 1.0e3;
-    determine_and_store_ffb_regime(1, 10.0, MODE8_LOW, MODE8_DT, &gal, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, MODE8_LOW, MODE8_DT, &gal, &rp);
     ASSERT_EQUAL_INT(1, gal.FFBRegime, "Enormous t_fbk: always FFB");
 }
 
@@ -1045,30 +1133,30 @@ void test_ffb_mode8_invalid_halo()
     struct GALAXY gal;
 
     init_mode8_galaxy(&gal);
-    determine_and_store_ffb_regime(1, 10.0, 0.0, MODE8_DT, &gal, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, 0.0, MODE8_DT, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "No accretion this step: not FFB");
 
     init_mode8_galaxy(&gal);
-    determine_and_store_ffb_regime(1, 10.0, -1.0, MODE8_DT, &gal, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, -1.0, MODE8_DT, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "Shrinking halo (negative infall): not FFB");
 
     init_mode8_galaxy(&gal);
-    determine_and_store_ffb_regime(1, 10.0, MODE8_HIGH, 0.0, &gal, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, MODE8_HIGH, 0.0, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "Zero timestep: not FFB");
 
     init_mode8_galaxy(&gal);
     gal.Rvir = 0.0f;
-    determine_and_store_ffb_regime(1, 10.0, MODE8_HIGH, MODE8_DT, &gal, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, MODE8_HIGH, MODE8_DT, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "Zero Rvir: not FFB");
 
     init_mode8_galaxy(&gal);
     gal.Vvir = 0.0f;
-    determine_and_store_ffb_regime(1, 10.0, MODE8_HIGH, MODE8_DT, &gal, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, MODE8_HIGH, MODE8_DT, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "Zero Vvir: not FFB");
 
     init_mode8_galaxy(&gal);
     gal.Type = 1;
-    determine_and_store_ffb_regime(1, 10.0, MODE8_HIGH, MODE8_DT, &gal, &rp);
+    determine_and_store_ffb_regime(1, 10.0, 0, MODE8_HIGH, MODE8_DT, &gal, &rp);
     ASSERT_EQUAL_INT(0, gal.FFBRegime, "Satellite: no cosmic-web stream of its own");
 }
 
@@ -1122,6 +1210,8 @@ int main()
     test_ffb_mode4_scatter_splits_identical_halos();
     test_ffb_mode4_zero_sigma_matches_mode2();
     test_ffb_mode4_deterministic();
+    test_ffb_fresh_draw_keyed_on_halo();
+    test_ffb_li24_and_bk25_select_the_same_haloes();
     test_ffb_mode5_hard_threshold();
     test_ffb_mode5_ignores_random();
     test_ffb_mode8_accretion_triggers_ffb();

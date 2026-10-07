@@ -428,8 +428,8 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
      * the classification here rather than before it leaves modes 1-7
      * unchanged. */
     if (run_params->FeedbackFreeModeOn >= 1) {
-        determine_and_store_ffb_regime(ngal, Zcurr, infallingGas, deltaT_total,
-                                       galaxies, run_params);
+        determine_and_store_ffb_regime(ngal, Zcurr, halo_snapnum, infallingGas,
+                                       deltaT_total, galaxies, run_params);
     }
 
     /* t_dyn = Rvir [Mpc/h] / Vvir [km/s] * KM_PER_MPC [km/Mpc] gives t_dyn in seconds. */
