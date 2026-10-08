@@ -1801,8 +1801,10 @@ def load_mcleod_rho_sfr_2024_data():
         table = Table.read(filename, format='ascii.ecsv')
         z = table['z']
         re = table['log_rho_sfr'] + imf_shift('McLeod+24')
-        re_err_plus = np.zeros_like(re)
-        re_err_minus = np.zeros_like(re)
+        # The file gives errors on log rho_UV.  log rho_SFR is log rho_UV minus a
+        # constant, so the same errors in dex apply to it.
+        re_err_plus = table['e_log_rho_uv_upper']
+        re_err_minus = table['e_log_rho_uv_lower']
         return z, re, re_err_plus, re_err_minus
     except Exception as e:
         print(f"Error loading McLeod 2024 SFRD data: {e}")
@@ -6016,7 +6018,7 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
     # The figure is drawn directly against redshift, down to z = 5.  No snapshot
     # sits at z = 5 exactly, so the axis is cut there and the segment to the next
     # snapshot below (z = 4.89) runs to the edge.
-    z_min = 5.0
+    z_min = 3.0
 
     import matplotlib.lines as mlines
 
@@ -7006,6 +7008,57 @@ def plot_14c_density_evolution_mbk25():
                 _ti = np.argmin(np.abs(_zm - _tz))
                 if np.abs(_zm[_ti] - _tz) < 1.0:
                     print(f"           z~{_zm[_ti]:.1f}: A={_ma[_vm][_ti]:.2f}, B={_mb[_vm][_ti]:.2f}, Δ={_dm[_ti]:+.2f} dex ({10**_dm[_ti]:.1f}x)")
+    print("="*60 + "\n")
+
+    # Each model against each observational point: model minus observation in
+    # dex, and in units of the point's error bar (upper error when the model
+    # lies above, lower when below).  Observations carry the IMF shift that
+    # imf_shift() applies; datasets listed as "IMF NOT ESTABLISHED" in the audit
+    # at the top of the run are unshifted, so read their offsets with that in mind.
+    print("="*60)
+    print("MODELS AGAINST OBSERVATIONS (model - obs, dex; [n] = offset / obs error)")
+    print("="*60)
+    _models14c = [('noFFB',      sfrd_noffb_sorted,           smd_noffb_sorted),
+                  ('Li a=0.2',   sfrd_ffb_sorted,             smd_ffb_sorted),
+                  ('MBK a=0.2',  sfrd_ffb_bk25_sorted,        smd_ffb_bk25_sorted),
+                  ('Li a=1.0',   sfrd_ffb100_sorted,          smd_ffb100_sorted),
+                  ('MBK a=1.0',  sfrd_ffb_bk25_ffb100_sorted, smd_ffb_bk25_ffb100_sorted)]
+    _obs14c = [('CSFRD', 'Madau & Dickinson 14', load_madau_dickinson_2014_data, 1),
+               ('CSFRD', 'Oesch+18',             load_oesch_sfrd_2018_data, 1),
+               ('CSFRD', 'McLeod+24',            load_mcleod_rho_sfr_2024_data, 1),
+               ('CSFRD', 'Harikane+23',          load_harikane_sfr_density_2023_data, 1),
+               ('SMD',   'Madau & Dickinson 14', load_madau_dickinson_smd_2014_data, 2),
+               ('SMD',   'Kikuchihara+20',       load_kikuchihara_smd_2020_data, 2),
+               ('SMD',   'Papovich+23',          load_papovich_smd_2023_data, 2)]
+    for _q, _name, _loader, _col in _obs14c:
+        try:
+            _zo, _yo, _ep, _em = _loader()
+        except Exception as _exc:                            # noqa: BLE001
+            print(f"  {_q} {_name}: not loaded ({_exc})")
+            continue
+        if _zo is None:
+            continue
+        _zo = np.asarray(_zo, float); _yo = np.asarray(_yo, float)
+        _ep = np.abs(np.asarray(_ep, float)); _em = np.abs(np.asarray(_em, float))
+        print(f"\n  {_q}  {_name}")
+        print("    " + f"{'z':>5} {'obs':>7} " + ' '.join(f"{m[0]:>15}" for m in _models14c))
+        _rows = {m[0]: [] for m in _models14c}
+        for _k in np.argsort(_zo):
+            _cells = []
+            for _mname, _sf, _sm in _models14c:
+                _y = _sf if _col == 1 else _sm
+                _v = ~np.isnan(_y)
+                if _v.sum() < 2 or not (z_sorted[_v].min() <= _zo[_k] <= z_sorted[_v].max()):
+                    _cells.append(f"{'--':>15}"); continue
+                _d = float(np.interp(_zo[_k], z_sorted[_v], _y[_v])) - _yo[_k]
+                _e = _ep[_k] if _d > 0 else _em[_k]
+                _n = _d / _e if _e > 0 else np.nan
+                _rows[_mname].append(_d)
+                _cells.append(f"{_d:+7.2f} [{_n:+5.1f}]")
+            if any(c.strip() != '--' for c in _cells):
+                print(f"    {_zo[_k]:5.2f} {_yo[_k]:7.2f} " + ' '.join(_cells))
+        print("    median " + ' '.join(f"{m[0]}: {np.median(_rows[m[0]]):+.2f}"
+                                       for m in _models14c if _rows[m[0]]))
     print("="*60 + "\n")
 
     print("Generating density evolution plots...")
@@ -12735,16 +12788,20 @@ def plot_36_selection_thresholds_mz():
         print('    %5.1f %12.3e %14.0f %14.0f'
               % (zq, M, M / m_part['Millennium'], M / m_part['miniUchuu']))
 
-    # Section 5.2: sigmoid width <-> concentration scatter equivalence.
-    d_logM = delta_log_M
-    sig_logistic = np.pi * d_logM / np.sqrt(3.0)
-    sig_lnc_implied = sig_logistic / 1.5
-    sig_lnc_adopted = 0.2
-    print('  transition-width equivalence (Section 5.2):')
-    print('    logistic sigma for dlogM=%.2f : %.3f dex' % (d_logM, sig_logistic))
-    print('    implied sigma_ln c            : %.3f   (adopted %.2f -> differ by %.1f%%)'
-          % (sig_lnc_implied, sig_lnc_adopted,
-             100.0 * abs(sig_lnc_implied - sig_lnc_adopted) / sig_lnc_adopted))
+    # Section 5.2: the halo-mass range over which each selection rises from 16
+    # to 84 per cent.  For the Li+24 sigmoid this is 2 dlogM ln(0.84/0.16); for
+    # MBK25 it is 2 sigma of a Gaussian fitted to its selection probability.
+    from scipy.optimize import curve_fit as _cf
+    from scipy.stats import norm as _nrm
+    print('  transition widths, 16 -> 84 per cent selected (Section 5.2):')
+    print('    Li+24 sigmoid, dlogM=%.2f : %.2f dex' % (delta_log_M, 2.0 * delta_log_M * np.log(0.84 / 0.16)))
+    for zq in (6.0, 9.0, 12.0):
+        M0 = float(np.interp(zq, z_grid, M_mbk_med))
+        lm = np.linspace(np.log10(M0) - 1.2, np.log10(M0) + 1.2, 241)
+        (m0, sg), _ = _cf(lambda x, m, s_: _nrm.cdf((x - m) / s_), lm,
+                          ffb_fraction_mbk25(10**lm, zq), p0=(np.log10(M0), 0.3))
+        print('    MBK25 at z=%4.1f            : %.2f dex  (sigma = %.3f dex = %.2f sigma_ln c)'
+              % (zq, 2.0 * sg, sg, sg / 0.2))
 
     save_figure(fig, os.path.join(OUTPUT_DIR,
                 'Selection_Thresholds_Mz' + OUTPUT_FORMAT))
@@ -13345,14 +13402,21 @@ def _box_geometry(directory):
                 box = float(sim['box_size'])
                 hh  = float(sim['hubble_h'])
                 if 'frac_volume_processed' in run:
-                    frac = float(run['frac_volume_processed'])
+                    # Each MPI output file records only its own share of the
+                    # volume, so the run's volume is the sum over all files.
+                    # Reading files[0] alone underestimates it by the number of
+                    # files (~10x for the Millennium-500 runs).
+                    frac = 0.0
+                    for fp in files:
+                        with h5.File(fp, 'r') as ff:
+                            frac += float(ff['Header/Runtime'].attrs['frac_volume_processed'])
                 elif all(k in run for k in ('FirstFile', 'LastFile')) \
                         and 'num_simulation_tree_files' in sim:
                     n_tot = float(sim['num_simulation_tree_files'])
                     if n_tot > 0:
                         frac = (float(run['LastFile']) -
                                 float(run['FirstFile']) + 1.0) / n_tot
-                if not (0.0 < frac <= 1.0):
+                if not (0.0 < frac <= 1.0 + 1e-6):
                     print(f'  Warning: implausible volume fraction {frac} in '
                           f'{directory}; treating as 1.0')
                     frac = 1.0
@@ -13775,6 +13839,9 @@ def plot_98_ffb_referee_diagnostics():
       [9] H2 in FFB galaxies
       [10] the low-redshift FFB population: abundance, persistence, properties,
            and the same haloes in the no-FFB run
+      [11] the low-redshift population against everything else: its share of
+           the star formation rate, how star-forming it is against mass-matched
+           centrals, and what happens to it after its selection ends
 
     Only FFBRegime and Type (plus Mvir where an expectation is computed) are read
     for every galaxy; everything else is read by row for the FFB galaxies alone
@@ -14161,6 +14228,7 @@ def plot_98_ffb_referee_diagnostics():
     nf_props = ['Posx', 'Posy', 'Posz', 'Mvir', 'ColdGas', 'HotGas',
                 'BlackHoleMass', 'SfrDisk', 'SfrBulge']
     z_bins = [(0.0, 0.5), (0.5, 1.0), (1.0, 1.5), (1.5, 2.0), (2.0, 3.0), (3.0, 4.6)]
+    recs = {}                     # name -> [10] records, reused by [11]
     for k, (name, d) in enumerate(runs):
         rec = []
         for s, r0 in ffb_rows[name].items():
@@ -14198,6 +14266,7 @@ def plot_98_ffb_referee_diagnostics():
             print(f'\n  {name}: no FFB galaxies at z <= 4.5')
             continue
         R = np.array(rec, dtype=float)
+        recs[name] = R
         L = lambda x: np.log10(np.where(x > 0, x, np.nan))
         print(f'\n  {name}: medians by redshift (masses log10 Msun, SFR Msun/yr; '
               f'"noFFB" = same halo in the no-FFB run)')
@@ -14229,6 +14298,150 @@ def plot_98_ffb_referee_diagnostics():
                   f'{np.log10(r[3]):+6.2f} {r[4]:8.1e} {f(r[5])} {f(r[6])} {f(r[7])} '
                   f'{f(r[8])} {f(r[9])} {f(r[10])} {r[11]:7.1f} {int(r[12]):2d} | '
                   f'{f(r[13]):>11} {f(r[14])} {f(r[15])} {r[16]:7.1f}')
+
+    # ----------------------------------------------------------------- [11]
+    head('[11] The low-redshift population against everything else (z <= 4.5)')
+    print('  One more pass over the z <= 4.5 snapshots of each run (GalaxyIndex, Type,')
+    print('  StellarMass, SfrDisk, SfrBulge, FFBRegime, ColdGas for every galaxy).')
+    print('  "Control" = centrals not selected at that snapshot in the same run, matched')
+    print('  in 0.1 dex bins of stellar mass.  Quenched = sSFR < 1e-11 / yr.')
+
+    QUENCH = 1e-11
+    m_edges = np.arange(7.0, 13.01, 0.1)
+    offsets = (1, 2, 4, 8)
+    props11 = ['GalaxyIndex', 'Type', 'StellarMass', 'SfrDisk', 'SfrBulge',
+               'FFBRegime', 'ColdGas']
+
+    def control_table(lm, sfr):
+        """Per stellar-mass bin: median SFR and quenched fraction of the control."""
+        b = np.digitize(lm, m_edges) - 1
+        med = np.full(len(m_edges) - 1, np.nan)
+        qf = np.full(len(m_edges) - 1, np.nan)
+        for i in range(len(m_edges) - 1):
+            m = b == i
+            if m.sum() >= 20:
+                med[i] = np.median(sfr[m])
+                qf[i] = np.mean(sfr[m] < QUENCH * 10**lm[m])
+        return med, qf
+
+    def against_control(lm, sfr, med, qf):
+        """SFR / control median and the control's quenched fraction, per galaxy."""
+        b = np.clip(np.digitize(lm, m_edges) - 1, 0, len(m_edges) - 2)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ratio = np.where(med[b] > 0, sfr / med[b], np.nan)
+        return ratio, qf[b]
+
+    low = sorted([s for s in snaps if REDSHIFTS[s] <= 4.6], key=lambda s: -REDSHIFTS[s])
+    for name, d in runs:
+        share = []                        # (z, N_sel, SFR_sel, SFR_total)
+        at_sel = []                       # (z, lm, ratio, quenched, control quenched frac)
+        after = {o: [] for o in offsets}  # offset -> (found, central, ratio, q, qf_ctrl, nocold, again)
+        at_end = []
+        open_ends = {}                    # gid -> index (in low) of the last selected snapshot
+        prev_sel = set()
+        for i, s in enumerate(low):
+            g, _ = _ffb_lean_read(d, s, props11)
+            if g is None or len(g['Type']) == 0:
+                prev_sel = set()
+                continue
+            sfr = g['SfrDisk'] + g['SfrBulge']
+            ms = g['StellarMass']
+            lm = np.log10(np.where(ms > 0, ms, 1e-30))
+            sel = g['FFBRegime'] == 1
+            cen = g['Type'] == 0
+            share.append((REDSHIFTS[s], int(sel.sum()), sfr[sel].sum(), sfr.sum()))
+
+            ctrl = cen & ~sel & (ms > 0)
+            med, qf = control_table(lm[ctrl], sfr[ctrl])
+
+            w = sel & cen & (ms > 0)
+            if w.any():
+                r, q = against_control(lm[w], sfr[w], med, qf)
+                for j in range(w.sum()):
+                    at_sel.append((REDSHIFTS[s], lm[w][j], r[j],
+                                   sfr[w][j] < QUENCH * ms[w][j], q[j]))
+
+            # Selection episodes that ended at the previous snapshot start a track.
+            gid = g['GalaxyIndex'].astype(np.int64)
+            sel_now = set(gid[sel].tolist())
+            for gg in prev_sel - sel_now:
+                open_ends[gg] = i - 1
+            prev_sel = sel_now
+
+            # Record tracked galaxies at the chosen offsets and at the last snapshot.
+            row = {int(x): j for j, x in enumerate(gid)}
+            want = [(gg, i - e) for gg, e in open_ends.items()
+                    if (i - e) in offsets or i == len(low) - 1]
+            for gg, off in want:
+                j = row.get(gg)
+                if j is None:
+                    rec11 = (0, 0, np.nan, np.nan, np.nan, np.nan, np.nan)
+                else:
+                    r, q = against_control(lm[j:j + 1], sfr[j:j + 1], med, qf)
+                    rec11 = (1, int(g['Type'][j] == 0), r[0],
+                             float(sfr[j] < QUENCH * max(ms[j], 1e-30)), q[0],
+                             float(g['ColdGas'][j] <= 0), float(sel[j]))
+                if off in offsets:
+                    after[off].append(rec11)
+                if i == len(low) - 1:
+                    at_end.append(rec11)
+            print(f'    {name} z = {REDSHIFTS[s]:5.2f} done')
+
+        # (a) share of the star formation rate, and the excess over the no-FFB haloes
+        print(f'\n  {name} (a): star formation rate of the selected galaxies')
+        print(f'    {"z":>9} {"N_sel":>7} {"SFR_sel/SFR_all":>16} {"excess/SFR_all":>15}')
+        sh = np.array(share, dtype=float)
+        Rr = recs.get(name)
+        for lo, hi in z_bins:
+            m = (sh[:, 0] >= lo) & (sh[:, 0] < hi)
+            if not m.any():
+                continue
+            tot = sh[m, 3].sum()
+            exc = np.nan
+            if Rr is not None and len(Rr):
+                mr = (Rr[:, 0] >= lo) & (Rr[:, 0] < hi) & np.isfinite(Rr[:, 16])
+                exc = (Rr[mr, 11] - Rr[mr, 16]).sum() / tot if tot > 0 else np.nan
+            print(f'    {lo:3.1f}-{hi:3.1f} {int(sh[m, 1].sum()):7d} '
+                  f'{sh[m, 2].sum() / tot:16.2e} {exc:15.2e}')
+        print('    excess = SFR in this run minus SFR of the same haloes without either mode,')
+        print('    summed over selected centrals matched in [10].')
+
+        # (b) at selection, against mass-matched centrals that were not selected
+        print(f'\n  {name} (b): selected centrals against mass-matched unselected centrals')
+        print(f'    {"z":>9} {"N":>6} {"logM*":>6} {"SFR/ctrl med":>13} '
+              f'{"quenched":>9} {"ctrl quenched":>14}')
+        A = np.array(at_sel, dtype=float)
+        for lo, hi in z_bins:
+            if not len(A):
+                break
+            m = (A[:, 0] >= lo) & (A[:, 0] < hi)
+            if not m.any():
+                continue
+            print(f'    {lo:3.1f}-{hi:3.1f} {m.sum():6d} {np.median(A[m, 1]):6.2f} '
+                  f'{np.nanmedian(A[m, 2]):13.1f} {np.mean(A[m, 3]):9.2f} '
+                  f'{np.nanmean(A[m, 4]):14.2f}')
+
+        # (c) after the selection ends
+        print(f'\n  {name} (c): after a selection episode ends (tracked by GalaxyIndex)')
+        print(f'    {"when":>13} {"N":>6} {"found":>6} {"central":>8} {"SFR/ctrl med":>13} '
+              f'{"quenched":>9} {"ctrl quenched":>14} {"no cold gas":>12} {"selected again":>15}')
+        rows = [(f'+{o} snapshot' + ('s' if o > 1 else ''), after[o]) for o in offsets]
+        rows.append((f'at z = {REDSHIFTS[low[-1]]:.2f}', at_end))
+        for lab, recs11 in rows:
+            if not recs11:
+                continue
+            T = np.array(recs11, dtype=float)
+            fnd = T[:, 0] == 1
+            print(f'    {lab:>13} {len(T):6d} {fnd.mean():6.2f} '
+                  f'{np.nanmean(T[fnd, 1]) if fnd.any() else np.nan:8.2f} '
+                  f'{np.nanmedian(T[fnd, 2]) if fnd.any() else np.nan:13.1f} '
+                  f'{np.nanmean(T[fnd, 3]) if fnd.any() else np.nan:9.2f} '
+                  f'{np.nanmean(T[fnd, 4]) if fnd.any() else np.nan:14.2f} '
+                  f'{np.nanmean(T[fnd, 5]) if fnd.any() else np.nan:12.2f} '
+                  f'{np.nanmean(T[fnd, 6]) if fnd.any() else np.nan:15.2f}')
+        print('    found = still in the catalogue (not merged); the remaining columns are')
+        print('    over found galaxies.  The last row counts each galaxy once, from its most')
+        print('    recent episode, wherever that ended.')
 
     print()
     print('END FFB / MBK25 REFEREE DIAGNOSTICS')
