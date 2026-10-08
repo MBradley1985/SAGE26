@@ -423,7 +423,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
      * none of which infall_recipe() touches, so the position of this call
      * relative to it does not affect the classification. */
     if (run_params->EnhancedStarFormationOn >= 1) {
-        determine_and_store_ffb_regime(ngal, Zcurr, galaxies, run_params);
+        determine_and_store_ffb_regime(ngal, Zcurr, halo_snapnum, galaxies, run_params);
     }
 
     /* t_dyn = Rvir [Mpc/h] / Vvir [km/s] * KM_PER_MPC [km/Mpc] gives t_dyn in seconds. */

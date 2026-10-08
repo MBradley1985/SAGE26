@@ -141,6 +141,24 @@ static double inverse_normal_cdf(double p)
 }
 
 /*
+ * Uniform deviate in (0, 1) fixed by a halo's MostBoundID and the snapshot.
+ *
+ * SplitMix64 (Steele, Lea & Flood 2014) mixes the two into 64 well-scrambled
+ * bits; the top 53 become a double.  Adding one half keeps the result off 0
+ * and 1, which inverse_normal_cdf() cannot take.  The same halo at the same
+ * snapshot gets the same value in every run on the same trees.
+ */
+static double halo_uniform(const long long most_bound_id, const int snapnum)
+{
+    uint64_t x = (uint64_t)most_bound_id ^ ((uint64_t)(uint32_t)snapnum * 0x9E3779B97F4A7C15ULL);
+    x += 0x9E3779B97F4A7C15ULL;
+    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    x = (x ^ (x >> 27)) * 0x94D049BB133111EBULL;
+    x ^= x >> 31;
+    return ((double)(x >> 11) + 0.5) * (1.0 / 9007199254740992.0);   /* 2^-53 */
+}
+
+/*
  * Classify galaxies as feedback-free burst (FFB) or normal mode.
  *
  * When EnhancedStarFormationOn > 0, evaluates each central galaxy against the
@@ -158,9 +176,17 @@ static double inverse_normal_cdf(double p)
  * therefore sits at the same quantile under either criterion, and the two
  * select the same haloes wherever their FFB probabilities agree.
  *
+ * The per-snapshot draw is a hash of the host halo's MostBoundID and the
+ * snapshot (halo_uniform), not the next rand() value.  Runs on the same merger
+ * trees therefore give a halo the same draw under either criterion.  A rand()
+ * stream cannot do this: its position depends on how many galaxies each run
+ * has created, merged or disrupted, which differs between runs once their
+ * physics does.
+ *
  * All galaxies are marked non-FFB when EnhancedStarFormationOn == 0.
  */
 void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
+                                     const int snapnum,
                                      struct GALAXY *galaxies,
                                      const struct params *run_params)
 {
@@ -192,8 +218,11 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
 
         // A fresh draw each snapshot, with no memory across timesteps, so a
         // halo sitting near the threshold moves in and out of FFB rather than
-        // being locked to one quantile fixed at creation.
-        const double draw = (double)rand() / (double)RAND_MAX;
+        // being locked to one quantile fixed at creation.  The draw is keyed on
+        // the halo and snapshot; the rand() call is kept and discarded so every
+        // other random draw in the model stays where it was.
+        (void)rand();
+        const double draw = halo_uniform(galaxies[p].MostBoundID, snapnum);
 
         if(run_params->EnhancedStarFormationOn == 1) {
             // Li et al. 2024 mass-based method (original)
