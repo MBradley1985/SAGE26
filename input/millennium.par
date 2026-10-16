@@ -64,7 +64,8 @@ SaveFullSFH                 0   %0: switch off
 %------------------------------------------
 
 SfrEfficiency               0.05    %efficiency of SF; unused for SFprescription=3,6
-FFBMaxEfficiency            0.2     %0.2 fits observations best, 1.0 is theoretical maximum
+FFBMaxEfficiency            0.2     %0.2 fits observations best; 1.0 converts all cold gas in one disk dynamical time
+FFBMassLoadingScaleOn       0       %0: normal-mode SN feedback in FFB regime (published); 1: reheating mass loading x 1/(1+eta_reheat); 2: reheating and ejection x 1/(1+eta_reheat); 3: no SN feedback in FFB regime
 
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)
 FeedbackEjectionEfficiency  0.3     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)

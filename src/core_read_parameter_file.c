@@ -106,6 +106,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->SNEnergyConservationOn     = 1;   /* default: on -- neither the reheating nor the ejection term may spend more than the SN energy available */ /* (hard-code once published)*/
     run_params->MaxSNEnergyCoupling        = 2.0; /* cap on eps_halo * f_FIRE: E_FB <= m_* eta_SN E_SN (the whole SN budget) */ /* (hard-code once published)*/
     run_params->FFBMaxEfficiency           = 0.2;
+    run_params->FFBMassLoadingScaleOn      = 0;    /* default: FFB feedback at the normal-mode mass loading (published behaviour) */
     run_params->FFBConcSigma               = 0.2;
     run_params->FFBThresholdSlope          = -6.2;
     run_params->FFBFeedbackDelayMyr        = 1.0;
@@ -236,6 +237,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("MergerTimeFactor",           &(run_params->MergerTimeFactor),           DOUBLE, 0);
     REG("H2RadialRMaxFactor",         &(run_params->H2RadialRMaxFactor),         DOUBLE, 0);
     REG("FFBMaxEfficiency",           &(run_params->FFBMaxEfficiency),           DOUBLE, 0);
+    REG("FFBMassLoadingScaleOn",      &(run_params->FFBMassLoadingScaleOn),      INT, 0);
     REG("FFBConcSigma",               &(run_params->FFBConcSigma),               DOUBLE, 0);
     REG("FFBThresholdSlope",          &(run_params->FFBThresholdSlope),          DOUBLE, 0);
     REG("FFBFeedbackDelayMyr",        &(run_params->FFBFeedbackDelayMyr),        DOUBLE, 0);
@@ -571,6 +573,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
             {"FeedbackFreeModeOn",     run_params->FeedbackFreeModeOn,     0, 11},
             {"FFBIgnoreRegime",        run_params->FFBIgnoreRegime,        0, 1},
+            {"FFBMassLoadingScaleOn",  run_params->FFBMassLoadingScaleOn,  0, 3},
             {"FFBRandomMode",          run_params->FFBRandomMode,          0, 1},
             {"ColdStreamCeilingOn",    run_params->ColdStreamCeilingOn,    0, 3},
             {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 3},

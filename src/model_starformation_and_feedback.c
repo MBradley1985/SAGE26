@@ -891,6 +891,15 @@ if(run_params->SupernovaRecipeOn == 1) {
  * because the FFB path deliberately differs: the FIRE branch guards on a
  * validity flag and leaves the reheated mass at zero when the FIRE scaling
  * is undefined (Vvir <= 0 or z < 0) instead of falling through.
+ * With FFBMassLoadingScaleOn = 1, the reheating mass loading is multiplied by
+ * 1/(1 + eta_reheat), where eta_reheat is the normal-mode loading, so
+ * eta_reheat -> eta_reheat/(1 + eta_reheat).  Ejection is computed as usual from
+ * the SN energy left after reheating.
+ * With FFBMassLoadingScaleOn = 2, the same factor also multiplies the ejected
+ * mass: the SN energy is scaled with it, so both reheating and ejection are
+ * 1/(1 + eta_reheat) times their normal-mode values.
+ * With FFBMassLoadingScaleOn = 3, there is no SN reheating or ejection in the
+ * FFB regime (factor 0 on both).
  * All masses [10^10 Msun/h].
  */
 static void compute_sn_feedback_ffb(const int p, double *stars_inout, double *reheated_out,
@@ -900,6 +909,10 @@ static void compute_sn_feedback_ffb(const int p, double *stars_inout, double *re
     double stars = *stars_inout;
     double reheated_mass = 0.0;
     double ejected_mass  = 0.0;
+
+    // 1 = normal-mode feedback; 1/(1+eta_reheat) with FFBMassLoadingScaleOn >= 1 (set
+    // below, once the normal-mode eta_reheat is known).
+    double loading_factor = 1.0;
 
 // FIRE velocity/redshift scaling (Muratov et al. 2015), computed once and
 // reused for both reheating and ejection: z and Vvir do not change between
@@ -922,13 +935,20 @@ if(run_params->SupernovaRecipeOn == 1 && run_params->FIREmodeOn == 1) {
 if(run_params->SupernovaRecipeOn == 1) {
     if(run_params->FIREmodeOn == 1) {
         if(fire_scaling_valid) {
-            const double eta_reheat  = capped_eta_reheat(
+            const double eta_normal  = capped_eta_reheat(
                 run_params->FeedbackReheatingEpsilon * fire_scaling, galaxies[p].Vvir, run_params);
+            if(run_params->FFBMassLoadingScaleOn == 3)      loading_factor = 0.0;
+            else if(run_params->FFBMassLoadingScaleOn >= 1) loading_factor = 1.0 / (1.0 + eta_normal);
+            const double eta_reheat  = loading_factor * eta_normal;
             galaxies[p].MassLoading  = (float)eta_reheat;
             reheated_mass            = eta_reheat * stars;
         }
     } else {
-        reheated_mass = run_params->FeedbackReheatingEpsilon * stars;
+        if(run_params->FFBMassLoadingScaleOn == 3)
+            loading_factor = 0.0;
+        else if(run_params->FFBMassLoadingScaleOn >= 1)
+            loading_factor = 1.0 / (1.0 + run_params->FeedbackReheatingEpsilon);
+        reheated_mass = loading_factor * run_params->FeedbackReheatingEpsilon * stars;
     }
 }
 
@@ -946,7 +966,10 @@ if(run_params->SupernovaRecipeOn == 1) {
         if(run_params->FIREmodeOn == 1) {
             if(fire_scaling_valid) {
                 const double vc         = galaxies[p].Vvir;
-                const double E_FB       = sn_energy_coupling(fire_scaling, run_params)
+                // Options 2 and 3 scale the SN energy by the same factor as the reheated
+                // mass, so the ejected mass is loading_factor x its normal-mode value.
+                const double E_scale    = (run_params->FFBMassLoadingScaleOn >= 2) ? loading_factor : 1.0;
+                const double E_FB       = E_scale * sn_energy_coupling(fire_scaling, run_params)
                                           * 0.5 * stars
                                           * (run_params->EtaSNcode * run_params->EnergySNcode);
                 const double E_lift     = 0.5 * reheated_mass * vc * vc;
@@ -957,6 +980,7 @@ if(run_params->SupernovaRecipeOn == 1) {
                             * (run_params->EtaSNcode * run_params->EnergySNcode)
                             / (galaxies[p].Vvir * galaxies[p].Vvir)
                             - run_params->FeedbackReheatingEpsilon) * stars;
+            if(run_params->FFBMassLoadingScaleOn >= 2) ejected_mass *= loading_factor;
         }
     }
     if(ejected_mass < 0.0) ejected_mass = 0.0;
@@ -998,7 +1022,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // ========================================================================
     if(run_params->FeedbackFreeModeOn >= 1 && galaxies[p].FFBRegime == 1) {
         // This is a Feedback-Free Burst halo
-        // Use specialized FFB star formation (no feedback)
+        // Use specialized FFB star formation (SN feedback applied; x 1/(1+eta) per FFBMassLoadingScaleOn)
         starformation_ffb(p, centralgal, dt, step, galaxies, run_params);
         return;  // Exit early - FFB path complete
     }

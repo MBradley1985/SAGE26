@@ -556,6 +556,12 @@ struct params
     double BaryonFrac;            /* cosmic baryon fraction Omega_b/Omega_m [dimensionless] */
     double SfrEfficiency;         /* SF efficiency per dynamical time [dimensionless] */
     double FFBMaxEfficiency;      /* maximum SF efficiency in the feedback-free burst regime [dimensionless] */
+    int32_t FFBMassLoadingScaleOn; /* 0: FFB SN feedback at the normal-mode mass loading (default, published behaviour);
+                                      1: the reheating mass loading is multiplied by 1/(1+eta_reheat) while a galaxy is in
+                                      the FFB regime, i.e. eta_reheat -> eta_reheat/(1+eta_reheat); ejection unchanged
+                                      (computed from the SN energy left after reheating);
+                                      2: as 1, and the ejected mass is also multiplied by 1/(1+eta_reheat);
+                                      3: no SN reheating or ejection in the FFB regime. */
     double FFBConcSigma;      // sigma_c for log-normal concentration scatter (ln c); typical ~0.2 (Jing 2000, Bullock+01)
     double FFBThresholdSlope; // exponent n in M_vir,FFB ~ ((1+z)/10)^n; -6.2 (Li+24) is the default. The
                               // normalisation is pinned at z=9, so varying this pivots the threshold about

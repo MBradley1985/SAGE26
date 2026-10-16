@@ -83,7 +83,8 @@ optional parameters take the listed default if omitted.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `FFBMaxEfficiency` | double | no | `0.2` | Maximum star formation efficiency during FFB bursts. `0.2` matches observations; `1.0` is the theoretical maximum. |
+| `FFBMaxEfficiency` | double | no | `0.2` | Maximum star formation efficiency during FFB bursts. `0.2` matches observations; `1.0` converts the whole cold gas reservoir in one disk dynamical time. |
+| `FFBMassLoadingScaleOn` | 0–3 | no | `0` | SN feedback in the FFB regime. 0 = reheating and ejection at the normal-mode (FIRE) mass loading (default, published behaviour); 1 = the reheating mass loading is multiplied by 1/(1+η_reheat), so η_reheat → η_reheat/(1+η_reheat) (always < 1); ejection is computed as usual from the SN energy left after reheating; 2 = as 1, and the ejected mass is also multiplied by 1/(1+η_reheat) (the SN energy is scaled with it), so all SN feedback is 1/(1+η_reheat) times its normal-mode value; 3 = no SN reheating or ejection in the FFB regime. `MassLoading` is saved after scaling. Diagnostic for the Paper II referee report (Major 1). |
 | `FFBConcSigma` | double | no | `0.2` | Log-normal scatter in halo concentration used by `FeedbackFreeModeOn=4,7` (dex). |
 | `FFBIgnoreRegime` | 0/1 | no | `1` | Apply FFB criterion regardless of CGM regime classification. |
 | `FFBThresholdSlope` | double | no | `-6.2` | Slope of the Li+24 FFB halo-mass threshold, `log10 Mvir_ffb = 10.8 + slope * log10((1+z)/10)`. The `10^10.8 Msun` normalisation is pinned at `z = 9`, so changing the slope pivots the threshold about that redshift rather than shifting it wholesale. |

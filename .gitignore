@@ -58,3 +58,7 @@ tests/baseline/microuchuu/
 CLAUDE.md
 
 plotting/random_plotting_scripts/
+Paper2_referee_fixes.md
+Paper2_revision_plan.md
+plotting/paper2_numbers.py
+plotting/paper2_tracked_diag.py
