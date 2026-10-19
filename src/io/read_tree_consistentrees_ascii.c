@@ -10,7 +10,7 @@
  *   forest -> {trees, file fds, byte-offsets} mapping, divides forests across
  *   MPI tasks, and parses the column header from the first data file.
  * Load   (load_forest_ctrees):        seeks to each tree's byte offset, parses
- *   halos from ASCII rows, fixes flybys and upids, assigns LHaloTree-compatible
+ *   halos from ASCII rows, fixes upids, assigns LHaloTree-compatible
  *   merger-tree indices.
  * Cleanup (cleanup_forests_io_ctrees): frees memory and closes all open file
  *   descriptors.
@@ -375,10 +375,10 @@ int setup_forests_io_ctrees(struct forest_info *forests_info, const int ThisTask
  *   2. After parsing each tree, calls convert_ctrees_conventions_to_lht() to
  *      translate Rockstar/CTrees conventions (raw spin, Msun masses, etc.) into
  *      the LHaloTree layout that SAGE expects.
- *   3. Once all trees in the forest are loaded, calls fix_flybys() to enforce a
- *      single z=0 root, fix_upid() to flatten the subhalo hierarchy to one level,
- *      and assign_mergertree_indices() to fill in Descendant/FirstProgenitor/
- *      NextProgenitor indices.
+ *   3. Once all trees in the forest are loaded, calls fix_upid() to flatten the
+ *      subhalo hierarchy to one level, and assign_mergertree_indices() to fill in
+ *      Descendant/FirstProgenitor/NextProgenitor indices. A forest may keep
+ *      several FOF hosts at z=0; they are not merged into one.
  *
  * Returns the total number of halos in the forest, or a negative error code.
  */
@@ -454,15 +454,6 @@ int64_t load_forest_ctrees(const int32_t forestnr, struct halo_data **halos, str
     int verbose = 0;
     struct halo_data *forest_halos = *halos;
 
-    /* Fix flybys -> multiple roots at z=0 must be joined such that only one root remains */
-    int status = fix_flybys(totnhalos, forest_halos, info, verbose);
-    if(status != EXIT_SUCCESS) {
-        /* Not successful but the exit status from this routine has to be negative */
-        const int neg_status = status < 0 ? status:-status;
-        return neg_status;
-    }
-
-
     /* Entire tree is loaded in. Fix upid's (i.e., only keep 1-level halo hierarchy: FOF->subhalo */
     const int max_snapnum = fix_upid(totnhalos, forest_halos, info, verbose);
     if(max_snapnum < 0) {
@@ -470,7 +461,7 @@ int64_t load_forest_ctrees(const int32_t forestnr, struct halo_data **halos, str
     }
 
     /* Now the entire tree is loaded in. Assign the mergertree indices */
-    status = assign_mergertree_indices(totnhalos, forest_halos, info, max_snapnum);
+    int status = assign_mergertree_indices(totnhalos, forest_halos, info, max_snapnum);
     if(status != EXIT_SUCCESS) {
         /* Not successful but the exit status from this routine has to be negative */
         const int neg_status = status < 0 ? status:-status;

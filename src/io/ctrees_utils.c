@@ -3,9 +3,8 @@
  *
  * Provides the forest and location readers (read_forests, read_locations),
  * comparator and sort wrappers used to order locations by tree-root ID, file
- * ID, and file offset, and the three halo-list fixup routines that convert
+ * ID, and file offset, and the two halo-list fixup routines that convert
  * raw Consistent Trees data to the LHaloTree convention:
- *   fix_flybys    -- removes flybys from the FOF group list
  *   fix_upid      -- resolves upid chains to direct parent IDs
  *   assign_mergertree_indices -- maps halo IDs to array indices
  * Also provides assign_forest_ids (builds per-tree forest ID arrays) and the
@@ -301,102 +300,6 @@ int assign_forest_ids(const int64_t ntrees, struct locations_with_forests *locat
                 "tree roots[%"PRId64"] = %"PRId64" does not equal tree roots in locations = %"PRId64"\n",
                 i, treeids[i], locations[i].treeid);
         locations[i].forestid = forests[i];
-    }
-
-    return EXIT_SUCCESS;
-}
-
-
-/*
- * fix_flybys -- remove flyby halos from the FOF host list.
- *
- * Sorts the halo array by (descending scale, halo ID) then iterates through
- * each snapshot's FOF hosts.  A halo is a flyby if its upid matches a
- * different FOF halo at the same snapshot; such halos are reassigned to the
- * correct FOF host.  Returns EXIT_SUCCESS, or a negative SAGE error code on
- * failure.
- */
-int fix_flybys(const int64_t totnhalos, struct halo_data *forest, struct additional_info *info, int verbose)
-{
-#define ID_COMPARATOR(x, y)         ((x.id > y.id ? 1:(x.id < y.id ? -1:0)))
-#define SCALE_ID_COMPARATOR(x,y)    ((x.scale > y.scale ? -1:(x.scale < y.scale ? 1:ID_COMPARATOR(x, y))) )
-#define MULTIPLE_ARRAY_EXCHANGER(type,a,i,j) {                          \
-        SGLIB_ARRAY_ELEMENTS_EXCHANGER(struct halo_data, forest,i,j); \
-        SGLIB_ARRAY_ELEMENTS_EXCHANGER(struct additional_info, info, i, j) \
-            }
-    SGLIB_ARRAY_HEAP_SORT(struct additional_info, info, totnhalos, SCALE_ID_COMPARATOR, MULTIPLE_ARRAY_EXCHANGER);
-
-#undef ID_COMPARATOR
-#undef SCALE_ID_COMPARATOR
-#undef MULTIPLE_ARRAY_EXCHANGER
-
-    double max_scale = info[0].scale;
-    int64_t last_halo_with_max_scale = 1;
-    int64_t num_fofs_last_scale = info[0].pid == -1 ? 1:0;
-    for(int64_t i=1;i<totnhalos;i++) {
-        if(info[i].scale < max_scale) {
-            break;
-        }
-        num_fofs_last_scale += (info[i].pid == -1) ? 1:0;
-        last_halo_with_max_scale = i;
-    }
-    if(num_fofs_last_scale == 0) {
-        fprintf(stderr,"ERROR: NO FOFs at max scale = %lf Will crash - here's some info that might help debug\n", max_scale);
-        fprintf(stderr,"Last scale halo id (likely tree root id ) = %"PRId64" at a = %lf\n",info[0].id, info[0].scale);
-        fprintf(stderr,"########################################################\n");
-        fprintf(stderr,"# snap     id      pid      upid    mass     scale      \n");
-        fprintf(stderr,"########################################################\n");
-        for(int64_t i=0;i<=last_halo_with_max_scale;i++) {
-            fprintf(stderr,"%d  %10"PRId64"  %10"PRId64" %10"PRId64" %12.6e  %20.8e\n",
-                    forest[i].SnapNum, info[i].id, info[i].pid, info[i].upid, forest[i].Mvir, info[i].scale);
-        }
-        fprintf(stderr,"All halos now:\n\n");
-        for(int64_t i=0;i<totnhalos;i++) {
-            fprintf(stderr,"%d  %10"PRId64"  %10"PRId64" %10"PRId64" %12.6e %20.8e\n",
-                    forest[i].SnapNum, info[i].id, info[i].pid, info[i].upid, forest[i].Mvir, info[i].scale);
-        }
-        return -1;
-    }
-
-    /* Is there anything to do? If there is only one FOF at z=0, then simply return */
-    if(num_fofs_last_scale == 1) {
-        return EXIT_SUCCESS;
-    }
-
-    int64_t max_mass_fof_loc = -1;
-    float max_mass_fof = -1.0f;
-    int64_t fof_id = -1;
-    for(int64_t i=0;i<=last_halo_with_max_scale;i++) {
-        if(forest[i].Mvir > max_mass_fof && info[i].pid == -1) {
-            max_mass_fof_loc = i;
-            max_mass_fof = forest[max_mass_fof_loc].Mvir;
-            fof_id = info[max_mass_fof_loc].id;
-        }
-    }
-
-    XRETURN(fof_id != -1, -EXIT_FAILURE,
-            "There must be at least one FOF halo.");
-    XRETURN(max_mass_fof_loc < INT_MAX, -EXIT_FAILURE,
-            "Most massive FOF location=%"PRId64" must be representable within INT_MAX=%d",
-            max_mass_fof_loc, INT_MAX);
-
-    int FirstHaloInFOFgroup = (int) max_mass_fof_loc;
-    for(int64_t i=0;i<=last_halo_with_max_scale;i++) {
-        if(i == FirstHaloInFOFgroup) {
-            continue;
-        }
-        if(info[i].pid == -1) {
-            //Show that this halo was switched from being a central
-            //just flip the sign. (MostBoundID should not have negative
-            //values -> this would signify a flyby)
-            forest[i].MostBoundID = -forest[i].MostBoundID;
-            info[i].pid = fof_id;
-            if(verbose == 1) {
-                fprintf(stderr,"id = %"PRId64" changed pid = -1 to pid = %"PRId64" for i=%"PRId64" FirstHaloInFOFgroup =%d last_halo_max_scale=%"PRId64"\n",
-                        info[i].id, fof_id, i, FirstHaloInFOFgroup,last_halo_with_max_scale);
-            }
-        }
-        info[i].upid = fof_id;
     }
 
     return EXIT_SUCCESS;

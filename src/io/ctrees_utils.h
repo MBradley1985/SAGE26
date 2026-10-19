@@ -3,7 +3,7 @@
  *
  * Declares the forest/location structs (locations_with_forests, filenames_and_fd,
  * additional_info) and the functions that read forest lists, assign forest IDs,
- * sort locations, and correct flyby/upid errors in Consistent Trees ASCII output.
+ * sort locations, and correct upid errors in Consistent Trees ASCII output.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -45,7 +45,6 @@ extern "C" {
     extern int64_t read_locations(const char *filename, const int64_t ntrees, struct locations_with_forests *l, struct filenames_and_fd *filenames_and_fd);
     extern int assign_forest_ids(const int64_t ntrees, struct locations_with_forests *locations, int64_t *forests, int64_t *tree_roots);
     extern void sort_locations_on_fid_file_offset(const int64_t ntrees, struct locations_with_forests *locations);
-    extern int fix_flybys(const int64_t totnhalos, struct halo_data *forest, struct additional_info *info, int verbose);
     extern int fix_upid(const int64_t totnhalos, struct halo_data *forest, struct additional_info *info, const int verbose);
     extern int assign_mergertree_indices(const int64_t totnhalos, struct halo_data *forest, struct additional_info *info, const int max_snapnum);
 
