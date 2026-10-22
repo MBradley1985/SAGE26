@@ -134,7 +134,14 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->AGNDynamicAccretionOn = 1;
     run_params->BHExsituGrowthOn = 0;
     run_params->BlackHoleSeedingOn = 0;
-    run_params->BHSeedMinHaloMass = 1.0; 
+    run_params->BHSeedMinHaloMass = 1.0;
+    run_params->BHEddLambda0 = 100.0;
+    run_params->BHEddM0 = 1.0e6;
+    run_params->BHEddAlpha = 0.5;
+    run_params->BHEddZ0 = 6.0;
+    run_params->BHEddBeta = 5.0;
+    run_params->BHEddLambdaCap = 5000.0;
+    run_params->BHBoostB0 = 1.0;
     run_params->BHAccretionNorm = 1.0;
     run_params->BHMassScalingIndex = 0.5;
     run_params->AGNAccretionScheme = 0; // Default to no change in Accretion Scheme
@@ -203,6 +210,13 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("BHExsituGrowthOn",      &(run_params->BHExsituGrowthOn),     INT, 0);
     REG("BlackHoleSeedingOn",    &(run_params->BlackHoleSeedingOn),   INT, 0);
     REG("BHSeedMinHaloMass",     &(run_params->BHSeedMinHaloMass),    DOUBLE, 0);
+    REG("BHEddLambda0",          &(run_params->BHEddLambda0),         DOUBLE, 0);
+    REG("BHEddM0",               &(run_params->BHEddM0),              DOUBLE, 0);
+    REG("BHEddAlpha",            &(run_params->BHEddAlpha),           DOUBLE, 0);
+    REG("BHEddZ0",               &(run_params->BHEddZ0),              DOUBLE, 0);
+    REG("BHEddBeta",             &(run_params->BHEddBeta),            DOUBLE, 0);
+    REG("BHEddLambdaCap",        &(run_params->BHEddLambdaCap),       DOUBLE, 0);
+    REG("BHBoostB0",             &(run_params->BHBoostB0),            DOUBLE, 0);
     REG("BHAccretionNorm",       &(run_params->BHAccretionNorm),      DOUBLE, 0);
     REG("BHMassScalingIndex",    &(run_params->BHMassScalingIndex),   DOUBLE, 0);
     REG("AGNAccretionScheme",    &(run_params->AGNAccretionScheme),   INT, 0);

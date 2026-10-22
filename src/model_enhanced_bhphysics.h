@@ -6,6 +6,10 @@ extern "C" {
 
     #include "core_allvars.h"
 
+    /* AGNAccretionScheme 14/15 helpers (M_BH in code units, z = redshift) */
+    double lambda_max_cap(const double black_hole_mass, const double z, const struct params *rp);
+    double bh_demand_boost(const double black_hole_mass, const double z, const struct params *rp);
+
     /* Seed a black hole if the seeding model is enabled */
     double seed_black_hole(const int p, const struct GALAXY *galaxies, const struct params *run_params);
 

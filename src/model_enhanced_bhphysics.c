@@ -23,6 +23,32 @@ static const double AGN_RADIATIVE_EFFICIENCY    = 0.1;
 static const double C_SQ_KMS2                  = 9.0e10;  /* (km/s)^2 */
 
 
+// Shared mass/redshift shape for AGNAccretionScheme 14 (cap), 15 (boost + cap) and 17 (boost only, uncapped):
+//   S(M_BH, z) = (M_BH / M0)^-alpha * ((1+z)/(1+z0))^beta,  M_BH converted to Msun.
+static double edd_shape(const double black_hole_mass, const double z, const struct params *rp)
+{
+    const double m_msun = black_hole_mass * 1.0e10 / rp->Hubble_h;
+    return pow(m_msun / rp->BHEddM0, -rp->BHEddAlpha) * pow((1.0 + z) / (1.0 + rp->BHEddZ0), rp->BHEddBeta);
+}
+
+// Eddington-cap multiplier: lambda_max = clip(1 + (lambda0-1) S, 1, lambda_cap).
+// Never below 1 (the cap only ever relaxes the Eddington limit).
+double lambda_max_cap(const double black_hole_mass, const double z, const struct params *rp)
+{
+    double lam = 1.0 + (rp->BHEddLambda0 - 1.0) * edd_shape(black_hole_mass, z, rp);
+    if(lam < 1.0) lam = 1.0;
+    if(lam > rp->BHEddLambdaCap) lam = rp->BHEddLambdaCap;
+    return lam;
+}
+
+// Demand-side boost on BlackHoleGrowthRate: B = 1 + (B0-1) S, never below 1.
+double bh_demand_boost(const double black_hole_mass, const double z, const struct params *rp)
+{
+    if(rp->BHBoostB0 <= 1.0 || black_hole_mass <= 0.0) return 1.0;
+    const double b = 1.0 + (rp->BHBoostB0 - 1.0) * edd_shape(black_hole_mass, z, rp);
+    return b < 1.0 ? 1.0 : b;
+}
+
 double seed_black_hole(const int p, const struct GALAXY *galaxies, const struct params *run_params)
 {
     if(run_params->BlackHoleSeedingOn == 0) {
@@ -154,9 +180,19 @@ double eddington_limited_accretion_rate(double accretion_rate, int eddington_fla
 
     edd_rate = (double)BHEddingtonRateLimit[snapnum];
 
-    if(accretion_rate > edd_rate && eddington_flag == 1) {
-        return_rate = edd_rate;
-        BHMaxaccretionRate[snapnum] = (float)edd_rate;
+    if(eddington_flag == 1) {
+        // Schemes 14/15 relax the cap on the quasar-mode channels (merger = 1, instability = 2) to
+        // lambda_max(M_BH, z) * Eddington.  Radio mode (type 0) keeps the hard cap at 1.
+        // BHEddingtonRateLimit still records the plain Eddington rate.
+        double cap_rate = edd_rate;
+        if((run_params->AGNAccretionScheme == 14 || run_params->AGNAccretionScheme == 15) &&
+           bh_accretion_type != 0 && valid_snap) {
+            cap_rate = edd_rate * lambda_max_cap(black_hole_mass, run_params->ZZ[snapnum], run_params);
+        }
+        if(accretion_rate > cap_rate) {
+            return_rate = cap_rate;
+            BHMaxaccretionRate[snapnum] = (float)cap_rate;
+        }
     }
 
     return return_rate;
@@ -299,6 +335,10 @@ double effective_bh_growth_rate(const struct GALAXY *gal, const struct params *r
         rate *= run_params->FirstEventGrowthBoost;
     }
 
+    // Schemes 15 and 17: smooth mass/redshift-dependent boost on the demanded gas fraction.
+    if((run_params->AGNAccretionScheme == 15 || run_params->AGNAccretionScheme == 17) && run_params->BHBoostB0 > 1.0)
+        rate *= bh_demand_boost(gal->BlackHoleMass, run_params->ZZ[gal->SnapNum], run_params);
+
     return rate;
 }
 
@@ -318,6 +358,9 @@ int accretion_scenario(int scenario_id, const struct GALAXY *gal,
         case 9: return scenario_disk_dominated_unlimited(gal, eddtype, run_params);
         case 11: return scenario_early_universe_unlimited(gal, run_params);
         case 13: return scenario_lowmass_host_unlimited(gal, run_params);
+        case 14: return run_params->EddingtonLimitOn;   // power-law lambda_max cap (applied in eddington_limited_accretion_rate)
+        case 15: return run_params->EddingtonLimitOn;   // demand boost B(M_BH,z) + power-law cap
+        case 17: return 0;                              // demand boost B(M_BH,z) only: merger/instability growth is never Eddington-capped (EddingtonLimitOn is irrelevant)
         default: return run_params->EddingtonLimitOn;         // safe fallback
     }
 }

@@ -550,6 +550,17 @@ struct params
                                      events whose host StellarMass is below this (code units, 1e10 Msun/h) at
                                      event time -- produces high f_BH as an outcome rather than a precondition. */
 
+    /* AGNAccretionScheme 14/15: lambda_max(M_BH,z) = 1 + (lambda0-1) (M_BH/M0)^-alpha ((1+z)/(1+z0))^beta,
+     * clipped to [1, lambda_cap].  M0 is in Msun.  Schemes 15 and 17 additionally multiply BlackHoleGrowthRate
+     * by B(M_BH,z) = 1 + (B0-1) (M_BH/M0)^-alpha ((1+z)/(1+z0))^beta (same M0, alpha, z0, beta). */
+    double BHEddLambda0;
+    double BHEddM0;
+    double BHEddAlpha;
+    double BHEddZ0;
+    double BHEddBeta;
+    double BHEddLambdaCap;
+    double BHBoostB0;
+
     double BHSeedMinHaloMass; // Minimum halo mass for seeding in units of 10^10 Msun/h
 
     int32_t BlackHoleSeedingOn; // 0: off, 1: on

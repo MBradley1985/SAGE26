@@ -122,6 +122,13 @@ optional parameters take the listed default if omitted.
 | `BlackHoleGrowthRate` | dimensionless | `0.015` | Fraction of cold gas accreted onto the BH during mergers (AGNrecipeOn > 0). |
 | `FirstEventGrowthBoost` | dimensionless | `1.0` | Multiplier on `BlackHoleGrowthRate` applied only to the qualifying first quasar-mode event under `AGNAccretionScheme=3` (requires `EddingtonLimitOn=1`); every later, capped event uses the unmodified rate. `1.0` = no effect. Decouples the R2 growth-rate boost from a global `BlackHoleGrowthRate` change -- see `bh_investigation/FINDINGS.md`. |
 | `EarlyUniverseZCut` | redshift | `4.0` | Used by `AGNAccretionScheme=11` ("EarlyWindow"): every merger/instability event for a galaxy runs unlimited (uncapped by Eddington) as long as its current redshift `z > EarlyUniverseZCut`; capped as normal once `z` drops below the cutoff. A sustained early-universe exemption window, vs. scheme 3's single lucky event. No effect unless `AGNAccretionScheme=11` and `EddingtonLimitOn=1`. |
+| `BHEddLambda0` | dimensionless | `100.0` | `AGNAccretionScheme=14/15`: cap normalisation lambda_0 in lambda_max = clip(1 + (lambda_0 - 1) (M_BH/M0)^-alpha ((1+z)/(1+z0))^beta, 1, BHEddLambdaCap). Merger/instability accretion is capped at lambda_max times the Eddington rate; radio mode keeps the plain Eddington cap. Needs `EddingtonLimitOn=1`. |
+| `BHEddM0` | `Msun` | `1.0e6` | Pivot BH mass M0 of the schemes 14/15/17 power law. |
+| `BHEddAlpha` | dimensionless | `0.5` | Mass slope alpha of the schemes 14/15/17 power law. |
+| `BHEddZ0` | redshift | `6.0` | Pivot redshift z0 of the schemes 14/15/17 power law. |
+| `BHEddBeta` | dimensionless | `5.0` | Redshift slope beta of the schemes 14/15/17 power law. |
+| `BHEddLambdaCap` | dimensionless | `5000.0` | Upper clip on lambda_max. |
+| `BHBoostB0` | dimensionless | `1.0` | `AGNAccretionScheme=15` (boost plus the scheme-14 cap) or `AGNAccretionScheme=17` (boost only: merger and instability accretion is never Eddington-capped, whatever `EddingtonLimitOn` is; radio mode keeps the plain cap): multiplies `BlackHoleGrowthRate` by B = 1 + (B0 - 1) (M_BH/M0)^-alpha ((1+z)/(1+z0))^beta (same M0, alpha, z0, beta as the cap). `1.0` = no boost. |
 | `LowMassHostThreshold` | `10^10 Msun/h` | `0.1` | Used by `AGNAccretionScheme=13` ("LowMassHost"): exempts merger/instability events whose host `StellarMass` is still below this value at event time. Produces high `M_BH/M_star` as an outcome of the exempted event rather than requiring it as a precondition. No effect unless `AGNAccretionScheme=13` and `EddingtonLimitOn=1`. |
 
 ### Mergers
