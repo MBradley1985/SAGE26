@@ -107,6 +107,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->BulgeSizeOn                = 3;
     run_params->SaveFullSFH                = 0;
     run_params->StarburstColdGasOn         = 1;
+    run_params->FixingGas                  = 0;
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
@@ -180,6 +181,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("BulgeSizeOn",           &(run_params->BulgeSizeOn),          INT, 0);
     REG("SaveFullSFH",           &(run_params->SaveFullSFH),          INT, 0);
     REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
+    REG("FixingGas",             &(run_params->FixingGas),            INT, 0);
     REG("SubstepResolution",     &(run_params->SubstepResolution),     DOUBLE, 0);
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
     REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
@@ -532,6 +534,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
+            {"FixingGas",              run_params->FixingGas,              0, 1},
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {
@@ -542,6 +545,14 @@ int read_parameter_file(const char *fname, struct params *run_params)
                 ABORT(EXIT_FAILURE);
             }
         }
+    }
+
+    /* FixingGas replaces how H2 turns into stars, so it needs a prescription
+       that tracks H2. */
+    if(run_params->FixingGas && !sf_prescription_tracks_h2(run_params->SFprescription)) {
+        fprintf(stderr, "Error: FixingGas = %d needs an H2-tracking SFprescription (1, 3-7); SFprescription = %d does not track H2.\n",
+                run_params->FixingGas, run_params->SFprescription);
+        ABORT(EXIT_FAILURE);
     }
 
     /* Numeric parameters that must be strictly positive for the physics to

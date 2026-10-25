@@ -226,7 +226,7 @@
       "Free-fall time of the CGM gas in the halo.", \
       "Gyr") \
     X(H2DepletionTime_Gyr, H2DepletionTime_Gyr, float, H5T_NATIVE_FLOAT, \
-      "H2 depletion time from the K13 prescription. -1 if not applicable.", \
+      "H2 depletion time from the K13 prescription, or with FixingGas the Tacconi+18 molecular (H2 + He) depletion time used for SF. -1 if not applicable.", \
       "Gyr") \
     X(RcoolToRvir, RcoolToRvir, float, H5T_NATIVE_FLOAT, \
       "Ratio of the cooling radius to the virial radius of the halo.", \

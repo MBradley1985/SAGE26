@@ -83,6 +83,21 @@ static const double FIRE_REDSHIFT_EXPONENT = 1.25;
  * Same constant used in model_mergers.c. */
 static const double KD11_METAL_HALO_MASS = 30.0;  /* 10^10 Msun/h */
 
+/* FixingGas: Tacconi et al. (2018, ApJ 853, 179) molecular depletion time, Table 3a
+ * "best" fit: log t_dep[Gyr] = A + B log(1+z) + C log dMS + D (log M* - 10.7).
+ * The size term (E = 0.11 +- 0.12) is consistent with zero and dropped. Their
+ * M_mol and t_dep include helium (a 36 per cent mass fraction), so the hydrogen-only
+ * H2gas is scaled by TACCONI18_HELIUM. dMS is relative to the Speagle et al.
+ * (2014) main sequence as written in Tacconi+18 eq. 1. */
+static const double TACCONI18_A = 0.09;
+static const double TACCONI18_B = -0.62;
+static const double TACCONI18_C = -0.44;
+static const double TACCONI18_D = 0.09;
+static const double TACCONI18_HELIUM = 1.36;
+/* Numerical guard on the main-sequence offset, not a fitted range. */
+static const double TACCONI18_DMS_MIN = 1.0e-2;
+static const double TACCONI18_DMS_MAX = 1.0e2;
+
 /* Somerville et al. (2025) Equation 8: fraction of gas in dense clouds. */
 static const double SOMERVILLE25_F_DENSE = 0.5;
 
@@ -720,6 +735,63 @@ static double sfr_gd14(const int p, struct GALAXY *galaxies, const struct params
 }
 
 /*
+ * Speagle et al. (2014) main-sequence sSFR [1/yr], as written in Tacconi et al.
+ * (2018) eq. 1: log sSFR[1/Gyr] = (-0.16 - 0.026 t_c)(log M* + 0.025)
+ * - (6.51 - 0.11 t_c) + 9, with the cosmic time t_c [Gyr] from their fit
+ * log t_c = 1.143 - 1.026 log(1+z) - 0.599 log^2(1+z) + 0.528 log^3(1+z).
+ */
+static double speagle14_ms_ssfr_per_yr(const double log_mstar, const double z)
+{
+    const double l  = log10(1.0 + z);
+    const double tc = pow(10.0, 1.143 - 1.026 * l - 0.599 * l * l + 0.528 * l * l * l);
+    return pow(10.0, (-0.16 - 0.026 * tc) * (log_mstar + 0.025) - (6.51 - 0.11 * tc) + 9.0) * 1.0e-9;
+}
+
+/*
+ * FixingGas -- SFR = TACCONI18_HELIUM * H2gas / t_dep, with t_dep the Tacconi+18
+ * molecular depletion time.  H2gas comes from whichever SFprescription ran.
+ *
+ * t_dep depends on the galaxy's own offset from the main sequence,
+ * t_dep = t_0 dMS^C with dMS = SFR / (M* sSFR_MS), so the SFR is solved
+ * self-consistently: SFR = S dMS^-C with S = TACCONI18_HELIUM H2 / t_0 gives
+ * dMS = (S / (M* sSFR_MS))^(1/(1+C)).  Galaxies without stars use dMS = 1.
+ * Stores the t_dep used in H2DepletionTime_Gyr.
+ *
+ * Returns the instantaneous SFR strdot [10^10 Msun/h / code time].
+ */
+static double sfr_fixing_gas_tacconi18(const int p, struct GALAXY *galaxies, const struct params *run_params)
+{
+    if(galaxies[p].H2gas <= 0.0) {
+        galaxies[p].H2DepletionTime_Gyr = -1.0f;
+        return 0.0;
+    }
+
+    const double h = run_params->Hubble_h;
+    const double z = run_params->ZZ[galaxies[p].SnapNum];
+    const double mstar = CODE_MASS_TO_MSUN(galaxies[p].StellarMass, h);
+    const double log_m = (mstar > 0.0) ? log10(mstar) : 0.0;
+
+    /* t_0 = t_dep on the main sequence (dMS = 1), in Gyr */
+    const double log_t0 = TACCONI18_A + TACCONI18_B * log10(1.0 + z) + TACCONI18_D * (log_m - 10.7);
+    /* code time is h x physical time (time unit (Mpc/h)/(km/s)), see docs/physics/units.md */
+    const double gyr_to_code = SEC_PER_GIGAYEAR * h / run_params->UnitTime_in_s;
+    const double s_code = TACCONI18_HELIUM * galaxies[p].H2gas / (pow(10.0, log_t0) * gyr_to_code);
+
+    double dms = 1.0;
+    if(mstar > 0.0) {
+        const double ms_sfr_code = galaxies[p].StellarMass * speagle14_ms_ssfr_per_yr(log_m, z)
+                                   * 1.0e9 / gyr_to_code;    /* M* sSFR_MS in code mass / code time */
+        dms = pow(s_code / ms_sfr_code, 1.0 / (1.0 + TACCONI18_C));
+        if(dms < TACCONI18_DMS_MIN) dms = TACCONI18_DMS_MIN;
+        if(dms > TACCONI18_DMS_MAX) dms = TACCONI18_DMS_MAX;
+    }
+
+    const double t_dep_gyr = pow(10.0, log_t0 + TACCONI18_C * log10(dms));
+    galaxies[p].H2DepletionTime_Gyr = (float)t_dep_gyr;
+    return TACCONI18_HELIUM * galaxies[p].H2gas / (t_dep_gyr * gyr_to_code);
+}
+
+/*
  * SN feedback masses for one SF event (main, non-FFB path).
  *
  * Given the stellar mass formed this substep (*stars_inout), computes the
@@ -1024,6 +1096,12 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         default:
             fprintf(stderr, "No star formation prescription selected!\n");
             ABORT(0);
+    }
+
+    // FixingGas: the prescription above sets H2gas; the molecular depletion time
+    // (Tacconi+18) sets how fast it forms stars
+    if(run_params->FixingGas >= 1) {
+        strdot = sfr_fixing_gas_tacconi18(p, galaxies, run_params);
     }
 
     // Calculate HI (atomic hydrogen) as the remainder of hydrogen after H2.
