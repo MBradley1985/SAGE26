@@ -102,7 +102,7 @@ static float calculate_molecular_fraction_BR06_from_hstar(float gas_surface_dens
 
 /*
  * H2 molecular fraction from the Leroy et al. (2008, AJ 136, 2782) pressure law
- * (FixingGas >= 2).
+ * (FixingGas & FIXINGGAS_LEROY08).
  *
  * Their eq. 9 midplane pressure P_h = (pi/2) G Sigma_g (Sigma_g + (sigma_g/sigma_*,z) Sigma_*),
  * with sigma_g = 11 km/s and sigma_*,z = sqrt(2 pi G l_* / 7.3) Sigma_*^0.5 (their
@@ -137,12 +137,12 @@ float calculate_molecular_fraction_L08(float gas_surface_density_msun_pc2, float
 
 /*
  * Pressure-based molecular fraction for the BR06 family (SFprescription 1, 3):
- * Blitz & Rosolowsky (2006), or Leroy et al. (2008) when FixingGas >= 2.
+ * Blitz & Rosolowsky (2006), or Leroy et al. (2008) with FixingGas & FIXINGGAS_LEROY08.
  */
 float calculate_molecular_fraction_pressure(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
                                             float disk_scale_length_pc, const struct params *run_params)
 {
-    if(run_params->FixingGas >= 2) {
+    if(run_params->FixingGas & FIXINGGAS_LEROY08) {
         return calculate_molecular_fraction_L08(gas_surface_density_msun_pc2, stellar_surface_density_msun_pc2, disk_scale_length_pc);
     }
     return calculate_molecular_fraction_BR06(gas_surface_density_msun_pc2, stellar_surface_density_msun_pc2, disk_scale_length_pc);
@@ -272,7 +272,7 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
 
         if(sf_prescription_is_br06(sfpres)) {
             // BR06 (scale height precomputed above)
-            f_mol_r = (run_params->FixingGas >= 2)
+            f_mol_r = (run_params->FixingGas & FIXINGGAS_LEROY08)
                       ? calculate_molecular_fraction_L08(sigma_gas_r, sigma_star_r, rs_pc)
                       : calculate_molecular_fraction_BR06_from_hstar(sigma_gas_r, sigma_star_r, h_star_br06);
 

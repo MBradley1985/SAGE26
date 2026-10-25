@@ -1100,7 +1100,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
     // FixingGas: the prescription above sets H2gas; the molecular depletion time
     // (Tacconi+18) sets how fast it forms stars
-    if(run_params->FixingGas >= 1) {
+    if(run_params->FixingGas & FIXINGGAS_TDEP) {
         strdot = sfr_fixing_gas_tacconi18(p, galaxies, run_params);
     }
 

@@ -534,7 +534,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
-            {"FixingGas",              run_params->FixingGas,              0, 2},
+            {"FixingGas",              run_params->FixingGas,              0, FIXINGGAS_ALL},
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {
@@ -547,8 +547,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
         }
     }
 
-    /* FixingGas replaces how H2 turns into stars, so it needs a prescription
-       that tracks H2. */
+    /* FixingGas changes how H2 is made and turned into stars, so it needs a
+       prescription that tracks H2. */
     if(run_params->FixingGas && !sf_prescription_tracks_h2(run_params->SFprescription)) {
         fprintf(stderr, "Error: FixingGas = %d needs an H2-tracking SFprescription (1, 3-7); SFprescription = %d does not track H2.\n",
                 run_params->FixingGas, run_params->SFprescription);

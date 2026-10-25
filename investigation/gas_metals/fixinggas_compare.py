@@ -82,6 +82,8 @@ fig, axs = plt.subplots(2, 2, figsize=(11, 8.4))
 t1, t2 = [], []
 for run, col, lab in RUNS[1:]:
     g = run.get(s0); sel = g['sf'] & (g['lm'] > 9) & (g['H2DepletionTime_Gyr'] > 0) & (g['H2gas'] > 0)
+    if sel.sum() < 10:      # run without the Tacconi depletion time
+        continue
     ratio = g['H2DepletionTime_Gyr'] / tacconi_tdep_gyr(g['lm'], g['dms'], g['z'])
     axs[0, 0].hist(np.log10(ratio[sel]), bins=np.linspace(-0.5, 0.5, 81), color=col, alpha=0.5, label=lab)
     r2 = g['SfrDisk'] / (HE * g['H2gas'] / (g['H2DepletionTime_Gyr'] * 1e9)); s2_ = sel & (g['SfrDisk'] > 0)
