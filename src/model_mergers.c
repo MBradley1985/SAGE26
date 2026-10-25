@@ -281,10 +281,26 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         }
     }
 
-    // starburst recipe - now tracks which bulge component receives the stars
-    collisional_starburst_recipe(mass_ratio, merger_centralgal, centralgal, time, dt, halonr,
-                                 0, step, burst_to_merger_bulge, old_disk_radius,
-                                 galaxies, run_params);
+    if(FG_SHARK_BURSTS(run_params)) {
+        // Shark (Lagos et al. 2018; shark galaxy_mergers.cpp create_merger): in a major
+        // merger all the gas goes to the bulge; in a minor merger the satellite's gas joins
+        // the central's disk (as add_galaxies_together has done), and all the disk gas goes
+        // to the bulge if mass_ratio >= minor_merger_burst_ratio = 0.1 and the merged gas-to-
+        // stellar mass ratio > gas_fraction_burst_ratio = 0.3 (sample.cfg).  The bulge gas
+        // then bursts in starformation_and_feedback; no SAGE collisional burst here.
+        const double ms = galaxies[merger_centralgal].StellarMass;
+        const double mgas_ratio = (ms > 0.0) ? galaxies[merger_centralgal].ColdGas / ms : 1.0;
+        if(mass_ratio > run_params->ThreshMajorMerger || (mass_ratio >= 0.1 && mgas_ratio > 0.3)) {
+            galaxies[merger_centralgal].BulgeColdGas = galaxies[merger_centralgal].ColdGas;
+            galaxies[merger_centralgal].MetalsBulgeColdGas = galaxies[merger_centralgal].MetalsColdGas;
+            galaxies[merger_centralgal].BulgeGasOrigin = 1;
+        }
+    } else {
+        // starburst recipe - now tracks which bulge component receives the stars
+        collisional_starburst_recipe(mass_ratio, merger_centralgal, centralgal, time, dt, halonr,
+                                     0, step, burst_to_merger_bulge, old_disk_radius,
+                                     galaxies, run_params);
+    }
 
     // Sync the central's BulgeRadius after add_galaxies_together + starburst have
     // modified bulge mass.  calculate_merger_remnant_radius reads BulgeRadius for
@@ -910,6 +926,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     // Zero all satellite baryonic fields after transfer -- defensive cleanup so
     // no downstream code can accidentally recount baryons from a merged galaxy.
     galaxies[gal].ColdGas         = galaxies[gal].MetalsColdGas     = 0.0f;
+    galaxies[gal].BulgeColdGas    = galaxies[gal].MetalsBulgeColdGas = 0.0f;
     galaxies[gal].HotGas          = galaxies[gal].MetalsHotGas      = 0.0f;
     galaxies[gal].CGMgas          = galaxies[gal].MetalsCGMgas      = 0.0f;
     galaxies[gal].EjectedMass     = galaxies[gal].MetalsEjectedMass = 0.0f;

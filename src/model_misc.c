@@ -118,6 +118,10 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].deltaMvir = 0.0;
 
     galaxies[p].ColdGas = 0.0;
+    galaxies[p].BulgeColdGas = 0.0;
+    galaxies[p].MetalsBulgeColdGas = 0.0;
+    galaxies[p].BulgeGasOrigin = 0;
+    galaxies[p].SharkDISnap = -1;
     galaxies[p].StellarMass = 0.0;
     galaxies[p].BulgeMass = 0.0;
     galaxies[p].MergerBulgeMass = 0.0;   

@@ -165,6 +165,33 @@ float calculate_molecular_fraction_shark(float gas_surface_density_msun_pc2, flo
 }
 
 /*
+ * Mass-weighted Shark molecular fraction of an exponential gas component with
+ * mass m_gas [Msun], co-spatial stars m_star [Msun] and half-mass radius
+ * r_half_pc [pc], integrated over 0-5 scale lengths as shark does (re =
+ * r_half / 1.678). Used for FixingGas 5 starbursts in the bulge.
+ */
+double shark_molecular_fraction_component(const double m_gas, const double m_star, const double r_half_pc)
+{
+    if(m_gas <= 0.0 || r_half_pc <= 0.0) {
+        return 0.0;
+    }
+    const double re = r_half_pc / 1.678346990;          /* shark RDISK_HALF_SCALE */
+    const double sg0 = m_gas / (2.0 * M_PI * re * re);
+    const double ss0 = (m_star > 0.0) ? m_star / (2.0 * M_PI * re * re) : 0.0;
+    const int nbins = 50;
+    const double dr = 5.0 * re / nbins;
+    double mmol = 0.0, mtot = 0.0;
+    for(int i = 0; i < nbins; i++) {
+        const double r = (i + 0.5) * dr;
+        const double e = exp(-r / re);
+        const double dm = 2.0 * M_PI * r * sg0 * e * dr;
+        mmol += dm * calculate_molecular_fraction_shark((float)(sg0 * e), (float)(ss0 * e), (float)r);
+        mtot += dm;
+    }
+    return (mtot > 0.0) ? mmol / mtot : 0.0;
+}
+
+/*
  * Pressure-based molecular fraction for the BR06 family (SFprescription 1, 3):
  * Blitz & Rosolowsky (2006); Leroy et al. (2008) with FixingGas 2, 3; Shark with
  * FixingGas 4, 5 (evaluated at the disk scale length on the slab path).

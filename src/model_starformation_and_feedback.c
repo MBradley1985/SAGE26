@@ -1087,8 +1087,8 @@ if(run_params->SupernovaRecipeOn == 1) {
  * recycling (Krumholz & Dekel 2011 Eq. 22). If the galaxy is in FFB regime,
  * delegates to starformation_ffb() and returns immediately.
  */
-void starformation_and_feedback(const int p, const int centralgal, const double time, const double dt, const int halonr, const int step,
-                                struct GALAXY *galaxies, const struct params *run_params)
+static void starformation_and_feedback_disk(const int p, const int centralgal, const double time, const double dt, const int halonr, const int step,
+                                           struct GALAXY *galaxies, const struct params *run_params)
 {
     XASSERT(step >= 0 && step < STEPS, -1,
             "Error: step = %d is out of bounds [0, %d)\n", step, STEPS);
@@ -1210,6 +1210,133 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         
         add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }
+}
+
+/*
+ * FixingGas 5 -- Shark (Lagos et al. 2018) starburst in the bulge gas reservoir.
+ *
+ * Shark evolves bulge gas with the same star-formation law as disks but boosted,
+ * Sigma_SFR = boost_starburst nu_SF f_mol Sigma_gas (shark src/star_formation.cpp,
+ * boost_starburst = 10, nu_SF = 1 Gyr^-1 in sample.cfg), with f_mol from the bulge
+ * gas and bulge stars, and the same stellar feedback.  Bulge gas left below
+ * mass_min = 1e5 Msun/h is returned to the disk (shark galaxy_mergers.cpp,
+ * disk_instability.cpp).  Here the burst runs every substep on BulgeColdGas,
+ * using SAGE's SN feedback, metal production and BulgeRadius.
+ */
+static const double SHARK_BOOST_STARBURST = 10.0;
+static const double SHARK_BURST_MASS_MIN  = 1.0e-5;   /* 1e5 Msun/h in 10^10 Msun/h */
+
+static void clamp_bulge_gas(const int p, struct GALAXY *galaxies)
+{
+    if(galaxies[p].BulgeColdGas > galaxies[p].ColdGas) galaxies[p].BulgeColdGas = galaxies[p].ColdGas;
+    if(galaxies[p].MetalsBulgeColdGas > galaxies[p].MetalsColdGas) galaxies[p].MetalsBulgeColdGas = galaxies[p].MetalsColdGas;
+    if(galaxies[p].BulgeColdGas < 0.0f) galaxies[p].BulgeColdGas = 0.0f;
+    if(galaxies[p].MetalsBulgeColdGas < 0.0f) galaxies[p].MetalsBulgeColdGas = 0.0f;
+}
+
+static void shark_starburst(const int p, const int centralgal, const double dt, const int step,
+                            struct GALAXY *galaxies, const struct params *run_params)
+{
+    clamp_bulge_gas(p, galaxies);
+    if(galaxies[p].BulgeColdGas < SHARK_BURST_MASS_MIN) {
+        galaxies[p].BulgeColdGas = galaxies[p].MetalsBulgeColdGas = 0.0f;   /* back to the disk */
+        return;
+    }
+
+    const double h = run_params->Hubble_h;
+    const double r_half = (galaxies[p].BulgeRadius > 0.0) ? galaxies[p].BulgeRadius
+                                                          : 1.678346990 * galaxies[p].DiskScaleRadius;
+    const double fmol = shark_molecular_fraction_component(CODE_MASS_TO_MSUN(galaxies[p].BulgeColdGas, h),
+                                                           CODE_MASS_TO_MSUN(galaxies[p].BulgeMass, h),
+                                                           CODE_LENGTH_TO_PC(r_half, h));
+    const double gyr_to_code = SEC_PER_GIGAYEAR * h / run_params->UnitTime_in_s;
+    const double sfr = SHARK_BOOST_STARBURST * SHARK_NU_SF_PER_GYR * fmol * galaxies[p].BulgeColdGas / gyr_to_code;
+
+    double stars = sfr * dt, reheated_mass, ejected_mass;
+    compute_sn_feedback(p, &stars, &reheated_mass, &ejected_mass, galaxies, run_params);
+    if(stars + reheated_mass > galaxies[p].BulgeColdGas && stars + reheated_mass > 0.0) {
+        const double fac = galaxies[p].BulgeColdGas / (stars + reheated_mass);
+        stars *= fac; reheated_mass *= fac; ejected_mass *= fac;
+    }
+    if(stars <= 0.0) {
+        return;
+    }
+
+    const double zb = get_metallicity(galaxies[p].BulgeColdGas, galaxies[p].MetalsBulgeColdGas);
+    galaxies[p].SfrBulge[step] += stars / dt;
+    galaxies[p].SfrBulgeColdGas[step] = galaxies[p].BulgeColdGas;
+    galaxies[p].SfrBulgeColdGasMetals[step] = galaxies[p].MetalsBulgeColdGas;
+
+    /* stars form from the bulge gas and join the bulge */
+    const double recycled_stars = (1.0 - run_params->RecycleFraction) * stars;
+    update_from_star_formation(p, stars, zb, galaxies, run_params);
+    galaxies[p].BulgeColdGas -= recycled_stars;
+    galaxies[p].MetalsBulgeColdGas -= zb * recycled_stars;
+    galaxies[p].BulgeMass += recycled_stars;
+    galaxies[p].MetalsBulgeMass += zb * recycled_stars;
+    if(galaxies[p].BulgeGasOrigin == 2) {
+        galaxies[p].InstabilityBulgeMass += recycled_stars;
+    } else {
+        galaxies[p].MergerBulgeMass += recycled_stars;
+    }
+    if(run_params->SaveFullSFH) {
+        const int snapnum = galaxies[p].SnapNum;
+        if(snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS) {
+            galaxies[p].SFHMassBulge[snapnum] += recycled_stars;
+        }
+    }
+
+    /* the reheated gas leaves the bulge reservoir */
+    if(reheated_mass > galaxies[p].BulgeColdGas) reheated_mass = galaxies[p].BulgeColdGas;
+    galaxies[p].BulgeColdGas -= reheated_mass;
+    galaxies[p].MetalsBulgeColdGas -= zb * reheated_mass;
+    update_from_feedback(p, centralgal, reheated_mass, ejected_mass, zb, galaxies, run_params);
+
+    /* new metals, as in the disk path; those staying in the cold gas stay in the bulge gas */
+    if(galaxies[p].ColdGas > 1.0e-8) {
+        const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / KD11_METAL_HALO_MASS);
+        galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        galaxies[p].MetalsBulgeColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, run_params->Yield * FracZleaveDiskVal * stars);
+    } else {
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, run_params->Yield * stars);
+    }
+
+    clamp_bulge_gas(p, galaxies);
+    if(galaxies[p].BulgeColdGas < SHARK_BURST_MASS_MIN) {
+        galaxies[p].BulgeColdGas = galaxies[p].MetalsBulgeColdGas = 0.0f;
+    }
+    get_bulge_radius(p, galaxies, run_params);
+}
+
+/*
+ * Star formation and feedback for one substep.  Outside FixingGas 5 this is the
+ * disk path above.  With FixingGas 5 the bulge (starburst) gas is set aside while
+ * the disk forms stars from the disk gas, then bursts on its own.
+ */
+void starformation_and_feedback(const int p, const int centralgal, const double time, const double dt, const int halonr, const int step,
+                                struct GALAXY *galaxies, const struct params *run_params)
+{
+    if(!FG_SHARK_BURSTS(run_params) || (run_params->EnhancedStarFormationOn >= 1 && galaxies[p].FFBRegime == 1)) {
+        starformation_and_feedback_disk(p, centralgal, time, dt, halonr, step, galaxies, run_params);
+        if(FG_SHARK_BURSTS(run_params)) clamp_bulge_gas(p, galaxies);
+        return;
+    }
+
+    clamp_bulge_gas(p, galaxies);
+    const float bulge_gas = galaxies[p].BulgeColdGas, bulge_metals = galaxies[p].MetalsBulgeColdGas;
+    galaxies[p].ColdGas -= bulge_gas;
+    galaxies[p].MetalsColdGas -= bulge_metals;
+    galaxies[p].BulgeColdGas = galaxies[p].MetalsBulgeColdGas = 0.0f;
+
+    starformation_and_feedback_disk(p, centralgal, time, dt, halonr, step, galaxies, run_params);
+
+    galaxies[p].ColdGas += bulge_gas;
+    galaxies[p].MetalsColdGas += bulge_metals;
+    galaxies[p].BulgeColdGas += bulge_gas;
+    galaxies[p].MetalsBulgeColdGas += bulge_metals;
+
+    shark_starburst(p, centralgal, dt, step, galaxies, run_params);
 }
 
 /*

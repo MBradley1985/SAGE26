@@ -213,6 +213,10 @@ struct GALAXY
     /* bulge properties -- split by formation channel for morphology tracking */
     float MergerBulgeMass;        /* bulge mass built via mergers [10^10 Msun/h] */
     float InstabilityBulgeMass;   /* bulge mass built via disk instability [10^10 Msun/h] */
+    float BulgeColdGas;           /* FixingGas 5: cold gas in the bulge (starburst) reservoir, a subset of ColdGas [10^10 Msun/h] */
+    float MetalsBulgeColdGas;     /* FixingGas 5: metals in BulgeColdGas, a subset of MetalsColdGas [10^10 Msun/h] */
+    int32_t BulgeGasOrigin;       /* FixingGas 5: what put gas in the bulge: 1 merger, 2 disk instability (sets which bulge component the burst builds) */
+    int32_t SharkDISnap;          /* FixingGas 5: snapshot whose disk-instability check has been made (shark checks once per snapshot) */
     float MergerBulgeRadius;      /* half-mass radius of merger-built bulge [Mpc/h] */
     float InstabilityBulgeRadius; /* half-mass radius of instability-built bulge [Mpc/h] */
 
