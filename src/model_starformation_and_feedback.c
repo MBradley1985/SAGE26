@@ -755,11 +755,12 @@ static double speagle14_ms_ssfr_per_yr(const double log_mstar, const double z)
  * t_dep = t_0 dMS^C with dMS = SFR / (M* sSFR_MS), so the SFR is solved
  * self-consistently: SFR = S dMS^-C with S = TACCONI18_HELIUM H2 / t_0 gives
  * dMS = (S / (M* sSFR_MS))^(1/(1+C)).  Galaxies without stars use dMS = 1.
- * Stores the t_dep used in H2DepletionTime_Gyr.
+ * Stores the t_dep used in H2DepletionTime_Gyr.  Also used by merger and
+ * disk-instability bursts (collisional_starburst_recipe).
  *
  * Returns the instantaneous SFR strdot [10^10 Msun/h / code time].
  */
-static double sfr_fixing_gas_tacconi18(const int p, struct GALAXY *galaxies, const struct params *run_params)
+double sfr_fixing_gas_tacconi18(const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
     if(galaxies[p].H2gas <= 0.0) {
         galaxies[p].H2DepletionTime_Gyr = -1.0f;

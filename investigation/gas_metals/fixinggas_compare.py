@@ -18,7 +18,7 @@ HE = 1.36
 EDGES = np.arange(8.5, 12.01, 0.2)
 C_OFF, C_ON = VIOLET, ORANGE
 FIELDS = ['Type', 'StellarMass', 'BulgeMass', 'ColdGas', 'MetalsColdGas', 'MetalsStellarMass', 'H2gas', 'H1gas',
-          'SfrDisk', 'SfrBulge', 'BlackHoleMass', 'H2DepletionTime_Gyr', 'HotGas', 'Mvir']
+          'SfrDisk', 'SfrBulge', 'BlackHoleMass', 'H2DepletionTime_Gyr', 'HotGas', 'Mvir', 'MergerBulgeMass', 'InstabilityBulgeMass']
 
 
 class Run:
@@ -38,7 +38,7 @@ class Run:
             g = self.f[f'Snap_{snap}']
             d = {k: g[k][:].astype('f8') for k in FIELDS}
             for k in ('StellarMass', 'BulgeMass', 'ColdGas', 'MetalsColdGas', 'MetalsStellarMass', 'H2gas', 'H1gas',
-                      'BlackHoleMass', 'HotGas', 'Mvir'):
+                      'BlackHoleMass', 'HotGas', 'Mvir', 'MergerBulgeMass', 'InstabilityBulgeMass'):
                 d[k] *= 1e10 / self.h
             d['sfr'] = d['SfrDisk'] + d['SfrBulge']
             d['lm'] = np.log10(np.maximum(d['StellarMass'], 1.0))
@@ -282,6 +282,41 @@ ax.set_xlabel(r'log $M_*$ [M$_\odot$]'); ax.set_ylabel(r'log $\Phi$ [Mpc$^{-3}$ 
 ax.legend(loc='lower left'); ax.set_title('(d) stellar mass function evolution', fontsize=10)
 fig.suptitle('Check 5: evolution (Millennium)', fontsize=12)
 fig.tight_layout(); p = os.path.join(PLOTS, f'{PREFIX}_5_evolution.png'); fig.savefig(p, dpi=130); plt.close(fig); print('wrote', p)
+
+# ------------------------------------------------------------------ 6. bursts and bulges
+fig, axs = plt.subplots(2, 2, figsize=(11, 8.4))
+ax = axs[0, 0]
+for run, col, lab in RUNS:
+    zz, fb = [], []
+    for s in snaps:
+        d = run.get(s); zz.append(run.z[s]); fb.append(np.sum(d['SfrBulge']) / max(np.sum(d['sfr']), 1e-30))
+    ax.plot(np.log10(1 + np.array(zz)), fb, color=col, label=lab)
+ax.set_xlabel('log (1 + z)'); ax.set_ylabel('fraction of cosmic SFR in bursts (SfrBulge)'); ax.set_ylim(0, None); ax.legend(loc='upper left')
+ax.set_title('(a) burst share of star formation', fontsize=10)
+ax = axs[0, 1]
+for run, col, lab in RUNS:
+    d = run.get(s0); med(ax, d['lm'], d['BulgeMass'] / d['StellarMass'], d['lm'] > 9, col, lab)
+ax.set_xlabel(r'log $M_*$ [M$_\odot$]'); ax.set_ylabel('B/T'); ax.set_ylim(0, 1); ax.set_xlim(9, 12); ax.legend(loc='upper left')
+ax.set_title('(b) bulge-to-total ratio, z = 0', fontsize=10)
+ax = axs[1, 0]
+for run, col, lab in RUNS:
+    d = run.get(s0)
+    c_, o = binned(d['lm'], d['MergerBulgeMass'] / d['StellarMass'], EDGES, d['lm'] > 9, stat=np.mean); ax.plot(c_, o[:, 0], color=col, label=f'{lab}: merger bulge')
+    c_, o = binned(d['lm'], d['InstabilityBulgeMass'] / d['StellarMass'], EDGES, d['lm'] > 9, stat=np.mean); ax.plot(c_, o[:, 0], color=col, ls='--', label=f'{lab}: instability bulge')
+ax.set_xlabel(r'log $M_*$ [M$_\odot$]'); ax.set_ylabel('mean mass fraction of M*'); ax.set_xlim(9, 12); ax.set_ylim(0, 1); ax.legend(loc='upper left')
+ax.set_title('(c) bulge origin, z = 0', fontsize=10)
+ax = axs[1, 1]
+for run, col, lab in RUNS:
+    d = run.get(s0); n, _ = np.histogram(lg(d['BulgeMass'][d['BulgeMass'] > 0]), bins=e)
+    ax.plot(c, lg(n / run.vol / bw), color=col, label=lab)
+    sph = d['BulgeMass'] / np.maximum(d['StellarMass'], 1) > 0.5; n, _ = np.histogram(d['lm'][sph & (d['lm'] > 0)], bins=e)
+    ax.plot(c, lg(n / run.vol / bw), color=col, ls='--')
+ax.plot(gm[:, 0], gm[:, 1], 's', color=OBS, ms=5, label='GAMA E/HE (morphological SMF)')
+ax.plot([], [], color='#52514e', ls='--', label='SAGE26 galaxies with B/T > 0.5')
+ax.set_xlabel(r'log $M$ [M$_\odot$]'); ax.set_ylabel(r'log $\Phi$ [Mpc$^{-3}$ dex$^{-1}$]'); ax.set_ylim(-5.5, -1.5); ax.set_xlim(8.5, 12.2)
+ax.legend(loc='lower left'); ax.set_title('(d) bulge mass function (solid) and spheroid-dominated galaxies', fontsize=10)
+fig.suptitle('Check 6: bursts and bulges (Millennium)', fontsize=12)
+fig.tight_layout(); p = os.path.join(PLOTS, f'{PREFIX}_6_bursts_bulges.png'); fig.savefig(p, dpi=130); plt.close(fig); print('wrote', p)
 
 # ------------------------------------------------------------------ numbers
 for lo in (9.5, 10.0, 10.5, 11.0):

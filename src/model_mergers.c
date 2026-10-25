@@ -624,7 +624,8 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         eburst = STARBURST_FRAC_COEFF * pow(mass_ratio, STARBURST_MASS_POWER);
     }
 
-    if (run_params->StarburstColdGasOn == 0 &&
+    // FixingGas bursts follow the molecular depletion-time law, so they need H2
+    if ((run_params->StarburstColdGasOn == 0 || run_params->FixingGas >= 1) &&
         sf_prescription_tracks_h2(run_params->SFprescription)) {
         // Recompute H2gas from the current ColdGas rather than using the stored value.
         // The stored H2gas was set during disk SF earlier in this timestep, but ColdGas has
@@ -703,7 +704,14 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     }
     if(gas_for_starburst < 0.0) gas_for_starburst = 0.0;
 
-    stars = eburst * gas_for_starburst;
+    if(run_params->FixingGas >= 1) {
+        // FixingGas: the bursting fraction of the H2 forms stars at the galaxy's
+        // Tacconi+18 depletion time over this substep, like quiescent disk SF
+        stars = eburst * sfr_fixing_gas_tacconi18(merger_centralgal, galaxies, run_params) * dt;
+        if(stars > gas_for_starburst) stars = gas_for_starburst;
+    } else {
+        stars = eburst * gas_for_starburst;
+    }
     if(stars < 0.0) {
         stars = 0.0;
     }

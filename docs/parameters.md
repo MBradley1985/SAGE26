@@ -70,7 +70,7 @@ optional parameters take the listed default if omitted.
 | `ConcentrationOn` | int | no | `3` | Halo concentration method: 0=off; 1=Ishiyama+21 table; 2=V_max/V_vir; 3=V_max/V_vir with infall freeze for satellites. |
 | `BulgeSizeOn` | int | no | `3` | Bulge radius model: 0=off; 1=Shen+2003 eq.33; 2=Shen+2003 eq.32; 3=Tonini+2016 (separate merger and instability channels, mass-weighted average). |
 | `StarburstColdGasOn` | 0/1 | no | `1` | Include cold gas contribution during merger starbursts. |
-| `FixingGas` | 0/1 | no | `0` | Cold-gas fixes (see `investigation/gas_metals/README.md`). 1: quiescent SF uses SFR = 1.36 H2 / t_dep, with t_dep the Tacconi+18 molecular depletion time (Table 3a: z, offset from the Speagle+14 main sequence, M*). The SFprescription still sets H2. Requires an H2-tracking SFprescription (1, 3-7). FFB and merger bursts are unchanged. |
+| `FixingGas` | 0/1 | no | `0` | Cold-gas fixes (see `investigation/gas_metals/README.md`). 1: quiescent SF uses SFR = 1.36 H2 / t_dep, with t_dep the Tacconi+18 molecular depletion time (Table 3a: z, offset from the Speagle+14 main sequence, M*). The SFprescription still sets H2. Merger and disk-instability bursts also use it: the bursting fraction of the (freshly computed) H2 forms stars at t_dep over the substep. Requires an H2-tracking SFprescription (1, 3-7). FFB is unchanged. |
 
 ---
 
