@@ -18,6 +18,7 @@ extern "C" {
 
     extern float calculate_molecular_fraction_BR06(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2, float disk_scale_length_pc);
     extern float calculate_molecular_fraction_L08(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2, float disk_scale_length_pc);
+    extern float calculate_molecular_fraction_shark(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2, float radius_pc);
     extern float calculate_molecular_fraction_pressure(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
                                                        float disk_scale_length_pc, const struct params *run_params);
     extern float calculate_molecular_fraction_radial_integration(const int gal, struct GALAXY *galaxies,

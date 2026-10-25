@@ -792,6 +792,29 @@ static double sfr_fixing_gas_tacconi18(const int p, struct GALAXY *galaxies, con
 }
 
 /*
+ * FixingGas 4, 5 -- Shark's quiescent star-formation law (Lagos et al. 2018; shark
+ * src/star_formation.cpp, model = br06): Sigma_SFR = nu_SF f_mol Sigma_gas with
+ * nu_SF = 1 Gyr^-1 (sample.cfg), i.e. SFR = nu_SF M_mol with M_mol including helium.
+ * H2gas is hydrogen only, so M_mol = H2gas / HYDROGEN_MASS_FRAC.  Stores the
+ * molecular depletion time 1/nu_SF in H2DepletionTime_Gyr.
+ *
+ * Returns the instantaneous SFR strdot [10^10 Msun/h / code time].
+ */
+static const double SHARK_NU_SF_PER_GYR = 1.0;
+
+static double sfr_fixing_gas_shark(const int p, struct GALAXY *galaxies, const struct params *run_params)
+{
+    if(galaxies[p].H2gas <= 0.0) {
+        galaxies[p].H2DepletionTime_Gyr = -1.0f;
+        return 0.0;
+    }
+    /* code time is h x physical time (time unit (Mpc/h)/(km/s)), see docs/physics/units.md */
+    const double gyr_to_code = SEC_PER_GIGAYEAR * run_params->Hubble_h / run_params->UnitTime_in_s;
+    galaxies[p].H2DepletionTime_Gyr = (float)(1.0 / SHARK_NU_SF_PER_GYR);
+    return SHARK_NU_SF_PER_GYR * (galaxies[p].H2gas / HYDROGEN_MASS_FRAC) / gyr_to_code;
+}
+
+/*
  * SN feedback masses for one SF event (main, non-FFB path).
  *
  * Given the stellar mass formed this substep (*stars_inout), computes the
@@ -1099,8 +1122,10 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     }
 
     // FixingGas: the prescription above sets H2gas; the molecular depletion time
-    // (Tacconi+18) sets how fast it forms stars
-    if(run_params->FixingGas & FIXINGGAS_TDEP) {
+    // (Tacconi+18 or Shark's constant nu_SF) sets how fast it forms stars
+    if(FG_SHARK_SF(run_params)) {
+        strdot = sfr_fixing_gas_shark(p, galaxies, run_params);
+    } else if(FG_TDEP(run_params)) {
         strdot = sfr_fixing_gas_tacconi18(p, galaxies, run_params);
     }
 

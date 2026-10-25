@@ -102,7 +102,7 @@ static float calculate_molecular_fraction_BR06_from_hstar(float gas_surface_dens
 
 /*
  * H2 molecular fraction from the Leroy et al. (2008, AJ 136, 2782) pressure law
- * (FixingGas & FIXINGGAS_LEROY08).
+ * (FixingGas 2, 3).
  *
  * Their eq. 9 midplane pressure P_h = (pi/2) G Sigma_g (Sigma_g + (sigma_g/sigma_*,z) Sigma_*),
  * with sigma_g = 11 km/s and sigma_*,z = sqrt(2 pi G l_* / 7.3) Sigma_*^0.5 (their
@@ -136,13 +136,46 @@ float calculate_molecular_fraction_L08(float gas_surface_density_msun_pc2, float
 }
 
 /*
+ * H2 molecular fraction as Shark computes it (Lagos et al. 2018; shark
+ * src/star_formation.cpp, fmol() and midplane_pressure(), model = br06 with the
+ * sample.cfg values): R_mol = (P/P0)^beta, P0/k = 34673 K cm^-3, beta = 0.92, with
+ * P = (pi/2) G Sigma_g (Sigma_g + (sigma_g/sigma_*) Sigma_*), sigma_g = 10 km/s,
+ * sigma_* = sqrt(pi G h_* Sigma_*) and h_* = 0.14 r at radius r (Kregel et al.
+ * 2002). Surface densities include helium. FixingGas 4, 5.
+ */
+static const double SHARK_P0_K           = 34673.0;  /* K cm^-3 */
+static const double SHARK_BETA_PRESS     = 0.92;
+static const double SHARK_SIGMA_GAS_CMS  = 10.0e5;   /* gas velocity dispersion [cm/s] */
+static const double SHARK_HSTAR_PER_R    = 0.14;     /* stellar scale height / radius */
+
+float calculate_molecular_fraction_shark(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
+                                         float radius_pc)
+{
+    if(gas_surface_density_msun_pc2 <= 0.0f || radius_pc <= 0.0f) {
+        return 0.0f;
+    }
+    const double msun_pc2_to_cgs = SOLAR_MASS / (CM_PER_PC * CM_PER_PC);
+    const double sg = gas_surface_density_msun_pc2 * msun_pc2_to_cgs;
+    const double ss = (stellar_surface_density_msun_pc2 > 0.0f) ? stellar_surface_density_msun_pc2 * msun_pc2_to_cgs : 0.0;
+    const double veldisp_star = sqrt(M_PI * GRAVITY * SHARK_HSTAR_PER_R * radius_pc * CM_PER_PC * ss);
+    const double star_comp = (ss > 0.0 && veldisp_star > 0.0) ? (SHARK_SIGMA_GAS_CMS / veldisp_star) * ss : 0.0;
+    const double p_over_k = 0.5 * M_PI * GRAVITY * sg * (sg + star_comp) / BOLTZMANN;
+    const double r_mol = pow(p_over_k / SHARK_P0_K, SHARK_BETA_PRESS);
+    return (float)(r_mol / (1.0 + r_mol));
+}
+
+/*
  * Pressure-based molecular fraction for the BR06 family (SFprescription 1, 3):
- * Blitz & Rosolowsky (2006), or Leroy et al. (2008) with FixingGas & FIXINGGAS_LEROY08.
+ * Blitz & Rosolowsky (2006); Leroy et al. (2008) with FixingGas 2, 3; Shark with
+ * FixingGas 4, 5 (evaluated at the disk scale length on the slab path).
  */
 float calculate_molecular_fraction_pressure(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
                                             float disk_scale_length_pc, const struct params *run_params)
 {
-    if(run_params->FixingGas & FIXINGGAS_LEROY08) {
+    if(FG_SHARK_SF(run_params)) {
+        return calculate_molecular_fraction_shark(gas_surface_density_msun_pc2, stellar_surface_density_msun_pc2, disk_scale_length_pc);
+    }
+    if(FG_LEROY08(run_params)) {
         return calculate_molecular_fraction_L08(gas_surface_density_msun_pc2, stellar_surface_density_msun_pc2, disk_scale_length_pc);
     }
     return calculate_molecular_fraction_BR06(gas_surface_density_msun_pc2, stellar_surface_density_msun_pc2, disk_scale_length_pc);
@@ -272,9 +305,9 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
 
         if(sf_prescription_is_br06(sfpres)) {
             // BR06 (scale height precomputed above)
-            f_mol_r = (run_params->FixingGas & FIXINGGAS_LEROY08)
-                      ? calculate_molecular_fraction_L08(sigma_gas_r, sigma_star_r, rs_pc)
-                      : calculate_molecular_fraction_BR06_from_hstar(sigma_gas_r, sigma_star_r, h_star_br06);
+            f_mol_r = FG_SHARK_SF(run_params) ? calculate_molecular_fraction_shark(sigma_gas_r, sigma_star_r, r)
+                    : FG_LEROY08(run_params) ? calculate_molecular_fraction_L08(sigma_gas_r, sigma_star_r, rs_pc)
+                    : calculate_molecular_fraction_BR06_from_hstar(sigma_gas_r, sigma_star_r, h_star_br06);
 
         } else if(sfpres == 4) {
             // KD12

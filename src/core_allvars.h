@@ -449,10 +449,17 @@ struct save_info {
 };
 
 
-/* FixingGas bit flags (combine by adding; see docs/parameters.md) */
-#define FIXINGGAS_TDEP     1   /* SFR = 1.36 H2 / t_dep, Tacconi+18 molecular depletion time */
-#define FIXINGGAS_LEROY08  2   /* Leroy+08 pressure law for BR06-family H2 (SFprescription 1, 3) */
-#define FIXINGGAS_ALL      3
+/* FixingGas modes (see docs/parameters.md):
+ *   1  SFR = 1.36 H2 / t_dep, Tacconi+18 molecular depletion time
+ *   2  Leroy+08 pressure law for BR06-family H2 (SFprescription 1, 3)
+ *   3  1 + 2
+ *   4  Shark (Lagos+18) star formation: SFR = nu_SF M_mol with Shark's BR06 pressure law
+ *   5  4 + Shark disk instabilities, merger classification and starbursts */
+#define FIXINGGAS_MAX      5
+#define FG_TDEP(p)         ((p)->FixingGas == 1 || (p)->FixingGas == 3)
+#define FG_LEROY08(p)      ((p)->FixingGas == 2 || (p)->FixingGas == 3)
+#define FG_SHARK_SF(p)     ((p)->FixingGas == 4 || (p)->FixingGas == 5)
+#define FG_SHARK_BURSTS(p) ((p)->FixingGas == 5)
 
 struct params
 {
@@ -506,7 +513,7 @@ struct params
                                           // histories. Those accumulate stellar mass, not rate, so they are
                                           // correct at any substep count (unlike the Sfr* rate bins).
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
-    int32_t    FixingGas;                 // cold-gas fixes, bit flags (see docs/parameters.md). 0: off (default); FIXINGGAS_TDEP, FIXINGGAS_LEROY08
+    int32_t    FixingGas;                 // cold-gas fixes, 0 (off, default) to FIXINGGAS_MAX; see the FG_* macros and docs/parameters.md
 
     /* baryonic physics calibration parameters */
     double RecycleFraction;       /* fraction of stellar mass returned to cold gas by SN */
