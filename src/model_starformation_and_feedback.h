@@ -32,7 +32,6 @@ extern "C" {
     /* Print totals of the silent physics clamps (H2 cap, negative HI,
        reheated-mass cap); called from finalize_sage() in VERBOSE builds. */
     extern void report_sf_clamp_counts(void);
-    extern double sfr_fixing_gas_tacconi18(const int p, struct GALAXY *galaxies, const struct params *run_params);
 
 #ifdef __cplusplus
 }
