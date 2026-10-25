@@ -247,8 +247,8 @@ static double sfr_br06(const int p, struct GALAXY *galaxies, const struct params
                 }
                 const float gas_surface_density  = (CODE_MASS_TO_MSUN(galaxies[p].ColdGas, h)) / disk_area_pc2;
                 const float star_surface_density = CODE_MASS_TO_MSUN(galaxies[p].StellarMass - galaxies[p].BulgeMass, h) / disk_area_pc2;
-                galaxies[p].H2gas = calculate_molecular_fraction_BR06(gas_surface_density, star_surface_density,
-                                                                       rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                galaxies[p].H2gas = calculate_molecular_fraction_pressure(gas_surface_density, star_surface_density,
+                                                                          rs_pc, run_params) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
             }
 
             if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
@@ -378,8 +378,8 @@ static double sfr_somerville25_h2(const int p, struct GALAXY *galaxies, const st
                 }
                 gas_surface_density = (CODE_MASS_TO_MSUN(galaxies[p].ColdGas, h)) / disk_area_pc2;
                 const float stellar_surface_density = (CODE_MASS_TO_MSUN(galaxies[p].StellarMass - galaxies[p].BulgeMass, h)) / disk_area_pc2;
-                total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
-                                                                        rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                total_molecular_gas = calculate_molecular_fraction_pressure(gas_surface_density, stellar_surface_density,
+                                                                            rs_pc, run_params) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
                 galaxies[p].H2gas = total_molecular_gas;
             }
 

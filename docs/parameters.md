@@ -70,7 +70,7 @@ optional parameters take the listed default if omitted.
 | `ConcentrationOn` | int | no | `3` | Halo concentration method: 0=off; 1=Ishiyama+21 table; 2=V_max/V_vir; 3=V_max/V_vir with infall freeze for satellites. |
 | `BulgeSizeOn` | int | no | `3` | Bulge radius model: 0=off; 1=Shen+2003 eq.33; 2=Shen+2003 eq.32; 3=Tonini+2016 (separate merger and instability channels, mass-weighted average). |
 | `StarburstColdGasOn` | 0/1 | no | `1` | Include cold gas contribution during merger starbursts. |
-| `FixingGas` | 0/1 | no | `0` | Cold-gas fixes (see `investigation/gas_metals/README.md`). 1: quiescent SF uses SFR = 1.36 H2 / t_dep, with t_dep the Tacconi+18 molecular depletion time (Table 3a: z, offset from the Speagle+14 main sequence, M*). The SFprescription still sets H2. Requires an H2-tracking SFprescription (1, 3-7). FFB and merger bursts are unchanged. |
+| `FixingGas` | 0/1/2 | no | `0` | Cold-gas fixes (see `investigation/gas_metals/README.md`). Each level includes the ones below it. 2: also replaces the BR06 pressure law (SFprescription 1, 3) with Leroy+08 (their eq. 9 pressure with sigma_gas = 11 km/s, Table 6 spirals: log P0/k = 4.23, alpha = 0.80); other prescriptions are unchanged by level 2. 1: quiescent SF uses SFR = 1.36 H2 / t_dep, with t_dep the Tacconi+18 molecular depletion time (Table 3a: z, offset from the Speagle+14 main sequence, M*). The SFprescription still sets H2. Requires an H2-tracking SFprescription (1, 3-7). FFB and merger bursts are unchanged. |
 
 ---
 

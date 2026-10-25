@@ -501,7 +501,7 @@ struct params
                                           // histories. Those accumulate stellar mass, not rate, so they are
                                           // correct at any substep count (unlike the Sfr* rate bins).
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
-    int32_t    FixingGas;                 // 0: off (default); 1: cold-gas fixes (see docs/parameters.md): SFR = 1.36 H2 / t_dep(Tacconi+18)
+    int32_t    FixingGas;                 // cold-gas fixes (see docs/parameters.md). 0: off (default); 1: SFR = 1.36 H2 / t_dep(Tacconi+18); 2: 1 + Leroy+08 pressure law for BR06-family H2
 
     /* baryonic physics calibration parameters */
     double RecycleFraction;       /* fraction of stellar mass returned to cold gas by SN */

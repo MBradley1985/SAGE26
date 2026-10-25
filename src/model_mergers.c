@@ -655,7 +655,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
                     if(sf_prescription_is_br06(run_params->SFprescription)) {
                         // BR06 / Somerville+H2
                         const float Sigma_star = (float)(CODE_MASS_TO_MSUN(galaxies[cgal].StellarMass - galaxies[cgal].BulgeMass, h)) / disk_area_pc2;
-                        h2gas_fresh = calculate_molecular_fraction_BR06(Sigma_gas, Sigma_star, rs_pc)
+                        h2gas_fresh = calculate_molecular_fraction_pressure(Sigma_gas, Sigma_star, rs_pc, run_params)
                                       * (galaxies[cgal].ColdGas * HYDROGEN_MASS_FRAC);
                     } else if(run_params->SFprescription == 4) {
                         // KD12

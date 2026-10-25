@@ -534,7 +534,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
-            {"FixingGas",              run_params->FixingGas,              0, 1},
+            {"FixingGas",              run_params->FixingGas,              0, 2},
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {

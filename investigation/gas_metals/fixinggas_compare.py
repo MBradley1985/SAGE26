@@ -1,8 +1,9 @@
 """Compare two SAGE26 runs (e.g. FixingGas = 0 and 1) against observations.
 
-Usage: python fixinggas_compare.py <run_off_dir> <run_on_dir> <label_on> <plot_dir> [prefix]
-Writes five multi-panel figures (law check, z = 0 gas, z = 0 population,
-metallicities, redshift evolution) into <plot_dir>.
+Usage: python fixinggas_compare.py <plot_dir> <prefix> <ref_dir> <ref_label> <dir> <label> [<dir> <label> ...]
+The first run is the reference (FixingGas 0); the others are FixingGas levels.
+Writes six multi-panel figures (law check, z = 0 gas, z = 0 population,
+metallicities, redshift evolution, bursts and bulges) into <plot_dir>.
 """
 import sys, os, h5py, numpy as np, matplotlib
 matplotlib.use('Agg')
@@ -11,14 +12,14 @@ from style import G05, BLUE, ORANGE, AQUA, YELLOW, MAGENTA, VIOLET, OBS, DATA
 from common import binned
 from fig_fixes import speagle_ms_ssfr
 
-OFF_DIR, ON_DIR, ON_LABEL, PLOTS = sys.argv[1:5]
-PREFIX = sys.argv[5] if len(sys.argv) > 5 else 'fg'
+PLOTS, PREFIX = sys.argv[1:3]
+PAIRS = list(zip(sys.argv[3::2], sys.argv[4::2]))
 os.makedirs(PLOTS, exist_ok=True)
 HE = 1.36
 EDGES = np.arange(8.5, 12.01, 0.2)
-C_OFF, C_ON = VIOLET, ORANGE
+COLOURS = [VIOLET, ORANGE, AQUA, MAGENTA, YELLOW]
 FIELDS = ['Type', 'StellarMass', 'BulgeMass', 'ColdGas', 'MetalsColdGas', 'MetalsStellarMass', 'H2gas', 'H1gas',
-          'SfrDisk', 'SfrBulge', 'BlackHoleMass', 'H2DepletionTime_Gyr', 'HotGas', 'Mvir']
+          'SfrDisk', 'SfrBulge', 'BlackHoleMass', 'H2DepletionTime_Gyr', 'HotGas', 'Mvir', 'MergerBulgeMass', 'InstabilityBulgeMass']
 
 
 class Run:
@@ -38,7 +39,7 @@ class Run:
             g = self.f[f'Snap_{snap}']
             d = {k: g[k][:].astype('f8') for k in FIELDS}
             for k in ('StellarMass', 'BulgeMass', 'ColdGas', 'MetalsColdGas', 'MetalsStellarMass', 'H2gas', 'H1gas',
-                      'BlackHoleMass', 'HotGas', 'Mvir'):
+                      'BlackHoleMass', 'HotGas', 'Mvir', 'MergerBulgeMass', 'InstabilityBulgeMass'):
                 d[k] *= 1e10 / self.h
             d['sfr'] = d['SfrDisk'] + d['SfrBulge']
             d['lm'] = np.log10(np.maximum(d['StellarMass'], 1.0))
@@ -51,8 +52,8 @@ class Run:
         return self.cache[snap]
 
 
-off, on = Run(OFF_DIR), Run(ON_DIR)
-RUNS = ((off, C_OFF, 'SAGE26 (FixingGas 0)'), (on, C_ON, ON_LABEL))
+RUNS = [(Run(d), COLOURS[i], lab) for i, (d, lab) in enumerate(PAIRS)]
+on = RUNS[-1][0]
 plt.rcParams.update({'font.size': 10, 'axes.grid': True, 'grid.color': '#e6e5e0', 'grid.linewidth': 0.6,
                      'legend.frameon': False, 'legend.fontsize': 7.5, 'lines.linewidth': 2})
 
@@ -75,23 +76,23 @@ def tacconi_tdep_gyr(lm, dms, z):
 
 
 s0 = on.snap_at(0.0)
-d_on, d_off = on.get(s0), off.get(s0)
 
 # ------------------------------------------------------------------ 1. law check
 fig, axs = plt.subplots(2, 2, figsize=(11, 8.4))
-g = d_on; sel = g['sf'] & (g['lm'] > 9) & (g['H2DepletionTime_Gyr'] > 0) & (g['H2gas'] > 0)
-ax = axs[0, 0]
-ratio = g['H2DepletionTime_Gyr'] / tacconi_tdep_gyr(g['lm'], g['dms'], g['z'])
-ax.hist(np.log10(ratio[sel]), bins=np.linspace(-0.5, 0.5, 81), color=C_ON, alpha=0.8)
-ax.axvline(0, color=OBS, lw=1)
+t1, t2 = [], []
+for run, col, lab in RUNS[1:]:
+    g = run.get(s0); sel = g['sf'] & (g['lm'] > 9) & (g['H2DepletionTime_Gyr'] > 0) & (g['H2gas'] > 0)
+    ratio = g['H2DepletionTime_Gyr'] / tacconi_tdep_gyr(g['lm'], g['dms'], g['z'])
+    axs[0, 0].hist(np.log10(ratio[sel]), bins=np.linspace(-0.5, 0.5, 81), color=col, alpha=0.5, label=lab)
+    r2 = g['SfrDisk'] / (HE * g['H2gas'] / (g['H2DepletionTime_Gyr'] * 1e9)); s2_ = sel & (g['SfrDisk'] > 0)
+    axs[0, 1].hist(np.log10(r2[s2_]), bins=np.linspace(-1, 1, 81), color=col, alpha=0.5, label=lab)
+    t1.append(f'{np.median(ratio[sel]):.3f}'); t2.append(f'{np.median(r2[s2_]):.3f}')
+ax = axs[0, 0]; ax.axvline(0, color=OBS, lw=1); ax.legend(loc='upper left')
 ax.set_xlabel(r'log [ $t_{\rm dep}$ used in SAGE26 / Tacconi+18 at output sSFR ]'); ax.set_ylabel('galaxies (SF, z = 0)')
-ax.set_title(f'(a) t_dep matches Tacconi+18: median ratio {np.median(ratio[sel]):.3f}', fontsize=10)
-ax = axs[0, 1]
-r2 = g['SfrDisk'] / (HE * g['H2gas'] / (g['H2DepletionTime_Gyr'] * 1e9))
-ax.hist(np.log10(r2[sel & (g['SfrDisk'] > 0)]), bins=np.linspace(-1, 1, 81), color=C_ON, alpha=0.8)
-ax.axvline(0, color=OBS, lw=1)
+ax.set_title(f'(a) t_dep matches Tacconi+18: median ratio {", ".join(t1)}', fontsize=10)
+ax = axs[0, 1]; ax.axvline(0, color=OBS, lw=1); ax.legend(loc='upper left')
 ax.set_xlabel(r'log [ SfrDisk / (1.36 $M_{\rm H_2}$ / $t_{\rm dep}$) ]'); ax.set_ylabel('galaxies (SF, z = 0)')
-ax.set_title(f'(b) SFR follows the law: median {np.median(r2[sel & (g["SfrDisk"] > 0)]):.3f}\n'
+ax.set_title(f'(b) SFR follows the law: median {", ".join(t2)}\n'
              '(spread: SFR is the snapshot average, H$_2$ the end state)', fontsize=9)
 ax = axs[1, 0]
 lm_ = np.linspace(9, 11.5, 50)
@@ -118,7 +119,7 @@ fig.suptitle('Check 1: the Tacconi+18 star-formation law is applied as written (
 fig.tight_layout(); p = os.path.join(PLOTS, f'{PREFIX}_1_law_check.png'); fig.savefig(p, dpi=130); plt.close(fig); print('wrote', p)
 
 # ------------------------------------------------------------------ 2. gas at z = 0
-fig, axs = plt.subplots(2, 2, figsize=(11, 8.4))
+fig, axs = plt.subplots(2, 3, figsize=(15.5, 8.4))
 logmean = lambda v: np.log10(np.mean(10 ** v[np.isfinite(v)]))
 ax = axs[0, 0]
 for run, col, lab in RUNS:
@@ -150,6 +151,19 @@ for run, col, lab in RUNS:
 ax.plot(lm_, -0.48 * lm_ + 4.39, color=OBS, ls='--', lw=1.5, label='Peeples+14 fit, $M_g/M_*$ (star-forming)')
 ax.set_ylabel(r'log $M_{\rm cold}/M_*$, all galaxies'); ax.set_ylim(-3, 1); ax.legend(loc='lower left')
 ax.set_title('(d) total cold gas', fontsize=10)
+ax = axs[0, 2]
+for run, col, lab in RUNS:
+    d = run.get(s0); med(ax, d['lm'], lg(d['H2gas'] / d['H1gas']), d['lm'] > 9, col, lab)
+c18r = np.array([[10.22, -0.704], [10.59, -0.662], [10.91, -0.530]])
+ax.plot(c18r[:, 0], c18r[:, 1], 'D', color=OBS, mfc='white', label=r'xGASS $\langle\log M_{\rm H_2}/M_{\rm HI}\rangle$ (Catinella+18 T3, no He)')
+ax.set_ylabel(r'log $M_{\rm H_2}/M_{\rm HI}$ (H only), all galaxies'); ax.set_ylim(-2.5, 1); ax.legend(loc='lower left')
+ax.set_title('(e) molecular-to-atomic ratio', fontsize=10)
+ax = axs[1, 2]
+for run, col, lab in RUNS:
+    d = run.get(s0); med(ax, d['lm'], lg(d['H1gas'] / d['sfr']), d['ms'] & (d['lm'] > 9) & (d['sfr'] > 0), col, lab)
+ax.axhspan(9.65 - 0.44, 9.65 + 0.44, color=OBS, alpha=0.08, lw=0, label=r'Saintonge+17 MS $\langle\log t_{\rm dep}({\rm HI})\rangle$ = 9.65 ± 0.44')
+ax.set_ylabel(r'log $t_{\rm dep}({\rm HI})$ [yr], MS galaxies'); ax.set_ylim(8.5, 11); ax.legend(loc='upper left')
+ax.set_title('(f) atomic gas depletion time', fontsize=10)
 for a in axs.flat:
     a.set_xlabel(r'log $M_*$ [M$_\odot$]'); a.set_xlim(9, 11.8)
 fig.suptitle('Check 2: gas content at z = 0 (Millennium)', fontsize=12)
@@ -283,6 +297,41 @@ ax.legend(loc='lower left'); ax.set_title('(d) stellar mass function evolution',
 fig.suptitle('Check 5: evolution (Millennium)', fontsize=12)
 fig.tight_layout(); p = os.path.join(PLOTS, f'{PREFIX}_5_evolution.png'); fig.savefig(p, dpi=130); plt.close(fig); print('wrote', p)
 
+# ------------------------------------------------------------------ 6. bursts and bulges
+fig, axs = plt.subplots(2, 2, figsize=(11, 8.4))
+ax = axs[0, 0]
+for run, col, lab in RUNS:
+    zz, fb = [], []
+    for s in snaps:
+        d = run.get(s); zz.append(run.z[s]); fb.append(np.sum(d['SfrBulge']) / max(np.sum(d['sfr']), 1e-30))
+    ax.plot(np.log10(1 + np.array(zz)), fb, color=col, label=lab)
+ax.set_xlabel('log (1 + z)'); ax.set_ylabel('fraction of cosmic SFR in bursts (SfrBulge)'); ax.set_ylim(0, None); ax.legend(loc='upper left')
+ax.set_title('(a) burst share of star formation', fontsize=10)
+ax = axs[0, 1]
+for run, col, lab in RUNS:
+    d = run.get(s0); med(ax, d['lm'], d['BulgeMass'] / d['StellarMass'], d['lm'] > 9, col, lab)
+ax.set_xlabel(r'log $M_*$ [M$_\odot$]'); ax.set_ylabel('B/T'); ax.set_ylim(0, 1); ax.set_xlim(9, 12); ax.legend(loc='upper left')
+ax.set_title('(b) bulge-to-total ratio, z = 0', fontsize=10)
+ax = axs[1, 0]
+for run, col, lab in RUNS:
+    d = run.get(s0)
+    c_, o = binned(d['lm'], d['MergerBulgeMass'] / d['StellarMass'], EDGES, d['lm'] > 9, stat=np.mean); ax.plot(c_, o[:, 0], color=col, label=f'{lab}: merger bulge')
+    c_, o = binned(d['lm'], d['InstabilityBulgeMass'] / d['StellarMass'], EDGES, d['lm'] > 9, stat=np.mean); ax.plot(c_, o[:, 0], color=col, ls='--', label=f'{lab}: instability bulge')
+ax.set_xlabel(r'log $M_*$ [M$_\odot$]'); ax.set_ylabel('mean mass fraction of M*'); ax.set_xlim(9, 12); ax.set_ylim(0, 1); ax.legend(loc='upper left')
+ax.set_title('(c) bulge origin, z = 0', fontsize=10)
+ax = axs[1, 1]
+for run, col, lab in RUNS:
+    d = run.get(s0); n, _ = np.histogram(lg(d['BulgeMass'][d['BulgeMass'] > 0]), bins=e)
+    ax.plot(c, lg(n / run.vol / bw), color=col, label=lab)
+    sph = d['BulgeMass'] / np.maximum(d['StellarMass'], 1) > 0.5; n, _ = np.histogram(d['lm'][sph & (d['lm'] > 0)], bins=e)
+    ax.plot(c, lg(n / run.vol / bw), color=col, ls='--')
+ax.plot(gm[:, 0], gm[:, 1], 's', color=OBS, ms=5, label='GAMA E/HE (morphological SMF)')
+ax.plot([], [], color='#52514e', ls='--', label='SAGE26 galaxies with B/T > 0.5')
+ax.set_xlabel(r'log $M$ [M$_\odot$]'); ax.set_ylabel(r'log $\Phi$ [Mpc$^{-3}$ dex$^{-1}$]'); ax.set_ylim(-5.5, -1.5); ax.set_xlim(8.5, 12.2)
+ax.legend(loc='lower left'); ax.set_title('(d) bulge mass function (solid) and spheroid-dominated galaxies', fontsize=10)
+fig.suptitle('Check 6: bursts and bulges (Millennium)', fontsize=12)
+fig.tight_layout(); p = os.path.join(PLOTS, f'{PREFIX}_6_bursts_bulges.png'); fig.savefig(p, dpi=130); plt.close(fig); print('wrote', p)
+
 # ------------------------------------------------------------------ numbers
 for lo in (9.5, 10.0, 10.5, 11.0):
     row = []
@@ -290,7 +339,7 @@ for lo in (9.5, 10.0, 10.5, 11.0):
         d = run.get(s0); mm = (np.abs(d['lm'] - lo) < 0.1)
         ms_ = mm & d['ms']
         row.append(f"{lab[:22]:22s} H2+He/M*(MS) {np.log10(np.mean(HE * d['H2gas'][ms_] / d['StellarMass'][ms_])):+.2f} "
-                   f"HI/M* {np.nanmedian(lg(d['H1gas'][mm] / d['StellarMass'][mm])):+.2f} "
+                   f"HI/M* {np.nanmedian(lg(d['H1gas'][mm] / d['StellarMass'][mm])):+.2f} H2/HI {np.nanmedian(lg(d['H2gas'][mm] / d['H1gas'][mm])):+.2f} "
                    f"sSFR(SF) {np.nanmedian(lg(d['ssfr'][mm & d['sf']])):+.2f} fQ {np.mean(~d['sf'][mm]):.2f} "
                    f"Z* {np.nanmedian(lg(d['MetalsStellarMass'][mm] / d['StellarMass'][mm] / 0.02)):+.2f} "
                    f"O/H {np.nanmedian(oh(d['MetalsColdGas'][mm & d['sf']] / d['ColdGas'][mm & d['sf']])):.2f}")

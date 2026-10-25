@@ -101,6 +101,54 @@ static float calculate_molecular_fraction_BR06_from_hstar(float gas_surface_dens
 }
 
 /*
+ * H2 molecular fraction from the Leroy et al. (2008, AJ 136, 2782) pressure law
+ * (FixingGas >= 2).
+ *
+ * Their eq. 9 midplane pressure P_h = (pi/2) G Sigma_g (Sigma_g + (sigma_g/sigma_*,z) Sigma_*),
+ * with sigma_g = 11 km/s and sigma_*,z = sqrt(2 pi G l_* / 7.3) Sigma_*^0.5 (their
+ * eq. B3, stellar scale length over scale height = 7.3 from Kregel et al. 2002), and their Table 6 fit for
+ * spirals (combined): R_mol = (P_h/P0)^alpha with log10 P0/k = 4.23, alpha = 0.80.
+ * Surface densities include helium, as SAGE26's ColdGas does.
+ * Returns f_H2 = R_mol / (1 + R_mol).
+ */
+static const double L08_LOG_P0_K        = 4.23;   /* log10 (P0/k) [K cm^-3] */
+static const double L08_ALPHA           = 0.80;
+static const double L08_SIGMA_GAS_CMS   = 11.0e5; /* gas velocity dispersion [cm/s] */
+static const double L08_SCALE_RATIO     = 7.3;    /* stellar scale length / scale height */
+static const double CM_PER_PC           = CM_PER_MPC * 1.0e-6;
+
+float calculate_molecular_fraction_L08(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
+                                       float disk_scale_length_pc)
+{
+    if(gas_surface_density_msun_pc2 <= 0.0f || disk_scale_length_pc <= 0.0f) {
+        return 0.0f;
+    }
+    const double msun_pc2_to_cgs = SOLAR_MASS / (CM_PER_PC * CM_PER_PC);
+    const double sg = gas_surface_density_msun_pc2 * msun_pc2_to_cgs;
+    const double ss = (stellar_surface_density_msun_pc2 > 0.0f) ? stellar_surface_density_msun_pc2 * msun_pc2_to_cgs : 0.0;
+    /* (sigma_g / sigma_*,z) Sigma_* = sigma_g Sigma_*^0.5 / sqrt(2 pi G l_* / 7.3) */
+    const double stellar_term = (ss > 0.0)
+        ? L08_SIGMA_GAS_CMS * sqrt(ss) / sqrt(2.0 * M_PI * GRAVITY * disk_scale_length_pc * CM_PER_PC / L08_SCALE_RATIO)
+        : 0.0;
+    const double p_over_k = 0.5 * M_PI * GRAVITY * sg * (sg + stellar_term) / BOLTZMANN;
+    const double r_mol = pow(p_over_k / pow(10.0, L08_LOG_P0_K), L08_ALPHA);
+    return (float)(r_mol / (1.0 + r_mol));
+}
+
+/*
+ * Pressure-based molecular fraction for the BR06 family (SFprescription 1, 3):
+ * Blitz & Rosolowsky (2006), or Leroy et al. (2008) when FixingGas >= 2.
+ */
+float calculate_molecular_fraction_pressure(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
+                                            float disk_scale_length_pc, const struct params *run_params)
+{
+    if(run_params->FixingGas >= 2) {
+        return calculate_molecular_fraction_L08(gas_surface_density_msun_pc2, stellar_surface_density_msun_pc2, disk_scale_length_pc);
+    }
+    return calculate_molecular_fraction_BR06(gas_surface_density_msun_pc2, stellar_surface_density_msun_pc2, disk_scale_length_pc);
+}
+
+/*
  * H2 molecular fraction from the Blitz & Rosolowsky (2006) midplane pressure
  * relation.
  *
@@ -224,7 +272,9 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
 
         if(sf_prescription_is_br06(sfpres)) {
             // BR06 (scale height precomputed above)
-            f_mol_r = calculate_molecular_fraction_BR06_from_hstar(sigma_gas_r, sigma_star_r, h_star_br06);
+            f_mol_r = (run_params->FixingGas >= 2)
+                      ? calculate_molecular_fraction_L08(sigma_gas_r, sigma_star_r, rs_pc)
+                      : calculate_molecular_fraction_BR06_from_hstar(sigma_gas_r, sigma_star_r, h_star_br06);
 
         } else if(sfpres == 4) {
             // KD12
