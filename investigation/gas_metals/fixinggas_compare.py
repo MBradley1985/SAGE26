@@ -17,7 +17,7 @@ PAIRS = list(zip(sys.argv[3::2], sys.argv[4::2]))
 os.makedirs(PLOTS, exist_ok=True)
 HE = 1.36
 EDGES = np.arange(8.5, 12.01, 0.2)
-COLOURS = [VIOLET, ORANGE, AQUA, MAGENTA, YELLOW]
+COLOURS = [VIOLET, ORANGE, AQUA, MAGENTA, YELLOW, BLUE, '#008300', '#e34948']
 FIELDS = ['Type', 'StellarMass', 'BulgeMass', 'ColdGas', 'MetalsColdGas', 'MetalsStellarMass', 'H2gas', 'H1gas',
           'SfrDisk', 'SfrBulge', 'BlackHoleMass', 'H2DepletionTime_Gyr', 'HotGas', 'Mvir', 'MergerBulgeMass', 'InstabilityBulgeMass']
 
