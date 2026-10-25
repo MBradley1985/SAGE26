@@ -236,6 +236,22 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
 
             galaxies[ngal].dT = -1.0;
 
+            // Per-snapshot accumulators start from zero for every galaxy carried forward,
+            // orphans included: a central or satellite of a secondary progenitor becomes an
+            // orphan here and would otherwise carry last snapshot's SFR into its merger
+            // (add_galaxies_together adds it to the central's SfrBulge).
+            galaxies[ngal].Cooling = 0.0;
+            galaxies[ngal].Heating = 0.0;
+            galaxies[ngal].QuasarModeBHaccretionMass = 0.0;
+            galaxies[ngal].RadioModeBHaccretionMass = 0.0;
+            galaxies[ngal].OutflowRate = 0.0;
+
+            for(int step = 0; step < STEPS; step++) {
+                galaxies[ngal].SfrDisk[step] = galaxies[ngal].SfrBulge[step] = 0.0;
+                galaxies[ngal].SfrDiskColdGas[step] = galaxies[ngal].SfrDiskColdGasMetals[step] = 0.0;
+                galaxies[ngal].SfrBulgeColdGas[step] = galaxies[ngal].SfrBulgeColdGasMetals[step] = 0.0;
+            }
+
             // this deals with the central galaxies of (sub)halos
             if(galaxies[ngal].Type == 0 || galaxies[ngal].Type == 1) {
                 // this halo shouldn't hold a galaxy that has already merged; remove it from future processing
@@ -269,17 +285,6 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                         galaxies[ngal].Vvir = get_virial_velocity(halonr, halos, run_params);
                     }
                     galaxies[ngal].Mvir = new_Mvir;
-
-                    galaxies[ngal].Cooling = 0.0;
-                    galaxies[ngal].Heating = 0.0;
-                    galaxies[ngal].QuasarModeBHaccretionMass = 0.0;
-                    galaxies[ngal].OutflowRate = 0.0;
-
-                    for(int step = 0; step < STEPS; step++) {
-                        galaxies[ngal].SfrDisk[step] = galaxies[ngal].SfrBulge[step] = 0.0;
-                        galaxies[ngal].SfrDiskColdGas[step] = galaxies[ngal].SfrDiskColdGasMetals[step] = 0.0;
-                        galaxies[ngal].SfrBulgeColdGas[step] = galaxies[ngal].SfrBulgeColdGasMetals[step] = 0.0;
-                    }
 
                     if(halonr == halos[halonr].FirstHaloInFOFgroup) {
                         // a central galaxy

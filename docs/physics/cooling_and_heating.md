@@ -248,6 +248,14 @@ Accretion is then capped at the Eddington rate. The resulting heating mass
 is converted from accreted mass via `AGNheating = (1.34e5 / V_vir)^2 *
 AGNaccreted` (with the coefficient derived from `sqrt(2 * eta * c^2)`).
 
+The heating mass is then capped at the (already suppressed) cooling mass, and
+`AGNaccreted` is cut back to match. Radio-mode accretion therefore only ever
+offsets cooling: once `r_heat >= r_cool` the cooling mass is zero, so the
+black hole accretes nothing in radio mode and `Heating` is zero, however much
+hot gas the halo holds. The accreted mass is tallied in
+`RadioModeBHaccretionMass` (per snapshot), and the `Heating` output is exactly
+`0.1 c^2 * RadioModeBHaccretionMass / dT`.
+
 Note that recipe 3's threshold scales as `(r_cool / R_vir)^3`, so with
 `r_cool` uncapped it rises steeply for `r_cool > R_vir` haloes and the
 trigger fires *less* often for them, not more.

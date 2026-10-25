@@ -299,6 +299,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     if(mass_ratio > run_params->ThreshMajorMerger) {
         // CASE 1: MAJOR MERGER (Section 5.2.3)
         // Destroys disc, creates pure merger-driven bulge
+        move_disk_sfh_to_bulge(merger_centralgal, 1.0, galaxies, run_params);
         make_bulge_from_burst(merger_centralgal, galaxies);
         
         // Apply the Energy Conservation Radius; then call get_bulge_radius so
@@ -532,12 +533,12 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
         galaxies[t].SfrBulgeColdGasMetals[step] += galaxies[p].SfrDiskColdGasMetals[step] + galaxies[p].SfrBulgeColdGasMetals[step];
     }
 
-    // Transfer star formation history from satellite to central
-    // During a merger, the central inherits all star formation history from the satellite
+    // Transfer star formation history from satellite to central.  All of the
+    // satellite's stars join the central's bulge (BulgeMass += StellarMass above),
+    // so its disk and bulge histories both go to the central's bulge history.
     if(run_params->SaveFullSFH) {
         for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
-            galaxies[t].SFHMassDisk[snap] += galaxies[p].SFHMassDisk[snap];
-            galaxies[t].SFHMassBulge[snap] += galaxies[p].SFHMassBulge[snap];
+            galaxies[t].SFHMassBulge[snap] += galaxies[p].SFHMassDisk[snap] + galaxies[p].SFHMassBulge[snap];
         }
     }
 }
@@ -545,6 +546,26 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
 // ============================================================================
 // Bulges
 // ============================================================================
+
+/*
+ * move_disk_sfh_to_bulge -- move a fraction of galaxy p's disk star-formation
+ * history into its bulge history, when that fraction of the disk's stars joins
+ * the bulge.  The disk is taken as well mixed, so the moved stars carry the
+ * disk's age distribution; with this, SFHMassBulge sums to BulgeMass.
+ */
+void move_disk_sfh_to_bulge(const int p, const double fraction, struct GALAXY *galaxies, const struct params *run_params)
+{
+    if(!run_params->SaveFullSFH || fraction <= 0.0) {
+        return;
+    }
+
+    const double f = (fraction > 1.0) ? 1.0 : fraction;
+    for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
+        const float moved = (float)(f * galaxies[p].SFHMassDisk[snap]);
+        galaxies[p].SFHMassDisk[snap] -= moved;
+        galaxies[p].SFHMassBulge[snap] += moved;
+    }
+}
 
 /*
  * make_bulge_from_burst -- transfer all stellar disk mass to the bulge after a

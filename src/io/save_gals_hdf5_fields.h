@@ -175,7 +175,10 @@
       "Energy rate for gas heating in the galaxy.", \
       "erg/s") \
     X(QuasarModeBHaccretionMass, QuasarModeBHaccretionMass, float, H5T_NATIVE_FLOAT, \
-      "Mass that this galaxy's black hole accreted during the last time step.", \
+      "Mass this galaxy's black hole accreted in quasar mode (mergers and disk instabilities) since the previous snapshot.", \
+      "1.0e10 Msun/h") \
+    X(RadioModeBHaccretionMass, RadioModeBHaccretionMass, float, H5T_NATIVE_FLOAT, \
+      "Mass this galaxy's black hole accreted in radio mode (from the hot halo or CGM) since the previous snapshot.", \
       "1.0e10 Msun/h") \
     X(TimeOfLastMajorMerger, TimeOfLastMajorMerger, float, H5T_NATIVE_FLOAT, \
       "Time since this galaxy had a major merger.", \

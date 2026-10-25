@@ -163,7 +163,7 @@ section below) and the unit actually written.
 | `mergeType` | -- | Merger/disruption channel (see flag table above). |
 | `mergeIntoID` | -- | `GalaxyIndex` of the galaxy this one is merging into. |
 | `mergeIntoSnapNum` | -- | Snapshot of the merge target. |
-| `dT` | Myr | Time since this galaxy was last evolved (snapshot interval / sub-step). |
+| `dT` | h^-1 Myr | Time over which this galaxy was evolved to reach this snapshot (the snapshot interval). Code times carry a factor of h, so divide by h for Myr. |
 
 ### Halo properties
 
@@ -223,7 +223,8 @@ section below) and the unit actually written.
 | `MassLoading` | dimensionless | SN mass-loading factor (outflow rate / SFR). |
 | `Cooling` | log10(erg / s) | log10 of cooling energy rate. Stored as 0.0 when no cooling occurred (i.e. zero, not "1 erg/s"). |
 | `Heating` | log10(erg / s) | log10 of AGN radio-mode heating energy rate. Stored as 0.0 when no heating occurred. |
-| `QuasarModeBHaccretionMass` | 1.0e10 Msun / h | Mass accreted by the black hole during the last sub-step via the quasar (merger-driven) mode. |
+| `QuasarModeBHaccretionMass` | 1.0e10 Msun / h | Mass accreted by the black hole since the previous snapshot (over `dT`) in quasar mode (mergers and disk instabilities). Not Eddington-limited. |
+| `RadioModeBHaccretionMass` | 1.0e10 Msun / h | Mass accreted by the black hole since the previous snapshot (over `dT`) in radio mode, from the hot halo or CGM. `Heating` = 0.1 c^2 x this mass / `dT`. |
 
 ### Sizes
 
@@ -308,12 +309,15 @@ written per output snapshot:
 
 | Dataset | Shape | Units | Description |
 |---------|-------|-------|-------------|
-| `SFHMassDisk` | (ngalaxies, SimMaxSnaps) | 1.0e10 Msun / h | Stellar mass formed in the disk at each snapshot up to the current one. |
-| `SFHMassBulge` | (ngalaxies, SimMaxSnaps) | 1.0e10 Msun / h | Stellar mass formed in the bulge (starbursts) at each snapshot up to the current one. |
+| `SFHMassDisk` | (ngalaxies, SimMaxSnaps) | 1.0e10 Msun / h | Stellar mass now in the disk, by the snapshot bin in which it formed. Sums to `StellarMass - BulgeMass`. |
+| `SFHMassBulge` | (ngalaxies, SimMaxSnaps) | 1.0e10 Msun / h | Stellar mass now in the bulge, by the snapshot bin in which it formed: bulge starbursts, merged satellites (all their stars), and disk stars moved by disk instabilities and major mergers (which take the disk's age mix with them). Sums to `BulgeMass`. |
 
 Each dataset carries `Description`, `Units`, and `NumSnapshots`
 attributes. Entries for snapshots beyond the galaxy's current
-`SnapNum` are zero. Reconstructing the SFR(z) curve for a galaxy
+`SnapNum` are zero. Stars formed between snapshots k and k+1 are filed
+in bin k (so the galaxy's own snapshot bin is always empty), and each
+bin holds the mass that survives recycling, (1 - R) x formed, so the
+bins sum to `StellarMass`. Reconstructing the SFR(z) curve for a galaxy
 amounts to differencing consecutive snapshot bins and dividing by
 the snapshot interval.
 

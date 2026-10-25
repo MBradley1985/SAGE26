@@ -398,6 +398,7 @@ static int32_t prepare_galaxy_for_output(struct GALAXY *g, struct GALAXY_OUTPUT 
     }
 
     o->QuasarModeBHaccretionMass = g->QuasarModeBHaccretionMass;
+    o->RadioModeBHaccretionMass = g->RadioModeBHaccretionMass;
 
     o->TimeOfLastMajorMerger = g->TimeOfLastMajorMerger * run_params->UnitTime_in_Megayears;
     o->TimeOfLastMinorMerger = g->TimeOfLastMinorMerger * run_params->UnitTime_in_Megayears;

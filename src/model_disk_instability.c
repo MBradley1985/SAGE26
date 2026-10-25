@@ -74,6 +74,12 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
             // Use disk metallicity here
             const double metallicity = get_metallicity(galaxies[p].StellarMass - galaxies[p].BulgeMass, galaxies[p].MetalsStellarMass - galaxies[p].MetalsBulgeMass);
 
+            // The moved stars take their share of the disk's star-formation history with them
+            const double disk_stars = galaxies[p].StellarMass - galaxies[p].BulgeMass;
+            if(disk_stars > 0.0) {
+                move_disk_sfh_to_bulge(p, unstable_stars / disk_stars, galaxies, run_params);
+            }
+
             galaxies[p].BulgeMass += unstable_stars;
             galaxies[p].InstabilityBulgeMass += unstable_stars;  // Track origin of bulge mass
             galaxies[p].MetalsBulgeMass += metallicity * unstable_stars;

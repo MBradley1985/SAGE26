@@ -189,6 +189,7 @@ struct GALAXY
     double Heating;        /* total AGN heating luminosity this snapshot [code energy / code time] */
     float r_heat;          /* AGN radio-mode heating radius [Mpc/h]; suppresses cooling gas at r < r_heat. Ratchet-only (no decay), capped at Rvir in the CGM regime. */
     float QuasarModeBHaccretionMass; /* BH mass accreted in quasar mode this snapshot [10^10 Msun/h] */
+    float RadioModeBHaccretionMass;  /* BH mass accreted in radio mode this snapshot [10^10 Msun/h] */
     float TimeOfLastMajorMerger;     /* lookback time to z=0 at last major merger [code time units]; -1 = never; written out in Myr */
     float TimeOfLastMinorMerger;     /* lookback time to z=0 at last minor merger [code time units]; -1 = never; written out in Myr */
     float OutflowRate;           /* SN-driven gas outflow rate [10^10 Msun/h / code time] */

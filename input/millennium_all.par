@@ -4,7 +4,7 @@
 
 FileNameGalaxies   model
 %OutputDir         /<absolute>/<root>/<path>/sage-model/output/millennium/
-OutputDir          output/millennium_all/
+OutputDir          output/millennium/
 
 FirstFile         0
 LastFile          7
@@ -66,13 +66,14 @@ SubstepResolution           1.0   %multiplier on the adaptive substep count (sca
 H2DiskAreaOption            1   %0: pi*r_s^2 (default); 1: pi*(3*r_s)^2 (thrice); 2: 2*pi*r_s^2 (central Sigma_0); ignored when H2RadialIntegrationOn=1
 H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk (H2DiskAreaOption unused)
 
+KarpovModeOn                0   %0: switch off
+
 %------------------------------------------
 %----- SAGE model parameters --------------
 %------------------------------------------
 
 SfrEfficiency               0.05    %efficiency of SF; unused for SFprescription=3,6
 EnhancedSFEfficiency        0.2     %0.2 fits observations best, 1.0 is theoretical maximum
-
 
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)
 FeedbackEjectionEfficiency  0.3     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)

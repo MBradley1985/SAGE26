@@ -988,6 +988,7 @@ static int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct sav
     }
 
     save_info->buffer_output_gals[output_snap_idx].QuasarModeBHaccretionMass[gals_in_buffer] = g->QuasarModeBHaccretionMass;
+    save_info->buffer_output_gals[output_snap_idx].RadioModeBHaccretionMass[gals_in_buffer] = g->RadioModeBHaccretionMass;
 
     save_info->buffer_output_gals[output_snap_idx].TimeOfLastMajorMerger[gals_in_buffer] = g->TimeOfLastMajorMerger * run_params->UnitTime_in_Megayears;
     save_info->buffer_output_gals[output_snap_idx].TimeOfLastMinorMerger[gals_in_buffer] = g->TimeOfLastMinorMerger * run_params->UnitTime_in_Megayears;
