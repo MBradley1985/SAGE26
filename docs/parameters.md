@@ -130,6 +130,7 @@ optional parameters take the listed default if omitted.
 | `BHEddLambdaCap` | dimensionless | `5000.0` | Upper clip on lambda_max. |
 | `BHBoostB0` | dimensionless | `1.0` | `AGNAccretionScheme=15` (boost plus the scheme-14 cap) or `AGNAccretionScheme=17` (boost only: merger and instability accretion is never Eddington-capped, whatever `EddingtonLimitOn` is; radio mode keeps the plain cap): multiplies `BlackHoleGrowthRate` by B = 1 + (B0 - 1) (M_BH/M0)^-alpha ((1+z)/(1+z0))^beta (same M0, alpha, z0, beta as the cap). `1.0` = no boost. |
 | `LowMassHostThreshold` | `10^10 Msun/h` | `0.1` | Used by `AGNAccretionScheme=13` ("LowMassHost"): exempts merger/instability events whose host `StellarMass` is still below this value at event time. Produces high `M_BH/M_star` as an outcome of the exempted event rather than requiring it as a precondition. No effect unless `AGNAccretionScheme=13` and `EddingtonLimitOn=1`. |
+| `BHSeedMinStellarMass` | `10^10 Msun/h` | `0.0` | Extra gate on BH seeding (`BlackHoleSeedingOn` 1 or 2): a halo is seeded only once its central's `StellarMass` is at least this value, on top of `BHSeedMinHaloMass`. Seeding is re-checked every snapshot, so the seed lands when the host crosses the threshold. `0.0` = no gate (previous behaviour). |
 
 ### Mergers
 

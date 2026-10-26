@@ -55,6 +55,13 @@ double seed_black_hole(const int p, const struct GALAXY *galaxies, const struct 
         return 0.0; // No seeding
     }
 
+    // Optional stellar-mass gate (in addition to the halo-mass gate below): the host
+    // must have formed at least BHSeedMinStellarMass in stars before it can be seeded.
+    // Callers re-check every snapshot, so the seed lands once the host crosses it.
+    if(galaxies[p].StellarMass < run_params->BHSeedMinStellarMass) {
+        return 0.0;
+    }
+
     // Light seeding from power-law distribution (Ricarte & Natarajan 2018)
     // if(run_params->BlackHoleSeedingOn == 1) {
     //     if(galaxies[p].Mvir > run_params->BHSeedMinHaloMass && galaxies[p].BlackHoleMass <= 0.0) {

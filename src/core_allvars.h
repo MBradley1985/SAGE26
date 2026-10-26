@@ -562,6 +562,7 @@ struct params
     double BHBoostB0;
 
     double BHSeedMinHaloMass; // Minimum halo mass for seeding in units of 10^10 Msun/h
+    double BHSeedMinStellarMass; // Minimum host StellarMass for seeding, 10^10 Msun/h (0 = no stellar-mass gate)
 
     int32_t BlackHoleSeedingOn; // 0: off, 1: on
     int32_t BHExsituGrowthOn; // 0: off, 1: on

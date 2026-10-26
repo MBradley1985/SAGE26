@@ -135,6 +135,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->BHExsituGrowthOn = 0;
     run_params->BlackHoleSeedingOn = 0;
     run_params->BHSeedMinHaloMass = 1.0;
+    run_params->BHSeedMinStellarMass = 0.0; // Default: no stellar-mass seeding gate
     run_params->BHEddLambda0 = 100.0;
     run_params->BHEddM0 = 1.0e6;
     run_params->BHEddAlpha = 0.5;
@@ -210,6 +211,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("BHExsituGrowthOn",      &(run_params->BHExsituGrowthOn),     INT, 0);
     REG("BlackHoleSeedingOn",    &(run_params->BlackHoleSeedingOn),   INT, 0);
     REG("BHSeedMinHaloMass",     &(run_params->BHSeedMinHaloMass),    DOUBLE, 0);
+    REG("BHSeedMinStellarMass",  &(run_params->BHSeedMinStellarMass), DOUBLE, 0);
     REG("BHEddLambda0",          &(run_params->BHEddLambda0),         DOUBLE, 0);
     REG("BHEddM0",               &(run_params->BHEddM0),              DOUBLE, 0);
     REG("BHEddAlpha",            &(run_params->BHEddAlpha),           DOUBLE, 0);
