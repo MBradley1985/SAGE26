@@ -97,7 +97,7 @@ static const double Z_SOLAR_ASPLUND09 = 0.014;
  * the UV background and removed from the atomic (HI) remainder. */
 static const double SIGMA_HI_CRIT = 0.5;
 
-/* FixingGas 4, 5: Lagos et al. (2018) Section 4.4.2 / Table 3, Sigma_thresh = 0.1 Msun/pc^2
+/* FixingGas 2, 3: Lagos et al. (2018) Section 4.4.2 / Table 3, Sigma_thresh = 0.1 Msun/pc^2
  * (Gnedin 2012), the HI surface density below which the gas is ionised. */
 static const double SHARK_SIGMA_HI_CRIT = 0.1;
 
@@ -725,7 +725,7 @@ static double sfr_gd14(const int p, struct GALAXY *galaxies, const struct params
 }
 
 /*
- * FixingGas 4, 5 -- Shark's quiescent star-formation law (Lagos et al. 2018; shark
+ * FixingGas 2, 3 -- Shark's quiescent star-formation law (Lagos et al. 2018; shark
  * src/star_formation.cpp, model = br06): Sigma_SFR = nu_SF f_mol Sigma_gas with
  * nu_SF = 1 Gyr^-1 (sample.cfg), i.e. SFR = nu_SF M_mol with M_mol including helium.
  * H2gas is hydrogen only, so M_mol = H2gas / HYDROGEN_MASS_FRAC.  Stores the
@@ -1054,7 +1054,7 @@ static void starformation_and_feedback_disk(const int p, const int centralgal, c
             ABORT(0);
     }
 
-    // FixingGas 4, 5: the prescription above sets H2gas; Shark's constant nu_SF sets how fast it forms stars
+    // FixingGas 2, 3: the prescription above sets H2gas; Shark's constant nu_SF sets how fast it forms stars
     if(FG_SHARK_SF(run_params)) {
         strdot = sfr_fixing_gas_shark(p, galaxies, run_params);
     }
@@ -1144,7 +1144,7 @@ static void starformation_and_feedback_disk(const int p, const int centralgal, c
 }
 
 /*
- * FixingGas 5 -- starbursts in the bulge (Lagos et al. 2018, Section 4.4.3).
+ * FixingGas 3 -- starbursts in the bulge (Lagos et al. 2018, Section 4.4.3).
  *
  * Bulge gas forms stars with the disk law (eq. 7, with R_mol, Sigma_gas and P from
  * the bulge's properties) boosted by eta_burst = 10 (Table 3): nu_SF,burst =
@@ -1241,8 +1241,8 @@ static void shark_starburst(const int p, const int centralgal, const double dt, 
 }
 
 /*
- * Star formation and feedback for one substep.  Outside FixingGas 5 this is the
- * disk path above.  With FixingGas 5 the bulge (starburst) gas is set aside while
+ * Star formation and feedback for one substep.  Outside FixingGas 3 this is the
+ * disk path above.  With FixingGas 3 the bulge (starburst) gas is set aside while
  * the disk forms stars from the disk gas, then bursts on its own.
  */
 void starformation_and_feedback(const int p, const int centralgal, const double time, const double dt, const int halonr, const int step,

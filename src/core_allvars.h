@@ -213,10 +213,10 @@ struct GALAXY
     /* bulge properties -- split by formation channel for morphology tracking */
     float MergerBulgeMass;        /* bulge mass built via mergers [10^10 Msun/h] */
     float InstabilityBulgeMass;   /* bulge mass built via disk instability [10^10 Msun/h] */
-    float BulgeColdGas;           /* FixingGas 5: cold gas in the bulge (starburst) reservoir, a subset of ColdGas [10^10 Msun/h] */
-    float MetalsBulgeColdGas;     /* FixingGas 5: metals in BulgeColdGas, a subset of MetalsColdGas [10^10 Msun/h] */
-    int32_t BulgeGasOrigin;       /* FixingGas 5: what put gas in the bulge: 1 merger, 2 disk instability (sets which bulge component the burst builds) */
-    int32_t SharkDISnap;          /* FixingGas 5: snapshot whose disk-instability check has been made (shark checks once per snapshot) */
+    float BulgeColdGas;           /* FixingGas 3: cold gas in the bulge (starburst) reservoir, a subset of ColdGas [10^10 Msun/h] */
+    float MetalsBulgeColdGas;     /* FixingGas 3: metals in BulgeColdGas, a subset of MetalsColdGas [10^10 Msun/h] */
+    int32_t BulgeGasOrigin;       /* FixingGas 3: what put gas in the bulge: 1 merger, 2 disk instability (sets which bulge component the burst builds) */
+    int32_t SharkDISnap;          /* FixingGas 3: snapshot whose disk-instability check has been made (shark checks once per snapshot) */
     float MergerBulgeRadius;      /* half-mass radius of merger-built bulge [Mpc/h] */
     float InstabilityBulgeRadius; /* half-mass radius of instability-built bulge [Mpc/h] */
 
@@ -453,14 +453,14 @@ struct save_info {
 };
 
 
-/* FixingGas modes (see docs/parameters.md); 1 and 3 were removed:
- *   2  Leroy+08 pressure law for BR06-family H2 (SFprescription 1, 3)
- *   4  Shark (Lagos+18) star formation: SFR = nu_SF M_mol with Shark's BR06 model
- *   5  4 + Shark disk instabilities, galaxy mergers, bulge sizes and starbursts */
-#define FIXINGGAS_MAX      5
-#define FG_LEROY08(p)      ((p)->FixingGas == 2)
-#define FG_SHARK_SF(p)     ((p)->FixingGas == 4 || (p)->FixingGas == 5)
-#define FG_SHARK_BURSTS(p) ((p)->FixingGas == 5)
+/* FixingGas modes (see docs/parameters.md):
+ *   1  Leroy+08 pressure law for BR06-family H2 (SFprescription 1, 3)
+ *   2  Shark (Lagos+18) star formation: SFR = nu_SF M_mol with Shark's BR06 model
+ *   3  2 + Shark disk instabilities, galaxy mergers, bulge sizes and starbursts */
+#define FIXINGGAS_MAX      3
+#define FG_LEROY08(p)      ((p)->FixingGas == 1)
+#define FG_SHARK_SF(p)     ((p)->FixingGas == 2 || (p)->FixingGas == 3)
+#define FG_SHARK_BURSTS(p) ((p)->FixingGas == 3)
 
 struct params
 {

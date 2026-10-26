@@ -50,7 +50,7 @@ static const double BH_GROWTH_V_KMS = 280.0;  /* km/s */
 static const double STARBURST_FRAC_COEFF = 0.56;
 static const double STARBURST_MASS_POWER = 0.7;
 
-/* FixingGas 5: Lagos et al. (2018) galaxy-merger classification (Section 4.4.7, Table 4). */
+/* FixingGas 3: Lagos et al. (2018) galaxy-merger classification (Section 4.4.7, Table 4). */
 static const double SHARK_F_ELLIP     = 0.3;   /* major_merger_ratio */
 static const double SHARK_F_BURST     = 0.1;   /* minor_merger_burst_ratio */
 static const double SHARK_F_GAS_BURST = 0.3;   /* gas_fraction_burst_ratio */
@@ -101,7 +101,7 @@ static double nfw_enclosed_fraction(const double x, const double c)
 }
 
 /*
- * FixingGas 5 -- black-hole growth in a starburst (Lagos et al. 2018 eq. 37, Kauffmann &
+ * FixingGas 3 -- black-hole growth in a starburst (Lagos et al. 2018 eq. 37, Kauffmann &
  * Haehnelt 2000): delta m_BH = f_smbh m_gas / (1 + (v_smbh/V_vir)^2), with m_gas the cold
  * gas of the starburst (BulgeColdGas), f_smbh = 8e-3 and v_smbh = 400 km/s.  The gas comes
  * out of the bulge reservoir with its metals.  As in shark (galaxy_mergers.cpp
@@ -127,7 +127,7 @@ void shark_starburst_bh_growth(const int p, struct GALAXY *galaxies, const struc
 }
 
 /*
- * FixingGas 5 -- bulge size after a disk instability (Lagos et al. 2018 eq. 48, following
+ * FixingGas 3 -- bulge size after a disk instability (Lagos et al. 2018 eq. 48, following
  * Lacey et al. 2016): c (Md + Mb)^2 / r = c Md^2/rd + c Mb^2/rb + f_int Md Mb/(rd + rb),
  * masses and mass-weighted radii including stars and gas, c = c_gal, f_int = 2 (Table 4).
  * As eq. (46), the published equation is printed without the squares; this is the form in
@@ -353,12 +353,12 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     // Save disc radius BEFORE merger for instability bulge radius update
     const double old_disk_radius = galaxies[merger_centralgal].DiskScaleRadius;
 
-    // FixingGas 5 (Lagos et al. 2018, Section 4.4.7): the starburst in a minor merger
+    // FixingGas 3 (Lagos et al. 2018, Section 4.4.7): the starburst in a minor merger
     // depends on the primary's cold-gas fraction before the merger, M_cold,p / M_p
     const double primary_mass = galaxies[merger_centralgal].StellarMass + galaxies[merger_centralgal].ColdGas;
     const double primary_gas_frac = (primary_mass > 0.0) ? galaxies[merger_centralgal].ColdGas / primary_mass : 0.0;
 
-    // FixingGas 5: remnant bulge size from the galaxies before they combine (Lagos et al.
+    // FixingGas 3: remnant bulge size from the galaxies before they combine (Lagos et al.
     // 2018, Section 4.4.7, eqs. 46-47).  Major merger: the primary is its baryons plus twice
     // the NFW dark matter inside its half-baryon-mass radius.  Minor merger: the primary is
     // what ends up in its bulge -- bulge plus disk gas if a starburst is driven, otherwise
@@ -400,7 +400,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
 
     add_galaxies_together(merger_centralgal, p, galaxies, run_params);
 
-    // grow black hole through accretion from cold disk during mergers (FixingGas 5:
+    // grow black hole through accretion from cold disk during mergers (FixingGas 3:
     // eq. 37 in the starburst instead, below)
     if(run_params->AGNrecipeOn && !FG_SHARK_BURSTS(run_params)) {
         grow_black_hole(merger_centralgal, mass_ratio, galaxies, run_params);
@@ -495,7 +495,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         }
     }
 
-    // FixingGas 5: the remnant's bulge (stars and gas) takes the Shark size from eqs. 46-47
+    // FixingGas 3: the remnant's bulge (stars and gas) takes the Shark size from eqs. 46-47
     if(FG_SHARK_BURSTS(run_params) && shark_bulge_radius > 0.0) {
         galaxies[merger_centralgal].BulgeRadius = shark_bulge_radius;
         galaxies[merger_centralgal].MergerBulgeRadius = shark_bulge_radius;

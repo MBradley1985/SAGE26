@@ -103,7 +103,7 @@ static float calculate_molecular_fraction_BR06_from_hstar(float gas_surface_dens
 
 /*
  * H2 molecular fraction from the Leroy et al. (2008, AJ 136, 2782) pressure law
- * (FixingGas 2).
+ * (FixingGas 1).
  *
  * Their eq. 9 midplane pressure P_h = (pi/2) G Sigma_g (Sigma_g + (sigma_g/sigma_*,z) Sigma_*),
  * with sigma_g = 11 km/s and sigma_*,z = sqrt(2 pi G l_* / 7.3) Sigma_*^0.5 (their
@@ -143,7 +143,7 @@ float calculate_molecular_fraction_L08(float gas_surface_density_msun_pc2, float
  * (sigma_gas/sigma_*) Sigma_*) (eq. 9, Elmegreen 1989) with sigma_gas = 10 km/s,
  * sigma_* = sqrt(pi G h_* Sigma_*) and h_* = r_star / 7.3, with r_star the half-stellar-mass
  * radius (Kregel et al. 2002).  Sigma_gas is total gas (atomic plus molecular).
- * FixingGas 4, 5.
+ * FixingGas 2, 3.
  */
 static const double SHARK_P0_K           = 34673.0;  /* K cm^-3 */
 static const double SHARK_ALPHA_P        = 0.92;
@@ -202,8 +202,8 @@ double shark_molecular_fraction(const double m_gas, const double re_gas_pc, cons
 
 /*
  * Pressure-based molecular fraction for the BR06 family (SFprescription 1, 3):
- * Blitz & Rosolowsky (2006); Leroy et al. (2008) with FixingGas 2; Shark with
- * FixingGas 4, 5.
+ * Blitz & Rosolowsky (2006); Leroy et al. (2008) with FixingGas 1; Shark with
+ * FixingGas 2, 3.
  */
 float calculate_molecular_fraction_pressure(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
                                             float disk_scale_length_pc, const struct params *run_params)
@@ -268,7 +268,7 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
     const float sigma_gas_0  = M_gas_total / (2.0 * M_PI * rs_pc * rs_pc);
     const float sigma_star_0 = (M_disk_star > 0.0) ? M_disk_star / (2.0 * M_PI * rs_pc * rs_pc) : 0.0;
 
-    // FixingGas 4, 5: Shark's integration (Lagos+18 Section 4.4.2), gas and stars sharing the SAGE disk scale length
+    // FixingGas 2, 3: Shark's integration (Lagos+18 Section 4.4.2), gas and stars sharing the SAGE disk scale length
     if(FG_SHARK_SF(run_params)) {
         galaxies[gal].H2gas = (float)(shark_molecular_fraction(M_gas_total, rs_pc, M_disk_star, rs_pc) * galaxies[gal].ColdGas * HYDROGEN_MASS_FRAC);
         return galaxies[gal].H2gas;
