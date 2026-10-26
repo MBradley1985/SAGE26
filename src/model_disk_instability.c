@@ -45,15 +45,14 @@ static const double TOOMRE_DISK_FACTOR = 3.0;
  * transfer so the Tonini formula uses the pre-instability disc scale.
  */
 /*
- * FixingGas 5 -- Shark's disk instability (Lagos et al. 2018; shark
- * src/disk_instability.cpp): Efstathiou et al. (1982) criterion
- * eps = V / sqrt(1.68 G M_disk / r_disk) with r_disk the disk half-mass radius and V the
- * virial velocity (shark's galaxy vmax);
- * a disk with eps < stable = 0.8 (sample.cfg), checked once per snapshot, is unstable and all of its stars and
- * gas move to the bulge, the gas becoming a starburst (shark_starburst in
- * model_starformation_and_feedback.c).  Called with any bulge gas set aside, so
- * ColdGas here is the disk gas.  Black-hole growth and bulge sizes use SAGE's
- * recipes (grow_black_hole, update_instability_bulge_radius).
+ * FixingGas 5 -- disk instabilities (Lagos et al. 2018, Section 4.4.8): eq. (35),
+ * eps = V_circ / sqrt(1.68 G M_disk / r_disk), with V_circ the maximum circular
+ * velocity, r_disk the disk half-mass radius and M_disk the disk mass (gas plus
+ * stars).  eps < eps_disc = 0.8 (Table 4) is unstable: the disk's stars and gas go
+ * to the spheroid and the gas drives a starburst (shark_starburst in
+ * model_starformation_and_feedback.c).  Checked once per snapshot, before the
+ * galaxy evolves, as the shark code does (shark_runner.cpp).  Called with any bulge
+ * gas set aside, so ColdGas here is the disk gas.
  */
 static const double SHARK_DI_STABLE = 0.8;
 
@@ -68,12 +67,10 @@ static void shark_disk_instability(const int p, struct GALAXY *galaxies, const s
     const double disk_stars = galaxies[p].StellarMass - galaxies[p].BulgeMass;
     const double md = galaxies[p].ColdGas + disk_stars;
     const double rd = 1.678346990 * galaxies[p].DiskScaleRadius;    /* half-mass radius */
-    /* shark sets the galaxy's vmax to the subhalo's virial velocity (gas_cooling.cpp:
-     * "using virial velocity since vmax from the catalogues can propagate numerical artefacts") */
-    if(md <= 0.0 || rd <= 0.0 || galaxies[p].Vvir <= 0.0) {
+    if(md <= 0.0 || rd <= 0.0 || galaxies[p].Vmax <= 0.0) {
         return;
     }
-    const double eps = galaxies[p].Vvir / sqrt(1.68 * run_params->G * md / rd);
+    const double eps = galaxies[p].Vmax / sqrt(1.68 * run_params->G * md / rd);
     if(eps >= SHARK_DI_STABLE) {
         return;
     }

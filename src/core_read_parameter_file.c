@@ -555,6 +555,13 @@ int read_parameter_file(const char *fname, struct params *run_params)
         ABORT(EXIT_FAILURE);
     }
 
+    /* FixingGas 4, 5 implement Shark's BR06 model (Lagos et al. 2018), which integrates
+       over the disk: only SFprescription 1 with radial integration corresponds to it. */
+    if(FG_SHARK_SF(run_params) && (run_params->SFprescription != 1 || !run_params->H2RadialIntegrationOn)) {
+        fprintf(stderr, "Error: FixingGas = %d (Shark BR06) needs SFprescription = 1 and H2RadialIntegrationOn = 1.\n", run_params->FixingGas);
+        ABORT(EXIT_FAILURE);
+    }
+
     /* Numeric parameters that must be strictly positive for the physics to
        be well-defined. */
     if(run_params->H2RadialIntegrationOn && run_params->H2RadialNBins < 1) {

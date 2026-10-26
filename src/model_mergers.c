@@ -50,6 +50,11 @@ static const double BH_GROWTH_V_KMS = 280.0;  /* km/s */
 static const double STARBURST_FRAC_COEFF = 0.56;
 static const double STARBURST_MASS_POWER = 0.7;
 
+/* FixingGas 5: Lagos et al. (2018) galaxy-merger classification (Section 4.4.7, Table 4). */
+static const double SHARK_F_ELLIP     = 0.3;   /* major_merger_ratio */
+static const double SHARK_F_BURST     = 0.1;   /* minor_merger_burst_ratio */
+static const double SHARK_F_GAS_BURST = 0.3;   /* gas_fraction_burst_ratio */
+
 /* FIRE (Muratov et al. 2015) critical velocity separating the two power-law
  * slopes of the wind loading factor.  Same value as in
  * model_starformation_and_feedback.c. */
@@ -256,6 +261,11 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     // Save disc radius BEFORE merger for instability bulge radius update
     const double old_disk_radius = galaxies[merger_centralgal].DiskScaleRadius;
 
+    // FixingGas 5 (Lagos et al. 2018, Section 4.4.7): the starburst in a minor merger
+    // depends on the primary's cold-gas fraction before the merger, M_cold,p / M_p
+    const double primary_mass = galaxies[merger_centralgal].StellarMass + galaxies[merger_centralgal].ColdGas;
+    const double primary_gas_frac = (primary_mass > 0.0) ? galaxies[merger_centralgal].ColdGas / primary_mass : 0.0;
+
     add_galaxies_together(merger_centralgal, p, galaxies, run_params);
 
     // grow black hole through accretion from cold disk during mergers
@@ -282,15 +292,16 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     }
 
     if(FG_SHARK_BURSTS(run_params)) {
-        // Shark (Lagos et al. 2018; shark galaxy_mergers.cpp create_merger): in a major
-        // merger all the gas goes to the bulge; in a minor merger the satellite's gas joins
-        // the central's disk (as add_galaxies_together has done), and all the disk gas goes
-        // to the bulge if mass_ratio >= minor_merger_burst_ratio = 0.1 and the merged gas-to-
-        // stellar mass ratio > gas_fraction_burst_ratio = 0.3 (sample.cfg).  The bulge gas
-        // then bursts in starformation_and_feedback; no SAGE collisional burst here.
-        const double ms = galaxies[merger_centralgal].StellarMass;
-        const double mgas_ratio = (ms > 0.0) ? galaxies[merger_centralgal].ColdGas / ms : 1.0;
-        if(mass_ratio > run_params->ThreshMajorMerger || (mass_ratio >= 0.1 && mgas_ratio > 0.3)) {
+        // Lagos et al. (2018), Section 4.4.7, with f_ellip = 0.3, f_burst = 0.1 and
+        // f_gas,burst = 0.3 (Table 4):
+        //   Ms/Mp > f_ellip: major merger, all the cold gas in the merging system bursts;
+        //   f_burst < Ms/Mp <= f_ellip: minor merger; if M_cold,p/M_p > f_gas,burst all the
+        //     cold gas from both galaxies goes to the spheroid and bursts, otherwise the
+        //     secondary's gas is accreted by the primary's disk;
+        //   Ms/Mp <= f_burst: all the gas stays in the disk.
+        // add_galaxies_together has already put the secondary's stars in the bulge and its
+        // gas in the primary's cold gas.  The bulge gas bursts in starformation_and_feedback.
+        if(mass_ratio > SHARK_F_ELLIP || (mass_ratio > SHARK_F_BURST && primary_gas_frac > SHARK_F_GAS_BURST)) {
             galaxies[merger_centralgal].BulgeColdGas = galaxies[merger_centralgal].ColdGas;
             galaxies[merger_centralgal].MetalsBulgeColdGas = galaxies[merger_centralgal].MetalsColdGas;
             galaxies[merger_centralgal].BulgeGasOrigin = 1;
@@ -312,7 +323,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     // We do this AFTER the starburst so the energy budget includes burst stars
     double new_merger_radius = calculate_merger_remnant_radius(&galaxies[merger_centralgal], &galaxies[p]);
 
-    if(mass_ratio > run_params->ThreshMajorMerger) {
+    if(FG_SHARK_BURSTS(run_params) ? mass_ratio > SHARK_F_ELLIP : mass_ratio > run_params->ThreshMajorMerger) {
         // CASE 1: MAJOR MERGER (Section 5.2.3)
         // Destroys disc, creates pure merger-driven bulge
         move_disk_sfh_to_bulge(merger_centralgal, 1.0, galaxies, run_params);
