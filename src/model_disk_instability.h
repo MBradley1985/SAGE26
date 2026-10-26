@@ -17,7 +17,6 @@ extern "C" {
     #include "core_allvars.h"
 
     /* functions in model_disk_instability.c */
-    extern void shark_disk_instability(const int p, struct GALAXY *galaxies, const struct params *run_params);
     extern void check_disk_instability(const int p, const int centralgal, const int halonr, const double time, const double dt, const int step,
                                        struct GALAXY *galaxies, const struct params *run_params);
     

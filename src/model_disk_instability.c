@@ -44,61 +44,9 @@ static const double TOOMRE_DISK_FACTOR = 3.0;
  * collisional_starburst_recipe().  Saves DiskScaleRadius before any mass
  * transfer so the Tonini formula uses the pre-instability disc scale.
  */
-/*
- * FixingGas 4 -- disk instabilities (Lagos et al. 2018, Section 4.4.8): eq. (35),
- * eps = V_circ / sqrt(1.68 G M_disk / r_disk), with V_circ the maximum circular
- * velocity, r_disk the disk half-mass radius and M_disk the disk mass (gas plus
- * stars).  eps < eps_disc = 0.8 (Table 4) is unstable: the disk's stars and gas go to
- * the spheroid, which takes the size from eq. (48), and the gas drives a starburst
- * (black-hole growth from eq. 37; star formation in shark_starburst).  Called once per
- * snapshot before the galaxy evolves, as shark does (shark_runner.cpp), from
- * starformation_and_feedback().
- */
-static const double SHARK_DI_STABLE = 0.8;
-
-void shark_disk_instability(const int p, struct GALAXY *galaxies, const struct params *run_params)
-{
-    const double disk_stars = galaxies[p].StellarMass - galaxies[p].BulgeMass;
-    const double disk_gas = galaxies[p].ColdGas - galaxies[p].BulgeColdGas;
-    const double md = disk_stars + disk_gas;
-    const double rd = 1.678346990 * galaxies[p].DiskScaleRadius;    /* half-mass radius */
-    if(md <= 0.0 || rd <= 0.0 || galaxies[p].Vmax <= 0.0) {
-        return;
-    }
-    const double eps = galaxies[p].Vmax / sqrt(1.68 * run_params->G * md / rd);
-    if(eps >= SHARK_DI_STABLE) {
-        return;
-    }
-
-    const double r_new = shark_disk_instability_bulge_size(p, galaxies);
-
-    if(disk_stars > 0.0) {
-        move_disk_sfh_to_bulge(p, 1.0, galaxies, run_params);
-        galaxies[p].InstabilityBulgeMass += disk_stars;
-        galaxies[p].BulgeMass = galaxies[p].StellarMass;
-        galaxies[p].MetalsBulgeMass = galaxies[p].MetalsStellarMass;
-    }
-    galaxies[p].BulgeColdGas = galaxies[p].ColdGas;
-    galaxies[p].MetalsBulgeColdGas = galaxies[p].MetalsColdGas;
-    galaxies[p].BulgeGasOrigin = 2;
-    if(r_new > 0.0) {
-        galaxies[p].BulgeRadius = r_new;
-        galaxies[p].InstabilityBulgeRadius = r_new;
-        galaxies[p].MergerBulgeRadius = r_new;
-    }
-    if(run_params->AGNrecipeOn > 0) {
-        shark_starburst_bh_growth(p, galaxies, run_params);
-    }
-}
-
 void check_disk_instability(const int p, const int centralgal, const int halonr, const double time, const double dt, const int step,
                             struct GALAXY *galaxies, const struct params *run_params)
 {
-    // FixingGas 4: disk instabilities are evaluated once per snapshot by shark_disk_instability()
-    if(FG_SHARK_BURSTS(run_params)) {
-        return;
-    }
-
     // Here we calculate the stability of the stellar and gaseous disk as discussed in Mo, Mao & White (1998).
     // For unstable stars and gas, we transfer the required amount to the bulge to make the disk stable again
 

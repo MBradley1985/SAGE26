@@ -19,7 +19,6 @@
 #include "model_starformation_and_feedback.h"
 #include "model_misc.h"
 #include "model_disk_instability.h"
-#include "model_mergers.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -96,10 +95,6 @@ static const double Z_SOLAR_ASPLUND09 = 0.014;
  * (Shark sigma_hi_crit): cold disk gas below this column is kept ionised by
  * the UV background and removed from the atomic (HI) remainder. */
 static const double SIGMA_HI_CRIT = 0.5;
-
-/* FixingGas 3, 4: Lagos et al. (2018) Section 4.4.2 / Table 3, Sigma_thresh = 0.1 Msun/pc^2
- * (Gnedin 2012), the HI surface density below which the gas is ionised. */
-static const double SHARK_SIGMA_HI_CRIT = 0.1;
 
 /* chi: ratio of the atomic-gas scale length to the stellar/H2 scale length,
  * applied in the HI ionisation truncation only.  chi = 1 makes the atomic disk
@@ -237,8 +232,8 @@ static double sfr_br06(const int p, struct GALAXY *galaxies, const struct params
                 }
                 const float gas_surface_density  = (CODE_MASS_TO_MSUN(galaxies[p].ColdGas, h)) / disk_area_pc2;
                 const float star_surface_density = CODE_MASS_TO_MSUN(galaxies[p].StellarMass - galaxies[p].BulgeMass, h) / disk_area_pc2;
-                galaxies[p].H2gas = calculate_molecular_fraction_pressure(gas_surface_density, star_surface_density,
-                                                                          rs_pc, run_params) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                galaxies[p].H2gas = calculate_molecular_fraction_BR06(gas_surface_density, star_surface_density,
+                                                                       rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
             }
 
             if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
@@ -368,8 +363,8 @@ static double sfr_somerville25_h2(const int p, struct GALAXY *galaxies, const st
                 }
                 gas_surface_density = (CODE_MASS_TO_MSUN(galaxies[p].ColdGas, h)) / disk_area_pc2;
                 const float stellar_surface_density = (CODE_MASS_TO_MSUN(galaxies[p].StellarMass - galaxies[p].BulgeMass, h)) / disk_area_pc2;
-                total_molecular_gas = calculate_molecular_fraction_pressure(gas_surface_density, stellar_surface_density,
-                                                                            rs_pc, run_params) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
+                total_molecular_gas = calculate_molecular_fraction_BR06(gas_surface_density, stellar_surface_density,
+                                                                        rs_pc) * (galaxies[p].ColdGas * HYDROGEN_MASS_FRAC);
                 galaxies[p].H2gas = total_molecular_gas;
             }
 
@@ -725,35 +720,14 @@ static double sfr_gd14(const int p, struct GALAXY *galaxies, const struct params
 }
 
 /*
- * FixingGas 3, 4 -- Shark's quiescent star-formation law (Lagos et al. 2018; shark
- * src/star_formation.cpp, model = br06): Sigma_SFR = nu_SF f_mol Sigma_gas with
- * nu_SF = 1 Gyr^-1 (sample.cfg), i.e. SFR = nu_SF M_mol with M_mol including helium.
- * H2gas is hydrogen only, so M_mol = H2gas / HYDROGEN_MASS_FRAC.  Stores the
- * molecular depletion time 1/nu_SF in H2DepletionTime_Gyr.
- *
- * Returns the instantaneous SFR strdot [10^10 Msun/h / code time].
- */
-static const double SHARK_NU_SF_PER_GYR = 1.0;
-
-static double sfr_fixing_gas_shark(const int p, struct GALAXY *galaxies, const struct params *run_params)
-{
-    if(galaxies[p].H2gas <= 0.0) {
-        galaxies[p].H2DepletionTime_Gyr = -1.0f;
-        return 0.0;
-    }
-    /* code time is h x physical time (time unit (Mpc/h)/(km/s)), see docs/physics/units.md */
-    const double gyr_to_code = SEC_PER_GIGAYEAR * run_params->Hubble_h / run_params->UnitTime_in_s;
-    galaxies[p].H2DepletionTime_Gyr = (float)(1.0 / SHARK_NU_SF_PER_GYR);
-    return SHARK_NU_SF_PER_GYR * (galaxies[p].H2gas / HYDROGEN_MASS_FRAC) / gyr_to_code;
-}
-
-/*
  * FixingGas 1 -- SFR = M_mol / t_dep for every H2 prescription, in place of its
  * efficiency x M_H2 / t_dyn law.  M_mol = H2gas / HYDROGEN_MASS_FRAC (helium included,
  * as in all the depletion-time laws).  t_dep follows H2DepletionTimeModel (see
  * h2_depletion_time_gyr in model_h2_chemistry.c): model 0 is the constant 1 Gyr; models 1-3
  * are local laws, integrated over the disk in calculate_molecular_fraction_radial_integration,
  * which stores the effective M_mol / SFR in H2DepletionTime_Gyr.
+ *
+ * Returns the instantaneous SFR strdot [10^10 Msun/h / code time].
  */
 static double sfr_fixing_gas_tdep(const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -1041,8 +1015,8 @@ if(run_params->SupernovaRecipeOn == 1) {
  * recycling (Krumholz & Dekel 2011 Eq. 22). If the galaxy is in FFB regime,
  * delegates to starformation_ffb() and returns immediately.
  */
-static void starformation_and_feedback_disk(const int p, const int centralgal, const double time, const double dt, const int halonr, const int step,
-                                           struct GALAXY *galaxies, const struct params *run_params)
+void starformation_and_feedback(const int p, const int centralgal, const double time, const double dt, const int halonr, const int step,
+                                struct GALAXY *galaxies, const struct params *run_params)
 {
     XASSERT(step >= 0 && step < STEPS, -1,
             "Error: step = %d is out of bounds [0, %d)\n", step, STEPS);
@@ -1076,11 +1050,9 @@ static void starformation_and_feedback_disk(const int p, const int centralgal, c
     }
 
     // FixingGas 1: the prescription above sets H2gas; a molecular depletion time replaces
-    // its t_dyn-based law.  FixingGas 3, 4: Shark's constant nu_SF.
+    // its t_dyn-based law
     if(FG_TDEP(run_params)) {
         strdot = sfr_fixing_gas_tdep(p, galaxies, run_params);
-    } else if(FG_SHARK_SF(run_params)) {
-        strdot = sfr_fixing_gas_shark(p, galaxies, run_params);
     }
 
     // Calculate HI (atomic hydrogen) as the remainder of hydrogen after H2.
@@ -1097,8 +1069,7 @@ static void starformation_and_feedback_disk(const int p, const int centralgal, c
         }
         const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas,
                                                   atomic_disk_radius(galaxies[p].DiskScaleRadius),
-                                                  run_params->Hubble_h,
-                                                  FG_SHARK_SF(run_params) ? SHARK_SIGMA_HI_CRIT : SIGMA_HI_CRIT);
+                                                  run_params->Hubble_h, SIGMA_HI_CRIT);
         atomicH *= (1.0 - f_ion);
         galaxies[p].H1gas = atomicH;
     }
@@ -1165,146 +1136,6 @@ static void starformation_and_feedback_disk(const int p, const int centralgal, c
         
         add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }
-}
-
-/*
- * FixingGas 4 -- starbursts in the bulge (Lagos et al. 2018, Section 4.4.3).
- *
- * Bulge gas forms stars with the disk law (eq. 7, with R_mol, Sigma_gas and P from
- * the bulge's properties) boosted by eta_burst = 10 (Table 3): nu_SF,burst =
- * eta_burst nu_SF.  The bulge gas settles in an exponential of scale length
- * r_bulge/1.67, and is transferred to the disk once it drops below
- * min_gas,bulge = 1e5 Msun.  The burst runs every substep on BulgeColdGas with
- * SAGE's SN feedback, metal production and BulgeRadius (r_bulge).
- */
-static const double SHARK_BOOST_STARBURST = 10.0;
-static const double SHARK_BULGE_GAS_MIN_MSUN = 1.0e5;
-
-static void clamp_bulge_gas(const int p, struct GALAXY *galaxies)
-{
-    if(galaxies[p].BulgeColdGas > galaxies[p].ColdGas) galaxies[p].BulgeColdGas = galaxies[p].ColdGas;
-    if(galaxies[p].MetalsBulgeColdGas > galaxies[p].MetalsColdGas) galaxies[p].MetalsBulgeColdGas = galaxies[p].MetalsColdGas;
-    if(galaxies[p].BulgeColdGas < 0.0f) galaxies[p].BulgeColdGas = 0.0f;
-    if(galaxies[p].MetalsBulgeColdGas < 0.0f) galaxies[p].MetalsBulgeColdGas = 0.0f;
-}
-
-static void shark_starburst(const int p, const int centralgal, const double dt, const int step,
-                            struct GALAXY *galaxies, const struct params *run_params)
-{
-    const double h = run_params->Hubble_h;
-    const double gas_min = SHARK_BULGE_GAS_MIN_MSUN * h / 1.0e10;   /* code units */
-    clamp_bulge_gas(p, galaxies);
-    if(galaxies[p].BulgeColdGas < gas_min) {
-        galaxies[p].BulgeColdGas = galaxies[p].MetalsBulgeColdGas = 0.0f;   /* back to the disk */
-        return;
-    }
-
-    if(galaxies[p].BulgeRadius <= 0.0) {
-        return;   /* no bulge size yet: no SB surface densities to evaluate */
-    }
-    const double re_bulge_pc = CODE_LENGTH_TO_PC(galaxies[p].BulgeRadius, h) / 1.67;
-    const double fmol = shark_molecular_fraction(CODE_MASS_TO_MSUN(galaxies[p].BulgeColdGas, h), re_bulge_pc,
-                                                 CODE_MASS_TO_MSUN(galaxies[p].BulgeMass, h), re_bulge_pc);
-    const double gyr_to_code = SEC_PER_GIGAYEAR * h / run_params->UnitTime_in_s;
-    const double sfr = SHARK_BOOST_STARBURST * SHARK_NU_SF_PER_GYR * fmol * galaxies[p].BulgeColdGas / gyr_to_code;
-
-    double stars = sfr * dt, reheated_mass, ejected_mass;
-    compute_sn_feedback(p, &stars, &reheated_mass, &ejected_mass, galaxies, run_params);
-    if(stars + reheated_mass > galaxies[p].BulgeColdGas && stars + reheated_mass > 0.0) {
-        const double fac = galaxies[p].BulgeColdGas / (stars + reheated_mass);
-        stars *= fac; reheated_mass *= fac; ejected_mass *= fac;
-    }
-    if(stars <= 0.0) {
-        return;
-    }
-
-    const double zb = get_metallicity(galaxies[p].BulgeColdGas, galaxies[p].MetalsBulgeColdGas);
-    galaxies[p].SfrBulge[step] += stars / dt;
-    galaxies[p].SfrBulgeColdGas[step] = galaxies[p].BulgeColdGas;
-    galaxies[p].SfrBulgeColdGasMetals[step] = galaxies[p].MetalsBulgeColdGas;
-
-    /* stars form from the bulge gas and join the bulge */
-    const double recycled_stars = (1.0 - run_params->RecycleFraction) * stars;
-    update_from_star_formation(p, stars, zb, galaxies, run_params);
-    galaxies[p].BulgeColdGas -= recycled_stars;
-    galaxies[p].MetalsBulgeColdGas -= zb * recycled_stars;
-    galaxies[p].BulgeMass += recycled_stars;
-    galaxies[p].MetalsBulgeMass += zb * recycled_stars;
-    if(galaxies[p].BulgeGasOrigin == 2) {
-        galaxies[p].InstabilityBulgeMass += recycled_stars;
-    } else {
-        galaxies[p].MergerBulgeMass += recycled_stars;
-    }
-    if(run_params->SaveFullSFH) {
-        const int snapnum = galaxies[p].SnapNum;
-        if(snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS) {
-            galaxies[p].SFHMassBulge[snapnum] += recycled_stars;
-        }
-    }
-
-    /* the reheated gas leaves the bulge reservoir */
-    if(reheated_mass > galaxies[p].BulgeColdGas) reheated_mass = galaxies[p].BulgeColdGas;
-    galaxies[p].BulgeColdGas -= reheated_mass;
-    galaxies[p].MetalsBulgeColdGas -= zb * reheated_mass;
-    update_from_feedback(p, centralgal, reheated_mass, ejected_mass, zb, galaxies, run_params);
-
-    /* new metals, as in the disk path; those staying in the cold gas stay in the bulge gas */
-    if(galaxies[p].ColdGas > 1.0e-8) {
-        const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / KD11_METAL_HALO_MASS);
-        galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
-        galaxies[p].MetalsBulgeColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
-        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, run_params->Yield * FracZleaveDiskVal * stars);
-    } else {
-        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, run_params->Yield * stars);
-    }
-
-    clamp_bulge_gas(p, galaxies);
-    if(galaxies[p].BulgeColdGas < gas_min) {
-        galaxies[p].BulgeColdGas = galaxies[p].MetalsBulgeColdGas = 0.0f;
-    }
-}
-
-/*
- * Star formation and feedback for one substep.  Outside FixingGas 4 this is the
- * disk path above.  With FixingGas 4 the bulge (starburst) gas is set aside while
- * the disk forms stars from the disk gas, then bursts on its own.
- */
-void starformation_and_feedback(const int p, const int centralgal, const double time, const double dt, const int halonr, const int step,
-                                struct GALAXY *galaxies, const struct params *run_params)
-{
-    if(!FG_SHARK_BURSTS(run_params) || (run_params->EnhancedStarFormationOn >= 1 && galaxies[p].FFBRegime == 1)) {
-        starformation_and_feedback_disk(p, centralgal, time, dt, halonr, step, galaxies, run_params);
-        if(FG_SHARK_BURSTS(run_params)) clamp_bulge_gas(p, galaxies);
-        return;
-    }
-
-    clamp_bulge_gas(p, galaxies);
-
-    // Once per snapshot, before the galaxy evolves (shark_runner.cpp): starbursts carried
-    // over in the bulge grow the black hole (eq. 37), then disk instabilities are evaluated
-    if(galaxies[p].SharkDISnap != galaxies[p].SnapNum) {
-        galaxies[p].SharkDISnap = galaxies[p].SnapNum;
-        if(run_params->AGNrecipeOn > 0) {
-            shark_starburst_bh_growth(p, galaxies, run_params);
-        }
-        if(run_params->DiskInstabilityOn) {
-            shark_disk_instability(p, galaxies, run_params);
-        }
-    }
-
-    const float bulge_gas = galaxies[p].BulgeColdGas, bulge_metals = galaxies[p].MetalsBulgeColdGas;
-    galaxies[p].ColdGas -= bulge_gas;
-    galaxies[p].MetalsColdGas -= bulge_metals;
-    galaxies[p].BulgeColdGas = galaxies[p].MetalsBulgeColdGas = 0.0f;
-
-    starformation_and_feedback_disk(p, centralgal, time, dt, halonr, step, galaxies, run_params);
-
-    galaxies[p].ColdGas += bulge_gas;
-    galaxies[p].MetalsColdGas += bulge_metals;
-    galaxies[p].BulgeColdGas += bulge_gas;
-    galaxies[p].MetalsBulgeColdGas += bulge_metals;
-
-    shark_starburst(p, centralgal, dt, step, galaxies, run_params);
 }
 
 /*
@@ -1484,8 +1315,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         if(atomicH < 0.0) { atomicH = 0.0; clamp_count_h1_negative++; }  // float-rounding guard only
         const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas,
                                                   atomic_disk_radius(galaxies[p].DiskScaleRadius),
-                                                  run_params->Hubble_h,
-                                                  FG_SHARK_SF(run_params) ? SHARK_SIGMA_HI_CRIT : SIGMA_HI_CRIT);
+                                                  run_params->Hubble_h, SIGMA_HI_CRIT);
         atomicH *= (1.0 - f_ion);
         galaxies[p].H1gas = atomicH;
     }

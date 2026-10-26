@@ -118,10 +118,6 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].deltaMvir = 0.0;
 
     galaxies[p].ColdGas = 0.0;
-    galaxies[p].BulgeColdGas = 0.0;
-    galaxies[p].MetalsBulgeColdGas = 0.0;
-    galaxies[p].BulgeGasOrigin = 0;
-    galaxies[p].SharkDISnap = -1;
     galaxies[p].StellarMass = 0.0;
     galaxies[p].BulgeMass = 0.0;
     galaxies[p].MergerBulgeMass = 0.0;   
@@ -243,12 +239,6 @@ double get_disk_radius(const int halonr, const int p, const struct halo_data *ha
  */
 double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
-    // FixingGas 4: bulge sizes follow Lagos et al. (2018) eqs. 46-48, set only at mergers
-    // and disk instabilities
-    if(FG_SHARK_BURSTS(run_params)) {
-        return galaxies[p].BulgeRadius;
-    }
-
     // BulgeSizeOn == 0: No bulge size calculation
     if(run_params->BulgeSizeOn == 0) {
         galaxies[p].BulgeRadius = 0.0;

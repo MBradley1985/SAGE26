@@ -213,10 +213,6 @@ struct GALAXY
     /* bulge properties -- split by formation channel for morphology tracking */
     float MergerBulgeMass;        /* bulge mass built via mergers [10^10 Msun/h] */
     float InstabilityBulgeMass;   /* bulge mass built via disk instability [10^10 Msun/h] */
-    float BulgeColdGas;           /* FixingGas 4: cold gas in the bulge (starburst) reservoir, a subset of ColdGas [10^10 Msun/h] */
-    float MetalsBulgeColdGas;     /* FixingGas 4: metals in BulgeColdGas, a subset of MetalsColdGas [10^10 Msun/h] */
-    int32_t BulgeGasOrigin;       /* FixingGas 4: what put gas in the bulge: 1 merger, 2 disk instability (sets which bulge component the burst builds) */
-    int32_t SharkDISnap;          /* FixingGas 4: snapshot whose disk-instability check has been made (shark checks once per snapshot) */
     float MergerBulgeRadius;      /* half-mass radius of merger-built bulge [Mpc/h] */
     float InstabilityBulgeRadius; /* half-mass radius of instability-built bulge [Mpc/h] */
 
@@ -455,15 +451,9 @@ struct save_info {
 
 /* FixingGas modes (see docs/parameters.md):
  *   1  every H2 recipe forms stars at SFR = M_mol / t_dep instead of eff M_H2 / t_dyn,
- *      with t_dep chosen by H2DepletionTimeModel
- *   2  Leroy+08 pressure law for BR06-family H2 (SFprescription 1, 3)
- *   3  Shark (Lagos+18) star formation: SFR = nu_SF M_mol with Shark's BR06 model
- *   4  3 + Shark disk instabilities, galaxy mergers, bulge sizes and starbursts */
-#define FIXINGGAS_MAX      4
+ *      with t_dep chosen by H2DepletionTimeModel */
+#define FIXINGGAS_MAX      1
 #define FG_TDEP(p)         ((p)->FixingGas == 1)
-#define FG_LEROY08(p)      ((p)->FixingGas == 2)
-#define FG_SHARK_SF(p)     ((p)->FixingGas == 3 || (p)->FixingGas == 4)
-#define FG_SHARK_BURSTS(p) ((p)->FixingGas == 4)
 
 struct params
 {
@@ -517,7 +507,7 @@ struct params
                                           // histories. Those accumulate stellar mass, not rate, so they are
                                           // correct at any substep count (unlike the Sfr* rate bins).
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
-    int32_t    FixingGas;                 // cold-gas fixes, 0 (off, default) to FIXINGGAS_MAX; see the FG_* macros and docs/parameters.md
+    int32_t    FixingGas;                 // cold-gas fixes, 0 (off, default) to FIXINGGAS_MAX; see FG_* macros and docs/parameters.md
     int32_t    H2DepletionTimeModel;      // FixingGas 1: 0 nu_SF = 1/Gyr (Lagos+18); 1 KMT09 eq. 10; 2 Krumholz 2013 eqs. 15-16; 3 KDM12 eqs. 4, 8, 9
 
     /* baryonic physics calibration parameters */

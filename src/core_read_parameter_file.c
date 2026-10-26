@@ -107,8 +107,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->BulgeSizeOn                = 3;
     run_params->SaveFullSFH                = 0;
     run_params->StarburstColdGasOn         = 1;
-    run_params->FixingGas                  = 0;
-    run_params->H2DepletionTimeModel       = 0;
+    run_params->FixingGas                  = 1;   /* as input/millennium.par */
+    run_params->H2DepletionTimeModel       = 2;   /* Krumholz (2013), as input/millennium.par */
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
@@ -127,7 +127,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->Reionization_z0            = 8.0;
     run_params->Reionization_zr            = 7.0;
     run_params->ThresholdSatDisruption     = 1.0;
-    run_params->MergerTimeFactor           = 2.0;   /* published value; hardcoded until now */
+    run_params->MergerTimeFactor           = 0.75;  /* as input/millennium.par (published value 2.0) */
     run_params->Exponent_Forest_Dist_Scheme = 0.7;
     run_params->KarpovModeOn               = 0; /* 0: full Karpov+2023 recipe, 1: low-metallicity floor (Z/Z_sun = 0.01) for reheated and ejected gas */
 
@@ -550,32 +550,16 @@ int read_parameter_file(const char *fname, struct params *run_params)
         }
     }
 
-    /* FixingGas changes how H2 is made and turned into stars, so it needs a
-       prescription that tracks H2. */
-    if(run_params->FixingGas && !sf_prescription_tracks_h2(run_params->SFprescription)) {
-        fprintf(stderr, "Error: FixingGas = %d needs an H2-tracking SFprescription (1, 3-7); SFprescription = %d does not track H2.\n",
-                run_params->FixingGas, run_params->SFprescription);
+    /* FixingGas 1 replaces how H2 is turned into stars, so it needs a prescription that
+       tracks H2; the surface-density-dependent depletion times (H2DepletionTimeModel 1-3)
+       are local laws evaluated annulus by annulus. */
+    if(FG_TDEP(run_params) && !sf_prescription_tracks_h2(run_params->SFprescription)) {
+        fprintf(stderr, "Error: FixingGas = 1 needs an H2-tracking SFprescription (1, 3-7); SFprescription = %d does not track H2.\n",
+                run_params->SFprescription);
         ABORT(EXIT_FAILURE);
     }
-
-    /* FixingGas 4 needs halo concentrations for the dark matter inside the merger
-       remnant (Lagos et al. 2018, eq. 46). */
-    if(run_params->FixingGas == 4 && run_params->ConcentrationOn == 0) {
-        fprintf(stderr, "Error: FixingGas = 4 needs ConcentrationOn > 0 (NFW enclosed mass in Lagos+18 eq. 46).\n");
-        ABORT(EXIT_FAILURE);
-    }
-
-    /* FixingGas 1 with a surface-density-dependent depletion time (H2DepletionTimeModel 1-3)
-       evaluates the published local laws annulus by annulus. */
     if(FG_TDEP(run_params) && run_params->H2DepletionTimeModel > 0 && !run_params->H2RadialIntegrationOn) {
         fprintf(stderr, "Error: FixingGas = 1 with H2DepletionTimeModel = %d needs H2RadialIntegrationOn = 1.\n", run_params->H2DepletionTimeModel);
-        ABORT(EXIT_FAILURE);
-    }
-
-    /* FixingGas 3, 4 implement Shark's BR06 model (Lagos et al. 2018), which integrates
-       over the disk: only SFprescription 1 with radial integration corresponds to it. */
-    if(FG_SHARK_SF(run_params) && (run_params->SFprescription != 1 || !run_params->H2RadialIntegrationOn)) {
-        fprintf(stderr, "Error: FixingGas = %d (Shark BR06) needs SFprescription = 1 and H2RadialIntegrationOn = 1.\n", run_params->FixingGas);
         ABORT(EXIT_FAILURE);
     }
 

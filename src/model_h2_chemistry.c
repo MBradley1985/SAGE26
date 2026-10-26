@@ -102,102 +102,27 @@ static float calculate_molecular_fraction_BR06_from_hstar(float gas_surface_dens
 }
 
 /*
- * H2 molecular fraction from the Leroy et al. (2008, AJ 136, 2782) pressure law
- * (FixingGas 2).
+ * H2 molecular fraction from the Blitz & Rosolowsky (2006) midplane pressure
+ * relation.
  *
- * Their eq. 9 midplane pressure P_h = (pi/2) G Sigma_g (Sigma_g + (sigma_g/sigma_*,z) Sigma_*),
- * with sigma_g = 11 km/s and sigma_*,z = sqrt(2 pi G l_* / 7.3) Sigma_*^0.5 (their
- * eq. B3, stellar scale length over scale height = 7.3 from Kregel et al. 2002), and their Table 6 fit for
- * spirals (combined): R_mol = (P_h/P0)^alpha with log10 P0/k = 4.23, alpha = 0.80.
- * Surface densities include helium, as SAGE26's ColdGas does.
- * Returns f_H2 = R_mol / (1 + R_mol).
+ * Computes the midplane pressure from their eq. 5 (stellar-dominated
+ * approximation, gas velocity dispersion 8 km/s), forms
+ * R_mol = (P_ext/P_0)^alpha with P_0 = 4.3e4 K cm^-3 and alpha = 0.92
+ * (their eq. 11 with the eq. 13 non-interacting fit), and returns
+ * f_H2 = R_mol / (1 + R_mol) in [0, 1].
+ *
+ * gas_surface_density_msun_pc2     : Sigma_gas  [Msun/pc^2]
+ * stellar_surface_density_msun_pc2 : Sigma_star [Msun/pc^2]
+ * disk_scale_length_pc             : r_s [pc]; sets the stellar scale height
  */
-static const double L08_LOG_P0_K        = 4.23;   /* log10 (P0/k) [K cm^-3] */
-static const double L08_ALPHA           = 0.80;
-static const double L08_SIGMA_GAS_CMS   = 11.0e5; /* gas velocity dispersion [cm/s] */
-static const double L08_SCALE_RATIO     = 7.3;    /* stellar scale length / scale height */
-static const double CM_PER_PC           = CM_PER_MPC * 1.0e-6;
-
-float calculate_molecular_fraction_L08(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
-                                       float disk_scale_length_pc)
+float calculate_molecular_fraction_BR06(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
+                                        float disk_scale_length_pc)
 {
-    if(gas_surface_density_msun_pc2 <= 0.0f || disk_scale_length_pc <= 0.0f) {
-        return 0.0f;
-    }
-    const double msun_pc2_to_cgs = SOLAR_MASS / (CM_PER_PC * CM_PER_PC);
-    const double sg = gas_surface_density_msun_pc2 * msun_pc2_to_cgs;
-    const double ss = (stellar_surface_density_msun_pc2 > 0.0f) ? stellar_surface_density_msun_pc2 * msun_pc2_to_cgs : 0.0;
-    /* (sigma_g / sigma_*,z) Sigma_* = sigma_g Sigma_*^0.5 / sqrt(2 pi G l_* / 7.3) */
-    const double stellar_term = (ss > 0.0)
-        ? L08_SIGMA_GAS_CMS * sqrt(ss) / sqrt(2.0 * M_PI * GRAVITY * disk_scale_length_pc * CM_PER_PC / L08_SCALE_RATIO)
-        : 0.0;
-    const double p_over_k = 0.5 * M_PI * GRAVITY * sg * (sg + stellar_term) / BOLTZMANN;
-    const double r_mol = pow(p_over_k / pow(10.0, L08_LOG_P0_K), L08_ALPHA);
-    return (float)(r_mol / (1.0 + r_mol));
-}
-
-/*
- * H2 molecular fraction in Shark's BR06 model (Lagos et al. 2018, MNRAS 481, 3573,
- * Section 4.4.2 and Table 3 defaults): R_mol = (P/P0)^alpha_P (their eq. 8) with
- * P0/k = 34,673 K cm^-3 and alpha_P = 0.92; P = (pi/2) G Sigma_gas (Sigma_gas +
- * (sigma_gas/sigma_*) Sigma_*) (eq. 9, Elmegreen 1989) with sigma_gas = 10 km/s,
- * sigma_* = sqrt(pi G h_* Sigma_*) and h_* = r_star / 7.3, with r_star the half-stellar-mass
- * radius (Kregel et al. 2002).  Sigma_gas is total gas (atomic plus molecular).
- * FixingGas 3, 4.
- */
-static const double SHARK_P0_K           = 34673.0;  /* K cm^-3 */
-static const double SHARK_ALPHA_P        = 0.92;
-static const double SHARK_SIGMA_GAS_CMS  = 10.0e5;   /* gas velocity dispersion [cm/s] */
-static const double SHARK_HSTAR_RATIO    = 7.3;      /* half-stellar-mass radius / stellar scale height */
-/* Lagos+18 integrate Sigma_SFR over 0-10 r_gas (half-mass) with 1 per cent accuracy;
- * 200 midpoint bins over that range are accurate to ~0.1 per cent. */
-static const double SHARK_RMAX_HALF      = 10.0;
-static const int    SHARK_NBINS          = 200;
-static const double HALF_MASS_PER_SCALE  = 1.678346990;  /* exponential disk */
-
-float calculate_molecular_fraction_shark(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
-                                         float h_star_pc)
-{
-    if(gas_surface_density_msun_pc2 <= 0.0f) {
-        return 0.0f;
-    }
-    const double msun_pc2_to_cgs = SOLAR_MASS / (CM_PER_PC * CM_PER_PC);
-    const double sg = gas_surface_density_msun_pc2 * msun_pc2_to_cgs;
-    const double ss = (stellar_surface_density_msun_pc2 > 0.0f) ? stellar_surface_density_msun_pc2 * msun_pc2_to_cgs : 0.0;
-    const double veldisp_star = (h_star_pc > 0.0f) ? sqrt(M_PI * GRAVITY * h_star_pc * CM_PER_PC * ss) : 0.0;
-    const double star_comp = (ss > 0.0 && veldisp_star > 0.0) ? (SHARK_SIGMA_GAS_CMS / veldisp_star) * ss : 0.0;
-    const double p_over_k = 0.5 * M_PI * GRAVITY * sg * (sg + star_comp) / BOLTZMANN;
-    const double r_mol = pow(p_over_k / SHARK_P0_K, SHARK_ALPHA_P);
-    return (float)(r_mol / (1.0 + r_mol));
-}
-
-/*
- * Mass-weighted Shark molecular fraction of an exponential gas component of mass
- * m_gas [Msun] with half-mass radius r_half_gas_pc [pc], and stars of mass m_star
- * [Msun] in an exponential with half-mass radius r_half_star_pc [pc], integrated over
- * 0-10 r_half_gas (Lagos et al. 2018, Section 4.4.2).  For bulges (Section 4.4.3) the
- * caller passes the bulge size: the gas settles in an exponential of scale length
- * r_bulge/1.67.
- */
-double shark_molecular_fraction(const double m_gas, const double re_gas_pc, const double m_star, const double re_star_pc)
-{
-    if(m_gas <= 0.0 || re_gas_pc <= 0.0) {
+    if (disk_scale_length_pc <= 0.0) {
         return 0.0;
     }
-    const double sg0 = m_gas / (2.0 * M_PI * re_gas_pc * re_gas_pc);
-    const double ss0 = (m_star > 0.0 && re_star_pc > 0.0) ? m_star / (2.0 * M_PI * re_star_pc * re_star_pc) : 0.0;
-    const double h_star = (re_star_pc > 0.0) ? HALF_MASS_PER_SCALE * re_star_pc / SHARK_HSTAR_RATIO : 0.0;
-    const double dr = SHARK_RMAX_HALF * HALF_MASS_PER_SCALE * re_gas_pc / SHARK_NBINS;
-    double mmol = 0.0, mtot = 0.0;
-    for(int i = 0; i < SHARK_NBINS; i++) {
-        const double r = (i + 0.5) * dr;
-        const double sg = sg0 * exp(-r / re_gas_pc);
-        const double ss = (ss0 > 0.0) ? ss0 * exp(-r / re_star_pc) : 0.0;
-        const double dm = 2.0 * M_PI * r * sg * dr;
-        mmol += dm * calculate_molecular_fraction_shark((float)sg, (float)ss, (float)h_star);
-        mtot += dm;
-    }
-    return (mtot > 0.0) ? mmol / mtot : 0.0;
+    const float h_star_pc = calculate_stellar_scale_height_BR06(disk_scale_length_pc);
+    return calculate_molecular_fraction_BR06_from_hstar(gas_surface_density_msun_pc2, stellar_surface_density_msun_pc2, h_star_pc);
 }
 
 /*
@@ -256,48 +181,6 @@ double h2_depletion_time_gyr(const double sigma_gas, const double r_pc, const do
 }
 
 /*
- * Pressure-based molecular fraction for the BR06 family (SFprescription 1, 3):
- * Blitz & Rosolowsky (2006); Leroy et al. (2008) with FixingGas 2; Shark with
- * FixingGas 3, 4.
- */
-float calculate_molecular_fraction_pressure(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
-                                            float disk_scale_length_pc, const struct params *run_params)
-{
-    if(FG_SHARK_SF(run_params)) {
-        return calculate_molecular_fraction_shark(gas_surface_density_msun_pc2, stellar_surface_density_msun_pc2,
-                                                  HALF_MASS_PER_SCALE * disk_scale_length_pc / SHARK_HSTAR_RATIO);
-    }
-    if(FG_LEROY08(run_params)) {
-        return calculate_molecular_fraction_L08(gas_surface_density_msun_pc2, stellar_surface_density_msun_pc2, disk_scale_length_pc);
-    }
-    return calculate_molecular_fraction_BR06(gas_surface_density_msun_pc2, stellar_surface_density_msun_pc2, disk_scale_length_pc);
-}
-
-/*
- * H2 molecular fraction from the Blitz & Rosolowsky (2006) midplane pressure
- * relation.
- *
- * Computes the midplane pressure from their eq. 5 (stellar-dominated
- * approximation, gas velocity dispersion 8 km/s), forms
- * R_mol = (P_ext/P_0)^alpha with P_0 = 4.3e4 K cm^-3 and alpha = 0.92
- * (their eq. 11 with the eq. 13 non-interacting fit), and returns
- * f_H2 = R_mol / (1 + R_mol) in [0, 1].
- *
- * gas_surface_density_msun_pc2     : Sigma_gas  [Msun/pc^2]
- * stellar_surface_density_msun_pc2 : Sigma_star [Msun/pc^2]
- * disk_scale_length_pc             : r_s [pc]; sets the stellar scale height
- */
-float calculate_molecular_fraction_BR06(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
-                                        float disk_scale_length_pc)
-{
-    if (disk_scale_length_pc <= 0.0) {
-        return 0.0;
-    }
-    const float h_star_pc = calculate_stellar_scale_height_BR06(disk_scale_length_pc);
-    return calculate_molecular_fraction_BR06_from_hstar(gas_surface_density_msun_pc2, stellar_surface_density_msun_pc2, h_star_pc);
-}
-
-/*
  * Radially integrated molecular fraction and SFR (used by SF prescriptions 2-6).
  *
  * Integrates f_H2(r) * Sigma_gas(r) over the exponential disk, using the
@@ -322,12 +205,6 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
     // Central surface densities for exponential profiles: Sigma0 = M_total / (2pi r_s^2)
     const float sigma_gas_0  = M_gas_total / (2.0 * M_PI * rs_pc * rs_pc);
     const float sigma_star_0 = (M_disk_star > 0.0) ? M_disk_star / (2.0 * M_PI * rs_pc * rs_pc) : 0.0;
-
-    // FixingGas 3, 4: Shark's integration (Lagos+18 Section 4.4.2), gas and stars sharing the SAGE disk scale length
-    if(FG_SHARK_SF(run_params)) {
-        galaxies[gal].H2gas = (float)(shark_molecular_fraction(M_gas_total, rs_pc, M_disk_star, rs_pc) * galaxies[gal].ColdGas * HYDROGEN_MASS_FRAC);
-        return galaxies[gal].H2gas;
-    }
 
     // Radial integration parameters from run_params (defaults: 25 bins, 5*r_s)
     const int   N_BINS = run_params->H2RadialNBins;
@@ -404,8 +281,7 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
 
         if(sf_prescription_is_br06(sfpres)) {
             // BR06 (scale height precomputed above)
-            f_mol_r = FG_LEROY08(run_params) ? calculate_molecular_fraction_L08(sigma_gas_r, sigma_star_r, rs_pc)
-                    : calculate_molecular_fraction_BR06_from_hstar(sigma_gas_r, sigma_star_r, h_star_br06);
+            f_mol_r = calculate_molecular_fraction_BR06_from_hstar(sigma_gas_r, sigma_star_r, h_star_br06);
 
         } else if(sfpres == 4) {
             // KD12
