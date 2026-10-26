@@ -555,6 +555,20 @@ int read_parameter_file(const char *fname, struct params *run_params)
         ABORT(EXIT_FAILURE);
     }
 
+    /* FixingGas 1 and 3 (Tacconi+18 depletion time) were removed: an observed relation,
+       not a published model star-formation law. */
+    if(run_params->FixingGas == 1 || run_params->FixingGas == 3) {
+        fprintf(stderr, "Error: FixingGas = %d has been removed; valid values are 0, 2, 4 and 5.\n", run_params->FixingGas);
+        ABORT(EXIT_FAILURE);
+    }
+
+    /* FixingGas 5 needs halo concentrations for the dark matter inside the merger
+       remnant (Lagos et al. 2018, eq. 46). */
+    if(run_params->FixingGas == 5 && run_params->ConcentrationOn == 0) {
+        fprintf(stderr, "Error: FixingGas = 5 needs ConcentrationOn > 0 (NFW enclosed mass in Lagos+18 eq. 46).\n");
+        ABORT(EXIT_FAILURE);
+    }
+
     /* FixingGas 4, 5 implement Shark's BR06 model (Lagos et al. 2018), which integrates
        over the disk: only SFprescription 1 with radial integration corresponds to it. */
     if(FG_SHARK_SF(run_params) && (run_params->SFprescription != 1 || !run_params->H2RadialIntegrationOn)) {

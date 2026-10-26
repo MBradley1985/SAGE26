@@ -453,15 +453,12 @@ struct save_info {
 };
 
 
-/* FixingGas modes (see docs/parameters.md):
- *   1  SFR = 1.36 H2 / t_dep, Tacconi+18 molecular depletion time
+/* FixingGas modes (see docs/parameters.md); 1 and 3 were removed:
  *   2  Leroy+08 pressure law for BR06-family H2 (SFprescription 1, 3)
- *   3  1 + 2
- *   4  Shark (Lagos+18) star formation: SFR = nu_SF M_mol with Shark's BR06 pressure law
- *   5  4 + Shark disk instabilities, merger classification and starbursts */
+ *   4  Shark (Lagos+18) star formation: SFR = nu_SF M_mol with Shark's BR06 model
+ *   5  4 + Shark disk instabilities, galaxy mergers, bulge sizes and starbursts */
 #define FIXINGGAS_MAX      5
-#define FG_TDEP(p)         ((p)->FixingGas == 1 || (p)->FixingGas == 3)
-#define FG_LEROY08(p)      ((p)->FixingGas == 2 || (p)->FixingGas == 3)
+#define FG_LEROY08(p)      ((p)->FixingGas == 2)
 #define FG_SHARK_SF(p)     ((p)->FixingGas == 4 || (p)->FixingGas == 5)
 #define FG_SHARK_BURSTS(p) ((p)->FixingGas == 5)
 

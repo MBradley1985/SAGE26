@@ -48,24 +48,19 @@ static const double TOOMRE_DISK_FACTOR = 3.0;
  * FixingGas 5 -- disk instabilities (Lagos et al. 2018, Section 4.4.8): eq. (35),
  * eps = V_circ / sqrt(1.68 G M_disk / r_disk), with V_circ the maximum circular
  * velocity, r_disk the disk half-mass radius and M_disk the disk mass (gas plus
- * stars).  eps < eps_disc = 0.8 (Table 4) is unstable: the disk's stars and gas go
- * to the spheroid and the gas drives a starburst (shark_starburst in
- * model_starformation_and_feedback.c).  Checked once per snapshot, before the
- * galaxy evolves, as the shark code does (shark_runner.cpp).  Called with any bulge
- * gas set aside, so ColdGas here is the disk gas.
+ * stars).  eps < eps_disc = 0.8 (Table 4) is unstable: the disk's stars and gas go to
+ * the spheroid, which takes the size from eq. (48), and the gas drives a starburst
+ * (black-hole growth from eq. 37; star formation in shark_starburst).  Called once per
+ * snapshot before the galaxy evolves, as shark does (shark_runner.cpp), from
+ * starformation_and_feedback().
  */
 static const double SHARK_DI_STABLE = 0.8;
 
-static void shark_disk_instability(const int p, struct GALAXY *galaxies, const struct params *run_params)
+void shark_disk_instability(const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
-    /* shark evaluates disk instabilities once per snapshot, before the galaxy evolves
-     * (shark_runner.cpp: mergers, then evaluate_disk_instability, then evolve_galaxy) */
-    if(galaxies[p].SharkDISnap == galaxies[p].SnapNum) {
-        return;
-    }
-    galaxies[p].SharkDISnap = galaxies[p].SnapNum;
     const double disk_stars = galaxies[p].StellarMass - galaxies[p].BulgeMass;
-    const double md = galaxies[p].ColdGas + disk_stars;
+    const double disk_gas = galaxies[p].ColdGas - galaxies[p].BulgeColdGas;
+    const double md = disk_stars + disk_gas;
     const double rd = 1.678346990 * galaxies[p].DiskScaleRadius;    /* half-mass radius */
     if(md <= 0.0 || rd <= 0.0 || galaxies[p].Vmax <= 0.0) {
         return;
@@ -75,29 +70,32 @@ static void shark_disk_instability(const int p, struct GALAXY *galaxies, const s
         return;
     }
 
+    const double r_new = shark_disk_instability_bulge_size(p, galaxies);
+
     if(disk_stars > 0.0) {
-        const double old_disk_radius = galaxies[p].DiskScaleRadius;
         move_disk_sfh_to_bulge(p, 1.0, galaxies, run_params);
         galaxies[p].InstabilityBulgeMass += disk_stars;
         galaxies[p].BulgeMass = galaxies[p].StellarMass;
         galaxies[p].MetalsBulgeMass = galaxies[p].MetalsStellarMass;
-        update_instability_bulge_radius(p, disk_stars, old_disk_radius, galaxies, run_params);
     }
-    if(galaxies[p].ColdGas > 0.0) {
-        if(run_params->AGNrecipeOn > 0) {
-            grow_black_hole(p, 1.0, galaxies, run_params);
-        }
-        galaxies[p].BulgeColdGas = galaxies[p].ColdGas;
-        galaxies[p].MetalsBulgeColdGas = galaxies[p].MetalsColdGas;
-        galaxies[p].BulgeGasOrigin = 2;
+    galaxies[p].BulgeColdGas = galaxies[p].ColdGas;
+    galaxies[p].MetalsBulgeColdGas = galaxies[p].MetalsColdGas;
+    galaxies[p].BulgeGasOrigin = 2;
+    if(r_new > 0.0) {
+        galaxies[p].BulgeRadius = r_new;
+        galaxies[p].InstabilityBulgeRadius = r_new;
+        galaxies[p].MergerBulgeRadius = r_new;
+    }
+    if(run_params->AGNrecipeOn > 0) {
+        shark_starburst_bh_growth(p, galaxies, run_params);
     }
 }
 
 void check_disk_instability(const int p, const int centralgal, const int halonr, const double time, const double dt, const int step,
                             struct GALAXY *galaxies, const struct params *run_params)
 {
+    // FixingGas 5: disk instabilities are evaluated once per snapshot by shark_disk_instability()
     if(FG_SHARK_BURSTS(run_params)) {
-        shark_disk_instability(p, galaxies, run_params);
         return;
     }
 

@@ -243,6 +243,12 @@ double get_disk_radius(const int halonr, const int p, const struct halo_data *ha
  */
 double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
+    // FixingGas 5: bulge sizes follow Lagos et al. (2018) eqs. 46-48, set only at mergers
+    // and disk instabilities
+    if(FG_SHARK_BURSTS(run_params)) {
+        return galaxies[p].BulgeRadius;
+    }
+
     // BulgeSizeOn == 0: No bulge size calculation
     if(run_params->BulgeSizeOn == 0) {
         galaxies[p].BulgeRadius = 0.0;

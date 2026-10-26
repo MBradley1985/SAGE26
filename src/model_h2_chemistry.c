@@ -103,7 +103,7 @@ static float calculate_molecular_fraction_BR06_from_hstar(float gas_surface_dens
 
 /*
  * H2 molecular fraction from the Leroy et al. (2008, AJ 136, 2782) pressure law
- * (FixingGas 2, 3).
+ * (FixingGas 2).
  *
  * Their eq. 9 midplane pressure P_h = (pi/2) G Sigma_g (Sigma_g + (sigma_g/sigma_*,z) Sigma_*),
  * with sigma_g = 11 km/s and sigma_*,z = sqrt(2 pi G l_* / 7.3) Sigma_*^0.5 (their
@@ -202,7 +202,7 @@ double shark_molecular_fraction(const double m_gas, const double re_gas_pc, cons
 
 /*
  * Pressure-based molecular fraction for the BR06 family (SFprescription 1, 3):
- * Blitz & Rosolowsky (2006); Leroy et al. (2008) with FixingGas 2, 3; Shark with
+ * Blitz & Rosolowsky (2006); Leroy et al. (2008) with FixingGas 2; Shark with
  * FixingGas 4, 5.
  */
 float calculate_molecular_fraction_pressure(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,

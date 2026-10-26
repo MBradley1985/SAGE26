@@ -54,6 +54,98 @@ static const double STARBURST_MASS_POWER = 0.7;
 static const double SHARK_F_ELLIP     = 0.3;   /* major_merger_ratio */
 static const double SHARK_F_BURST     = 0.1;   /* minor_merger_burst_ratio */
 static const double SHARK_F_GAS_BURST = 0.3;   /* gas_fraction_burst_ratio */
+/* Bulge sizes (Section 4.4.7, eqs. 46-47; Table 4). */
+static const double SHARK_C_GAL       = 0.49;  /* cgal */
+static const double SHARK_F_ORBIT     = 1.0;   /* f_orbit */
+static const double SHARK_MR_DISS     = 0.3;   /* merger_ratio_dissipation */
+static const double SHARK_R0_DISS     = 1.0;   /* fgas_dissipation, R0 in eq. (47) */
+/* Black-hole growth in starbursts (Section 4.4.10, eq. 37; Table 3). */
+static const double SHARK_F_SMBH      = 8.0e-3;
+static const double SHARK_V_SMBH_KMS  = 400.0;
+static const double SHARK_BULGE_GAS_MIN_MSUN = 1.0e5;  /* min_gas,bulge (Section 4.4.3) */
+static const double HALF_MASS_PER_SCALE = 1.678346990; /* exponential disk */
+
+/* Shark's galaxy components in SAGE26 terms: the disk is (StellarMass - BulgeMass) stars
+ * plus (ColdGas - BulgeColdGas) gas with half-mass radius 1.678 DiskScaleRadius; the bulge
+ * is BulgeMass stars plus BulgeColdGas gas with half-mass radius BulgeRadius. */
+static double shark_disk_mass(const struct GALAXY *g)  { return (g->StellarMass - g->BulgeMass) + (g->ColdGas - g->BulgeColdGas); }
+static double shark_bulge_mass(const struct GALAXY *g) { return g->BulgeMass + g->BulgeColdGas; }
+static double shark_composite_size(const struct GALAXY *g)
+{
+    const double mbar = g->StellarMass + g->ColdGas;
+    return (mbar > 0.0) ? (shark_disk_mass(g) * HALF_MASS_PER_SCALE * g->DiskScaleRadius
+                           + shark_bulge_mass(g) * g->BulgeRadius) / mbar : 0.0;
+}
+
+/*
+ * Remnant half-mass radius from energy conservation (Lagos et al. 2018 eq. 46, following
+ * Cole et al. 2000): (Mc + Ms)^2 / r = Mc^2/rc + Ms^2/rs + (f_orbit/c_gal) Mc Ms/(rc + rs).
+ * The published eq. (46) is printed without the squares on the right-hand side; the squares
+ * follow Cole et al. (2000) and shark's r_remnant() (galaxy_mergers.cpp).
+ */
+static double shark_r_remnant(const double mc, const double ms, const double rc, const double rs)
+{
+    const double f1 = (rc > 0.0 && mc > 0.0) ? mc * mc / rc : 0.0;
+    const double f2 = (rs > 0.0 && ms > 0.0) ? ms * ms / rs : 0.0;
+    const double f3 = (rc > 0.0 || rs > 0.0) ? SHARK_F_ORBIT / SHARK_C_GAL * mc * ms / (rc + rs) : 0.0;
+    const double f = f1 + f2 + f3;
+    return (f > 0.0) ? (mc + ms) * (mc + ms) / f : 0.0;
+}
+
+/* NFW enclosed-mass fraction M(<x Rvir)/Mvir for concentration c. */
+static double nfw_enclosed_fraction(const double x, const double c)
+{
+    if(x <= 0.0 || c <= 0.0) return 0.0;
+    const double frac = (log(1.0 + c * x) - c * x / (1.0 + c * x)) / (log(1.0 + c) - c / (1.0 + c));
+    return (frac > 1.0) ? 1.0 : frac;
+}
+
+/*
+ * FixingGas 5 -- black-hole growth in a starburst (Lagos et al. 2018 eq. 37, Kauffmann &
+ * Haehnelt 2000): delta m_BH = f_smbh m_gas / (1 + (v_smbh/V_vir)^2), with m_gas the cold
+ * gas of the starburst (BulgeColdGas), f_smbh = 8e-3 and v_smbh = 400 km/s.  The gas comes
+ * out of the bulge reservoir with its metals.  As in shark (galaxy_mergers.cpp
+ * create_starbursts, disk_instability.cpp create_starburst) it applies whenever a starburst
+ * is created from bulge gas above min_gas,bulge.
+ */
+void shark_starburst_bh_growth(const int p, struct GALAXY *galaxies, const struct params *run_params)
+{
+    const double gas_min = SHARK_BULGE_GAS_MIN_MSUN * run_params->Hubble_h / 1.0e10;
+    if(galaxies[p].BulgeColdGas <= gas_min || galaxies[p].Vvir <= 0.0) {
+        return;
+    }
+    double dm = SHARK_F_SMBH * galaxies[p].BulgeColdGas
+                / (1.0 + (SHARK_V_SMBH_KMS / galaxies[p].Vvir) * (SHARK_V_SMBH_KMS / galaxies[p].Vvir));
+    if(dm > galaxies[p].BulgeColdGas) dm = galaxies[p].BulgeColdGas;
+    const double z = galaxies[p].MetalsBulgeColdGas / galaxies[p].BulgeColdGas;
+    galaxies[p].BulgeColdGas -= dm;
+    galaxies[p].MetalsBulgeColdGas -= z * dm;
+    galaxies[p].ColdGas -= dm;
+    galaxies[p].MetalsColdGas -= z * dm;
+    galaxies[p].BlackHoleMass += dm;
+    galaxies[p].QuasarModeBHaccretionMass += dm;
+}
+
+/*
+ * FixingGas 5 -- bulge size after a disk instability (Lagos et al. 2018 eq. 48, following
+ * Lacey et al. 2016): c (Md + Mb)^2 / r = c Md^2/rd + c Mb^2/rb + f_int Md Mb/(rd + rb),
+ * masses and mass-weighted radii including stars and gas, c = c_gal, f_int = 2 (Table 4).
+ * As eq. (46), the published equation is printed without the squares; this is the form in
+ * shark's DiskInstability::bulge_size().
+ */
+double shark_disk_instability_bulge_size(const int p, const struct GALAXY *galaxies)
+{
+    const double md = shark_disk_mass(&galaxies[p]);
+    const double mb = shark_bulge_mass(&galaxies[p]);
+    const double rd = HALF_MASS_PER_SCALE * galaxies[p].DiskScaleRadius;
+    const double rb = (mb > 0.0) ? galaxies[p].BulgeRadius : 0.0;
+    const double f_int = 2.0;
+    const double bc = (mb > 0.0 && rb > 0.0) ? SHARK_C_GAL * mb * mb / rb : 0.0;
+    const double dc = (md > 0.0 && rd > 0.0) ? SHARK_C_GAL * md * md / rd : 0.0;
+    const double cc = (rd + rb > 0.0) ? f_int * md * mb / (rd + rb) : 0.0;
+    const double denom = bc + dc + cc;
+    return (denom > 0.0) ? SHARK_C_GAL * (md + mb) * (md + mb) / denom : galaxies[p].BulgeRadius;
+}
 
 /* FIRE (Muratov et al. 2015) critical velocity separating the two power-law
  * slopes of the wind loading factor.  Same value as in
@@ -266,10 +358,51 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     const double primary_mass = galaxies[merger_centralgal].StellarMass + galaxies[merger_centralgal].ColdGas;
     const double primary_gas_frac = (primary_mass > 0.0) ? galaxies[merger_centralgal].ColdGas / primary_mass : 0.0;
 
+    // FixingGas 5: remnant bulge size from the galaxies before they combine (Lagos et al.
+    // 2018, Section 4.4.7, eqs. 46-47).  Major merger: the primary is its baryons plus twice
+    // the NFW dark matter inside its half-baryon-mass radius.  Minor merger: the primary is
+    // what ends up in its bulge -- bulge plus disk gas if a starburst is driven, otherwise
+    // the bulge alone.  Dissipation (Hopkins et al. 2009) above mass ratio mr_diss.
+    double shark_bulge_radius = -1.0;
+    if(FG_SHARK_BURSTS(run_params)) {
+        const struct GALAXY *gc = &galaxies[merger_centralgal], *gs = &galaxies[p];
+        const double ms = gs->StellarMass + gs->ColdGas;
+        const double rs = shark_composite_size(gs);
+        double mc, rc;
+        if(mass_ratio > SHARK_F_ELLIP) {
+            rc = shark_composite_size(gc);
+            const double x = (galaxies[centralgal].Rvir > 0.0) ? rc / galaxies[centralgal].Rvir : 0.0;
+            mc = gc->StellarMass + gc->ColdGas
+                 + 2.0 * galaxies[centralgal].Mvir * nfw_enclosed_fraction(x, galaxies[centralgal].Concentration);
+        } else if(mass_ratio > SHARK_F_BURST && primary_gas_frac > SHARK_F_GAS_BURST) {
+            const double disk_gas = gc->ColdGas - gc->BulgeColdGas;
+            mc = shark_bulge_mass(gc) + disk_gas;
+            rc = (mc > 0.0) ? (gc->BulgeRadius * shark_bulge_mass(gc) + disk_gas * HALF_MASS_PER_SCALE * gc->DiskScaleRadius) / mc : 0.0;
+        } else {
+            mc = shark_bulge_mass(gc);
+            rc = gc->BulgeRadius;
+        }
+        shark_bulge_radius = shark_r_remnant(mc, ms, rc, rs);
+        if(SHARK_R0_DISS > 0.0 && mass_ratio > SHARK_MR_DISS) {
+            // eq. (47): r' = r / (1 + R_gas/R0), R_gas = M_cold/M_* of the remnant; shark's
+            // code limits the denominator to 3 (and uses 3 when there are no stars)
+            const double mstars = gc->StellarMass + gs->StellarMass;
+            const double mgas = gc->ColdGas + gs->ColdGas;
+            if(mgas > 0.0 && mstars > 0.0) {
+                double denom = 1.0 + (mgas / mstars) / SHARK_R0_DISS;
+                if(denom > 3.0) denom = 3.0;
+                shark_bulge_radius /= denom;
+            } else if(mstars == 0.0 && mgas > 0.0) {
+                shark_bulge_radius /= 3.0;
+            }
+        }
+    }
+
     add_galaxies_together(merger_centralgal, p, galaxies, run_params);
 
-    // grow black hole through accretion from cold disk during mergers
-    if(run_params->AGNrecipeOn) {
+    // grow black hole through accretion from cold disk during mergers (FixingGas 5:
+    // eq. 37 in the starburst instead, below)
+    if(run_params->AGNrecipeOn && !FG_SHARK_BURSTS(run_params)) {
         grow_black_hole(merger_centralgal, mass_ratio, galaxies, run_params);
     }
 
@@ -305,6 +438,9 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
             galaxies[merger_centralgal].BulgeColdGas = galaxies[merger_centralgal].ColdGas;
             galaxies[merger_centralgal].MetalsBulgeColdGas = galaxies[merger_centralgal].MetalsColdGas;
             galaxies[merger_centralgal].BulgeGasOrigin = 1;
+            if(run_params->AGNrecipeOn > 0) {
+                shark_starburst_bh_growth(merger_centralgal, galaxies, run_params);
+            }
         }
     } else {
         // starburst recipe - now tracks which bulge component receives the stars
@@ -357,6 +493,13 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
             galaxies[merger_centralgal].MergerBulgeRadius = new_merger_radius;
             get_bulge_radius(merger_centralgal, galaxies, run_params);
         }
+    }
+
+    // FixingGas 5: the remnant's bulge (stars and gas) takes the Shark size from eqs. 46-47
+    if(FG_SHARK_BURSTS(run_params) && shark_bulge_radius > 0.0) {
+        galaxies[merger_centralgal].BulgeRadius = shark_bulge_radius;
+        galaxies[merger_centralgal].MergerBulgeRadius = shark_bulge_radius;
+        galaxies[merger_centralgal].InstabilityBulgeRadius = shark_bulge_radius;
     }
 }
 
