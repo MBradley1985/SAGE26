@@ -19,6 +19,7 @@ extern "C" {
     extern float calculate_molecular_fraction_BR06(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2, float disk_scale_length_pc);
     extern float calculate_molecular_fraction_L08(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2, float disk_scale_length_pc);
     extern float calculate_molecular_fraction_shark(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2, float h_star_pc);
+    extern double h2_depletion_time_gyr(const double sigma_gas, const double r_pc, const double v_circ, const int model);
     extern double shark_molecular_fraction(const double m_gas, const double re_gas_pc, const double m_star, const double re_star_pc);
     extern float calculate_molecular_fraction_pressure(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
                                                        float disk_scale_length_pc, const struct params *run_params);

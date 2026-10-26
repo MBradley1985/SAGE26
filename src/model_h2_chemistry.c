@@ -103,7 +103,7 @@ static float calculate_molecular_fraction_BR06_from_hstar(float gas_surface_dens
 
 /*
  * H2 molecular fraction from the Leroy et al. (2008, AJ 136, 2782) pressure law
- * (FixingGas 1).
+ * (FixingGas 2).
  *
  * Their eq. 9 midplane pressure P_h = (pi/2) G Sigma_g (Sigma_g + (sigma_g/sigma_*,z) Sigma_*),
  * with sigma_g = 11 km/s and sigma_*,z = sqrt(2 pi G l_* / 7.3) Sigma_*^0.5 (their
@@ -143,7 +143,7 @@ float calculate_molecular_fraction_L08(float gas_surface_density_msun_pc2, float
  * (sigma_gas/sigma_*) Sigma_*) (eq. 9, Elmegreen 1989) with sigma_gas = 10 km/s,
  * sigma_* = sqrt(pi G h_* Sigma_*) and h_* = r_star / 7.3, with r_star the half-stellar-mass
  * radius (Kregel et al. 2002).  Sigma_gas is total gas (atomic plus molecular).
- * FixingGas 2, 3.
+ * FixingGas 3, 4.
  */
 static const double SHARK_P0_K           = 34673.0;  /* K cm^-3 */
 static const double SHARK_ALPHA_P        = 0.92;
@@ -201,9 +201,64 @@ double shark_molecular_fraction(const double m_gas, const double re_gas_pc, cons
 }
 
 /*
+ * FixingGas 1 -- molecular gas depletion time t_dep [Gyr] at a point in the disk with
+ * total (atomic plus molecular) gas surface density sigma_gas [Msun/pc^2], galactocentric
+ * radius r [pc] and circular velocity v_circ [km/s], so that Sigma_SFR = Sigma_mol / t_dep
+ * with Sigma_mol = f_mol Sigma_gas (helium included).  H2DepletionTimeModel selects:
+ *   0  Lagos et al. (2018) Table 3 default nu_SF = 1 Gyr^-1: t_dep = 1 Gyr.
+ *   1  Krumholz, McKee & Tumlinson (2009, ApJ 699, 850) eq. (10):
+ *      t_dep = 2.6 Gyr (Sigma_gas/85)^(+0.33) below 85 Msun/pc^2, (Sigma_gas/85)^(-0.33) above.
+ *   2  Krumholz (2013, MNRAS 436, 2747) eqs. (15)-(16): t_dep = t_ff/eps_ff with
+ *      t_ff = pi^(1/4)/sqrt(8) sigma_g / (G (Sigma_GMC^3 Sigma)^(1/4)), sigma_g = 8 km/s,
+ *      Sigma_GMC = 85 Msun/pc^2, eps_ff = 0.01.
+ *   3  Krumholz, Dekel & McKee (2012, ApJ 745, 69) eqs. (2), (4), (8), (9):
+ *      t_dep = min(t_ff,GMC, t_ff,T)/eps_ff with t_ff,GMC as in 2 (Sigma_gal = Sigma_gas,
+ *      sigma = 8 km/s, their value for nearby disks) and t_ff,T = sqrt(3 pi^2 Q^2 /
+ *      (32 (beta+1) phi_P)) / Omega with Q = 1, beta = 0 (flat rotation curve), phi_P = 3,
+ *      Omega = v_circ / r.
+ */
+static const double KMT09_TDEP_GYR     = 2.6;
+static const double KRUMHOLZ_SIGMA_GMC = 85.0;     /* Msun/pc^2 */
+static const double KRUMHOLZ_SIGMA_G   = 8.0;      /* km/s */
+static const double KRUMHOLZ_EPS_FF    = 0.01;
+static const double G_PC_KMS2_MSUN     = 4.30091e-3;   /* G [pc (km/s)^2 / Msun] */
+static const double GYR_PER_PC_KMS     = 9.7779e-4;    /* 1 pc / (km/s) in Gyr */
+static const double KDM12_Q            = 1.0;
+static const double KDM12_BETA         = 0.0;
+static const double KDM12_PHI_P        = 3.0;
+
+double h2_depletion_time_gyr(const double sigma_gas, const double r_pc, const double v_circ, const int model)
+{
+    if(model == 0) {
+        return 1.0;
+    }
+    if(sigma_gas <= 0.0) {
+        return 0.0;
+    }
+    if(model == 1) {
+        const double x = sigma_gas / KRUMHOLZ_SIGMA_GMC;
+        return KMT09_TDEP_GYR * ((x < 1.0) ? pow(x, 0.33) : pow(x, -0.33));
+    }
+    const double t_ff_gmc = pow(M_PI, 0.25) / sqrt(8.0) * KRUMHOLZ_SIGMA_G
+                            / (G_PC_KMS2_MSUN * pow(KRUMHOLZ_SIGMA_GMC * KRUMHOLZ_SIGMA_GMC * KRUMHOLZ_SIGMA_GMC * sigma_gas, 0.25))
+                            * GYR_PER_PC_KMS;
+    if(model == 2) {
+        return t_ff_gmc / KRUMHOLZ_EPS_FF;
+    }
+    double t_ff = t_ff_gmc;
+    if(v_circ > 0.0 && r_pc > 0.0) {
+        const double omega = v_circ / r_pc;   /* (km/s)/pc */
+        const double t_ff_t = sqrt(3.0 * M_PI * M_PI * KDM12_Q * KDM12_Q / (32.0 * (KDM12_BETA + 1.0) * KDM12_PHI_P))
+                              / omega * GYR_PER_PC_KMS;
+        if(t_ff_t < t_ff) t_ff = t_ff_t;
+    }
+    return t_ff / KRUMHOLZ_EPS_FF;
+}
+
+/*
  * Pressure-based molecular fraction for the BR06 family (SFprescription 1, 3):
- * Blitz & Rosolowsky (2006); Leroy et al. (2008) with FixingGas 1; Shark with
- * FixingGas 2, 3.
+ * Blitz & Rosolowsky (2006); Leroy et al. (2008) with FixingGas 2; Shark with
+ * FixingGas 3, 4.
  */
 float calculate_molecular_fraction_pressure(float gas_surface_density_msun_pc2, float stellar_surface_density_msun_pc2,
                                             float disk_scale_length_pc, const struct params *run_params)
@@ -268,7 +323,7 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
     const float sigma_gas_0  = M_gas_total / (2.0 * M_PI * rs_pc * rs_pc);
     const float sigma_star_0 = (M_disk_star > 0.0) ? M_disk_star / (2.0 * M_PI * rs_pc * rs_pc) : 0.0;
 
-    // FixingGas 2, 3: Shark's integration (Lagos+18 Section 4.4.2), gas and stars sharing the SAGE disk scale length
+    // FixingGas 3, 4: Shark's integration (Lagos+18 Section 4.4.2), gas and stars sharing the SAGE disk scale length
     if(FG_SHARK_SF(run_params)) {
         galaxies[gal].H2gas = (float)(shark_molecular_fraction(M_gas_total, rs_pc, M_disk_star, rs_pc) * galaxies[gal].ColdGas * HYDROGEN_MASS_FRAC);
         return galaxies[gal].H2gas;
@@ -330,6 +385,7 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
 
     // Integrate molecular gas mass
     float M_H2_total = 0.0;
+    double SFR_tdep_total = 0.0;   /* FixingGas 1 */
 
     for (int i = 0; i < N_BINS; i++) {
         // Bin center radius
@@ -389,6 +445,12 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
 
         M_H2_total += dM_H2;
 
+        // FixingGas 1: star formation from this annulus's molecular gas (He included) at the local t_dep
+        if(FG_TDEP(run_params)) {
+            const double t_dep_r = h2_depletion_time_gyr(sigma_gas_r, r, galaxies[gal].Vmax, run_params->H2DepletionTimeModel);
+            if(t_dep_r > 0.0) SFR_tdep_total += (double)dM_H2 / HYDROGEN_MASS_FRAC / t_dep_r;   /* Msun/Gyr */
+        }
+
         // K13 SFR: Sigma_gas(r) / t_dep(r) * 2pi r dr [Msun/Gyr], using local f_H2 from base prescription
         if(strdot_code_out != NULL) {
             double t_dep_r = calculate_tdep_K13_Gyr(sigma_gas_r, sigma_star_r, rs_pc, Z_prime_k13, f_mol_r);
@@ -407,6 +469,12 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
         // Effective global depletion time [Gyr] = M_gas / SFR_K13
         galaxies[gal].H2DepletionTime_Gyr = (SFR_K13_total > 0.0)
                                             ? (float)(M_gas_total / SFR_K13_total) : -1.0f;
+    }
+
+    // FixingGas 1: effective molecular depletion time M_mol / SFR, used by the star-formation law
+    if(FG_TDEP(run_params)) {
+        galaxies[gal].H2DepletionTime_Gyr = (SFR_tdep_total > 0.0)
+                                            ? (float)((double)M_H2_total / HYDROGEN_MASS_FRAC / SFR_tdep_total) : -1.0f;
     }
 
     // Store and return

@@ -108,6 +108,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->SaveFullSFH                = 0;
     run_params->StarburstColdGasOn         = 1;
     run_params->FixingGas                  = 0;
+    run_params->H2DepletionTimeModel       = 0;
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
@@ -182,6 +183,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("SaveFullSFH",           &(run_params->SaveFullSFH),          INT, 0);
     REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
     REG("FixingGas",             &(run_params->FixingGas),            INT, 0);
+    REG("H2DepletionTimeModel",  &(run_params->H2DepletionTimeModel), INT, 0);
     REG("SubstepResolution",     &(run_params->SubstepResolution),     DOUBLE, 0);
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
     REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
@@ -535,6 +537,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"FixingGas",              run_params->FixingGas,              0, FIXINGGAS_MAX},
+            {"H2DepletionTimeModel",   run_params->H2DepletionTimeModel,   0, 3},
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {
@@ -555,14 +558,21 @@ int read_parameter_file(const char *fname, struct params *run_params)
         ABORT(EXIT_FAILURE);
     }
 
-    /* FixingGas 3 needs halo concentrations for the dark matter inside the merger
+    /* FixingGas 4 needs halo concentrations for the dark matter inside the merger
        remnant (Lagos et al. 2018, eq. 46). */
-    if(run_params->FixingGas == 3 && run_params->ConcentrationOn == 0) {
-        fprintf(stderr, "Error: FixingGas = 3 needs ConcentrationOn > 0 (NFW enclosed mass in Lagos+18 eq. 46).\n");
+    if(run_params->FixingGas == 4 && run_params->ConcentrationOn == 0) {
+        fprintf(stderr, "Error: FixingGas = 4 needs ConcentrationOn > 0 (NFW enclosed mass in Lagos+18 eq. 46).\n");
         ABORT(EXIT_FAILURE);
     }
 
-    /* FixingGas 2, 3 implement Shark's BR06 model (Lagos et al. 2018), which integrates
+    /* FixingGas 1 with a surface-density-dependent depletion time (H2DepletionTimeModel 1-3)
+       evaluates the published local laws annulus by annulus. */
+    if(FG_TDEP(run_params) && run_params->H2DepletionTimeModel > 0 && !run_params->H2RadialIntegrationOn) {
+        fprintf(stderr, "Error: FixingGas = 1 with H2DepletionTimeModel = %d needs H2RadialIntegrationOn = 1.\n", run_params->H2DepletionTimeModel);
+        ABORT(EXIT_FAILURE);
+    }
+
+    /* FixingGas 3, 4 implement Shark's BR06 model (Lagos et al. 2018), which integrates
        over the disk: only SFprescription 1 with radial integration corresponds to it. */
     if(FG_SHARK_SF(run_params) && (run_params->SFprescription != 1 || !run_params->H2RadialIntegrationOn)) {
         fprintf(stderr, "Error: FixingGas = %d (Shark BR06) needs SFprescription = 1 and H2RadialIntegrationOn = 1.\n", run_params->FixingGas);

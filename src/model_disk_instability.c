@@ -45,7 +45,7 @@ static const double TOOMRE_DISK_FACTOR = 3.0;
  * transfer so the Tonini formula uses the pre-instability disc scale.
  */
 /*
- * FixingGas 3 -- disk instabilities (Lagos et al. 2018, Section 4.4.8): eq. (35),
+ * FixingGas 4 -- disk instabilities (Lagos et al. 2018, Section 4.4.8): eq. (35),
  * eps = V_circ / sqrt(1.68 G M_disk / r_disk), with V_circ the maximum circular
  * velocity, r_disk the disk half-mass radius and M_disk the disk mass (gas plus
  * stars).  eps < eps_disc = 0.8 (Table 4) is unstable: the disk's stars and gas go to
@@ -94,7 +94,7 @@ void shark_disk_instability(const int p, struct GALAXY *galaxies, const struct p
 void check_disk_instability(const int p, const int centralgal, const int halonr, const double time, const double dt, const int step,
                             struct GALAXY *galaxies, const struct params *run_params)
 {
-    // FixingGas 3: disk instabilities are evaluated once per snapshot by shark_disk_instability()
+    // FixingGas 4: disk instabilities are evaluated once per snapshot by shark_disk_instability()
     if(FG_SHARK_BURSTS(run_params)) {
         return;
     }
