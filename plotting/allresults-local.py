@@ -2187,3 +2187,50 @@ if __name__ == '__main__':
 
     plt.savefig(OutputDir + 'disk_radius_vs_stellar_mass' + OutputFormat, dpi=150)
     print('Saved file to', outputFile, '\n')
+
+#--------------------------------------------------------
+
+    # Plotting half-mass radius vs stellar mass coloured by sSFR
+
+    print('Plotting half-mass radius vs stellar mass coloured by sSFR')
+
+    plt.figure()
+    ax = plt.subplot(111)
+
+    # SAGE26 has no light, so this is the stellar half-mass radius. The galaxy size is the
+    # mass-weighted mean of the disk and bulge half-mass radii, as Shark defines a galaxy's
+    # composite size (Lagos et al. 2018; shark Galaxy::composite_size). DiskRadius is the
+    # exponential scale length, r_e = 1.68 r_d, as in the disk-size plot above.
+    DiskRadius = read_hdf(file_list, Snapshot, 'DiskRadius') * 1.0e3 * 1.68  # kpc/h, half-mass
+    BulgeRadius = read_hdf(file_list, Snapshot, 'BulgeRadius') * 1.0e3        # kpc/h, half-mass
+    StellarMass = read_hdf(file_list, Snapshot, 'StellarMass') * 1.0e10 / Hubble_h  # Msun
+    BulgeMass = read_hdf(file_list, Snapshot, 'BulgeMass') * 1.0e10 / Hubble_h      # Msun
+    SFR = read_hdf(file_list, Snapshot, 'SfrDisk') + read_hdf(file_list, Snapshot, 'SfrBulge')  # Msun/yr
+
+    w = np.where((StellarMass > 1.0e8) & ((DiskRadius > 0.0) | (BulgeRadius > 0.0)))[0]
+    if len(w) == 0:
+        print('  Skipping half_mass_radius_vs_stellar_mass: no galaxies with M* > 1e8 and a size.\n')
+        plt.close()
+    else:
+        if len(w) > dilute: w = sample(list(w), dilute)
+        w = np.array(w)
+        DiskMass = StellarMass[w] - BulgeMass[w]
+        half_mass_radius = (DiskMass * DiskRadius[w] + BulgeMass[w] * BulgeRadius[w]) / StellarMass[w]
+        # Galaxies with no star formation sit at the floor of the colour scale
+        log_ssfr = np.log10(np.maximum(SFR[w] / StellarMass[w], 1.0e-13))
+
+        sc = ax.scatter(StellarMass[w], half_mass_radius, c=log_ssfr, cmap='jet_r',
+                        vmin=-13, vmax=-9, s=2, alpha=0.5, rasterized=True)
+        cbar = plt.colorbar(sc, ax=ax, pad=0.02)
+        cbar.set_label(r'$\log_{10}\,\mathrm{sSFR}\ (\mathrm{yr}^{-1})$')
+        cbar.solids.set_alpha(1.0)
+
+        ax.set_xlabel(r'$M_{\rm stars}\ (M_{\odot})$')
+        ax.set_ylabel(r'$R_{\rm 50}\ (\mathrm{kpc}/h)$')
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+
+        outputFile = OutputDir + 'half_mass_radius_vs_stellar_mass' + OutputFormat
+        plt.savefig(outputFile, dpi=150)
+        print('Saved file to', outputFile, '\n')
+        plt.close()
