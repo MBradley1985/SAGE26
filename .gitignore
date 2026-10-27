@@ -37,6 +37,7 @@ yy*
 *.csv
 *.par
 *.tex
+*.npz
 
 # sage_analysis Package Stuff #
 *.egg-info
