@@ -14,8 +14,10 @@
 # Keep --array in sync with the length of CONFIG_FILES (0 .. N-1).
 # Plots go to <OutputDir>/plots/.
 
-module purge
-ml restore basic
+ml h5py/3.8.0
+ml numpy/1.24.2-scipy-bundle-2023.02
+ml matplotlib/3.7.0
+ml astropy/5.2.2
 
 cd "$SLURM_SUBMIT_DIR"
 
