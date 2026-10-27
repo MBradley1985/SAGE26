@@ -1,6 +1,7 @@
 sage
 tests/test_data/
 input/millennium/
+input/shin-uchuu/
 output/
 input/microuchuu/
 input/300/
@@ -21,7 +22,7 @@ tmp*
 _sage_cffi.*
 codecov
 *.tar*
-
+*.png
 *.jpg
 *.ipynb_checkpoints
 *.dSYM

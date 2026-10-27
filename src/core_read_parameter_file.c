@@ -107,7 +107,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->BulgeSizeOn                = 3;
     run_params->SaveFullSFH                = 0;
     run_params->StarburstColdGasOn         = 1;
-    run_params->FixingGas                  = 1;   /* as input/millennium.par */
+    run_params->FixingGas                  = 0;   /* as input/millennium.par */
     run_params->H2DepletionTimeModel       = 2;   /* Krumholz (2013), as input/millennium.par */
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
     run_params->ThreshMajorMerger          = 0.3;
