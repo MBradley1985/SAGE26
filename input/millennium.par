@@ -58,7 +58,7 @@ ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vv
 EnhancedStarFormationOn     1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: BK25 acceleration threshold w. log-normal c scatter
 
 SaveFullSFH                 1   %0: switch off
-FixingGas                   1   %0 off; 1 SFR = M_mol / t_dep in every H2 recipe (t_dep from H2DepletionTimeModel)
+FixingGas                   0   %0 off; 1 SFR = M_mol / t_dep in every H2 recipe (t_dep from H2DepletionTimeModel)
 H2DepletionTimeModel        2   %FixingGas 1: 0 nu_SF = 1/Gyr (Lagos+18); 1 KMT09 eq. 10; 2 Krumholz 2013 eqs. 15-16; 3 KDM12 eqs. 4, 8, 9
 
 %------------------------------------------
