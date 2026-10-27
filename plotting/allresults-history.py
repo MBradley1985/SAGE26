@@ -335,6 +335,9 @@ if __name__ == '__main__':
     H2GasFull = [np.array([]) for _ in range(LastSnap + 1)]
     RcoolToRvirFull = [np.array([]) for _ in range(LastSnap + 1)]
 
+    # Only fields the plots below actually use are read; the other arrays stay
+    # empty. The history pass is I/O bound, so every unread field saves a full
+    # column read per snapshot per file.
     for snap in range(FirstSnap, LastSnap + 1):
         Snapshot = f'Snap_{snap}'
 
@@ -342,29 +345,11 @@ if __name__ == '__main__':
         SfrDiskFull[snap] = read_hdf(file_list, Snapshot, 'SfrDisk')
         SfrBulgeFull[snap] = read_hdf(file_list, Snapshot, 'SfrBulge')
         BlackHoleMassFull[snap] = read_hdf(file_list, Snapshot, 'BlackHoleMass') * 1.0e10 / Hubble_h
-        BulgeMassFull[snap] = read_hdf(file_list, Snapshot, 'BulgeMass') * 1.0e10 / Hubble_h
         HaloMassFull[snap] = read_hdf(file_list, Snapshot, 'Mvir') * 1.0e10 / Hubble_h
-        cgmFull[snap] = read_hdf(file_list, Snapshot, 'CGMgas') * 1.0e10 / Hubble_h
-        hotgasFull[snap] = read_hdf(file_list, Snapshot, 'HotGas') * 1.0e10 / Hubble_h
         H2GasFull[snap] = read_hdf(file_list, Snapshot, 'H2gas') * 1.0e10 / Hubble_h
 
-        # Calculate full CGM
-        cgm_temp = read_hdf(file_list, Snapshot, 'CGMgas')
-        hot_temp = read_hdf(file_list, Snapshot, 'HotGas')
-        if len(cgm_temp) > 0 and len(hot_temp) > 0:
-            fullcgmFull[snap] = (cgm_temp + hot_temp) * 1.0e10 / Hubble_h
-        else:
-            fullcgmFull[snap] = np.array([])
-            
         TypeFull[snap] = read_hdf(file_list, Snapshot, 'Type')
-        OutflowRateFull[snap] = read_hdf(file_list, Snapshot, 'OutflowRate')
         coldgasFull[snap] = read_hdf(file_list, Snapshot, 'ColdGas') * 1.0e10 / Hubble_h
-        dT[snap] = read_hdf(file_list, Snapshot, 'dT')
-        RegimeFull[snap] = read_hdf(file_list, Snapshot, 'Regime')
-        FFBRegimeFull[snap] = read_hdf(file_list, Snapshot, 'FFBRegime')
-        DiskRadiusFull[snap] = read_hdf(file_list, Snapshot, 'DiskRadius') / Hubble_h
-        BulgeRadiusFull[snap] = read_hdf(file_list, Snapshot, 'BulgeRadius') / Hubble_h
-        RvirFull[snap] = read_hdf(file_list, Snapshot, 'Rvir') / Hubble_h
         ConcentrationFull[snap] = read_hdf(file_list, Snapshot, 'Concentration')
         MetallicityFull[snap] = read_hdf(file_list, Snapshot, 'MetalsStellarMass')
         RcoolToRvirFull[snap] = read_hdf(file_list, Snapshot, 'RcoolToRvir')
