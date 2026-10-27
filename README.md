@@ -256,6 +256,9 @@ optimization.
 Everything in one place, plus data visualisation. Give it a try: https://github.com/MBradley1985/ViSAGE
 <p align="center">
   <img src="launch.png" width="600" alt="ViSAGE launch page"/>
+  <img src="structure_mode.png" width="600" alt="A group of galaxies">
+  <img src="HD_mode.png" width="600" alt="HD galaxy">
+  <img src="lightcone_spectra.png" width="600" alt="HD galaxy in LightSAGE with spectra">
 </p>
 
 ---
