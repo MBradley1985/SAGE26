@@ -55,6 +55,7 @@ void test_regime_boundary() {
 
             // Convert to code units: 10^10 Msun/h
             gal.Mvir = test_cases[i].Mvir_physical / (1e10 / run_params.Hubble_h);
+            gal.MostBoundID = j;   /* distinct halo -> independent draw */
 
             // Determine regime
             determine_and_store_regime(1, &gal, &run_params);
@@ -114,6 +115,7 @@ void test_regime_sigmoid_transition() {
 
             double Mvir_physical = test_cases[i].mass_factor * Mshock;
             gal.Mvir = Mvir_physical / (1e10 / run_params.Hubble_h);
+            gal.MostBoundID = j;   /* distinct halo -> independent draw */
 
             determine_and_store_regime(1, &gal, &run_params);
 

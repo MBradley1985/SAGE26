@@ -8,7 +8,21 @@ below reproduces the committed regression baseline dataset-for-dataset unless
 it says otherwise. See
 [docs/developer/REGRESSION_BASELINE.md](docs/developer/REGRESSION_BASELINE.md).
 
-## Unreleased
+## v0.9 -- 2026-10-27
+
+### Reproducible regime draws (not bit-identical)
+
+- The CGM/hot classification now draws from a hash of the halo's MostBoundID
+  and the snapshot, as the FFB classification already did, instead of the
+  global `rand()` stream. Each classification has its own hash stream, so a
+  halo's CGM/hot and FFB draws are independent. The same trees give the same
+  output on every run, and changing the substep count or other physics no
+  longer reshuffles which haloes land either side of the thresholds.
+- FFB draws are unchanged. CGM/hot draws are a new Monte Carlo realisation,
+  so outputs differ from the previous baseline.
+- `rand()` is no longer called anywhere in the model; the discarded draws in
+  `init_galaxy()` and `determine_and_store_ffb_regime()` are gone.
+
 
 ### Removed and renamed parameters (breaking)
 
@@ -66,9 +80,7 @@ Removed outright with the Dekel+23 shell and disc FFB criteria:
 ### Removed galaxy fields
 
 - `FFBRandom` and `RegimeRandom` are gone from `struct GALAXY`. They were never
-  written to output. Two `rand()` calls are still consumed and discarded at
-  galaxy creation: the stream is shared with the regime and FFB
-  classifications, so dropping them would re-phase every later draw.
+  written to output.
 
 ### Fixed
 

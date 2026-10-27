@@ -73,23 +73,6 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].Type = 0;
     galaxies[p].Regime = -1;
     galaxies[p].FFBRegime = 0;
-    /* Two draws are consumed here and discarded.  They are not dead code.
-     *
-     * rand() is a single global stream, never re-seeded, shared with the
-     * CGM/hot and FFB classifications in model_regimes.c, which draw from it
-     * once per galaxy per snapshot.  These two calls were the per-galaxy
-     * quantiles of the old RegimeRandomMode=1 / FFBRandomMode=1 paths; those
-     * modes are gone, but dropping the calls re-phases the stream for every
-     * draw after them, so unrelated galaxies land on the other side of their
-     * thresholds.  Measured: removing them changes 3194 of the 5252 millennium
-     * baseline datasets and moves the z=0 total stellar mass by +0.6%.
-     *
-     * That is a different Monte Carlo realisation, not a different model, but
-     * it is not bit-identical.  Removing them therefore needs a labelled
-     * commit and a re-captured baseline (docs/developer/STYLE_COMMITS.md
-     * section 4), not a silent cleanup. */
-    (void)rand();
-    (void)rand();
     galaxies[p].Concentration = 0.0;
 
     galaxies[p].GalaxyNr = *galaxycounter;
