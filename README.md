@@ -254,7 +254,9 @@ optimization.
 ## ViSAGE
 
 Everything in one place, plus data visualisation. Give it a try: https://github.com/MBradley1985/ViSAGE
-<img src="launch.png" width="300" alt="ViSAGE launch page"/>
+<p align="center">
+  <img src="launch.png" width="600" alt="ViSAGE launch page"/>
+</p>
 
 ---
 
