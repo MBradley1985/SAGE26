@@ -52,6 +52,7 @@ static const double FFB_THRESHOLD_SLOPE = -6.2;
 
 
 
+
 /*
  * Classify each central galaxy as CGM-regime or hot-halo regime (Voit 2015).
  *
@@ -91,6 +92,9 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
             // A fresh draw each snapshot: a borderline-mass central is
             // re-tested against the sigmoid every timestep rather than being
             // held to one quantile fixed at creation.
+
+            // Add a seed based on the galaxy's MostBoundID and the snapshot number to ensure reproducibility
+            srand((unsigned int)(galaxies[p].MostBoundID + galaxies[p].SnapNum * 1000000));
             const double random_uniform = (double)rand() / (double)RAND_MAX;
             new_regime = (random_uniform < hot_fraction) ? 1 : 0;
         }
@@ -230,6 +234,9 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
 
             // Calculate smooth FFB fraction using sigmoid transition (Li et al. 2024, eq. 3)
             const double f_ffb = calculate_ffb_fraction(Mvir, Zcurr, run_params);
+
+            // Seed the random number generator with a combination of the galaxy's MostBoundID and the snapshot number to ensure reproducibility
+            srand((unsigned int)(galaxies[p].MostBoundID + galaxies[p].SnapNum * 1000000));
 
             const double random_uniform = draw;
 
