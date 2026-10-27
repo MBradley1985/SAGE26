@@ -42,6 +42,7 @@ Examples
 """
 
 import argparse
+import gc
 import glob
 import os
 import sys
@@ -234,10 +235,12 @@ def read_hdf_cumulative(file_list, snap_num, field, ref_field='BlackHoleMass'):
         with h5py.File(f, 'r') as hf:
             if key not in hf or field not in hf[key]:
                 continue
-            val = np.array(hf[key][field])
+            ds = hf[key][field]
+            # read only the columns up to snap_num, not the whole history
+            val = ds[:, :int(snap_num) + 1] if ds.ndim == 2 else np.array(ds)
             ref_len = len(hf[key][ref_field]) if ref_field in hf[key] else len(val)
             if val.ndim == 2:
-                val = np.nansum(val[:, :int(snap_num) + 1], axis=1)
+                val = np.nansum(val, axis=1)
             elif val.ndim == 1 and ref_len > 0 and len(val) > ref_len:
                 max_snaps = len(val) // ref_len
                 val = np.nansum(val.reshape(ref_len, max_snaps)[:, :int(snap_num) + 1], axis=1)
@@ -256,12 +259,17 @@ def _reshape_history(raw, ngal):
     return raw.reshape(ngal, maxsnaps)
 
 
-def read_bh_histories(file_list, snap_num, hubble_h, fields):
+def read_bh_histories(file_list, snap_num, hubble_h, fields, snap_col=None):
     """
     Read the requested per-galaxy history fields at `snap_num` and return a dict
     of 2D arrays (ngal, maxsnaps) plus 1D BlackHoleMass / StellarMass / Mvir for
     masking.  Returns None if no galaxies are found.  Missing 2D fields come back
     as None so callers can decide whether to skip.
+
+    If `snap_col` is given, history fields are read as a single column
+    (min(snap_col, width-1)) and returned with shape (ngal, 1), instead of the
+    full (ngal, maxsnaps) block -- the callers only ever use that one column,
+    and the full block is what exhausts memory on large runs.
     """
     conv = 1.0e10 / hubble_h
     key = f"Snap_{snap_num}"
@@ -288,7 +296,14 @@ def read_bh_histories(file_list, snap_num, hubble_h, fields):
                     # so skip the 1e10/h mass conversion for them.
                     c = 1.0 if fld in ('BHAccretionType', 'TimeOfLastMajorMerger',
                                        'TimeOfLastMinorMerger') else conv
-                    blocks[fld].append(_reshape_history(np.array(grp[fld]), ngal) * c)
+                    ds = grp[fld]
+                    if snap_col is not None and ds.ndim == 2 and ds.shape[1] > 1:
+                        raw = ds[:, min(int(snap_col), ds.shape[1] - 1)][:, None]
+                    else:
+                        raw = _reshape_history(np.array(ds), ngal)
+                        if snap_col is not None and raw.shape[1] > 1:
+                            raw = raw[:, min(int(snap_col), raw.shape[1] - 1)][:, None]
+                    blocks[fld].append(raw * c)
                 else:
                     blocks[fld].append(None)
 
@@ -954,7 +969,7 @@ def plot_accretion_rate_function_merger_split(file_list, snap_num, hubble_h, red
             axes[k].text(0.5, 0.5, 'no snap', transform=axes[k].transAxes,
                          ha='center')
             continue
-        d = read_bh_histories(file_list, sn, hubble_h, need)
+        d = read_bh_histories(file_list, sn, hubble_h, need, snap_col=sn)
         if d is None or d['BHMaxaccretionRate'] is None:
             axes[k].set_xlim(-10, 5)
             axes[k].set_ylim(*RATE_YLIM)
@@ -1024,7 +1039,7 @@ def plot_accretion_rate_function(file_list, snap_num, hubble_h, redshifts,
             print(f"[skip] {name}: missing {fld}.")
             return
 
-    data = read_bh_histories(file_list, snap_num, hubble_h, need)
+    data = read_bh_histories(file_list, snap_num, hubble_h, need, snap_col=snap_num)
     if data is None:
         print(f"[skip] {name}: no galaxies at snapshot {snap_num}.")
         return
@@ -1110,7 +1125,7 @@ def plot_accretion_rate_function(file_list, snap_num, hubble_h, redshifts,
                 axes[k].text(0.5, 0.5, 'no snap', transform=axes[k].transAxes,
                              ha='center')
                 continue
-            d = read_bh_histories(file_list, sn, hubble_h, need)
+            d = read_bh_histories(file_list, sn, hubble_h, need, snap_col=sn)
             if d is None or d['BHMaxaccretionRate'] is None:
                 axes[k].set_xlim(-10, 2.5)
                 axes[k].set_ylim(*RATE_YLIM)
@@ -1175,7 +1190,7 @@ def _read_rate_function_inputs(file_list, snap_num, hubble_h, no_cuts):
     for fld in need:
         if not field_present(file_list, snap_num, fld):
             return None
-    data = read_bh_histories(file_list, snap_num, hubble_h, need)
+    data = read_bh_histories(file_list, snap_num, hubble_h, need, snap_col=snap_num)
     if data is None:
         return None
     accr, edd, typ = (data['BHMaxaccretionRate'],
@@ -1732,6 +1747,17 @@ def main():
     if not file_list:
         print(f"Error: no files match {args.input_pattern}")
         sys.exit(1)
+    readable = []
+    for f in file_list:
+        try:
+            with h5py.File(f, 'r'):
+                readable.append(f)
+        except OSError as e:
+            print(f"  ! skipping unreadable file {f}: {e}")
+    if not readable:
+        print("Error: none of the matched files could be opened.")
+        sys.exit(1)
+    file_list = readable
 
     sim = read_simulation_params(file_list[0])
     hubble_h = sim['Hubble_h']
@@ -1799,34 +1825,41 @@ def main():
     print(f"  output dir       : {output_dir}")
     print("=" * 70)
 
+    def run(label, fn, *a, **kw):
+        # one failing plot (e.g. out of memory) must not take out the others
+        try:
+            fn(*a, **kw)
+        except Exception as e:
+            print(f"[fail] {label}: {type(e).__name__}: {e}")
+        gc.collect()
+
     if not args.no_growth:
-        plot_bh_growth_channels(file_list, growth_snap_num, hubble_h, redshifts,
-                                available, output_dir)
+        run("growth channels", plot_bh_growth_channels, file_list, growth_snap_num,
+            hubble_h, redshifts, available, output_dir)
     if not args.no_ratefunc:
-        plot_accretion_rate_function(file_list, snap_num, hubble_h, redshifts,
-                                     available, output_dir, args.bin_mode,
-                                     stellar_edges, panel_z, args.edd_limited,
-                                     volume_h3, args.no_cuts)
+        run("accretion rate function", plot_accretion_rate_function, file_list,
+            snap_num, hubble_h, redshifts, available, output_dir, args.bin_mode,
+            stellar_edges, panel_z, args.edd_limited, volume_h3, args.no_cuts)
         # always also emit the redshift-panel grid (matches bh_lrd_analysis_multiz.py's
         # panels) unless that's already what --bin-mode produced above
         if args.bin_mode != 'redshift':
-            plot_accretion_rate_function(file_list, snap_num, hubble_h, redshifts,
-                                         available, output_dir, 'redshift',
-                                         stellar_edges, panel_z, args.edd_limited,
-                                         volume_h3, args.no_cuts)
+            run("accretion rate function (redshift panels)",
+                plot_accretion_rate_function, file_list, snap_num, hubble_h,
+                redshifts, available, output_dir, 'redshift', stellar_edges,
+                panel_z, args.edd_limited, volume_h3, args.no_cuts)
         # same redshift-panel grid again, but with the Merger channel split
         # into Major/Minor (see plot_accretion_rate_function_merger_split's
         # docstring for the proxy this relies on).
-        plot_accretion_rate_function_merger_split(file_list, snap_num, hubble_h,
-                                                  redshifts, available, output_dir,
-                                                  panel_z, args.edd_limited,
-                                                  volume_h3, args.no_cuts)
+        run("accretion rate function (merger split)",
+            plot_accretion_rate_function_merger_split, file_list, snap_num,
+            hubble_h, redshifts, available, output_dir, panel_z,
+            args.edd_limited, volume_h3, args.no_cuts)
     if not args.no_bhbulge:
-        plot_bh_bulge_relation(file_list, bhbulge_snap_num, hubble_h, output_dir,
-                               redshifts=redshifts)
+        run("BH-bulge relation", plot_bh_bulge_relation, file_list,
+            bhbulge_snap_num, hubble_h, output_dir, redshifts=redshifts)
     if not args.no_bhmf:
-        plot_bh_mass_function(file_list, hubble_h, volume_phys, redshifts,
-                              available, output_dir, args.data_dir)
+        run("BH mass function", plot_bh_mass_function, file_list, hubble_h,
+            volume_phys, redshifts, available, output_dir, args.data_dir)
 
     print("=" * 70)
     print("Done.")
