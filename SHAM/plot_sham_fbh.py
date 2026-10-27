@@ -14,6 +14,8 @@ curves they were matched to) and a text summary of the LRD-region statistics.
 Usage:
     python SHAM/plot_sham_fbh.py                       # every SHAM/output/sham_snap*.npz
     python SHAM/plot_sham_fbh.py --snaps 19            # one snapshot
+    python SHAM/plot_sham_fbh.py --grid                # + 2x3 grid (z~0,1,2,4,6,8) like multiz
+    python SHAM/plot_sham_fbh.py --grid --grid-z 3 5 7  # choose the grid redshifts
     python SHAM/plot_sham_fbh.py --no-sage             # SHAM only
     python SHAM/plot_sham_fbh.py -i './output/millennium/model_*.hdf5'
 """
@@ -72,7 +74,14 @@ def summarise(d, mbh, mstar, extrap):
     return lines
 
 
-def plot_fbh(d, files, out, show_lit=True, n_scatter=40_000, mask_seeds=True):
+def draw_fbh(ax, d, files, show_lit=True, n_scatter=40_000, mask_seeds=True,
+             legend=True, fs=1.0, xlim=None, ylim=None, compact=False):
+    """
+    Draw one redshift's f_BH-M_BH panel onto `ax`.
+    compact=True is the multi-redshift grid look (see plot_grid): thinner lines/markers,
+    multiz colours, no in-panel text labels or axis labels (the grid supplies them).
+    Returns (log M_BH, log M*, extrap, legend handles).
+    """
     z = float(d['z'])
     snap = int(d['snap'])
     ms, mb = d['logmstar'], d['logmbh']
@@ -82,19 +91,22 @@ def plot_fbh(d, files, out, show_lit=True, n_scatter=40_000, mask_seeds=True):
     extrap = ms_i < float(d['smf_data_min'])     # M* below the SMF data -> Schechter extrapolation
     lfbh = mb - ms
 
-    fig, ax = plt.subplots(figsize=(7.5, 7.5))
     ax.minorticks_on()
-    x_lo, x_hi = lrd.lock_axis_range(*lrd.PANEL_B_XLIM, axis_name='x')
-    y_lo, y_hi = lrd.lock_axis_range(*lrd.PANEL_B_YLIM, axis_name='y')
+    x_lo, x_hi = xlim if xlim else lrd.lock_axis_range(*lrd.PANEL_B_XLIM, axis_name='x')
+    y_lo, y_hi = ylim if ylim else lrd.lock_axis_range(*lrd.PANEL_B_YLIM, axis_name='y')
+    c_lrd, c_01 = ('#C10020', '#FFB300') if compact else ('#C62828', '#F57C00')
+    lw_ref = 1.4 if compact else 1.8
+    pt = 0.5 if compact else 1.0                 # marker / line scale
 
     # LRD shaded region + threshold lines (as panel b)
-    ax.fill_between([x_lo, x_hi], np.log10(LRD_FBH), y_hi, color='#D32F2F', alpha=0.08, zorder=0)
-    ax.axhline(np.log10(0.1), color='#F57C00', lw=1.8, zorder=4)
-    ax.axhline(np.log10(LRD_FBH), color='#C62828', lw=1.8, zorder=4)
-    ax.text(x_hi - 0.2, np.log10(LRD_FBH) + 0.10, r'$f_{\rm BH} = 3\%$',
-            fontsize=13, color='#C62828', ha='right')
-    ax.text(x_hi - 0.2, np.log10(0.1) + 0.10, r'$M_{\rm BH}/M_\star = 0.1$',
-            fontsize=13, color='#F57C00', ha='right')
+    ax.fill_between([x_lo, x_hi], np.log10(LRD_FBH), y_hi, color=c_lrd, alpha=0.08, zorder=0)
+    ax.axhline(np.log10(0.1), color=c_01, lw=lw_ref, zorder=4)
+    ax.axhline(np.log10(LRD_FBH), color=c_lrd, lw=lw_ref, zorder=4)
+    if not compact:
+        ax.text(x_hi - 0.2, np.log10(LRD_FBH) + 0.10, r'$f_{\rm BH} = 3\%$',
+                fontsize=13, color=c_lrd, ha='right')
+        ax.text(x_hi - 0.2, np.log10(0.1) + 0.10, r'$M_{\rm BH}/M_\star = 0.1$',
+                fontsize=13, color=c_01, ha='right')
 
     handles = []
 
@@ -110,13 +122,13 @@ def plot_fbh(d, files, out, show_lit=True, n_scatter=40_000, mask_seeds=True):
             sy = np.log10(sd['bh_mass'][valid] / sd['stellar_mass'][valid])
             if len(sx) > 30_000:
                 i = np.random.default_rng(42).choice(len(sx), 30_000, replace=False)
-                ax.scatter(sx[i], sy[i], s=4, color=SAGE_COLOR, alpha=0.2, lw=0,
+                ax.scatter(sx[i], sy[i], s=4 * pt, color=SAGE_COLOR, alpha=0.2, lw=0,
                            rasterized=True, zorder=1)
             else:
-                ax.scatter(sx, sy, s=4, color=SAGE_COLOR, alpha=0.2, lw=0, rasterized=True, zorder=1)
+                ax.scatter(sx, sy, s=4 * pt, color=SAGE_COLOR, alpha=0.2, lw=0, rasterized=True, zorder=1)
             lrd.kde_contour(ax, sx, sy, x_lo, x_hi, y_lo, y_hi, '#000000', zorder=2)
             handles.append(Line2D([0], [0], marker='o', ls='none', markerfacecolor=SAGE_COLOR,
-                                  markeredgecolor='none', ms=7, label=f'SAGE26 ({len(sx):,} BH events)'))
+                                  markeredgecolor='none', ms=7, label='SAGE26' if compact else f'SAGE26 ({len(sx):,} BH events)'))
         except Exception as e:
             print(f'  (SAGE26 overlay skipped: {e})')
 
@@ -124,21 +136,21 @@ def plot_fbh(d, files, out, show_lit=True, n_scatter=40_000, mask_seeds=True):
     rng = np.random.default_rng(7)
     sel = rng.choice(len(mb), min(n_scatter, len(mb)), replace=False)
     ex = extrap[sel]
-    ax.scatter(mb[sel][~ex], lfbh[sel][~ex], s=5, color=SHAM_COLOR, alpha=0.30, lw=0,
+    ax.scatter(mb[sel][~ex], lfbh[sel][~ex], s=5 * pt, color=SHAM_COLOR, alpha=0.30, lw=0,
                rasterized=True, zorder=3)
     if ex.any():
-        ax.scatter(mb[sel][ex], lfbh[sel][ex], s=5, facecolors='none', edgecolors=SHAM_COLOR,
+        ax.scatter(mb[sel][ex], lfbh[sel][ex], s=5 * pt, facecolors='none', edgecolors=SHAM_COLOR,
                    alpha=0.25, lw=0.3, rasterized=True, zorder=3)
     lrd.kde_contour(ax, mb, lfbh, x_lo, x_hi, y_lo, y_hi, SHAM_COLOR, zorder=5)
     # zero-scatter locus and scattered percentile track
     o = np.argsort(mb_i)
-    ax.plot(mb_i[o], (mb_i - ms_i)[o], color='k', lw=1.5, ls='-', zorder=6)
+    ax.plot(mb_i[o], (mb_i - ms_i)[o], color='k', lw=1.5 * (0.7 if compact else 1), ls='-', zorder=6)
     xc, q = percentile_track(mb, lfbh, np.arange(x_lo, x_hi + 0.01, 0.25))
-    ax.plot(xc, q[:, 1], color=SHAM_COLOR, lw=2.2, zorder=7)
+    ax.plot(xc, q[:, 1], color=SHAM_COLOR, lw=2.2 * (0.7 if compact else 1), zorder=7)
     ax.fill_between(xc, q[:, 0], q[:, 2], color=SHAM_COLOR, alpha=0.15, zorder=2)
     handles += [Line2D([0], [0], marker='o', ls='none', markerfacecolor=SHAM_COLOR,
                        markeredgecolor='none', ms=7,
-                       label=f'SHAM BHs ({len(mb):,})'),
+                       label='SHAM BHs' if compact else f'SHAM BHs ({len(mb):,})'),
                 Line2D([0], [0], color=SHAM_COLOR, lw=2.2, label='SHAM median, 16-84%'),
                 Line2D([0], [0], color='k', lw=1.5, label='SHAM, zero scatter')]
 
@@ -156,18 +168,119 @@ def plot_fbh(d, files, out, show_lit=True, n_scatter=40_000, mask_seeds=True):
         labels += lrd.plot_jones25_family(ax, JONES25_LRD_SOURCES, jm, kind='fbh')
         handles += lrd.lit_legend_handles(labels)
 
-    ax.legend(handles=handles, loc='upper left', fontsize=11, ncol=1)
+    if legend:
+        ax.legend(handles=handles, loc='upper left', fontsize=11 * fs, ncol=1)
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
-    ax.set_xlabel(r'$M_{\rm BH}\ [M_\odot]$', fontsize=18)
-    ax.set_ylabel(r'$f_{\rm BH} = M_{\rm BH}/M_\star$', fontsize=18)
-    ax.set_xticks(np.arange(int(np.ceil(x_lo)), int(np.floor(x_hi)) + 1, 2))
-    ax.text(0.97, 0.04, rf'$z = {z:.1f}$', transform=ax.transAxes, ha='right', va='bottom', fontsize=16)
+    if compact:
+        ax.text(0.95, 0.05, rf'$z \approx {z:.1f}$', transform=ax.transAxes, ha='right',
+                va='bottom', fontsize=10)
+    else:
+        ax.set_xlabel(r'$M_{\rm BH}\ [M_\odot]$', fontsize=18 * fs)
+        ax.set_ylabel(r'$f_{\rm BH} = M_{\rm BH}/M_\star$', fontsize=18 * fs)
+        ax.set_xticks(np.arange(int(np.ceil(x_lo)), int(np.floor(x_hi)) + 1, 2))
+        ax.text(0.97, 0.04, rf'$z = {z:.1f}$', transform=ax.transAxes, ha='right', va='bottom',
+                fontsize=16 * fs)
+    return mb, ms, extrap, handles
+
+
+def plot_fbh(d, files, out, **kw):
+    fig, ax = plt.subplots(figsize=(7.5, 7.5))
+    res = draw_fbh(ax, d, files, **kw)[:3]
     plt.tight_layout()
     plt.savefig(out, dpi=140, bbox_inches='tight')
     plt.close()
     print(f'  saved {out}')
-    return mb, ms, extrap
+    return res
+
+
+# Same look as plotting/bh_lrd_analysis_multiz.py (3 columns, touching panels, shared axes).
+GRID_RC = {
+    'font.family': 'serif', 'font.size': 11.0, 'axes.linewidth': 1.0,
+    'xtick.major.size': 4.5, 'xtick.minor.size': 3.0, 'xtick.direction': 'in',
+    'xtick.top': True, 'xtick.labelsize': 9,
+    'ytick.major.size': 4.5, 'ytick.minor.size': 3.0, 'ytick.direction': 'in',
+    'ytick.right': True, 'ytick.labelsize': 9,
+    'legend.frameon': False, 'legend.fontsize': 8, 'figure.autolayout': False,
+}
+MULTIZ_B_XLIM = (4.0, 9.0)       # = MULTIZ_PANEL_B_XLIM / YLIM in bh_lrd_analysis_multiz.py
+MULTIZ_B_YLIM = (-6.0, 1.0)
+DEFAULT_GRID_Z = [0.0, 1.0, 2.0, 4.0, 6.0, 8.0]
+
+
+def plot_grid(dlist, files, out, targets=None, ncols=3, **kw):
+    """
+    One figure, one panel per target redshift, laid out like the multiz grid
+    (6 targets -> 2 rows x 3 cols; touching panels, shared axes, one set of axis
+    labels). `dlist` is the list of loaded sham_snap npz files; each target uses the
+    nearest one in redshift (a panel is left blank, with a note, if none is close).
+    """
+    targets = DEFAULT_GRID_Z if targets is None else list(targets)
+    zs = np.array([float(d['z']) for d in dlist])
+    chosen = []
+    for zt in targets:
+        i = int(np.argmin(np.abs(zs - zt)))
+        ok = abs(zs[i] - zt) <= max(0.5, 0.15 * (1 + zt))
+        chosen.append(dlist[i] if ok else None)
+        print(f'  grid: z~{zt:g} -> ' + (f'snap {int(dlist[i]["snap"])} (z={zs[i]:.2f})' if ok
+                                          else 'no SHAM output close enough (blank panel)'))
+    n = len(targets)
+    nrows = int(np.ceil(n / ncols))
+
+    # shared axis range: multiz default, widened only if observations would be clipped
+    xl, yl = [], []
+    for d in chosen:
+        if d is None:
+            continue
+        z = float(d['z'])
+        for src in [PANG26] + JONES25_LRD_SOURCES:
+            m = lrd.lit_z_mask(src['z'], z)
+            xl.append(src['log_mbh'][m])
+            yl.append(src['log_mbh'][m] - src['log_mstar'][m])
+    x_lo, x_hi = lrd.lock_axis_range(*MULTIZ_B_XLIM, must_include=xl, axis_name='grid x')
+    y_lo, y_hi = lrd.lock_axis_range(*MULTIZ_B_YLIM, must_include=yl, axis_name='grid y')
+
+    with plt.rc_context(GRID_RC):
+        fig, axes = plt.subplots(nrows, ncols, figsize=(3.6 * ncols, 3.4 * nrows), squeeze=False)
+        flat = axes.flatten()
+        legend_by_label = {}
+        for i, (zt, d) in enumerate(zip(targets, chosen)):
+            ax = flat[i]
+            if d is None:
+                ax.set_xlim(x_lo, x_hi); ax.set_ylim(y_lo, y_hi)
+                ax.text(0.5, 0.5, 'no SHAM output', transform=ax.transAxes, ha='center')
+                ax.text(0.95, 0.05, rf'$z \approx {zt:g}$', transform=ax.transAxes, ha='right',
+                        va='bottom', fontsize=10)
+            else:
+                h = draw_fbh(ax, d, files, legend=False, xlim=(x_lo, x_hi), ylim=(y_lo, y_hi),
+                             compact=True, n_scatter=12_000, **kw)[3]
+                for hh in h:
+                    legend_by_label.setdefault(hh.get_label(), hh)
+            # label only integer ticks strictly inside the range, so touching panels never
+            # print two labels on the same seam
+            ax.set_xticks(np.arange(int(np.floor(x_lo)) + 1, int(np.ceil(x_hi))))
+            ax.set_yticks(np.arange(int(np.floor(y_lo)) + 1, int(np.ceil(y_hi))))
+            ax.minorticks_on()
+            row, col = divmod(i, ncols)
+            if col != 0:
+                ax.tick_params(labelleft=False)
+            if row != nrows - 1:
+                ax.tick_params(labelbottom=False)
+        for ax in flat[n:]:
+            ax.axis('off')
+
+        left, right, top, bottom = 0.06, 0.995, 0.995, 0.065
+        fig.subplots_adjust(left=left, right=right, top=top, bottom=bottom, wspace=0.0, hspace=0.0)
+        big = fig.add_axes([left, bottom, right - left, top - bottom], frameon=False)
+        big.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
+        big.set_xlabel(r'$M_{\rm BH}\ [M_\odot]$', fontsize=13, labelpad=9)
+        big.set_ylabel(r'$f_{\rm BH} = M_{\rm BH}/M_\star$', fontsize=13, labelpad=14)
+        if legend_by_label:
+            flat[0].legend(handles=list(legend_by_label.values()), loc='upper left', fontsize=8,
+                           labelspacing=0.3, handletextpad=0.4)
+        fig.savefig(out, dpi=150, bbox_inches='tight')
+        plt.close(fig)
+    print(f'  saved {out}')
 
 
 def plot_closure(d, out):
@@ -224,6 +337,12 @@ def main():
     p.add_argument('--no-lit', action='store_true')
     p.add_argument('--no-mask-seeds', action='store_true')
     p.add_argument('--out-dir', default=os.path.join(HERE, 'plots'))
+    p.add_argument('--grid', action='store_true',
+                   help='also make one multi-panel figure laid out like '
+                        'bh_lrd_analysis_multiz.py (default 6 panels, 2 x 3)')
+    p.add_argument('--grid-z', type=float, nargs='+', default=None,
+                   help=f'target redshifts for --grid (default {DEFAULT_GRID_Z}); each uses the '
+                        'nearest SHAM snapshot found')
     a = p.parse_args()
 
     os.makedirs(a.out_dir, exist_ok=True)
@@ -235,6 +354,11 @@ def main():
     files = [] if a.no_sage else sorted(glob.glob(a.input_pattern))
     if not files and not a.no_sage:
         print('  NOTE: no SAGE26 files matched; plotting SHAM only')
+
+    if a.grid:
+        dl = [np.load(f, allow_pickle=False) for f in found]
+        plot_grid(dl, files, os.path.join(a.out_dir, 'sham_fbh_mbh_grid.png'), targets=a.grid_z,
+                  show_lit=not a.no_lit, mask_seeds=not a.no_mask_seeds)
 
     for f in found:
         d = np.load(f, allow_pickle=False)

@@ -95,9 +95,9 @@ def match(n_halo, logm, phi_int, logm_floor):
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--trees-dir', default=os.path.join(REPO, 'input/millennium/trees'))
+    p.add_argument('--trees-dir', default=os.path.join(REPO, '/fred/oz004/simulations/Millennium/'))
     p.add_argument('--tree-name', default='trees_063')
-    p.add_argument('--a-list', default=os.path.join(REPO, 'input/millennium/trees/millennium.a_list'))
+    p.add_argument('--a-list', default=os.path.join(REPO, '/fred/oz004/simulations/Millennium/millennium.alist'))
     p.add_argument('--n-files-total', type=int, default=512,
                    help='number of files the full simulation is split into (volume = '
                         'box^3 * n_found / n_total); default 512')
