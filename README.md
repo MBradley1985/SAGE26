@@ -183,6 +183,8 @@ cap) rather than a fixed count.
 | `H2DiskAreaOption` | 0–2 | Disk area for H2 surface density: 0=π r_s²; 1=π (3 r_s)²; 2=2π r_s² |
 | `H2RadialIntegrationOn` | 0/1 | Radial ring integration for H2 fraction (slower, more accurate) |
 | `H2RadialNBins` | int | Number of radial bins for ring integration |
+| `FixingGas` | 0/1 | Uses H2 depletion time and no SfrEfficiency |
+| `H2DepletionTimeModel` | 0-3 | nu_SF = 1/Gyr (Lagos+18); KMT09 eq. 10; Krumholz 2013 eqs. 15-16; KDM12 eqs. 4, 8, 9   
 
 ### Mergers and ICS tracking
 
