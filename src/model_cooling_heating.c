@@ -226,7 +226,12 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
                                * pow(mass_ratio, 4.0/3.0);
 
             double f_stream;
-            if(ratio <= 0.0) {
+            if(galaxies[gal].Mvir <= 0.0) {
+                // An orphan (Mvir = 0) has no halo to accrete through and so no
+                // streams; ratio is 0 * inf = NaN there.  Orphans reach this path
+                // because satellites keep the regime they had at infall.
+                f_stream = 0.0;
+            } else if(ratio <= 0.0) {
                 f_stream = 1.0;
             } else {
                 // Smoothing across the threshold.  The width is quoted in dex,

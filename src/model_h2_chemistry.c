@@ -340,8 +340,10 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
 
     // Write K13 SFR and effective depletion time when requested
     if(strdot_code_out != NULL) {
-        // SFR_K13_total [Msun/Gyr] -> code units [(10^10 Msun/h) / (UnitTime_in_Megayears Myr)]
-        *strdot_code_out = MSUN_TO_CODE_MASS(SFR_K13_total, h) * run_params->UnitTime_in_Megayears / 1000.0;
+        // SFR_K13_total [Msun/Gyr] -> code units [(10^10 Msun/h) / code time].  One code
+        // time is UnitTime_in_Megayears / h Myr (time unit (Mpc/h)/(km/s)), hence the 1/h;
+        // see docs/physics/units.md and sfr_fixing_gas_tdep().
+        *strdot_code_out = MSUN_TO_CODE_MASS(SFR_K13_total, h) * run_params->UnitTime_in_Megayears / 1000.0 / h;
         // Effective global depletion time [Gyr] = M_gas / SFR_K13
         galaxies[gal].H2DepletionTime_Gyr = (SFR_K13_total > 0.0)
                                             ? (float)(M_gas_total / SFR_K13_total) : -1.0f;

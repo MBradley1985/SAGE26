@@ -567,10 +567,7 @@ static double sfr_kmt09(const int p, struct GALAXY *galaxies, const struct param
  */
 static double sfr_k13(const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
-    double reff, tdyn, strdot;
-
-    strdot = 0.0;
-    tdyn = 0.0;
+    double strdot = 0.0;
 
 
     // ========================================================================
@@ -579,16 +576,11 @@ static double sfr_k13(const int p, struct GALAXY *galaxies, const struct params 
     // Uses the analytic approximation for depletion time (Equation 28)
     // ========================================================================
 
-    reff = SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius;
-    tdyn = reff / galaxies[p].Vvir;
-
     // Basic safety checks
     if(galaxies[p].Vvir <= 0.0 || galaxies[p].ColdGas <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
         strdot = 0.0;
         galaxies[p].H2gas = 0.0;
     } else {
-        tdyn = reff / galaxies[p].Vvir; // Code units
-
         const float h = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
         const float rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
 
@@ -637,8 +629,10 @@ static double sfr_k13(const int p, struct GALAXY *galaxies, const struct params 
                                                                rs_pc, (float)Z_prime_k13, (float)f_H2_2p_k13);
             galaxies[p].H2DepletionTime_Gyr = (t_dep_Gyr > 0.0) ? (float)t_dep_Gyr : -1.0f;
 
-            strdot = (galaxies[p].H2gas > 0.0 && tdyn > 0.0)
-                     ? run_params->SfrEfficiency * galaxies[p].H2gas / tdyn : 0.0;
+            // SFR = M_gas / t_dep, the same K13 law the radial path integrates
+            // (Sigma_gas / t_dep per annulus).  Code time is h x physical time.
+            const double gyr_to_code = SEC_PER_GIGAYEAR * run_params->Hubble_h / run_params->UnitTime_in_s;
+            strdot = (t_dep_Gyr > 0.0) ? galaxies[p].ColdGas / (t_dep_Gyr * gyr_to_code) : 0.0;
         }
     }
 
@@ -1349,6 +1343,16 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     }
 
     // ========================================================================
+    // SUPERNOVA FEEDBACK MASSES
+    // Balanced against the cold gas before any of it is used, as on the main
+    // path, so that the stars booked below, the SN masses and the metal yield
+    // all refer to the same (possibly rescaled) burst.
+    // ========================================================================
+    double reheated_mass = 0.0;
+    double ejected_mass  = 0.0;
+    compute_sn_feedback_ffb(p, &stars, &reheated_mass, &ejected_mass, galaxies, run_params);
+
+    // ========================================================================
     // SFR TRACKING AND STAR FORMATION UPDATE
     // ========================================================================
     galaxies[p].SfrDisk[step] += stars / dt;
@@ -1368,9 +1372,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     // ========================================================================
     // SUPERNOVA FEEDBACK
     // ========================================================================
-    double reheated_mass = 0.0;
-    double ejected_mass  = 0.0;
-    compute_sn_feedback_ffb(p, &stars, &reheated_mass, &ejected_mass, galaxies, run_params);
+    metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
 
     if(reheated_mass > galaxies[p].ColdGas) { reheated_mass = galaxies[p].ColdGas; clamp_count_reheat_coldgas++; }
 

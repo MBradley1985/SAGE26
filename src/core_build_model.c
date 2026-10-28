@@ -411,18 +411,29 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
     const int halo_snapnum = halos[halonr].SnapNum;
     const double Zcurr = run_params->ZZ[halo_snapnum];
-    
+    const double halo_age = run_params->Age[halo_snapnum];
+
+    /* On entry each galaxy's SnapNum still names the snapshot it was last
+     * evolved to (its progenitor's).  Record the interval it has to cover in
+     * dT, then move SnapNum to the snapshot being evolved to, so that every
+     * routine reading redshift or snapshot-indexed arrays from SnapNum (FIRE
+     * and DB06 redshift terms, the regime draw, the SFH bins) sees the current
+     * snapshot rather than lagging by one. */
+    for(int p = 0; p < ngal; p++) {
+        galaxies[p].dT = run_params->Age[galaxies[p].SnapNum] - halo_age;
+        galaxies[p].SnapNum = halo_snapnum;
+    }
+
     if (run_params->CGMrecipeOn == 1) {
         determine_and_store_regime(ngal, galaxies, run_params);
     }
     
-    const double halo_age = run_params->Age[halo_snapnum];
     const double infallingGas = infall_recipe(centralgal, ngal, Zcurr, galaxies, run_params);
 
     // We integrate things forward by using a number of intervals equal to STEPS
     // Adaptive timesteps: at high-z, snapshot spacing can exceed dynamical time
     // so we use more substeps when needed
-    const double deltaT_total = run_params->Age[galaxies[0].SnapNum] - halo_age;
+    const double deltaT_total = galaxies[0].dT;
 
     /* Both FFB criteria read only Mvir/Rvir and the halo's own random draw,
      * none of which infall_recipe() touches, so the position of this call
@@ -481,12 +492,8 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 continue;
             }
 
-            const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
-            const double time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
-
-            if(galaxies[p].dT < 0.0) {
-                galaxies[p].dT = deltaT;
-            }
+            const double deltaT = galaxies[p].dT;
+            const double time = halo_age + deltaT - (step + 0.5) * (deltaT / effective_steps);
 
             // For the central galaxy only
             if(p == centralgal) {
@@ -531,7 +538,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                         "Error: galaxies[%d].MergTime = %lf is too large! Should have been within the age of the Universe\n",
                         p, galaxies[p].MergTime);
 
-                const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
+                const double deltaT = galaxies[p].dT;
                 galaxies[p].MergTime -= deltaT / effective_steps;
 
                 // only consider mergers or disruption for halo-to-baryonic mass ratios below the threshold
@@ -551,7 +558,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
                     if(isfinite(galaxies[p].MergTime)) {
                         // Time at which this event occurs (same formula used for mergers)
-                        const double event_time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
+                        const double event_time = halo_age + deltaT - (step + 0.5) * (deltaT / effective_steps);
                         /* DIAGNOSTIC: record what the test saw, before the
                            destruction routines zero the galaxy's fields. */
                         FILE *dlog = get_disrupt_log(run_params->ThisTask);
@@ -593,8 +600,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
     } // Go on to the next STEPS substep
 
     // Extra miscellaneous stuff before finishing this halo
-    const double deltaT = run_params->Age[galaxies[0].SnapNum] - halo_age;
-    const double inv_deltaT = 1.0/deltaT;
+    const double inv_deltaT = 1.0/galaxies[0].dT;
 
     for(int p = 0; p < ngal; p++) {
 

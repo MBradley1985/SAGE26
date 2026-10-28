@@ -256,6 +256,13 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     // Save disc radius BEFORE merger for instability bulge radius update
     const double old_disk_radius = galaxies[merger_centralgal].DiskScaleRadius;
 
+    // Merger remnant radius via energy conservation, from the two progenitors as
+    // they were before the merger.  It must be evaluated here: afterwards the
+    // central already holds the satellite's mass while the satellite's own fields
+    // are not cleared, so the satellite would be counted twice.  The burst stars
+    // need no separate term, since they come out of ColdGas already in M = M* + Mcold.
+    const double new_merger_radius = calculate_merger_remnant_radius(&galaxies[merger_centralgal], &galaxies[p]);
+
     add_galaxies_together(merger_centralgal, p, galaxies, run_params);
 
     // grow black hole through accretion from cold disk during mergers
@@ -287,14 +294,8 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
                                  galaxies, run_params);
 
     // Sync the central's BulgeRadius after add_galaxies_together + starburst have
-    // modified bulge mass.  calculate_merger_remnant_radius reads BulgeRadius for
-    // the energy conservation calculation; a stale or zero value there would bias
-    // the resulting remnant radius.
+    // modified bulge mass.
     get_bulge_radius(merger_centralgal, galaxies, run_params);
-
-    // 1. Calculate the merger remnant radius via Energy Conservation
-    // We do this AFTER the starburst so the energy budget includes burst stars
-    double new_merger_radius = calculate_merger_remnant_radius(&galaxies[merger_centralgal], &galaxies[p]);
 
     if(mass_ratio > run_params->ThreshMajorMerger) {
         // CASE 1: MAJOR MERGER (Section 5.2.3)

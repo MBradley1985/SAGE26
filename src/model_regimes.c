@@ -93,6 +93,14 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
     for(int p = 0; p < ngal; p++) {
         if(galaxies[p].mergeType > 0) continue;
 
+        /* Only centrals are classified.  infall_recipe() moves a central's gas
+         * into the reservoir of its regime, but nothing moves a satellite's, and
+         * a satellite cools and is stripped only from the reservoir its own
+         * regime names.  Reclassifying satellites from their shrinking subhalo
+         * mass (or Mvir = 0 for orphans) stranded their hot gas in the other
+         * reservoir; satellites instead keep the regime they had at infall. */
+        if(galaxies[p].Type != 0) continue;
+
         // Convert Mvir to physical units (Msun)
         // Mvir is stored in units of 10^10 Msun/h
         const double Mshock = MSUN_TO_CODE_MASS(run_params->MShockMsun, run_params->Hubble_h);  // Msun

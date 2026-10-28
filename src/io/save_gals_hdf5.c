@@ -548,20 +548,8 @@ int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct
             if(h5_status != EXIT_SUCCESS) {
                 return h5_status;
             }
-
-            for(int32_t gal_idx = 0; gal_idx < num_gals_to_write; gal_idx++) {
-
-                // JS: We're going to be a bit sneaky here so we don't need to pass the tree number to this function.
-                /* MS: 17/9/2019 -- we have to do it the difficult way! */
-                int64_t tree = save_info->buffer_output_gals[snap_idx].TaskForestNr[gal_idx];
-                if(tree < 0 || tree >= forest_info->nforests_this_task) {
-                    fprintf(stderr,"\nError: at snap_idx = %d -> got tree = %"PRId64". num_gals_to_write = %d\n"
-                            "Expecting to get tree in the range [0, %"PRId64"), where the upper limit is the number of forests on THIS task\n",
-                            snap_idx, tree, num_gals_to_write, forest_info->nforests_this_task);
-                    return EXIT_FAILURE;
-                }
-                save_info->forest_ngals[snap_idx][tree]++;
-            }
+            // No forest_ngals update here: save_hdf5_galaxies() already counted
+            // every galaxy, buffered or not, when it was added to the buffer.
         }
 
         // Write attributes showing how many galaxies we wrote for this snapshot.
