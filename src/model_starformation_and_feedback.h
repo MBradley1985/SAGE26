@@ -31,7 +31,7 @@ extern "C" {
 
     /* Print totals of the silent physics clamps (H2 cap, negative HI,
        reheated-mass cap); called from finalize_sage() in VERBOSE builds. */
-    extern void report_sf_clamp_counts(void);
+    // extern void report_sf_clamp_counts(void);
 
 #ifdef __cplusplus
 }

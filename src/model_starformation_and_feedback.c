@@ -36,23 +36,23 @@
  * in update_from_star_formation()/update_from_feedback() fire routinely by
  * construction (H2 is computed before SF debits ColdGas) and are not counted.
  * -------------------------------------------------------------------------*/
-static int64_t clamp_count_h2_cap = 0;         /* H2 fit exceeded ColdGas * HYDROGEN_MASS_FRAC */
-static int64_t clamp_count_h1_negative = 0;    /* HI went negative after ionisation/H2 subtraction */
-static int64_t clamp_count_reheat_coldgas = 0; /* reheated mass exceeded available ColdGas */
+// static int64_t clamp_count_h2_cap = 0;         /* H2 fit exceeded ColdGas * HYDROGEN_MASS_FRAC */
+// static int64_t clamp_count_h1_negative = 0;    /* HI went negative after ionisation/H2 subtraction */
+// static int64_t clamp_count_reheat_coldgas = 0; /* reheated mass exceeded available ColdGas */
 
 /* Print the silent-clamp totals accumulated over the run (VERBOSE builds
  * call this from finalize_sage()). Quiet when nothing fired -- the report
  * exists to flag anomalies, and all-zero is the expected healthy state. */
-void report_sf_clamp_counts(void)
-{
-    if(clamp_count_h2_cap == 0 && clamp_count_h1_negative == 0 && clamp_count_reheat_coldgas == 0) {
-        return;
-    }
-    printf("SF/feedback clamp totals: H2 capped to hydrogen budget = %" PRId64
-           ", negative HI zeroed = %" PRId64
-           ", reheated mass capped to ColdGas = %" PRId64 "\n",
-           clamp_count_h2_cap, clamp_count_h1_negative, clamp_count_reheat_coldgas);
-}
+// void report_sf_clamp_counts(void)
+// {
+//     if(clamp_count_h2_cap == 0 && clamp_count_h1_negative == 0 && clamp_count_reheat_coldgas == 0) {
+//         return;
+//     }
+//     printf("SF/feedback clamp totals: H2 capped to hydrogen budget = %" PRId64
+//            ", negative HI zeroed = %" PRId64
+//            ", reheated mass capped to ColdGas = %" PRId64 "\n",
+//            clamp_count_h2_cap, clamp_count_h1_negative, clamp_count_reheat_coldgas);
+// }
 
 /* SF disk effective radius: reff = SF_DISK_RADIUS_FRAC * r_s, calibrated to
  * the Milky Way disk.  Used for both the dynamical time and disk area in all
@@ -238,7 +238,7 @@ static double sfr_br06(const int p, struct GALAXY *galaxies, const struct params
 
             if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
                 galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-                clamp_count_h2_cap++;
+                // clamp_count_h2_cap++;
             }
 
             if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
@@ -370,7 +370,7 @@ static double sfr_somerville25_h2(const int p, struct GALAXY *galaxies, const st
 
             if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
                 galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-                clamp_count_h2_cap++;
+                // clamp_count_h2_cap++;
             }
 
             // Critical surface density from Equation 2
@@ -453,7 +453,7 @@ static double sfr_kd12(const int p, struct GALAXY *galaxies, const struct params
             // Safety check: H2 fraction cannot exceed 1.0
             if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
                 galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-                clamp_count_h2_cap++;
+                // clamp_count_h2_cap++;
             }
 
             if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
@@ -546,7 +546,7 @@ static double sfr_kmt09(const int p, struct GALAXY *galaxies, const struct param
         // Can't create more H2 than total cold gas
         if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
             galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-            clamp_count_h2_cap++;
+            // clamp_count_h2_cap++;
         }
 
         if (galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
@@ -592,7 +592,7 @@ static double sfr_k13(const int p, struct GALAXY *galaxies, const struct params 
             calculate_molecular_fraction_radial_integration(p, galaxies, run_params, &strdot_k13);
             if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
                 galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-                clamp_count_h2_cap++;
+                // clamp_count_h2_cap++;
             }
             // H2DepletionTime_Gyr = M_gas / SFR_K13_integrated, set inside function
             strdot = strdot_k13;
@@ -622,7 +622,7 @@ static double sfr_k13(const int p, struct GALAXY *galaxies, const struct params 
 
             if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
                 galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-                clamp_count_h2_cap++;
+                // clamp_count_h2_cap++;
             }
 
             const double t_dep_Gyr = calculate_tdep_K13_Gyr((float)Sigma_gas_k13, (float)Sigma_star_k13,
@@ -700,7 +700,7 @@ static double sfr_gd14(const int p, struct GALAXY *galaxies, const struct params
         // Can't create more H2 than total cold gas
         if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
             galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;
-            clamp_count_h2_cap++;
+            // clamp_count_h2_cap++;
         }
 
         if(galaxies[p].H2gas > 0.0 && tdyn > 0.0) {
@@ -1058,7 +1058,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         double atomicH = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC - galaxies[p].H2gas;
         if(atomicH < 0.0) {
             atomicH = 0.0;  // H2 is capped at the budget; this guards float rounding only
-            clamp_count_h1_negative++;
+            // clamp_count_h1_negative++;
         }
         const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas,
                                                   atomic_disk_radius(galaxies[p].DiskScaleRadius),
@@ -1100,7 +1100,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // Safety check: ensure reheated_mass doesn't exceed remaining ColdGas (floating-point precision)
     if(reheated_mass > galaxies[p].ColdGas) {
         reheated_mass = galaxies[p].ColdGas;
-        clamp_count_reheat_coldgas++;
+        // clamp_count_reheat_coldgas++;
     }
 
     // update from SN feedback
@@ -1174,7 +1174,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
 
     if(reheated_mass > galaxies[p].ColdGas) {
         reheated_mass = galaxies[p].ColdGas;
-        clamp_count_reheat_coldgas++;
+        // clamp_count_reheat_coldgas++;
     }
 
     XASSERT(reheated_mass >= 0.0, -1,
@@ -1305,7 +1305,7 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     // remainder only -- matching the non-FFB path.
     {
         double atomicH = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC - galaxies[p].H2gas;
-        if(atomicH < 0.0) { atomicH = 0.0; clamp_count_h1_negative++; }  // float-rounding guard only
+        if(atomicH < 0.0) { atomicH = 0.0;}  // float-rounding guard only
         const double f_ion = ionized_gas_fraction(galaxies[p].ColdGas,
                                                   atomic_disk_radius(galaxies[p].DiskScaleRadius),
                                                   run_params->Hubble_h, SIGMA_HI_CRIT);
@@ -1373,7 +1373,8 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     // ========================================================================
     metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
 
-    if(reheated_mass > galaxies[p].ColdGas) { reheated_mass = galaxies[p].ColdGas; clamp_count_reheat_coldgas++; }
+    // Clamp the reheated mass to the available cold gas
+    if(reheated_mass > galaxies[p].ColdGas) { reheated_mass = galaxies[p].ColdGas; }
 
     update_from_feedback(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 
