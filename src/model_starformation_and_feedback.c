@@ -957,11 +957,10 @@ if(run_params->SupernovaRecipeOn == 1) {
 XASSERT(reheated_mass >= 0.0, -1,
         "Error: Expected reheated gas-mass = %g to be >=0.0\n", reheated_mass);
 
-if((stars + reheated_mass) > galaxies[p].ColdGas && (stars + reheated_mass) > 0.0) {
-    const double fac = galaxies[p].ColdGas / (stars + reheated_mass);
-    stars         *= fac;
-    reheated_mass *= fac;
-}
+// No stars + reheated balance here: the burst is feedback-free, so the stars
+// are not limited by the reheated mass.  The caller clamps reheated_mass to
+// the cold gas left after the burst.
+if(stars > galaxies[p].ColdGas) stars = galaxies[p].ColdGas;
 
 if(run_params->SupernovaRecipeOn == 1) {
     if(galaxies[p].Vvir > 0.0) {
@@ -1344,9 +1343,9 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
 
     // ========================================================================
     // SUPERNOVA FEEDBACK MASSES
-    // Balanced against the cold gas before any of it is used, as on the main
-    // path, so that the stars booked below, the SN masses and the metal yield
-    // all refer to the same (possibly rescaled) burst.
+    // Computed before the burst is booked so that the stars booked below, the
+    // SN masses and the metal yield all refer to the same burst.  Unlike the
+    // main path the stars are not rescaled against the reheated mass.
     // ========================================================================
     double reheated_mass = 0.0;
     double ejected_mass  = 0.0;
