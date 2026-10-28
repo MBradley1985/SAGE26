@@ -67,8 +67,7 @@ H2DiskAreaOption            1   %0: pi*r_s^2 (default); 1: pi*(3*r_s)^2 (thrice)
 H2RadialIntegrationOn       1   %0: single-slab area (uses H2DiskAreaOption); 1: radial integration of exponential disk (H2DiskAreaOption unused)
 
 KarpovModeOn                0   %0: switch off
-FixingGas                   0   %0 off; 1 SFR = M_mol / t_dep in every H2 recipe (t_dep from H2DepletionTimeModel)
-H2DepletionTimeModel        2   %FixingGas 1: 0 nu_SF = 1/Gyr (Lagos+18); 1 KMT09 eq. 10; 2 Krumholz 2013 eqs. 15-16; 3 KDM12 eqs. 4, 8, 9
+H2DepletionMode             0   %0 off; SFR = M_mol / t_dep in every H2 recipe with 1 nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9
 
 %------------------------------------------
 %----- SAGE model parameters --------------

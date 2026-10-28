@@ -107,8 +107,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->BulgeSizeOn                = 3;
     run_params->SaveFullSFH                = 0;
     run_params->StarburstColdGasOn         = 1;
-    run_params->FixingGas                  = 0;   /* as input/millennium.par */
-    run_params->H2DepletionTimeModel       = 2;   /* Krumholz (2013), as input/millennium.par */
+    run_params->H2DepletionMode            = 0;   /* as input/millennium.par */
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
@@ -182,8 +181,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("BulgeSizeOn",           &(run_params->BulgeSizeOn),          INT, 0);
     REG("SaveFullSFH",           &(run_params->SaveFullSFH),          INT, 0);
     REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
-    REG("FixingGas",             &(run_params->FixingGas),            INT, 0);
-    REG("H2DepletionTimeModel",  &(run_params->H2DepletionTimeModel), INT, 0);
+    REG("H2DepletionMode",       &(run_params->H2DepletionMode),      INT, 0);
     REG("SubstepResolution",     &(run_params->SubstepResolution),     DOUBLE, 0);
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
     REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
@@ -536,8 +534,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
-            {"FixingGas",              run_params->FixingGas,              0, FIXINGGAS_MAX},
-            {"H2DepletionTimeModel",   run_params->H2DepletionTimeModel,   0, 3},
+            {"H2DepletionMode",        run_params->H2DepletionMode,        0, H2DEPLETIONMODE_MAX},
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {
@@ -550,16 +547,16 @@ int read_parameter_file(const char *fname, struct params *run_params)
         }
     }
 
-    /* FixingGas 1 replaces how H2 is turned into stars, so it needs a prescription that
-       tracks H2; the surface-density-dependent depletion times (H2DepletionTimeModel 1-3)
+    /* H2DepletionMode > 0 replaces how H2 is turned into stars, so it needs a prescription that
+       tracks H2; the surface-density-dependent depletion times (H2DepletionMode 2-4)
        are local laws evaluated annulus by annulus. */
     if(FG_TDEP(run_params) && !sf_prescription_tracks_h2(run_params->SFprescription)) {
-        fprintf(stderr, "Error: FixingGas = 1 needs an H2-tracking SFprescription (1, 3-7); SFprescription = %d does not track H2.\n",
-                run_params->SFprescription);
+        fprintf(stderr, "Error: H2DepletionMode = %d needs an H2-tracking SFprescription (1, 3-7); SFprescription = %d does not track H2.\n",
+                run_params->H2DepletionMode, run_params->SFprescription);
         ABORT(EXIT_FAILURE);
     }
-    if(FG_TDEP(run_params) && run_params->H2DepletionTimeModel > 0 && !run_params->H2RadialIntegrationOn) {
-        fprintf(stderr, "Error: FixingGas = 1 with H2DepletionTimeModel = %d needs H2RadialIntegrationOn = 1.\n", run_params->H2DepletionTimeModel);
+    if(run_params->H2DepletionMode > 1 && !run_params->H2RadialIntegrationOn) {
+        fprintf(stderr, "Error: H2DepletionMode = %d needs H2RadialIntegrationOn = 1.\n", run_params->H2DepletionMode);
         ABORT(EXIT_FAILURE);
     }
 

@@ -449,11 +449,11 @@ struct save_info {
 };
 
 
-/* FixingGas modes (see docs/parameters.md):
- *   1  every H2 recipe forms stars at SFR = M_mol / t_dep instead of eff M_H2 / t_dyn,
- *      with t_dep chosen by H2DepletionTimeModel */
-#define FIXINGGAS_MAX      1
-#define FG_TDEP(p)         ((p)->FixingGas == 1)
+/* H2DepletionMode (see docs/parameters.md): 0 off; 1-4 every H2 recipe forms stars at
+ * SFR = M_mol / t_dep instead of eff M_H2 / t_dyn, with t_dep from
+ *   1  nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9 */
+#define H2DEPLETIONMODE_MAX 4
+#define FG_TDEP(p)         ((p)->H2DepletionMode > 0)
 
 struct params
 {
@@ -507,8 +507,7 @@ struct params
                                           // histories. Those accumulate stellar mass, not rate, so they are
                                           // correct at any substep count (unlike the Sfr* rate bins).
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
-    int32_t    FixingGas;                 // cold-gas fixes, 0 (off, default) to FIXINGGAS_MAX; see FG_* macros and docs/parameters.md
-    int32_t    H2DepletionTimeModel;      // FixingGas 1: 0 nu_SF = 1/Gyr (Lagos+18); 1 KMT09 eq. 10; 2 Krumholz 2013 eqs. 15-16; 3 KDM12 eqs. 4, 8, 9
+    int32_t    H2DepletionMode;           // 0 off (default); SFR = M_mol / t_dep with 1 nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9
 
     /* baryonic physics calibration parameters */
     double RecycleFraction;       /* fraction of stellar mass returned to cold gas by SN */
