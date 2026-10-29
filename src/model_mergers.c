@@ -23,6 +23,7 @@
 
 #include "model_mergers.h"
 #include "model_misc.h"
+#include "model_darksage_mergers.h"
 
 #include "model_starformation_and_feedback.h"
 #include "model_disk_instability.h"
@@ -267,8 +268,22 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
 
     add_galaxies_together(merger_centralgal, p, galaxies, run_params);
 
+    // DarkSAGEMode: the annuli hold the merged gas; with DarkSAGEMergerBursts == 0 the merger has
+    // no burst or black-hole growth of its own -- the added gas makes the disc unstable and the
+    // instability does both (Stevens et al. 2024 Secs. 7, 9.2)
+    const int merger_burst = !(run_params->DarkSAGEMode == 1 && run_params->DarkSAGEMergerBursts == 0);
+    if(run_params->DarkSAGEMode == 1) {
+        double gas = 0.0, metals = 0.0;
+        for(int i = 0; i < N_BINS; i++) {
+            gas += galaxies[merger_centralgal].DiscGas[i];
+            metals += galaxies[merger_centralgal].DiscGasMetals[i];
+        }
+        galaxies[merger_centralgal].ColdGas = gas;
+        galaxies[merger_centralgal].MetalsColdGas = metals;
+    }
+
     // grow black hole through accretion from cold disk during mergers
-    if(run_params->AGNrecipeOn) {
+    if(run_params->AGNrecipeOn && merger_burst) {
         grow_black_hole(merger_centralgal, mass_ratio, galaxies, run_params);
     }
 
@@ -291,9 +306,11 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     }
 
     // starburst recipe - now tracks which bulge component receives the stars
-    collisional_starburst_recipe(mass_ratio, merger_centralgal, centralgal, time, dt, halonr,
-                                 0, step, burst_to_merger_bulge, old_disk_radius,
-                                 galaxies, run_params);
+    if(merger_burst) {
+        collisional_starburst_recipe(mass_ratio, merger_centralgal, centralgal, time, dt, halonr,
+                                     0, step, burst_to_merger_bulge, old_disk_radius,
+                                     galaxies, run_params);
+    }
 
     // Sync the central's BulgeRadius after add_galaxies_together + starburst have
     // modified bulge mass.
@@ -303,6 +320,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         // CASE 1: MAJOR MERGER (Section 5.2.3)
         // Destroys disc, creates pure merger-driven bulge
         move_disk_sfh_to_bulge(merger_centralgal, 1.0, galaxies, run_params);
+        if(run_params->DarkSAGEMode == 1) darksage_stars_to_bulge(merger_centralgal, galaxies);
         make_bulge_from_burst(merger_centralgal, galaxies);
         
         // Apply the Energy Conservation Radius; then call get_bulge_radius so
@@ -333,6 +351,12 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
             galaxies[merger_centralgal].MergerBulgeRadius = new_merger_radius;
             get_bulge_radius(merger_centralgal, galaxies, run_params);
         }
+    }
+
+    // DarkSAGEMode without merger bursts: resolve the instability the merged gas causes straight
+    // away (DarkSage deal_with_galaxy_merger())
+    if(!merger_burst && run_params->DiskInstabilityOn) {
+        check_disk_instability_darksage(merger_centralgal, centralgal, dt, step, galaxies, run_params);
     }
 }
 
@@ -474,24 +498,10 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
         // Mass-weighted spins, using the masses before they are combined
         combine_spins_merger(t, p, galaxies);
 
-        // Satellite gas joins the central's annuli by j-bin; its stars all join the bulge below,
-        // so DiscStars are not added.  Annuli with no area (capped at Rvir) hand theirs to the last real one.
-        int last = 0;
-        for(int i = N_BINS - 1; i >= 0; i--) {
-            if(galaxies[t].DiscRadii[i+1] > galaxies[t].DiscRadii[i]) { last = i; break; }
-        }
-        for(int i = 0; i < N_BINS; i++) {
-            const int k = (i > last) ? last : i;
-            galaxies[t].DiscGas[k] += galaxies[p].DiscGas[i];
-            galaxies[t].DiscGasMetals[k] += galaxies[p].DiscGasMetals[i];
-        }
-
-        // Satellite fountain / outflow gas joins the central's hot (or CGM) reservoir
-        add_gas_to_hot_reservoir(&galaxies[t], run_params,
-                                 galaxies[p].FountainGas + galaxies[p].OutflowGas,
-                                 galaxies[p].MetalsFountainGas + galaxies[p].MetalsOutflowGas);
-        galaxies[p].FountainGas = galaxies[p].MetalsFountainGas = 0.0f;
-        galaxies[p].OutflowGas = galaxies[p].MetalsOutflowGas = 0.0f;
+        // Satellite gas joins the central's annuli by angular momentum (minor) or the gas disc is
+        // rebuilt in the orbital plane (major); its stars all join the bulge below, so DiscStars are
+        // not added.  Also updates the merger bulge's kinematics and moves the fountain / outflow gas.
+        darksage_merge_galaxies(t, p, galaxies, run_params);
     }
 
     galaxies[t].ColdGas += galaxies[p].ColdGas;

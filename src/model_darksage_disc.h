@@ -17,6 +17,8 @@ extern "C" {
                                   const struct params *run_params);
     extern double darksage_nfw_potential(const int p, const double r, const struct GALAXY *galaxies,
                                          const struct params *run_params);
+    extern void darksage_project_disc(const float DiscMass[N_BINS], const double cos_angle, double NewDisc[N_BINS],
+                                      const struct params *run_params, const double Rvir, const double Vvir);
     extern void darksage_precess_gas(const int p, const double dt, struct GALAXY *galaxies, const struct params *run_params);
 
 #ifdef __cplusplus

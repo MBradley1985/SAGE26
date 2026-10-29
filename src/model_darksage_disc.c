@@ -63,49 +63,68 @@ static double circular_velocity2(const struct rotation_curve *rc, const double r
 #define N_BULGE_GRID 51
 
 /*
- * BulgeSizeOn == 4: DarkSage's dynamical size of the instability-driven bulge
- * (update_disc_radii() and core_save.c).
+ * BulgeSizeOn == 4: DarkSage's dynamical (Jeans) size of a bulge
+ * (update_disc_radii() and core_save.c; Stevens et al. 2024 eq. 128).
  *
- * The Hernquist scale length a of a bulge of 1-D dispersion sigma in
- * equilibrium in the potential Phi satisfies, at each radius r,
- *   a = 3 / (dPhi/dr / (3 sigma^2) - 1/r) - r,
- * with dPhi/dr = V_circ^2 / r.  DarkSage evaluates this on 51 radii from the
- * centre outwards (spaced by ExponentBin, outermost max(10 j_max / Vvir,
- * Rvir)) and keeps the running mean once it changes by <= 1%.  The output is
- * the radius enclosing half the bulge mass within Rvir, the positive root of
- *   (2a^2 + 4 a Rvir + Rvir^2) r^2 - 2 a Rvir^2 r - a^2 Rvir^2 = 0.
- * Sets InstabilityBulgeRadius; leaves it unchanged if the mean never settles.
+ * The Hernquist scale length a of a bulge of 1-D dispersion sigma and specific
+ * angular momentum j in equilibrium in the potential Phi satisfies, at each r,
+ *   a = 3 / ((dPhi/dr - j^2 / r^3) / (3 sigma^2) - 1/r) - r,
+ * with dPhi/dr = V_circ^2 / r; j = 0 for the instability-driven bulge.
+ * DarkSage evaluates this on 51 radii from the centre outwards (spaced by
+ * ExponentBin, outermost max(10 j_max / Vvir, Rvir)) and keeps the running
+ * mean once it changes by <= 1%.  Returns the radius enclosing half the bulge
+ * mass within Rvir, the positive root of
+ *   (2a^2 + 4 a Rvir + Rvir^2) r^2 - 2 a Rvir^2 r - a^2 Rvir^2 = 0,
+ * or -1 if the mean never settles.
  */
-static void darksage_instability_bulge_size(const int p, const struct rotation_curve *rc, struct GALAXY *galaxies,
-                                            const struct params *run_params)
+static double darksage_bulge_half_mass_radius(const struct rotation_curve *rc, const double sigma, const double j2,
+                                              const struct GALAXY *g, const struct params *run_params)
 {
-    const double sigma2 = 3.0 * galaxies[p].VelDispBulge * galaxies[p].VelDispBulge;
-    const double Rvir = galaxies[p].Rvir;
-    if(galaxies[p].InstabilityBulgeMass <= 0.0f || sigma2 <= 0.0 || Rvir <= 0.0) return;
+    const double sigma2 = 3.0 * sigma * sigma;
+    const double Rvir = g->Rvir;
+    if(sigma2 <= 0.0 || Rvir <= 0.0 || g->Vvir <= 0.0) return -1.0;
 
-    double r_out = 10.0 * run_params->DiscBinEdge[N_BINS] / galaxies[p].Vvir;
+    double r_out = 10.0 * run_params->DiscBinEdge[N_BINS] / g->Vvir;
     if(r_out < Rvir) r_out = Rvir;
 
     double g_prev = 0.0, a_av = 0.0, a_av_prev = 0.0, a = -1.0;
     for(int k = 1; k < N_BULGE_GRID; k++) {
         const double r = r_out * pow(run_params->ExponentBin, -(double)(N_BULGE_GRID - 1 - k));
-        const double g = circular_velocity2(rc, r) / r;   /* dPhi/dr */
-        const double grad = (k == 1) ? g : 0.5 * (g_prev + g);
-        const double a_new = 3.0 / (grad / sigma2 - 1.0 / r) - r;
+        const double grav = circular_velocity2(rc, r) / r;   /* dPhi/dr */
+        const double grad = (k == 1) ? grav : 0.5 * (g_prev + grav);
+        const double a_new = 3.0 / ((grad - j2 / (r * r * r)) / sigma2 - 1.0 / r) - r;
         a_av = ((k - 1) * a_av + a_new) / k;
         if(k > 1 && fabs(a_av - a_av_prev) <= 0.01 * a_av) {
             a = a_av;
             break;
         }
         a_av_prev = a_av;
-        g_prev = g;
+        g_prev = grav;
     }
-    if(!(a > 0.0) || !isfinite(a)) return;
+    if(!(a > 0.0) || !isfinite(a)) return -1.0;
 
     const double qa = 2.0 * a * a + 4.0 * a * Rvir + Rvir * Rvir;
     const double qb = -2.0 * a * Rvir * Rvir;
     const double qc = -a * a * Rvir * Rvir;
-    galaxies[p].InstabilityBulgeRadius = (float)((-qb + sqrt(qb * qb - 4.0 * qa * qc)) / (2.0 * qa));
+    return (-qb + sqrt(qb * qb - 4.0 * qa * qc)) / (2.0 * qa);
+}
+
+/* BulgeSizeOn == 4: Jeans sizes of the instability-driven and merger-driven bulges; a radius is
+ * left unchanged where the solution does not settle */
+static void darksage_bulge_sizes(const int p, const struct rotation_curve *rc, struct GALAXY *galaxies,
+                                 const struct params *run_params)
+{
+    struct GALAXY *g = &galaxies[p];
+    if(g->InstabilityBulgeMass > 0.0f) {
+        const double r = darksage_bulge_half_mass_radius(rc, g->VelDispBulge, 0.0, g, run_params);
+        if(r > 0.0) g->InstabilityBulgeRadius = (float)r;
+    }
+    if(g->MergerBulgeMass > 0.0f) {
+        const double j2 = g->SpinMergerBulge[0] * g->SpinMergerBulge[0] + g->SpinMergerBulge[1] * g->SpinMergerBulge[1]
+                          + g->SpinMergerBulge[2] * g->SpinMergerBulge[2];
+        const double r = darksage_bulge_half_mass_radius(rc, g->VelDispMergerBulge, j2, g, run_params);
+        if(r > 0.0) g->MergerBulgeRadius = (float)r;
+    }
 }
 
 /* Mass-percentile radii of an exponential disc, as multiples of the scale length's fit */
@@ -398,7 +417,7 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     update_hot_energetics(p, z_snap, galaxies, run_params);
 
     if(run_params->BulgeSizeOn == 4) {
-        darksage_instability_bulge_size(p, &rc, galaxies, run_params);
+        darksage_bulge_sizes(p, &rc, galaxies, run_params);
         get_bulge_radius(p, galaxies, run_params);
     }
 }
@@ -423,8 +442,9 @@ static void rotate_vector(float v[3], const float axis[3], const double angle_de
     }
 }
 
-/* Re-bin a disc tilted by angle acos(cos_angle): its j along the new axis is j cos(angle) */
-static void project_disc(const float DiscMass[N_BINS], const double cos_angle, double NewDisc[N_BINS],
+/* Re-bin a disc tilted by angle acos(cos_angle): its j along the new axis is j cos(angle);
+ * also used to shrink a disc's j by a factor cos_angle (retrograde mergers) */
+void darksage_project_disc(const float DiscMass[N_BINS], const double cos_angle, double NewDisc[N_BINS],
                          const struct params *run_params, const double Rvir, const double Vvir)
 {
     const double cos_ang = fabs(cos_angle);
@@ -507,8 +527,8 @@ void darksage_precess_gas(const int p, const double dt, struct GALAXY *galaxies,
     if(cos_precess < fabs(cos_theta)) cos_precess = fabs(cos_theta);
 
     double new_gas[N_BINS], new_metals[N_BINS];
-    project_disc(galaxies[p].DiscGas, cos_precess, new_gas, run_params, galaxies[p].Rvir, galaxies[p].Vvir);
-    project_disc(galaxies[p].DiscGasMetals, cos_precess, new_metals, run_params, galaxies[p].Rvir, galaxies[p].Vvir);
+    darksage_project_disc(galaxies[p].DiscGas, cos_precess, new_gas, run_params, galaxies[p].Rvir, galaxies[p].Vvir);
+    darksage_project_disc(galaxies[p].DiscGasMetals, cos_precess, new_metals, run_params, galaxies[p].Rvir, galaxies[p].Vvir);
     for(int i = 0; i < N_BINS; i++) {
         galaxies[p].DiscGas[i] = (float)new_gas[i];
         galaxies[p].DiscGasMetals[i] = (float)new_metals[i];

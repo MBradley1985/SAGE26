@@ -207,6 +207,8 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].SpinBulge[j] = galaxies[p].SpinSecularBulge[j] = 0.0f;
     }
     galaxies[p].VelDispBulge = 0.0f;
+    galaxies[p].VelDispMergerBulge = (float)darksage_cold_gas_dispersion(run_params->ZZ[halos[halonr].SnapNum], run_params);
+    for(int j = 0; j < 3; j++) galaxies[p].SpinMergerBulge[j] = 0.0f;
     galaxies[p].SecularBulgeMass = galaxies[p].SecularMetalsBulgeMass = 0.0f;
     galaxies[p].R2_hot_av = 0.0f;
     galaxies[p].CoolScaleRadius = galaxies[p].GasDiscScaleRadius = galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;
@@ -499,8 +501,8 @@ void update_spin_gas_cooling(const int gal, const double cooling_mass, struct GA
 /* Merger of p into t.  Call before the masses are combined. */
 void combine_spins_merger(const int t, const int p, struct GALAXY *galaxies)
 {
-    evolve_spin(galaxies[t].SpinGas, galaxies[t].ColdGas, galaxies[p].SpinGas, galaxies[p].ColdGas);
-    evolve_spin(galaxies[t].SpinStars, galaxies[t].StellarMass, galaxies[p].SpinStars, galaxies[p].StellarMass);
+    /* The gas-disc axis is set by darksage_merge_galaxies() and the stellar disc keeps its own
+     * (the satellite's stars join the bulge); hot gas and bulge spins mix by mass */
     evolve_spin(galaxies[t].SpinHot, galaxies[t].HotGas, galaxies[p].SpinHot, galaxies[p].HotGas);
     evolve_spin(galaxies[t].SpinBulge, galaxies[t].BulgeMass, galaxies[p].SpinBulge, galaxies[p].BulgeMass);
 }
