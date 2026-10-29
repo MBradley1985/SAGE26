@@ -624,6 +624,7 @@ struct params
     /*                    fountain gas reservoirs (for hot-regime haloes only) */
     /* When DarkSAGEMode=0: Standard SAGE behavior */
     int32_t    DarkSAGEMode;            // 0: standard SAGE; 1: full DarkSage physics
+    double     RadiativeEfficiency;     // DarkSAGEMode: radio-mode AGN radiative efficiency (DarkSage RadiativeEfficiency)
     int32_t    RamPressureOn;           // DarkSAGEMode: satellite disc stripping 0 off; 1 ram pressure; 2 gradual ram pressure; 3 ram pressure + tides (DarkSage)
     int32_t    DarkSAGEMergerBursts;    // DarkSAGEMode: 0 merger gas drives instabilities only (DarkSage); 1 SAGE26 merger starburst + BH growth
     double     FirstBin;                // First j-bin edge [kpc/h km/s] (default 1, as DarkSage)
