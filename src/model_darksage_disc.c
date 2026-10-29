@@ -1,16 +1,36 @@
 /*
- * model_darksage_disc.c -- disc annulus radii from the rotation curve (DarkSAGEMode == 1).
+ * model_darksage_disc.c -- disc annulus radii, potential and bulge sizes from the
+ * rotation curve (DarkSAGEMode == 1).
  *
- * Each j-bin edge j_i is mapped to the radius r_i solving j_i = r_i V_circ(r_i),
- * with V_circ from an NFW halo (Dutton & Maccio 2014 concentration), a
- * Hernquist bulge, exponential stellar and gas discs and a beta-profile hot
- * halo (Stevens, Croton & Mutch 2016).  Radii are capped at the current Rvir.
+ * Follows DarkSage's update_disc_radii() (model_misc.c; Stevens, Croton &
+ * Mutch 2016 Sec. 3.2; Stevens et al. 2024 Sec. 4).  The rotation curve is
+ * built on a 51-point radial grid, spaced by ExponentBin inwards from
+ * max(10 j_max / Vvir, Rvir), from
+ *   - an NFW halo (the dark matter left after the baryons), concentration from
+ *     SAGE26's ConcentrationOn when set, otherwise Dutton & Maccio (2014) with
+ *     the Di Cintio et al. (2014) baryonic modification;
+ *   - Hernquist instability- and merger-driven bulges;
+ *   - the black hole as a point mass;
+ *   - exponential stellar and gas discs;
+ *   - a beta-profile hot halo (hot / CGM, fountain and outflowing gas);
+ * with only the fraction f_support = 1 - exp(-r / RotSupportScaleRadius) of
+ * the support in rotation: V_rot^2 = f_support V_circ^2, j = V_rot r.
  *
- * The same NFW potential sets the energetics DarkSage's feedback and
- * reincorporation use (Stevens et al. 2024, Secs. 9-10): the potential at each
- * annulus edge, the mass-weighted potential of the hot halo (DarkSage's beta
- * profile, or SAGE26's rho ~ r^-1.4 CGM profile for CGM-regime haloes) and the
- * potential at Rvir that ejected gas must climb to.
+ * From the grid:
+ *   - annulus edge i sits at the radius where j = DiscBinEdge[i];
+ *   - the potential Phi(r), integrated inwards from the outermost radius,
+ *     gives Potential[] at the annulus edges, the mass-weighted potential of
+ *     the hot gas (beta profile, or SAGE26's rho ~ r^-1.4 CGM profile for
+ *     CGM-regime haloes) and the potential at Rvir that ejected gas must
+ *     climb to -- the energetics of the outflow model (Secs. 9-10);
+ *   - BulgeSizeOn == 4: the Jeans sizes of the two bulges.
+ * Galaxies with no disc (B/T >= 1) keep their last radii and potentials, as in
+ * DarkSage.
+ *
+ * Two deviations from the source: the grid is interpolated linearly (DarkSage
+ * uses a cubic spline), and Phi at the outermost radius is -G M(<r) / r rather
+ * than 0, so the potential matches the NFW potential used beyond Rvir for the
+ * turnaround of outflowing gas (model_reincorporation.c).
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -22,122 +42,22 @@
 #include "core_allvars.h"
 
 #include "model_darksage_disc.h"
+#include "model_darksage_instability.h"
 #include "model_halo_properties.h"
 #include "model_misc.h"
 
-/* Components of the rotation curve used to place the annuli */
-struct rotation_curve {
-    double G, rho_norm, r_s;          /* NFW dark matter */
-    double M_bulge, a_bulge;          /* Hernquist bulge */
-    double M_sdisc, a_sdisc;          /* exponential stellar disc */
-    double M_gdisc, a_gdisc;          /* exponential gas disc */
-    double M_hot, c_beta;             /* beta-profile hot gas */
-    double Rvir;
-};
-
-static inline double v2_disc_cterm(const double x, const double c);
-
-/* V_circ^2 at radius r [(km/s)^2] from all rotation-curve components */
-static double circular_velocity2(const struct rotation_curve *rc, const double r)
-{
-    double v2 = rc->G * rc->rho_norm * (log(1.0 + r / rc->r_s) - r / (r + rc->r_s)) / r;   /* NFW */
-    if(v2 < 0.0) v2 = 0.0;
-    if(rc->M_bulge > 0.0 && rc->a_bulge > 0.0) {
-        v2 += rc->G * rc->M_bulge * r / ((r + rc->a_bulge) * (r + rc->a_bulge));   /* Hernquist */
-    }
-    if(rc->M_sdisc > 0.0 && rc->a_sdisc > 0.0) {
-        v2 += rc->G * rc->M_sdisc / rc->Rvir * v2_disc_cterm(r / rc->a_sdisc, rc->Rvir / rc->a_sdisc);
-    }
-    if(rc->M_gdisc > 0.0 && rc->a_gdisc > 0.0) {
-        v2 += rc->G * rc->M_gdisc / rc->Rvir * v2_disc_cterm(r / rc->a_gdisc, rc->Rvir / rc->a_gdisc);
-    }
-    if(rc->M_hot > 0.0 && rc->c_beta > 0.0) {
-        const double cb_norm = 1.0 / (1.0 - rc->c_beta * atan(1.0 / rc->c_beta));
-        const double M_hot_enc = rc->M_hot * cb_norm * (atan(r / rc->Rvir / rc->c_beta) - rc->c_beta * atan(1.0 / rc->c_beta));
-        if(M_hot_enc > 0.0) v2 += rc->G * M_hot_enc / r;
-    }
-    return v2;
-}
-
-/* DarkSage radial grid for the bulge-size solution (update_disc_radii(), NUM_R_BINS) */
-#define N_BULGE_GRID 51
-
-/*
- * BulgeSizeOn == 4: DarkSage's dynamical (Jeans) size of a bulge
- * (update_disc_radii() and core_save.c; Stevens et al. 2024 eq. 128).
- *
- * The Hernquist scale length a of a bulge of 1-D dispersion sigma and specific
- * angular momentum j in equilibrium in the potential Phi satisfies, at each r,
- *   a = 3 / ((dPhi/dr - j^2 / r^3) / (3 sigma^2) - 1/r) - r,
- * with dPhi/dr = V_circ^2 / r; j = 0 for the instability-driven bulge.
- * DarkSage evaluates this on 51 radii from the centre outwards (spaced by
- * ExponentBin, outermost max(10 j_max / Vvir, Rvir)) and keeps the running
- * mean once it changes by <= 1%.  Returns the radius enclosing half the bulge
- * mass within Rvir, the positive root of
- *   (2a^2 + 4 a Rvir + Rvir^2) r^2 - 2 a Rvir^2 r - a^2 Rvir^2 = 0,
- * or -1 if the mean never settles.
- */
-static double darksage_bulge_half_mass_radius(const struct rotation_curve *rc, const double sigma, const double j2,
-                                              const struct GALAXY *g, const struct params *run_params)
-{
-    const double sigma2 = 3.0 * sigma * sigma;
-    const double Rvir = g->Rvir;
-    if(sigma2 <= 0.0 || Rvir <= 0.0 || g->Vvir <= 0.0) return -1.0;
-
-    double r_out = 10.0 * run_params->DiscBinEdge[N_BINS] / g->Vvir;
-    if(r_out < Rvir) r_out = Rvir;
-
-    double g_prev = 0.0, a_av = 0.0, a_av_prev = 0.0, a = -1.0;
-    for(int k = 1; k < N_BULGE_GRID; k++) {
-        const double r = r_out * pow(run_params->ExponentBin, -(double)(N_BULGE_GRID - 1 - k));
-        const double grav = circular_velocity2(rc, r) / r;   /* dPhi/dr */
-        const double grad = (k == 1) ? grav : 0.5 * (g_prev + grav);
-        const double a_new = 3.0 / ((grad - j2 / (r * r * r)) / sigma2 - 1.0 / r) - r;
-        a_av = ((k - 1) * a_av + a_new) / k;
-        if(k > 1 && fabs(a_av - a_av_prev) <= 0.01 * a_av) {
-            a = a_av;
-            break;
-        }
-        a_av_prev = a_av;
-        g_prev = grav;
-    }
-    if(!(a > 0.0) || !isfinite(a)) return -1.0;
-
-    const double qa = 2.0 * a * a + 4.0 * a * Rvir + Rvir * Rvir;
-    const double qb = -2.0 * a * Rvir * Rvir;
-    const double qc = -a * a * Rvir * Rvir;
-    return (-qb + sqrt(qb * qb - 4.0 * qa * qc)) / (2.0 * qa);
-}
-
-/* BulgeSizeOn == 4: Jeans sizes of the instability-driven and merger-driven bulges; a radius is
- * left unchanged where the solution does not settle */
-static void darksage_bulge_sizes(const int p, const struct rotation_curve *rc, struct GALAXY *galaxies,
-                                 const struct params *run_params)
-{
-    struct GALAXY *g = &galaxies[p];
-    if(g->InstabilityBulgeMass > 0.0f) {
-        const double r = darksage_bulge_half_mass_radius(rc, g->VelDispBulge, 0.0, g, run_params);
-        if(r > 0.0) g->InstabilityBulgeRadius = (float)r;
-    }
-    if(g->MergerBulgeMass > 0.0f) {
-        const double j2 = g->SpinMergerBulge[0] * g->SpinMergerBulge[0] + g->SpinMergerBulge[1] * g->SpinMergerBulge[1]
-                          + g->SpinMergerBulge[2] * g->SpinMergerBulge[2];
-        const double r = darksage_bulge_half_mass_radius(rc, g->VelDispMergerBulge, j2, g, run_params);
-        if(r > 0.0) g->MergerBulgeRadius = (float)r;
-    }
-}
+/* Radial grid of the rotation curve (DarkSage NUM_R_BINS) */
+#define N_RC_GRID 51
+/* Innermost grid radius relative to the halo scale radius (DarkSage's rrat cut) */
+static const double RC_MIN_RRAT = 1.0e-8;
+/* Times the outermost grid radius may grow x10 to reach the largest j-bin edge */
+static const int RC_MAX_GROW = 10;
+/* Floor on the rotation-support fraction (DarkSage) */
+static const double F_SUPPORT_MIN = 1.0e-5;
 
 /* Mass-percentile radii of an exponential disc, as multiples of the scale length's fit */
 static const double PERCENT_VALUES[9]     = {0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
 static const double PERCENT_CONVERSION[9] = {0.3567, 0.4214, 0.4765, 0.5268, 0.5752, 0.6244, 0.6785, 0.7491, 0.8684};
-
-/* Exponential-disc contribution to V_circ^2 (dimensionless); x = r/r_d, c = Rvir/r_d */
-static inline double v2_disc_cterm(const double x, const double c)
-{
-    const double cx = c * x;
-    const double inv_cx = 1.0 / cx;
-    return (c + 4.8 * c * exp(-0.35 * cx - 3.5 * inv_cx)) / (cx + inv_cx * inv_cx + 2.0 * sqrt(inv_cx));
-}
 
 /* DarkSage minimum core radius of the hot-gas beta profile (MIN_C_BETA, core_allvars.h) */
 static const double DS_MIN_C_BETA = 0.05;
@@ -147,10 +67,14 @@ static const double DS_R2_HOT_COEFF = 0.15343;
  * rho ~ r^-CGM_ALPHA between CGM_R0_FRAC * Rvir and Rvir */
 static const double CGM_ALPHA = 1.4;
 static const double CGM_R0_FRAC = 0.1;
-/* Radial sampling of the hot-gas profile for its mass-weighted potential: log-spaced
- * from PROFILE_R_MIN_FRAC * Rvir to Rvir */
-#define N_PROFILE 200
-static const double PROFILE_R_MIN_FRAC = 1.0e-4;
+
+/* Exponential-disc contribution to V_circ^2 (dimensionless); x = r/r_d, c = Rvir/r_d */
+static inline double v2_disc_cterm(const double x, const double c)
+{
+    const double cx = c * x;
+    const double inv_cx = 1.0 / cx;
+    return (c + 4.8 * c * exp(-0.35 * cx - 3.5 * inv_cx)) / (cx + inv_cx * inv_cx + 2.0 * sqrt(inv_cx));
+}
 
 /*
  * NFW potential at radius r [code units], normalised to Mvir within Rvir.
@@ -167,70 +91,6 @@ double darksage_nfw_potential(const int p, const double r, const struct GALAXY *
 
     if(r == 0.0) return -run_params->G * galaxies[p].Mvir / (rs * norm);
     return -run_params->G * galaxies[p].Mvir / r * log(1.0 + r / rs) / norm;
-}
-
-/*
- * update_hot_energetics -- potentials of the hot and ejected reservoirs.
- *
- * Follows DarkSage's update_disc_radii() (model_misc.c) and model_cooling.c:
- *   c_beta      = max(0.05, 0.20 exp(-1.5 z) - 0.039 z + 0.28)
- *   HotGasPotential = mass-weighted potential of the hot gas within Rvir:
- *                 beta profile rho ~ 1 / (c_beta^2 + x^2), x = r / Rvir, whose
- *                 enclosed mass grows as x - c_beta atan(x / c_beta);
- *                 for CGM-regime haloes (CGMrecipeOn, Regime == 0) SAGE26's
- *                 rho ~ r^-1.4 profile on [0.1, 1] Rvir instead.
- *   R2_hot_av   = (Rvir c_beta^2 cb 0.15343)^2 for the beta profile (DarkSage);
- *                 for the CGM profile 1 / <1/r^2>, the radius at which
- *                 0.5 j^2 / r^2 equals its mass-weighted mean.
- *   EjectedPotential = max(0.9999 HotGasPotential, Phi(Rvir)).
- * Potentials come from the NFW halo alone, as Potential[] does here.
- */
-static void update_hot_energetics(const int p, const double z, struct GALAXY *galaxies, const struct params *run_params)
-{
-    const double Rvir = galaxies[p].Rvir;
-    if(Rvir <= 0.0 || galaxies[p].HaloScaleRadius <= 0.0) return;
-
-    double c_beta = 0.20 * exp(-1.5 * z) - 0.039 * z + 0.28;
-    if(c_beta < DS_MIN_C_BETA) c_beta = DS_MIN_C_BETA;
-    galaxies[p].c_beta = (float)c_beta;
-
-    const int cgm_regime = (run_params->CGMrecipeOn == 1 && galaxies[p].Regime == 0);
-    const double x_min = cgm_regime ? CGM_R0_FRAC : PROFILE_R_MIN_FRAC;
-    const double dlnx = -log(x_min) / (N_PROFILE - 1);
-
-    /* Trapezoid sums over the profile's mass shells; for the beta profile the shell
-     * mass is the exact difference of x - c_beta atan(x / c_beta) */
-    double pot_sum = 0.0, inv_r2_sum = 0.0, mass_sum = 0.0;
-    double x_prev = x_min, phi_prev = darksage_nfw_potential(p, x_min * Rvir, galaxies, run_params);
-    for(int k = 1; k < N_PROFILE; k++) {
-        const double x = x_min * exp(k * dlnx);
-        const double phi = darksage_nfw_potential(p, x * Rvir, galaxies, run_params);
-        double dm;
-        if(cgm_regime) {
-            dm = (pow(x, 3.0 - CGM_ALPHA) - pow(x_prev, 3.0 - CGM_ALPHA)) / (3.0 - CGM_ALPHA);
-        } else {
-            dm = (x - c_beta * atan(x / c_beta)) - (x_prev - c_beta * atan(x_prev / c_beta));
-        }
-        pot_sum += 0.5 * (phi + phi_prev) * dm;
-        inv_r2_sum += dm / (x * x_prev);
-        mass_sum += dm;
-        x_prev = x;
-        phi_prev = phi;
-    }
-    if(mass_sum <= 0.0) return;
-
-    galaxies[p].HotGasPotential = (float)(pot_sum / mass_sum);
-    if(cgm_regime) {
-        galaxies[p].R2_hot_av = (float)(Rvir * Rvir * mass_sum / inv_r2_sum);
-    } else {
-        const double cb_term = 1.0 / (1.0 - c_beta * atan(1.0 / c_beta));
-        const double r_hot = Rvir * c_beta * c_beta * cb_term * DS_R2_HOT_COEFF;
-        galaxies[p].R2_hot_av = (float)(r_hot * r_hot);
-    }
-
-    const double phi_rvir = darksage_nfw_potential(p, Rvir, galaxies, run_params);
-    galaxies[p].EjectedPotential = (float)((phi_rvir > 0.9999 * galaxies[p].HotGasPotential)
-                                           ? phi_rvir : 0.9999 * galaxies[p].HotGasPotential);
 }
 
 /* Scale length from the radii enclosing 10..90% of an annulus mass distribution */
@@ -268,11 +128,115 @@ static double disc_scaleradius(const int p, const float mass[N_BINS], const stru
     return rs;
 }
 
-/* Radius where rotational support f_rot = v/sqrt(v^2 + sigma^2) reaches 0.5, as an exponential scale */
+/* Hernquist scale length a whose mass within Rvir is half inside r_half (inverts the
+ * half-mass radius of darksage_bulge_half_mass_radius()) */
+static double hernquist_a_from_half_mass(const double r_half, const double Rvir)
+{
+    if(r_half <= 0.0) return 0.0;
+    if(Rvir > M_SQRT2 * r_half) return r_half * Rvir * (M_SQRT2 - 1.0) / (Rvir - M_SQRT2 * r_half);
+    return r_half / (1.0 + M_SQRT2);
+}
+
+/* The rotation curve on DarkSage's radial grid; valid entries are first..N_RC_GRID-1 */
+struct rc_grid {
+    double r[N_RC_GRID], j[N_RC_GRID], phi[N_RC_GRID];
+    int first;
+};
+
+/*
+ * BulgeSizeOn == 4: DarkSage's Jeans size of a bulge (update_disc_radii() and
+ * core_save.c; Stevens et al. 2024 eq. 128).  The Hernquist scale length a of
+ * a bulge of 1-D dispersion sigma and specific angular momentum j satisfies, at
+ * each grid radius r,
+ *   a = 3 / ((dPhi/dr - j^2 / r^3) / (3 sigma^2) - 1/r) - r
+ * (j = 0 for the instability-driven bulge); DarkSage keeps the running mean
+ * from the centre outwards once it changes by <= 1%.  Returns the radius
+ * enclosing half the bulge mass within Rvir, the positive root of
+ *   (2a^2 + 4 a Rvir + Rvir^2) r^2 - 2 a Rvir^2 r - a^2 Rvir^2 = 0,
+ * or -1 if the mean never settles.
+ */
+static double darksage_bulge_half_mass_radius(const struct rc_grid *gr, const double sigma, const double j2,
+                                              const double Rvir)
+{
+    const double sigma2 = 3.0 * sigma * sigma;
+    if(sigma2 <= 0.0 || Rvir <= 0.0) return -1.0;
+
+    double a_av = 0.0, a_av_prev = 0.0, a = -1.0;
+    int n = 0;
+    for(int k = gr->first; k < N_RC_GRID - 1; k++) {
+        const double r = gr->r[k+1];
+        const double grad = (gr->phi[k+1] - gr->phi[k]) / (gr->r[k+1] - gr->r[k]);
+        const double a_new = 3.0 / ((grad - j2 / (r * r * r)) / sigma2 - 1.0 / r) - r;
+        a_av = (n * a_av + a_new) / (n + 1);
+        n++;
+        if(n > 1 && fabs(a_av - a_av_prev) <= 0.01 * a_av) {
+            a = a_av;
+            break;
+        }
+        a_av_prev = a_av;
+    }
+    if(!(a > 0.0) || !isfinite(a)) return -1.0;
+
+    const double qa = 2.0 * a * a + 4.0 * a * Rvir + Rvir * Rvir;
+    const double qb = -2.0 * a * Rvir * Rvir;
+    const double qc = -a * a * Rvir * Rvir;
+    return (-qb + sqrt(qb * qb - 4.0 * qa * qc)) / (2.0 * qa);
+}
+
+/* Linear interpolation of y(x) on the valid part of a grid with increasing x */
+static double grid_interp(const double *x, const double *y, const int first, const double xv)
+{
+    if(xv <= x[first]) return y[first];
+    for(int k = first + 1; k < N_RC_GRID; k++) {
+        if(xv <= x[k]) return y[k-1] + (y[k] - y[k-1]) * (xv - x[k-1]) / (x[k] - x[k-1]);
+    }
+    return y[N_RC_GRID - 1];
+}
+
+/*
+ * Mass-weighted potential of the hot gas and its R2_hot_av, from the grid.
+ * Beta profile: enclosed mass ~ x - c_beta atan(x / c_beta), x = r / Rvir,
+ * R2_hot_av = (Rvir c_beta^2 cb 0.15343)^2 (DarkSage).  CGM regime: SAGE26's
+ * rho ~ r^-1.4 on [0.1, 1] Rvir, R2_hot_av = 1 / <1/r^2>.
+ */
+static void hot_gas_energetics(struct GALAXY *g, const struct rc_grid *gr, const double c_beta, const int cgm_regime)
+{
+    const double Rvir = g->Rvir;
+    double pot = 0.0, mass = 0.0, inv_r2 = 0.0;
+    for(int k = gr->first; k < N_RC_GRID - 1; k++) {
+        double x0 = gr->r[k] / Rvir, x1 = gr->r[k+1] / Rvir;
+        if(x0 >= 1.0) break;
+        if(x1 > 1.0) x1 = 1.0;
+        double dm;
+        if(cgm_regime) {
+            if(x1 <= CGM_R0_FRAC) continue;
+            if(x0 < CGM_R0_FRAC) x0 = CGM_R0_FRAC;
+            dm = (pow(x1, 3.0 - CGM_ALPHA) - pow(x0, 3.0 - CGM_ALPHA)) / (3.0 - CGM_ALPHA);
+            inv_r2 += dm / (x0 * x1);
+        } else {
+            dm = (x1 - c_beta * atan(x1 / c_beta)) - (x0 - c_beta * atan(x0 / c_beta));
+        }
+        const double phi_mid = 0.5 * (gr->phi[k] + gr->phi[k+1]);
+        pot += ((phi_mid < 0.0) ? phi_mid : 0.0) * dm;
+        mass += dm;
+    }
+    if(mass > 0.0) g->HotGasPotential = (float)(pot / mass);
+
+    if(cgm_regime) {
+        if(inv_r2 > 0.0) g->R2_hot_av = (float)(Rvir * Rvir * mass / inv_r2);
+    } else {
+        const double cb_term = 1.0 / (1.0 - c_beta * atan(1.0 / c_beta));
+        const double r_hot = Rvir * c_beta * c_beta * cb_term * DS_R2_HOT_COEFF;
+        g->R2_hot_av = (float)(r_hot * r_hot);
+    }
+}
+
+/* Radius where rotational support f_rot = v / sqrt(v^2 + sigma^2) reaches 0.5, as an exponential
+ * scale (DarkSage update_rotation_support_scale_radius()); gas-only annuli use the cold-gas dispersion */
 static void update_rotation_support_scale_radius(const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
     double rad_old = 0.0, f_rot_old = 0.0;
-    const double default_sigma = 8.0e5 / run_params->UnitVelocity_in_cm_per_s;   /* 8 km/s */
+    const double sigma_gas = darksage_cold_gas_dispersion(run_params->ZZ[galaxies[p].SnapNum], run_params);
 
     for(int i = 0; i < N_BINS; i++) {
         const double r_in = galaxies[p].DiscRadii[i];
@@ -281,11 +245,10 @@ static void update_rotation_support_scale_radius(const int p, struct GALAXY *gal
         if(rad <= 0.0) continue;
 
         const double v_circ = 0.5 * (run_params->DiscBinEdge[i] + run_params->DiscBinEdge[i+1]) / rad;
-        const double sigma = (galaxies[p].DiscStars[i] > 0.0) ? galaxies[p].VelDispStars[i] : default_sigma;
-        const double v2_tot = v_circ * v_circ + sigma * sigma;
-        const double f_rot = (v2_tot > 0.0) ? v_circ / sqrt(v2_tot) : 0.0;
+        const double sigma = (galaxies[p].DiscStars[i] > 0.0) ? galaxies[p].VelDispStars[i] : sigma_gas;
+        const double f_rot = v_circ / sqrt(v_circ * v_circ + sigma * sigma);
 
-        if(f_rot >= 0.5 && f_rot > f_rot_old && rad > rad_old) {
+        if(f_rot >= 0.5 && f_rot > f_rot_old) {
             const double rad_50 = rad - (f_rot - 0.5) / (f_rot - f_rot_old) * (rad - rad_old);
             galaxies[p].RotSupportScaleRadius = rad_50 * 1.442695;   /* -1/ln(0.5) */
             return;
@@ -298,126 +261,157 @@ static void update_rotation_support_scale_radius(const int p, struct GALAXY *gal
         ? -rad_old / log(1.0 - f_rot_old) : galaxies[p].DiskScaleRadius;
 }
 
-/* Strictly increasing radii, capped at Rvir_cap */
-static void enforce_monotonic_radii(const int p, const double Rvir_cap, struct GALAXY *galaxies)
-{
-    const double dr_min = 0.001 * Rvir_cap;
-    for(int i = 1; i < N_BINS + 1; i++) {
-        if(galaxies[p].DiscRadii[i] <= galaxies[p].DiscRadii[i-1]) {
-            galaxies[p].DiscRadii[i] = galaxies[p].DiscRadii[i-1] + dr_min;
-        }
-        if(galaxies[p].DiscRadii[i] > Rvir_cap) galaxies[p].DiscRadii[i] = Rvir_cap;
-    }
-}
-
+/*
+ * update_disc_radii -- annulus radii, potentials and (BulgeSizeOn == 4) bulge
+ * sizes of galaxy p from its rotation curve (DarkSage update_disc_radii()).
+ *
+ * Algorithm:
+ *   1. Disc scale radii and the rotation-support scale radius from the annuli.
+ *   2. Halo: the dark matter left after the baryons, NFW with the SAGE26
+ *      concentration (ConcentrationOn) or Dutton & Maccio (2014) x Di Cintio
+ *      et al. (2014); c_beta(z) of the hot halo.
+ *   3. If the galaxy has a disc (B/T < 1), build the grid inwards from
+ *      max(10 j_max / Vvir, Rvir): enclosed spherical mass (halo, bulges, hot
+ *      gas, black hole), the two discs, V_rot^2 = f_support V_circ^2 and
+ *      j = V_rot r.  If the outermost j is below j_max, the radius grows x10.
+ *      The potential is integrated inwards with dPhi/dr = V_circ^2 / r.
+ *   4. Annulus edges at j = DiscBinEdge[i], their potentials, the hot gas's
+ *      mass-weighted potential and R2_hot_av, the potential at Rvir, and the
+ *      bulge Jeans sizes (BulgeSizeOn == 4).
+ */
 void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_data *halos,
                        const struct params *run_params)
 {
-    if(galaxies[p].Vvir <= 0.0 || galaxies[p].Rvir <= 0.0) return;
+    struct GALAXY *g = &galaxies[p];
+    (void)halos;
+    if(g->Vvir <= 0.0 || g->Rvir <= 0.0 || g->Mvir <= 0.0) return;
 
-    /* Current (possibly stripped) virial radius; orphans keep their last Rvir */
-    double current_Rvir = get_virial_radius(galaxies[p].HaloNr, halos, run_params);
-    if(galaxies[p].Type == 2 || current_Rvir <= 0.0) current_Rvir = galaxies[p].Rvir;
-
-    const double Rvir = galaxies[p].Rvir;
-    const double Vvir = galaxies[p].Vvir;
+    const double Rvir = g->Rvir;
     const double G = run_params->G;
+    const double z = run_params->ZZ[g->SnapNum];
 
-    galaxies[p].StellarDiscScaleRadius = disc_scaleradius(p, galaxies[p].DiscStars, galaxies);
-    galaxies[p].GasDiscScaleRadius = disc_scaleradius(p, galaxies[p].DiscGas, galaxies);
+    /* Step 1: disc and rotation-support scale radii */
+    g->StellarDiscScaleRadius = disc_scaleradius(p, g->DiscStars, galaxies);
+    g->GasDiscScaleRadius = disc_scaleradius(p, g->DiscGas, galaxies);
     update_rotation_support_scale_radius(p, galaxies, run_params);
 
     double DiscStars = 0.0, DiscGas = 0.0;
     for(int i = 0; i < N_BINS; i++) {
-        DiscStars += galaxies[p].DiscStars[i];
-        DiscGas += galaxies[p].DiscGas[i];
+        DiscStars += g->DiscStars[i];
+        DiscGas += g->DiscGas[i];
     }
 
-    /* Hot-phase mass for the beta profile: whichever halo reservoir is in use plus the fountain/outflow gas */
-    const double M_hot_total = galaxies[p].HotGas + galaxies[p].CGMgas + galaxies[p].FountainGas + galaxies[p].OutflowGas;
-
-    double M_DM = galaxies[p].Mvir - (M_hot_total + galaxies[p].ColdGas + galaxies[p].StellarMass
-                                      + galaxies[p].BlackHoleMass + galaxies[p].ICS);
+    /* Step 2: halo and hot gas */
+    const double M_hot_total = g->HotGas + g->CGMgas + g->FountainGas + g->OutflowGas;
+    double M_DM = g->Mvir - (M_hot_total + g->ColdGas + g->StellarMass + g->BlackHoleMass + g->ICS);
     if(M_DM < 0.0) M_DM = 0.0;
 
-    /* NFW concentration, Dutton & Maccio (2014) */
-    const double z_snap = run_params->ZZ[halos[galaxies[p].HaloNr].SnapNum];
-    double z = z_snap;
-    if(z > 5.0) z = 5.0;
-    const double a_conc = 0.520 + (0.905 - 0.520) * exp(-0.617 * pow(z, 1.21));
-    const double b_conc = -0.101 + 0.026 * z;
-    const double log_Mvir = log10(galaxies[p].Mvir * run_params->UnitMass_in_g / SOLAR_MASS) - 12.0;
-    const double r_s = Rvir / pow(10.0, a_conc + b_conc * log_Mvir);
-    galaxies[p].HaloScaleRadius = r_s;
-
-    double rho_norm = M_DM / (log(1.0 + Rvir / r_s) - Rvir / (Rvir + r_s));
-    if(rho_norm < 0.0) rho_norm = 0.0;
-
-    const double total_stellar_gas = galaxies[p].StellarMass + galaxies[p].ColdGas;
-    const double BTT = (total_stellar_gas > 0.0) ? galaxies[p].BulgeMass / total_stellar_gas : 0.0;
-
-    if(galaxies[p].Mvir <= 0.0 || BTT >= 1.0) {
-        /* No disc: flat rotation curve */
-        for(int i = 0; i < N_BINS + 1; i++) {
-            const double r = run_params->DiscBinEdge[i] / Vvir;
-            galaxies[p].DiscRadii[i] = (r > current_Rvir) ? current_Rvir : r;
+    double conc;
+    if(run_params->ConcentrationOn > 0 && g->Concentration > 0.0f) {
+        conc = g->Concentration;
+    } else {
+        const double zc = (z > 5.0) ? 5.0 : z;
+        const double a_conc = 0.520 + (0.905 - 0.520) * exp(-0.617 * pow(zc, 1.21));
+        const double b_conc = -0.101 + 0.026 * zc;
+        conc = pow(10.0, a_conc + b_conc * (log10(g->Mvir * run_params->UnitMass_in_g / SOLAR_MASS) - 12.0));
+        if(g->Type == 0 && g->StellarMass > 0.0) {
+            const double X = log10(g->StellarMass / g->Mvir);
+            conc *= 1.0 + 3.0e-5 * exp(3.4 * (X + 4.5));   /* Di Cintio et al. (2014b) */
         }
-        enforce_monotonic_radii(p, current_Rvir, galaxies);
-        for(int i = 0; i < N_BINS + 1; i++) {
-            galaxies[p].Potential[i] = darksage_nfw_potential(p, galaxies[p].DiscRadii[i], galaxies, run_params);
+    }
+    const double r_s = Rvir / conc;
+    g->HaloScaleRadius = (float)r_s;
+    const double rho_norm = M_DM / (log(1.0 + Rvir / r_s) - Rvir / (Rvir + r_s));
+
+    double c_beta = 0.20 * exp(-1.5 * z) - 0.039 * z + 0.28;
+    if(c_beta < DS_MIN_C_BETA) c_beta = DS_MIN_C_BETA;
+    g->c_beta = (float)c_beta;
+    const double hot_norm = M_hot_total / (1.0 - c_beta * atan(1.0 / c_beta));
+
+    const double total_stellar_gas = g->StellarMass + g->ColdGas;
+    const double BTT = (total_stellar_gas > 0.0) ? g->BulgeMass / total_stellar_gas : 0.0;
+    if(BTT >= 1.0) return;   /* no disc: keep the last radii and potentials */
+
+    /* Hernquist bulges, normalised to their mass within Rvir */
+    const double a_SB = hernquist_a_from_half_mass((g->InstabilityBulgeRadius > 0.0f) ? g->InstabilityBulgeRadius : g->BulgeRadius, Rvir);
+    const double a_CB = hernquist_a_from_half_mass((g->MergerBulgeRadius > 0.0f) ? g->MergerBulgeRadius : g->BulgeRadius, Rvir);
+    const double M_SB_inf = g->InstabilityBulgeMass * ((Rvir + a_SB) / Rvir) * ((Rvir + a_SB) / Rvir);
+    const double M_CB_inf = g->MergerBulgeMass * ((Rvir + a_CB) / Rvir) * ((Rvir + a_CB) / Rvir);
+
+    double a_sdisc = g->StellarDiscScaleRadius, a_gdisc = g->GasDiscScaleRadius;
+    if(a_sdisc <= 0.0) a_sdisc = g->DiskScaleRadius;
+    if(a_gdisc <= 0.0) a_gdisc = g->DiskScaleRadius;
+    const double r_support = (g->RotSupportScaleRadius > 0.0f) ? g->RotSupportScaleRadius : g->DiskScaleRadius;
+
+    /* Step 3: the grid, from the outside in */
+    struct rc_grid gr;
+    double f_sup[N_RC_GRID], M_out = 0.0;
+    int n_grow = 0;
+    double r = 10.0 * run_params->DiscBinEdge[N_BINS] / g->Vvir;
+    if(r < Rvir) r = Rvir;
+    gr.r[0] = gr.j[0] = 0.0;
+    gr.first = 0;
+    int i;
+    for(i = N_RC_GRID - 1; i > 0; i--) {
+        const double rrat = r / r_s;
+        if(rrat < RC_MIN_RRAT) { gr.first = i + 1; break; }
+        gr.r[i] = r;
+        const double x = r / Rvir;
+        double M_int = rho_norm * (log(1.0 + rrat) - rrat / (1.0 + rrat));
+        if(M_int < 0.0) M_int = 0.0;
+        M_int += M_SB_inf * (r / (r + a_SB)) * (r / (r + a_SB)) + M_CB_inf * (r / (r + a_CB)) * (r / (r + a_CB));
+        M_int += hot_norm * (x - c_beta * atan(x / c_beta)) + g->BlackHoleMass;
+        double v2 = G * M_int / r;
+        if(DiscStars > 0.0 && a_sdisc > 0.0) v2 += G * DiscStars / Rvir * v2_disc_cterm(x, Rvir / a_sdisc);
+        if(DiscGas > 0.0 && a_gdisc > 0.0) v2 += G * DiscGas / Rvir * v2_disc_cterm(x, Rvir / a_gdisc);
+
+        double f = 1.0 - exp(-r / r_support);
+        if(f < F_SUPPORT_MIN) f = F_SUPPORT_MIN;
+        f_sup[i] = f;
+        gr.j[i] = sqrt(f * v2) * r;
+
+        if(i == N_RC_GRID - 1) {
+            M_out = M_int;
+            gr.phi[i] = -G * M_out / r;   /* zero point: matches the NFW potential beyond Rvir */
+            if(gr.j[i] < run_params->DiscBinEdge[N_BINS] && n_grow < RC_MAX_GROW) {
+                r *= 10.0;   /* grid must reach j_max */
+                n_grow++;
+                i++;
+                continue;
+            }
+        } else {
+            if(!(gr.j[i] < gr.j[i+1])) gr.j[i] = 0.999 * gr.j[i+1];   /* keep j(r) invertible */
+            gr.phi[i] = gr.phi[i+1] - (gr.r[i+1] - gr.r[i]) * 0.5
+                        * (gr.j[i+1] * gr.j[i+1] / (f_sup[i+1] * gr.r[i+1] * gr.r[i+1] * gr.r[i+1]) + v2 / r);
         }
-        update_hot_energetics(p, z_snap, galaxies, run_params);
-        return;
+        r /= run_params->ExponentBin;
     }
+    if(i == 0) gr.phi[0] = gr.phi[1];   /* the potential flattens at the centre */
 
-    const double v_max = (galaxies[p].Vmax > Vvir) ? 2.0 * galaxies[p].Vmax : 2.0 * Vvir;
-    const double c_beta = galaxies[p].c_beta;
-    double a_stars = galaxies[p].StellarDiscScaleRadius;
-    double a_gas = galaxies[p].GasDiscScaleRadius;
-    if(a_stars <= 0.0) a_stars = galaxies[p].DiskScaleRadius;
-    if(a_gas <= 0.0) a_gas = galaxies[p].DiskScaleRadius;
-
-    const double r_min = (0.01 / 1000.0 > 0.001 * current_Rvir) ? 0.01 / 1000.0 : 0.001 * current_Rvir;
-
-    const struct rotation_curve rc = {
-        G, rho_norm, r_s,
-        galaxies[p].BulgeMass, galaxies[p].BulgeRadius,
-        DiscStars, a_stars, DiscGas, a_gas,
-        M_hot_total, c_beta, Rvir
-    };
-
-    for(int i = 0; i < N_BINS + 1; i++) {
-        const double j = run_params->DiscBinEdge[i];
-        double r = j / Vvir;   /* flat-curve initial guess */
-
-        /* Iterate j = r V_circ(r) */
-        for(int iter = 0; iter < 20; iter++) {
-            if(r <= 0.0) { r = j / Vvir; break; }
-
-            double V_circ = sqrt(circular_velocity2(&rc, r));
-            if(V_circ > v_max) V_circ = v_max;
-            if(V_circ < 0.1 * Vvir) V_circ = 0.1 * Vvir;
-
-            const double r_new = j / V_circ;
-            const int converged = fabs(r_new - r) < 1.0e-6 * r;
-            r = r_new;
-            if(converged) break;
-        }
-
-        if(r > current_Rvir) r = current_Rvir;
-        if(r < r_min && j > 0.0) r = r_min;
-        galaxies[p].DiscRadii[i] = r;
+    /* Step 4: annuli, potentials, hot gas, bulges */
+    g->DiscRadii[0] = 0.0f;
+    for(int k = 1; k < N_BINS + 1; k++) {
+        g->DiscRadii[k] = (float)grid_interp(gr.j, gr.r, gr.first, run_params->DiscBinEdge[k]);
+        if(g->DiscRadii[k] <= g->DiscRadii[k-1]) g->DiscRadii[k] = 1.0001f * g->DiscRadii[k-1] + 1.0e-9f;
+        g->Potential[k] = (float)grid_interp(gr.r, gr.phi, gr.first, g->DiscRadii[k]);
     }
+    g->Potential[0] = (float)gr.phi[gr.first];
 
-    enforce_monotonic_radii(p, current_Rvir, galaxies);
-
-    for(int i = 0; i < N_BINS + 1; i++) {
-        galaxies[p].Potential[i] = darksage_nfw_potential(p, galaxies[p].DiscRadii[i], galaxies, run_params);
-    }
-    update_hot_energetics(p, z_snap, galaxies, run_params);
+    hot_gas_energetics(g, &gr, c_beta, run_params->CGMrecipeOn == 1 && g->Regime == 0);
+    const double phi_rvir = grid_interp(gr.r, gr.phi, gr.first, Rvir);
+    g->EjectedPotential = (float)((phi_rvir > 0.9999 * g->HotGasPotential) ? phi_rvir : 0.9999 * g->HotGasPotential);
 
     if(run_params->BulgeSizeOn == 4) {
-        darksage_bulge_sizes(p, &rc, galaxies, run_params);
+        if(g->InstabilityBulgeMass > 0.0f) {
+            const double rh = darksage_bulge_half_mass_radius(&gr, g->VelDispBulge, 0.0, Rvir);
+            if(rh > 0.0) g->InstabilityBulgeRadius = (float)rh;
+        }
+        if(g->MergerBulgeMass > 0.0f) {
+            const double j2 = g->SpinMergerBulge[0] * g->SpinMergerBulge[0] + g->SpinMergerBulge[1] * g->SpinMergerBulge[1]
+                              + g->SpinMergerBulge[2] * g->SpinMergerBulge[2];
+            const double rh = darksage_bulge_half_mass_radius(&gr, g->VelDispMergerBulge, j2, Rvir);
+            if(rh > 0.0) g->MergerBulgeRadius = (float)rh;
+        }
         get_bulge_radius(p, galaxies, run_params);
     }
 }
