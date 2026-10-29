@@ -55,9 +55,10 @@ static const int RC_MAX_GROW = 10;
 /* Floor on the rotation-support fraction (DarkSage) */
 static const double F_SUPPORT_MIN = 1.0e-5;
 
-/* Mass-percentile radii of an exponential disc, as multiples of the scale length's fit */
-static const double PERCENT_VALUES[9]     = {0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
-static const double PERCENT_CONVERSION[9] = {0.3567, 0.4214, 0.4765, 0.5268, 0.5752, 0.6244, 0.6785, 0.7491, 0.8684};
+/* An exponential disc encloses 10%, 20%, ..., 90% of its mass within PERCENT_RADIUS
+ * scale lengths, so r_d = r_x / PERCENT_RADIUS (DarkSage main.c DiscScalePercentConversion) */
+static const double PERCENT_VALUES[9] = {0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
+static const double PERCENT_RADIUS[9] = {0.531812, 0.824388, 1.09735, 1.37642, 1.67835, 2.02231, 2.43922, 2.99431, 3.88927};
 
 /* DarkSage minimum core radius of the hot-gas beta profile (MIN_C_BETA, core_allvars.h) */
 static const double DS_MIN_C_BETA = 0.05;
@@ -93,39 +94,40 @@ double darksage_nfw_potential(const int p, const double r, const struct GALAXY *
     return -run_params->G * galaxies[p].Mvir / r * log(1.0 + r / rs) / norm;
 }
 
-/* Scale length from the radii enclosing 10..90% of an annulus mass distribution */
-static double disc_scaleradius(const int p, const float mass[N_BINS], const struct GALAXY *galaxies)
+/*
+ * Exponential scale length of an annulus mass distribution (DarkSage
+ * update_stellardisc_scaleradius()): the mean over x = 10%, ..., 90% of
+ * r_x / PERCENT_RADIUS[x], r_x interpolated from the cumulative mass.  An empty
+ * disc keeps its current value (the disc scale radius if it has none).
+ */
+static double disc_scaleradius(const float mass[N_BINS], const double current, const struct GALAXY *g)
 {
     double total = 0.0;
     for(int i = 0; i < N_BINS; i++) total += mass[i];
-    if(total <= 0.0) return galaxies[p].DiskScaleRadius;
+    if(total <= 0.0) return (current > 0.0) ? current : g->DiskScaleRadius;
 
     double cum[N_BINS + 1];
     cum[0] = 0.0;
     for(int i = 0; i < N_BINS; i++) cum[i+1] = cum[i] + mass[i] / total;
 
     double Rscale_sum = 0.0;
-    int n_found = 0, i_min = 1;
+    int i_min = 1;
     for(int j = 0; j < 9; j++) {
         for(int i = i_min; i < N_BINS + 1; i++) {
             if(cum[i] >= PERCENT_VALUES[j]) {
                 const double dcum = cum[i] - cum[i-1];
                 if(dcum > 0.0) {
-                    const double r = (galaxies[p].DiscRadii[i] * (PERCENT_VALUES[j] - cum[i-1])
-                                      + galaxies[p].DiscRadii[i-1] * (cum[i] - PERCENT_VALUES[j])) / dcum;
-                    Rscale_sum += r * PERCENT_CONVERSION[j];
-                    n_found++;
+                    const double r = (g->DiscRadii[i] * (PERCENT_VALUES[j] - cum[i-1])
+                                      + g->DiscRadii[i-1] * (cum[i] - PERCENT_VALUES[j])) / dcum;
+                    Rscale_sum += r / PERCENT_RADIUS[j];
                 }
                 i_min = i;
                 break;
             }
         }
     }
-
-    double rs = (n_found > 0) ? Rscale_sum / n_found : galaxies[p].DiskScaleRadius;
-    /* Floor at 1% of Rvir */
-    if(galaxies[p].Rvir > 0.0 && rs < 0.01 * galaxies[p].Rvir) rs = 0.01 * galaxies[p].Rvir;
-    return rs;
+    const double rs = Rscale_sum / 9.0;
+    return (rs > 0.0) ? rs : g->DiskScaleRadius;
 }
 
 /* Hernquist scale length a whose mass within Rvir is half inside r_half (inverts the
@@ -291,8 +293,8 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     const double z = run_params->ZZ[g->SnapNum];
 
     /* Step 1: disc and rotation-support scale radii */
-    g->StellarDiscScaleRadius = disc_scaleradius(p, g->DiscStars, galaxies);
-    g->GasDiscScaleRadius = disc_scaleradius(p, g->DiscGas, galaxies);
+    g->StellarDiscScaleRadius = (float)disc_scaleradius(g->DiscStars, g->StellarDiscScaleRadius, g);
+    g->GasDiscScaleRadius = (float)disc_scaleradius(g->DiscGas, g->GasDiscScaleRadius, g);
     update_rotation_support_scale_radius(p, galaxies, run_params);
 
     double DiscStars = 0.0, DiscGas = 0.0;
