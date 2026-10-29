@@ -759,7 +759,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     // FIRE velocity/redshift scaling (Muratov et al. 2015) -- pre-computed once
     // and reused for both reheating and ejection.
     double fire_scaling = 0.0;
-    if(run_params->FIREmodeOn == 1 && run_params->SupernovaRecipeOn == 1) {
+    if(run_params->FIREmodeOn == 1 && run_params->SupernovaRecipeOn >= 1) {
         const double z_fire = run_params->ZZ[galaxies[merger_centralgal].SnapNum];
         const double vc_fire = galaxies[merger_centralgal].Vvir;
         if(vc_fire > 0.0 && z_fire >= 0.0) {
@@ -772,7 +772,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     }
 
     // this bursting results in SN feedback on the cold/hot gas
-    if(run_params->SupernovaRecipeOn == 1) {
+    if(run_params->SupernovaRecipeOn >= 1) {
         if(run_params->FIREmodeOn == 1) {
             reheated_mass = capped_eta_reheat(
                 run_params->FeedbackReheatingEpsilon * fire_scaling,
@@ -794,7 +794,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     }
 
     // determine ejection
-    if(run_params->SupernovaRecipeOn == 1) {
+    if(run_params->SupernovaRecipeOn >= 1) {
         if(galaxies[merger_centralgal].Vvir > 0.0) {
             if(run_params->FIREmodeOn == 1) {
                 // FIRE energy-based ejection; fire_scaling pre-computed above
@@ -868,7 +868,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         }
         darksage_remove_disc_gas(merger_centralgal,
                                  (1.0 - run_params->RecycleFraction) * stars
-                                 + ((run_params->SupernovaRecipeOn == 1) ? reheated_mass : 0.0),
+                                 + ((run_params->SupernovaRecipeOn >= 1) ? reheated_mass : 0.0),
                                  burst_weight, galaxies);
     }
 

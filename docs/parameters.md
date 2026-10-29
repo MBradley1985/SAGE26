@@ -60,7 +60,7 @@ optional parameters take the listed default if omitted.
 |-----------|------|----|---------|-------------------|
 | `SFprescription` | int | no | `1` | Star formation prescription: 0=Croton+06; 1=Blitz & Rosolowsky 06 H₂; 2=Somerville+25 SFR; 3=Somerville+25 SFR+H₂; 4=Krumholz & Dekel 12; 5=KMT 09; 6=Krumholz 13; 7=Gnedin & Draine 14. |
 | `AGNrecipeOn` | int | no | `2` | AGN feedback: 0=off; 1=empirical; 2=Bondi-Hoyle; 3=cold cloud accretion. |
-| `SupernovaRecipeOn` | 0/1 | no | `1` | SN feedback: 0=off; 1=Croton+16 reheating/ejection. |
+| `SupernovaRecipeOn` | 0-2 | no | `1` | SN feedback: 0=off; 1=Croton+16 reheating/ejection (FIRE scaling with FIREmodeOn); in DarkSAGEMode the gas removed from each annulus is split between the fountain and outflowing reservoirs by the DarkSage wind-speed test (Stevens et al. 2024 Sec. 9). 2=DarkSage energy-driven feedback, the SN energy (EtaSN x EnergySN per unit mass formed) sets the reheated and ejected masses in each annulus; DarkSAGEMode = 1 only. |
 | `ReionizationOn` | 0/1 | no | `1` | Reionization suppression of infall: 0=off; 1=Kravtsov+04 analytic fit. |
 | `DiskInstabilityOn` | 0/1 | no | `1` | Disk instability: 0=off; 1=Toomre criterion drives bulge and BH growth. |
 | `CGMrecipeOn` | 0/1 | no | `1` | Two-regime CGM model: 0=off (classical C16 cooling only, including its rapid cold-accretion branch at `r_cool > R_vir`); 1=on. |

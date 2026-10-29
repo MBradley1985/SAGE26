@@ -540,7 +540,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     {
         const struct { const char *name; int32_t value; int32_t min; int32_t max; } option_ranges[] = {
             {"AGNrecipeOn",            run_params->AGNrecipeOn,            0, 3},
-            {"SupernovaRecipeOn",      run_params->SupernovaRecipeOn,      0, 1},
+            {"SupernovaRecipeOn",      run_params->SupernovaRecipeOn,      0, 2},
             {"ReionizationOn",         run_params->ReionizationOn,         0, 1},
             {"DiskInstabilityOn",      run_params->DiskInstabilityOn,      0, 1},
             {"CGMrecipeOn",            run_params->CGMrecipeOn,            0, 1},
@@ -577,6 +577,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     }
     /* In DarkSAGEMode the disc annuli replace the radial integration, and mode 5 (the DarkSage
        H2 law) only exists there. */
+    if(run_params->SupernovaRecipeOn == 2 && run_params->DarkSAGEMode != 1) {
+        fprintf(stderr, "Error: SupernovaRecipeOn = 2 (DarkSage energy-driven feedback) needs DarkSAGEMode = 1.\n");
+        ABORT(EXIT_FAILURE);
+    }
     if(run_params->H2DepletionMode == 5 && run_params->DarkSAGEMode != 1) {
         fprintf(stderr, "Error: H2DepletionMode = 5 (DarkSage H2 law) needs DarkSAGEMode = 1.\n");
         ABORT(EXIT_FAILURE);

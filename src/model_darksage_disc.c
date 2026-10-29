@@ -6,6 +6,12 @@
  * Hernquist bulge, exponential stellar and gas discs and a beta-profile hot
  * halo (Stevens, Croton & Mutch 2016).  Radii are capped at the current Rvir.
  *
+ * The same NFW potential sets the energetics DarkSage's feedback and
+ * reincorporation use (Stevens et al. 2024, Secs. 9-10): the potential at each
+ * annulus edge, the mass-weighted potential of the hot halo (DarkSage's beta
+ * profile, or SAGE26's rho ~ r^-1.4 CGM profile for CGM-regime haloes) and the
+ * potential at Rvir that ejected gas must climb to.
+ *
  * SAGE26 -- released under MIT (see LICENSE).
  */
 
@@ -30,16 +36,98 @@ static inline double v2_disc_cterm(const double x, const double c)
     return (c + 4.8 * c * exp(-0.35 * cx - 3.5 * inv_cx)) / (cx + inv_cx * inv_cx + 2.0 * sqrt(inv_cx));
 }
 
-static double NFW_potential(const int p, const double r, const struct GALAXY *galaxies, const struct params *run_params)
+/* DarkSage minimum core radius of the hot-gas beta profile (MIN_C_BETA, core_allvars.h) */
+static const double DS_MIN_C_BETA = 0.05;
+/* Coefficient of DarkSage's R2_hot_av for the beta profile (model_cooling.c) */
+static const double DS_R2_HOT_COEFF = 0.15343;
+/* Carr et al. (2023) CGM profile used by the SAGE26 CGM regime (model_cooling_heating.c):
+ * rho ~ r^-CGM_ALPHA between CGM_R0_FRAC * Rvir and Rvir */
+static const double CGM_ALPHA = 1.4;
+static const double CGM_R0_FRAC = 0.1;
+/* Radial sampling of the hot-gas profile for its mass-weighted potential: log-spaced
+ * from PROFILE_R_MIN_FRAC * Rvir to Rvir */
+#define N_PROFILE 200
+static const double PROFILE_R_MIN_FRAC = 1.0e-4;
+
+/*
+ * NFW potential at radius r [code units], normalised to Mvir within Rvir.
+ * At r = 0 it returns the finite central value -G Mvir / (r_s norm).
+ */
+double darksage_nfw_potential(const int p, const double r, const struct GALAXY *galaxies, const struct params *run_params)
 {
     const double rs = galaxies[p].HaloScaleRadius;
-    if(r <= 0.0 || rs <= 0.0) return 0.0;
+    if(r < 0.0 || rs <= 0.0) return 0.0;
 
     const double c = galaxies[p].Rvir / rs;
     const double norm = log(1.0 + c) - c / (1.0 + c);
     if(norm <= 0.0) return 0.0;
 
+    if(r == 0.0) return -run_params->G * galaxies[p].Mvir / (rs * norm);
     return -run_params->G * galaxies[p].Mvir / r * log(1.0 + r / rs) / norm;
+}
+
+/*
+ * update_hot_energetics -- potentials of the hot and ejected reservoirs.
+ *
+ * Follows DarkSage's update_disc_radii() (model_misc.c) and model_cooling.c:
+ *   c_beta      = max(0.05, 0.20 exp(-1.5 z) - 0.039 z + 0.28)
+ *   HotGasPotential = mass-weighted potential of the hot gas within Rvir:
+ *                 beta profile rho ~ 1 / (c_beta^2 + x^2), x = r / Rvir, whose
+ *                 enclosed mass grows as x - c_beta atan(x / c_beta);
+ *                 for CGM-regime haloes (CGMrecipeOn, Regime == 0) SAGE26's
+ *                 rho ~ r^-1.4 profile on [0.1, 1] Rvir instead.
+ *   R2_hot_av   = (Rvir c_beta^2 cb 0.15343)^2 for the beta profile (DarkSage);
+ *                 for the CGM profile 1 / <1/r^2>, the radius at which
+ *                 0.5 j^2 / r^2 equals its mass-weighted mean.
+ *   EjectedPotential = max(0.9999 HotGasPotential, Phi(Rvir)).
+ * Potentials come from the NFW halo alone, as Potential[] does here.
+ */
+static void update_hot_energetics(const int p, const double z, struct GALAXY *galaxies, const struct params *run_params)
+{
+    const double Rvir = galaxies[p].Rvir;
+    if(Rvir <= 0.0 || galaxies[p].HaloScaleRadius <= 0.0) return;
+
+    double c_beta = 0.20 * exp(-1.5 * z) - 0.039 * z + 0.28;
+    if(c_beta < DS_MIN_C_BETA) c_beta = DS_MIN_C_BETA;
+    galaxies[p].c_beta = (float)c_beta;
+
+    const int cgm_regime = (run_params->CGMrecipeOn == 1 && galaxies[p].Regime == 0);
+    const double x_min = cgm_regime ? CGM_R0_FRAC : PROFILE_R_MIN_FRAC;
+    const double dlnx = -log(x_min) / (N_PROFILE - 1);
+
+    /* Trapezoid sums over the profile's mass shells; for the beta profile the shell
+     * mass is the exact difference of x - c_beta atan(x / c_beta) */
+    double pot_sum = 0.0, inv_r2_sum = 0.0, mass_sum = 0.0;
+    double x_prev = x_min, phi_prev = darksage_nfw_potential(p, x_min * Rvir, galaxies, run_params);
+    for(int k = 1; k < N_PROFILE; k++) {
+        const double x = x_min * exp(k * dlnx);
+        const double phi = darksage_nfw_potential(p, x * Rvir, galaxies, run_params);
+        double dm;
+        if(cgm_regime) {
+            dm = (pow(x, 3.0 - CGM_ALPHA) - pow(x_prev, 3.0 - CGM_ALPHA)) / (3.0 - CGM_ALPHA);
+        } else {
+            dm = (x - c_beta * atan(x / c_beta)) - (x_prev - c_beta * atan(x_prev / c_beta));
+        }
+        pot_sum += 0.5 * (phi + phi_prev) * dm;
+        inv_r2_sum += dm / (x * x_prev);
+        mass_sum += dm;
+        x_prev = x;
+        phi_prev = phi;
+    }
+    if(mass_sum <= 0.0) return;
+
+    galaxies[p].HotGasPotential = (float)(pot_sum / mass_sum);
+    if(cgm_regime) {
+        galaxies[p].R2_hot_av = (float)(Rvir * Rvir * mass_sum / inv_r2_sum);
+    } else {
+        const double cb_term = 1.0 / (1.0 - c_beta * atan(1.0 / c_beta));
+        const double r_hot = Rvir * c_beta * c_beta * cb_term * DS_R2_HOT_COEFF;
+        galaxies[p].R2_hot_av = (float)(r_hot * r_hot);
+    }
+
+    const double phi_rvir = darksage_nfw_potential(p, Rvir, galaxies, run_params);
+    galaxies[p].EjectedPotential = (float)((phi_rvir > 0.9999 * galaxies[p].HotGasPotential)
+                                           ? phi_rvir : 0.9999 * galaxies[p].HotGasPotential);
 }
 
 /* Scale length from the radii enclosing 10..90% of an annulus mass distribution */
@@ -150,7 +238,8 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     if(M_DM < 0.0) M_DM = 0.0;
 
     /* NFW concentration, Dutton & Maccio (2014) */
-    double z = run_params->ZZ[halos[galaxies[p].HaloNr].SnapNum];
+    const double z_snap = run_params->ZZ[halos[galaxies[p].HaloNr].SnapNum];
+    double z = z_snap;
     if(z > 5.0) z = 5.0;
     const double a_conc = 0.520 + (0.905 - 0.520) * exp(-0.617 * pow(z, 1.21));
     const double b_conc = -0.101 + 0.026 * z;
@@ -171,6 +260,10 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
             galaxies[p].DiscRadii[i] = (r > current_Rvir) ? current_Rvir : r;
         }
         enforce_monotonic_radii(p, current_Rvir, galaxies);
+        for(int i = 0; i < N_BINS + 1; i++) {
+            galaxies[p].Potential[i] = darksage_nfw_potential(p, galaxies[p].DiscRadii[i], galaxies, run_params);
+        }
+        update_hot_energetics(p, z_snap, galaxies, run_params);
         return;
     }
 
@@ -228,8 +321,9 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     enforce_monotonic_radii(p, current_Rvir, galaxies);
 
     for(int i = 0; i < N_BINS + 1; i++) {
-        galaxies[p].Potential[i] = NFW_potential(p, galaxies[p].DiscRadii[i], galaxies, run_params);
+        galaxies[p].Potential[i] = darksage_nfw_potential(p, galaxies[p].DiscRadii[i], galaxies, run_params);
     }
+    update_hot_energetics(p, z_snap, galaxies, run_params);
 }
 
 /* ---------------------------------------------------------------------------

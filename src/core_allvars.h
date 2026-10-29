@@ -254,6 +254,12 @@ struct GALAXY
     float MetalsOutflowGas;          /* Metals in outflow gas */
     float FountainTime;              /* Time for fountain gas to return to hot gas */
     float OutflowTime;               /* Time for outflow to reach EjectedMass */
+    float OutflowSpecificEnergy;     /* Specific energy of the outflowing gas [(km/s)^2] */
+    float EjectedSpecificEnergy;     /* Specific energy of the ejected gas at turnaround [(km/s)^2] */
+    float ReincTime;                 /* Time for ejected gas to fall back into the fountain */
+    float HotGasPotential;           /* Mass-weighted potential of the hot (or CGM) gas [(km/s)^2] */
+    float EjectedPotential;          /* Potential at Rvir, reached by ejected gas [(km/s)^2] */
+    float prevRvir;                  /* Rvir at the previous snapshot [Mpc/h] */
 
     /* DarkSAGEMode: Enhanced disk physics */
     float VelDispStars[N_BINS];      /* Stellar velocity dispersion per annulus [km/s] */

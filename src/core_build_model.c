@@ -289,6 +289,7 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                     galaxies[ngal].Len = halos[halonr].Len;
                     galaxies[ngal].Vmax = halos[halonr].Vmax;
 
+                    galaxies[ngal].prevRvir = galaxies[ngal].Rvir;
                     const double new_Mvir = get_virial_mass(halonr, halos, run_params);
                     galaxies[ngal].deltaMvir = new_Mvir - galaxies[ngal].Mvir;
 
@@ -454,6 +455,12 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
     
     const double infallingGas = infall_recipe(centralgal, ngal, Zcurr, galaxies, run_params);
 
+    /* DarkSAGEMode: a halo that grew moves outflowing and ejected gas that can no longer
+     * reach the new Rvir into the fountain (DarkSage update_galactic_fountain_from_growth()) */
+    if(run_params->DarkSAGEMode == 1 && infallingGas > 0.0) {
+        darksage_fountain_from_growth(centralgal, galaxies, run_params);
+    }
+
     // We integrate things forward by using a number of intervals equal to STEPS
     // Adaptive timesteps: at high-z, snapshot spacing can exceed dynamical time
     // so we use more substeps when needed
@@ -532,13 +539,11 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
             if(p == centralgal) {
                 add_infall_to_hot(centralgal, infallingGas / effective_steps, galaxies, run_params);
 
-                if(run_params->ReIncorporationFactor > 0.0) {
-                    reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
-                }
-
-                /* FountainGas cycling: FountainGas → HotGas, OutflowGas → EjectedMass */
                 if(run_params->DarkSAGEMode == 1) {
-                    reincorporate_fountain_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
+                    /* DarkSage cycle: OutflowGas -> EjectedMass -> FountainGas -> HotGas / CGMgas */
+                    darksage_reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
+                } else if(run_params->ReIncorporationFactor > 0.0) {
+                    reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
                 }
 
             } else if(galaxies[p].Type == 1) {
