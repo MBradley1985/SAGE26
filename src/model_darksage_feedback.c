@@ -170,7 +170,10 @@ void darksage_feedback_masses(const int p, const int centralgal, const int i, do
     if(*stars > gas) *stars = gas;
     if(*stars <= 0.0 || gas <= 0.0) return;
 
-    /* SN energy of the stars formed: SAGE26's eta_SN SNe per unit mass of E_SN each */
+    /* SN energy of the stars formed: SAGE26's eta_SN SNe per unit mass of E_SN each.  DarkSage
+     * instead integrates its IMF (get_RecycleFraction_and_NumSNperMass(), Type Ia/II ratio 0.15),
+     * giving 1.282e-2 SNe per Msun over a population's lifetime, with EnergySN = 1.1e51 erg in its
+     * MTNG parameter file; set EtaSN and EnergySN to those values to compare with DarkSage. */
     double energy = *stars * run_params->EtaSNcode * run_params->EnergySNcode;
 
     const struct wind w = wind_kinematics(p, centralgal, i, galaxies, run_params);
