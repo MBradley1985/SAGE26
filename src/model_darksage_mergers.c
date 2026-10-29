@@ -143,10 +143,10 @@ static void merge_gas_major(const int t, const int p, const double dpos[3], cons
                             double j_t[3], double j_p[3], double *vr_t, double *vr_p,
                             struct GALAXY *galaxies, const struct params *run_params)
 {
-    /* Centre of momentum, weighting by the haloes' masses (baryons if a halo is gone) */
-    double m_t = galaxies[t].Mvir, m_p = galaxies[p].Mvir;
-    if(m_t <= 0.0) m_t = galaxies[t].StellarMass + galaxies[t].ColdGas;
-    if(m_p <= 0.0) m_p = galaxies[p].StellarMass + galaxies[p].ColdGas;
+    /* Centre of momentum, weighting by the host's mass inside the satellite's radius and the
+     * satellite's mass (DarkSage get_Mhost_internal(), get_satellite_mass()) */
+    const double m_p = darksage_satellite_mass(&galaxies[p]);
+    const double m_t = darksage_host_mass_within(&galaxies[t], sqrt(dot3(dpos, dpos)), m_p, run_params);
     const double f_t = (m_t + m_p > 0.0) ? m_t / (m_t + m_p) : 0.5;
     double r_p[3], r_t[3], v_p[3], v_t[3];
     for(int k = 0; k < 3; k++) {

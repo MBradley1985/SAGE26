@@ -170,6 +170,14 @@ void darksage_add_ics_radius(struct GALAXY *c, const double m, const double r)
     if(total > 0.0) c->ICSMeanRadius = (float)((c->ICSMeanRadius * c->ICS + r * m) / total);
 }
 
+/* Satellite mass: Mvir, but never below its baryons (DarkSage get_satellite_mass()) */
+double darksage_satellite_mass(const struct GALAXY *s)
+{
+    const double baryons = s->StellarMass + s->ColdGas + s->HotGas + s->CGMgas + s->BlackHoleMass + s->EjectedMass
+                           + s->FountainGas + s->OutflowGas + s->ICS;
+    return (s->Mvir > baryons) ? s->Mvir : baryons;
+}
+
 /* Physical distance between galaxies s and c (comoving positions, periodic box) */
 double darksage_satellite_radius(const struct GALAXY *c, const struct GALAXY *s, const struct params *run_params)
 {

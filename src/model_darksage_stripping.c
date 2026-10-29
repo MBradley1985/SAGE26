@@ -57,14 +57,6 @@ static void strip_annulus_gas(struct GALAXY *s, const int i, const double f, con
     s->DiscHI[i] -= f * s->DiscHI[i];
 }
 
-/* Satellite mass: Mvir, but never below its baryons (DarkSage get_satellite_mass()) */
-static double satellite_mass(const struct GALAXY *s)
-{
-    const double baryons = s->StellarMass + s->ColdGas + s->HotGas + s->CGMgas + s->BlackHoleMass + s->EjectedMass
-                           + s->FountainGas + s->OutflowGas + s->ICS;
-    return (s->Mvir > baryons) ? s->Mvir : baryons;
-}
-
 int darksage_ram_pressure_stripping(const int centralgal, const int gal, const double time, const int n_steps,
                                     struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -82,7 +74,7 @@ int darksage_ram_pressure_stripping(const int centralgal, const int gal, const d
     if(r_sat <= 0.0) return 0;
 
     /* Tidal radius */
-    const double M_sat = satellite_mass(s);
+    const double M_sat = darksage_satellite_mass(s);
     const double M_host = darksage_host_mass_within(c, r_sat, M_sat, run_params);
     const double dr = 0.01 * r_sat;
     const double dMdr = (darksage_host_mass_within(c, r_sat + dr, M_sat, run_params) - M_host) / dr;
