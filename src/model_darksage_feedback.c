@@ -60,6 +60,21 @@ static const double DS_METAL_ENTRAINMENT = 0.1;
  *   cannot; in between, ratio = reheated / ejected follows from the fraction
  *   of directions that escape.
  */
+/* Rotation speed of annulus i: mid-bin j over its mass-weighted mid radius */
+static double annulus_velocity(const struct GALAXY *g, const int i, const struct params *run_params)
+{
+    const double r_ann = sqrt(0.5 * (g->DiscRadii[i] * g->DiscRadii[i] + g->DiscRadii[i+1] * g->DiscRadii[i+1]));
+    return (r_ann > 0.0) ? 0.5 * (run_params->DiscBinEdge[i] + run_params->DiscBinEdge[i+1]) / r_ann : 0.0;
+}
+
+/* Specific energy of annulus i's cold gas: 0.5 (v_rot^2 + sigma_z^2) plus the mean potential of its edges */
+static double annulus_cold_energy(const struct GALAXY *g, const int i, const struct params *run_params)
+{
+    const double v_ann = annulus_velocity(g, i, run_params);
+    const double v_z = (DS_SIGMA_Z0_CGS + DS_SIGMA_Z1_CGS * run_params->ZZ[g->SnapNum]) / run_params->UnitVelocity_in_cm_per_s;
+    return 0.5 * (v_ann * v_ann + v_z * v_z + g->Potential[i] + g->Potential[i+1]);
+}
+
 enum wind_case { WIND_ALL_REHEATED, WIND_SPLIT, WIND_ALL_EJECTED };
 
 struct wind {
@@ -75,13 +90,10 @@ static struct wind wind_kinematics(const int p, const int centralgal, const int 
     const struct GALAXY *g = &galaxies[p];
     struct wind w = {WIND_ALL_REHEATED, 0.0, 0.0, 0.0, 0.0};
 
-    const double r_ann = sqrt(0.5 * (g->DiscRadii[i] * g->DiscRadii[i] + g->DiscRadii[i+1] * g->DiscRadii[i+1]));
-    const double v_ann = (r_ann > 0.0) ? 0.5 * (run_params->DiscBinEdge[i] + run_params->DiscBinEdge[i+1]) / r_ann : 0.0;
-    const double z = run_params->ZZ[g->SnapNum];
-    const double v_z = (DS_SIGMA_Z0_CGS + DS_SIGMA_Z1_CGS * z) / run_params->UnitVelocity_in_cm_per_s;
+    const double v_ann = annulus_velocity(g, i, run_params);
     const double v_therm2 = g->Vvir * g->Vvir;
 
-    w.cold_e = 0.5 * (v_ann * v_ann + v_z * v_z + g->Potential[i] + g->Potential[i+1]);
+    w.cold_e = annulus_cold_energy(g, i, run_params);
     w.reheat_e = darksage_hot_specific_energy(p, galaxies) - w.cold_e;
 
     const double v_wind2 = 2.0 * w.reheat_e - v_therm2;
@@ -275,4 +287,80 @@ void darksage_eject_hot(const int centralgal, double ejected_mass, struct GALAXY
     if(*hot_metals < 0.0f) *hot_metals = 0.0f;
     if(c->FountainGas < 0.0f) c->FountainGas = 0.0f;
     if(c->MetalsFountainGas < 0.0f) c->MetalsFountainGas = 0.0f;
+}
+
+/*
+ * darksage_quasar_wind -- quasar-mode feedback from black-hole growth BHaccrete,
+ * annulus by annulus (DarkSage quasar_mode_wind(); Stevens et al. 2024 Sec. 9.2).
+ *
+ * The wind energy is SAGE26's, QuasarModeEfficiency * 0.1 * BHaccrete c^2 (as
+ * quasar_mode_wind()); DarkSage uses RadiativeEfficiency * BHaccrete c^2 with
+ * RadiativeEfficiency = 0.40, i.e. QuasarModeEfficiency = 4.
+ *
+ * Algorithm:
+ *   1. The ejected gas leaves with specific energy e_ej = max(e_out,
+ *      EjectedPotential + 0.5 (Vvir^2 + j_hot^2 / R2_hot_av)), e_out that of
+ *      the gas already outflowing.
+ *   2. From the innermost annulus out, lift annulus k's gas from its own
+ *      specific energy to e_ej into the outflowing reservoir until the energy
+ *      runs out (all of it where e_ej is no higher than the annulus's).
+ *   3. Energy left over ejects hot-phase and fountain gas, at
+ *      e_ej - e_hot per unit mass (darksage_eject_hot()).
+ * ColdGas and MetalsColdGas are reset to the annulus sums.
+ */
+void darksage_quasar_wind(const int p, const double BHaccrete, struct GALAXY *galaxies, const struct params *run_params)
+{
+    struct GALAXY *g = &galaxies[p];
+    const double c_code = C / run_params->UnitVelocity_in_cm_per_s;
+    double energy = run_params->QuasarModeEfficiency * 0.1 * BHaccrete * c_code * c_code;
+    if(energy <= 0.0) return;
+
+    /* Step 1: specific energy of the wind's gas */
+    const double j_hot = 2.0 * g->Vvir * g->CoolScaleRadius;
+    const double hot_tk = 0.5 * (g->Vvir * g->Vvir + ((g->R2_hot_av > 0.0) ? j_hot * j_hot / g->R2_hot_av : 0.0));
+    const double hot_e = g->HotGasPotential + hot_tk;
+    double eject_e = g->EjectedPotential + hot_tk;
+    if(g->OutflowGas > 0.0f && g->OutflowSpecificEnergy > eject_e) eject_e = g->OutflowSpecificEnergy;
+
+    /* Step 2: blow out the disc from the centre */
+    for(int k = 0; k < N_BINS && energy > 0.0; k++) {
+        const double gas = g->DiscGas[k];
+        if(gas <= 0.0) continue;
+        double delta = eject_e - annulus_cold_energy(g, k, run_params);
+        if(delta < 0.0) delta = 0.0;
+        const double m_max = (delta > 0.0) ? energy / delta : gas;
+
+        if(m_max >= gas) {
+            darksage_add_to_outflow(p, gas, g->DiscGasMetals[k], eject_e, galaxies);
+            energy -= gas * delta;
+            g->DiscGas[k] = g->DiscGasMetals[k] = 0.0f;
+            g->DiscH2[k] = 0.0f;
+        } else {
+            const double Z = get_metallicity(gas, g->DiscGasMetals[k]);
+            darksage_add_to_outflow(p, m_max, Z * m_max, eject_e, galaxies);
+            g->DiscGas[k] -= m_max;
+            g->DiscGasMetals[k] -= Z * m_max;
+            energy = 0.0;
+        }
+    }
+    double gas_sum = 0.0, metals_sum = 0.0;
+    for(int k = 0; k < N_BINS; k++) {
+        gas_sum += g->DiscGas[k];
+        metals_sum += g->DiscGasMetals[k];
+    }
+    g->ColdGas = gas_sum;
+    g->MetalsColdGas = metals_sum;
+
+    /* Step 3: remaining energy ejects hot-phase gas */
+    const double delta_hot = eject_e - hot_e;
+    if(energy > 0.0 && delta_hot > 0.0) {
+        const int cgm = (run_params->CGMrecipeOn == 1 && g->Regime == 0);
+        const double pool = (cgm ? g->CGMgas : g->HotGas) + g->FountainGas;
+        double m_hot = energy / delta_hot;
+        if(m_hot > pool) m_hot = pool;
+        if(m_hot > 0.0) {
+            g->OutflowSpecificEnergy = (float)((g->OutflowGas * g->OutflowSpecificEnergy + m_hot * eject_e) / (g->OutflowGas + m_hot));
+            darksage_eject_hot(p, m_hot, galaxies, run_params);
+        }
+    }
 }

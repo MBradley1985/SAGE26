@@ -41,6 +41,10 @@ extern "C" {
                                          struct GALAXY *galaxies, const struct params *run_params);
     extern void darksage_add_to_outflow(const int centralgal, const double mass, const double metals,
                                         const double e_spec, struct GALAXY *galaxies);
+    /* Quasar-mode wind from black-hole growth BHaccrete, blowing gas out of the annuli from the centre
+     * into the outflowing reservoir, then hot gas with any energy left */
+    extern void darksage_quasar_wind(const int p, const double BHaccrete, struct GALAXY *galaxies,
+                                     const struct params *run_params);
     extern void darksage_eject_hot(const int centralgal, double ejected_mass, struct GALAXY *galaxies,
                                    const struct params *run_params);
 

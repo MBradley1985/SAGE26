@@ -24,6 +24,7 @@
 #include "model_mergers.h"
 #include "model_misc.h"
 #include "model_darksage_mergers.h"
+#include "model_darksage_feedback.h"
 
 #include "model_starformation_and_feedback.h"
 #include "model_disk_instability.h"
@@ -420,6 +421,12 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
  */
 void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *galaxies, const struct params *run_params)
 {
+    // DarkSAGEMode: the same energy, used annulus by annulus from the centre (DarkSage)
+    if(run_params->DarkSAGEMode == 1) {
+        darksage_quasar_wind(gal, BHaccrete, galaxies, run_params);
+        return;
+    }
+
     // work out total energy in quasar wind (eta*m*c^2)
     const double quasar_energy = run_params->QuasarModeEfficiency * 0.1 * BHaccrete * (C / run_params->UnitVelocity_in_cm_per_s) * (C / run_params->UnitVelocity_in_cm_per_s);
     const double cold_gas_energy = 0.5 * galaxies[gal].ColdGas * galaxies[gal].Vvir * galaxies[gal].Vvir;
@@ -428,14 +435,6 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
     if(quasar_energy > cold_gas_energy) {
         galaxies[gal].EjectedMass += galaxies[gal].ColdGas;
         galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsColdGas;
-
-        if(run_params->DarkSAGEMode == 1) {
-            for(int i = 0; i < N_BINS; i++) {
-                galaxies[gal].DiscGas[i] = 0.0f;
-                galaxies[gal].DiscGasMetals[i] = 0.0f;
-                galaxies[gal].DiscH2[i] = 0.0f;
-            }
-        }
 
         galaxies[gal].ColdGas = 0.0;
         galaxies[gal].MetalsColdGas = 0.0;

@@ -110,6 +110,7 @@ static double sink_unstable_gas(const int p, const int i, double unstable_gas, d
         j_split(i, gas_sink, run_params, &m_down, &m_up);
         if(i == 0) {
             g->BlackHoleMass += m_down;
+            g->QuasarModeBHaccretionMass += m_down;   /* instability-fed (quasar-mode) accretion */
             *bh_growth += m_down;
         } else {
             g->DiscGas[i-1] += m_down;
