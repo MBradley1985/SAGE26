@@ -141,6 +141,11 @@ float calculate_molecular_fraction_BR06(float gas_surface_density_msun_pc2, floa
  *      sigma = 8 km/s, their value for nearby disks) and t_ff,T = sqrt(3 pi^2 Q^2 /
  *      (32 (beta+1) phi_P)) / Omega with Q = 1, beta = 0 (flat rotation curve), phi_P = 3,
  *      Omega = v_circ / r.
+ *   5  DarkSage (Stevens et al. 2024 eq. 63): SFR = eps_H2 * M_H2 with the
+ *      fixed eps_H2 = 4.35e-4 Myr^-1 of the DarkSage source (SFE_H2 in
+ *      model_starformation_and_feedback.c; the paper quotes (2.35 Gyr)^-1),
+ *      after Bigiel et al. (2011).  It acts on M_H2, not M_mol, so the
+ *      returned t_dep is (1 / eps_H2) / HYDROGEN_MASS_FRAC.  DarkSAGEMode only.
  */
 static const double KMT09_TDEP_GYR     = 2.6;
 static const double KRUMHOLZ_SIGMA_GMC = 85.0;     /* Msun/pc^2 */
@@ -151,11 +156,15 @@ static const double GYR_PER_PC_KMS     = 9.7779e-4;    /* 1 pc / (km/s) in Gyr *
 static const double KDM12_Q            = 1.0;
 static const double KDM12_BETA         = 0.0;
 static const double KDM12_PHI_P        = 3.0;
+static const double DARKSAGE_EPS_H2_PER_GYR = 0.435;  /* 4.35e-4 Myr^-1 */
 
 double h2_depletion_time_gyr(const double sigma_gas, const double r_pc, const double v_circ, const int mode)
 {
     if(mode == 1) {
         return 1.0;
+    }
+    if(mode == 5) {
+        return 1.0 / (DARKSAGE_EPS_H2_PER_GYR * HYDROGEN_MASS_FRAC);
     }
     if(sigma_gas <= 0.0) {
         return 0.0;

@@ -494,7 +494,7 @@ struct save_info {
 /* H2DepletionMode (see docs/parameters.md): 0 off; 1-4 every H2 recipe forms stars at
  * SFR = M_mol / t_dep instead of eff M_H2 / t_dyn, with t_dep from
  *   1  nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9 */
-#define H2DEPLETIONMODE_MAX 4
+#define H2DEPLETIONMODE_MAX 5
 #define FG_TDEP(p)         ((p)->H2DepletionMode > 0)
 
 struct params
