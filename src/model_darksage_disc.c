@@ -139,6 +139,54 @@ static double hernquist_a_from_half_mass(const double r_half, const double Rvir)
     return r_half / (1.0 + M_SQRT2);
 }
 
+/* DarkSage cap on the intrahalo stars' mean radius, in Rvir: the limit of a truncated
+ * Hernquist sphere of arbitrarily large scale length */
+static const double ICS_MAX_MEAN_RADIUS = 0.66;
+
+/*
+ * Hernquist scale length of the intrahalo stars (DarkSage get_a_ICS()): the a whose
+ * truncated (r < Rvir) profile has mass-weighted mean radius R_av, i.e. in units of Rvir
+ *   R_av = a (2 (a+1)^2 ln(1/a + 1) - 2a - 3),
+ * solved by bisection to 0.1 per cent.
+ */
+double darksage_ics_scale_radius(const double Rvir, const double R_av)
+{
+    if(Rvir <= 0.0 || R_av <= 0.0) return 0.0;
+    double target = R_av / Rvir;
+    if(target > ICS_MAX_MEAN_RADIUS) target = ICS_MAX_MEAN_RADIUS;
+
+    double left = 0.0, right = 100.0, a = 0.0;
+    for(int i = 0; i < 100; i++) {
+        a = 0.5 * (left + right);
+        const double R = a * (2.0 * (a + 1.0) * (a + 1.0) * log(1.0 / a + 1.0) - 2.0 * a - 3.0);
+        if(fabs(R - target) <= 1e-3 * target) break;
+        if(R < target) left = a;
+        else right = a;
+    }
+    return a * Rvir;
+}
+
+/* Add stars of mass m deposited at radius r to central c's intrahalo stars' mean radius;
+ * call before c->ICS grows (DarkSage model_infall.c, model_mergers.c) */
+void darksage_add_ics_radius(struct GALAXY *c, const double m, const double r)
+{
+    const double total = c->ICS + m;
+    if(total > 0.0) c->ICSMeanRadius = (float)((c->ICSMeanRadius * c->ICS + r * m) / total);
+}
+
+/* Physical distance between galaxies s and c (comoving positions, periodic box) */
+double darksage_satellite_radius(const struct GALAXY *c, const struct GALAXY *s, const struct params *run_params)
+{
+    double r2 = 0.0;
+    for(int k = 0; k < 3; k++) {
+        double dx = s->Pos[k] - c->Pos[k];
+        if(dx > 0.5 * run_params->BoxSize) dx -= run_params->BoxSize;
+        if(dx < -0.5 * run_params->BoxSize) dx += run_params->BoxSize;
+        r2 += dx * dx;
+    }
+    return sqrt(r2) * run_params->AA[s->SnapNum];
+}
+
 /* The rotation curve on DarkSage's radial grid; valid entries are first..N_RC_GRID-1 */
 struct rc_grid {
     double r[N_RC_GRID], j[N_RC_GRID], phi[N_RC_GRID];
@@ -339,6 +387,9 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     const double a_CB = hernquist_a_from_half_mass((g->MergerBulgeRadius > 0.0f) ? g->MergerBulgeRadius : g->BulgeRadius, Rvir);
     const double M_SB_inf = g->InstabilityBulgeMass * ((Rvir + a_SB) / Rvir) * ((Rvir + a_SB) / Rvir);
     const double M_CB_inf = g->MergerBulgeMass * ((Rvir + a_CB) / Rvir) * ((Rvir + a_CB) / Rvir);
+    if(g->ICSMeanRadius > ICS_MAX_MEAN_RADIUS * Rvir) g->ICSMeanRadius = (float)(ICS_MAX_MEAN_RADIUS * Rvir);
+    const double a_ICS = darksage_ics_scale_radius(Rvir, g->ICSMeanRadius);
+    const double M_ICS_inf = g->ICS * ((Rvir + a_ICS) / Rvir) * ((Rvir + a_ICS) / Rvir);
 
     double a_sdisc = g->StellarDiscScaleRadius, a_gdisc = g->GasDiscScaleRadius;
     if(a_sdisc <= 0.0) a_sdisc = g->DiskScaleRadius;
@@ -362,6 +413,7 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
         double M_int = rho_norm * (log(1.0 + rrat) - rrat / (1.0 + rrat));
         if(M_int < 0.0) M_int = 0.0;
         M_int += M_SB_inf * (r / (r + a_SB)) * (r / (r + a_SB)) + M_CB_inf * (r / (r + a_CB)) * (r / (r + a_CB));
+        M_int += M_ICS_inf * (r / (r + a_ICS)) * (r / (r + a_ICS));
         M_int += hot_norm * (x - c_beta * atan(x / c_beta)) + g->BlackHoleMass;
         double v2 = G * M_int / r;
         if(DiscStars > 0.0 && a_sdisc > 0.0) v2 += G * DiscStars / Rvir * v2_disc_cterm(x, Rvir / a_sdisc);
@@ -560,8 +612,8 @@ void darksage_precess_gas(const int p, const double dt, struct GALAXY *galaxies,
  * Hot-gas density of galaxy c at physical radius r, from HotGas + CGMgas.
  * Beta profile of Stevens et al. (2024) eq. 11; CGM regime: SAGE26's
  * rho ~ r^-CGM_ALPHA, flat inside CGM_R0_FRAC Rvir.
- * Source bug: DarkSage's ram_pressure_stripping() squares C_beta; the paper's
- * single power is used here.
+ * As DarkSage's ram_pressure_stripping(), C_beta enters squared (the paper's
+ * eq. 11 has one power).
  */
 double darksage_hot_density(const struct GALAXY *c, const double r, const struct params *run_params)
 {
@@ -577,14 +629,14 @@ double darksage_hot_density(const struct GALAXY *c, const double r, const struct
     const double c_beta = (c->c_beta > DS_MIN_C_BETA) ? c->c_beta : DS_MIN_C_BETA;
     const double cb_term = 1.0 / (1.0 - c_beta * atan(1.0 / c_beta));
     const double x = r / (c_beta * Rvir);
-    return M_hot * cb_term / (4.0 * M_PI * c_beta * c_beta * Rvir * Rvir * Rvir * (1.0 + x * x));
+    return M_hot * cb_term * cb_term / (4.0 * M_PI * c_beta * c_beta * Rvir * Rvir * Rvir * (1.0 + x * x));
 }
 
 /*
  * Mass of central c inside physical radius r < Rvir (DarkSage get_Mhost_internal()):
  * NFW dark matter (Mvir less c's baryons and the satellite mass m_sat), hot gas,
- * the two Hernquist bulges, the disc annuli and the black hole, capped at Mvir.
- * DarkSage's intrahalo-star term is left out: SAGE26 tracks no ICS radius.
+ * the two Hernquist bulges, the intrahalo stars, the disc annuli and the black
+ * hole, capped at Mvir.
  */
 double darksage_host_mass_within(const struct GALAXY *c, const double r, const double m_sat,
                                  const struct params *run_params)
@@ -615,6 +667,8 @@ double darksage_host_mass_within(const struct GALAXY *c, const double r, const d
     const double a_CB = hernquist_a_from_half_mass((c->MergerBulgeRadius > 0.0f) ? c->MergerBulgeRadius : c->BulgeRadius, Rvir);
     M += c->InstabilityBulgeMass * ((Rvir + a_SB) / Rvir) * ((Rvir + a_SB) / Rvir) * (r / (r + a_SB)) * (r / (r + a_SB));
     M += c->MergerBulgeMass * ((Rvir + a_CB) / Rvir) * ((Rvir + a_CB) / Rvir) * (r / (r + a_CB)) * (r / (r + a_CB));
+    const double a_ICS = darksage_ics_scale_radius(Rvir, c->ICSMeanRadius);
+    M += c->ICS * ((Rvir + a_ICS) / Rvir) * ((Rvir + a_ICS) / Rvir) * (r / (r + a_ICS)) * (r / (r + a_ICS));
 
     for(int i = 0; i < N_BINS; i++) {
         const double m = c->DiscGas[i] + c->DiscStars[i];

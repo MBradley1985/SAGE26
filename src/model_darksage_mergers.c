@@ -7,24 +7,18 @@
  * Minor mergers: the satellite's cold gas is spread evenly over the central's
  *   annuli whose j lies within j_orb . n_cold +- j_spread, with j_orb the
  *   satellite's orbital specific angular momentum and n_cold the central's
- *   gas-disc axis (eq. 123).  If the orbit is retrograde the central's gas
- *   disc is then shrunk so its angular momentum is what conservation requires
- *   (eq. 124).
+ *   gas-disc axis (eq. 123).
  * Major mergers: the new gas disc lies in the last orbital plane.  Each
  *   annulus of both progenitors is cut into 10 segments whose j about the
- *   centre of momentum, projected on the new axis, picks the annulus they join;
- *   retrograde segments shrink the disc in the same way.
+ *   centre of momentum, projected on the new axis, picks the annulus they join.
  * Both: the merger-driven bulge's velocity dispersion and specific angular
  *   momentum are updated from the progenitors' components and orbital motion,
  *   for its Jeans size (BulgeSizeOn == 4, eq. 128).
  *
- * Two places where this follows the paper rather than the DarkSage source:
- *   - the retrograde shrink.  deal_with_galaxy_merger() sums the disc angular
- *     momentum with '=' instead of '+=' (only the innermost annulus counts) and
- *     shrinks the satellite's disc, which is discarded, so it has no effect;
- *     here the central's disc is shrunk using the full sums (eq. 124).
- *   - the projected j of a major-merger segment: the source takes
- *     sqrt(sum_k (n_k j_k)^2); here it is the projection |j . n|.
+ * As in the DarkSage source, retrograde gas is not shrunk afterwards: its
+ * deal_with_galaxy_merger() shrinks the satellite's disc, which has already
+ * been merged, so the paper's eq. 124 has no effect.  A major-merger segment's
+ * j is sqrt(sum_k (n_k j_k)^2), as in the source.
  * The stellar masses themselves are moved by add_galaxies_together() and
  * make_bulge_from_burst() with SAGE26's bulge bookkeeping.
  *
@@ -47,8 +41,6 @@
 
 /* Segments each annulus is cut into when rebuilding a major-merger gas disc (DarkSage N_ann_segs) */
 #define N_ANNULUS_SEGMENTS 10
-/* Skip the retrograde shrink when it would change J by less than this (DarkSage's 1% safety net) */
-static const double RETRO_SHRINK_MIN = 0.99;
 
 static double dot3(const double a[3], const double b[3])
 {
@@ -78,39 +70,23 @@ static double disc_ang_mom(const double *mass, const struct params *run_params)
     return J;
 }
 
-/*
- * Shrink galaxy t's gas disc by rescaling every annulus's j by J_should / J_current
- * (darksage_project_disc()), so the disc carries the angular momentum it should
- * after retrograde gas was added at |j| (eq. 124).
- */
-static void shrink_gas_disc(const int t, const double J_current, const double J_should,
-                            struct GALAXY *galaxies, const struct params *run_params)
+/* Unit vector in galaxy s's disc plane where its segments start (DarkSage add_galaxies_together()) */
+static void perpendicular(const double s[3], double e[3])
 {
-    if(J_current <= 0.0 || J_should >= RETRO_SHRINK_MIN * J_current) return;
-    double factor = J_should / J_current;
-    if(factor < 1.0e-3) factor = 1.0e-3;   /* net counter-rotation: collapse to the centre */
-
-    double gas[N_BINS], metals[N_BINS];
-    darksage_project_disc(galaxies[t].DiscGas, factor, gas, run_params, galaxies[t].Rvir, galaxies[t].Vvir);
-    darksage_project_disc(galaxies[t].DiscGasMetals, factor, metals, run_params, galaxies[t].Rvir, galaxies[t].Vvir);
-    for(int i = 0; i < N_BINS; i++) {
-        galaxies[t].DiscGas[i] = (float)gas[i];
-        galaxies[t].DiscGasMetals[i] = (float)metals[i];
+    const double n = sqrt(s[1] * s[1] + s[2] * s[2]);
+    if(n > 0.0) {
+        e[0] = 0.0;
+        e[1] = s[2] / n;
+        e[2] = -s[1] / n;
+    } else {
+        e[0] = 0.0;
+        e[1] = 1.0;
+        e[2] = 0.0;
     }
 }
 
-/* Unit vector perpendicular to the unit vector s */
-static void perpendicular(const double s[3], double e[3])
-{
-    const double ref[3] = {(fabs(s[0]) < 0.9) ? 1.0 : 0.0, (fabs(s[0]) < 0.9) ? 0.0 : 1.0, 0.0};
-    cross3(s, ref, e);
-    const double n = sqrt(dot3(e, e));
-    for(int k = 0; k < 3; k++) e[k] /= n;
-}
-
 /*
- * Minor merger: deposit the satellite's gas by orbital j (eq. 123), then shrink
- * the central's gas disc if the orbit was retrograde (eq. 124).  Returns the
+ * Minor merger: deposit the satellite's gas by orbital j (eq. 123).  Returns the
  * satellite's orbital radial velocity for the bulge dispersion.
  */
 static double merge_gas_minor(const int t, const int p, const double dpos[3], const double dvel[3],
@@ -151,17 +127,10 @@ static double merge_gas_minor(const int t, const int p, const double dpos[3], co
     }
     const int n_bins = i_max - i_min;
 
-    /* Deposit, and the angular momentum the disc should end with: retrograde gas adds -j, not +j */
-    double J_retro = 0.0;
     for(int i = i_min; i < i_max; i++) {
         galaxies[t].DiscGas[i] += (float)(gas_sat / n_bins);
         galaxies[t].DiscGasMetals[i] += (float)(metals_sat / n_bins);
-        if(cos_orb < 0.0) J_retro += 0.5 * (edge[i] + edge[i+1]) * gas_sat / n_bins;
     }
-    double gas[N_BINS];
-    for(int i = 0; i < N_BINS; i++) gas[i] = galaxies[t].DiscGas[i];
-    const double J_current = disc_ang_mom(gas, run_params);
-    shrink_gas_disc(t, J_current, J_current - 2.0 * J_retro, galaxies, run_params);
     return v_rad;
 }
 
@@ -208,7 +177,7 @@ static void merge_gas_major(const int t, const int p, const double dpos[3], cons
         for(int k = 0; k < 3; k++) n_new[k] /= n_mag;
     }
 
-    double new_gas[N_BINS] = {0.0}, new_metals[N_BINS] = {0.0}, J_retro = 0.0;
+    double new_gas[N_BINS] = {0.0}, new_metals[N_BINS] = {0.0};
     const int gals[2] = {p, t};
     for(int g = 0; g < 2; g++) {
         const int gal = gals[g];
@@ -236,11 +205,11 @@ static void merge_gas_major(const int t, const int p, const double dpos[3], cons
                     v[k] = v_ann * (-sin(phi) * e1[k] + cos(phi) * e2[k]) + v_off[k];
                 }
                 cross3(r, v, j);
-                const double j_par = dot3(j, n_new);
-                const int bin = j_bin(fabs(j_par), run_params);
+                const double j_seg = sqrt((n_new[0] * j[0]) * (n_new[0] * j[0]) + (n_new[1] * j[1]) * (n_new[1] * j[1])
+                                          + (n_new[2] * j[2]) * (n_new[2] * j[2]));
+                const int bin = j_bin(j_seg, run_params);
                 new_gas[bin] += dm;
                 new_metals[bin] += dz;
-                if(j_par < 0.0) J_retro += 0.5 * (run_params->DiscBinEdge[bin] + run_params->DiscBinEdge[bin+1]) * dm;
             }
         }
     }
@@ -251,8 +220,6 @@ static void merge_gas_major(const int t, const int p, const double dpos[3], cons
         galaxies[p].DiscGas[i] = galaxies[p].DiscGasMetals[i] = 0.0f;
     }
     for(int k = 0; k < 3; k++) galaxies[t].SpinGas[k] = (float)n_new[k];
-    const double J_current = disc_ang_mom(new_gas, run_params);
-    shrink_gas_disc(t, J_current, J_current - 2.0 * J_retro, galaxies, run_params);
 }
 
 void darksage_merge_galaxies(const int t, const int p, struct GALAXY *galaxies, const struct params *run_params)

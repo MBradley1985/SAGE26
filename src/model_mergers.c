@@ -26,6 +26,7 @@
 #include "model_darksage_mergers.h"
 #include "model_darksage_feedback.h"
 #include "model_darksage_stellar_pop.h"
+#include "model_darksage_disc.h"
 
 #include "model_starformation_and_feedback.h"
 #include "model_disk_instability.h"
@@ -999,6 +1000,13 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     // Transfer ejected mass (same for all regimes)
     galaxies[centralgal].EjectedMass += galaxies[gal].EjectedMass;
     galaxies[centralgal].MetalsEjectedMass += galaxies[gal].MetalsEjectedMass;
+
+    // DarkSAGEMode: the stars are deposited at the satellite's radius (DarkSage disrupt_satellite_to_ICS())
+    if(run_params->DarkSAGEMode == 1) {
+        darksage_add_ics_radius(&galaxies[centralgal], galaxies[gal].ICS + galaxies[gal].StellarMass,
+                                darksage_satellite_radius(&galaxies[centralgal], &galaxies[gal], run_params));
+        galaxies[gal].ICSMeanRadius = 0.0f;
+    }
 
     // Transfer ICS (same for all regimes)
     galaxies[centralgal].ICS += galaxies[gal].ICS;

@@ -114,9 +114,10 @@ void darksage_return_and_sn(const double t0, const double t1, const struct param
 
 /*
  * HI photoionisation rate of the UV background, Faucher-Giguere (2020), at z = 0, 0.2, ..., 8.8
- * [1e-12 s^-1] (DarkSage main.c GammaHI_arr).  DarkSage fills its redshift grid only up to z = 6
- * (31 entries) while reading 45; the table's own 0.2 spacing is used for all 45 here, with linear
- * interpolation between the bracketing entries.
+ * [1e-12 s^-1] (DarkSage main.c GammaHI_arr), looked up as DarkSage does: from the first entry
+ * at or above z, along the segment above it.  Source bug: DarkSage fills its redshift grid only
+ * up to z = 6 (31 entries) while reading 45, so above z = 6 it reads unset memory; the table's
+ * own 0.2 spacing is used for all 45 here.
  */
 static const double FG20_GAMMA_HI[45] = {
     3.62e-2, 8.72e-2, 0.177, 0.312, 0.488, 0.682, 0.862, 1.003, 1.091, 1.136, 1.136, 1.109, 1.069, 1.021, 0.968,
@@ -127,11 +128,12 @@ static const double FG20_DZ = 0.2;
 void darksage_init_age_bins(struct params *run_params)
 {
     for(int s = 0; s < run_params->Snaplistlen && s < ABSOLUTEMAXSNAPS; s++) {
-        const double x = run_params->ZZ[s] / FG20_DZ;
-        int i = (int)x;
+        const double z = run_params->ZZ[s];
+        int i = 0;
+        while(i < 45 && FG20_DZ * i < z) i++;
         double g;
         if(i >= 44) g = FG20_GAMMA_HI[44];
-        else g = FG20_GAMMA_HI[i] + (FG20_GAMMA_HI[i+1] - FG20_GAMMA_HI[i]) * (x - i);
+        else g = FG20_GAMMA_HI[i] + (FG20_GAMMA_HI[i+1] - FG20_GAMMA_HI[i]) * (z - FG20_DZ * i) / FG20_DZ;
         run_params->GammaHI[s] = g * 1.0e-12 * run_params->UnitTime_in_s / run_params->Hubble_h;
     }
 

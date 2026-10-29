@@ -19,6 +19,9 @@ extern "C" {
                                          const struct params *run_params);
     extern void darksage_project_disc(const float DiscMass[N_BINS], const double cos_angle, double NewDisc[N_BINS],
                                       const struct params *run_params, const double Rvir, const double Vvir);
+    extern double darksage_ics_scale_radius(const double Rvir, const double R_av);
+    extern void darksage_add_ics_radius(struct GALAXY *c, const double m, const double r);
+    extern double darksage_satellite_radius(const struct GALAXY *c, const struct GALAXY *s, const struct params *run_params);
     extern double darksage_hot_density(const struct GALAXY *c, const double r, const struct params *run_params);
     extern double darksage_host_mass_within(const struct GALAXY *c, const double r, const double m_sat,
                                             const struct params *run_params);

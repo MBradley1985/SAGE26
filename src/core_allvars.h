@@ -281,6 +281,7 @@ struct GALAXY
     int32_t AgeBinNow;               /* age bin of the current substep */
     double TimeNow;                  /* lookback time of the current substep [code time] */
     float DiscFNeutral[N_BINS];      /* neutral fraction of each annulus's hydrogen (SFprescription 8; else 1) */
+    float ICSMeanRadius;             /* mass-weighted radius at which the intrahalo stars were deposited [Mpc/h] (DarkSage R_ICS_av) */
     float AgeMismatch;               /* misbooked stellar mass by age, / StellarMass (diagnostic) */
     float SpinMergerBulge[3];        /* Specific angular momentum vector of the merger-driven bulge [(Mpc/h)(km/s)] */
 };

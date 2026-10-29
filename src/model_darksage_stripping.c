@@ -22,7 +22,9 @@
  * P_ram / P_grav of the annulus goes per snapshot.  Stripped gas joins the satellite's hot (or CGM)
  * reservoir.
  *
- * Source bug: DarkSage's tidal loop zeroes DiscGas[i] instead of DiscGas[j].
+ * Source bug: DarkSage's tidal loop zeroes DiscGas[i] instead of DiscGas[j], which
+ * leaves the gas in the annulus after taking it out of ColdGas (gas is created).
+ * As in the source, tidally stripped stars leave the ICS mean radius unchanged.
  *
  * Code units throughout (10^10 Msun/h, Mpc/h, km/s).
  *
@@ -70,18 +72,13 @@ int darksage_ram_pressure_stripping(const int centralgal, const int gal, const d
     struct GALAXY *s = &galaxies[gal], *c = &galaxies[centralgal];
     if(mode == 0 || s->ColdGas <= 0.0) return 0;
 
-    /* Physical distance and relative speed (periodic box) */
-    const double a = run_params->AA[s->SnapNum];
-    double r2 = 0.0, v2 = 0.0;
+    /* Physical distance and relative speed */
+    const double r_sat = darksage_satellite_radius(c, s, run_params);
+    double v2 = 0.0;
     for(int k = 0; k < 3; k++) {
-        double dx = s->Pos[k] - c->Pos[k];
-        if(dx > 0.5 * run_params->BoxSize) dx -= run_params->BoxSize;
-        if(dx < -0.5 * run_params->BoxSize) dx += run_params->BoxSize;
-        r2 += dx * dx;
         const double dv = s->Vel[k] - c->Vel[k];
         v2 += dv * dv;
     }
-    const double r_sat = sqrt(r2) * a;
     if(r_sat <= 0.0) return 0;
 
     /* Tidal radius */
