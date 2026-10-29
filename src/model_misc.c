@@ -18,6 +18,7 @@
 #include "core_allvars.h"
 
 #include "model_misc.h"
+#include "model_darksage_disc.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -181,7 +182,51 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
 
     galaxies[p].g_max = 0.0;
 
+    /* DarkSAGEMode reservoirs and annuli: zeroed always so the outputs are clean when the mode is off */
+    galaxies[p].FountainGas = galaxies[p].MetalsFountainGas = 0.0f;
+    galaxies[p].OutflowGas = galaxies[p].MetalsOutflowGas = 0.0f;
+    galaxies[p].FountainTime = galaxies[p].OutflowTime = 0.0f;
+    for(int i = 0; i < N_BINS; i++) {
+        galaxies[p].DiscGas[i] = galaxies[p].DiscGasMetals[i] = 0.0f;
+        galaxies[p].DiscStars[i] = galaxies[p].DiscStarsMetals[i] = 0.0f;
+        galaxies[p].DiscH2[i] = galaxies[p].DiscHI[i] = 0.0f;
+        galaxies[p].DiscSFR[i] = galaxies[p].DiscDust[i] = 0.0f;
+        galaxies[p].VelDispStars[i] = 10.0f;   /* km/s; evolves through disc heating */
+    }
+    for(int i = 0; i < N_BINS + 1; i++) {
+        galaxies[p].DiscRadii[i] = 0.0f;
+        galaxies[p].Potential[i] = 0.0f;
+    }
+    for(int j = 0; j < 3; j++) {
+        galaxies[p].SpinGas[j] = galaxies[p].SpinStars[j] = galaxies[p].SpinHot[j] = 0.0f;
+        galaxies[p].SpinBulge[j] = galaxies[p].SpinSecularBulge[j] = 0.0f;
+    }
+    galaxies[p].VelDispBulge = 0.0f;
+    galaxies[p].SecularBulgeMass = galaxies[p].SecularMetalsBulgeMass = 0.0f;
+    galaxies[p].R2_hot_av = 0.0f;
+    galaxies[p].CoolScaleRadius = galaxies[p].GasDiscScaleRadius = galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;
+    galaxies[p].HaloScaleRadius = galaxies[p].Rvir / 10.0;   /* r_s = Rvir/c with c ~ 10 until update_disc_radii() */
+    galaxies[p].RotSupportScaleRadius = 0.0f;
+    galaxies[p].c_beta = 0.1f;   /* hot-gas beta-profile core */
 
+    if(run_params->DarkSAGEMode == 1) {
+        /* Gas, stellar and hot spins start along the halo spin */
+        const double spin_mag = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
+                                     halos[halonr].Spin[1] * halos[halonr].Spin[1] +
+                                     halos[halonr].Spin[2] * halos[halonr].Spin[2]);
+        if(spin_mag > 0.0) {
+            for(int j = 0; j < 3; j++) {
+                galaxies[p].SpinGas[j] = galaxies[p].SpinStars[j] = galaxies[p].SpinHot[j] = (float)(halos[halonr].Spin[j] / spin_mag);
+            }
+        }
+
+        /* Flat-curve radii r = j / Vvir capped at Rvir, then refined from the rotation curve */
+        for(int i = 0; i < N_BINS + 1; i++) {
+            const double r = (galaxies[p].Vvir > 0.0) ? run_params->DiscBinEdge[i] / galaxies[p].Vvir : 0.0;
+            galaxies[p].DiscRadii[i] = (r < galaxies[p].Rvir) ? r : galaxies[p].Rvir;
+        }
+        update_disc_radii(p, galaxies, halos, run_params);
+    }
 }
 
 double get_disk_radius(const int halonr, const int p, const struct halo_data *halos, const struct GALAXY *galaxies)
@@ -421,6 +466,48 @@ double get_metallicity(const double gas, const double metals)
 }
 
 /* Return the larger of two doubles. */
+/* ---------------------------------------------------------------------------
+ * DarkSAGEMode: spin vectors (unit vectors, mass-weighted on mixing)
+ * -------------------------------------------------------------------------*/
+
+/* spin_old <- unit vector along m_old spin_old + m_add spin_add; unchanged on exact cancellation */
+void evolve_spin(float spin_old[3], const double m_old, const float spin_add[3], const double m_add)
+{
+    if(m_add <= 0.0 || m_old + m_add <= 0.0) return;
+
+    double J[3];
+    for(int j = 0; j < 3; j++) J[j] = m_old * spin_old[j] + m_add * spin_add[j];
+    const double mag = sqrt(J[0] * J[0] + J[1] * J[1] + J[2] * J[2]);
+    if(mag > 0.0) {
+        for(int j = 0; j < 3; j++) spin_old[j] = (float)(J[j] / mag);
+    }
+}
+
+/* Cooling gas brings the hot/CGM spin to the gas disc.  Call before ColdGas is incremented. */
+void update_spin_gas_cooling(const int gal, const double cooling_mass, struct GALAXY *galaxies)
+{
+    evolve_spin(galaxies[gal].SpinGas, galaxies[gal].ColdGas, galaxies[gal].SpinHot, cooling_mass);
+}
+
+/* Merger of p into t.  Call before the masses are combined. */
+void combine_spins_merger(const int t, const int p, struct GALAXY *galaxies)
+{
+    evolve_spin(galaxies[t].SpinGas, galaxies[t].ColdGas, galaxies[p].SpinGas, galaxies[p].ColdGas);
+    evolve_spin(galaxies[t].SpinStars, galaxies[t].StellarMass, galaxies[p].SpinStars, galaxies[p].StellarMass);
+    evolve_spin(galaxies[t].SpinHot, galaxies[t].HotGas, galaxies[p].SpinHot, galaxies[p].HotGas);
+    evolve_spin(galaxies[t].SpinBulge, galaxies[t].BulgeMass, galaxies[p].SpinBulge, galaxies[p].BulgeMass);
+}
+
+/* Fountain return time 0.1 / H(z) [code units] */
+double get_dynamical_time(const int snapnum, const struct params *run_params)
+{
+    const double zplus1 = 1.0 + run_params->ZZ[snapnum];
+    const double Omega_k = 1.0 - run_params->Omega - run_params->OmegaLambda;
+    const double H_sqr = run_params->Hubble * run_params->Hubble *
+                         (run_params->Omega * zplus1 * zplus1 * zplus1 + Omega_k * zplus1 * zplus1 + run_params->OmegaLambda);
+    return (H_sqr > 0.0) ? 0.1 / sqrt(H_sqr) : 1.0;
+}
+
 double dmax(const double x, const double y)
 {
     return (x > y) ? x:y;

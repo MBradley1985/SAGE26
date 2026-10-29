@@ -76,6 +76,17 @@ void init(struct params *run_params)
         fprintf(stdout, "cooling functions read\n\n");
     }
 #endif
+
+    /* DarkSAGEMode: specific angular momentum bin edges, j_0 = 0 and j_i = FirstBin ExponentBin^(i-1) */
+    if(run_params->DarkSAGEMode == 1) {
+        /* FirstBin [kpc km/s] -> code units [(Mpc/h)(km/s)] */
+        const double j_unit = (CM_PER_MPC / 1e3 / run_params->UnitLength_in_cm)
+                            / (1e5 / run_params->UnitVelocity_in_cm_per_s);
+        run_params->DiscBinEdge[0] = 0.0;
+        for(int i = 1; i < N_BINS + 1; i++) {
+            run_params->DiscBinEdge[i] = run_params->FirstBin * j_unit * pow(run_params->ExponentBin, i - 1);
+        }
+    }
 }
 
 

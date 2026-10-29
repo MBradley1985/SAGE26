@@ -155,6 +155,10 @@ extern "C" {
     extern double get_disk_radius(const int halonr, const int p, const struct halo_data *halos, const struct GALAXY *galaxies);
     extern double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct params *run_params);
     extern double dmax(const double x, const double y);
+    extern void evolve_spin(float spin_old[3], const double m_old, const float spin_add[3], const double m_add);
+    extern void update_spin_gas_cooling(const int gal, const double cooling_mass, struct GALAXY *galaxies);
+    extern void combine_spins_merger(const int t, const int p, struct GALAXY *galaxies);
+    extern double get_dynamical_time(const int snapnum, const struct params *run_params);
     extern void update_instability_bulge_radius(const int p, const double delta_mass,
                                      const double old_disk_radius,
                                      struct GALAXY *galaxies, const struct params *run_params);

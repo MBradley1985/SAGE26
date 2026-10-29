@@ -37,6 +37,11 @@ struct HDF5_GALAXY_OUTPUT
     /* cumulative star formation history - tracks stellar mass formed at each snapshot (controlled by SaveFullSFH) */
     float *SFHMassDisk;      /* Shape: [ngalaxies, SimMaxSnaps] - mass formed in disk at each snapshot */
     float *SFHMassBulge;     /* Shape: [ngalaxies, SimMaxSnaps] - mass formed in bulge at each snapshot */
+
+    /* DarkSAGEMode outputs (DARKSAGE_OUTPUT_FIELDS); [ngalaxies, width] each, NULL when the mode is off */
+#define DARKSAGE_FIELD_STRUCT_MEMBER(name, width, desc, unit) float *ds_##name;
+    DARKSAGE_OUTPUT_FIELDS(DARKSAGE_FIELD_STRUCT_MEMBER)
+#undef DARKSAGE_FIELD_STRUCT_MEMBER
 };
     
     // Proto-Types //

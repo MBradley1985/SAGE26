@@ -19,6 +19,9 @@
 #include "model_starformation_and_feedback.h"
 #include "model_misc.h"
 #include "model_disk_instability.h"
+#include "model_darksage_sf.h"
+#include "model_darksage_instability.h"
+#include "model_darksage_disc.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -1014,6 +1017,11 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     XASSERT(step >= 0 && step < STEPS, -1,
             "Error: step = %d is out of bounds [0, %d)\n", step, STEPS);
 
+    // DarkSAGEMode: precess the gas disc towards the stellar disc before star formation
+    if(run_params->DarkSAGEMode == 1) {
+        darksage_precess_gas(p, dt, galaxies, run_params);
+    }
+
     // ========================================================================
     // CHECK FOR FFB REGIME - EARLY EXIT IF FFB
     // ========================================================================
@@ -1028,6 +1036,11 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
     // star formation recipes: one prescription, one function (see sfr_* above)
     double strdot = 0.0;
+    double sfr_bin[N_BINS] = {0.0};
+    if(run_params->DarkSAGEMode == 1) {
+        // DarkSAGEMode: same SFprescription / H2DepletionMode laws, applied per disc annulus
+        strdot = darksage_star_formation_rate(p, sfr_bin, galaxies, run_params);
+    } else {
     switch(run_params->SFprescription) {
         case 0: strdot = sfr_croton06(p, galaxies, run_params); break;
         case 1: strdot = sfr_br06(p, galaxies, run_params); break;
@@ -1046,6 +1059,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // its t_dyn-based law
     if(FG_TDEP(run_params)) {
         strdot = sfr_fixing_gas_tdep(p, galaxies, run_params);
+    }
     }
 
     // Calculate HI (atomic hydrogen) as the remainder of hydrogen after H2.
@@ -1106,9 +1120,19 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // update from SN feedback
     update_from_feedback(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 
+    // DarkSAGEMode: mirror the bulk SF and reheating onto the annuli (reheating only acts when SupernovaRecipeOn == 1)
+    if(run_params->DarkSAGEMode == 1) {
+        darksage_update_disc_from_sf(p, stars, (run_params->SupernovaRecipeOn == 1) ? reheated_mass : 0.0,
+                                     dt, sfr_bin, galaxies, run_params);
+    }
+
     // check for disk instability
     if(run_params->DiskInstabilityOn) {
-        check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, run_params);
+        if(run_params->DarkSAGEMode == 1) {
+            check_disk_instability_darksage(p, centralgal, dt, step, galaxies, run_params);
+        } else {
+            check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, run_params);
+        }
     }
 
     // formation of new metals - instantaneous recycling approximation - only SNII
@@ -1117,6 +1141,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         
         // Metals that stay in disk (same for all regimes)
         galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        if(run_params->DarkSAGEMode == 1) {
+            darksage_add_disc_metals(p, run_params->Yield * (1.0 - FracZleaveDiskVal) * stars, sfr_bin, galaxies);
+        }
         
         // Metals that leave disk - regime dependent
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
@@ -1128,6 +1155,55 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         const double all_metals = run_params->Yield * stars;
         
         add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
+    }
+
+    if(run_params->DarkSAGEMode == 1) darksage_sync_disc_metals(p, galaxies);
+}
+
+/*
+ * DarkSAGEMode: central burst from unstable gas in annulus 0
+ * (check_disk_instability_darksage).  All of burst_gas forms stars, then the
+ * same SN feedback, SfrDisk / SFH tracking and yields as the quiescent path;
+ * the changes are mirrored onto annulus 0.
+ */
+void darksage_central_burst(const int p, const int centralgal, const double burst_gas, const double dt, const int step,
+                            struct GALAXY *galaxies, const struct params *run_params)
+{
+    if(burst_gas <= 0.0 || dt <= 0.0) return;
+
+    double stars = burst_gas, reheated_mass, ejected_mass;
+    compute_sn_feedback(p, &stars, &reheated_mass, &ejected_mass, galaxies, run_params);
+
+    double sfr_bin[N_BINS] = {0.0};
+    sfr_bin[0] = 1.0;
+
+    galaxies[p].SfrDisk[step] += stars / dt;
+
+    double metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
+    update_from_star_formation(p, stars, metallicity, galaxies, run_params);
+
+    if(run_params->SaveFullSFH) {
+        const int snapnum = galaxies[p].SnapNum;
+        if(snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS) {
+            galaxies[p].SFHMassDisk[snapnum] += (1.0 - run_params->RecycleFraction) * stars;
+        }
+    }
+
+    metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
+    if(reheated_mass > galaxies[p].ColdGas) reheated_mass = galaxies[p].ColdGas;
+    if(reheated_mass < 0.0) reheated_mass = 0.0;   /* ColdGas can round to just below zero */
+    update_from_feedback(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
+
+    darksage_update_disc_from_sf(p, stars, (run_params->SupernovaRecipeOn == 1) ? reheated_mass : 0.0,
+                                 dt, sfr_bin, galaxies, run_params);
+
+    if(galaxies[p].ColdGas > 1.0e-8) {
+        const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / KD11_METAL_HALO_MASS);
+        galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        darksage_add_disc_metals(p, run_params->Yield * (1.0 - FracZleaveDiskVal) * stars, sfr_bin, galaxies);
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, run_params->Yield * FracZleaveDiskVal * stars);
+    } else {
+        add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, run_params->Yield * stars);
     }
 }
 
@@ -1194,7 +1270,40 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
             if(galaxies[p].H1gas > max_h_fb) galaxies[p].H1gas = max_h_fb;
         }
 
-        if(run_params->CGMrecipeOn == 1) {
+        if(run_params->DarkSAGEMode == 1 && !(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0)) {
+            // DarkSAGEMode, hot regime (Stevens+16 reservoirs):
+            //   Cold --> FountainGas --> HotGas      (reincorporate_fountain_gas, on FountainTime)
+            //   FountainGas --> OutflowGas --> Ejected (on OutflowTime = 2 x FountainTime)
+            const double t_fountain = get_dynamical_time(galaxies[p].SnapNum, run_params);
+
+            if(reheated_mass > 0.0) {
+                galaxies[centralgal].FountainTime = (galaxies[centralgal].FountainGas > 0.0)
+                    ? (galaxies[centralgal].FountainGas * galaxies[centralgal].FountainTime + reheated_mass * t_fountain)
+                      / (galaxies[centralgal].FountainGas + reheated_mass)
+                    : t_fountain;
+                galaxies[centralgal].FountainGas += reheated_mass;
+                galaxies[centralgal].MetalsFountainGas += metallicity * reheated_mass;
+            }
+
+            if(ejected_mass > galaxies[centralgal].FountainGas) {
+                ejected_mass = galaxies[centralgal].FountainGas;
+            }
+            if(ejected_mass > 0.0) {
+                const double metallicityFountain = get_metallicity(galaxies[centralgal].FountainGas,
+                                                                   galaxies[centralgal].MetalsFountainGas);
+                galaxies[centralgal].OutflowTime = (galaxies[centralgal].OutflowGas > 0.0)
+                    ? (galaxies[centralgal].OutflowGas * galaxies[centralgal].OutflowTime + ejected_mass * 2.0 * t_fountain)
+                      / (galaxies[centralgal].OutflowGas + ejected_mass)
+                    : 2.0 * t_fountain;
+                galaxies[centralgal].FountainGas -= ejected_mass;
+                galaxies[centralgal].MetalsFountainGas -= metallicityFountain * ejected_mass;
+                galaxies[centralgal].OutflowGas += ejected_mass;
+                galaxies[centralgal].MetalsOutflowGas += metallicityFountain * ejected_mass;
+            }
+
+            if(galaxies[centralgal].FountainGas < 0.0f) galaxies[centralgal].FountainGas = 0.0f;
+            if(galaxies[centralgal].MetalsFountainGas < 0.0f) galaxies[centralgal].MetalsFountainGas = 0.0f;
+        } else if(run_params->CGMrecipeOn == 1) {
             if(galaxies[centralgal].Regime == 0) {
                 // CGM-regime: Cold --> CGM --> Ejected
 
@@ -1347,6 +1456,12 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     // SN masses and the metal yield all refer to the same burst.  Unlike the
     // main path the stars are not rescaled against the reheated mass.
     // ========================================================================
+    // DarkSAGEMode: the burst has one efficiency and t_dyn, so each annulus contributes in proportion to its gas
+    double sfr_bin[N_BINS] = {0.0};
+    if(run_params->DarkSAGEMode == 1) {
+        for(int i = 0; i < N_BINS; i++) sfr_bin[i] = galaxies[p].DiscGas[i];
+    }
+
     double reheated_mass = 0.0;
     double ejected_mass  = 0.0;
     compute_sn_feedback_ffb(p, &stars, &reheated_mass, &ejected_mass, galaxies, run_params);
@@ -1378,6 +1493,11 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
 
     update_from_feedback(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 
+    if(run_params->DarkSAGEMode == 1) {
+        darksage_update_disc_from_sf(p, stars, (run_params->SupernovaRecipeOn == 1) ? reheated_mass : 0.0,
+                                     dt, sfr_bin, galaxies, run_params);
+    }
+
     // ========================================================================
     // METAL PRODUCTION (instantaneous recycling approximation - SNII only)
     // ========================================================================
@@ -1385,6 +1505,9 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const double FracZleaveDiskVal = run_params->FracZleaveDisk
                                          * exp(-1.0 * galaxies[centralgal].Mvir / KD11_METAL_HALO_MASS);
         galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        if(run_params->DarkSAGEMode == 1) {
+            darksage_add_disc_metals(p, run_params->Yield * (1.0 - FracZleaveDiskVal) * stars, sfr_bin, galaxies);
+        }
 
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
         add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, metals_leaving_disk);

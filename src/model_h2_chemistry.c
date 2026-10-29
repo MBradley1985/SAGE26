@@ -207,9 +207,9 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
     const float sigma_star_0 = (M_disk_star > 0.0) ? M_disk_star / (2.0 * M_PI * rs_pc * rs_pc) : 0.0;
 
     // Radial integration parameters from run_params (defaults: 25 bins, 5*r_s)
-    const int   N_BINS = run_params->H2RadialNBins;
+    const int   n_bins = run_params->H2RadialNBins;
     const float R_MAX  = (float)(run_params->H2RadialRMaxFactor) * rs_pc;
-    const float dr     = R_MAX / N_BINS;
+    const float dr     = R_MAX / n_bins;
 
     // Prescription-specific quantities that don't depend on radius (compute before loop)
     const int sfpres = run_params->SFprescription;
@@ -264,7 +264,7 @@ float calculate_molecular_fraction_radial_integration(const int gal, struct GALA
     float M_H2_total = 0.0;
     double SFR_tdep_total = 0.0;   /* H2DepletionMode > 0 */
 
-    for (int i = 0; i < N_BINS; i++) {
+    for (int i = 0; i < n_bins; i++) {
         // Bin center radius
         const float r = (i + 0.5f) * dr;
 

@@ -36,6 +36,7 @@
 #include "model_mergers.h"
 #include "model_infall.h"
 #include "model_reincorporation.h"
+#include "model_darksage_disc.h"
 #include "model_starformation_and_feedback.h"
 
 #include "model_cooling_heating.h"
@@ -252,6 +253,17 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                 galaxies[ngal].SfrBulgeColdGas[step] = galaxies[ngal].SfrBulgeColdGasMetals[step] = 0.0;
             }
 
+            // DarkSAGEMode: Zero DiscSFR array for this output step
+            if(run_params->DarkSAGEMode == 1) {
+                for(int bin_i = 0; bin_i < N_BINS; bin_i++) {
+                    galaxies[ngal].DiscSFR[bin_i] = 0.0;
+                }
+
+                // Update disc radii as halo grows - rotation curve depends on current mass distribution
+                // This also fixes galaxies that started with Vvir=0 (zero disc radii)
+                update_disc_radii(ngal, galaxies, halos, run_params);
+            }
+
             // this deals with the central galaxies of (sub)halos
             if(galaxies[ngal].Type == 0 || galaxies[ngal].Type == 1) {
                 // this halo shouldn't hold a galaxy that has already merged; remove it from future processing
@@ -301,6 +313,18 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
 
                         galaxies[ngal].DiskScaleRadius = get_disk_radius(halonr, ngal, halos, galaxies);
                         get_bulge_radius(ngal, galaxies, run_params);
+
+                        // DarkSAGEMode: newly cooling gas follows the current halo, like DiskScaleRadius above:
+                        // its j-profile scale and the hot-gas spin direction are refreshed every snapshot
+                        if(run_params->DarkSAGEMode == 1) {
+                            galaxies[ngal].CoolScaleRadius = galaxies[ngal].DiskScaleRadius;
+                            const double spin_mag = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
+                                                         halos[halonr].Spin[1] * halos[halonr].Spin[1] +
+                                                         halos[halonr].Spin[2] * halos[halonr].Spin[2]);
+                            if(spin_mag > 0.0) {
+                                for(int j = 0; j < 3; j++) galaxies[ngal].SpinHot[j] = (float)(halos[halonr].Spin[j] / spin_mag);
+                            }
+                        }
 
                         galaxies[ngal].Type = 0;
                     } else {
@@ -483,6 +507,15 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         galaxies[p].SubstepsUsed = effective_steps;
     }
 
+    // DarkSAGEMode: Zero DiscSFR arrays before accumulating over timesteps
+    if(run_params->DarkSAGEMode == 1) {
+        for(int p = 0; p < ngal; p++) {
+            for(int i = 0; i < N_BINS; i++) {
+                galaxies[p].DiscSFR[i] = 0.0;
+            }
+        }
+    }
+
     for(int step = 0; step < effective_steps; step++) {
 
         // Loop over all galaxies in the halo
@@ -502,6 +535,12 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 if(run_params->ReIncorporationFactor > 0.0) {
                     reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
                 }
+
+                /* FountainGas cycling: FountainGas → HotGas, OutflowGas → EjectedMass */
+                if(run_params->DarkSAGEMode == 1) {
+                    reincorporate_fountain_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
+                }
+
             } else if(galaxies[p].Type == 1) {
                 // Satellites hand their baryon excess to the central once per
                 // substep, in the same place and on the same cadence as the
@@ -510,15 +549,32 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 strip_from_satellite(centralgal, p, Zcurr, effective_steps, galaxies, run_params);
             }
 
+            // // Determine the cooling gas given the halo properties
+            // double coolingGas;
+            // if(run_params->CGMrecipeOn == 1) {
+
+            //     cooling_recipe_regime_aware(p, deltaT / effective_steps, galaxies, run_params);
+
+            // } else {
+            //     coolingGas = cooling_recipe(p, deltaT / effective_steps, galaxies, run_params);
+            //     cool_gas_onto_galaxy(p, coolingGas, galaxies);
+            // }
+
             // Determine the cooling gas given the halo properties
-            double coolingGas;
-            if(run_params->CGMrecipeOn == 1) {
+              const double dt_step = deltaT / effective_steps;
+              if(run_params->CGMrecipeOn == 1) {
+                // deposits internally (bulk ColdGas, or annuli when DarkSAGEMode=1)
+                cooling_recipe_regime_aware(p, dt_step, galaxies, run_params);
 
-                cooling_recipe_regime_aware(p, deltaT / effective_steps, galaxies, run_params);
+                } else {
+                    const double coolingGas = cooling_recipe(p, dt_step, galaxies, run_params);
 
-            } else {
-                coolingGas = cooling_recipe(p, deltaT / effective_steps, galaxies, run_params);
-                cool_gas_onto_galaxy(p, coolingGas, galaxies);
+                    if(run_params->DarkSAGEMode == 1) {
+                        cool_gas_onto_galaxy_darksage(p, coolingGas, galaxies, run_params);
+
+                    } else {
+                    cool_gas_onto_galaxy(p, coolingGas, galaxies);
+                }
             }
 
             // stars form and then explode!
@@ -612,6 +668,35 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         galaxies[p].Cooling *= inv_deltaT;
         galaxies[p].Heating *= inv_deltaT;
         galaxies[p].OutflowRate *= inv_deltaT;
+    
+
+        /* Safety cleanup: move mass from zero-area disc bins to last physical bin */
+        if(run_params->DarkSAGEMode == 1) {
+            /* Find the last bin with physical area (r_out > r_in) */
+            int last_physical_bin = 0;
+            for(int i = N_BINS - 1; i >= 0; i--) {
+                if(galaxies[p].DiscRadii[i+1] > galaxies[p].DiscRadii[i]) {
+                    last_physical_bin = i;
+                    break;
+                }
+            }
+
+            /* Move mass from zero-area bins to last physical bin */
+            for(int i = last_physical_bin + 1; i < N_BINS; i++) {
+                if(galaxies[p].DiscGas[i] > 0.0) {
+                    galaxies[p].DiscGas[last_physical_bin] += galaxies[p].DiscGas[i];
+                    galaxies[p].DiscGasMetals[last_physical_bin] += galaxies[p].DiscGasMetals[i];
+                    galaxies[p].DiscGas[i] = 0.0;
+                    galaxies[p].DiscGasMetals[i] = 0.0;
+                }
+                if(galaxies[p].DiscStars[i] > 0.0) {
+                    galaxies[p].DiscStars[last_physical_bin] += galaxies[p].DiscStars[i];
+                    galaxies[p].DiscStarsMetals[last_physical_bin] += galaxies[p].DiscStarsMetals[i];
+                    galaxies[p].DiscStars[i] = 0.0;
+                    galaxies[p].DiscStarsMetals[i] = 0.0;
+                }
+            }
+        }
     }
 
 

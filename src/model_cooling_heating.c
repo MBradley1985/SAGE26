@@ -405,6 +405,75 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
  * the total cooled mass is returned.
  */
 /*
+ * deposit_cooled_gas_darksage -- DarkSAGEMode deposit of cooled gas.
+ *
+ * Distributes cooling_mass over the disc annuli with an exponential
+ * j-profile, f(j) ~ j exp(-j/j_scale), j_scale = Vvir * CoolScaleRadius
+ * (Stevens, Croton & Mutch 2016), updates the gas-disc spin and adds the
+ * mass to the bulk ColdGas.  The caller removes the mass from its source
+ * reservoir (HotGas or CGMgas), so this serves both cooling regimes.
+ */
+static void deposit_cooled_gas_darksage(const int gal, const double cooling_mass, const double metallicity,
+                                        struct GALAXY *galaxies, const struct params *run_params)
+{
+    if(cooling_mass <= 0.0) return;
+
+    // Find the last bin with physical area (r_out > r_in); bins capped at Rvir have zero area
+    int last_physical_bin = N_BINS - 1;
+    for(int i = N_BINS - 1; i >= 0; i--) {
+        if(galaxies[gal].DiscRadii[i+1] > galaxies[gal].DiscRadii[i]) {
+            last_physical_bin = i;
+            break;
+        }
+    }
+
+    const double jscale = galaxies[gal].Vvir * galaxies[gal].CoolScaleRadius;
+
+    double coolingGasBinSum = 0.0;
+    double overflow_gas = 0.0;
+
+    for(int i = 0; i < N_BINS; i++) {
+        double coolingGasBin;
+
+        if(jscale > 0.0) {
+            // Integral of j exp(-j/j_scale) between the bin edges
+            const double jfrac1 = run_params->DiscBinEdge[i] / jscale;
+            const double jfrac2 = run_params->DiscBinEdge[i+1] / jscale;
+            coolingGasBin = cooling_mass * ((jfrac1 + 1.0) * exp(-jfrac1) - (jfrac2 + 1.0) * exp(-jfrac2));
+        } else {
+            // Fallback: uniform distribution if scale radius is zero
+            coolingGasBin = cooling_mass / N_BINS;
+        }
+
+        // Last bin takes the remainder so the bins sum exactly to cooling_mass
+        if(coolingGasBin + coolingGasBinSum > cooling_mass || i == N_BINS - 1) {
+            coolingGasBin = cooling_mass - coolingGasBinSum;
+        }
+        if(coolingGasBin < 0.0) coolingGasBin = 0.0;
+
+        if(i <= last_physical_bin) {
+            galaxies[gal].DiscGas[i] += coolingGasBin;
+            galaxies[gal].DiscGasMetals[i] += metallicity * coolingGasBin;
+        } else {
+            overflow_gas += coolingGasBin;
+        }
+        coolingGasBinSum += coolingGasBin;
+    }
+
+    // Zero-area bins hand their share to the last physical bin
+    if(overflow_gas > 0.0 && last_physical_bin >= 0) {
+        galaxies[gal].DiscGas[last_physical_bin] += overflow_gas;
+        galaxies[gal].DiscGasMetals[last_physical_bin] += metallicity * overflow_gas;
+    }
+
+    // Spin update uses the pre-cooling ColdGas as the weight, so it must precede the ColdGas update
+    update_spin_gas_cooling(gal, cooling_mass, galaxies);
+
+    galaxies[gal].ColdGas += cooling_mass;
+    galaxies[gal].MetalsColdGas += metallicity * cooling_mass;
+}
+
+/*
  * reset_cgm_diagnostics -- clear the CGM timescale diagnostics.
  *
  * cooling_recipe_cgm() is only entered when CGMgas > 0, so a halo that drains
@@ -482,8 +551,12 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
             cgm_cooling = galaxies[gal].CGMgas;
         }
         const double metallicity = get_metallicity(galaxies[gal].CGMgas, galaxies[gal].MetalsCGMgas);
-        galaxies[gal].ColdGas += cgm_cooling;
-        galaxies[gal].MetalsColdGas += metallicity * cgm_cooling;
+        if(run_params->DarkSAGEMode == 1) {
+            deposit_cooled_gas_darksage(gal, cgm_cooling, metallicity, galaxies, run_params);
+        } else {
+            galaxies[gal].ColdGas += cgm_cooling;
+            galaxies[gal].MetalsColdGas += metallicity * cgm_cooling;
+        }
         galaxies[gal].CGMgas -= cgm_cooling;
         galaxies[gal].MetalsCGMgas -= metallicity * cgm_cooling;
     }
@@ -494,8 +567,12 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
             hot_cooling = galaxies[gal].HotGas;
         }
         const double metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);
-        galaxies[gal].ColdGas += hot_cooling;
-        galaxies[gal].MetalsColdGas += metallicity * hot_cooling;
+        if(run_params->DarkSAGEMode == 1) {
+            deposit_cooled_gas_darksage(gal, hot_cooling, metallicity, galaxies, run_params);
+        } else {
+            galaxies[gal].ColdGas += hot_cooling;
+            galaxies[gal].MetalsColdGas += metallicity * hot_cooling;
+        }
         galaxies[gal].HotGas -= hot_cooling;
         galaxies[gal].MetalsHotGas -= metallicity * hot_cooling;
     }
@@ -711,4 +788,25 @@ void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct 
             galaxies[centralgal].MetalsHotGas = 0.0;
         }
     }
+}
+
+/*
+ * DarkSAGEMode counterpart of cool_gas_onto_galaxy() for the non-CGM path
+ * (CGMrecipeOn == 0): moves up to coolingGas from HotGas into the disc
+ * annuli via deposit_cooled_gas_darksage().
+ */
+void cool_gas_onto_galaxy_darksage(const int centralgal, const double coolingGas, struct GALAXY *galaxies,
+                                   const struct params *run_params)
+{
+    if(coolingGas <= 0.0) return;
+
+    const double actual_cooling = (coolingGas < galaxies[centralgal].HotGas) ? coolingGas : galaxies[centralgal].HotGas;
+    const double metallicity = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);
+
+    deposit_cooled_gas_darksage(centralgal, actual_cooling, metallicity, galaxies, run_params);
+
+    galaxies[centralgal].HotGas -= actual_cooling;
+    galaxies[centralgal].MetalsHotGas -= metallicity * actual_cooling;
+    if(galaxies[centralgal].HotGas < 0.0) galaxies[centralgal].HotGas = 0.0;
+    if(galaxies[centralgal].MetalsHotGas < 0.0) galaxies[centralgal].MetalsHotGas = 0.0;
 }

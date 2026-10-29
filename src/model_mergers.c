@@ -26,6 +26,8 @@
 
 #include "model_starformation_and_feedback.h"
 #include "model_disk_instability.h"
+#include "model_darksage_instability.h"
+#include "model_darksage_sf.h"
 #include "model_halo_properties.h"
 
 /* -------------------------------------------------------------------------
@@ -362,6 +364,9 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
         galaxies[merger_centralgal].BlackHoleMass += BHaccrete;
         galaxies[merger_centralgal].ColdGas -= BHaccrete;
         galaxies[merger_centralgal].MetalsColdGas -= metallicity * BHaccrete;
+        if(run_params->DarkSAGEMode == 1) {
+            darksage_remove_disc_gas(merger_centralgal, BHaccrete, galaxies[merger_centralgal].DiscGas, galaxies);
+        }
         if(galaxies[merger_centralgal].MetalsColdGas < 0.0) {
             galaxies[merger_centralgal].MetalsColdGas = 0.0;
         }
@@ -399,6 +404,14 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
     if(quasar_energy > cold_gas_energy) {
         galaxies[gal].EjectedMass += galaxies[gal].ColdGas;
         galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsColdGas;
+
+        if(run_params->DarkSAGEMode == 1) {
+            for(int i = 0; i < N_BINS; i++) {
+                galaxies[gal].DiscGas[i] = 0.0f;
+                galaxies[gal].DiscGasMetals[i] = 0.0f;
+                galaxies[gal].DiscH2[i] = 0.0f;
+            }
+        }
 
         galaxies[gal].ColdGas = 0.0;
         galaxies[gal].MetalsColdGas = 0.0;
@@ -457,6 +470,30 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
  */
 void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
+    if(run_params->DarkSAGEMode == 1) {
+        // Mass-weighted spins, using the masses before they are combined
+        combine_spins_merger(t, p, galaxies);
+
+        // Satellite gas joins the central's annuli by j-bin; its stars all join the bulge below,
+        // so DiscStars are not added.  Annuli with no area (capped at Rvir) hand theirs to the last real one.
+        int last = 0;
+        for(int i = N_BINS - 1; i >= 0; i--) {
+            if(galaxies[t].DiscRadii[i+1] > galaxies[t].DiscRadii[i]) { last = i; break; }
+        }
+        for(int i = 0; i < N_BINS; i++) {
+            const int k = (i > last) ? last : i;
+            galaxies[t].DiscGas[k] += galaxies[p].DiscGas[i];
+            galaxies[t].DiscGasMetals[k] += galaxies[p].DiscGasMetals[i];
+        }
+
+        // Satellite fountain / outflow gas joins the central's hot (or CGM) reservoir
+        add_gas_to_hot_reservoir(&galaxies[t], run_params,
+                                 galaxies[p].FountainGas + galaxies[p].OutflowGas,
+                                 galaxies[p].MetalsFountainGas + galaxies[p].MetalsOutflowGas);
+        galaxies[p].FountainGas = galaxies[p].MetalsFountainGas = 0.0f;
+        galaxies[p].OutflowGas = galaxies[p].MetalsOutflowGas = 0.0f;
+    }
+
     galaxies[t].ColdGas += galaxies[p].ColdGas;
     galaxies[t].MetalsColdGas += galaxies[p].MetalsColdGas;
 
@@ -580,6 +617,12 @@ void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
     galaxies[p].InstabilityBulgeMass = 0.0;                      // Destroyed
     galaxies[p].MetalsBulgeMass = galaxies[p].MetalsStellarMass;
 
+    // DarkSAGEMode: the stellar disc is destroyed (arrays are all zero otherwise)
+    for(int i = 0; i < N_BINS; i++) {
+        galaxies[p].DiscStars[i] = 0.0f;
+        galaxies[p].DiscStarsMetals[i] = 0.0f;
+    }
+
     // update the star formation rate
     for(int step = 0; step < STEPS; step++) {
         galaxies[p].SfrBulge[step] += galaxies[p].SfrDisk[step];
@@ -634,7 +677,11 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         // Using the stale value + clamp would silently fall back to ColdGas for most events.
         const int cgal = merger_centralgal;
         double h2gas_fresh = 0.0;
-        if(galaxies[cgal].ColdGas > 0.0 && galaxies[cgal].DiskScaleRadius > 0.0) {
+        if(run_params->DarkSAGEMode == 1) {
+            double sfr_unused[N_BINS];
+            darksage_star_formation_rate(cgal, sfr_unused, galaxies, run_params);   // sets H2gas and DiscH2[]
+            h2gas_fresh = galaxies[cgal].H2gas;
+        } else if(galaxies[cgal].ColdGas > 0.0 && galaxies[cgal].DiskScaleRadius > 0.0) {
             const float h     = run_params->Hubble_h;  /* float on purpose: frozen single-precision behaviour, do not promote (see docs/physics/units.md) */
             const float rs_pc = (float)(CODE_LENGTH_TO_PC(galaxies[cgal].DiskScaleRadius, h));
             if(rs_pc > 0.0f) {
@@ -812,6 +859,19 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     // update from feedback
     update_from_feedback(merger_centralgal, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 
+    // DarkSAGEMode: the burst's gas use (stars locked up + reheating) comes out of the annuli,
+    // weighted by H2 when the burst used H2; the stars themselves join the bulge, not DiscStars
+    const float *burst_weight = galaxies[merger_centralgal].DiscGas;
+    if(run_params->DarkSAGEMode == 1) {
+        if(run_params->StarburstColdGasOn == 0 && sf_prescription_tracks_h2(run_params->SFprescription)) {
+            burst_weight = galaxies[merger_centralgal].DiscH2;
+        }
+        darksage_remove_disc_gas(merger_centralgal,
+                                 (1.0 - run_params->RecycleFraction) * stars
+                                 + ((run_params->SupernovaRecipeOn == 1) ? reheated_mass : 0.0),
+                                 burst_weight, galaxies);
+    }
+
     // Clamp H2/H1 after gas has been consumed and ejected, so any chained merger
     // or disk-instability check that reads H2gas gets a physically consistent value.
     // Note: this quick refresh skips the HIIonizationOn cut (H1 here is the full
@@ -828,7 +888,11 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     // check for disk instability
     if(run_params->DiskInstabilityOn && mode == 0) {
         if(mass_ratio < run_params->ThreshMajorMerger) {
-            check_disk_instability(merger_centralgal, centralgal, halonr, time, dt, step, galaxies, run_params);
+            if(run_params->DarkSAGEMode == 1) {
+                check_disk_instability_darksage(merger_centralgal, centralgal, dt, step, galaxies, run_params);
+            } else {
+                check_disk_instability(merger_centralgal, centralgal, halonr, time, dt, step, galaxies, run_params);
+            }
         }
     }
 
@@ -839,6 +903,12 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         
         // Metals that stay in disk
         galaxies[merger_centralgal].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        if(run_params->DarkSAGEMode == 1) {
+            double gas_weight[N_BINS];
+            for(int i = 0; i < N_BINS; i++) gas_weight[i] = galaxies[merger_centralgal].DiscGas[i];
+            darksage_add_disc_metals(merger_centralgal, run_params->Yield * (1.0 - FracZleaveDiskVal) * stars,
+                                     gas_weight, galaxies);
+        }
         
         // Metals that leave disk - regime dependent
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
@@ -851,6 +921,8 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         
         add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }
+
+    if(run_params->DarkSAGEMode == 1) darksage_sync_disc_metals(merger_centralgal, galaxies);
 }
 
 // ============================================================================
@@ -871,6 +943,18 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     const double total_metals_gas = galaxies[gal].MetalsColdGas + galaxies[gal].MetalsHotGas + galaxies[gal].MetalsCGMgas;
     
     add_gas_to_hot_reservoir(&galaxies[centralgal], run_params, total_gas, total_metals_gas);
+
+    if(run_params->DarkSAGEMode == 1) {
+        add_gas_to_hot_reservoir(&galaxies[centralgal], run_params,
+                                 galaxies[gal].FountainGas + galaxies[gal].OutflowGas,
+                                 galaxies[gal].MetalsFountainGas + galaxies[gal].MetalsOutflowGas);
+        galaxies[gal].FountainGas = galaxies[gal].MetalsFountainGas = 0.0f;
+        galaxies[gal].OutflowGas = galaxies[gal].MetalsOutflowGas = 0.0f;
+        for(int i = 0; i < N_BINS; i++) {
+            galaxies[gal].DiscGas[i] = galaxies[gal].DiscGasMetals[i] = 0.0f;
+            galaxies[gal].DiscStars[i] = galaxies[gal].DiscStarsMetals[i] = 0.0f;
+        }
+    }
 
     // Transfer ejected mass (same for all regimes)
     galaxies[centralgal].EjectedMass += galaxies[gal].EjectedMass;

@@ -130,6 +130,16 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->Exponent_Forest_Dist_Scheme = 0.7;
     run_params->KarpovModeOn               = 0; /* 0: full Karpov+2023 recipe, 1: low-metallicity floor (Z/Z_sun = 0.01) for reheated and ejected gas */
 
+    // DarkSAGEMode: 0 = standard SAGE; 1 = full DarkSage physics (radially-resolved disk structure, Toomre Q instability, precession, j-conservation, fountain gas reservoirs)
+    run_params->DarkSAGEMode               = 0; /* default: standard SAGE behavior */
+    run_params->FirstBin                   = 100.0; /* default: first j-bin edge [kpc km/s] */
+    run_params->ExponentBin                = 1.4; /* default: j-bin geometric growth factor */
+    run_params->GasSinkRate                = 0.1; /* default: unstable gas sink fraction */
+    run_params->ThetaThresh                = 5.0; /* default: coplanar threshold [deg] */
+    run_params->DegPerTdyn                 = 1.0; /* default: precession rate [deg/tdyn] */
+    run_params->QTotMin                    = 1.0; /* default: minimum combined Q for stability */
+
+
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
 #define REG(tag, addr, type, req) do {         \
     strncpy(ParamTag[NParam], tag, MAXTAGLEN); \
@@ -209,6 +219,14 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("H2RadialRMaxFactor",         &(run_params->H2RadialRMaxFactor),         DOUBLE, 0);
     REG("EnhancedSFEfficiency",       &(run_params->EnhancedSFEfficiency),       DOUBLE, 0);
     REG("KarpovModeOn",               &(run_params->KarpovModeOn),               INT, 0);
+
+    REG("DarkSAGEMode",                &(run_params->DarkSAGEMode),               INT, 0);
+    REG("FirstBin",                    &(run_params->FirstBin),                   DOUBLE, 0);
+    REG("ExponentBin",                 &(run_params->ExponentBin),                DOUBLE, 0);
+    REG("GasSinkRate",                 &(run_params->GasSinkRate),                DOUBLE, 0);
+    REG("ThetaThresh",                 &(run_params->ThetaThresh),                DOUBLE, 0);
+    REG("DegPerTdyn",                  &(run_params->DegPerTdyn),                   DOUBLE, 0);
+    REG("QTotMin",                     &(run_params->QTotMin),                     DOUBLE, 0);
 
 #undef REG
 
@@ -535,6 +553,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"H2DepletionMode",        run_params->H2DepletionMode,        0, H2DEPLETIONMODE_MAX},
+            {"KarpovModeOn",            run_params->KarpovModeOn,            0, 1},
+            {"DarkSAGEMode",           run_params->DarkSAGEMode,           0, 1}
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {

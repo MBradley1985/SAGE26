@@ -51,6 +51,10 @@ static int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to
 
 static int32_t write_header(hid_t file_id, const struct forest_info *forest_info, const struct params *run_params);
 
+static int32_t create_darksage_datasets(hid_t file_id, const int32_t snap_idx, const struct params *run_params);
+static int32_t write_darksage_datasets(const int32_t snap_idx, const int32_t num_to_write,
+                                       struct save_info *save_info, const struct params *run_params);
+
 
 
 // HDF5 is a self-describing data format.  Each dataset will contain a number of attributes to
@@ -385,6 +389,13 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
         }
     }
 
+    if(run_params->DarkSAGEMode == 1) {
+        for(int32_t snap_idx = 0; snap_idx < run_params->NumSnapOutputs; snap_idx++) {
+            const int32_t ds_status = create_darksage_datasets(file_id, snap_idx, run_params);
+            if(ds_status != EXIT_SUCCESS) return ds_status;
+        }
+    }
+
     // Now for each snapshot, we process `buffer_count` galaxies into RAM for every snapshot before
     // writing a single chunk. Unlike the binary instance where we have a single GALAXY_OUTPUT
     // struct instance per galaxy, here HDF5_GALAXY_OUTPUT is a **struct of arrays**.
@@ -434,6 +445,16 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
             save_info->buffer_output_gals[snap_idx].SFHMassDisk = NULL;
             save_info->buffer_output_gals[snap_idx].SFHMassBulge = NULL;
         }
+
+#define DARKSAGE_FIELD_MALLOC(name, width, desc, unit) \
+        save_info->buffer_output_gals[snap_idx].ds_##name = NULL; \
+        if(run_params->DarkSAGEMode == 1) { \
+            save_info->buffer_output_gals[snap_idx].ds_##name = malloc((size_t) save_info->buffer_size * (width) * sizeof(float)); \
+            CHECK_POINTER_AND_RETURN_ON_NULL(save_info->buffer_output_gals[snap_idx].ds_##name, \
+                                             "Failed to allocate the DarkSAGE output buffer for " #name); \
+        }
+        DARKSAGE_OUTPUT_FIELDS(DARKSAGE_FIELD_MALLOC)
+#undef DARKSAGE_FIELD_MALLOC
     }
 
     return EXIT_SUCCESS;
@@ -666,6 +687,9 @@ int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct
             free(save_info->buffer_output_gals[snap_idx].SFHMassDisk);
             free(save_info->buffer_output_gals[snap_idx].SFHMassBulge);
         }
+#define DARKSAGE_FIELD_FREE(name, width, desc, unit) free(save_info->buffer_output_gals[snap_idx].ds_##name);
+        DARKSAGE_OUTPUT_FIELDS(DARKSAGE_FIELD_FREE)
+#undef DARKSAGE_FIELD_FREE
     }
 
     myfree(save_info->buffer_output_gals);
@@ -956,6 +980,20 @@ static int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct sav
         }
     }
 
+    if(run_params->DarkSAGEMode == 1) {
+        // Each field is a float scalar or float array member of GALAXY, copied as `width` floats
+#define DARKSAGE_FIELD_PACK(name, width, desc, unit) \
+        memcpy(&save_info->buffer_output_gals[output_snap_idx].ds_##name[(size_t) gals_in_buffer * (width)], \
+               (const float *) &g->name, (width) * sizeof(float));
+        DARKSAGE_OUTPUT_FIELDS(DARKSAGE_FIELD_PACK)
+#undef DARKSAGE_FIELD_PACK
+        // DiscSFR accumulates code-unit rates over the substeps: convert to Msun/yr and average like SfrDisk
+        float *disc_sfr = &save_info->buffer_output_gals[output_snap_idx].ds_DiscSFR[(size_t) gals_in_buffer * N_BINS];
+        for(int i = 0; i < N_BINS; i++) {
+            disc_sfr[i] = disc_sfr[i] * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS / sfr_norm;
+        }
+    }
+
     save_info->buffer_output_gals[output_snap_idx].DiskScaleRadius[gals_in_buffer] = g->DiskScaleRadius;
     save_info->buffer_output_gals[output_snap_idx].BulgeRadius[gals_in_buffer] = g->BulgeRadius;
     save_info->buffer_output_gals[output_snap_idx].MergerBulgeRadius[gals_in_buffer] = g->MergerBulgeRadius;
@@ -1202,6 +1240,11 @@ static int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to
         }
     }
 
+    if(run_params->DarkSAGEMode == 1) {
+        const int32_t ds_status = write_darksage_datasets(snap_idx, num_to_write, save_info, run_params);
+        if(ds_status != EXIT_SUCCESS) return ds_status;
+    }
+
     // We've performed a write, so future galaxies will overwrite the old data.
     save_info->num_gals_in_buffer[snap_idx] = 0;
     save_info->tot_ngals[snap_idx] += num_to_write;
@@ -1211,6 +1254,127 @@ static int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to
 
 #undef SIZEOF_STRUCT_FIELD
 #undef EXTEND_AND_WRITE_GALAXY_DATASET
+
+/*
+ * create_darksage_datasets -- create the empty, extensible DarkSAGEMode datasets
+ * (DARKSAGE_OUTPUT_FIELDS) in one snapshot group: 1-D for width 1, else [0, width].
+ */
+static int32_t create_darksage_datasets(hid_t file_id, const int32_t snap_idx, const struct params *run_params)
+{
+    const char *names[] = {
+#define DS_NAME(name, width, desc, unit) #name,
+        DARKSAGE_OUTPUT_FIELDS(DS_NAME)
+#undef DS_NAME
+    };
+    const char *descs[] = {
+#define DS_DESC(name, width, desc, unit) desc,
+        DARKSAGE_OUTPUT_FIELDS(DS_DESC)
+#undef DS_DESC
+    };
+    const char *units[] = {
+#define DS_UNIT(name, width, desc, unit) unit,
+        DARKSAGE_OUTPUT_FIELDS(DS_UNIT)
+#undef DS_UNIT
+    };
+    const int widths[] = {
+#define DS_WIDTH(name, width, desc, unit) (width),
+        DARKSAGE_OUTPUT_FIELDS(DS_WIDTH)
+#undef DS_WIDTH
+    };
+
+    for(size_t k = 0; k < sizeof(widths) / sizeof(widths[0]); k++) {
+        char full_name[2*MAX_STRING_LEN];
+        snprintf(full_name, 2*MAX_STRING_LEN - 1, "Snap_%d/%s", run_params->ListOutputSnaps[snap_idx], names[k]);
+
+        const int rank = (widths[k] > 1) ? 2 : 1;
+        hsize_t dims[2] = {0, (hsize_t) widths[k]};
+        hsize_t maxdims[2] = {H5S_UNLIMITED, (hsize_t) widths[k]};
+        hsize_t chunk[2] = {NUM_GALS_PER_BUFFER, (hsize_t) widths[k]};
+
+        hid_t prop = H5Pcreate(H5P_DATASET_CREATE);
+        CHECK_STATUS_AND_RETURN_ON_FAIL(prop, (int32_t) prop, "Could not create the property list for %s", names[k]);
+        herr_t status = H5Pset_chunk(prop, rank, chunk);
+        CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status, "Could not set chunking for %s", names[k]);
+        hid_t space = H5Screate_simple(rank, dims, maxdims);
+        CHECK_STATUS_AND_RETURN_ON_FAIL(space, (int32_t) space, "Could not create the dataspace for %s", names[k]);
+        hid_t dset = H5Dcreate2(file_id, full_name, H5T_NATIVE_FLOAT, space, H5P_DEFAULT, prop, H5P_DEFAULT);
+        CHECK_STATUS_AND_RETURN_ON_FAIL(dset, (int32_t) dset, "Could not create the dataset %s", full_name);
+
+        // Attribute strings are staged in zeroed MAX_STRING_LEN buffers (H5Awrite reads that many bytes)
+        char attr_buf[MAX_STRING_LEN];
+        memset(attr_buf, 0, sizeof(attr_buf));
+        snprintf(attr_buf, sizeof(attr_buf), "%s", descs[k]);
+        CREATE_STRING_ATTRIBUTE(dset, "Description", attr_buf, MAX_STRING_LEN);
+        memset(attr_buf, 0, sizeof(attr_buf));
+        snprintf(attr_buf, sizeof(attr_buf), "%s", units[k]);
+        CREATE_STRING_ATTRIBUTE(dset, "Units", attr_buf, MAX_STRING_LEN);
+
+        H5Dclose(dset);
+        H5Sclose(space);
+        H5Pclose(prop);
+    }
+
+    return EXIT_SUCCESS;
+}
+
+/*
+ * write_darksage_datasets -- extend each DarkSAGEMode dataset by num_to_write rows
+ * and write the buffered galaxies for one snapshot.
+ */
+static int32_t write_darksage_datasets(const int32_t snap_idx, const int32_t num_to_write,
+                                       struct save_info *save_info, const struct params *run_params)
+{
+    const char *names[] = {
+#define DS_NAME(name, width, desc, unit) #name,
+        DARKSAGE_OUTPUT_FIELDS(DS_NAME)
+#undef DS_NAME
+    };
+    const int widths[] = {
+#define DS_WIDTH(name, width, desc, unit) (width),
+        DARKSAGE_OUTPUT_FIELDS(DS_WIDTH)
+#undef DS_WIDTH
+    };
+    float *buffers[] = {
+#define DS_BUF(name, width, desc, unit) save_info->buffer_output_gals[snap_idx].ds_##name,
+        DARKSAGE_OUTPUT_FIELDS(DS_BUF)
+#undef DS_BUF
+    };
+
+    for(size_t k = 0; k < sizeof(widths) / sizeof(widths[0]); k++) {
+        char full_name[2*MAX_STRING_LEN];
+        snprintf(full_name, 2*MAX_STRING_LEN - 1, "Snap_%d/%s", run_params->ListOutputSnaps[snap_idx], names[k]);
+
+        const int rank = (widths[k] > 1) ? 2 : 1;
+        hid_t dset = H5Dopen2(save_info->file_id, full_name, H5P_DEFAULT);
+        CHECK_STATUS_AND_RETURN_ON_FAIL(dset, (int32_t) dset, "Could not open the dataset %s", full_name);
+
+        hid_t space = H5Dget_space(dset);
+        hsize_t cur[2] = {0, 0};
+        H5Sget_simple_extent_dims(space, cur, NULL);
+        H5Sclose(space);
+
+        hsize_t new_dims[2] = {cur[0] + num_to_write, (hsize_t) widths[k]};
+        herr_t status = H5Dset_extent(dset, new_dims);
+        CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status, "Could not extend the dataset %s", full_name);
+
+        hid_t filespace = H5Dget_space(dset);
+        hsize_t offset[2] = {cur[0], 0};
+        hsize_t count[2] = {(hsize_t) num_to_write, (hsize_t) widths[k]};
+        status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, offset, NULL, count, NULL);
+        CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status, "Could not select the hyperslab for %s", full_name);
+        hid_t memspace = H5Screate_simple(rank, count, NULL);
+        CHECK_STATUS_AND_RETURN_ON_FAIL(memspace, (int32_t) memspace, "Could not create the memspace for %s", full_name);
+
+        status = H5Dwrite(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, buffers[k]);
+        CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status, "Could not write the dataset %s", full_name);
+
+        H5Sclose(memspace);
+        H5Sclose(filespace);
+        H5Dclose(dset);
+    }
+
+    return EXIT_SUCCESS;
+}
 
 /*
  * write_header -- write run metadata into the "Header" HDF5 group hierarchy.
@@ -1353,6 +1517,22 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
 
     CREATE_AND_WRITE_1D_ARRAY(file_id, "Header/output_snapshots", dims, run_params->ListOutputSnaps, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "NumOutputs", run_params->NumSnapOutputs, H5T_NATIVE_INT);
+    if(run_params->DarkSAGEMode == 1) {
+        // Only when on, so DarkSAGEMode == 0 headers are unchanged
+        CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DarkSAGEMode", run_params->DarkSAGEMode, H5T_NATIVE_INT);
+        CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FirstBin", run_params->FirstBin, H5T_NATIVE_DOUBLE);
+        CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ExponentBin", run_params->ExponentBin, H5T_NATIVE_DOUBLE);
+        CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "GasSinkRate", run_params->GasSinkRate, H5T_NATIVE_DOUBLE);
+        CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "QTotMin", run_params->QTotMin, H5T_NATIVE_DOUBLE);
+        CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ThetaThresh", run_params->ThetaThresh, H5T_NATIVE_DOUBLE);
+        CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DegPerTdyn", run_params->DegPerTdyn, H5T_NATIVE_DOUBLE);
+        // Bin edges in code units, (Mpc/h)(km/s)
+        hid_t edge_space = H5Screate_simple(1, (hsize_t[]){N_BINS + 1}, NULL);
+        hid_t edge_attr = H5Acreate(runtime_group_id, "DiscBinEdge", H5T_NATIVE_DOUBLE, edge_space, H5P_DEFAULT, H5P_DEFAULT);
+        H5Awrite(edge_attr, H5T_NATIVE_DOUBLE, run_params->DiscBinEdge);
+        H5Aclose(edge_attr);
+        H5Sclose(edge_space);
+    }
 
     herr_t status = H5Gclose(sim_group_id);
     CHECK_STATUS_AND_RETURN_ON_FAIL(status, (int32_t) status,
