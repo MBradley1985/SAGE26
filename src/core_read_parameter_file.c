@@ -547,7 +547,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
             {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
             {"EnhancedStarFormationOn", run_params->EnhancedStarFormationOn, 0, 2},
-            {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 3},
+            {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 4},
             {"H2DiskAreaOption",       run_params->H2DiskAreaOption,       0, 2},
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
@@ -577,6 +577,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     }
     /* In DarkSAGEMode the disc annuli replace the radial integration, and mode 5 (the DarkSage
        H2 law) only exists there. */
+    if(run_params->BulgeSizeOn == 4 && run_params->DarkSAGEMode != 1) {
+        fprintf(stderr, "Error: BulgeSizeOn = 4 (DarkSage dynamical bulge size) needs DarkSAGEMode = 1.\n");
+        ABORT(EXIT_FAILURE);
+    }
     if(run_params->SupernovaRecipeOn == 2 && run_params->DarkSAGEMode != 1) {
         fprintf(stderr, "Error: SupernovaRecipeOn = 2 (DarkSage energy-driven feedback) needs DarkSAGEMode = 1.\n");
         ABORT(EXIT_FAILURE);

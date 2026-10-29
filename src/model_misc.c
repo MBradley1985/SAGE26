@@ -348,7 +348,9 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
     }
     
     // BulgeSizeOn == 3: Tonini setup (separate merger and instability bulges)
-    if(run_params->BulgeSizeOn == 3) {
+    // BulgeSizeOn == 4: the same, with the instability radius from DarkSage's dynamical
+    // bulge size (DarkSAGEMode, model_darksage_disc.c)
+    if(run_params->BulgeSizeOn == 3 || run_params->BulgeSizeOn == 4) {
         const double M_merger = galaxies[p].MergerBulgeMass;
         const double M_instability = galaxies[p].InstabilityBulgeMass;
         const double M_total = M_merger + M_instability;
