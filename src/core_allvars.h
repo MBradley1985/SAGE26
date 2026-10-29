@@ -220,6 +220,48 @@ struct GALAXY
     float mdot_stream;  /* cold-stream inflow rate from CGMgas [10^10 Msun/h / code time] */
 
     double g_max; /* peak NFW gravitational acceleration for the BK25 FFB threshold, code units (UnitLength/UnitTime^2) */
+
+    /* DarkSAGEMode: radially-resolved disk structure (only used when DarkSAGEOn=1) */
+    float DiscRadii[N_BINS+1];       /* Physical radius of each annulus boundary [Mpc/h] */
+    float DiscGas[N_BINS];           /* Cold gas mass in each annulus */
+    float DiscStars[N_BINS];         /* Stellar mass in each annulus */
+    float DiscGasMetals[N_BINS];     /* Gas-phase metals in each annulus */
+    float DiscStarsMetals[N_BINS];   /* Stellar metals in each annulus */
+    float DiscH2[N_BINS];            /* H2 mass in each annulus */
+    float DiscHI[N_BINS];            /* HI mass in each annulus */
+    float DiscSFR[N_BINS];           /* Star formation rate in each annulus */
+    float DiscDust[N_BINS];          /* Dust mass in each annulus (if DustOn=1) */
+
+    /* DarkSAGEMode: angular momentum tracking */
+    float SpinGas[3];                /* Gas disk spin vector */
+    float SpinStars[3];              /* Stellar disk spin vector */
+    float SpinHot[3];                /* Hot gas spin vector */
+    float SpinBulge[3];              /* Bulge spin vector */
+    float CoolScaleRadius;           /* Scale radius of cooling gas */
+    float GasDiscScaleRadius;        /* Gas disk scale radius */
+    float StellarDiscScaleRadius;    /* Stellar disk scale radius */
+
+    /* DarkSAGEMode: Rotation curve and potential (only used when DarkSAGEOn=1) */
+    float HaloScaleRadius;           /* NFW scale radius r_s = Rvir/c */
+    float RotSupportScaleRadius;     /* Radius where f_rot = 0.5 */
+    float Potential[N_BINS+1];       /* Gravitational potential at each radius */
+    float c_beta;                    /* Beta profile parameter for hot gas (init to 0.1) */
+
+    /* FountainGas/OutflowGas reservoirs (only used when DarkSAGEOn=1 for hot-regime haloes) */
+    float FountainGas;               /* Gas leaving disc but not halo */
+    float MetalsFountainGas;         /* Metals in fountain gas */
+    float OutflowGas;                /* Higher energy gas escaping beyond Rvir */
+    float MetalsOutflowGas;          /* Metals in outflow gas */
+    float FountainTime;              /* Time for fountain gas to return to hot gas */
+    float OutflowTime;               /* Time for outflow to reach EjectedMass */
+
+    /* DarkSAGEMode: Enhanced disk physics */
+    float VelDispStars[N_BINS];      /* Stellar velocity dispersion per annulus [km/s] */
+    float VelDispBulge;              /* Secular bulge velocity dispersion [km/s] */
+    float SecularBulgeMass;          /* Mass in secular bulge [10^10 Msun/h] */
+    float SecularMetalsBulgeMass;    /* Metals in secular bulge */
+    float SpinSecularBulge[3];       /* Secular bulge spin vector */
+    float R2_hot_av;                 /* Average <r^2> for hot gas */
 };
 
 
@@ -554,6 +596,19 @@ struct params
     /* reionization filter-mass scale factors (Kravtsov+2004 / Gnedin 2000) */
     double a0;  /* scale factor at which the filter mass M_F reaches its peak */
     double ar;  /* scale factor at which reionization completes (used in M_F integral) */
+
+    /* DarkSAGEMode: Full DarkSage physics with radially-resolved disk structure */
+    /* When DarkSAGEMode=1: Enables radial bins, Toomre Q instability, precession, j-conservation, */
+    /*                    fountain gas reservoirs (for hot-regime haloes only) */
+    /* When DarkSAGEMode=0: Standard SAGE behavior */
+    int32_t    DarkSAGEMode;            // 0: standard SAGE; 1: full DarkSage physics
+    double     FirstBin;                // First j-bin edge [kpc km/s] (default 100)
+    double     ExponentBin;             // j-bin geometric growth factor (default 1.4)
+    double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
+    double     GasSinkRate;             // Unstable gas sink fraction (default 0.1)
+    double     ThetaThresh;             // Coplanar threshold [deg] (default 5.0)
+    double     DegPerTdyn;              // Precession rate [deg/tdyn] (default 1.0)
+    double     QTotMin;                 // Minimum combined Q for stability (default 1.0)
 
     int32_t nsnapshots;
     int32_t LastSnapshotNr;

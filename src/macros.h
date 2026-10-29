@@ -19,6 +19,10 @@
 #define  MAXGALFAC        1
 #define  ABSOLUTEMAXSNAPS 200  /* The largest number of snapshots for any simulation */
 
+
+/* DarkSAGEMode (radially-resolved disks) constants */
+#define  N_BINS           30         /* Number of radial annuli for disk structure (DarkSAGEMode) */
+
 /* physical constants in cgs */
 #define  GRAVITY     6.672e-8        /* gravitational constant [cm^3 g^-1 s^-2] */
 #define  SOLAR_MASS  1.989e33        /* solar mass [g] */
