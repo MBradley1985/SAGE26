@@ -132,6 +132,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
     // DarkSAGEMode: 0 = standard SAGE; 1 = full DarkSage physics (radially-resolved disk structure, Toomre Q instability, precession, j-conservation, fountain gas reservoirs)
     run_params->DarkSAGEMode               = 0; /* default: standard SAGE behavior */
+    run_params->RamPressureOn              = 3; /* default: DarkSage, ram pressure and tides */
     run_params->DarkSAGEMergerBursts       = 0; /* default: DarkSage, mergers act through disc instability */
     run_params->FirstBin                   = 1.0; /* default: first j-bin edge [kpc/h km/s] (DarkSage MTNG.par) */
     run_params->ExponentBin                = 1.4; /* default: j-bin geometric growth factor */
@@ -222,6 +223,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("KarpovModeOn",               &(run_params->KarpovModeOn),               INT, 0);
 
     REG("DarkSAGEMode",                &(run_params->DarkSAGEMode),               INT, 0);
+    REG("RamPressureOn",               &(run_params->RamPressureOn),              INT, 0);
     REG("DarkSAGEMergerBursts",        &(run_params->DarkSAGEMergerBursts),       INT, 0);
     REG("FirstBin",                    &(run_params->FirstBin),                   DOUBLE, 0);
     REG("ExponentBin",                 &(run_params->ExponentBin),                DOUBLE, 0);
@@ -556,6 +558,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"H2DepletionMode",        run_params->H2DepletionMode,        0, H2DEPLETIONMODE_MAX},
             {"KarpovModeOn",            run_params->KarpovModeOn,            0, 1},
+            {"RamPressureOn",          run_params->RamPressureOn,          0, 3},
             {"DarkSAGEMergerBursts",   run_params->DarkSAGEMergerBursts,   0, 1},
             {"DarkSAGEMode",           run_params->DarkSAGEMode,           0, 1}
         };

@@ -1522,6 +1522,7 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
         CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DarkSAGEMode", run_params->DarkSAGEMode, H5T_NATIVE_INT);
         CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FirstBin", run_params->FirstBin, H5T_NATIVE_DOUBLE);
         CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ExponentBin", run_params->ExponentBin, H5T_NATIVE_DOUBLE);
+        CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RamPressureOn", run_params->RamPressureOn, H5T_NATIVE_INT);
         CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DarkSAGEMergerBursts", run_params->DarkSAGEMergerBursts, H5T_NATIVE_INT);
         CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "GasSinkRate", run_params->GasSinkRate, H5T_NATIVE_DOUBLE);
         CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "QTotMin", run_params->QTotMin, H5T_NATIVE_DOUBLE);

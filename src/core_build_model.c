@@ -38,6 +38,7 @@
 #include "model_reincorporation.h"
 #include "model_darksage_disc.h"
 #include "model_darksage_stellar_pop.h"
+#include "model_darksage_stripping.h"
 #include "model_starformation_and_feedback.h"
 
 #include "model_cooling_heating.h"
@@ -557,6 +558,15 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 // original SAGE. strip_from_satellite divides by the substep
                 // count, so the per-snapshot fraction does not depend on it.
                 strip_from_satellite(centralgal, p, Zcurr, effective_steps, galaxies, run_params);
+
+                // DarkSAGEMode: ram pressure and tides on the satellite's disc (DarkSage
+                // ram_pressure_stripping()); a satellite inside its tidal radius is disrupted
+                if(run_params->DarkSAGEMode == 1 && run_params->RamPressureOn > 0 && galaxies[p].ColdGas > 0.0
+                   && darksage_ram_pressure_stripping(centralgal, p, time, effective_steps, galaxies, run_params)) {
+                    galaxies[p].mergeIntoID = *numgals + centralgal;  // position in output
+                    disrupt_satellite_to_ICS(centralgal, p, time, galaxies, run_params);
+                    continue;
+                }
             }
 
             // // Determine the cooling gas given the halo properties

@@ -555,3 +555,77 @@ void darksage_precess_gas(const int p, const double dt, struct GALAXY *galaxies,
         for(int j = 0; j < 3; j++) SpinGas[j] = (float)(SpinGas[j] / spin_mag);
     }
 }
+
+/*
+ * Hot-gas density of galaxy c at physical radius r, from HotGas + CGMgas.
+ * Beta profile of Stevens et al. (2024) eq. 11; CGM regime: SAGE26's
+ * rho ~ r^-CGM_ALPHA, flat inside CGM_R0_FRAC Rvir.
+ * Source bug: DarkSage's ram_pressure_stripping() squares C_beta; the paper's
+ * single power is used here.
+ */
+double darksage_hot_density(const struct GALAXY *c, const double r, const struct params *run_params)
+{
+    const double Rvir = c->Rvir;
+    const double M_hot = c->HotGas + c->CGMgas;
+    if(Rvir <= 0.0 || M_hot <= 0.0) return 0.0;
+
+    if(run_params->CGMrecipeOn == 1 && c->Regime == 0) {
+        const double x = (r / Rvir > CGM_R0_FRAC) ? r / Rvir : CGM_R0_FRAC;
+        return M_hot * (3.0 - CGM_ALPHA) / (4.0 * M_PI * Rvir * Rvir * Rvir * (1.0 - pow(CGM_R0_FRAC, 3.0 - CGM_ALPHA)))
+               * pow(x, -CGM_ALPHA);
+    }
+    const double c_beta = (c->c_beta > DS_MIN_C_BETA) ? c->c_beta : DS_MIN_C_BETA;
+    const double cb_term = 1.0 / (1.0 - c_beta * atan(1.0 / c_beta));
+    const double x = r / (c_beta * Rvir);
+    return M_hot * cb_term / (4.0 * M_PI * c_beta * c_beta * Rvir * Rvir * Rvir * (1.0 + x * x));
+}
+
+/*
+ * Mass of central c inside physical radius r < Rvir (DarkSage get_Mhost_internal()):
+ * NFW dark matter (Mvir less c's baryons and the satellite mass m_sat), hot gas,
+ * the two Hernquist bulges, the disc annuli and the black hole, capped at Mvir.
+ * DarkSage's intrahalo-star term is left out: SAGE26 tracks no ICS radius.
+ */
+double darksage_host_mass_within(const struct GALAXY *c, const double r, const double m_sat,
+                                 const struct params *run_params)
+{
+    const double Rvir = c->Rvir;
+    if(r >= Rvir) return c->Mvir;
+
+    double M = 0.0;
+    const double M_DM = c->Mvir - c->HotGas - c->CGMgas - c->ColdGas - c->StellarMass - c->BlackHoleMass - m_sat;
+    const double r_s = c->HaloScaleRadius;
+    if(M_DM > 0.0 && r_s > 0.0) {
+        M += M_DM * (log(1.0 + r / r_s) - r / (r + r_s)) / (log(1.0 + Rvir / r_s) - Rvir / (Rvir + r_s));
+    }
+
+    const double M_hot = c->HotGas + c->CGMgas + c->FountainGas + c->OutflowGas;
+    const double x = r / Rvir;
+    if(run_params->CGMrecipeOn == 1 && c->Regime == 0) {
+        if(x > CGM_R0_FRAC) {
+            const double x0 = pow(CGM_R0_FRAC, 3.0 - CGM_ALPHA);
+            M += M_hot * (pow(x, 3.0 - CGM_ALPHA) - x0) / (1.0 - x0);
+        }
+    } else {
+        const double c_beta = (c->c_beta > DS_MIN_C_BETA) ? c->c_beta : DS_MIN_C_BETA;
+        M += M_hot * (x - c_beta * atan(x / c_beta)) / (1.0 - c_beta * atan(1.0 / c_beta));
+    }
+
+    const double a_SB = hernquist_a_from_half_mass((c->InstabilityBulgeRadius > 0.0f) ? c->InstabilityBulgeRadius : c->BulgeRadius, Rvir);
+    const double a_CB = hernquist_a_from_half_mass((c->MergerBulgeRadius > 0.0f) ? c->MergerBulgeRadius : c->BulgeRadius, Rvir);
+    M += c->InstabilityBulgeMass * ((Rvir + a_SB) / Rvir) * ((Rvir + a_SB) / Rvir) * (r / (r + a_SB)) * (r / (r + a_SB));
+    M += c->MergerBulgeMass * ((Rvir + a_CB) / Rvir) * ((Rvir + a_CB) / Rvir) * (r / (r + a_CB)) * (r / (r + a_CB));
+
+    for(int i = 0; i < N_BINS; i++) {
+        const double m = c->DiscGas[i] + c->DiscStars[i];
+        if(c->DiscRadii[i+1] <= r) {
+            M += m;
+        } else {
+            const double f = (r - c->DiscRadii[i]) / (c->DiscRadii[i+1] - c->DiscRadii[i]);
+            if(f > 0.0) M += m * f * f;
+            break;
+        }
+    }
+    M += c->BlackHoleMass;
+    return (M < c->Mvir) ? M : c->Mvir;
+}
