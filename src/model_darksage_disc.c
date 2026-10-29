@@ -20,8 +20,8 @@
  *   - annulus edge i sits at the radius where j = DiscBinEdge[i];
  *   - the potential Phi(r), integrated inwards from the outermost radius,
  *     gives Potential[] at the annulus edges, the mass-weighted potential of
- *     the hot gas (beta profile, or SAGE26's rho ~ r^-1.4 CGM profile for
- *     CGM-regime haloes) and the potential at Rvir that ejected gas must
+ *     the hot gas (DarkSage's beta profile, for HotGas and CGMgas alike) and
+ *     the potential at Rvir that ejected gas must
  *     climb to -- the energetics of the outflow model (Secs. 9-10);
  *   - BulgeSizeOn == 4: the Jeans sizes of the two bulges.
  * Galaxies with no disc (B/T >= 1) keep their last radii and potentials, as in
@@ -64,10 +64,6 @@ static const double PERCENT_RADIUS[9] = {0.531812, 0.824388, 1.09735, 1.37642, 1
 static const double DS_MIN_C_BETA = 0.05;
 /* Coefficient of DarkSage's R2_hot_av for the beta profile (model_cooling.c) */
 static const double DS_R2_HOT_COEFF = 0.15343;
-/* Carr et al. (2023) CGM profile used by the SAGE26 CGM regime (model_cooling_heating.c):
- * rho ~ r^-CGM_ALPHA between CGM_R0_FRAC * Rvir and Rvir */
-static const double CGM_ALPHA = 1.4;
-static const double CGM_R0_FRAC = 0.1;
 
 /* Exponential-disc contribution to V_circ^2 (dimensionless); x = r/r_d, c = Rvir/r_d */
 static inline double v2_disc_cterm(const double x, const double c)
@@ -246,39 +242,27 @@ static double grid_interp(const double *x, const double *y, const int first, con
 /*
  * Mass-weighted potential of the hot gas and its R2_hot_av, from the grid.
  * Beta profile: enclosed mass ~ x - c_beta atan(x / c_beta), x = r / Rvir,
- * R2_hot_av = (Rvir c_beta^2 cb 0.15343)^2 (DarkSage).  CGM regime: SAGE26's
- * rho ~ r^-1.4 on [0.1, 1] Rvir, R2_hot_av = 1 / <1/r^2>.
+ * R2_hot_av = (Rvir c_beta^2 cb 0.15343)^2 (DarkSage).  The CGM regime uses the
+ * same profile: these set the SN-wind energetics, which are DarkSage's.
  */
-static void hot_gas_energetics(struct GALAXY *g, const struct rc_grid *gr, const double c_beta, const int cgm_regime)
+static void hot_gas_energetics(struct GALAXY *g, const struct rc_grid *gr, const double c_beta)
 {
     const double Rvir = g->Rvir;
-    double pot = 0.0, mass = 0.0, inv_r2 = 0.0;
+    double pot = 0.0, mass = 0.0;
     for(int k = gr->first; k < N_RC_GRID - 1; k++) {
         double x0 = gr->r[k] / Rvir, x1 = gr->r[k+1] / Rvir;
         if(x0 >= 1.0) break;
         if(x1 > 1.0) x1 = 1.0;
-        double dm;
-        if(cgm_regime) {
-            if(x1 <= CGM_R0_FRAC) continue;
-            if(x0 < CGM_R0_FRAC) x0 = CGM_R0_FRAC;
-            dm = (pow(x1, 3.0 - CGM_ALPHA) - pow(x0, 3.0 - CGM_ALPHA)) / (3.0 - CGM_ALPHA);
-            inv_r2 += dm / (x0 * x1);
-        } else {
-            dm = (x1 - c_beta * atan(x1 / c_beta)) - (x0 - c_beta * atan(x0 / c_beta));
-        }
+        const double dm = (x1 - c_beta * atan(x1 / c_beta)) - (x0 - c_beta * atan(x0 / c_beta));
         const double phi_mid = 0.5 * (gr->phi[k] + gr->phi[k+1]);
         pot += ((phi_mid < 0.0) ? phi_mid : 0.0) * dm;
         mass += dm;
     }
     if(mass > 0.0) g->HotGasPotential = (float)(pot / mass);
 
-    if(cgm_regime) {
-        if(inv_r2 > 0.0) g->R2_hot_av = (float)(Rvir * Rvir * mass / inv_r2);
-    } else {
-        const double cb_term = 1.0 / (1.0 - c_beta * atan(1.0 / c_beta));
-        const double r_hot = Rvir * c_beta * c_beta * cb_term * DS_R2_HOT_COEFF;
-        g->R2_hot_av = (float)(r_hot * r_hot);
-    }
+    const double cb_term = 1.0 / (1.0 - c_beta * atan(1.0 / c_beta));
+    const double r_hot = Rvir * c_beta * c_beta * cb_term * DS_R2_HOT_COEFF;
+    g->R2_hot_av = (float)(r_hot * r_hot);
 }
 
 /* Radius where rotational support f_rot = v / sqrt(v^2 + sigma^2) reaches 0.5, as an exponential
@@ -451,7 +435,7 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     }
     g->Potential[0] = (float)gr.phi[gr.first];
 
-    hot_gas_energetics(g, &gr, c_beta, run_params->CGMrecipeOn == 1 && g->Regime == 0);
+    hot_gas_energetics(g, &gr, c_beta);
     const double phi_rvir = grid_interp(gr.r, gr.phi, gr.first, Rvir);
     g->EjectedPotential = (float)((phi_rvir > 0.9999 * g->HotGasPotential) ? phi_rvir : 0.9999 * g->HotGasPotential);
 
@@ -609,9 +593,8 @@ void darksage_precess_gas(const int p, const double dt, struct GALAXY *galaxies,
 }
 
 /*
- * Hot-gas density of galaxy c at physical radius r, from HotGas + CGMgas.
- * Beta profile of Stevens et al. (2024) eq. 11; CGM regime: SAGE26's
- * rho ~ r^-CGM_ALPHA, flat inside CGM_R0_FRAC Rvir.
+ * Hot-gas density of galaxy c at physical radius r, from HotGas + CGMgas, in
+ * DarkSage's beta profile (Stevens et al. 2024 eq. 11).
  * As DarkSage's ram_pressure_stripping(), C_beta enters squared (the paper's
  * eq. 11 has one power).
  */
@@ -619,13 +602,9 @@ double darksage_hot_density(const struct GALAXY *c, const double r, const struct
 {
     const double Rvir = c->Rvir;
     const double M_hot = c->HotGas + c->CGMgas;
+    (void)run_params;
     if(Rvir <= 0.0 || M_hot <= 0.0) return 0.0;
 
-    if(run_params->CGMrecipeOn == 1 && c->Regime == 0) {
-        const double x = (r / Rvir > CGM_R0_FRAC) ? r / Rvir : CGM_R0_FRAC;
-        return M_hot * (3.0 - CGM_ALPHA) / (4.0 * M_PI * Rvir * Rvir * Rvir * (1.0 - pow(CGM_R0_FRAC, 3.0 - CGM_ALPHA)))
-               * pow(x, -CGM_ALPHA);
-    }
     const double c_beta = (c->c_beta > DS_MIN_C_BETA) ? c->c_beta : DS_MIN_C_BETA;
     const double cb_term = 1.0 / (1.0 - c_beta * atan(1.0 / c_beta));
     const double x = r / (c_beta * Rvir);
@@ -642,6 +621,7 @@ double darksage_host_mass_within(const struct GALAXY *c, const double r, const d
                                  const struct params *run_params)
 {
     const double Rvir = c->Rvir;
+    (void)run_params;
     if(r >= Rvir) return c->Mvir;
 
     double M = 0.0;
@@ -653,15 +633,8 @@ double darksage_host_mass_within(const struct GALAXY *c, const double r, const d
 
     const double M_hot = c->HotGas + c->CGMgas + c->FountainGas + c->OutflowGas;
     const double x = r / Rvir;
-    if(run_params->CGMrecipeOn == 1 && c->Regime == 0) {
-        if(x > CGM_R0_FRAC) {
-            const double x0 = pow(CGM_R0_FRAC, 3.0 - CGM_ALPHA);
-            M += M_hot * (pow(x, 3.0 - CGM_ALPHA) - x0) / (1.0 - x0);
-        }
-    } else {
-        const double c_beta = (c->c_beta > DS_MIN_C_BETA) ? c->c_beta : DS_MIN_C_BETA;
-        M += M_hot * (x - c_beta * atan(x / c_beta)) / (1.0 - c_beta * atan(1.0 / c_beta));
-    }
+    const double c_beta = (c->c_beta > DS_MIN_C_BETA) ? c->c_beta : DS_MIN_C_BETA;
+    M += M_hot * (x - c_beta * atan(x / c_beta)) / (1.0 - c_beta * atan(1.0 / c_beta));
 
     const double a_SB = hernquist_a_from_half_mass((c->InstabilityBulgeRadius > 0.0f) ? c->InstabilityBulgeRadius : c->BulgeRadius, Rvir);
     const double a_CB = hernquist_a_from_half_mass((c->MergerBulgeRadius > 0.0f) ? c->MergerBulgeRadius : c->BulgeRadius, Rvir);

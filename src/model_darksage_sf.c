@@ -7,8 +7,13 @@
  * The annuli are themselves a radial integration over the actual disc, so
  * H2RadialIntegrationOn and H2DiskAreaOption are not used in this mode.
  *
+ * The dynamical-time laws use the galaxy's t_dyn = 3 r_s / Vvir in every
+ * annulus, as the bulk laws and DarkSage's SFprescription 2 do: an annulus's
+ * own r_i / v_circ,i (~1 Myr at the centre) empties the inner disc.  The
+ * local circular velocity enters only the depletion-time laws.
+ *
  * The annuli are the state: these functions supply the per-annulus SFR (and
- * the per-annulus dynamical time used by it and by FFB bursts); the stars,
+ * the per-annulus dynamical time used by FFB bursts); the stars,
  * feedback and yields are booked annulus by annulus in
  * model_starformation_and_feedback.c.  Mergers still remove burst gas from
  * the annuli and resync their metals with the helpers below.
@@ -28,6 +33,9 @@
 #include "model_starformation_and_feedback.h"
 #include "model_misc.h"
 #include "model_darksage_stellar_pop.h"
+
+/* Star-forming radius in disc scale radii, as SF_DISK_RADIUS_FRAC in model_starformation_and_feedback.c */
+static const double DS_SF_DISK_RADIUS_FRAC = 3.0;
 #include "model_darksage_instability.h"
 
 /* Same constants as the bulk recipes in model_starformation_and_feedback.c */
@@ -161,6 +169,8 @@ double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
     if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
         return 0.0;
     }
+    /* Galaxy dynamical time, as the bulk laws */
+    const double tdyn = DS_SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius / galaxies[p].Vvir;
 
     for(int i = 0; i < N_BINS; i++) {
         const double gas = galaxies[p].DiscGas[i];
@@ -177,9 +187,9 @@ double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
         const double Sigma_star = CODE_MASS_TO_MSUN(galaxies[p].DiscStars[i], h) / area_pc2;
         const double Z = galaxies[p].DiscGasMetals[i] / gas;
 
-        /* Local circular velocity and dynamical time from the j-bins: v = j/r, t_dyn = r/v */
-        const double tdyn = darksage_annulus_tdyn(p, i, galaxies, run_params);
-        const double v_circ = r_mid / tdyn;
+        /* Local circular velocity from the j-bin, v = j/r, for the depletion-time laws */
+        const double tdyn_i = darksage_annulus_tdyn(p, i, galaxies, run_params);
+        const double v_circ = (tdyn_i > 0.0) ? r_mid / tdyn_i : galaxies[p].Vvir;
 
         /* --- molecular fraction --- */
         double f_H2 = 0.0;
