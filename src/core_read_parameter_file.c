@@ -132,7 +132,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
     // DarkSAGEMode: 0 = standard SAGE; 1 = full DarkSage physics (radially-resolved disk structure, Toomre Q instability, precession, j-conservation, fountain gas reservoirs)
     run_params->DarkSAGEMode               = 0; /* default: standard SAGE behavior */
-    run_params->FirstBin                   = 100.0; /* default: first j-bin edge [kpc km/s] */
+    run_params->FirstBin                   = 1.0; /* default: first j-bin edge [kpc/h km/s] (DarkSage MTNG.par) */
     run_params->ExponentBin                = 1.4; /* default: j-bin geometric growth factor */
     run_params->GasSinkRate                = 0.66; /* default: unstable gas sink fraction (DarkSage MTNG.par) */
     run_params->ThetaThresh                = 10.0; /* default: coplanar threshold [deg] (DarkSage MTNG.par) */

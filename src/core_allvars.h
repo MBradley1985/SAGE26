@@ -608,7 +608,7 @@ struct params
     /*                    fountain gas reservoirs (for hot-regime haloes only) */
     /* When DarkSAGEMode=0: Standard SAGE behavior */
     int32_t    DarkSAGEMode;            // 0: standard SAGE; 1: full DarkSage physics
-    double     FirstBin;                // First j-bin edge [kpc km/s] (default 100)
+    double     FirstBin;                // First j-bin edge [kpc/h km/s] (default 1, as DarkSage)
     double     ExponentBin;             // j-bin geometric growth factor (default 1.4)
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
     double     GasSinkRate;             // Unstable gas sink fraction (default 0.1)
