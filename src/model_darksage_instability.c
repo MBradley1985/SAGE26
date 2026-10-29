@@ -1,13 +1,29 @@
 /*
  * model_darksage_instability.c -- annulus-resolved disc instability (DarkSAGEMode == 1).
  *
- * Replaces check_disk_instability() when DarkSAGEMode == 1.  Each annulus is
- * tested against the two-fluid (gas + stars) Toomre Q (Romeo & Wiegert 2011)
- * using the j-bin epicyclic frequency of Stevens, Croton & Mutch (2016).
- * Unstable mass in annulus i > 0 is split between annuli i-1 and i+1 so that
- * angular momentum is conserved; unstable mass in annulus 0 feeds the bulge
- * (stars) and the black hole plus a central burst (gas), which goes through
- * the normal SF + SN feedback bookkeeping (darksage_central_burst()).
+ * Replaces check_disk_instability() when DarkSAGEMode == 1, following
+ * DarkSage's check_disk_instability() and deal_with_unstable_gas()
+ * (model_disk_instability.c; Stevens, Croton & Mutch 2016 Sec. 3.7;
+ * Stevens et al. 2024 Sec. 8).  Each annulus is tested against the
+ * Toomre Q of its gas and stars, combined with the Romeo & Wiegert (2011)
+ * two-fluid weighting W = 2 sigma c_s / (sigma^2 + c_s^2).
+ *
+ * Gas pass, outer annulus to inner:
+ *   The unstable gas is the part that must go for Q_gas to reach its
+ *   minimum.  GasSinkRate of it sinks: it is split between the neighbouring
+ *   annuli so that angular momentum is conserved (from annulus 0 the inward
+ *   share feeds the black hole).  The rest forms stars in the annulus, with
+ *   the usual SN feedback (darksage_instability_burst()).  Black-hole growth
+ *   drives a quasar wind.
+ * Stellar pass, outer annulus to inner:
+ *   StarSinkRate of the unstable stars migrate the same way (from annulus 0
+ *   inward into the secular bulge); the rest of the instability is removed
+ *   by heating the annulus's stars until Q_star = Q_star_min.
+ *
+ * Gas and stellar discs more than ThetaThresh degrees apart are tested as
+ * separate one-component discs.
+ *
+ * Code units throughout (10^10 Msun/h, Mpc/h, km/s).
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -20,253 +36,262 @@
 
 #include "model_darksage_instability.h"
 #include "model_starformation_and_feedback.h"
+#include "model_mergers.h"
+#include "model_misc.h"
 
-static const double DS_SOUND_SPEED   = 10.0;   /* km/s, cold ISM */
-static const double DS_SIGMA_FLOOR   = 10.0;   /* km/s, stellar dispersion floor */
-static const double DS_Q_STABLE      = 1000.0;
+/* DarkSage cold-gas velocity dispersion (= sound speed here), c_s = 11 + 11.3 z km/s [cm/s] */
+static const double DS_CS0_CGS = 1.1e6;
+static const double DS_CS1_CGS = 1.13e6;
+/* Stellar-disc Toomre factor 3.36 / pi inverted (Toomre 1964) */
+static const double TOOMRE_STARS = 0.935;
+/* DarkSage minimum unstable mass that is acted on, and minimum mass that forms stars
+ * (MIN_STARFORMATION in core_allvars.h) [10^10 Msun/h] */
+static const double DS_MIN_UNSTABLE = 1.0e-10;
+static const double DS_MIN_STARFORMATION = 1.0e-10;
 
-static int last_physical_bin(const int p, const struct GALAXY *galaxies)
+double darksage_cold_gas_dispersion(const double z, const struct params *run_params)
 {
-    for(int i = N_BINS - 1; i >= 0; i--) {
-        if(galaxies[p].DiscRadii[i+1] > galaxies[p].DiscRadii[i]) return i;
-    }
-    return 0;
+    return (DS_CS0_CGS + DS_CS1_CGS * z) / run_params->UnitVelocity_in_cm_per_s;
 }
 
-/* Epicyclic frequency from the j-bin edges: kappa^2 = 2 j / r^3 dj/dr */
-static double epicyclic_frequency(const int bin, const double r_inner, const double r_outer,
-                                  const struct params *run_params)
-{
-    const double dj = run_params->DiscBinEdge[bin+1] - run_params->DiscBinEdge[bin];
-    const double dr = r_outer - r_inner;
-    if(dr <= 0.0 || dj <= 0.0) return 0.0;
-
-    const double j = (bin > 0) ? run_params->DiscBinEdge[bin] : run_params->DiscBinEdge[bin+1];
-    const double r = (bin > 0) ? r_inner : r_outer;
-    if(r <= 0.0) return 0.0;
-    return sqrt(2.0 * j / (r * r * r) * dj / dr);
-}
-
-/* Two-fluid Toomre Q of one annulus, in code units (masses, not surface densities) */
-static double combined_toomre_Q(const int bin, const double gas, const double stars,
-                                const double sigma_stars, const double r_inner, const double r_outer,
-                                const struct params *run_params)
-{
-    if(r_outer <= 0.0) return DS_Q_STABLE;
-
-    const double kappa = epicyclic_frequency(bin, r_inner, r_outer, run_params);
-    const double area_factor = r_outer * r_outer - r_inner * r_inner;
-    if(kappa <= 0.0 || area_factor <= 0.0) return DS_Q_STABLE;
-
-    const double G = run_params->G;
-    const double c_s = DS_SOUND_SPEED;
-    const double Q_gas = (gas > 0.0) ? c_s * kappa * area_factor / (G * gas) : DS_Q_STABLE;
-    /* 0.935 = pi / 3.36 for a stellar disc */
-    const double Q_stars = (stars > 0.0) ? kappa * sigma_stars * 0.935 * area_factor / (G * stars) : DS_Q_STABLE;
-
-    if(gas <= 0.0) return Q_stars;
-    if(stars <= 0.0) return Q_gas;
-
-    const double W = 2.0 * sigma_stars * c_s / (sigma_stars * sigma_stars + c_s * c_s);
-    const double denom = (sigma_stars >= c_s) ? W / Q_gas + 1.0 / Q_stars : 1.0 / Q_gas + W / Q_stars;
-    return (denom > 0.0) ? 1.0 / denom : DS_Q_STABLE;
-}
-
-/* j-conservation split of mass leaving annulus `bin`: m_up * j_gain = m_down * j_lose */
-static void j_split(const int bin, const double mass, const struct params *run_params,
-                    double *m_down, double *m_up)
+/* Epicyclic frequency of annulus i from its j-bin edges: kappa^2 = 2 j / r^3 dj/dr */
+static double epicyclic_frequency(const int i, const struct GALAXY *g, const struct params *run_params)
 {
     const double *edge = run_params->DiscBinEdge;
-    const double j_lose = 0.5 * (edge[bin+1] - edge[(bin > 0) ? bin-1 : 0]);
-    const double j_gain = (bin < N_BINS - 1) ? 0.5 * (edge[bin+2] - edge[bin]) : j_lose;
-    const double j_total = j_lose + j_gain;
-    if(j_lose <= 0.0 || j_gain <= 0.0 || j_total <= 0.0) {
-        *m_down = *m_up = 0.0;
-        return;
-    }
-    *m_down = mass * j_gain / j_total;
-    *m_up   = mass * j_lose / j_total;
+    const double r_inner = g->DiscRadii[i], r_outer = g->DiscRadii[i+1];
+    if(r_outer <= r_inner) return 0.0;
+    const double j = (i > 0) ? edge[i] : edge[i+1];
+    const double r = (i > 0) ? r_inner : r_outer;
+    return sqrt(2.0 * j / (r * r * r) * (edge[i+1] - edge[i]) / (r_outer - r_inner));
 }
 
-static void move_unstable_gas(const int p, const int bin, const double unstable,
-                              struct GALAXY *galaxies, const struct params *run_params)
+/*
+ * Split mass leaving annulus i between i-1 (m_down) and i+1 (m_up) so its
+ * angular momentum is unchanged: m_up j_gain = m_down j_lose, with j_gain and
+ * j_lose the j steps to the neighbouring bin centres.
+ */
+static void j_split(const int i, const double mass, const struct params *run_params, double *m_down, double *m_up)
 {
-    if(unstable <= 0.0 || bin <= 0 || galaxies[p].DiscGas[bin] <= 0.0) return;
-
-    double m_down, m_up;
-    j_split(bin, unstable, run_params, &m_down, &m_up);
-    if(m_down + m_up <= 0.0) return;
-
-    const double Z = galaxies[p].DiscGasMetals[bin] / galaxies[p].DiscGas[bin];
-    int up = (bin < N_BINS - 1) ? bin + 1 : N_BINS - 1;
-    const int last = last_physical_bin(p, galaxies);
-    if(up > last) up = last;
-
-    galaxies[p].DiscGas[bin] -= m_down + m_up;
-    galaxies[p].DiscGasMetals[bin] -= Z * (m_down + m_up);
-    galaxies[p].DiscGas[bin-1] += m_down;
-    galaxies[p].DiscGasMetals[bin-1] += Z * m_down;
-    galaxies[p].DiscGas[up] += m_up;
-    galaxies[p].DiscGasMetals[up] += Z * m_up;
-
-    if(galaxies[p].DiscGas[bin] < 0.0f) galaxies[p].DiscGas[bin] = 0.0f;
-    if(galaxies[p].DiscGasMetals[bin] < 0.0f) galaxies[p].DiscGasMetals[bin] = 0.0f;
+    const double *edge = run_params->DiscBinEdge;
+    const double j_gain = 0.5 * (edge[i+2] - edge[i]);
+    const double j_lose = (i > 0) ? 0.5 * (edge[i+1] - edge[i-1]) : 0.5 * (edge[i+1] - edge[i]);
+    *m_up = j_lose / (j_gain + j_lose) * mass;
+    *m_down = *m_up * j_gain / j_lose;
 }
 
-static void move_unstable_stars(const int p, const int bin, const double unstable,
+/* Mass-weighted quadrature mix of a velocity dispersion */
+static float mix_dispersion(const double m_old, const double s_old, const double m_add, const double s_add)
+{
+    return (m_old + m_add > 0.0) ? (float)sqrt((m_old * s_old * s_old + m_add * s_add * s_add) / (m_old + m_add)) : (float)s_add;
+}
+
+/*
+ * Sink unstable gas from annulus i (DarkSage deal_with_unstable_gas()) and
+ * return the gas left to form stars there.
+ */
+static double sink_unstable_gas(const int p, const int i, double unstable_gas, double *bh_growth,
                                 struct GALAXY *galaxies, const struct params *run_params)
 {
-    if(unstable <= 0.0 || bin <= 0 || galaxies[p].DiscStars[bin] <= 0.0) return;
+    struct GALAXY *g = &galaxies[p];
+    if(unstable_gas > g->DiscGas[i]) unstable_gas = g->DiscGas[i];
+    const double Z = get_metallicity(g->DiscGas[i], g->DiscGasMetals[i]);
 
-    double m_down, m_up;
-    j_split(bin, unstable, run_params, &m_down, &m_up);
-    if(m_down + m_up <= 0.0) return;
+    double gas_sink = run_params->GasSinkRate * unstable_gas;
+    if(unstable_gas - gas_sink < DS_MIN_STARFORMATION) gas_sink = unstable_gas;
 
-    const double Z = galaxies[p].DiscStarsMetals[bin] / galaxies[p].DiscStars[bin];
-    int up = (bin < N_BINS - 1) ? bin + 1 : N_BINS - 1;
-    const int last = last_physical_bin(p, galaxies);
-    if(up > last) up = last;
+    g->DiscGas[i] -= gas_sink;
+    g->DiscGasMetals[i] -= Z * gas_sink;
 
-    /* Mass-weighted dispersion mixing into the inner annulus */
-    const double m_dst = galaxies[p].DiscStars[bin-1];
-    const double s_src = galaxies[p].VelDispStars[bin];
-    const double s_dst = galaxies[p].VelDispStars[bin-1];
-    if(m_dst + m_down > 0.0) {
-        galaxies[p].VelDispStars[bin-1] = (float)sqrt((m_dst * s_dst * s_dst + m_down * s_src * s_src) / (m_dst + m_down));
+    if(i == N_BINS - 1) {
+        g->DiscGas[i-1] += gas_sink;
+        g->DiscGasMetals[i-1] += Z * gas_sink;
+    } else {
+        double m_down, m_up;
+        j_split(i, gas_sink, run_params, &m_down, &m_up);
+        if(i == 0) {
+            g->BlackHoleMass += m_down;
+            *bh_growth += m_down;
+        } else {
+            g->DiscGas[i-1] += m_down;
+            g->DiscGasMetals[i-1] += Z * m_down;
+        }
+        g->DiscGas[i+1] += m_up;
+        g->DiscGasMetals[i+1] += Z * m_up;
     }
+    if(g->DiscGas[i] < 0.0f) g->DiscGas[i] = 0.0f;
+    if(g->DiscGasMetals[i] < 0.0f) g->DiscGasMetals[i] = 0.0f;
 
-    galaxies[p].DiscStars[bin] -= m_down + m_up;
-    galaxies[p].DiscStarsMetals[bin] -= Z * (m_down + m_up);
-    galaxies[p].DiscStars[bin-1] += m_down;
-    galaxies[p].DiscStarsMetals[bin-1] += Z * m_down;
-    galaxies[p].DiscStars[up] += m_up;
-    galaxies[p].DiscStarsMetals[up] += Z * m_up;
-
-    if(galaxies[p].DiscStars[bin] < 0.0f) galaxies[p].DiscStars[bin] = 0.0f;
-    if(galaxies[p].DiscStarsMetals[bin] < 0.0f) galaxies[p].DiscStarsMetals[bin] = 0.0f;
+    return unstable_gas - gas_sink;
 }
 
+/* Move unstable stars out of annulus i, conserving j; from annulus 0 the inward share joins the secular bulge */
+static void sink_unstable_stars(const int p, const int i, const double unstable_stars,
+                                struct GALAXY *galaxies, const struct params *run_params)
+{
+    struct GALAXY *g = &galaxies[p];
+    const double Z = get_metallicity(g->DiscStars[i], g->DiscStarsMetals[i]);
+    const double sigma = g->VelDispStars[i];
+
+    g->DiscStars[i] -= unstable_stars;
+    g->DiscStarsMetals[i] = Z * g->DiscStars[i];
+
+    if(i == N_BINS - 1) {
+        g->VelDispStars[i-1] = mix_dispersion(g->DiscStars[i-1], g->VelDispStars[i-1], unstable_stars, sigma);
+        g->DiscStars[i-1] += unstable_stars;
+        g->DiscStarsMetals[i-1] += Z * unstable_stars;
+        return;
+    }
+
+    double m_down, m_up;
+    j_split(i, unstable_stars, run_params, &m_down, &m_up);
+    if(i > 0) {
+        g->VelDispStars[i-1] = mix_dispersion(g->DiscStars[i-1], g->VelDispStars[i-1], m_down, sigma);
+        g->DiscStars[i-1] += m_down;
+        g->DiscStarsMetals[i-1] += Z * m_down;
+    } else {
+        /* Disc -> secular (instability-driven) bulge; StellarMass is unchanged */
+        for(int s = 0; s < 3; s++) {
+            g->SpinSecularBulge[s] = (float)(g->SpinSecularBulge[s] * g->SecularBulgeMass / (g->SecularBulgeMass + m_down));
+        }
+        g->VelDispBulge = mix_dispersion(g->SecularBulgeMass, g->VelDispBulge, m_down, sigma);
+        g->SecularBulgeMass += m_down;
+        g->SecularMetalsBulgeMass += Z * m_down;
+        g->BulgeMass += m_down;
+        g->InstabilityBulgeMass += m_down;
+        g->MetalsBulgeMass += Z * m_down;
+        update_instability_bulge_radius(p, m_down, g->DiskScaleRadius, galaxies, run_params);
+    }
+    g->VelDispStars[i+1] = mix_dispersion(g->DiscStars[i+1], g->VelDispStars[i+1], m_up, sigma);
+    g->DiscStars[i+1] += m_up;
+    g->DiscStarsMetals[i+1] += Z * m_up;
+}
+
+/*
+ * check_disk_instability_darksage -- one substep of DarkSage disc instability.
+ *
+ * Algorithm (DarkSage check_disk_instability()):
+ *   1. Gas pass, i = N_BINS-1 .. 0, over annuli with gas:
+ *        Q_gas  = c_s kappa (r_out^2 - r_in^2) / (G m_gas)
+ *        Q_star = 0.935 kappa sigma (r_out^2 - r_in^2) / (G m_star)
+ *      With coplanar stars (angle <= ThetaThresh) the two-fluid
+ *      Q_tot = 1 / (W/Q_gas + 1/Q_star) if Q_gas >= Q_star, else
+ *      1 / (1/Q_gas + W/Q_star); stable if Q_tot >= QTotMin.  If both Q are
+ *      below QTotMin + W the gas must reach that; if only the gas is, it must
+ *      reach the Q_gas that brings Q_tot to QTotMin; otherwise the stars
+ *      resolve it.  Without coplanar stars Q_gas_min = QTotMin.
+ *      Unstable gas m_gas (1 - Q_gas / Q_gas_min) sinks (GasSinkRate) and the
+ *      rest forms stars in the annulus with SN feedback.
+ *   2. The black hole growth from annulus 0 drives a quasar wind.
+ *   3. Stellar pass, i = N_BINS-1 .. 0, over annuli with stars: Q_star_min
+ *      from the two-fluid Q (or QTotMin alone); unstable stars
+ *      StarSinkRate m_star (1 - Q_star / Q_star_min) migrate with
+ *      StarSinkRate = 1 - (1 - GasSinkRate) c_s / sigma, and the rest heat the
+ *      annulus: sigma *= (1 - StarSinkRate) Q_star_min / Q_star + StarSinkRate.
+ *   4. ColdGas and MetalsColdGas are reset to the annulus sums.
+ */
 void check_disk_instability_darksage(const int p, const int centralgal, const double dt, const int step,
                                      struct GALAXY *galaxies, const struct params *run_params)
 {
-    if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) return;
+    struct GALAXY *g = &galaxies[p];
+    const double G = run_params->G;
+    const double Q_min = run_params->QTotMin;
+    const double c_s = darksage_cold_gas_dispersion(run_params->ZZ[g->SnapNum], run_params);
 
-    const double diskmass = galaxies[p].ColdGas + (galaxies[p].StellarMass - galaxies[p].BulgeMass);
-    if(diskmass <= 0.0) return;
+    double disc_gas = 0.0, disc_stars = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        disc_gas += g->DiscGas[i];
+        disc_stars += g->DiscStars[i];
+    }
+    if(disc_gas <= 0.0 && disc_stars <= 0.0) return;
 
-    /* Soft global-stability suppression (floor 0.15) using the Mo, Mao & White critical mass */
-    const double Mcrit = galaxies[p].Vmax * galaxies[p].Vmax * (3.0 * galaxies[p].DiskScaleRadius) / run_params->G;
-    const double f_floor = 0.15;
-    double f_global = 1.0;
-    if(Mcrit > 0.0 && diskmass < 2.0 * Mcrit) {
-        f_global = f_floor + (1.0 - f_floor) * diskmass / (2.0 * Mcrit);
-        if(f_global > 1.0) f_global = 1.0;
+    double cos_angle = g->SpinStars[0] * g->SpinGas[0] + g->SpinStars[1] * g->SpinGas[1] + g->SpinStars[2] * g->SpinGas[2];
+    if(cos_angle > 1.0) cos_angle = 1.0;
+    if(cos_angle < -1.0) cos_angle = -1.0;
+    const int coplanar = (acos(cos_angle) * 180.0 / M_PI <= run_params->ThetaThresh);
+
+    /* Step 1: gas instabilities */
+    double bh_growth = 0.0;
+    for(int i = N_BINS - 1; i >= 0; i--) {
+        if(g->DiscGas[i] <= 0.0f) continue;
+        const double kappa = epicyclic_frequency(i, g, run_params);
+        if(kappa <= 0.0) continue;
+        const double area = g->DiscRadii[i+1] * g->DiscRadii[i+1] - g->DiscRadii[i] * g->DiscRadii[i];
+        const double sigma = g->VelDispStars[i];
+        const double Q_gas = c_s * kappa * area / (G * g->DiscGas[i]);
+
+        double Q_gas_min = Q_min;
+        if(g->DiscStars[i] > 0.0f && coplanar) {
+            const double Q_star = kappa * sigma * TOOMRE_STARS * area / (G * g->DiscStars[i]);
+            const double W = 2.0 * sigma * c_s / (sigma * sigma + c_s * c_s);
+            const double Q_tot = (Q_gas >= Q_star) ? 1.0 / (W / Q_gas + 1.0 / Q_star) : 1.0 / (1.0 / Q_gas + W / Q_star);
+            if(Q_tot >= Q_min) continue;
+
+            const double Q_stable = Q_min + W;
+            if(Q_gas < Q_stable && Q_star < Q_stable) Q_gas_min = Q_stable;
+            else if(Q_gas < Q_stable) Q_gas_min = 1.0 / (1.0 / Q_min - W / Q_star);
+            else continue;   /* the stars' job to restore stability */
+        }
+        if(Q_gas >= Q_gas_min) continue;
+
+        const double unstable_gas = g->DiscGas[i] * (1.0 - Q_gas / Q_gas_min);
+        if(unstable_gas <= DS_MIN_UNSTABLE) continue;
+
+        const double stars = sink_unstable_gas(p, i, unstable_gas, &bh_growth, galaxies, run_params);
+        if(g->DiscGas[i] > 0.0f && stars > 0.0) {
+            darksage_instability_burst(p, centralgal, i, stars, stars / (1.0 - run_params->RecycleFraction),
+                                       dt, step, galaxies, run_params);
+        }
     }
 
-    const double Q_min = run_params->QTotMin;
-    const double gas_sink_rate = run_params->GasSinkRate;
-    const double c_s = DS_SOUND_SPEED;
+    /* Step 2: quasar wind from the instability-fed black hole growth */
+    double gas_sum = 0.0, metals_sum = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        gas_sum += g->DiscGas[i];
+        metals_sum += g->DiscGasMetals[i];
+    }
+    g->ColdGas = gas_sum;
+    g->MetalsColdGas = metals_sum;
+    if(bh_growth > 0.0 && run_params->AGNrecipeOn > 0) {
+        quasar_mode_wind(p, bh_growth, galaxies, run_params);
+    }
 
-    /* --- annuli N_BINS-1 .. 1: migrate unstable mass with j-conservation, heat the stars --- */
+    /* Step 3: stellar instabilities */
     for(int i = N_BINS - 1; i >= 0; i--) {
-        if(galaxies[p].DiscGas[i] <= 0.0 && galaxies[p].DiscStars[i] <= 0.0) continue;
+        if(g->DiscStars[i] <= 0.0f) continue;
+        const double kappa = epicyclic_frequency(i, g, run_params);
+        if(kappa <= 0.0) continue;
+        const double area = g->DiscRadii[i+1] * g->DiscRadii[i+1] - g->DiscRadii[i] * g->DiscRadii[i];
+        const double sigma = g->VelDispStars[i];
+        if(sigma <= 0.0) continue;
+        const double Q_star = kappa * sigma * TOOMRE_STARS * area / (G * g->DiscStars[i]);
 
-        const double r_inner = (i > 0) ? galaxies[p].DiscRadii[i] : 0.0;
-        const double r_outer = galaxies[p].DiscRadii[i+1];
-
-        double sigma_stars = galaxies[p].VelDispStars[i];
-        if(sigma_stars < DS_SIGMA_FLOOR) sigma_stars = DS_SIGMA_FLOOR;
-
-        const double Q = combined_toomre_Q(i, galaxies[p].DiscGas[i], galaxies[p].DiscStars[i],
-                                           sigma_stars, r_inner, r_outer, run_params);
-        if(Q >= Q_min) continue;
-
-        /* Stellar sink rate grows with the stellar dispersion (Stevens+16) */
-        double star_sink_rate = 1.0 - (1.0 - gas_sink_rate) * c_s / sigma_stars;
-        if(star_sink_rate < 0.0) star_sink_rate = 0.0;
-        if(star_sink_rate > 1.0) star_sink_rate = 1.0;
-
-        double Q_deficit = (Q_min - Q) / Q_min;
-        if(Q_deficit > 1.0) Q_deficit = 1.0;
-
-        const double gas_excess   = f_global * gas_sink_rate  * galaxies[p].DiscGas[i]   * Q_deficit;
-        const double stars_excess = f_global * star_sink_rate * galaxies[p].DiscStars[i] * Q_deficit;
-
-        if(i > 0) {
-            move_unstable_stars(p, i, stars_excess, galaxies, run_params);
-            move_unstable_gas(p, i, gas_excess, galaxies, run_params);
-
-            /* The rest of the instability is resolved by heating:
-             * sigma_new = sigma_old [(1 - StarSinkRate) Q_min/Q + StarSinkRate] */
-            if(galaxies[p].DiscStars[i] > 0.0) {
-                double heating = (1.0 - star_sink_rate) * (Q_min / Q) + star_sink_rate;
-                if(heating > 2.0) heating = 2.0;
-                if(heating > 1.0) galaxies[p].VelDispStars[i] *= (float)heating;
+        double Q_star_min = Q_min;
+        if(g->DiscGas[i] > 0.0f && coplanar) {
+            const double Q_gas = c_s * kappa * area / (G * g->DiscGas[i]);
+            const double W = 2.0 * sigma * c_s / (sigma * sigma + c_s * c_s);
+            double Q_tot;
+            if(Q_gas >= Q_star) {
+                Q_tot = 1.0 / (W / Q_gas + 1.0 / Q_star);
+                Q_star_min = (1.0 / Q_min - W / Q_gas > 0.0) ? 1.0 / (1.0 / Q_min - W / Q_gas) : 1.0;
+            } else {
+                Q_tot = 1.0 / (1.0 / Q_gas + W / Q_star);
+                Q_star_min = (1.0 / Q_min - 1.0 / Q_gas > 0.0) ? W / (1.0 / Q_min - 1.0 / Q_gas) : 1.0;
             }
-            continue;
+            /* 0.99 absorbs rounding (DarkSage) */
+            if(Q_tot >= 0.99 * Q_min || Q_star >= 0.99 * Q_star_min) continue;
         }
+        if(Q_star >= Q_star_min) continue;
 
-        /* --- annulus 0: m_down feeds the bulge (stars) or BH + central burst (gas), m_up goes to annulus 1 --- */
-        double m_down, m_up;
+        const double star_sink_rate = 1.0 - (1.0 - run_params->GasSinkRate) * c_s / sigma;
+        double unstable_stars = star_sink_rate * g->DiscStars[i] * (1.0 - Q_star / Q_star_min);
+        if(unstable_stars > g->DiscStars[i]) unstable_stars = g->DiscStars[i];
+        if(unstable_stars <= DS_MIN_UNSTABLE) continue;
 
-        if(stars_excess > 0.0 && galaxies[p].DiscStars[0] > 0.0) {
-            j_split(0, stars_excess, run_params, &m_down, &m_up);
-            const double Z = galaxies[p].DiscStarsMetals[0] / galaxies[p].DiscStars[0];
+        sink_unstable_stars(p, i, unstable_stars, galaxies, run_params);
 
-            galaxies[p].DiscStars[0] -= m_down + m_up;
-            galaxies[p].DiscStarsMetals[0] -= Z * (m_down + m_up);
-            galaxies[p].DiscStars[1] += m_up;
-            galaxies[p].DiscStarsMetals[1] += Z * m_up;
-
-            /* Disc -> bulge: StellarMass unchanged */
-            const double m_old = galaxies[p].SecularBulgeMass;
-            galaxies[p].SecularBulgeMass += m_down;
-            galaxies[p].SecularMetalsBulgeMass += Z * m_down;
-            galaxies[p].BulgeMass += m_down;
-            galaxies[p].InstabilityBulgeMass += m_down;
-            galaxies[p].MetalsBulgeMass += Z * m_down;
-
-            double sigma_new = galaxies[p].Vvir / 3.0;
-            if(sigma_new < 50.0) sigma_new = 50.0;
-            const double sigma_old = galaxies[p].VelDispBulge;
-            galaxies[p].VelDispBulge = (sigma_old > 0.0)
-                ? (float)sqrt((m_old * sigma_old * sigma_old + m_down * sigma_new * sigma_new) / (m_old + m_down))
-                : (float)sigma_new;
+        /* What the migration did not fix is fixed by heating the annulus's stars */
+        if(g->DiscStars[i] > 0.0f) {
+            g->VelDispStars[i] *= (float)((1.0 - star_sink_rate) * Q_star_min / Q_star + star_sink_rate);
         }
-
-        if(gas_excess > 0.0 && galaxies[p].DiscGas[0] > 0.0) {
-            j_split(0, gas_excess, run_params, &m_down, &m_up);
-            const double Z = galaxies[p].DiscGasMetals[0] / galaxies[p].DiscGas[0];
-
-            galaxies[p].DiscGas[0] -= m_up;
-            galaxies[p].DiscGasMetals[0] -= Z * m_up;
-            galaxies[p].DiscGas[1] += m_up;
-            galaxies[p].DiscGasMetals[1] += Z * m_up;
-
-            /* BH accretion with the Kauffmann & Haehnelt (2000) Vvir suppression */
-            double BH_accrete = 0.0;
-            if(run_params->AGNrecipeOn > 0) {
-                const double Vvir = galaxies[p].Vvir;
-                BH_accrete = run_params->BlackHoleGrowthRate * m_down / (1.0 + (280.0 * 280.0) / (Vvir * Vvir));
-                if(BH_accrete > m_down) BH_accrete = m_down;
-                galaxies[p].BlackHoleMass += BH_accrete;
-                galaxies[p].DiscGas[0] -= BH_accrete;
-                galaxies[p].DiscGasMetals[0] -= Z * BH_accrete;
-                galaxies[p].ColdGas -= BH_accrete;
-                galaxies[p].MetalsColdGas -= Z * BH_accrete;
-                if(galaxies[p].ColdGas < 0.0f) galaxies[p].ColdGas = 0.0f;
-                if(galaxies[p].MetalsColdGas < 0.0f) galaxies[p].MetalsColdGas = 0.0f;
-            }
-
-            /* The remainder (still in annulus 0) bursts: counted in SfrDisk / SFH, with SN feedback and yields */
-            darksage_central_burst(p, centralgal, m_down - BH_accrete, dt, step, galaxies, run_params);
-        }
-
-        if(galaxies[p].DiscStars[0] < 0.0f) galaxies[p].DiscStars[0] = 0.0f;
-        if(galaxies[p].DiscStarsMetals[0] < 0.0f) galaxies[p].DiscStarsMetals[0] = 0.0f;
-        if(galaxies[p].DiscGas[0] < 0.0f) galaxies[p].DiscGas[0] = 0.0f;
-        if(galaxies[p].DiscGasMetals[0] < 0.0f) galaxies[p].DiscGasMetals[0] = 0.0f;
-        if(galaxies[p].ColdGas < 0.0f) galaxies[p].ColdGas = 0.0f;
-        if(galaxies[p].MetalsColdGas < 0.0f) galaxies[p].MetalsColdGas = 0.0f;
     }
 }

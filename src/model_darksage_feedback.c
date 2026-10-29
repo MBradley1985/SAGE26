@@ -162,11 +162,11 @@ void darksage_split_feedback(const int p, const int centralgal, const int i, con
 }
 
 void darksage_feedback_masses(const int p, const int centralgal, const int i, const int stars_fixed,
-                              double *stars, double *reheated, double *ejected, double *eject_e,
-                              const struct GALAXY *galaxies, const struct params *run_params)
+                              const double max_consume, double *stars, double *reheated, double *ejected,
+                              double *eject_e, const struct GALAXY *galaxies, const struct params *run_params)
 {
     *reheated = *ejected = *eject_e = 0.0;
-    const double gas = galaxies[p].DiscGas[i];
+    const double gas = (max_consume < galaxies[p].DiscGas[i]) ? max_consume : galaxies[p].DiscGas[i];
     if(*stars > gas) *stars = gas;
     if(*stars <= 0.0 || gas <= 0.0) return;
 
