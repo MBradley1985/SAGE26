@@ -299,17 +299,13 @@ pyext: lib$(LIBNAME).so
 	@echo "Creating python extension in Makefile"
 	python -c "from sage import build_sage_pyext; build_sage_pyext();"
 
-# -MMD -MP write a .d file per object listing every header it includes, so editing
-# any header (e.g. io/save_gals_hdf5_fields.h, not in INCL) rebuilds what uses it
 %.o: %.c $(INCL) Makefile
-	$(CC) $(OPTS) $(OPTIMIZE) $(CCFLAGS) -MMD -MP -c $< -o $@
-
--include $(OBJS:.o=.d)
+	$(CC) $(OPTS) $(OPTIMIZE) $(CCFLAGS) -c $< -o $@
 
 
 celan celna clena: clean
 clean:
-	rm -f $(OBJS) $(OBJS:.o=.d) $(EXEC) $(SAGELIB) _$(LIBNAME)_cffi*.so _$(LIBNAME)_cffi.[co]
+	rm -f $(OBJS) $(EXEC) $(SAGELIB) _$(LIBNAME)_cffi*.so _$(LIBNAME)_cffi.[co]
 
 tests: $(EXEC)
 ifdef GSL_FOUND
