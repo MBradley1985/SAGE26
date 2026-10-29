@@ -45,6 +45,13 @@ extern "C" {
      * into the outflowing reservoir, then hot gas with any energy left */
     extern void darksage_quasar_wind(const int p, const double BHaccrete, struct GALAXY *galaxies,
                                      const struct params *run_params);
+    /* Outflow from annulus i driven by SN energy (delayed feedback); returns the energy the annulus's
+     * gas could not absorb */
+    extern double darksage_energy_feedback(const int p, const int centralgal, const int i, const double energy,
+                                           struct GALAXY *galaxies, const struct params *run_params);
+    /* SN energy acting on the hot phase: ejects hot and fountain gas into the outflowing reservoir */
+    extern void darksage_hot_energy_ejection(const int p, const int centralgal, const double energy,
+                                             struct GALAXY *galaxies, const struct params *run_params);
     extern void darksage_eject_hot(const int centralgal, double ejected_mass, struct GALAXY *galaxies,
                                    const struct params *run_params);
 

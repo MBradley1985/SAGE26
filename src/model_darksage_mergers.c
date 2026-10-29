@@ -43,6 +43,7 @@
 #include "model_darksage_disc.h"
 #include "model_darksage_feedback.h"
 #include "model_misc.h"
+#include "model_darksage_stellar_pop.h"
 
 /* Segments each annulus is cut into when rebuilding a major-merger gas disc (DarkSage N_ann_segs) */
 #define N_ANNULUS_SEGMENTS 10
@@ -333,4 +334,11 @@ void darksage_stars_to_bulge(const int t, struct GALAXY *galaxies)
 
     g->SecularBulgeMass = g->SecularMetalsBulgeMass = 0.0f;
     for(int k = 0; k < 3; k++) g->SpinSecularBulge[k] = 0.0f;
+
+    /* every stellar population now belongs to the merger bulge */
+    for(int i = 0; i < N_BINS; i++) {
+        darksage_move_ages(g->DiscStarsAge[i], g->DiscStarsMetalsAge[i], 1.0, g->MergerBulgeMassAge, g->MergerBulgeMetalsAge);
+    }
+    darksage_move_ages(g->InstabilityBulgeMassAge, g->InstabilityBulgeMetalsAge, 1.0,
+                       g->MergerBulgeMassAge, g->MergerBulgeMetalsAge);
 }

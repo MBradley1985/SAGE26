@@ -35,6 +35,7 @@
 
 #include "model_darksage_feedback.h"
 #include "model_misc.h"
+#include "model_darksage_stellar_pop.h"
 
 /* DarkSage vertical velocity dispersion of cold gas, sigma_z = 11 + 11.3 z km/s
  * (model_starformation_and_feedback.c; Stevens et al. 2024 Sec. 9) [cm/s] */
@@ -173,6 +174,21 @@ void darksage_split_feedback(const int p, const int centralgal, const int i, con
     *eject_e = w.eject_e;
 }
 
+/* Reheated and ejected masses that SN energy can lift out of annulus i (DarkSage calculate_feedback_masses()) */
+static void masses_from_energy(const struct wind *w, const double energy, double *reheated, double *ejected)
+{
+    *reheated = *ejected = 0.0;
+    if(w->kind == WIND_ALL_EJECTED) {
+        *ejected = energy / (w->eject_e - w->cold_e);
+    } else if(w->kind == WIND_SPLIT) {
+        *ejected = energy / (w->ratio * w->reheat_e + w->eject_e - w->cold_e);
+        *reheated = w->ratio * *ejected;
+    } else {
+        *reheated = energy / w->reheat_e;
+    }
+    if(!(*reheated >= 0.0) || !(*ejected >= 0.0)) *reheated = *ejected = 0.0;
+}
+
 void darksage_feedback_masses(const int p, const int centralgal, const int i, const int stars_fixed,
                               const double max_consume, double *stars, double *reheated, double *ejected,
                               double *eject_e, const struct GALAXY *galaxies, const struct params *run_params)
@@ -182,26 +198,19 @@ void darksage_feedback_masses(const int p, const int centralgal, const int i, co
     if(*stars > gas) *stars = gas;
     if(*stars <= 0.0 || gas <= 0.0) return;
 
-    /* SN energy of the stars formed: SAGE26's eta_SN SNe per unit mass of E_SN each.  DarkSage
-     * instead integrates its IMF (get_RecycleFraction_and_NumSNperMass(), Type Ia/II ratio 0.15),
-     * giving 1.282e-2 SNe per Msun over a population's lifetime, with EnergySN = 1.1e51 erg in its
-     * MTNG parameter file; set EtaSN and EnergySN to those values to compare with DarkSage. */
-    double energy = *stars * run_params->EtaSNcode * run_params->EnergySNcode;
+    /* SN energy of the stars formed, from the supernovae they produce within half the current age
+     * bin; the rest comes later through darksage_delayed_feedback() (DarkSage DelayedFeedbackOn) */
+    double inst[2];
+    darksage_instant_return_and_sn(galaxies[p].AgeBinNow, run_params, inst);
+    const double energy = *stars * inst[1] * run_params->EnergySNcode;
 
     const struct wind w = wind_kinematics(p, centralgal, i, galaxies, run_params);
-    if(w.kind == WIND_ALL_EJECTED) {
-        *ejected = energy / (w.eject_e - w.cold_e);
-    } else if(w.kind == WIND_SPLIT) {
-        *ejected = energy / (w.ratio * w.reheat_e + w.eject_e - w.cold_e);
-        *reheated = w.ratio * *ejected;
-    } else {
-        *reheated = energy / w.reheat_e;
-    }
+    masses_from_energy(&w, energy, reheated, ejected);
     *eject_e = w.eject_e;
 
     /* Can't use more cold gas than the annulus has: balance SF and feedback, or for a
      * feedback-free burst (stars_fixed) cap the feedback at the gas the burst leaves */
-    const double locked = (1.0 - run_params->RecycleFraction) * *stars;
+    const double locked = (1.0 - inst[0]) * *stars;
     const double used = locked + *reheated + *ejected;
     if(used > gas) {
         if(stars_fixed) {
@@ -363,4 +372,73 @@ void darksage_quasar_wind(const int p, const double BHaccrete, struct GALAXY *ga
             darksage_eject_hot(p, m_hot, galaxies, run_params);
         }
     }
+}
+
+double darksage_energy_feedback(const int p, const int centralgal, const int i, const double energy,
+                                struct GALAXY *galaxies, const struct params *run_params)
+{
+    struct GALAXY *g = &galaxies[p];
+    const double gas = g->DiscGas[i];
+    if(energy <= 0.0 || gas <= 0.0) return energy;
+
+    const struct wind w = wind_kinematics(p, centralgal, i, galaxies, run_params);
+    double reheated, ejected;
+    masses_from_energy(&w, energy, &reheated, &ejected);
+    double removed = reheated + ejected, norm = 1.0;
+    if(removed >= gas && removed > 0.0) {
+        norm = gas / removed;
+        reheated *= norm;
+        ejected *= norm;
+        removed = gas;
+    }
+    if(removed <= 0.0) return energy;
+
+    /* 10% of the metals are carried out, never so few that the annulus keeps more metals than gas
+     * (DarkSage update_from_feedback()) */
+    const double Z = get_metallicity(gas, g->DiscGasMetals[i]);
+    double Z_out = darksage_outflow_metallicity(Z, run_params);
+    const double Z_min = (g->DiscGasMetals[i] - (gas - removed)) / removed;
+    if(Z_out < Z_min) Z_out = Z_min;
+    g->DiscGas[i] -= (float)removed;
+    g->DiscGasMetals[i] -= (float)(Z_out * removed);
+    if(g->DiscGas[i] < 0.0f) g->DiscGas[i] = 0.0f;
+    if(g->DiscGasMetals[i] < 0.0f) g->DiscGasMetals[i] = 0.0f;
+
+    darksage_add_to_fountain(centralgal, reheated, Z_out * reheated, galaxies, run_params);
+    darksage_add_to_outflow(centralgal, ejected, Z_out * ejected, w.eject_e, galaxies);
+    g->OutflowRate += removed;
+    return (1.0 - norm) * energy;
+}
+
+/*
+ * darksage_hot_energy_ejection -- SN energy from spheroid stars, and any the annuli could not use,
+ * ejects hot-phase and fountain gas (end of DarkSage delayed_feedback()).  The ejected gas leaves at
+ * the outflow's specific energy (at least EjectedPotential + the hot gas's thermal and rotational
+ * energy); if the hot gas cannot absorb all the energy, its specific energy rises instead.
+ */
+void darksage_hot_energy_ejection(const int p, const int centralgal, const double energy, struct GALAXY *galaxies,
+                                  const struct params *run_params)
+{
+    struct GALAXY *c = &galaxies[centralgal];
+    const struct GALAXY *g = &galaxies[p];
+    if(energy <= 0.0) return;
+    const int cgm = (run_params->CGMrecipeOn == 1 && c->Regime == 0);
+    const double pool = (cgm ? c->CGMgas : c->HotGas) + c->FountainGas;
+    if(pool <= 0.0) return;
+
+    const double j_hot = 2.0 * g->Vvir * g->CoolScaleRadius;
+    const double hot_tk = 0.5 * (g->Vvir * g->Vvir + ((g->R2_hot_av > 0.0) ? j_hot * j_hot / g->R2_hot_av : 0.0));
+    const double hot_e = g->HotGasPotential + hot_tk;
+    double eject_e = g->EjectedPotential + hot_tk;
+    if(c->OutflowGas > 0.0f && c->OutflowSpecificEnergy > eject_e) eject_e = c->OutflowSpecificEnergy;
+    if(eject_e <= hot_e) return;
+
+    double m = energy / (eject_e - hot_e);
+    if(m > pool) {
+        m = pool;
+        eject_e = energy / m + hot_e;
+    }
+    c->OutflowSpecificEnergy = (c->OutflowGas > 0.0f)
+        ? (float)((c->OutflowGas * c->OutflowSpecificEnergy + m * eject_e) / (c->OutflowGas + m)) : (float)eject_e;
+    darksage_eject_hot(centralgal, m, galaxies, run_params);
 }

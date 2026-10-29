@@ -269,6 +269,17 @@ struct GALAXY
     float SpinSecularBulge[3];       /* Secular bulge spin vector */
     float R2_hot_av;                 /* Average <r^2> for hot gas */
     float VelDispMergerBulge;        /* 1-D velocity dispersion of the merger-driven bulge [km/s] */
+    /* DarkSAGEMode: stellar populations by age bin, for delayed feedback (DarkSage DiscStarsAge etc.) */
+    float DiscStarsAge[N_BINS][N_AGE_BINS];
+    float DiscStarsMetalsAge[N_BINS][N_AGE_BINS];
+    float MergerBulgeMassAge[N_AGE_BINS];
+    float MergerBulgeMetalsAge[N_AGE_BINS];
+    float InstabilityBulgeMassAge[N_AGE_BINS];
+    float InstabilityBulgeMetalsAge[N_AGE_BINS];
+    float ICSAge[N_AGE_BINS];        /* intrahalo stars by age bin */
+    float MetalsICSAge[N_AGE_BINS];
+    int32_t AgeBinNow;               /* age bin of the current substep */
+    float AgeMismatch;               /* misbooked stellar mass by age, / StellarMass (diagnostic) */
     float SpinMergerBulge[3];        /* Specific angular momentum vector of the merger-driven bulge [(Mpc/h)(km/s)] */
 };
 
@@ -614,6 +625,8 @@ struct params
     double     FirstBin;                // First j-bin edge [kpc/h km/s] (default 1, as DarkSage)
     double     ExponentBin;             // j-bin geometric growth factor (default 1.4)
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
+    double     AgeBinEdge[N_AGE_BINS+1]; // DarkSAGEMode: stellar age-bin edges in lookback time [code time] (computed)
+    double     FinalRecycleFraction;     // DarkSAGEMode: mass a stellar population returns over its lifetime (IMF, computed)
     double     GasSinkRate;             // Unstable gas sink fraction (default 0.1)
     double     ThetaThresh;             // Coplanar threshold [deg] (default 5.0)
     double     DegPerTdyn;              // Precession rate [deg/tdyn] (default 1.0)

@@ -209,6 +209,15 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].VelDispBulge = 0.0f;
     galaxies[p].VelDispMergerBulge = (float)darksage_cold_gas_dispersion(run_params->ZZ[halos[halonr].SnapNum], run_params);
     for(int j = 0; j < 3; j++) galaxies[p].SpinMergerBulge[j] = 0.0f;
+    memset(galaxies[p].DiscStarsAge, 0, sizeof(galaxies[p].DiscStarsAge));
+    memset(galaxies[p].DiscStarsMetalsAge, 0, sizeof(galaxies[p].DiscStarsMetalsAge));
+    for(int k = 0; k < N_AGE_BINS; k++) {
+        galaxies[p].MergerBulgeMassAge[k] = galaxies[p].MergerBulgeMetalsAge[k] = 0.0f;
+        galaxies[p].InstabilityBulgeMassAge[k] = galaxies[p].InstabilityBulgeMetalsAge[k] = 0.0f;
+        galaxies[p].ICSAge[k] = galaxies[p].MetalsICSAge[k] = 0.0f;
+    }
+    galaxies[p].AgeBinNow = 0;
+    galaxies[p].AgeMismatch = 0.0f;
     galaxies[p].SecularBulgeMass = galaxies[p].SecularMetalsBulgeMass = 0.0f;
     galaxies[p].R2_hot_av = 0.0f;
     galaxies[p].CoolScaleRadius = galaxies[p].GasDiscScaleRadius = galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;

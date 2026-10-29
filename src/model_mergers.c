@@ -25,6 +25,7 @@
 #include "model_misc.h"
 #include "model_darksage_mergers.h"
 #include "model_darksage_feedback.h"
+#include "model_darksage_stellar_pop.h"
 
 #include "model_starformation_and_feedback.h"
 #include "model_disk_instability.h"
@@ -533,6 +534,9 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     }
 
     galaxies[t].ICS += galaxies[p].ICS;
+    if(run_params->DarkSAGEMode == 1) {
+        darksage_move_ages(galaxies[p].ICSAge, galaxies[p].MetalsICSAge, 1.0, galaxies[t].ICSAge, galaxies[t].MetalsICSAge);
+    }
     galaxies[t].MetalsICS += galaxies[p].MetalsICS;
 
     // The assembly history now belongs to the central; clear it on the satellite
@@ -556,12 +560,28 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     // Track this based on the central's current morphology (Tonini+2016 logic)
     const double satellite_disk_mass = galaxies[p].StellarMass - galaxies[p].BulgeMass;
 
+    // DarkSAGEMode: the satellite's stellar populations keep their ages in the bulge they join
+    int sat_disc_to_instability = 0;
     if(satellite_disk_mass > 0.0) {
         const double disk_mass = galaxies[t].StellarMass - galaxies[t].BulgeMass;
         const double disk_fraction = (galaxies[t].StellarMass > 0.0) ?
                                      disk_mass / galaxies[t].StellarMass : 0.0;
+        sat_disc_to_instability = (disk_fraction > 0.5);
+    }
+    if(run_params->DarkSAGEMode == 1) {
+        darksage_move_ages(galaxies[p].InstabilityBulgeMassAge, galaxies[p].InstabilityBulgeMetalsAge, 1.0,
+                           galaxies[t].InstabilityBulgeMassAge, galaxies[t].InstabilityBulgeMetalsAge);
+        darksage_move_ages(galaxies[p].MergerBulgeMassAge, galaxies[p].MergerBulgeMetalsAge, 1.0,
+                           galaxies[t].MergerBulgeMassAge, galaxies[t].MergerBulgeMetalsAge);
+        for(int i = 0; i < N_BINS; i++) {
+            darksage_move_ages(galaxies[p].DiscStarsAge[i], galaxies[p].DiscStarsMetalsAge[i], 1.0,
+                               sat_disc_to_instability ? galaxies[t].InstabilityBulgeMassAge : galaxies[t].MergerBulgeMassAge,
+                               sat_disc_to_instability ? galaxies[t].InstabilityBulgeMetalsAge : galaxies[t].MergerBulgeMetalsAge);
+        }
+    }
 
-        if(disk_fraction > 0.5) {
+    if(satellite_disk_mass > 0.0) {
+        if(sat_disc_to_instability) {
             // Disc-dominated: minor merger triggers instability
             galaxies[t].InstabilityBulgeMass += satellite_disk_mass;
             const double old_disk_radius = galaxies[t].DiskScaleRadius;
@@ -849,6 +869,17 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     
     galaxies[merger_centralgal].BulgeMass += recycled_stars;
     galaxies[merger_centralgal].MetalsBulgeMass += metallicity * recycled_stars;
+
+    // DarkSAGEMode: the burst's stars are a new population in the bulge they join
+    if(run_params->DarkSAGEMode == 1) {
+        const int k_now = galaxies[merger_centralgal].AgeBinNow;
+        float *age = burst_to_merger_bulge ? galaxies[merger_centralgal].MergerBulgeMassAge
+                                           : galaxies[merger_centralgal].InstabilityBulgeMassAge;
+        float *age_z = burst_to_merger_bulge ? galaxies[merger_centralgal].MergerBulgeMetalsAge
+                                             : galaxies[merger_centralgal].InstabilityBulgeMetalsAge;
+        age[k_now] += (float)recycled_stars;
+        age_z[k_now] += (float)(metallicity * recycled_stars);
+    }
     
     if(burst_to_merger_bulge) {
         // Add to merger-driven bulge
@@ -976,6 +1007,17 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     // Transfer satellite's stellar mass to central's ICS (intra-cluster stars)
     galaxies[centralgal].ICS += galaxies[gal].StellarMass;
     galaxies[centralgal].MetalsICS += galaxies[gal].MetalsStellarMass;
+
+    // DarkSAGEMode: all the satellite's stellar populations join the ICS with their ages
+    if(run_params->DarkSAGEMode == 1) {
+        struct GALAXY *c = &galaxies[centralgal], *s = &galaxies[gal];
+        darksage_move_ages(s->ICSAge, s->MetalsICSAge, 1.0, c->ICSAge, c->MetalsICSAge);
+        darksage_move_ages(s->MergerBulgeMassAge, s->MergerBulgeMetalsAge, 1.0, c->ICSAge, c->MetalsICSAge);
+        darksage_move_ages(s->InstabilityBulgeMassAge, s->InstabilityBulgeMetalsAge, 1.0, c->ICSAge, c->MetalsICSAge);
+        for(int i = 0; i < N_BINS; i++) {
+            darksage_move_ages(s->DiscStarsAge[i], s->DiscStarsMetalsAge[i], 1.0, c->ICSAge, c->MetalsICSAge);
+        }
+    }
 
     // Track ICS assembly: newly disrupted stellar mass goes to ICS_disrupt.
     // These stars become unbound here and now, so `time` (the lookback time of

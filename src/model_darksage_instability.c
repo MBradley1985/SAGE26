@@ -38,6 +38,7 @@
 #include "model_starformation_and_feedback.h"
 #include "model_mergers.h"
 #include "model_misc.h"
+#include "model_darksage_stellar_pop.h"
 
 /* DarkSage cold-gas velocity dispersion (= sound speed here), c_s = 11 + 11.3 z km/s [cm/s] */
 static const double DS_CS0_CGS = 1.1e6;
@@ -132,6 +133,7 @@ static void sink_unstable_stars(const int p, const int i, const double unstable_
     struct GALAXY *g = &galaxies[p];
     const double Z = get_metallicity(g->DiscStars[i], g->DiscStarsMetals[i]);
     const double sigma = g->VelDispStars[i];
+    const double m_before = g->DiscStars[i];
 
     g->DiscStars[i] -= unstable_stars;
     g->DiscStarsMetals[i] = Z * g->DiscStars[i];
@@ -140,11 +142,19 @@ static void sink_unstable_stars(const int p, const int i, const double unstable_
         g->VelDispStars[i-1] = mix_dispersion(g->DiscStars[i-1], g->VelDispStars[i-1], unstable_stars, sigma);
         g->DiscStars[i-1] += unstable_stars;
         g->DiscStarsMetals[i-1] += Z * unstable_stars;
+        darksage_move_ages(g->DiscStarsAge[i], g->DiscStarsMetalsAge[i], unstable_stars / m_before,
+                           g->DiscStarsAge[i-1], g->DiscStarsMetalsAge[i-1]);
         return;
     }
 
     double m_down, m_up;
     j_split(i, unstable_stars, run_params, &m_down, &m_up);
+    /* the migrating stars carry the annulus's age mix: m_down of it inwards, then m_up of the rest outwards */
+    darksage_move_ages(g->DiscStarsAge[i], g->DiscStarsMetalsAge[i], m_down / m_before,
+                       (i > 0) ? g->DiscStarsAge[i-1] : g->InstabilityBulgeMassAge,
+                       (i > 0) ? g->DiscStarsMetalsAge[i-1] : g->InstabilityBulgeMetalsAge);
+    darksage_move_ages(g->DiscStarsAge[i], g->DiscStarsMetalsAge[i], m_up / (m_before - m_down),
+                       g->DiscStarsAge[i+1], g->DiscStarsMetalsAge[i+1]);
     if(i > 0) {
         g->VelDispStars[i-1] = mix_dispersion(g->DiscStars[i-1], g->VelDispStars[i-1], m_down, sigma);
         g->DiscStars[i-1] += m_down;

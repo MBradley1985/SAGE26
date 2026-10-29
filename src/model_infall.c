@@ -29,6 +29,7 @@
 #include "model_infall.h"
 #include "model_misc.h"
 #include "model_darksage_feedback.h"
+#include "model_darksage_stellar_pop.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -123,6 +124,10 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
                 galaxies[i].ICS_sum_mt = 0.0;
             }
             galaxies[i].ICS = galaxies[i].MetalsICS = 0.0;
+            if(run_params->DarkSAGEMode == 1) {
+                darksage_move_ages(galaxies[i].ICSAge, galaxies[i].MetalsICSAge, 1.0,
+                                   galaxies[centralgal].ICSAge, galaxies[centralgal].MetalsICSAge);
+            }
 
             // Satellite CGM handling: when CGMrecipeOn==1, satellites retain
             // their CGMgas across snapshots and stripping happens uniformly
@@ -219,6 +224,9 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
 
     if(galaxies[centralgal].ICS < 0.0) {
         galaxies[centralgal].ICS = galaxies[centralgal].MetalsICS = 0.0;
+        if(run_params->DarkSAGEMode == 1) {
+            darksage_move_ages(galaxies[centralgal].ICSAge, galaxies[centralgal].MetalsICSAge, 1.0, NULL, NULL);
+        }
     }
 
     if(galaxies[centralgal].MetalsICS < 0.0) {

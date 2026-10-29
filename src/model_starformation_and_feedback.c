@@ -23,6 +23,7 @@
 #include "model_darksage_instability.h"
 #include "model_darksage_disc.h"
 #include "model_darksage_feedback.h"
+#include "model_darksage_stellar_pop.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -1063,6 +1064,22 @@ static void project_stars_with_dispersion(const int p, const double cos_angle, s
         g->DiscStarsMetals[i] = (float)z[i];
         if(m[i] > 0.0) g->VelDispStars[i] = (float)sqrt(v[i] / m[i]);
     }
+
+    /* each age bin is re-binned the same way (the projection is linear in mass) */
+    for(int k = 0; k < N_AGE_BINS; k++) {
+        float col[N_BINS], colz[N_BINS];
+        double out[N_BINS], outz[N_BINS];
+        for(int i = 0; i < N_BINS; i++) {
+            col[i] = g->DiscStarsAge[i][k];
+            colz[i] = g->DiscStarsMetalsAge[i][k];
+        }
+        darksage_project_disc(col, cos_angle, out, run_params, g->Rvir, g->Vvir);
+        darksage_project_disc(colz, cos_angle, outz, run_params, g->Rvir, g->Vvir);
+        for(int i = 0; i < N_BINS; i++) {
+            g->DiscStarsAge[i][k] = (float)out[i];
+            g->DiscStarsMetalsAge[i][k] = (float)outz[i];
+        }
+    }
 }
 
 /*
@@ -1137,6 +1154,8 @@ static void darksage_combine_stellar_discs(const int p, const double new_stars[N
         g->VelDispStars[i] = (float)sqrt((m_old * s_old * s_old + add[i] * sigma_gas * sigma_gas) / (m_old + add[i]));
         g->DiscStars[i] += (float)add[i];
         g->DiscStarsMetals[i] += (float)add_metals[i];
+        g->DiscStarsAge[i][g->AgeBinNow] += (float)add[i];
+        g->DiscStarsMetalsAge[i][g->AgeBinNow] += (float)add_metals[i];
     }
 
     /* Step 4: counter-rotating stars shrink the disc */
@@ -1208,7 +1227,12 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
                                 const double *max_consume, const double dt, const int step, const int ffb,
                                 struct GALAXY *galaxies, const struct params *run_params)
 {
-    const double R = run_params->RecycleFraction;
+    /* Return fraction of the stars formed now: SAGE26's instantaneous RecycleFraction, or, with
+     * DarkSage's feedback (SupernovaRecipeOn == 2), the mass returned within half the current age
+     * bin, the rest following through darksage_delayed_feedback() */
+    double inst[2] = {run_params->RecycleFraction, 0.0};
+    if(run_params->SupernovaRecipeOn == 2) darksage_instant_return_and_sn(galaxies[p].AgeBinNow, run_params, inst);
+    const double R = inst[0];
     const float h = run_params->Hubble_h;
     double fire_scaling;
     const double eta = sn_reheat_loading(p, &fire_scaling, galaxies, run_params);
@@ -1270,7 +1294,11 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
         /* SNII yield, instantaneous recycling: the FracZleaveDisk share
          * (Krumholz & Dekel 2011 eq. 22) leaves the disc, the rest stays in
          * the annulus that formed the stars -- unless it has no gas left */
-        const double yield = run_params->Yield * stars;
+        /* SNII yield: SAGE26's instantaneous Yield * stars, or DarkSage's share made by the stars
+         * returned now, Yield * stars (1 - Z) R / FinalRecycleFraction */
+        const double yield = (run_params->SupernovaRecipeOn == 2)
+            ? run_params->Yield * stars * (1.0 - Z) * R / run_params->FinalRecycleFraction
+            : run_params->Yield * stars;
         if(galaxies[p].DiscGas[i] > 0.0f) {
             galaxies[p].DiscGasMetals[i] += (1.0 - FracZleaveDiskVal) * yield;
             metals_leaving_disk += FracZleaveDiskVal * yield;
