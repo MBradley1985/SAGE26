@@ -161,8 +161,8 @@ void darksage_split_feedback(const int p, const int centralgal, const int i, con
     *eject_e = w.eject_e;
 }
 
-void darksage_feedback_masses(const int p, const int centralgal, const int i, double *stars,
-                              double *reheated, double *ejected, double *eject_e,
+void darksage_feedback_masses(const int p, const int centralgal, const int i, const int stars_fixed,
+                              double *stars, double *reheated, double *ejected, double *eject_e,
                               const struct GALAXY *galaxies, const struct params *run_params)
 {
     *reheated = *ejected = *eject_e = 0.0;
@@ -187,13 +187,22 @@ void darksage_feedback_masses(const int p, const int centralgal, const int i, do
     }
     *eject_e = w.eject_e;
 
-    /* Can't use more cold gas than the annulus has: balance SF and feedback */
-    const double used = (1.0 - run_params->RecycleFraction) * *stars + *reheated + *ejected;
+    /* Can't use more cold gas than the annulus has: balance SF and feedback, or for a
+     * feedback-free burst (stars_fixed) cap the feedback at the gas the burst leaves */
+    const double locked = (1.0 - run_params->RecycleFraction) * *stars;
+    const double used = locked + *reheated + *ejected;
     if(used > gas) {
-        const double fac = gas / used;
-        *stars *= fac;
-        *reheated *= fac;
-        *ejected *= fac;
+        if(stars_fixed) {
+            const double left = gas - locked;
+            const double fac = (left > 0.0) ? left / (*reheated + *ejected) : 0.0;
+            *reheated *= fac;
+            *ejected *= fac;
+        } else {
+            const double fac = gas / used;
+            *stars *= fac;
+            *reheated *= fac;
+            *ejected *= fac;
+        }
     }
 }
 

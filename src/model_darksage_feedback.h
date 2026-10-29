@@ -25,9 +25,10 @@ extern "C" {
                                         const struct GALAXY *galaxies, const struct params *run_params);
 
     /* SupernovaRecipeOn == 2: DarkSage energy-driven reheated and ejected masses for *stars formed in
-     * annulus i; *stars, reheated and ejected are scaled down together to fit the annulus gas */
-    extern void darksage_feedback_masses(const int p, const int centralgal, const int i, double *stars,
-                                         double *reheated, double *ejected, double *eject_e,
+     * annulus i; *stars, reheated and ejected are scaled down together to fit the annulus gas, or,
+     * with stars_fixed (feedback-free bursts), only the feedback is cut to the gas left */
+    extern void darksage_feedback_masses(const int p, const int centralgal, const int i, const int stars_fixed,
+                                         double *stars, double *reheated, double *ejected, double *eject_e,
                                          const struct GALAXY *galaxies, const struct params *run_params);
 
     /* Metallicity of gas blown out of an annulus of metallicity Z (DarkSage entrains 10% of the

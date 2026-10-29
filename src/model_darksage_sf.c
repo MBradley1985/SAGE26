@@ -7,9 +7,11 @@
  * The annuli are themselves a radial integration over the actual disc, so
  * H2RadialIntegrationOn and H2DiskAreaOption are not used in this mode.
  *
- * The bulk path stays authoritative for the totals (stars formed, SN
- * reheating, ejection, yields); these functions supply the bulk SFR and
- * mirror the bulk mass changes onto the annuli, weighted by the per-annulus SFR.
+ * The annuli are the state: these functions supply the per-annulus SFR (and
+ * the per-annulus dynamical time used by it and by FFB bursts); the stars,
+ * feedback and yields are booked annulus by annulus in
+ * model_starformation_and_feedback.c.  Mergers still remove burst gas from
+ * the annuli and resync their metals with the helpers below.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -41,6 +43,21 @@ static double fH2_kmt09(const double Sigma_gas, const double Z)
     const double s = (clumping_factor * Sigma_gas > 0.0 && tau_c > 1e-10)
         ? log(1.0 + 0.6 * chi + 0.01 * chi * chi) / (0.6 * tau_c) : 100.0;
     return (s < 2.0) ? 1.0 - (3.0 * s) / (4.0 + s) : 0.0;
+}
+
+/*
+ * Local dynamical time of annulus i, t_dyn = r_mid / v_circ with v_circ = j_mid / r_mid
+ * from the annulus's j-bin [code time].  Falls back to Vvir when j_mid = 0.  Returns 0
+ * for an annulus with no radial extent.
+ */
+double darksage_annulus_tdyn(const int p, const int i, const struct GALAXY *galaxies,
+                             const struct params *run_params)
+{
+    const double r_mid = 0.5 * (galaxies[p].DiscRadii[i] + galaxies[p].DiscRadii[i+1]);
+    if(r_mid <= 0.0) return 0.0;
+    const double j_mid = 0.5 * (run_params->DiscBinEdge[i] + run_params->DiscBinEdge[i+1]);
+    const double v_circ = (j_mid > 0.0) ? j_mid / r_mid : galaxies[p].Vvir;
+    return (v_circ > 0.0) ? r_mid / v_circ : 0.0;
 }
 
 double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
@@ -79,9 +96,8 @@ double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
         const double Z = galaxies[p].DiscGasMetals[i] / gas;
 
         /* Local circular velocity and dynamical time from the j-bins: v = j/r, t_dyn = r/v */
-        const double j_mid = 0.5 * (run_params->DiscBinEdge[i] + run_params->DiscBinEdge[i+1]);
-        const double v_circ = (j_mid > 0.0) ? j_mid / r_mid : galaxies[p].Vvir;
-        const double tdyn = r_mid / v_circ;
+        const double tdyn = darksage_annulus_tdyn(p, i, galaxies, run_params);
+        const double v_circ = r_mid / tdyn;
 
         /* --- molecular fraction --- */
         double f_H2 = 0.0;
@@ -140,54 +156,6 @@ double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
     }
 
     return total_sfr;
-}
-
-void darksage_update_disc_from_sf(const int p, const double stars, const double reheated_mass,
-                                  const double dt, const double sfr_bin[N_BINS],
-                                  struct GALAXY *galaxies, const struct params *run_params)
-{
-    double sfr_sum = 0.0;
-    for(int i = 0; i < N_BINS; i++) sfr_sum += sfr_bin[i];
-
-    if(sfr_sum <= 0.0 || (stars <= 0.0 && reheated_mass <= 0.0)) return;
-
-    const double R = run_params->RecycleFraction;
-    double shortfall = 0.0;
-
-    // New stars carry the gas-disc spin into the stellar disc (mass-weighted with the existing disc stars)
-    double disc_stars = 0.0;
-    for(int i = 0; i < N_BINS; i++) disc_stars += galaxies[p].DiscStars[i];
-    evolve_spin(galaxies[p].SpinStars, disc_stars, galaxies[p].SpinGas, (1.0 - R) * stars);
-
-    for(int i = 0; i < N_BINS; i++) {
-        const double w = sfr_bin[i] / sfr_sum;
-        if(dt > 0.0) galaxies[p].DiscSFR[i] += (float)(w * stars / dt);
-        if(w <= 0.0 || galaxies[p].DiscGas[i] <= 0.0) continue;
-
-        const double Z = galaxies[p].DiscGasMetals[i] / galaxies[p].DiscGas[i];
-        double stars_i = (1.0 - R) * w * stars;
-        double reheat_i = w * reheated_mass;
-        const double removed = stars_i + reheat_i;
-        if(removed > galaxies[p].DiscGas[i]) {
-            /* Annulus runs short: stars still form here, the missing gas comes from the other annuli below */
-            const double f = galaxies[p].DiscGas[i] / removed;
-            shortfall += removed - galaxies[p].DiscGas[i];
-            galaxies[p].DiscStars[i] += stars_i * (1.0 - f);
-            galaxies[p].DiscStarsMetals[i] += Z * stars_i * (1.0 - f);
-            stars_i *= f;
-            reheat_i *= f;
-        }
-
-        galaxies[p].DiscGas[i] -= stars_i + reheat_i;
-        galaxies[p].DiscGasMetals[i] -= Z * (stars_i + reheat_i);
-        galaxies[p].DiscStars[i] += stars_i;
-        galaxies[p].DiscStarsMetals[i] += Z * stars_i;
-
-        if(galaxies[p].DiscGas[i] < 0.0f) galaxies[p].DiscGas[i] = 0.0f;
-        if(galaxies[p].DiscGasMetals[i] < 0.0f) galaxies[p].DiscGasMetals[i] = 0.0f;
-    }
-
-    if(shortfall > 0.0) darksage_remove_disc_gas(p, shortfall, galaxies[p].DiscGas, galaxies);
 }
 
 void darksage_remove_disc_gas(const int p, const double mass, const float weight[N_BINS],

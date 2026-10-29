@@ -799,12 +799,13 @@ if(run_params->SupernovaRecipeOn >= 1) {
  * 0.5 * reheated * Vvir^2 spent lifting the reheated gas, ejected at
  * 0.5 * Vvir^2 per unit mass.  Otherwise the Croton et al. (2006) form
  * (epsilon_eject * eta_SN E_SN / Vvir^2 - epsilon_reheat) * stars, or the
- * Karpov et al. (2020) momentum-driven form when KarpovModeOn == 1, which
- * also replaces *reheated_inout with its SN cooling mass.
+ * Karpov et al. (2020) momentum-driven form when KarpovModeOn == 1 and
+ * allow_karpov (the FFB path never uses it), which also replaces
+ * *reheated_inout with its SN cooling mass.
  * All masses [10^10 Msun/h]; returns >= 0.
  */
 static double sn_ejected_mass(const int p, const double stars, double *reheated_inout,
-                              const double fire_scaling, struct GALAXY *galaxies,
+                              const double fire_scaling, const int allow_karpov, struct GALAXY *galaxies,
                               const struct params *run_params)
 {
     double ejected_mass;
@@ -829,7 +830,7 @@ if(run_params->SupernovaRecipeOn >= 1) {
                            (galaxies[p].Vvir * galaxies[p].Vvir) -
                            run_params->FeedbackReheatingEpsilon) * stars;
         }
-        if (run_params->KarpovModeOn == 1 && galaxies[p].Vvir > 0.0 &&
+        if (allow_karpov && run_params->KarpovModeOn == 1 && galaxies[p].Vvir > 0.0 &&
             galaxies[p].ColdGas > 0.0 && galaxies[p].DiskScaleRadius > 0.0 &&
             run_params->Hubble_h > 0.0 && isfinite(stars) && isfinite(galaxies[p].MetalsColdGas)) {
             // Calculate Metallicity (Z/Z_sun)
@@ -947,7 +948,7 @@ if((stars + reheated_mass) > galaxies[p].ColdGas && (stars + reheated_mass) > 0.
     reheated_mass *= fac;
 }
 
-    *ejected_out  = sn_ejected_mass(p, stars, &reheated_mass, fire_scaling, galaxies, run_params);
+    *ejected_out  = sn_ejected_mass(p, stars, &reheated_mass, fire_scaling, 1, galaxies, run_params);
     *stars_inout  = stars;
     *reheated_out = reheated_mass;
 }
@@ -1072,13 +1073,16 @@ if(run_params->SupernovaRecipeOn >= 1) {
  *   stars_bin -- gas mass turned into stars in each annulus this substep
  *                [10^10 Msun/h], before the feedback balance of step 1.
  *   dt, step  -- substep length (code units) and index.
+ *   ffb       -- 1 for a feedback-free burst: the stars are not cut back to
+ *                make room for the feedback, which instead is capped at the
+ *                gas left in the annulus (as starformation_ffb()).
  *
  * Invariants:
  *   - Each annulus loses at most its own gas.
  *   - ColdGas == sum(DiscGas), MetalsColdGas == sum(DiscGasMetals) on exit.
  */
 static void darksage_form_stars(const int p, const int centralgal, const double stars_bin[N_BINS],
-                                const double dt, const int step,
+                                const double dt, const int step, const int ffb,
                                 struct GALAXY *galaxies, const struct params *run_params)
 {
     const double R = run_params->RecycleFraction;
@@ -1102,11 +1106,16 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
 
         double reheated, ejected, eject_e;
         if(run_params->SupernovaRecipeOn == 2) {
-            darksage_feedback_masses(p, centralgal, i, &stars, &reheated, &ejected, &eject_e, galaxies, run_params);
+            darksage_feedback_masses(p, centralgal, i, ffb, &stars, &reheated, &ejected, &eject_e, galaxies, run_params);
         } else {
             if(stars > gas) stars = gas;
             double removed = eta * stars;
-            if(stars + removed > gas) {
+            if(ffb) {
+                /* feedback-free burst: the stars are not limited by the feedback, which is
+                 * capped at the gas the burst leaves (starformation_ffb()) */
+                const double left = gas - (1.0 - R) * stars;
+                if(removed > left) removed = (left > 0.0) ? left : 0.0;
+            } else if(stars + removed > gas) {
                 const double fac = gas / (stars + removed);
                 stars *= fac;
                 removed *= fac;
@@ -1189,7 +1198,7 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
 
     /* Step 4: SAGE26's ejection of hot-phase gas by the leftover SN energy */
     if(run_params->SupernovaRecipeOn == 1) {
-        const double ejected_hot = sn_ejected_mass(p, stars_sum, &removed_sum, fire_scaling, galaxies, run_params);
+        const double ejected_hot = sn_ejected_mass(p, stars_sum, &removed_sum, fire_scaling, !ffb, galaxies, run_params);
         darksage_eject_hot(centralgal, ejected_hot, galaxies, run_params);
     }
     galaxies[p].OutflowRate += removed_sum;
@@ -1217,6 +1226,30 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
 }
 
 /*
+ * starformation_ffb_darksage -- DarkSAGEMode feedback-free burst (Li et al.
+ * 2024), annulus by annulus.
+ *
+ * Each annulus bursts at SFR_i = EnhancedSFEfficiency * DiscGas[i] / t_dyn,i,
+ * with its own dynamical time t_dyn,i = r_i / v_circ,i
+ * (darksage_annulus_tdyn()), in place of the single 3 r_s / Vvir of
+ * starformation_ffb().  As there, the burst uses all the cold gas (no H2,
+ * DiscH2 = 0), the feedback does not limit the stars, and there is no
+ * instability check.
+ */
+static void starformation_ffb_darksage(const int p, const int centralgal, const double dt, const int step,
+                                       struct GALAXY *galaxies, const struct params *run_params)
+{
+    double stars_bin[N_BINS];
+    for(int i = 0; i < N_BINS; i++) {
+        galaxies[p].DiscH2[i] = 0.0f;
+        const double tdyn = darksage_annulus_tdyn(p, i, galaxies, run_params);
+        stars_bin[i] = (tdyn > 0.0 && galaxies[p].DiscGas[i] > 0.0f)
+            ? run_params->EnhancedSFEfficiency * galaxies[p].DiscGas[i] / tdyn * dt : 0.0;
+    }
+    darksage_form_stars(p, centralgal, stars_bin, dt, step, 1, galaxies, run_params);
+}
+
+/*
  * starformation_and_feedback_darksage -- DarkSAGEMode counterpart of the
  * quiescent SF path in starformation_and_feedback().
  *
@@ -1231,7 +1264,7 @@ static void starformation_and_feedback_darksage(const int p, const int centralga
     darksage_star_formation_rate(p, sfr_bin, galaxies, run_params);
     for(int i = 0; i < N_BINS; i++) stars_bin[i] = sfr_bin[i] * dt;
 
-    darksage_form_stars(p, centralgal, stars_bin, dt, step, galaxies, run_params);
+    darksage_form_stars(p, centralgal, stars_bin, dt, step, 0, galaxies, run_params);
 
     if(run_params->DiskInstabilityOn) {
         check_disk_instability_darksage(p, centralgal, dt, step, galaxies, run_params);
@@ -1404,7 +1437,7 @@ void darksage_central_burst(const int p, const int centralgal, const double burs
 
     double stars_bin[N_BINS] = {0.0};
     stars_bin[0] = burst_gas;
-    darksage_form_stars(p, centralgal, stars_bin, dt, step, galaxies, run_params);
+    darksage_form_stars(p, centralgal, stars_bin, dt, step, 0, galaxies, run_params);
 }
 
 /*
@@ -1580,7 +1613,9 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
  * Triggered when EnhancedStarFormationOn > 0 and FFBRegime==1. Computes a burst
  * SFR from cold gas (or H2 for modes 6/7) and runs standard SN feedback,
  * updating StellarMass, SFR history, and cold gas per substep. Metal
- * production and CGM/HotGas routing follow the main SF path.
+ * production and CGM/HotGas routing follow the main SF path.  In DarkSAGEMode
+ * each disc annulus bursts on its own dynamical time
+ * (starformation_ffb_darksage()).
  */
 void starformation_ffb(const int p, const int centralgal, const double dt, const int step,
                        struct GALAXY *galaxies, const struct params *run_params)
@@ -1589,6 +1624,11 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     // FEEDBACK-FREE BURST (FFB) STAR FORMATION
     // Implementation of Li et al. 2024 - Equation (4) (modified to be Kauffmann-like)
     // ========================================================================
+
+    if(run_params->DarkSAGEMode == 1) {
+        starformation_ffb_darksage(p, centralgal, dt, step, galaxies, run_params);
+        return;
+    }
 
     double reff, tdyn, strdot, stars, metallicity;
 
@@ -1648,12 +1688,6 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     // SN masses and the metal yield all refer to the same burst.  Unlike the
     // main path the stars are not rescaled against the reheated mass.
     // ========================================================================
-    // DarkSAGEMode: the burst has one efficiency and t_dyn, so each annulus contributes in proportion to its gas
-    double sfr_bin[N_BINS] = {0.0};
-    if(run_params->DarkSAGEMode == 1) {
-        for(int i = 0; i < N_BINS; i++) sfr_bin[i] = galaxies[p].DiscGas[i];
-    }
-
     double reheated_mass = 0.0;
     double ejected_mass  = 0.0;
     compute_sn_feedback_ffb(p, &stars, &reheated_mass, &ejected_mass, galaxies, run_params);
@@ -1685,11 +1719,6 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
 
     update_from_feedback(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 
-    if(run_params->DarkSAGEMode == 1) {
-        darksage_update_disc_from_sf(p, stars, (run_params->SupernovaRecipeOn >= 1) ? reheated_mass : 0.0,
-                                     dt, sfr_bin, galaxies, run_params);
-    }
-
     // ========================================================================
     // METAL PRODUCTION (instantaneous recycling approximation - SNII only)
     // ========================================================================
@@ -1697,9 +1726,6 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const double FracZleaveDiskVal = run_params->FracZleaveDisk
                                          * exp(-1.0 * galaxies[centralgal].Mvir / KD11_METAL_HALO_MASS);
         galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
-        if(run_params->DarkSAGEMode == 1) {
-            darksage_add_disc_metals(p, run_params->Yield * (1.0 - FracZleaveDiskVal) * stars, sfr_bin, galaxies);
-        }
 
         const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
         add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, metals_leaving_disk);
