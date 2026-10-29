@@ -1265,22 +1265,25 @@ static void starformation_ffb_darksage(const int p, const int centralgal, const 
  * starformation_and_feedback_darksage -- DarkSAGEMode counterpart of the
  * quiescent SF path in starformation_and_feedback().
  *
- * The SFprescription / H2DepletionMode law is evaluated in each annulus
- * (darksage_star_formation_rate()), the stars form there with SN feedback
- * (darksage_form_stars()), then the annuli are tested for Toomre instability.
+ * The annuli are first tested for Toomre instability, then the
+ * SFprescription / H2DepletionMode law is evaluated in each annulus
+ * (darksage_star_formation_rate()) and the stars form there with SN feedback
+ * (darksage_form_stars()).
  */
 static void starformation_and_feedback_darksage(const int p, const int centralgal, const double dt, const int step,
                                                 struct GALAXY *galaxies, const struct params *run_params)
 {
+    /* Instabilities first, so passive star formation only uses gas that is stable on the
+     * scale of an annulus (Stevens et al. 2024 Sec. 7; DarkSage core_build_model.c) */
+    if(run_params->DiskInstabilityOn) {
+        check_disk_instability_darksage(p, centralgal, dt, step, galaxies, run_params);
+    }
+
     double sfr_bin[N_BINS], stars_bin[N_BINS];
     darksage_star_formation_rate(p, sfr_bin, galaxies, run_params);
     for(int i = 0; i < N_BINS; i++) stars_bin[i] = sfr_bin[i] * dt;
 
     darksage_form_stars(p, centralgal, stars_bin, NULL, dt, step, 0, galaxies, run_params);
-
-    if(run_params->DiskInstabilityOn) {
-        check_disk_instability_darksage(p, centralgal, dt, step, galaxies, run_params);
-    }
 }
 
 /*
