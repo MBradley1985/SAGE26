@@ -1035,6 +1035,124 @@ if(run_params->SupernovaRecipeOn >= 1) {
     *ejected_out  = ejected_mass;
 }
 
+/* Angular momentum of a set of annuli, sum of j_mid m */
+static double annuli_ang_mom(const double *mass, const struct params *run_params)
+{
+    double J = 0.0;
+    for(int i = 0; i < N_BINS; i++) J += 0.5 * (run_params->DiscBinEdge[i] + run_params->DiscBinEdge[i+1]) * mass[i];
+    return J;
+}
+
+/*
+ * Re-bin galaxy p's stellar annuli with every j scaled by cos_angle, mixing the
+ * velocity dispersions by mass (DarkSage project_disc_with_dispersion()): the
+ * mass and the mass-weighted variance are re-binned alike.
+ */
+static void project_stars_with_dispersion(const int p, const double cos_angle, struct GALAXY *galaxies,
+                                          const struct params *run_params)
+{
+    struct GALAXY *g = &galaxies[p];
+    float var[N_BINS];
+    for(int i = 0; i < N_BINS; i++) var[i] = (float)(g->DiscStars[i] * g->VelDispStars[i] * g->VelDispStars[i]);
+    double m[N_BINS], z[N_BINS], v[N_BINS];
+    darksage_project_disc(g->DiscStars, cos_angle, m, run_params, g->Rvir, g->Vvir);
+    darksage_project_disc(g->DiscStarsMetals, cos_angle, z, run_params, g->Rvir, g->Vvir);
+    darksage_project_disc(var, cos_angle, v, run_params, g->Rvir, g->Vvir);
+    for(int i = 0; i < N_BINS; i++) {
+        g->DiscStars[i] = (float)m[i];
+        g->DiscStarsMetals[i] = (float)z[i];
+        if(m[i] > 0.0) g->VelDispStars[i] = (float)sqrt(v[i] / m[i]);
+    }
+}
+
+/*
+ * darksage_combine_stellar_discs -- add stars just formed in the gas disc to the
+ * stellar disc (DarkSage combine_stellar_discs(); Stevens et al. 2016 Sec. 3.6).
+ *
+ * Algorithm:
+ *   1. The combined disc's axis is the J-weighted mean of the gas-disc axis
+ *      (new stars, J_new) and the stellar-disc axis (J_sdisc); with no stellar
+ *      disc it is the gas axis.
+ *   2. If the axes differ, both discs are projected onto the new axis, every
+ *      j scaled by the cosine of its tilt (stars move inwards); the old
+ *      disc's dispersions mix by mass as stars change bin.
+ *   3. The new stars carry the cold gas's dispersion, 11 + 11.3 z km/s, mixed
+ *      by mass into each annulus.
+ *   4. If either disc counter-rotates relative to the new axis, the combined
+ *      disc is shrunk by (J_sum - 2 J_retro) / J_sum to conserve J.
+ * The caller adds the new stars to StellarMass.
+ */
+static void darksage_combine_stellar_discs(const int p, const double new_stars[N_BINS], const double new_metals[N_BINS],
+                                           struct GALAXY *galaxies, const struct params *run_params)
+{
+    struct GALAXY *g = &galaxies[p];
+    const double sigma_gas = darksage_cold_gas_dispersion(run_params->ZZ[g->SnapNum], run_params);
+
+    /* Step 1: new stellar-disc axis */
+    double disc_stars[N_BINS];
+    double disc_sum = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        disc_stars[i] = g->DiscStars[i];
+        disc_sum += disc_stars[i];
+    }
+    const double J_new = annuli_ang_mom(new_stars, run_params);
+    double J_sdisc = 0.0, cos_sdisc = 1.0, cos_new = 1.0, axis[3];
+    if(disc_sum > 0.0) {
+        J_sdisc = annuli_ang_mom(disc_stars, run_params);
+        for(int k = 0; k < 3; k++) axis[k] = g->SpinGas[k] * J_new + g->SpinStars[k] * J_sdisc;
+        const double n = sqrt(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
+        if(n > 0.0) {
+            for(int k = 0; k < 3; k++) axis[k] /= n;
+        } else {
+            for(int k = 0; k < 3; k++) axis[k] = g->SpinGas[k];
+        }
+        cos_sdisc = g->SpinStars[0] * axis[0] + g->SpinStars[1] * axis[1] + g->SpinStars[2] * axis[2];
+        cos_new = g->SpinGas[0] * axis[0] + g->SpinGas[1] * axis[1] + g->SpinGas[2] * axis[2];
+    } else {
+        for(int k = 0; k < 3; k++) axis[k] = g->SpinGas[k];
+    }
+
+    /* Step 2: project both discs onto the new axis */
+    double add[N_BINS], add_metals[N_BINS];
+    if(cos_sdisc < 1.0) {
+        project_stars_with_dispersion(p, cos_sdisc, galaxies, run_params);
+        float tmp[N_BINS], tmpz[N_BINS];
+        for(int i = 0; i < N_BINS; i++) {
+            tmp[i] = (float)new_stars[i];
+            tmpz[i] = (float)new_metals[i];
+        }
+        darksage_project_disc(tmp, cos_new, add, run_params, g->Rvir, g->Vvir);
+        darksage_project_disc(tmpz, cos_new, add_metals, run_params, g->Rvir, g->Vvir);
+    } else {
+        for(int i = 0; i < N_BINS; i++) {
+            add[i] = new_stars[i];
+            add_metals[i] = new_metals[i];
+        }
+    }
+
+    /* Step 3: add the new stars at the cold gas's dispersion */
+    for(int i = 0; i < N_BINS; i++) {
+        if(add[i] <= 0.0) continue;
+        const double m_old = g->DiscStars[i], s_old = g->VelDispStars[i];
+        g->VelDispStars[i] = (float)sqrt((m_old * s_old * s_old + add[i] * sigma_gas * sigma_gas) / (m_old + add[i]));
+        g->DiscStars[i] += (float)add[i];
+        g->DiscStarsMetals[i] += (float)add_metals[i];
+    }
+
+    /* Step 4: counter-rotating stars shrink the disc */
+    double J_retro = 0.0;
+    if(cos_sdisc < 0.0) J_retro = J_sdisc * fabs(cos_sdisc);
+    else if(cos_new < 0.0) J_retro = J_new * fabs(cos_new);
+    const double J_sum = J_sdisc * fabs(cos_sdisc) + J_new * fabs(cos_new);
+    if(J_retro > 0.0 && J_sum > 0.0) {
+        double factor = (J_sum - 2.0 * J_retro) / J_sum;
+        if(factor < 1.0e-3) factor = 1.0e-3;
+        project_stars_with_dispersion(p, factor, galaxies, run_params);
+    }
+
+    for(int k = 0; k < 3; k++) g->SpinStars[k] = (float)axis[k];
+}
+
 /*
  * darksage_form_stars -- DarkSAGEMode star formation and SN feedback, annulus
  * by annulus.
@@ -1059,9 +1177,9 @@ if(run_params->SupernovaRecipeOn >= 1) {
  *      (model_darksage_feedback.c).  Remove the (1 - R) * stars locked up
  *      plus the removed gas, and return the instantaneous-recycling yield to
  *      the annulus (the FracZleaveDisk share goes to the hot reservoir).
- *   2. Add the new stars to the stellar annuli, carrying the gas-disc spin
- *      into the stellar disc (mass-weighted) and the cold gas's velocity
- *      dispersion into each annulus's stars.
+ *   2. Combine the new stars, born in the gas disc's plane with the cold
+ *      gas's velocity dispersion, with the stellar disc
+ *      (darksage_combine_stellar_discs()).
  *   3. Reset the galaxy totals from the annuli; record SfrDisk and the SFH.
  *   4. SupernovaRecipeOn == 1 only: the SN energy left after lifting the
  *      removed gas ejects hot-phase gas (sn_ejected_mass()), which joins the
@@ -1172,21 +1290,9 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
         removed_sum += removed;
     }
 
-    /* Step 2: the new stars join the stellar annuli they formed in */
+    /* Step 2: the new stars join the stellar disc (darksage_combine_stellar_discs()) */
     if(new_stars_sum > 0.0) {
-        double disc_stars = 0.0;
-        for(int i = 0; i < N_BINS; i++) disc_stars += galaxies[p].DiscStars[i];
-        evolve_spin(galaxies[p].SpinStars, disc_stars, galaxies[p].SpinGas, new_stars_sum);
-        const double sigma_gas = darksage_cold_gas_dispersion(run_params->ZZ[galaxies[p].SnapNum], run_params);
-        for(int i = 0; i < N_BINS; i++) {
-            if(new_stars[i] <= 0.0) continue;
-            /* new stars are born with the cold gas's velocity dispersion (DarkSage combine_stellar_discs()) */
-            const double m_old = galaxies[p].DiscStars[i], s_old = galaxies[p].VelDispStars[i];
-            galaxies[p].VelDispStars[i] = (float)sqrt((m_old * s_old * s_old + new_stars[i] * sigma_gas * sigma_gas)
-                                                      / (m_old + new_stars[i]));
-            galaxies[p].DiscStars[i] += new_stars[i];
-            galaxies[p].DiscStarsMetals[i] += new_stars_metals[i];
-        }
+        darksage_combine_stellar_discs(p, new_stars, new_stars_metals, galaxies, run_params);
         galaxies[p].StellarMass += new_stars_sum;
         galaxies[p].MetalsStellarMass += new_metals_sum;
     }
