@@ -112,8 +112,29 @@ void darksage_return_and_sn(const double t0, const double t1, const struct param
     out[1] = num_sn_per_mass(m0, m1) / (denom * SOLAR_MASS * run_params->Hubble_h) * run_params->UnitMass_in_g;
 }
 
+/*
+ * HI photoionisation rate of the UV background, Faucher-Giguere (2020), at z = 0, 0.2, ..., 8.8
+ * [1e-12 s^-1] (DarkSage main.c GammaHI_arr).  DarkSage fills its redshift grid only up to z = 6
+ * (31 entries) while reading 45; the table's own 0.2 spacing is used for all 45 here, with linear
+ * interpolation between the bracketing entries.
+ */
+static const double FG20_GAMMA_HI[45] = {
+    3.62e-2, 8.72e-2, 0.177, 0.312, 0.488, 0.682, 0.862, 1.003, 1.091, 1.136, 1.136, 1.109, 1.069, 1.021, 0.968,
+    0.915, 0.857, 0.805, 0.757, 0.711, 0.670, 0.631, 0.592, 0.558, 0.525, 0.493, 0.463, 0.436, 0.409, 0.384,
+    0.356, 0.329, 0.304, 0.279, 0.257, 0.237, 0.167, 1.25e-2, 1.44e-4, 2.80e-5, 4.26e-6, 2.81e-7, 1.24e-9, 1e-28, 1e-28};
+static const double FG20_DZ = 0.2;
+
 void darksage_init_age_bins(struct params *run_params)
 {
+    for(int s = 0; s < run_params->Snaplistlen && s < ABSOLUTEMAXSNAPS; s++) {
+        const double x = run_params->ZZ[s] / FG20_DZ;
+        int i = (int)x;
+        double g;
+        if(i >= 44) g = FG20_GAMMA_HI[44];
+        else g = FG20_GAMMA_HI[i] + (FG20_GAMMA_HI[i+1] - FG20_GAMMA_HI[i]) * (x - i);
+        run_params->GammaHI[s] = g * 1.0e-12 * run_params->UnitTime_in_s / run_params->Hubble_h;
+    }
+
     /* Bin edges in lookback time: the latest output snapshot, then snapshots spaced evenly back
      * to the first (DarkSage main.c) */
     const int last = run_params->ListOutputSnaps[0];

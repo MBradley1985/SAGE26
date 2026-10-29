@@ -279,6 +279,8 @@ struct GALAXY
     float ICSAge[N_AGE_BINS];        /* intrahalo stars by age bin */
     float MetalsICSAge[N_AGE_BINS];
     int32_t AgeBinNow;               /* age bin of the current substep */
+    double TimeNow;                  /* lookback time of the current substep [code time] */
+    float DiscFNeutral[N_BINS];      /* neutral fraction of each annulus's hydrogen (SFprescription 8; else 1) */
     float AgeMismatch;               /* misbooked stellar mass by age, / StellarMass (diagnostic) */
     float SpinMergerBulge[3];        /* Specific angular momentum vector of the merger-driven bulge [(Mpc/h)(km/s)] */
 };
@@ -627,6 +629,7 @@ struct params
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
     double     AgeBinEdge[N_AGE_BINS+1]; // DarkSAGEMode: stellar age-bin edges in lookback time [code time] (computed)
     double     FinalRecycleFraction;     // DarkSAGEMode: mass a stellar population returns over its lifetime (IMF, computed)
+    double     GammaHI[ABSOLUTEMAXSNAPS]; // DarkSAGEMode: HI photoionisation rate of the UV background per snapshot [1/code time]
     double     GasSinkRate;             // Unstable gas sink fraction (default 0.1)
     double     ThetaThresh;             // Coplanar threshold [deg] (default 5.0)
     double     DegPerTdyn;              // Precession rate [deg/tdyn] (default 1.0)

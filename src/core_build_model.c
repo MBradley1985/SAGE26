@@ -537,6 +537,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
             const double time = halo_age + deltaT - (step + 0.5) * (deltaT / effective_steps);
             if(run_params->DarkSAGEMode == 1) {
                 galaxies[p].AgeBinNow = darksage_age_bin(time, run_params);   /* stars formed now go here */
+                galaxies[p].TimeNow = time;
             }
 
             // For the central galaxy only

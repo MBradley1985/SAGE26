@@ -217,6 +217,8 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].ICSAge[k] = galaxies[p].MetalsICSAge[k] = 0.0f;
     }
     galaxies[p].AgeBinNow = 0;
+    galaxies[p].TimeNow = 0.0;
+    for(int i = 0; i < N_BINS; i++) galaxies[p].DiscFNeutral[i] = 1.0f;
     galaxies[p].AgeMismatch = 0.0f;
     galaxies[p].SecularBulgeMass = galaxies[p].SecularMetalsBulgeMass = 0.0f;
     galaxies[p].R2_hot_av = 0.0f;
