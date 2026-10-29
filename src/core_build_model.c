@@ -582,19 +582,17 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
             // Determine the cooling gas given the halo properties
               const double dt_step = deltaT / effective_steps;
-              if(run_params->CGMrecipeOn == 1) {
-                // deposits internally (bulk ColdGas, or annuli when DarkSAGEMode=1)
+              if(run_params->DarkSAGEMode == 1) {
+                // DarkSage cooling of HotGas and CGMgas together, onto the annuli
+                cooling_darksage(p, dt_step, galaxies, run_params);
+
+              } else if(run_params->CGMrecipeOn == 1) {
+                // deposits internally into the bulk ColdGas
                 cooling_recipe_regime_aware(p, dt_step, galaxies, run_params);
 
                 } else {
                     const double coolingGas = cooling_recipe(p, dt_step, galaxies, run_params);
-
-                    if(run_params->DarkSAGEMode == 1) {
-                        cool_gas_onto_galaxy_darksage(p, coolingGas, galaxies, run_params);
-
-                    } else {
                     cool_gas_onto_galaxy(p, coolingGas, galaxies);
-                }
             }
 
             // DarkSAGEMode: refresh the annulus radii and potentials from the rotation curve every
