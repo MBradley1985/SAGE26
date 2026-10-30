@@ -621,16 +621,10 @@ struct params
     /*                    fountain gas reservoirs (for hot-regime haloes only) */
     /* When DarkSAGEMode=0: Standard SAGE behavior */
     int32_t    DarkSAGEMode;            // 0: standard SAGE; 1: full DarkSage physics
-    double     FirstBin;                // First j-bin edge [kpc km/s] (default 100)
-    double     ExponentBin;             // j-bin geometric growth factor (default 1.4)
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
     double     AgeBinEdge[N_AGE_BINS+1]; // DarkSAGEMode: stellar age-bin edges in lookback time [code time] (computed)
     double     FinalRecycleFraction;     // DarkSAGEMode: mass a stellar population returns over its lifetime (IMF, computed)
     double     GammaHI[ABSOLUTEMAXSNAPS]; // DarkSAGEMode: HI photoionisation rate of the UV background per snapshot [1/code time]
-    double     GasSinkRate;             // Unstable gas sink fraction (default 0.1)
-    double     ThetaThresh;             // Coplanar threshold [deg] (default 5.0)
-    double     DegPerTdyn;              // Precession rate [deg/tdyn] (default 1.0)
-    double     QTotMin;                 // Minimum combined Q for stability (default 1.0)
 
     int32_t nsnapshots;
     int32_t LastSnapshotNr;

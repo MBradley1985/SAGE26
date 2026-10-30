@@ -52,7 +52,7 @@ static const double DS_UNI_FNEUT_BG = 2.351e-5;
  * H2 mass of annulus i under DarkSage's H2 prescription (update_HI_H2(), H2prescription 0).
  *
  *   1. Midplane pressure P = (pi/2) G Sigma_gas (Sigma_gas + (sigma_gas / sigma_*) Sigma_*) h^2,
- *      the stars counting only when the stellar and gas discs are within ThetaThresh;
+ *      the stars counting only when the stellar and gas discs are within DS_THETA_THRESH_DEG;
  *      H2/HI = (P / P_0)^0.92.
  *   2. Neutral fraction from the annulus's own young stars: its recent SFR (from the youngest
  *      populated age bin) keeps f_ion^2 ~ SFR sigma^2 area^2 / M_gas^3 of the hydrogen ionised,
@@ -75,7 +75,7 @@ static double h2_darksage(const int p, const int i, const double gas, double *f_
 
     const double sigma_gas = darksage_cold_gas_dispersion(run_params->ZZ[g->SnapNum], run_params);
     const double cos_angle = g->SpinStars[0] * g->SpinGas[0] + g->SpinStars[1] * g->SpinGas[1] + g->SpinStars[2] * g->SpinGas[2];
-    const int coplanar = (cos_angle >= cos(run_params->ThetaThresh * M_PI / 180.0));
+    const int coplanar = (cos_angle >= cos(DS_THETA_THRESH_DEG * M_PI / 180.0));
 
     /* Step 1: pressure-based H2/HI */
     double P;

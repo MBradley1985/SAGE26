@@ -10,7 +10,7 @@
  *
  * Gas pass, outer annulus to inner:
  *   The unstable gas is the part that must go for Q_gas to reach its
- *   minimum.  GasSinkRate of it sinks: it is split between the neighbouring
+ *   minimum.  DS_GAS_SINK_RATE of it sinks: it is split between the neighbouring
  *   annuli so that angular momentum is conserved (from annulus 0 the inward
  *   share feeds the black hole).  The rest forms stars in the annulus, with
  *   the usual SN feedback (darksage_instability_burst()).  Black-hole growth
@@ -20,7 +20,7 @@
  *   inward into the secular bulge); the rest of the instability is removed
  *   by heating the annulus's stars until Q_star = Q_star_min.
  *
- * Gas and stellar discs more than ThetaThresh degrees apart are tested as
+ * Gas and stellar discs more than DS_THETA_THRESH_DEG degrees apart are tested as
  * separate one-component discs.
  *
  * Code units throughout (10^10 Msun/h, Mpc/h, km/s).
@@ -33,6 +33,7 @@
 #include <math.h>
 
 #include "core_allvars.h"
+#include "macros.h"
 
 #include "model_darksage_instability.h"
 #include "model_starformation_and_feedback.h"
@@ -97,7 +98,7 @@ static double sink_unstable_gas(const int p, const int i, double unstable_gas, d
     if(unstable_gas > g->DiscGas[i]) unstable_gas = g->DiscGas[i];
     const double Z = get_metallicity(g->DiscGas[i], g->DiscGasMetals[i]);
 
-    double gas_sink = run_params->GasSinkRate * unstable_gas;
+    double gas_sink = DS_GAS_SINK_RATE * unstable_gas;
     if(unstable_gas - gas_sink < DS_MIN_STARFORMATION) gas_sink = unstable_gas;
 
     g->DiscGas[i] -= gas_sink;
@@ -184,19 +185,19 @@ static void sink_unstable_stars(const int p, const int i, const double unstable_
  *   1. Gas pass, i = N_BINS-1 .. 0, over annuli with gas:
  *        Q_gas  = c_s kappa (r_out^2 - r_in^2) / (G m_gas)
  *        Q_star = 0.935 kappa sigma (r_out^2 - r_in^2) / (G m_star)
- *      With coplanar stars (angle <= ThetaThresh) the two-fluid
+ *      With coplanar stars (angle <= DS_THETA_THRESH_DEG) the two-fluid
  *      Q_tot = 1 / (W/Q_gas + 1/Q_star) if Q_gas >= Q_star, else
- *      1 / (1/Q_gas + W/Q_star); stable if Q_tot >= QTotMin.  If both Q are
- *      below QTotMin + W the gas must reach that; if only the gas is, it must
- *      reach the Q_gas that brings Q_tot to QTotMin; otherwise the stars
- *      resolve it.  Without coplanar stars Q_gas_min = QTotMin.
- *      Unstable gas m_gas (1 - Q_gas / Q_gas_min) sinks (GasSinkRate) and the
+ *      1 / (1/Q_gas + W/Q_star); stable if Q_tot >= DS_QTOT_MIN.  If both Q are
+ *      below DS_QTOT_MIN + W the gas must reach that; if only the gas is, it must
+ *      reach the Q_gas that brings Q_tot to DS_QTOT_MIN; otherwise the stars
+ *      resolve it.  Without coplanar stars Q_gas_min = DS_QTOT_MIN.
+ *      Unstable gas m_gas (1 - Q_gas / Q_gas_min) sinks (DS_GAS_SINK_RATE) and the
  *      rest forms stars in the annulus with SN feedback.
  *   2. The black hole growth from annulus 0 drives a quasar wind.
  *   3. Stellar pass, i = N_BINS-1 .. 0, over annuli with stars: Q_star_min
- *      from the two-fluid Q (or QTotMin alone); unstable stars
+ *      from the two-fluid Q (or DS_QTOT_MIN alone); unstable stars
  *      StarSinkRate m_star (1 - Q_star / Q_star_min) migrate with
- *      StarSinkRate = 1 - (1 - GasSinkRate) c_s / sigma, and the rest heat the
+ *      StarSinkRate = 1 - (1 - DS_GAS_SINK_RATE) c_s / sigma, and the rest heat the
  *      annulus: sigma *= (1 - StarSinkRate) Q_star_min / Q_star + StarSinkRate.
  *   4. ColdGas and MetalsColdGas are reset to the annulus sums.
  */
@@ -205,7 +206,7 @@ void check_disk_instability_darksage(const int p, const int centralgal, const do
 {
     struct GALAXY *g = &galaxies[p];
     const double G = run_params->G;
-    const double Q_min = run_params->QTotMin;
+    const double Q_min = DS_QTOT_MIN;
     const double c_s = darksage_cold_gas_dispersion(run_params->ZZ[g->SnapNum], run_params);
 
     double disc_gas = 0.0, disc_stars = 0.0;
@@ -218,7 +219,7 @@ void check_disk_instability_darksage(const int p, const int centralgal, const do
     double cos_angle = g->SpinStars[0] * g->SpinGas[0] + g->SpinStars[1] * g->SpinGas[1] + g->SpinStars[2] * g->SpinGas[2];
     if(cos_angle > 1.0) cos_angle = 1.0;
     if(cos_angle < -1.0) cos_angle = -1.0;
-    const int coplanar = (acos(cos_angle) * 180.0 / M_PI <= run_params->ThetaThresh);
+    const int coplanar = (acos(cos_angle) * 180.0 / M_PI <= DS_THETA_THRESH_DEG);
 
     /* Step 1: gas instabilities */
     double bh_growth = 0.0;
@@ -292,7 +293,7 @@ void check_disk_instability_darksage(const int p, const int centralgal, const do
         }
         if(Q_star >= Q_star_min) continue;
 
-        const double star_sink_rate = 1.0 - (1.0 - run_params->GasSinkRate) * c_s / sigma;
+        const double star_sink_rate = 1.0 - (1.0 - DS_GAS_SINK_RATE) * c_s / sigma;
         double unstable_stars = star_sink_rate * g->DiscStars[i] * (1.0 - Q_star / Q_star_min);
         if(unstable_stars > g->DiscStars[i]) unstable_stars = g->DiscStars[i];
         if(unstable_stars <= DS_MIN_UNSTABLE) continue;

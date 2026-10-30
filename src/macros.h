@@ -24,6 +24,14 @@
 #define  N_BINS           30         /* Number of radial annuli for disk structure (DarkSAGEMode) */
 #define  N_AGE_BINS       30         /* Stellar age bins (DarkSAGEMode, DarkSage N_AGE_BINS) */
 
+/* DarkSAGEMode constants, DarkSage's values (millennium.par; Stevens et al. 2024) */
+#define  DS_FIRST_BIN         1.0     /* first specific angular momentum bin edge [kpc km/s], j_i = DS_FIRST_BIN DS_EXPONENT_BIN^(i-1) */
+#define  DS_EXPONENT_BIN      1.4     /* geometric growth of the j-bin edges, and of the rotation-curve grid */
+#define  DS_GAS_SINK_RATE     0.66    /* fraction of unstable gas that sinks to the neighbouring annuli; the rest forms stars */
+#define  DS_THETA_THRESH_DEG  10.0    /* gas and stellar discs closer than this are treated as coplanar [deg] */
+#define  DS_DEG_PER_TDYN      5.0     /* precession of the gas disc towards the stellar disc [deg per dynamical time] */
+#define  DS_QTOT_MIN          1.0     /* minimum two-fluid Toomre Q for a stable annulus */
+
 /* physical constants in cgs */
 #define  GRAVITY     6.672e-8        /* gravitational constant [cm^3 g^-1 s^-2] */
 #define  SOLAR_MASS  1.989e33        /* solar mass [g] */

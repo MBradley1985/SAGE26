@@ -3,7 +3,7 @@
  *
  * Follows DarkSage's update_disc_radii() (model_misc.c; Stevens, Croton &
  * Mutch 2016 Sec. 3.2; Stevens et al. 2024 Sec. 4).  The rotation curve is
- * built on a 51-point radial grid, spaced by ExponentBin inwards from
+ * built on a 51-point radial grid, spaced by DS_EXPONENT_BIN inwards from
  * max(10 j_max / Vvir, Rvir), from
  *   - an NFW halo (the dark matter left after the disc, bulge, hot gas and
  *     black hole), concentration from SAGE26's ConcentrationOn when set,
@@ -34,6 +34,7 @@
 #include <math.h>
 
 #include "core_allvars.h"
+#include "macros.h"
 
 #include "model_darksage_disc.h"
 #include "model_halo_properties.h"
@@ -350,7 +351,7 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
             gr_phi[i] = gr_phi[i+1] - (gr_r[i+1] - gr_r[i]) * 0.5
                         * (gr_j[i+1] * gr_j[i+1] / (f_sup[i+1] * gr_r[i+1] * gr_r[i+1] * gr_r[i+1]) + v2 / r);
         }
-        r /= run_params->ExponentBin;
+        r /= DS_EXPONENT_BIN;
     }
     if(i == 0) gr_phi[0] = gr_phi[1];   /* the potential flattens at the centre */
 
@@ -466,16 +467,16 @@ void darksage_precess_gas(const int p, const double dt, struct GALAXY *galaxies,
     if(cos_theta > 1.0) cos_theta = 1.0;
     if(cos_theta < -1.0) cos_theta = -1.0;
 
-    /* Already (counter-)aligned within ThetaThresh */
-    if(fabs(cos_theta) > cos(run_params->ThetaThresh * M_PI / 180.0)) return;
+    /* Already (counter-)aligned within DS_THETA_THRESH_DEG */
+    if(fabs(cos_theta) > cos(DS_THETA_THRESH_DEG * M_PI / 180.0)) return;
 
-    /* Mass-weighted precession angle: DegPerTdyn per local t_dyn = r^2 / j */
+    /* Mass-weighted precession angle: DS_DEG_PER_TDYN per local t_dyn = r^2 / j */
     double deg = 0.0;
     for(int i = 0; i < N_BINS; i++) {
         const double j_edge = run_params->DiscBinEdge[i+1];
         const double r_out = galaxies[p].DiscRadii[i+1];
         if(galaxies[p].DiscGas[i] <= 0.0 || j_edge <= 0.0 || r_out <= 0.0) continue;
-        deg += run_params->DegPerTdyn * dt / (r_out * r_out / j_edge) * galaxies[p].DiscGas[i] / gas_sum;
+        deg += DS_DEG_PER_TDYN * dt / (r_out * r_out / j_edge) * galaxies[p].DiscGas[i] / gas_sum;
     }
     if(deg <= 0.0) return;
 

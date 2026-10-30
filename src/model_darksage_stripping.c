@@ -15,7 +15,7 @@
  * Ram pressure (Gunn & Gott 1972; paper eqs 117-118), per annulus:
  *   P_ram = rho_hot(R_sat) V_sat^2,  P_grav = 2 pi G Sigma_disc Sigma_gas,
  * Sigma_disc includes the stars when the gas and stellar discs lie within
- * ThetaThresh degrees.  Once the innermost annulus is stripped, all the cold
+ * DS_THETA_THRESH_DEG degrees.  Once the innermost annulus is stripped, all the cold
  * gas goes; other annuli are stripped where P_ram >= P_grav, unless shielded
  * by the hot halo (M_cold + M_* < M_hot and r_ann^2 < <R_hot^2>).  This is
  * DarkSage's RamPressureOn = 3.  Stripped gas joins the satellite's hot (or
@@ -35,6 +35,7 @@
 #include <math.h>
 
 #include "core_allvars.h"
+#include "macros.h"
 
 #include "model_darksage_stripping.h"
 #include "model_darksage_disc.h"
@@ -84,7 +85,7 @@ int darksage_ram_pressure_stripping(const int centralgal, const int gal, const d
 
     const double P_ram = darksage_hot_density(c, r_sat, run_params) * v2;
     const double cos_angle = s->SpinStars[0] * s->SpinGas[0] + s->SpinStars[1] * s->SpinGas[1] + s->SpinStars[2] * s->SpinGas[2];
-    const int coplanar = (cos_angle >= cos(run_params->ThetaThresh * M_PI / 180.0));
+    const int coplanar = (cos_angle >= cos(DS_THETA_THRESH_DEG * M_PI / 180.0));
     const int unshielded = (s->ColdGas + s->StellarMass > s->HotGas + s->CGMgas);
 
     for(int i = 0; i < N_BINS; i++) {

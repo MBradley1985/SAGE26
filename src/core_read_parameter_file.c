@@ -132,12 +132,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
     // DarkSAGEMode: 0 = standard SAGE; 1 = full DarkSage physics (radially-resolved disk structure, Toomre Q instability, precession, j-conservation, fountain gas reservoirs)
     run_params->DarkSAGEMode               = 0; /* default: standard SAGE behavior */
-    run_params->FirstBin                   = 1.0; /* default: first j-bin edge [kpc km/s] (DarkSage) */
-    run_params->ExponentBin                = 1.4; /* default: j-bin geometric growth factor */
-    run_params->GasSinkRate                = 0.1; /* default: unstable gas sink fraction */
-    run_params->ThetaThresh                = 5.0; /* default: coplanar threshold [deg] */
-    run_params->DegPerTdyn                 = 1.0; /* default: precession rate [deg/tdyn] */
-    run_params->QTotMin                    = 1.0; /* default: minimum combined Q for stability */
 
 
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
@@ -221,12 +215,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("KarpovModeOn",               &(run_params->KarpovModeOn),               INT, 0);
 
     REG("DarkSAGEMode",                &(run_params->DarkSAGEMode),               INT, 0);
-    REG("FirstBin",                    &(run_params->FirstBin),                   DOUBLE, 0);
-    REG("ExponentBin",                 &(run_params->ExponentBin),                DOUBLE, 0);
-    REG("GasSinkRate",                 &(run_params->GasSinkRate),                DOUBLE, 0);
-    REG("ThetaThresh",                 &(run_params->ThetaThresh),                DOUBLE, 0);
-    REG("DegPerTdyn",                  &(run_params->DegPerTdyn),                   DOUBLE, 0);
-    REG("QTotMin",                     &(run_params->QTotMin),                     DOUBLE, 0);
 
 #undef REG
 
