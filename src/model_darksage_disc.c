@@ -139,9 +139,12 @@ double darksage_ics_scale_radius(const double Rvir, const double R_av)
 }
 
 /* Add stars of mass m deposited at radius r to central c's intrahalo stars' mean radius;
- * call before c->ICS grows (DarkSage model_infall.c, model_mergers.c) */
+ * call before c->ICS grows (DarkSage model_infall.c, model_mergers.c).  Stars deposited
+ * beyond Rvir leave it unchanged: DarkSage keeps them out of the central's intrahalo
+ * stars (its local intergalactic stars), while SAGE26 still adds their mass */
 void darksage_add_ics_radius(struct GALAXY *c, const double m, const double r)
 {
+    if(r > c->Rvir) return;
     const double total = c->ICS + m;
     if(total > 0.0) c->ICSMeanRadius = (float)((c->ICSMeanRadius * c->ICS + r * m) / total);
 }
