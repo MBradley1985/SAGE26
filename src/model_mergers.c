@@ -29,6 +29,7 @@
 #include "model_darksage_instability.h"
 #include "model_darksage_sf.h"
 #include "model_darksage_disc.h"
+#include "model_darksage_mergers.h"
 #include "model_halo_properties.h"
 
 /* -------------------------------------------------------------------------
@@ -410,8 +411,9 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
             for(int i = 0; i < N_BINS; i++) {
                 galaxies[gal].DiscGas[i] = 0.0f;
                 galaxies[gal].DiscGasMetals[i] = 0.0f;
-                galaxies[gal].DiscH2[i] = 0.0f;
+                galaxies[gal].DiscH2[i] = galaxies[gal].DiscHI[i] = 0.0f;
             }
+            galaxies[gal].H2gas = galaxies[gal].H1gas = 0.0f;
         }
 
         galaxies[gal].ColdGas = 0.0;
@@ -475,17 +477,9 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
         // Mass-weighted spins, using the masses before they are combined
         combine_spins_merger(t, p, galaxies);
 
-        // Satellite gas joins the central's annuli by j-bin; its stars all join the bulge below,
-        // so DiscStars are not added.  Annuli with no area (capped at Rvir) hand theirs to the last real one.
-        int last = 0;
-        for(int i = N_BINS - 1; i >= 0; i--) {
-            if(galaxies[t].DiscRadii[i+1] > galaxies[t].DiscRadii[i]) { last = i; break; }
-        }
-        for(int i = 0; i < N_BINS; i++) {
-            const int k = (i > last) ? last : i;
-            galaxies[t].DiscGas[k] += galaxies[p].DiscGas[i];
-            galaxies[t].DiscGasMetals[k] += galaxies[p].DiscGasMetals[i];
-        }
+        // Satellite gas joins the central's annuli by its orbital angular momentum (DarkSage
+        // add_galaxies_together()); its stars all join the bulge below, so DiscStars are not added
+        darksage_merge_gas(t, p, galaxies, run_params);
 
         // Satellite fountain / outflow gas joins the central's hot (or CGM) reservoir
         add_gas_to_hot_reservoir(&galaxies[t], run_params,
@@ -617,6 +611,9 @@ void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
     galaxies[p].MergerBulgeMass = galaxies[p].StellarMass;      // All merger-driven
     galaxies[p].InstabilityBulgeMass = 0.0;                      // Destroyed
     galaxies[p].MetalsBulgeMass = galaxies[p].MetalsStellarMass;
+    // DarkSAGEMode's instability-built (secular) bulge goes with it (DarkSage stars_to_bulge())
+    galaxies[p].SecularBulgeMass = galaxies[p].SecularMetalsBulgeMass = 0.0f;
+    for(int k = 0; k < 3; k++) galaxies[p].SpinSecularBulge[k] = 0.0f;
 
     // DarkSAGEMode: the stellar disc is destroyed (arrays are all zero otherwise)
     for(int i = 0; i < N_BINS; i++) {
