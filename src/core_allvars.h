@@ -195,6 +195,7 @@ struct GALAXY
     float RadioModeBHaccretionMass;  /* BH mass accreted in radio mode this snapshot [10^10 Msun/h] */
     float TimeOfLastMajorMerger;     /* lookback time to z=0 at last major merger [code time units]; -1 = never; written out in Myr */
     float TimeOfLastMinorMerger;     /* lookback time to z=0 at last minor merger [code time units]; -1 = never; written out in Myr */
+    float TimeOfLastQuasarBurst;     /* lookback time to z=0 at last quasar-mode accretion, from a merger or disk instability [code time units]; -1 = never; written out in Myr/h */
     float OutflowRate;           /* SN-driven gas outflow rate [10^10 Msun/h / code time] */
     float RcoolToRvir;           /* ratio of cooling radius to virial radius at last cooling evaluation */
 

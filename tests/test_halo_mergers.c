@@ -314,15 +314,30 @@ void test_black_hole_merger_growth() {
     double initial_BH = gal[0].BlackHoleMass;
     double initial_cold = gal[0].ColdGas;
     
-    grow_black_hole(0, mass_ratio, gal, &run_params);
-    
+    gal[0].Vvir = 200.0;
+    gal[0].TimeOfLastQuasarBurst = -1.0;
+
+    grow_black_hole(0, mass_ratio, 0.5, gal, &run_params);
+
     // Check that function executed (BH mass should be >= initial)
     ASSERT_TRUE(gal[0].BlackHoleMass >= initial_BH,
                "Black hole mass non-decreasing");
-    
+
     // Cold gas should be <= initial (may be consumed)
     ASSERT_TRUE(gal[0].ColdGas <= initial_cold,
                "Cold gas mass non-increasing");
+
+    // Accretion records the burst time; a later burst overwrites it
+    ASSERT_CLOSE(0.5, gal[0].TimeOfLastQuasarBurst, 1e-6, "Burst time recorded");
+    grow_black_hole(0, mass_ratio, 0.4, gal, &run_params);
+    ASSERT_CLOSE(0.4, gal[0].TimeOfLastQuasarBurst, 1e-6, "Later burst overwrites the time");
+
+    // No accretion means no burst
+    grow_black_hole(0, 0.0, 0.3, gal, &run_params);
+    ASSERT_CLOSE(0.4, gal[0].TimeOfLastQuasarBurst, 1e-6, "Zero accretion leaves the time alone");
+    gal[0].ColdGas = 0.0;
+    grow_black_hole(0, mass_ratio, 0.2, gal, &run_params);
+    ASSERT_CLOSE(0.4, gal[0].TimeOfLastQuasarBurst, 1e-6, "No cold gas leaves the time alone");
 }
 
 // ============================================================================

@@ -242,6 +242,7 @@ section below) and the unit actually written.
 |-------|-------|-------------|
 | `TimeOfLastMajorMerger` | Myr | Code-time of the last major merger, converted to Myr. |
 | `TimeOfLastMinorMerger` | Myr | Code-time of the last minor merger, converted to Myr. |
+| `TimeOfLastQuasarBurst` | Myr / h | Lookback time to z=0 of the last quasar-mode accretion (`grow_black_hole`, from a merger or disk instability), at the midpoint of its substep. Negative if the galaxy has had none. |
 | `TimeOfInfall` | Myr | Code-time at which this galaxy became a satellite (zero for Type 0). |
 
 ### Two-regime cooling (CGM model)

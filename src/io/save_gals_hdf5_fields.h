@@ -187,6 +187,9 @@
     X(TimeOfLastMinorMerger, TimeOfLastMinorMerger, float, H5T_NATIVE_FLOAT, \
       "Time since this galaxy had a minor merger.", \
       "Myr") \
+    X(TimeOfLastQuasarBurst, TimeOfLastQuasarBurst, float, H5T_NATIVE_FLOAT, \
+      "Lookback time to z=0 of this galaxy's last quasar-mode accretion, from a merger or disk instability; negative if none.", \
+      "Myr/h") \
     X(OutflowRate, OutflowRate, float, H5T_NATIVE_FLOAT, \
       "Rate at which cold gas is reheated to hot gas.", \
       "Msun/yr") \

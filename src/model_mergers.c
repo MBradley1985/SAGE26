@@ -267,7 +267,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
 
     // grow black hole through accretion from cold disk during mergers
     if(run_params->AGNrecipeOn) {
-        grow_black_hole(merger_centralgal, mass_ratio, galaxies, run_params);
+        grow_black_hole(merger_centralgal, mass_ratio, time, galaxies, run_params);
     }
 
     // Determine which bulge component will receive burst stars
@@ -343,9 +343,10 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
  *
  * Scales the accreted mass by (mass_ratio / (mass_ratio + BlackHoleCouplingFactor))
  * and removes it from the cold gas reservoir.  Computes quasar-mode energy
- * output for AGNrecipeOn == 1 via quasar_mode_wind().
+ * output for AGNrecipeOn == 1 via quasar_mode_wind().  Records `time`, the
+ * lookback time of this substep, as the galaxy's last quasar burst.
  */
-void grow_black_hole(const int merger_centralgal, const double mass_ratio, struct GALAXY *galaxies, const struct params *run_params)
+void grow_black_hole(const int merger_centralgal, const double mass_ratio, const double time, struct GALAXY *galaxies, const struct params *run_params)
 {
     double BHaccrete, metallicity;
 
@@ -376,6 +377,9 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
         quasar_mode_wind(merger_centralgal, BHaccrete, galaxies, run_params);
 
         galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
+        if(BHaccrete > 0.0) {
+            galaxies[merger_centralgal].TimeOfLastQuasarBurst = time;
+        }
     }
 }
 
