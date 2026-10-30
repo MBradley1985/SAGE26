@@ -106,6 +106,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->EnhancedStarFormationOn    = 1;
     run_params->BulgeSizeOn                = 3;
     run_params->SaveFullSFH                = 0;
+    run_params->SaveFullMH                 = 0;
     run_params->StarburstColdGasOn         = 1;
     run_params->H2DepletionMode            = 0;   /* as input/millennium.par */
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
@@ -180,6 +181,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("EnhancedStarFormationOn", &(run_params->EnhancedStarFormationOn), INT, 0);
     REG("BulgeSizeOn",           &(run_params->BulgeSizeOn),          INT, 0);
     REG("SaveFullSFH",           &(run_params->SaveFullSFH),          INT, 0);
+    REG("SaveFullMH",            &(run_params->SaveFullMH),           INT, 0);
     REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
     REG("H2DepletionMode",       &(run_params->H2DepletionMode),      INT, 0);
     REG("SubstepResolution",     &(run_params->SubstepResolution),     DOUBLE, 0);
@@ -533,6 +535,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"H2DiskAreaOption",       run_params->H2DiskAreaOption,       0, 2},
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
+            {"SaveFullMH",             run_params->SaveFullMH,             0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"H2DepletionMode",        run_params->H2DepletionMode,        0, H2DEPLETIONMODE_MAX},
         };
@@ -545,6 +548,12 @@ int read_parameter_file(const char *fname, struct params *run_params)
                 ABORT(EXIT_FAILURE);
             }
         }
+    }
+
+    /* The metal histories only give a metallicity when divided by the SFH mass bins. */
+    if(run_params->SaveFullMH && !run_params->SaveFullSFH) {
+        fprintf(stderr, "Error: SaveFullMH = 1 needs SaveFullSFH = 1.\n");
+        ABORT(EXIT_FAILURE);
     }
 
     /* H2DepletionMode > 0 replaces how H2 is turned into stars, so it needs a prescription that

@@ -37,6 +37,10 @@ struct HDF5_GALAXY_OUTPUT
     /* cumulative star formation history - tracks stellar mass formed at each snapshot (controlled by SaveFullSFH) */
     float *SFHMassDisk;      /* Shape: [ngalaxies, SimMaxSnaps] - mass formed in disk at each snapshot */
     float *SFHMassBulge;     /* Shape: [ngalaxies, SimMaxSnaps] - mass formed in bulge at each snapshot */
+
+    /* metallicity history - metal mass in the stars of the SFH bins (controlled by SaveFullMH) */
+    float *MHMetalsDisk;     /* Shape: [ngalaxies, SimMaxSnaps] - metals in stars formed in disk at each snapshot */
+    float *MHMetalsBulge;    /* Shape: [ngalaxies, SimMaxSnaps] - metals in stars formed in bulge at each snapshot */
 };
     
     // Proto-Types //

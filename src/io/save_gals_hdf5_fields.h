@@ -9,8 +9,9 @@
  * line in save_hdf5_galaxies() that fills the buffer value.
  *
  * Not listed here (special cases handled explicitly): TaskForestNr (internal
- * per-tree bookkeeping, never written) and SFHMassDisk/SFHMassBulge (2-D
- * star-formation-history datasets with their own shape and write path).
+ * per-tree bookkeeping, never written), SFHMassDisk/SFHMassBulge and
+ * MHMetalsDisk/MHMetalsBulge (2-D star-formation and metallicity history
+ * datasets with their own shape and write path).
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */

@@ -325,14 +325,18 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
             herr_t sfh_status;  // Use different name to avoid shadowing macro's 'status'
             
             // Create 2D datasets for cumulative SFH (stellar mass formed at each snapshot)
-            const char *cum_sfh_names[2] = {"SFHMassDisk", "SFHMassBulge"};
-            const char *cum_sfh_descriptions[2] = {
+            // and, with SaveFullMH, the metal mass in those stars
+            const char *cum_sfh_names[4] = {"SFHMassDisk", "SFHMassBulge", "MHMetalsDisk", "MHMetalsBulge"};
+            const char *cum_sfh_descriptions[4] = {
                 "Cumulative star formation history - stellar mass formed in disk at each snapshot (10^10 Msun/h)",
-                "Cumulative star formation history - stellar mass formed in bulge (starbursts) at each snapshot (10^10 Msun/h)"
+                "Cumulative star formation history - stellar mass formed in bulge (starbursts) at each snapshot (10^10 Msun/h)",
+                "Metallicity history - metal mass in stars formed in disk at each snapshot (10^10 Msun/h)",
+                "Metallicity history - metal mass in stars formed in bulge (starbursts) at each snapshot (10^10 Msun/h)"
             };
-            const char *cum_sfh_units[2] = {"10^10 Msun/h", "10^10 Msun/h"};
-            
-            for(int cum_idx = 0; cum_idx < 2; cum_idx++) {
+            const char *cum_sfh_units[4] = {"10^10 Msun/h", "10^10 Msun/h", "10^10 Msun/h", "10^10 Msun/h"};
+            const int num_cum_datasets = run_params->SaveFullMH ? 4 : 2;
+
+            for(int cum_idx = 0; cum_idx < num_cum_datasets; cum_idx++) {
                 snprintf(full_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/%s", run_params->ListOutputSnaps[snap_idx], cum_sfh_names[cum_idx]);
                 
                 // Create 2D dataset with shape [0, SimMaxSnaps] initially, extensible in first dimension
@@ -433,6 +437,25 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
             /* Set pointers to NULL if not saving full SFH */
             save_info->buffer_output_gals[snap_idx].SFHMassDisk = NULL;
             save_info->buffer_output_gals[snap_idx].SFHMassBulge = NULL;
+        }
+
+        /* Conditionally allocate metallicity history arrays if SaveFullMH is enabled */
+        save_info->buffer_output_gals[snap_idx].MHMetalsDisk = NULL;
+        save_info->buffer_output_gals[snap_idx].MHMetalsBulge = NULL;
+        if(run_params->SaveFullMH) {
+            save_info->buffer_output_gals[snap_idx].MHMetalsDisk = malloc(save_info->buffer_size * run_params->SimMaxSnaps * sizeof(float));
+            save_info->buffer_output_gals[snap_idx].MHMetalsBulge = malloc(save_info->buffer_size * run_params->SimMaxSnaps * sizeof(float));
+
+            if(save_info->buffer_output_gals[snap_idx].MHMetalsDisk == NULL ||
+               save_info->buffer_output_gals[snap_idx].MHMetalsBulge == NULL) {
+                fprintf(stderr, "Could not allocate memory for metallicity history arrays (SimMaxSnaps=%d, buffer_size=%d)\n",
+                        run_params->SimMaxSnaps, save_info->buffer_size);
+                free(save_info->buffer_output_gals[snap_idx].MHMetalsDisk);
+                free(save_info->buffer_output_gals[snap_idx].MHMetalsBulge);
+                save_info->buffer_output_gals[snap_idx].MHMetalsDisk = NULL;
+                save_info->buffer_output_gals[snap_idx].MHMetalsBulge = NULL;
+                return MALLOC_FAILURE;
+            }
         }
     }
 
@@ -665,6 +688,10 @@ int32_t finalize_hdf5_galaxy_files(const struct forest_info *forest_info, struct
         if(run_params->SaveFullSFH) {
             free(save_info->buffer_output_gals[snap_idx].SFHMassDisk);
             free(save_info->buffer_output_gals[snap_idx].SFHMassBulge);
+        }
+        if(run_params->SaveFullMH) {
+            free(save_info->buffer_output_gals[snap_idx].MHMetalsDisk);
+            free(save_info->buffer_output_gals[snap_idx].MHMetalsBulge);
         }
     }
 
@@ -956,6 +983,15 @@ static int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct sav
         }
     }
 
+    // Conditionally save metallicity history arrays if SaveFullMH is enabled
+    if(run_params->SaveFullMH) {
+        for(int snap = 0; snap < run_params->SimMaxSnaps; snap++) {
+            const int idx = gals_in_buffer * run_params->SimMaxSnaps + snap;  // Index into flattened 2D array
+            save_info->buffer_output_gals[output_snap_idx].MHMetalsDisk[idx] = g->MHMetalsDisk[snap];
+            save_info->buffer_output_gals[output_snap_idx].MHMetalsBulge[idx] = g->MHMetalsBulge[snap];
+        }
+    }
+
     save_info->buffer_output_gals[output_snap_idx].DiskScaleRadius[gals_in_buffer] = g->DiskScaleRadius;
     save_info->buffer_output_gals[output_snap_idx].BulgeRadius[gals_in_buffer] = g->BulgeRadius;
     save_info->buffer_output_gals[output_snap_idx].MergerBulgeRadius[gals_in_buffer] = g->MergerBulgeRadius;
@@ -1148,14 +1184,18 @@ static int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to
 
     // Conditionally write cumulative SFH datasets if SaveFullSFH is enabled
     if(run_params->SaveFullSFH) {
-        // Write cumulative SFH datasets (SFHMassDisk, SFHMassBulge)
-        const char *cum_sfh_field_names[2] = {"SFHMassDisk", "SFHMassBulge"};
-        float *cum_sfh_data_ptrs[2] = {
+        // Write cumulative SFH datasets (SFHMassDisk, SFHMassBulge) and, with
+        // SaveFullMH, the metallicity histories (MHMetalsDisk, MHMetalsBulge)
+        const char *cum_sfh_field_names[4] = {"SFHMassDisk", "SFHMassBulge", "MHMetalsDisk", "MHMetalsBulge"};
+        float *cum_sfh_data_ptrs[4] = {
             save_info->buffer_output_gals[snap_idx].SFHMassDisk,
-            save_info->buffer_output_gals[snap_idx].SFHMassBulge
+            save_info->buffer_output_gals[snap_idx].SFHMassBulge,
+            save_info->buffer_output_gals[snap_idx].MHMetalsDisk,
+            save_info->buffer_output_gals[snap_idx].MHMetalsBulge
         };
-        
-        for(int cum_idx = 0; cum_idx < 2; cum_idx++) {
+        const int num_cum_datasets = run_params->SaveFullMH ? 4 : 2;
+
+        for(int cum_idx = 0; cum_idx < num_cum_datasets; cum_idx++) {
             char full_field_name[2*MAX_STRING_LEN];
             snprintf(full_field_name, 2*MAX_STRING_LEN - 1, "Snap_%d/%s",
                      run_params->ListOutputSnaps[snap_idx], cum_sfh_field_names[cum_idx]);
@@ -1293,6 +1333,7 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2RadialRMaxFactor", run_params->H2RadialRMaxFactor, H5T_NATIVE_DOUBLE);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ConcentrationOn", run_params->ConcentrationOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SaveFullSFH", run_params->SaveFullSFH, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SaveFullMH", run_params->SaveFullMH, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "StarburstColdGasOn", run_params->StarburstColdGasOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "H2DepletionMode", run_params->H2DepletionMode, H5T_NATIVE_INT);
 

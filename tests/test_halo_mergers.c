@@ -165,6 +165,47 @@ void test_mass_conservation_merger() {
 }
 
 // ============================================================================
+// TEST 4b: Metallicity History Follows the Stars
+// ============================================================================
+void test_metal_history_transfer() {
+    BEGIN_TEST("Metallicity History Follows the Stars");
+
+    struct params run_params;
+    memset(&run_params, 0, sizeof(struct params));
+    run_params.SaveFullSFH = 1;
+    run_params.SaveFullMH = 1;
+
+    struct GALAXY gal[2];
+    memset(gal, 0, 2 * sizeof(struct GALAXY));
+
+    gal[0].SFHMassDisk[5] = 4.0;
+    gal[0].MHMetalsDisk[5] = 0.04;
+    gal[0].SFHMassBulge[5] = 1.0;
+    gal[0].MHMetalsBulge[5] = 0.02;
+    gal[1].SFHMassDisk[3] = 2.0;
+    gal[1].MHMetalsDisk[3] = 0.01;
+    gal[1].SFHMassBulge[5] = 0.5;
+    gal[1].MHMetalsBulge[5] = 0.005;
+
+    // A quarter of the central's disk joins its bulge
+    move_disk_sfh_to_bulge(0, 0.25, gal, &run_params);
+    ASSERT_CLOSE(0.03, gal[0].MHMetalsDisk[5], 1e-6, "Disk bin keeps the unmoved metals");
+    ASSERT_CLOSE(0.03, gal[0].MHMetalsBulge[5], 1e-6, "Bulge bin gains the moved metals");
+
+    // The whole satellite joins the central's bulge, and its bins keep their snapshots
+    add_galaxies_together(0, 1, gal, &run_params);
+    ASSERT_CLOSE(0.01, gal[0].MHMetalsBulge[3], 1e-6, "Satellite disk metals reach the central's bulge");
+    ASSERT_CLOSE(0.035, gal[0].MHMetalsBulge[5], 1e-6, "Satellite bulge metals reach the central's bulge");
+    ASSERT_CLOSE(0.03, gal[0].MHMetalsDisk[5], 1e-6, "Central disk metals untouched by the merger");
+
+    // With the toggle off the metal bins are left alone
+    run_params.SaveFullMH = 0;
+    const float bulge_before = gal[0].MHMetalsBulge[5];
+    move_disk_sfh_to_bulge(0, 1.0, gal, &run_params);
+    ASSERT_CLOSE(bulge_before, gal[0].MHMetalsBulge[5], 1e-6, "SaveFullMH = 0 skips the metal bins");
+}
+
+// ============================================================================
 // TEST 5: Major Merger Creates Bulge
 // ============================================================================
 void test_major_merger_bulge_formation() {
@@ -324,6 +365,7 @@ int main(void) {
     test_major_minor_threshold();
     test_merger_timescale();
     test_mass_conservation_merger();
+    test_metal_history_transfer();
     test_major_merger_bulge_formation();
     test_minor_merger_disk_survival();
     test_merger_timescale_coulomb();

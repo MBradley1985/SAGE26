@@ -169,6 +169,9 @@ struct GALAXY
     /* full star formation history - tracks stellar mass formed at each snapshot */
     float SFHMassDisk[ABSOLUTEMAXSNAPS];   /* stellar mass formed in disk at each snapshot [10^10 Msun/h] */
     float SFHMassBulge[ABSOLUTEMAXSNAPS];  /* stellar mass formed in bulge (starbursts) at each snapshot [10^10 Msun/h] */
+    /* full metallicity history - metal mass locked into the stars of SFHMassDisk/SFHMassBulge */
+    float MHMetalsDisk[ABSOLUTEMAXSNAPS];  /* metals in stars formed in disk at each snapshot [10^10 Msun/h] */
+    float MHMetalsBulge[ABSOLUTEMAXSNAPS]; /* metals in stars formed in bulge (starbursts) at each snapshot [10^10 Msun/h] */
     /* ICS assembly tracking.  These are channels of LAST TRANSFER into this
        halo's reservoir, not channels of origin: every gram of ICS is created by
        disrupt_satellite_to_ICS(), but ICS assembled in a progenitor group is
@@ -506,6 +509,8 @@ struct params
                                           // 1 = additionally save the per-snapshot SFHMassDisk/SFHMassBulge
                                           // histories. Those accumulate stellar mass, not rate, so they are
                                           // correct at any substep count (unlike the Sfr* rate bins).
+    int32_t    SaveFullMH;                // 1 = additionally save the per-snapshot MHMetalsDisk/MHMetalsBulge
+                                          // histories, the metal mass in the stars of the SFH bins (needs SaveFullSFH = 1)
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
     int32_t    H2DepletionMode;           // 0 off (default); SFR = M_mol / t_dep with 1 nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9
 

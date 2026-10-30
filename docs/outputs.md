@@ -57,6 +57,7 @@ field reference. Everything else is in code units.
 +- Snap_<N>/         (one group per output snapshot)
    +- SnapNum, Type, GalaxyIndex, ...   (one dataset per field)
    +- SFHMassDisk, SFHMassBulge          (only if SaveFullSFH = 1)
+   +- MHMetalsDisk, MHMetalsBulge        (only if SaveFullMH = 1)
 ```
 
 Each galaxy-property dataset has two HDF5 attributes:

@@ -542,6 +542,11 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
             galaxies[t].SFHMassBulge[snap] += galaxies[p].SFHMassDisk[snap] + galaxies[p].SFHMassBulge[snap];
         }
     }
+    if(run_params->SaveFullMH) {
+        for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
+            galaxies[t].MHMetalsBulge[snap] += galaxies[p].MHMetalsDisk[snap] + galaxies[p].MHMetalsBulge[snap];
+        }
+    }
 }
 
 // ============================================================================
@@ -552,7 +557,9 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
  * move_disk_sfh_to_bulge -- move a fraction of galaxy p's disk star-formation
  * history into its bulge history, when that fraction of the disk's stars joins
  * the bulge.  The disk is taken as well mixed, so the moved stars carry the
- * disk's age distribution; with this, SFHMassBulge sums to BulgeMass.
+ * disk's age distribution; with this, SFHMassBulge sums to BulgeMass.  The same
+ * fraction of each metal history bin moves too, so MHMetalsBulge sums to
+ * MetalsBulgeMass.
  */
 void move_disk_sfh_to_bulge(const int p, const double fraction, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -565,6 +572,14 @@ void move_disk_sfh_to_bulge(const int p, const double fraction, struct GALAXY *g
         const float moved = (float)(f * galaxies[p].SFHMassDisk[snap]);
         galaxies[p].SFHMassDisk[snap] -= moved;
         galaxies[p].SFHMassBulge[snap] += moved;
+    }
+
+    if(run_params->SaveFullMH) {
+        for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
+            const float moved_metals = (float)(f * galaxies[p].MHMetalsDisk[snap]);
+            galaxies[p].MHMetalsDisk[snap] -= moved_metals;
+            galaxies[p].MHMetalsBulge[snap] += moved_metals;
+        }
     }
 }
 
@@ -786,6 +801,9 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         const int snapnum = galaxies[merger_centralgal].SnapNum;
         if(snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS) {
             galaxies[merger_centralgal].SFHMassBulge[snapnum] += (1.0 - run_params->RecycleFraction) * stars;
+            if(run_params->SaveFullMH) {
+                galaxies[merger_centralgal].MHMetalsBulge[snapnum] += metallicity * (1.0 - run_params->RecycleFraction) * stars;
+            }
         }
     }
 
