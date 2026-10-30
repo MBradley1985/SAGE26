@@ -703,35 +703,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         galaxies[p].OutflowRate *= inv_deltaT;
     
 
-        /* Safety cleanup: move mass from zero-area disc bins to last physical bin */
         if(run_params->DarkSAGEMode == 1) {
-            /* Find the last bin with physical area (r_out > r_in) */
-            int last_physical_bin = 0;
-            for(int i = N_BINS - 1; i >= 0; i--) {
-                if(galaxies[p].DiscRadii[i+1] > galaxies[p].DiscRadii[i]) {
-                    last_physical_bin = i;
-                    break;
-                }
-            }
-
-            /* Move mass from zero-area bins to last physical bin */
-            for(int i = last_physical_bin + 1; i < N_BINS; i++) {
-                if(galaxies[p].DiscGas[i] > 0.0) {
-                    galaxies[p].DiscGas[last_physical_bin] += galaxies[p].DiscGas[i];
-                    galaxies[p].DiscGasMetals[last_physical_bin] += galaxies[p].DiscGasMetals[i];
-                    galaxies[p].DiscGas[i] = 0.0;
-                    galaxies[p].DiscGasMetals[i] = 0.0;
-                }
-                if(galaxies[p].DiscStars[i] > 0.0) {
-                    galaxies[p].DiscStars[last_physical_bin] += galaxies[p].DiscStars[i];
-                    galaxies[p].DiscStarsMetals[last_physical_bin] += galaxies[p].DiscStarsMetals[i];
-                    galaxies[p].DiscStars[i] = 0.0;
-                    galaxies[p].DiscStarsMetals[i] = 0.0;
-                    darksage_move_ages(galaxies[p].DiscStarsAge[i], galaxies[p].DiscStarsMetalsAge[i], 1.0,
-                                       galaxies[p].DiscStarsAge[last_physical_bin],
-                                       galaxies[p].DiscStarsMetalsAge[last_physical_bin]);
-                }
-            }
             galaxies[p].AgeMismatch = darksage_age_mismatch(&galaxies[p]);
         }
     }

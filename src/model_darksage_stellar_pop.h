@@ -29,6 +29,10 @@ extern "C" {
                                    float mass_to[N_AGE_BINS], float metals_to[N_AGE_BINS]);
     /* SupernovaRecipeOn 2: mass return, metals and SN energy of the older stellar populations of
      * galaxy p over dt (DarkSage delayed_feedback()) */
+    extern void darksage_move_ages_disp(float mass_from[N_AGE_BINS], float metals_from[N_AGE_BINS], const float disp_from[N_AGE_BINS],
+                                        const double frac, float mass_to[N_AGE_BINS], float metals_to[N_AGE_BINS],
+                                        float disp_to[N_AGE_BINS]);
+    extern void darksage_sync_dispersions(struct GALAXY *g);
     extern void darksage_delayed_feedback(const int p, const int centralgal, const double time, const double dt,
                                           struct GALAXY *galaxies, const struct params *run_params);
     /* Stellar mass whose age bins disagree with its component mass, as a fraction of StellarMass */

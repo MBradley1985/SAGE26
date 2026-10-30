@@ -144,19 +144,20 @@ static void sink_unstable_stars(const int p, const int i, const double unstable_
         g->VelDispStars[i-1] = mix_dispersion(g->DiscStars[i-1], g->VelDispStars[i-1], unstable_stars, sigma);
         g->DiscStars[i-1] += unstable_stars;
         g->DiscStarsMetals[i-1] += Z * unstable_stars;
-        darksage_move_ages(g->DiscStarsAge[i], g->DiscStarsMetalsAge[i], unstable_stars / m_before,
-                           g->DiscStarsAge[i-1], g->DiscStarsMetalsAge[i-1]);
+        darksage_move_ages_disp(g->DiscStarsAge[i], g->DiscStarsMetalsAge[i], g->VelDispStarsAge[i], unstable_stars / m_before,
+                                g->DiscStarsAge[i-1], g->DiscStarsMetalsAge[i-1], g->VelDispStarsAge[i-1]);
         return;
     }
 
     double m_down, m_up;
     j_split(i, unstable_stars, run_params, &m_down, &m_up);
     /* the migrating stars carry the annulus's age mix: m_down of it inwards, then m_up of the rest outwards */
-    darksage_move_ages(g->DiscStarsAge[i], g->DiscStarsMetalsAge[i], m_down / m_before,
-                       (i > 0) ? g->DiscStarsAge[i-1] : g->InstabilityBulgeMassAge,
-                       (i > 0) ? g->DiscStarsMetalsAge[i-1] : g->InstabilityBulgeMetalsAge);
-    darksage_move_ages(g->DiscStarsAge[i], g->DiscStarsMetalsAge[i], m_up / (m_before - m_down),
-                       g->DiscStarsAge[i+1], g->DiscStarsMetalsAge[i+1]);
+    darksage_move_ages_disp(g->DiscStarsAge[i], g->DiscStarsMetalsAge[i], g->VelDispStarsAge[i], m_down / m_before,
+                            (i > 0) ? g->DiscStarsAge[i-1] : g->InstabilityBulgeMassAge,
+                            (i > 0) ? g->DiscStarsMetalsAge[i-1] : g->InstabilityBulgeMetalsAge,
+                            (i > 0) ? g->VelDispStarsAge[i-1] : g->VelDispBulgeAge);
+    darksage_move_ages_disp(g->DiscStarsAge[i], g->DiscStarsMetalsAge[i], g->VelDispStarsAge[i], m_up / (m_before - m_down),
+                            g->DiscStarsAge[i+1], g->DiscStarsMetalsAge[i+1], g->VelDispStarsAge[i+1]);
     if(i > 0) {
         g->VelDispStars[i-1] = mix_dispersion(g->DiscStars[i-1], g->VelDispStars[i-1], m_down, sigma);
         g->DiscStars[i-1] += m_down;
@@ -303,7 +304,9 @@ void check_disk_instability_darksage(const int p, const int centralgal, const do
 
         /* What the migration did not fix is fixed by heating the annulus's stars */
         if(g->DiscStars[i] > 0.0f) {
-            g->VelDispStars[i] *= (float)((1.0 - star_sink_rate) * Q_star_min / Q_star + star_sink_rate);
+            const double heat = (1.0 - star_sink_rate) * Q_star_min / Q_star + star_sink_rate;
+            g->VelDispStars[i] *= (float)heat;
+            for(int k = 0; k < N_AGE_BINS; k++) g->VelDispStarsAge[i][k] *= (float)heat;
         }
     }
 }

@@ -1068,19 +1068,22 @@ static void project_stars_with_dispersion(const int p, const double cos_angle, s
         if(m[i] > 0.0) g->VelDispStars[i] = (float)sqrt(v[i] / m[i]);
     }
 
-    /* each age bin is re-binned the same way (the projection is linear in mass) */
+    /* each age bin, and its dispersion, is re-binned the same way (the projection is linear in mass) */
     for(int k = 0; k < N_AGE_BINS; k++) {
-        float col[N_BINS], colz[N_BINS];
-        double out[N_BINS], outz[N_BINS];
+        float col[N_BINS], colz[N_BINS], colv[N_BINS];
+        double out[N_BINS], outz[N_BINS], outv[N_BINS];
         for(int i = 0; i < N_BINS; i++) {
             col[i] = g->DiscStarsAge[i][k];
             colz[i] = g->DiscStarsMetalsAge[i][k];
+            colv[i] = (float)(g->DiscStarsAge[i][k] * g->VelDispStarsAge[i][k] * g->VelDispStarsAge[i][k]);
         }
         darksage_project_disc(col, cos_angle, out, run_params, g->Rvir, g->Vvir);
         darksage_project_disc(colz, cos_angle, outz, run_params, g->Rvir, g->Vvir);
+        darksage_project_disc(colv, cos_angle, outv, run_params, g->Rvir, g->Vvir);
         for(int i = 0; i < N_BINS; i++) {
             g->DiscStarsAge[i][k] = (float)out[i];
             g->DiscStarsMetalsAge[i][k] = (float)outz[i];
+            if(out[i] > 0.0) g->VelDispStarsAge[i][k] = (float)sqrt(outv[i] / out[i]);
         }
     }
 }
@@ -1157,6 +1160,8 @@ static void darksage_combine_stellar_discs(const int p, const double new_stars[N
         g->VelDispStars[i] = (float)sqrt((m_old * s_old * s_old + add[i] * sigma_gas * sigma_gas) / (m_old + add[i]));
         g->DiscStars[i] += (float)add[i];
         g->DiscStarsMetals[i] += (float)add_metals[i];
+        const double m_k = g->DiscStarsAge[i][g->AgeBinNow], s_k = g->VelDispStarsAge[i][g->AgeBinNow];
+        g->VelDispStarsAge[i][g->AgeBinNow] = (float)sqrt((m_k * s_k * s_k + add[i] * sigma_gas * sigma_gas) / (m_k + add[i]));
         g->DiscStarsAge[i][g->AgeBinNow] += (float)add[i];
         g->DiscStarsMetalsAge[i][g->AgeBinNow] += (float)add_metals[i];
     }

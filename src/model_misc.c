@@ -208,6 +208,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].DiscSFR[i] = galaxies[p].DiscDust[i] = 0.0f;
         /* DarkSage init_galaxy(): the cold-gas dispersion 11 + 11.3 z km/s */
         galaxies[p].VelDispStars[i] = (float)darksage_cold_gas_dispersion(run_params->ZZ[halos[halonr].SnapNum], run_params);
+        for(int k = 0; k < N_AGE_BINS; k++) galaxies[p].VelDispStarsAge[i][k] = galaxies[p].VelDispStars[i];
     }
     for(int i = 0; i < N_BINS + 1; i++) {
         galaxies[p].DiscRadii[i] = 0.0f;
@@ -221,6 +222,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     /* DarkSage init_galaxy(): merger bulge at the cold-gas dispersion, bulge scale lengths placeholders
      * until update_disc_radii() solves them */
     galaxies[p].VelDispMergerBulge = (float)darksage_cold_gas_dispersion(run_params->ZZ[halos[halonr].SnapNum], run_params);
+    for(int k = 0; k < N_AGE_BINS; k++) galaxies[p].VelDispBulgeAge[k] = galaxies[p].VelDispMergerBulge;
     for(int j = 0; j < 3; j++) galaxies[p].SpinClassicalBulge[j] = 0.0f;
     galaxies[p].a_InstabBulge = galaxies[p].a_MergerBulge = 0.08284f * galaxies[p].DiskScaleRadius;
     galaxies[p].SecularBulgeMass = galaxies[p].SecularMetalsBulgeMass = 0.0f;

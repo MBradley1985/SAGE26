@@ -171,6 +171,41 @@ void darksage_move_ages(float mass_from[N_AGE_BINS], float metals_from[N_AGE_BIN
     }
 }
 
+/* As darksage_move_ages(), carrying each age bin's velocity dispersion: a receiving bin takes the
+ * mass-weighted quadrature mean (DarkSage VelDispStarsAge / VelDispBulgeAge) */
+void darksage_move_ages_disp(float mass_from[N_AGE_BINS], float metals_from[N_AGE_BINS], const float disp_from[N_AGE_BINS],
+                             const double frac, float mass_to[N_AGE_BINS], float metals_to[N_AGE_BINS],
+                             float disp_to[N_AGE_BINS])
+{
+    if(frac <= 0.0) return;
+    for(int k = 0; k < N_AGE_BINS; k++) {
+        const double dm = frac * mass_from[k], m_to = mass_to[k];
+        if(dm > 0.0) {
+            disp_to[k] = (float)sqrt((m_to * disp_to[k] * disp_to[k] + dm * disp_from[k] * disp_from[k]) / (m_to + dm));
+        }
+    }
+    darksage_move_ages(mass_from, metals_from, frac, mass_to, metals_to);
+}
+
+/* Each annulus's and the secular bulge's dispersion from their age bins (DarkSage check_channel_stars()) */
+void darksage_sync_dispersions(struct GALAXY *g)
+{
+    for(int i = 0; i < N_BINS; i++) {
+        double m = 0.0, ms2 = 0.0;
+        for(int k = 0; k < N_AGE_BINS; k++) {
+            m += g->DiscStarsAge[i][k];
+            ms2 += g->DiscStarsAge[i][k] * g->VelDispStarsAge[i][k] * g->VelDispStarsAge[i][k];
+        }
+        if(m > 0.0) g->VelDispStars[i] = (float)sqrt(ms2 / m);
+    }
+    double m = 0.0, ms2 = 0.0;
+    for(int k = 0; k < N_AGE_BINS; k++) {
+        m += g->InstabilityBulgeMassAge[k];
+        ms2 += g->InstabilityBulgeMassAge[k] * g->VelDispBulgeAge[k] * g->VelDispBulgeAge[k];
+    }
+    if(m > 0.0) g->VelDispBulge = (float)sqrt(ms2 / m);
+}
+
 /* Mass lost by an age-binned component over this substep: the mass and metals returned, the new
  * metals made by the returning stars (DarkSage: Yield (1 - Z) / FinalRecycleFraction per unit mass
  * returned), and the SN energy (returned) */
@@ -276,6 +311,9 @@ void darksage_delayed_feedback(const int p, const int centralgal, const double t
     }
     g->ColdGas = gas;
     g->MetalsColdGas = metals;
+
+    /* old, hot populations have lost mass: the net dispersions follow the age bins */
+    darksage_sync_dispersions(g);
 }
 
 float darksage_age_mismatch(const struct GALAXY *g)
