@@ -358,8 +358,16 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
             const double tff = sqrt(2.0 * galaxies[gal].Rvir / g_accel);
 
             // Diagnostic storage
-            galaxies[gal].tcool = (float)(tcool * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR);
-            galaxies[gal].tff = (float)(tff * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR);
+            if(run_params->DarkSAGEMode == 1) {
+                /* Diagnostics only: a halo with no mass has no free-fall time (-1, not applicable), and
+                 * the cooling time of a vanishing CGM is capped at the float range */
+                const double tcool_gyr = tcool * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR;
+                galaxies[gal].tcool = (float)((tcool_gyr < FLT_MAX) ? tcool_gyr : FLT_MAX);
+                galaxies[gal].tff = isfinite(tff) ? (float)(tff * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR) : -1.0f;
+            } else {
+                galaxies[gal].tcool = (float)(tcool * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR);
+                galaxies[gal].tff = (float)(tff * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR);
+            }
             
             // Pin rcool to Rvir since we are evaluating bulk accretion
             double rcool = galaxies[gal].Rvir;

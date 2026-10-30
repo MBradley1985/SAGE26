@@ -84,7 +84,8 @@ static void j_split(const int i, const double mass, const struct params *run_par
 /* Mass-weighted quadrature mix of a velocity dispersion */
 static float mix_dispersion(const double m_old, const double s_old, const double m_add, const double s_add)
 {
-    return (m_old + m_add > 0.0) ? (float)sqrt((m_old * s_old * s_old + m_add * s_add * s_add) / (m_old + m_add)) : (float)s_add;
+    const double m = fmax(m_old, 0.0);
+    return (m + m_add > 0.0) ? (float)sqrt((m * s_old * s_old + m_add * s_add * s_add) / (m + m_add)) : (float)s_add;
 }
 
 /*

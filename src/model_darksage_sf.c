@@ -250,6 +250,10 @@ void darksage_remove_disc_gas(const int p, const double mass, const float weight
         double m_i = mass * weight[i] / w_sum;
         if(m_i > galaxies[p].DiscGas[i]) m_i = galaxies[p].DiscGas[i];
         const double Z = galaxies[p].DiscGasMetals[i] / galaxies[p].DiscGas[i];
+        /* H2 and HI leave with the gas, keeping the annulus's fractions */
+        const double keep = 1.0 - m_i / galaxies[p].DiscGas[i];
+        galaxies[p].DiscH2[i] *= (float)keep;
+        galaxies[p].DiscHI[i] *= (float)keep;
         galaxies[p].DiscGas[i] -= m_i;
         galaxies[p].DiscGasMetals[i] -= Z * m_i;
         if(galaxies[p].DiscGas[i] < 0.0f) galaxies[p].DiscGas[i] = 0.0f;
@@ -264,8 +268,20 @@ void darksage_remove_disc_gas(const int p, const double mass, const float weight
         darksage_remove_disc_gas(p, shortfall, galaxies[p].DiscGas, galaxies);
     } else if(shortfall > 1.0e-6 * mass) {
         /* Already gas-weighted: only possible if the annuli hold less than mass in total; empty them */
-        for(int i = 0; i < N_BINS; i++) galaxies[p].DiscGas[i] = galaxies[p].DiscGasMetals[i] = 0.0f;
+        for(int i = 0; i < N_BINS; i++) {
+            galaxies[p].DiscGas[i] = galaxies[p].DiscGasMetals[i] = 0.0f;
+            galaxies[p].DiscH2[i] = galaxies[p].DiscHI[i] = 0.0f;
+        }
     }
+
+    /* Galaxy H2 and HI follow the annuli */
+    double h2 = 0.0, hi = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        h2 += galaxies[p].DiscH2[i];
+        hi += galaxies[p].DiscHI[i];
+    }
+    galaxies[p].H2gas = (float)h2;
+    galaxies[p].H1gas = (float)hi;
 }
 
 /* The bulk removes metals at the galaxy-average metallicity, the annuli at their local one;

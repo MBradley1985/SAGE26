@@ -66,6 +66,28 @@ extern "C" {
      */
     static inline void add_metals_to_hot_reservoir(struct GALAXY *central, const struct params *run_params, const double metals)
     {
+        /* DarkSAGEMode: metals only go where there is gas -- the regime's hot reservoir, else the
+         * other hot phase (gas left over from a regime change), else the ejected gas */
+        if(run_params->DarkSAGEMode == 1) {
+            const int cgm = (run_params->CGMrecipeOn == 1 && central->Regime == 0);
+            float *target_gas = cgm ? &central->CGMgas : &central->HotGas;
+            float *target_metals = cgm ? &central->MetalsCGMgas : &central->MetalsHotGas;
+            if(*target_gas <= 0.0f) {
+                if((cgm ? central->HotGas : central->CGMgas) > 0.0f) {
+                    target_metals = cgm ? &central->MetalsHotGas : &central->MetalsCGMgas;
+                } else if(central->EjectedMass > 0.0f) {
+                    target_metals = &central->MetalsEjectedMass;
+                } else if(central->ColdGas > 0.0f) {
+                    /* no halo gas at all: the metals stay in the central's disc, spread like its gas */
+                    for(int i = 0; i < N_BINS; i++) {
+                        central->DiscGasMetals[i] += (float)(metals * central->DiscGas[i] / central->ColdGas);
+                    }
+                    target_metals = &central->MetalsColdGas;
+                }
+            }
+            *target_metals += metals;
+            return;
+        }
         if(run_params->CGMrecipeOn == 1 && central->Regime == 0) {
             central->MetalsCGMgas += metals;
         } else {

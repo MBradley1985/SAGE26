@@ -224,8 +224,14 @@ void darksage_delayed_feedback(const int p, const int centralgal, const double t
     darksage_add_to_fountain(centralgal, lost, lost_z + new_z, galaxies, run_params);
     energy_onto_hot += age_losses(g->InstabilityBulgeMassAge, g->InstabilityBulgeMetalsAge, k_now, ret, sn, inv_R_final,
                                   run_params->Yield, &lost, &lost_z, &new_z, run_params);
+    /* the secular bulge is only part of the instability bulge (merged-in satellite bulges are not
+     * secular), so it loses its share */
+    if(g->InstabilityBulgeMass > 0.0f) {
+        const double f_sec = fmin(1.0, fmax(0.0, (double)g->SecularBulgeMass / g->InstabilityBulgeMass));
+        g->SecularBulgeMass -= f_sec * lost;
+        g->SecularMetalsBulgeMass -= f_sec * lost_z;
+    }
     g->InstabilityBulgeMass -= lost;
-    g->SecularBulgeMass -= lost;
     g->BulgeMass -= lost;
     g->StellarMass -= lost;
     g->MetalsBulgeMass -= lost_z;

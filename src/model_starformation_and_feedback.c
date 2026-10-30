@@ -1225,7 +1225,18 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
     const double R = inst[0];
     const float h = run_params->Hubble_h;
     double fire_scaling;
-    const double eta = sn_reheat_loading(p, &fire_scaling, galaxies, run_params);
+    double eta = sn_reheat_loading(p, &fire_scaling, galaxies, run_params);
+    /* KarpovModeOn: sn_ejected_mass() sets its own reheated mass, so take its loading per unit
+     * stellar mass for the annuli here, before any gas leaves them */
+    if(run_params->SupernovaRecipeOn == 1 && run_params->KarpovModeOn == 1) {
+        double stars_total = 0.0;
+        for(int i = 0; i < N_BINS; i++) stars_total += stars_bin[i];
+        if(stars_total > 0.0) {
+            double reheated_karpov = eta * stars_total;
+            (void)sn_ejected_mass(p, stars_total, &reheated_karpov, fire_scaling, galaxies, run_params);
+            eta = reheated_karpov / stars_total;
+        }
+    }
     const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / KD11_METAL_HALO_MASS);
 
     galaxies[p].SfrDiskColdGas[step] = galaxies[p].ColdGas;
@@ -1315,6 +1326,11 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
         if(galaxies[p].DiscGas[i] > 0.0f) {
             galaxies[p].DiscGasMetals[i] += (1.0 - FracZleaveDiskVal) * yield;
             metals_leaving_disk += FracZleaveDiskVal * yield;
+            /* a nearly emptied annulus cannot hold more metals than gas: the excess leaves */
+            if(galaxies[p].DiscGasMetals[i] > galaxies[p].DiscGas[i]) {
+                metals_leaving_disk += galaxies[p].DiscGasMetals[i] - galaxies[p].DiscGas[i];
+                galaxies[p].DiscGasMetals[i] = galaxies[p].DiscGas[i];
+            }
         } else {
             metals_leaving_disk += yield;
         }
@@ -1355,7 +1371,9 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
      * sent them to the fountain and outflow above) */
     if(ds_feedback) galaxies[p].OutflowRate += removed_sum;
     if(run_params->SupernovaRecipeOn == 1) {
-        const double ejected = sn_ejected_mass(p, stars_sum, &reheated_sum, fire_scaling, galaxies, run_params);
+        /* reheated_sum is what the annuli lost; sn_ejected_mass() may reset its copy (KarpovModeOn) */
+        double reheated_check = reheated_sum;
+        const double ejected = sn_ejected_mass(p, stars_sum, &reheated_check, fire_scaling, galaxies, run_params);
         const double Z_reheat = (reheated_sum > 0.0) ? reheated_metals / reheated_sum : 0.0;
         route_feedback_to_reservoirs(p, centralgal, reheated_sum, ejected, Z_reheat, galaxies, run_params);
     }
