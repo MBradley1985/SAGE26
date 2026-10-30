@@ -28,9 +28,6 @@
 
 #include "model_infall.h"
 #include "model_misc.h"
-#include "model_darksage_feedback.h"
-#include "model_darksage_stellar_pop.h"
-#include "model_darksage_disc.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -71,7 +68,6 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
 {
     double tot_stellarMass, tot_BHMass, tot_coldMass, tot_hotMass, tot_ejected, tot_ICS;
     double tot_ejectedMetals, tot_ICSMetals;
-    double ics_mr = 0.0;   /* DarkSAGEMode: sum of mass x radius of the satellites' ICS */
     double infallingMass, reionization_modifier;
     double tot_CGMgas, tot_MetalsCGMgas;
 
@@ -84,10 +80,6 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
         tot_BHMass += galaxies[i].BlackHoleMass;
         tot_coldMass += galaxies[i].ColdGas;
         tot_hotMass += galaxies[i].HotGas;
-        if(run_params->DarkSAGEMode == 1) {
-            /* DarkSage counts the fountain and outflowing gas as halo baryons (model_infall.c) */
-            tot_hotMass += galaxies[i].FountainGas + galaxies[i].OutflowGas;
-        }
         tot_ejected += galaxies[i].EjectedMass;
         tot_ejectedMetals += galaxies[i].MetalsEjectedMass;
         tot_ICS += galaxies[i].ICS;
@@ -98,17 +90,6 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
         if(i != centralgal) {
             // satellite ejected gas goes to central ejected reservior
             galaxies[i].EjectedMass = galaxies[i].MetalsEjectedMass = 0.0;
-
-            // DarkSAGEMode: a satellite's fountain and outflowing gas are inside the central's
-            // halo, so they join the central's fountain (DarkSage reincorporate_gas())
-            if(run_params->DarkSAGEMode == 1) {
-                darksage_add_to_fountain(centralgal, galaxies[i].FountainGas + galaxies[i].OutflowGas,
-                                         galaxies[i].MetalsFountainGas + galaxies[i].MetalsOutflowGas,
-                                         galaxies, run_params);
-                galaxies[i].FountainGas = galaxies[i].MetalsFountainGas = 0.0f;
-                galaxies[i].OutflowGas = galaxies[i].MetalsOutflowGas = 0.0f;
-                galaxies[i].FountainTime = galaxies[i].OutflowTime = 0.0f;
-            }
 
             // satellite ICS (and its assembly history) goes to central
             // if the satellite carried ICS it was a former group central
@@ -125,16 +106,7 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
                 galaxies[i].ICS_accrete = 0.0;
                 galaxies[i].ICS_sum_mt = 0.0;
             }
-            if(run_params->DarkSAGEMode == 1) {
-                /* deposited at the satellite's radius (DarkSage strip_from_satellite()) */
-                ics_mr += galaxies[i].ICS * darksage_satellite_radius(&galaxies[centralgal], &galaxies[i], run_params);
-                galaxies[i].ICSMeanRadius = 0.0f;
-            }
             galaxies[i].ICS = galaxies[i].MetalsICS = 0.0;
-            if(run_params->DarkSAGEMode == 1) {
-                darksage_move_ages(galaxies[i].ICSAge, galaxies[i].MetalsICSAge, 1.0,
-                                   galaxies[centralgal].ICSAge, galaxies[centralgal].MetalsICSAge);
-            }
 
             // Satellite CGM handling: when CGMrecipeOn==1, satellites retain
             // their CGMgas across snapshots and stripping happens uniformly
@@ -222,9 +194,6 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
     }
 
     // the central galaxy keeps all the ICS (mostly for numerical convenience)
-    if(run_params->DarkSAGEMode == 1 && tot_ICS > 0.0) {
-        galaxies[centralgal].ICSMeanRadius = (float)((galaxies[centralgal].ICSMeanRadius * galaxies[centralgal].ICS + ics_mr) / tot_ICS);
-    }
     galaxies[centralgal].ICS = tot_ICS;
     galaxies[centralgal].MetalsICS = tot_ICSMetals;
 
@@ -234,9 +203,6 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
 
     if(galaxies[centralgal].ICS < 0.0) {
         galaxies[centralgal].ICS = galaxies[centralgal].MetalsICS = 0.0;
-        if(run_params->DarkSAGEMode == 1) {
-            darksage_move_ages(galaxies[centralgal].ICSAge, galaxies[centralgal].MetalsICSAge, 1.0, NULL, NULL);
-        }
     }
 
     if(galaxies[centralgal].MetalsICS < 0.0) {

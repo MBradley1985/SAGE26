@@ -254,12 +254,6 @@ struct GALAXY
     float MetalsOutflowGas;          /* Metals in outflow gas */
     float FountainTime;              /* Time for fountain gas to return to hot gas */
     float OutflowTime;               /* Time for outflow to reach EjectedMass */
-    float OutflowSpecificEnergy;     /* Specific energy of the outflowing gas [(km/s)^2] */
-    float EjectedSpecificEnergy;     /* Specific energy of the ejected gas at turnaround [(km/s)^2] */
-    float ReincTime;                 /* Time for ejected gas to fall back into the fountain */
-    float HotGasPotential;           /* Mass-weighted potential of the hot (or CGM) gas [(km/s)^2] */
-    float EjectedPotential;          /* Potential at Rvir, reached by ejected gas [(km/s)^2] */
-    float prevRvir;                  /* Rvir at the previous snapshot [Mpc/h] */
 
     /* DarkSAGEMode: Enhanced disk physics */
     float VelDispStars[N_BINS];      /* Stellar velocity dispersion per annulus [km/s] */
@@ -268,22 +262,6 @@ struct GALAXY
     float SecularMetalsBulgeMass;    /* Metals in secular bulge */
     float SpinSecularBulge[3];       /* Secular bulge spin vector */
     float R2_hot_av;                 /* Average <r^2> for hot gas */
-    float VelDispMergerBulge;        /* 1-D velocity dispersion of the merger-driven bulge [km/s] */
-    /* DarkSAGEMode: stellar populations by age bin, for delayed feedback (DarkSage DiscStarsAge etc.) */
-    float DiscStarsAge[N_BINS][N_AGE_BINS];
-    float DiscStarsMetalsAge[N_BINS][N_AGE_BINS];
-    float MergerBulgeMassAge[N_AGE_BINS];
-    float MergerBulgeMetalsAge[N_AGE_BINS];
-    float InstabilityBulgeMassAge[N_AGE_BINS];
-    float InstabilityBulgeMetalsAge[N_AGE_BINS];
-    float ICSAge[N_AGE_BINS];        /* intrahalo stars by age bin */
-    float MetalsICSAge[N_AGE_BINS];
-    int32_t AgeBinNow;               /* age bin of the current substep */
-    double TimeNow;                  /* lookback time of the current substep [code time] */
-    float DiscFNeutral[N_BINS];      /* neutral fraction of each annulus's hydrogen (SFprescription 8; else 1) */
-    float ICSMeanRadius;             /* mass-weighted radius at which the intrahalo stars were deposited [Mpc/h] (DarkSage R_ICS_av) */
-    float AgeMismatch;               /* misbooked stellar mass by age, / StellarMass (diagnostic) */
-    float SpinMergerBulge[3];        /* Specific angular momentum vector of the merger-driven bulge [(Mpc/h)(km/s)] */
 };
 
 
@@ -624,15 +602,9 @@ struct params
     /*                    fountain gas reservoirs (for hot-regime haloes only) */
     /* When DarkSAGEMode=0: Standard SAGE behavior */
     int32_t    DarkSAGEMode;            // 0: standard SAGE; 1: full DarkSage physics
-    double     RadiativeEfficiency;     // DarkSAGEMode: radio-mode AGN radiative efficiency (DarkSage RadiativeEfficiency)
-    int32_t    RamPressureOn;           // DarkSAGEMode: satellite disc stripping 0 off; 1 ram pressure; 2 gradual ram pressure; 3 ram pressure + tides (DarkSage)
-    int32_t    DarkSAGEMergerBursts;    // DarkSAGEMode: 0 merger gas drives instabilities only (DarkSage); 1 SAGE26 merger starburst + BH growth
-    double     FirstBin;                // First j-bin edge [kpc/h km/s] (default 1, as DarkSage)
+    double     FirstBin;                // First j-bin edge [kpc km/s] (default 100)
     double     ExponentBin;             // j-bin geometric growth factor (default 1.4)
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
-    double     AgeBinEdge[N_AGE_BINS+1]; // DarkSAGEMode: stellar age-bin edges in lookback time [code time] (computed)
-    double     FinalRecycleFraction;     // DarkSAGEMode: mass a stellar population returns over its lifetime (IMF, computed)
-    double     GammaHI[ABSOLUTEMAXSNAPS]; // DarkSAGEMode: HI photoionisation rate of the UV background per snapshot [1/code time]
     double     GasSinkRate;             // Unstable gas sink fraction (default 0.1)
     double     ThetaThresh;             // Coplanar threshold [deg] (default 5.0)
     double     DegPerTdyn;              // Precession rate [deg/tdyn] (default 1.0)

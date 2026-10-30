@@ -22,7 +22,6 @@
 
 /* DarkSAGEMode (radially-resolved disks) constants */
 #define  N_BINS           30         /* Number of radial annuli for disk structure (DarkSAGEMode) */
-#define  N_AGE_BINS       30         /* Stellar age bins for delayed feedback (DarkSAGEMode, DarkSage N_AGE_BINS) */
 
 /* physical constants in cgs */
 #define  GRAVITY     6.672e-8        /* gravitational constant [cm^3 g^-1 s^-2] */

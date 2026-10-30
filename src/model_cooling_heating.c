@@ -42,7 +42,6 @@
 
 #include "model_cooling_heating.h"
 #include "model_misc.h"
-#include "model_darksage_feedback.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -109,12 +108,6 @@ static const double STREAM_THRESHOLD_WIDTH_DEX = 0.15;  /* dex */
  * this fraction of the sonic-radius enclosed virial mass, and accretes at this
  * fraction of the current cooling rate. Croton et al. (2006), AGN appendix. */
 static const double AGN_COLD_CLOUD_FRAC = 1.0e-4;
-
-/* DarkSage do_AGN_heating() Eddington coefficient, 1.3e48 / 9e10 (L_Edd per 10^10 Msun over c^2 in (km/s)^2) */
-static const double DS_EDDINGTON_COEFF = 1.4444444444e37;
-/* DarkSage BIG_BANG_METALLICITY and MIN_C_BETA (core_allvars.h) */
-static const double DS_BIG_BANG_METALLICITY = 1.0e-10;
-static const double DS_MIN_C_BETA_COOL = 0.05;
 
 /* File-private: AGN radio-mode heating for CGM-regime galaxies (defined below). */
 static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
@@ -411,30 +404,6 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
  * residual CGMgas.  Both contributions are applied to ColdGas in-place and
  * the total cooled mass is returned.
  */
-/* Stevens et al. (2017) eq. 18 scale of the cooling gas's j-profile in the hot-halo regime,
- * log10(r_cool,scale / Rvir) = 0.23 log10(sqrt(2) r_d / Rvir) - 1.15 (DarkSage CoolingScaleSlope,
- * CoolingScaleConst; model_cooling.c) */
-static const double STEVENS17_COOL_SLOPE = 0.23;
-static const double STEVENS17_COOL_CONST = 1.15;
-
-/*
- * set_cool_scale_radius -- DarkSAGEMode scale radius of newly cooling gas (DarkSage
- * cooling_recipe()).  Gas cooling out of a hot halo whose cooling radius is inside Rvir
- * (quasi-static cooling) carries the Stevens et al. (2017) eq. 18 scale; infall-
- * dominated cooling (r_cool >= Rvir) and the SAGE26 CGM regime keep the disc scale
- * radius.
- */
-static void set_cool_scale_radius(const int gal, const int quasi_static, struct GALAXY *galaxies)
-{
-    struct GALAXY *g = &galaxies[gal];
-    if(quasi_static && g->DiskScaleRadius > 0.0 && g->Rvir > 0.0) {
-        g->CoolScaleRadius = (float)(pow(10.0, STEVENS17_COOL_SLOPE * log10(M_SQRT2 * g->DiskScaleRadius / g->Rvir)
-                                          - STEVENS17_COOL_CONST) * g->Rvir);
-    } else {
-        g->CoolScaleRadius = g->DiskScaleRadius;
-    }
-}
-
 /*
  * deposit_cooled_gas_darksage -- DarkSAGEMode deposit of cooled gas.
  *
@@ -582,8 +551,12 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
             cgm_cooling = galaxies[gal].CGMgas;
         }
         const double metallicity = get_metallicity(galaxies[gal].CGMgas, galaxies[gal].MetalsCGMgas);
-        galaxies[gal].ColdGas += cgm_cooling;
-        galaxies[gal].MetalsColdGas += metallicity * cgm_cooling;
+        if(run_params->DarkSAGEMode == 1) {
+            deposit_cooled_gas_darksage(gal, cgm_cooling, metallicity, galaxies, run_params);
+        } else {
+            galaxies[gal].ColdGas += cgm_cooling;
+            galaxies[gal].MetalsColdGas += metallicity * cgm_cooling;
+        }
         galaxies[gal].CGMgas -= cgm_cooling;
         galaxies[gal].MetalsCGMgas -= metallicity * cgm_cooling;
     }
@@ -594,8 +567,12 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
             hot_cooling = galaxies[gal].HotGas;
         }
         const double metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);
-        galaxies[gal].ColdGas += hot_cooling;
-        galaxies[gal].MetalsColdGas += metallicity * hot_cooling;
+        if(run_params->DarkSAGEMode == 1) {
+            deposit_cooled_gas_darksage(gal, hot_cooling, metallicity, galaxies, run_params);
+        } else {
+            galaxies[gal].ColdGas += hot_cooling;
+            galaxies[gal].MetalsColdGas += metallicity * hot_cooling;
+        }
         galaxies[gal].HotGas -= hot_cooling;
         galaxies[gal].MetalsHotGas -= metallicity * hot_cooling;
     }
@@ -618,10 +595,21 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
  * the resulting heating. Updates BlackHoleMass, HotGas, and r_heat in-place.
  * Returns the post-heating coolingGas value.
  */
-/* Radio-mode BH accretion rate of the selected recipe (AGNrecipeOn 1/2/3), Eddington-limited */
-static double agn_accretion_rate(const int centralgal, const double dt, const double x,
-                                 const double coolingGas, const double rcool, const double reservoir_mass,
-                                 const struct GALAXY *galaxies, const struct params *run_params)
+/*
+ * agn_accretion_compute -- shared radio-mode AGN accretion and heating calculation.
+ *
+ * Computes AGNrate via the selected recipe (AGNrecipeOn 1/2/3), applies the
+ * Eddington cap, converts to accreted mass, and derives the equivalent heating
+ * mass.  reservoir_mass is the gas available for accretion (HotGas or CGMgas
+ * depending on the caller); the heating coefficient uses Vvir of the central.
+ * Does NOT modify any galaxy fields -- the caller draws from the right reservoir
+ * and updates r_heat.
+ */
+static void agn_accretion_compute(const int centralgal, const double dt, const double x,
+                                   const double coolingGas, const double rcool,
+                                   const double reservoir_mass,
+                                   const struct GALAXY *galaxies, const struct params *run_params,
+                                   double *AGNaccreted_out, double *AGNheating_out)
 {
     const double Vvir   = galaxies[centralgal].Vvir;
     const double Mvir   = galaxies[centralgal].Mvir;
@@ -649,27 +637,6 @@ static double agn_accretion_rate(const int centralgal, const double dt, const do
         / (run_params->UnitEnergy_in_cgs / run_params->UnitTime_in_s)
         / (AGN_RADIATIVE_EFFICIENCY * C_SQ_KMS2);
     if(AGNrate > EDDrate) AGNrate = EDDrate;
-    return AGNrate;
-}
-
-/*
- * agn_accretion_compute -- shared radio-mode AGN accretion and heating calculation.
- *
- * Computes AGNrate via the selected recipe (AGNrecipeOn 1/2/3), applies the
- * Eddington cap, converts to accreted mass, and derives the equivalent heating
- * mass.  reservoir_mass is the gas available for accretion (HotGas or CGMgas
- * depending on the caller); the heating coefficient uses Vvir of the central.
- * Does NOT modify any galaxy fields -- the caller draws from the right reservoir
- * and updates r_heat.
- */
-static void agn_accretion_compute(const int centralgal, const double dt, const double x,
-                                   const double coolingGas, const double rcool,
-                                   const double reservoir_mass,
-                                   const struct GALAXY *galaxies, const struct params *run_params,
-                                   double *AGNaccreted_out, double *AGNheating_out)
-{
-    const double Vvir = galaxies[centralgal].Vvir;
-    const double AGNrate = agn_accretion_rate(centralgal, dt, x, coolingGas, rcool, reservoir_mass, galaxies, run_params);
 
     double AGNaccreted = AGNrate * dt;
     if(AGNaccreted > reservoir_mass) AGNaccreted = reservoir_mass;
@@ -797,158 +764,6 @@ static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const 
 }
 
 /*
- * Remove mass m from the hot phases, HotGas and CGMgas, in proportion to their
- * masses, each at its own metallicity; returns the metals removed.
- */
-static double take_from_hot_phases(struct GALAXY *g, double m)
-{
-    const double total = g->HotGas + g->CGMgas;
-    if(m <= 0.0 || total <= 0.0) return 0.0;
-    if(m > total) m = total;
-    const double f = m / total;
-    const double metals = f * (g->MetalsHotGas + g->MetalsCGMgas);
-    g->HotGas -= f * g->HotGas;
-    g->MetalsHotGas -= f * g->MetalsHotGas;
-    g->CGMgas -= f * g->CGMgas;
-    g->MetalsCGMgas -= f * g->MetalsCGMgas;
-    if(g->HotGas < 0.0f) g->HotGas = 0.0f;
-    if(g->MetalsHotGas < 0.0f) g->MetalsHotGas = 0.0f;
-    if(g->CGMgas < 0.0f) g->CGMgas = 0.0f;
-    if(g->MetalsCGMgas < 0.0f) g->MetalsCGMgas = 0.0f;
-    return metals;
-}
-
-/*
- * do_AGN_heating_darksage -- DarkSAGEMode radio-mode heating (DarkSage
- * do_AGN_heating(), model_cooling.c), drawing on HotGas and CGMgas together.
- *
- * The accretion rate is SAGE26's (AGNrecipeOn, RadioModeEfficiency,
- * agn_accretion_rate()), capped at DarkSage's Eddington rate.  As in DarkSage:
- * there is no heating radius; each substep the energy eta c^2 M_acc heats
- * M_heat = eta c^2 M_acc / delta_e of the hot phases, delta_e the specific
- * energy the cooling gas gives up; cooling falls by at most the cooling gas;
- * M_heat joins the fountain, and the black hole gains (1 - eta) M_acc.
- * eta is RadiativeEfficiency (DarkSage's parameter, default 0.4).
- */
-static double do_AGN_heating_darksage(double coolingGas, const int centralgal, const double dt, const double x,
-                                      const double rcool, const double delta_e, struct GALAXY *galaxies,
-                                      const struct params *run_params)
-{
-    struct GALAXY *g = &galaxies[centralgal];
-    const double hot = g->HotGas + g->CGMgas;
-    if(hot <= 0.0) return 0.0;
-
-    /* DarkSage's Eddington limit, L_Edd / c^2 (1.3e48 erg/s per 10^10 code mass units / 9e10) */
-    double AGNrate = agn_accretion_rate(centralgal, dt, x, coolingGas, rcool, hot, galaxies, run_params);
-    const double EDDrate = DS_EDDINGTON_COEFF * g->BlackHoleMass / run_params->UnitEnergy_in_cgs * run_params->UnitTime_in_s;
-    if(AGNrate > EDDrate) AGNrate = EDDrate;
-    double AGNaccreted = AGNrate * dt;
-    if(AGNaccreted > hot) AGNaccreted = hot;
-    const double eta = run_params->RadiativeEfficiency;
-    const double AGNfountain = C_SQ_KMS2 * eta / delta_e * AGNaccreted;
-    const double AGNheating = (AGNfountain > coolingGas) ? coolingGas : AGNfountain;
-
-    g->BlackHoleMass += (1.0 - eta) * AGNaccreted;
-    g->RadioModeBHaccretionMass += AGNaccreted;
-    take_from_hot_phases(g, AGNaccreted);
-    g->Heating += AGNheating * delta_e;
-
-    /* the heated gas joins the fountain */
-    const double to_fountain = (AGNfountain < g->HotGas + g->CGMgas) ? AGNfountain : g->HotGas + g->CGMgas;
-    const double fountain_metals = take_from_hot_phases(g, to_fountain);
-    darksage_add_to_fountain(centralgal, to_fountain, fountain_metals, galaxies, run_params);
-
-    coolingGas -= AGNheating;
-    return (coolingGas > 0.0) ? coolingGas : 0.0;
-}
-
-/*
- * cooling_darksage -- DarkSAGEMode cooling (DarkSage cooling_recipe() with its
- * beta profile, HotGasProfileType 1, and cool_gas_onto_galaxy(); model_cooling.c).
- *
- * The hot phases HotGas and CGMgas -- whichever the SAGE26 regimes have filled --
- * form one beta-profile halo of mass M_hot:
- *   t_cool = 0.1 / H(z), rho(r_cool) = 0.885 x / t_cool,
- *   rho_0 = M_hot C_beta / (4 pi c_beta^2 Rvir^3),
- *   r_cool = c_beta Rvir sqrt(rho_0 / rho(r_cool) - 1) (0 if rho_0 is lower);
- *   r_cool > Rvir: M_cool = M_hot Vvir / Rvir dt, the cooling gas's j-scale from the disc
- *                  scale radius;
- *   otherwise:     M_cool = M_hot / Rvir r_cool / (2 t_cool) C_beta dt, the Stevens et
- *                  al. (2017) j-scale.
- * No gas cools if the hot gas is the lower-energy phase (delta_e < 0); radio-mode AGN
- * heating then offsets cooling (do_AGN_heating_darksage()).  The cooled gas leaves
- * HotGas and CGMgas in proportion to their masses and is laid onto the annuli.
- */
-void cooling_darksage(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
-{
-    struct GALAXY *g = &galaxies[gal];
-    g->mdot_cool = g->mdot_stream = 0.0f;
-    g->CoolingRate = 0.0f;
-    const double hot = g->HotGas + g->CGMgas;
-    if(hot <= 0.0 || g->Vvir <= 0.0 || g->Rvir <= 0.0) return;
-
-    const double tcool = get_dynamical_time(g->SnapNum, run_params);
-    const double temp = VIRIAL_TEMP_COEFF * g->Vvir * g->Vvir;
-    const double hot_metals = g->MetalsHotGas + g->MetalsCGMgas;
-    const double logZ = (hot_metals > 0.0) ? log10(hot_metals / hot) : log10(DS_BIG_BANG_METALLICITY);
-    const double lambda = get_metaldependent_cooling_rate(log10(temp), logZ);
-    if(lambda <= 0.0) return;
-    const double x = PROTONMASS * BOLTZMANN * temp / lambda / (run_params->UnitDensity_in_cgs * run_params->UnitTime_in_s);
-    const double rho_rcool = x / tcool * (1.5 * MU_IONISED);
-
-    const double z = run_params->ZZ[g->SnapNum];
-    double c_beta = 0.20 * exp(-1.5 * z) - 0.039 * z + 0.28;
-    if(c_beta < DS_MIN_C_BETA_COOL) c_beta = DS_MIN_C_BETA_COOL;
-    const double cb_term = 1.0 / (1.0 - c_beta * atan(1.0 / c_beta));
-    const double rho0 = hot / (4.0 * M_PI * c_beta * c_beta * g->Rvir * g->Rvir * g->Rvir) * cb_term;
-    const double rcool = (rho0 > rho_rcool) ? c_beta * g->Rvir * sqrt(rho0 / rho_rcool - 1.0) : 0.0;
-    g->RcoolToRvir = (float)(rcool / g->Rvir);
-    g->tcool = (float)(tcool * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR);
-    g->tff = -1.0f;
-
-    double coolingGas;
-    if(rcool > g->Rvir) {
-        coolingGas = hot / (g->Rvir / g->Vvir) * dt;
-    } else {
-        coolingGas = (hot / g->Rvir) * (rcool / (2.0 * tcool)) * cb_term * dt;
-    }
-    set_cool_scale_radius(gal, rcool <= g->Rvir, galaxies);
-    if(coolingGas > hot) coolingGas = hot;
-    if(coolingGas < 0.0) coolingGas = 0.0;
-
-    /* Specific energy the cooling gas gives up: hot gas minus its mean over the annuli,
-     * weighted by its exponential j-profile, of the potential plus 0.5 v^2 */
-    const double jscale = g->Vvir * g->CoolScaleRadius;
-    double cold_e = 0.0;
-    for(int i = 0; i < N_BINS && jscale > 0.0; i++) {
-        if(g->DiscRadii[i+1] <= 0.0f || (i > 0 && g->DiscRadii[i] <= 0.0f)) continue;   /* radii not yet set */
-        const double *edge = run_params->DiscBinEdge;
-        const double v_av = (i > 0) ? 0.5 * (edge[i] / g->DiscRadii[i] + edge[i+1] / g->DiscRadii[i+1])
-                                    : 0.5 * edge[1] / g->DiscRadii[1];
-        const double pot_av = 0.5 * (g->Potential[i] + g->Potential[i+1]);
-        const double f1 = edge[i] / jscale, f2 = edge[i+1] / jscale;
-        double massfrac = (f1 + 1.0) * exp(-f1) - (f2 + 1.0) * exp(-f2);
-        if(massfrac < 0.0) massfrac = 0.0;
-        cold_e += massfrac * (pot_av + 0.5 * v_av * v_av);
-    }
-    const double delta_e = darksage_hot_specific_energy(gal, galaxies) - cold_e;
-    if(delta_e < 0.0) return;
-
-    if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0 && delta_e > 0.0) {
-        coolingGas = do_AGN_heating_darksage(coolingGas, gal, dt, x, rcool, delta_e, galaxies, run_params);
-    }
-    if(coolingGas > g->HotGas + g->CGMgas) coolingGas = g->HotGas + g->CGMgas;
-    if(coolingGas <= 0.0) return;
-    g->Cooling += coolingGas * delta_e;
-
-    const double metals = take_from_hot_phases(g, coolingGas);
-    deposit_cooled_gas_darksage(gal, coolingGas, metals / coolingGas, galaxies, run_params);
-    g->mdot_cool = (float)(coolingGas / dt);
-    g->CoolingRate = (float)((coolingGas / dt) * 1.0e10 / run_params->Hubble_h
-                             * SEC_PER_GIGAYEAR / run_params->UnitTime_in_s);
-}
-
-/*
  * Transfer cooled gas from the HotGas reservoir into the cold disk.
  *
  * Moves up to coolingGas mass (clamped to available HotGas) from HotGas to
@@ -975,3 +790,23 @@ void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct 
     }
 }
 
+/*
+ * DarkSAGEMode counterpart of cool_gas_onto_galaxy() for the non-CGM path
+ * (CGMrecipeOn == 0): moves up to coolingGas from HotGas into the disc
+ * annuli via deposit_cooled_gas_darksage().
+ */
+void cool_gas_onto_galaxy_darksage(const int centralgal, const double coolingGas, struct GALAXY *galaxies,
+                                   const struct params *run_params)
+{
+    if(coolingGas <= 0.0) return;
+
+    const double actual_cooling = (coolingGas < galaxies[centralgal].HotGas) ? coolingGas : galaxies[centralgal].HotGas;
+    const double metallicity = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);
+
+    deposit_cooled_gas_darksage(centralgal, actual_cooling, metallicity, galaxies, run_params);
+
+    galaxies[centralgal].HotGas -= actual_cooling;
+    galaxies[centralgal].MetalsHotGas -= metallicity * actual_cooling;
+    if(galaxies[centralgal].HotGas < 0.0) galaxies[centralgal].HotGas = 0.0;
+    if(galaxies[centralgal].MetalsHotGas < 0.0) galaxies[centralgal].MetalsHotGas = 0.0;
+}

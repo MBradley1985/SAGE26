@@ -37,8 +37,6 @@
 #include "model_infall.h"
 #include "model_reincorporation.h"
 #include "model_darksage_disc.h"
-#include "model_darksage_stellar_pop.h"
-#include "model_darksage_stripping.h"
 #include "model_starformation_and_feedback.h"
 
 #include "model_cooling_heating.h"
@@ -291,7 +289,6 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                     galaxies[ngal].Len = halos[halonr].Len;
                     galaxies[ngal].Vmax = halos[halonr].Vmax;
 
-                    galaxies[ngal].prevRvir = galaxies[ngal].Rvir;
                     const double new_Mvir = get_virial_mass(halonr, halos, run_params);
                     galaxies[ngal].deltaMvir = new_Mvir - galaxies[ngal].Mvir;
 
@@ -457,12 +454,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
     
     const double infallingGas = infall_recipe(centralgal, ngal, Zcurr, galaxies, run_params);
 
-    /* DarkSAGEMode: a halo that grew moves outflowing and ejected gas that can no longer
-     * reach the new Rvir into the fountain (DarkSage update_galactic_fountain_from_growth()) */
-    if(run_params->DarkSAGEMode == 1 && infallingGas > 0.0) {
-        darksage_fountain_from_growth(centralgal, galaxies, run_params);
-    }
-
     // We integrate things forward by using a number of intervals equal to STEPS
     // Adaptive timesteps: at high-z, snapshot spacing can exceed dynamical time
     // so we use more substeps when needed
@@ -536,20 +527,18 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
             const double deltaT = galaxies[p].dT;
             const double time = halo_age + deltaT - (step + 0.5) * (deltaT / effective_steps);
-            if(run_params->DarkSAGEMode == 1) {
-                galaxies[p].AgeBinNow = darksage_age_bin(time, run_params);   /* stars formed now go here */
-                galaxies[p].TimeNow = time;
-            }
 
             // For the central galaxy only
             if(p == centralgal) {
                 add_infall_to_hot(centralgal, infallingGas / effective_steps, galaxies, run_params);
 
-                if(run_params->DarkSAGEMode == 1) {
-                    /* DarkSage cycle: OutflowGas -> EjectedMass -> FountainGas -> HotGas / CGMgas */
-                    darksage_reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
-                } else if(run_params->ReIncorporationFactor > 0.0) {
+                if(run_params->ReIncorporationFactor > 0.0) {
                     reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
+                }
+
+                /* FountainGas cycling: FountainGas → HotGas, OutflowGas → EjectedMass */
+                if(run_params->DarkSAGEMode == 1) {
+                    reincorporate_fountain_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
                 }
 
             } else if(galaxies[p].Type == 1) {
@@ -558,15 +547,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 // original SAGE. strip_from_satellite divides by the substep
                 // count, so the per-snapshot fraction does not depend on it.
                 strip_from_satellite(centralgal, p, Zcurr, effective_steps, galaxies, run_params);
-
-                // DarkSAGEMode: ram pressure and tides on the satellite's disc (DarkSage
-                // ram_pressure_stripping()); a satellite inside its tidal radius is disrupted
-                if(run_params->DarkSAGEMode == 1 && run_params->RamPressureOn > 0 && galaxies[p].ColdGas > 0.0
-                   && darksage_ram_pressure_stripping(centralgal, p, time, effective_steps, galaxies, run_params)) {
-                    galaxies[p].mergeIntoID = *numgals + centralgal;  // position in output
-                    disrupt_satellite_to_ICS(centralgal, p, time, galaxies, run_params);
-                    continue;
-                }
             }
 
             // // Determine the cooling gas given the halo properties
@@ -582,29 +562,19 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
             // Determine the cooling gas given the halo properties
               const double dt_step = deltaT / effective_steps;
-              if(run_params->DarkSAGEMode == 1) {
-                // DarkSage cooling of HotGas and CGMgas together, onto the annuli
-                cooling_darksage(p, dt_step, galaxies, run_params);
-
-              } else if(run_params->CGMrecipeOn == 1) {
-                // deposits internally into the bulk ColdGas
+              if(run_params->CGMrecipeOn == 1) {
+                // deposits internally (bulk ColdGas, or annuli when DarkSAGEMode=1)
                 cooling_recipe_regime_aware(p, dt_step, galaxies, run_params);
 
                 } else {
                     const double coolingGas = cooling_recipe(p, dt_step, galaxies, run_params);
+
+                    if(run_params->DarkSAGEMode == 1) {
+                        cool_gas_onto_galaxy_darksage(p, coolingGas, galaxies, run_params);
+
+                    } else {
                     cool_gas_onto_galaxy(p, coolingGas, galaxies);
-            }
-
-            // DarkSAGEMode: refresh the annulus radii and potentials from the rotation curve every
-            // substep after the first (DarkSage core_build_model.c)
-            if(run_params->DarkSAGEMode == 1 && step != 0) {
-                update_disc_radii(p, galaxies, halos, run_params);
-            }
-
-            // DarkSAGEMode: older stellar populations return mass, metals and supernova energy
-            // (DarkSage delayed_feedback(), with SupernovaRecipeOn == 2)
-            if(run_params->DarkSAGEMode == 1 && run_params->SupernovaRecipeOn == 2 && (galaxies[p].StellarMass > 0.0 || galaxies[p].ICS > 0.0)) {
-                darksage_delayed_feedback(p, centralgal, time, deltaT / effective_steps, galaxies, run_params);
+                }
             }
 
             // stars form and then explode!
@@ -724,12 +694,8 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                     galaxies[p].DiscStarsMetals[last_physical_bin] += galaxies[p].DiscStarsMetals[i];
                     galaxies[p].DiscStars[i] = 0.0;
                     galaxies[p].DiscStarsMetals[i] = 0.0;
-                    darksage_move_ages(galaxies[p].DiscStarsAge[i], galaxies[p].DiscStarsMetalsAge[i], 1.0,
-                                       galaxies[p].DiscStarsAge[last_physical_bin],
-                                       galaxies[p].DiscStarsMetalsAge[last_physical_bin]);
                 }
             }
-            galaxies[p].AgeMismatch = darksage_age_mismatch(&galaxies[p]);
         }
     }
 

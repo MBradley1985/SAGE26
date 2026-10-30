@@ -19,7 +19,6 @@
 
 #include "model_misc.h"
 #include "model_darksage_disc.h"
-#include "model_darksage_instability.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -187,16 +186,12 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].FountainGas = galaxies[p].MetalsFountainGas = 0.0f;
     galaxies[p].OutflowGas = galaxies[p].MetalsOutflowGas = 0.0f;
     galaxies[p].FountainTime = galaxies[p].OutflowTime = 0.0f;
-    galaxies[p].OutflowSpecificEnergy = galaxies[p].EjectedSpecificEnergy = galaxies[p].ReincTime = 0.0f;
-    galaxies[p].HotGasPotential = galaxies[p].EjectedPotential = 0.0f;
-    galaxies[p].prevRvir = galaxies[p].Rvir;
     for(int i = 0; i < N_BINS; i++) {
         galaxies[p].DiscGas[i] = galaxies[p].DiscGasMetals[i] = 0.0f;
         galaxies[p].DiscStars[i] = galaxies[p].DiscStarsMetals[i] = 0.0f;
         galaxies[p].DiscH2[i] = galaxies[p].DiscHI[i] = 0.0f;
         galaxies[p].DiscSFR[i] = galaxies[p].DiscDust[i] = 0.0f;
-        /* DarkSage init_galaxy(): the cold-gas dispersion 11 + 11.3 z km/s */
-        galaxies[p].VelDispStars[i] = (float)darksage_cold_gas_dispersion(run_params->ZZ[halos[halonr].SnapNum], run_params);
+        galaxies[p].VelDispStars[i] = 10.0f;   /* km/s; evolves through disc heating */
     }
     for(int i = 0; i < N_BINS + 1; i++) {
         galaxies[p].DiscRadii[i] = 0.0f;
@@ -207,20 +202,6 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].SpinBulge[j] = galaxies[p].SpinSecularBulge[j] = 0.0f;
     }
     galaxies[p].VelDispBulge = 0.0f;
-    galaxies[p].VelDispMergerBulge = (float)darksage_cold_gas_dispersion(run_params->ZZ[halos[halonr].SnapNum], run_params);
-    for(int j = 0; j < 3; j++) galaxies[p].SpinMergerBulge[j] = 0.0f;
-    memset(galaxies[p].DiscStarsAge, 0, sizeof(galaxies[p].DiscStarsAge));
-    memset(galaxies[p].DiscStarsMetalsAge, 0, sizeof(galaxies[p].DiscStarsMetalsAge));
-    for(int k = 0; k < N_AGE_BINS; k++) {
-        galaxies[p].MergerBulgeMassAge[k] = galaxies[p].MergerBulgeMetalsAge[k] = 0.0f;
-        galaxies[p].InstabilityBulgeMassAge[k] = galaxies[p].InstabilityBulgeMetalsAge[k] = 0.0f;
-        galaxies[p].ICSAge[k] = galaxies[p].MetalsICSAge[k] = 0.0f;
-    }
-    galaxies[p].AgeBinNow = 0;
-    galaxies[p].TimeNow = 0.0;
-    for(int i = 0; i < N_BINS; i++) galaxies[p].DiscFNeutral[i] = 1.0f;
-    galaxies[p].ICSMeanRadius = 0.0f;
-    galaxies[p].AgeMismatch = 0.0f;
     galaxies[p].SecularBulgeMass = galaxies[p].SecularMetalsBulgeMass = 0.0f;
     galaxies[p].R2_hot_av = 0.0f;
     galaxies[p].CoolScaleRadius = galaxies[p].GasDiscScaleRadius = galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;
@@ -362,9 +343,7 @@ double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct param
     }
     
     // BulgeSizeOn == 3: Tonini setup (separate merger and instability bulges)
-    // BulgeSizeOn == 4: the same, with the instability radius from DarkSage's dynamical
-    // bulge size (DarkSAGEMode, model_darksage_disc.c)
-    if(run_params->BulgeSizeOn == 3 || run_params->BulgeSizeOn == 4) {
+    if(run_params->BulgeSizeOn == 3) {
         const double M_merger = galaxies[p].MergerBulgeMass;
         const double M_instability = galaxies[p].InstabilityBulgeMass;
         const double M_total = M_merger + M_instability;
@@ -513,8 +492,8 @@ void update_spin_gas_cooling(const int gal, const double cooling_mass, struct GA
 /* Merger of p into t.  Call before the masses are combined. */
 void combine_spins_merger(const int t, const int p, struct GALAXY *galaxies)
 {
-    /* The gas-disc axis is set by darksage_merge_galaxies() and the stellar disc keeps its own
-     * (the satellite's stars join the bulge); hot gas and bulge spins mix by mass */
+    evolve_spin(galaxies[t].SpinGas, galaxies[t].ColdGas, galaxies[p].SpinGas, galaxies[p].ColdGas);
+    evolve_spin(galaxies[t].SpinStars, galaxies[t].StellarMass, galaxies[p].SpinStars, galaxies[p].StellarMass);
     evolve_spin(galaxies[t].SpinHot, galaxies[t].HotGas, galaxies[p].SpinHot, galaxies[p].HotGas);
     evolve_spin(galaxies[t].SpinBulge, galaxies[t].BulgeMass, galaxies[p].SpinBulge, galaxies[p].BulgeMass);
 }

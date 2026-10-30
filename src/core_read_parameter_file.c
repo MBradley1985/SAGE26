@@ -132,13 +132,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
     // DarkSAGEMode: 0 = standard SAGE; 1 = full DarkSage physics (radially-resolved disk structure, Toomre Q instability, precession, j-conservation, fountain gas reservoirs)
     run_params->DarkSAGEMode               = 0; /* default: standard SAGE behavior */
-    run_params->RadiativeEfficiency        = 0.4; /* default: DarkSage millennium.par */
-    run_params->RamPressureOn              = 3; /* default: DarkSage, ram pressure and tides */
-    run_params->DarkSAGEMergerBursts       = 0; /* default: DarkSage, mergers act through disc instability */
-    run_params->FirstBin                   = 1.0; /* default: first j-bin edge [kpc/h km/s] (DarkSage MTNG.par) */
+    run_params->FirstBin                   = 100.0; /* default: first j-bin edge [kpc km/s] */
     run_params->ExponentBin                = 1.4; /* default: j-bin geometric growth factor */
-    run_params->GasSinkRate                = 0.66; /* default: unstable gas sink fraction (DarkSage MTNG.par) */
-    run_params->ThetaThresh                = 10.0; /* default: coplanar threshold [deg] (DarkSage MTNG.par) */
+    run_params->GasSinkRate                = 0.1; /* default: unstable gas sink fraction */
+    run_params->ThetaThresh                = 5.0; /* default: coplanar threshold [deg] */
     run_params->DegPerTdyn                 = 1.0; /* default: precession rate [deg/tdyn] */
     run_params->QTotMin                    = 1.0; /* default: minimum combined Q for stability */
 
@@ -224,9 +221,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("KarpovModeOn",               &(run_params->KarpovModeOn),               INT, 0);
 
     REG("DarkSAGEMode",                &(run_params->DarkSAGEMode),               INT, 0);
-    REG("RadiativeEfficiency",         &(run_params->RadiativeEfficiency),        DOUBLE, 0);
-    REG("RamPressureOn",               &(run_params->RamPressureOn),              INT, 0);
-    REG("DarkSAGEMergerBursts",        &(run_params->DarkSAGEMergerBursts),       INT, 0);
     REG("FirstBin",                    &(run_params->FirstBin),                   DOUBLE, 0);
     REG("ExponentBin",                 &(run_params->ExponentBin),                DOUBLE, 0);
     REG("GasSinkRate",                 &(run_params->GasSinkRate),                DOUBLE, 0);
@@ -532,10 +526,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
 #undef CHECK_VALID_ENUM_IN_PARAM_FILE
 
 
-    /* SF prescription must be one of the nine implemented recipes; the
+    /* SF prescription must be one of the eight implemented recipes; the
        H2-tracking predicate (sf_prescription_tracks_h2) relies on this range. */
-    if(run_params->SFprescription < 0 || run_params->SFprescription > 8) {
-        fprintf(stderr,"Error: SFprescription = %d is not valid; it must be in [0, 8].\n", run_params->SFprescription);
+    if(run_params->SFprescription < 0 || run_params->SFprescription > 7) {
+        fprintf(stderr,"Error: SFprescription = %d is not valid; it must be in [0, 7].\n", run_params->SFprescription);
         fprintf(stderr,"Please change the value for the parameter 'SFprescription' in the parameter file (%s)\n", fname);
         ABORT(EXIT_FAILURE);
     }
@@ -546,22 +540,20 @@ int read_parameter_file(const char *fname, struct params *run_params)
     {
         const struct { const char *name; int32_t value; int32_t min; int32_t max; } option_ranges[] = {
             {"AGNrecipeOn",            run_params->AGNrecipeOn,            0, 3},
-            {"SupernovaRecipeOn",      run_params->SupernovaRecipeOn,      0, 2},
+            {"SupernovaRecipeOn",      run_params->SupernovaRecipeOn,      0, 1},
             {"ReionizationOn",         run_params->ReionizationOn,         0, 1},
             {"DiskInstabilityOn",      run_params->DiskInstabilityOn,      0, 1},
             {"CGMrecipeOn",            run_params->CGMrecipeOn,            0, 1},
             {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
             {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
             {"EnhancedStarFormationOn", run_params->EnhancedStarFormationOn, 0, 2},
-            {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 4},
+            {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 3},
             {"H2DiskAreaOption",       run_params->H2DiskAreaOption,       0, 2},
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"H2DepletionMode",        run_params->H2DepletionMode,        0, H2DEPLETIONMODE_MAX},
             {"KarpovModeOn",            run_params->KarpovModeOn,            0, 1},
-            {"RamPressureOn",          run_params->RamPressureOn,          0, 3},
-            {"DarkSAGEMergerBursts",   run_params->DarkSAGEMergerBursts,   0, 1},
             {"DarkSAGEMode",           run_params->DarkSAGEMode,           0, 1}
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
@@ -585,22 +577,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     }
     /* In DarkSAGEMode the disc annuli replace the radial integration, and mode 5 (the DarkSage
        H2 law) only exists there. */
-    if(run_params->SFprescription == 8 && run_params->DarkSAGEMode != 1) {
-        fprintf(stderr, "Error: SFprescription = 8 (DarkSage H2 per annulus) needs DarkSAGEMode = 1.\n");
-        ABORT(EXIT_FAILURE);
-    }
-    if(run_params->BulgeSizeOn == 4 && run_params->DarkSAGEMode != 1) {
-        fprintf(stderr, "Error: BulgeSizeOn = 4 (DarkSage dynamical bulge size) needs DarkSAGEMode = 1.\n");
-        ABORT(EXIT_FAILURE);
-    }
-    if(run_params->SupernovaRecipeOn == 2 && run_params->DarkSAGEMode != 1) {
-        fprintf(stderr, "Error: SupernovaRecipeOn = 2 (DarkSage energy-driven feedback) needs DarkSAGEMode = 1.\n");
-        ABORT(EXIT_FAILURE);
-    }
-    if(run_params->DarkSAGEMode == 1 && !(run_params->RadiativeEfficiency > 0.0 && run_params->RadiativeEfficiency < 1.0)) {
-        fprintf(stderr, "Error: RadiativeEfficiency = %g must be in (0, 1).\n", run_params->RadiativeEfficiency);
-        ABORT(EXIT_FAILURE);
-    }
     if(run_params->H2DepletionMode == 5 && run_params->DarkSAGEMode != 1) {
         fprintf(stderr, "Error: H2DepletionMode = 5 (DarkSage H2 law) needs DarkSAGEMode = 1.\n");
         ABORT(EXIT_FAILURE);
