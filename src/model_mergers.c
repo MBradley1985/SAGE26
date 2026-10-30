@@ -280,8 +280,9 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     // This must be decided BEFORE the starburst
     int burst_to_merger_bulge = 0;  // 0 = instability, 1 = merger
     
-    if(mass_ratio > run_params->ThreshMajorMerger) {
-        // Major merger: all stars go to merger-driven bulge
+    if(mass_ratio > run_params->ThreshMajorMerger || run_params->DarkSAGEMode == 1) {
+        // Major merger: all stars go to merger-driven bulge.  DarkSAGEMode: every merger-made
+        // star is in the merger-driven bulge (DarkSage); the secular bulge is instability-built
         burst_to_merger_bulge = 1;
     } else {
         // Minor merger: depends on morphology
@@ -547,45 +548,42 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].BulgeMass += galaxies[p].StellarMass;
     galaxies[t].MetalsBulgeMass += galaxies[p].MetalsStellarMass;
 
-    // Transfer the satellite's bulge component breakdown to the central
-    galaxies[t].InstabilityBulgeMass += galaxies[p].InstabilityBulgeMass;
-    galaxies[t].MergerBulgeMass += galaxies[p].MergerBulgeMass;
-
-    // The satellite's DISK mass (StellarMass - BulgeMass) becomes new bulge mass
-    // Track this based on the central's current morphology (Tonini+2016 logic)
-    const double satellite_disk_mass = galaxies[p].StellarMass - galaxies[p].BulgeMass;
-
-    // DarkSAGEMode: the satellite's stellar populations keep their ages in the bulge they join
-    int sat_disc_to_instability = 0;
-    if(satellite_disk_mass > 0.0) {
-        const double disk_mass = galaxies[t].StellarMass - galaxies[t].BulgeMass;
-        const double disk_fraction = (galaxies[t].StellarMass > 0.0) ?
-                                     disk_mass / galaxies[t].StellarMass : 0.0;
-        sat_disc_to_instability = (disk_fraction > 0.5);
-    }
     if(run_params->DarkSAGEMode == 1) {
+        // DarkSage add_galaxies_together(): every satellite star joins the merger-driven
+        // (classical) bulge with its age; the secular bulge only grows by disc instability
+        galaxies[t].MergerBulgeMass += galaxies[p].StellarMass;
         darksage_move_ages(galaxies[p].InstabilityBulgeMassAge, galaxies[p].InstabilityBulgeMetalsAge, 1.0,
-                           galaxies[t].InstabilityBulgeMassAge, galaxies[t].InstabilityBulgeMetalsAge);
+                           galaxies[t].MergerBulgeMassAge, galaxies[t].MergerBulgeMetalsAge);
         darksage_move_ages(galaxies[p].MergerBulgeMassAge, galaxies[p].MergerBulgeMetalsAge, 1.0,
                            galaxies[t].MergerBulgeMassAge, galaxies[t].MergerBulgeMetalsAge);
         for(int i = 0; i < N_BINS; i++) {
             darksage_move_ages(galaxies[p].DiscStarsAge[i], galaxies[p].DiscStarsMetalsAge[i], 1.0,
-                               sat_disc_to_instability ? galaxies[t].InstabilityBulgeMassAge : galaxies[t].MergerBulgeMassAge,
-                               sat_disc_to_instability ? galaxies[t].InstabilityBulgeMetalsAge : galaxies[t].MergerBulgeMetalsAge);
+                               galaxies[t].MergerBulgeMassAge, galaxies[t].MergerBulgeMetalsAge);
         }
-    }
+    } else {
+        // Transfer the satellite's bulge component breakdown to the central
+        galaxies[t].InstabilityBulgeMass += galaxies[p].InstabilityBulgeMass;
+        galaxies[t].MergerBulgeMass += galaxies[p].MergerBulgeMass;
 
-    if(satellite_disk_mass > 0.0) {
-        if(sat_disc_to_instability) {
-            // Disc-dominated: minor merger triggers instability
-            galaxies[t].InstabilityBulgeMass += satellite_disk_mass;
-            const double old_disk_radius = galaxies[t].DiskScaleRadius;
+        // The satellite's DISK mass (StellarMass - BulgeMass) becomes new bulge mass
+        // Track this based on the central's current morphology (Tonini+2016 logic)
+        const double satellite_disk_mass = galaxies[p].StellarMass - galaxies[p].BulgeMass;
 
-            // UPDATE: Tonini incremental radius evolution (equation 16)
-            update_instability_bulge_radius(t, satellite_disk_mass, old_disk_radius, galaxies, run_params);
-        } else {
-            // Spheroid-dominated: grows merger bulge
-            galaxies[t].MergerBulgeMass += satellite_disk_mass;
+        if(satellite_disk_mass > 0.0) {
+            const double disk_mass = galaxies[t].StellarMass - galaxies[t].BulgeMass;
+            const double disk_fraction = (galaxies[t].StellarMass > 0.0) ?
+                                         disk_mass / galaxies[t].StellarMass : 0.0;
+            if(disk_fraction > 0.5) {
+                // Disc-dominated: minor merger triggers instability
+                galaxies[t].InstabilityBulgeMass += satellite_disk_mass;
+                const double old_disk_radius = galaxies[t].DiskScaleRadius;
+
+                // UPDATE: Tonini incremental radius evolution (equation 16)
+                update_instability_bulge_radius(t, satellite_disk_mass, old_disk_radius, galaxies, run_params);
+            } else {
+                // Spheroid-dominated: grows merger bulge
+                galaxies[t].MergerBulgeMass += satellite_disk_mass;
+            }
         }
     }
 
@@ -635,6 +633,13 @@ void move_disk_sfh_to_bulge(const int p, const double fraction, struct GALAXY *g
  */
 void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
 {
+    // DarkSage stars_to_bulge(): the merger bulge's dispersion becomes the mass-weighted
+    // quadrature sum over the components it is built from (DarkSAGEMode quantities only)
+    double msig2 = galaxies[p].MergerBulgeMass * galaxies[p].VelDispMergerBulge * galaxies[p].VelDispMergerBulge
+                 + galaxies[p].SecularBulgeMass * galaxies[p].VelDispBulge * galaxies[p].VelDispBulge;
+    for(int i = 0; i < N_BINS; i++) msig2 += galaxies[p].DiscStars[i] * galaxies[p].VelDispStars[i] * galaxies[p].VelDispStars[i];
+    if(galaxies[p].StellarMass > 0.0f) galaxies[p].VelDispMergerBulge = (float)sqrt(msig2 / galaxies[p].StellarMass);
+
     // generate bulge
     galaxies[p].BulgeMass = galaxies[p].StellarMass;
     galaxies[p].MergerBulgeMass = galaxies[p].StellarMass;      // All merger-driven

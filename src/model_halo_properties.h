@@ -23,6 +23,8 @@ extern "C" {
     extern double interpolate_clustering_mass(const double z, const struct params *run_params);
     extern double interpolate_concentration_ishiyama21(const double logM, const double z, const struct params *run_params);
     extern double concentration_from_vmax_vvir(const double Vmax, const double Vvir);
+    extern double darksage_concentration(const double Mvir, const double StellarMass, const int type, const double z,
+                                         const struct params *run_params);
     extern double get_halo_concentration(const int p, const double z, const struct GALAXY *galaxies,
                                           const struct params *run_params);
 

@@ -533,7 +533,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"DiskInstabilityOn",      run_params->DiskInstabilityOn,      0, 1},
             {"CGMrecipeOn",            run_params->CGMrecipeOn,            0, 1},
             {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
-            {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
+            {"ConcentrationOn",        run_params->ConcentrationOn,        0, 4},
             {"EnhancedStarFormationOn", run_params->EnhancedStarFormationOn, 0, 2},
             {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 3},
             {"H2DiskAreaOption",       run_params->H2DiskAreaOption,       0, 2},

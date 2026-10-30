@@ -218,6 +218,11 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].SpinBulge[j] = galaxies[p].SpinSecularBulge[j] = 0.0f;
     }
     galaxies[p].VelDispBulge = 0.0f;
+    /* DarkSage init_galaxy(): merger bulge at the cold-gas dispersion, bulge scale lengths placeholders
+     * until update_disc_radii() solves them */
+    galaxies[p].VelDispMergerBulge = (float)darksage_cold_gas_dispersion(run_params->ZZ[halos[halonr].SnapNum], run_params);
+    for(int j = 0; j < 3; j++) galaxies[p].SpinClassicalBulge[j] = 0.0f;
+    galaxies[p].a_InstabBulge = galaxies[p].a_MergerBulge = 0.08284f * galaxies[p].DiskScaleRadius;
     galaxies[p].SecularBulgeMass = galaxies[p].SecularMetalsBulgeMass = 0.0f;
     galaxies[p].R2_hot_av = 0.0f;
     galaxies[p].CoolScaleRadius = galaxies[p].GasDiscScaleRadius = galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;

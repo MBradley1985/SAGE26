@@ -179,7 +179,7 @@ section below) and the unit actually written.
 | `Vvir` | km / s | Virial velocity of this galaxy's halo. |
 | `Vmax` | km / s | Maximum circular velocity of this galaxy's halo. |
 | `VelDisp` | km / s | Velocity dispersion of this galaxy's halo. |
-| `Concentration` | -- | NFW halo concentration from the Ishiyama+21 c-M relation (set when `ConcentrationOn = 1`). |
+| `Concentration` | -- | NFW halo concentration from the method chosen by `ConcentrationOn` (1: Ishiyama+21; 2, 3: V_max/V_vir; 4: DarkSAGE). |
 | `g_max` | code units (UnitLength / UnitTime^2) | Peak NFW gravitational acceleration used for the Boylan-Kolchin (2025) feedback-free-burst threshold (HDF5 dtype: float64). Set per snapshot by `EnhancedStarFormationOn = 2` (the BK25 method) and reset to 0 for non-FFB haloes; not a running maximum across snapshots, and unrelated to CGM cooling. |
 
 ### Baryonic reservoirs

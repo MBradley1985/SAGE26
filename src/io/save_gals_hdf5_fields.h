@@ -44,6 +44,8 @@
     X(HotGasPotential, 1, "Mass-weighted potential of the hot (or CGM) gas.", "(km/s)^2") \
     X(SecularBulgeMass, 1, "Bulge mass built by annulus-0 disc instability.", "1.0e10 Msun/h") \
     X(VelDispBulge, 1, "Velocity dispersion of the secular bulge.", "km/s") \
+    X(VelDispMergerBulge, 1, "Velocity dispersion of the merger-driven (classical) bulge.", "km/s") \
+    X(SpinClassicalBulge, 3, "Specific angular momentum vector of the merger-driven bulge.", "(Mpc/h)(km/s)") \
     X(StellarDiscScaleRadius, 1, "Exponential scale radius fitted to the stellar annuli.", "Mpc/h") \
     X(GasDiscScaleRadius, 1, "Exponential scale radius fitted to the gas annuli.", "Mpc/h")
 

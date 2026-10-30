@@ -54,7 +54,7 @@ DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through i
 CGMrecipeOn                 1   %0: switch off
 FIREmodeOn                  1   %0: switch off
 
-ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites
+ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites; 4: DarkSAGE (Dutton & Maccio 2014 + Di Cintio 2014)
 EnhancedStarFormationOn     1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: BK25 acceleration threshold w. log-normal c scatter
 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini

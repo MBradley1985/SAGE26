@@ -6,10 +6,10 @@
  * built on a 51-point radial grid, spaced by DS_EXPONENT_BIN inwards from
  * max(10 j_max / Vvir, Rvir), from
  *   - an NFW halo (the dark matter left after the disc, bulge, hot gas and
- *     black hole), concentration from SAGE26's ConcentrationOn when set,
- *     otherwise Dutton & Maccio (2014) with the Di Cintio et al. (2014)
- *     baryonic modification;
- *   - Hernquist instability- and merger-driven bulges (SAGE26's bulge radii)
+ *     black hole), always DarkSage's concentration (ConcentrationOn 4:
+ *     Dutton & Maccio 2014 with the Di Cintio et al. 2014 baryonic factor);
+ *   - Hernquist secular and merger-driven bulges, scale lengths solved from
+ *     the potential and the bulge velocity dispersions
  *     and intrahalo stars;
  *   - the black hole as a point mass;
  *   - exponential stellar and gas discs;
@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <gsl/gsl_spline.h>
 
 #include "core_allvars.h"
 #include "macros.h"
@@ -104,13 +105,20 @@ static double disc_scaleradius(const float mass[N_BINS], const double current, c
     return (rs > 0.0) ? rs : g->DiskScaleRadius;
 }
 
-/* Hernquist scale length a whose mass within Rvir is half inside r_half */
-static double hernquist_a_from_half_mass(const double r_half, const double Rvir)
+/* Half-mass radius, within Rvir, of a Hernquist profile with scale length a (DarkSage core_save.c) */
+static double hernquist_half_mass(const double a, const double Rvir)
 {
-    if(r_half <= 0.0) return 0.0;
-    if(Rvir > M_SQRT2 * r_half) return r_half * Rvir * (M_SQRT2 - 1.0) / (Rvir - M_SQRT2 * r_half);
-    return r_half / (1.0 + M_SQRT2);
+    return (a > 0.0) ? a * Rvir / (Rvir * (M_SQRT2 - 1.0) + M_SQRT2 * a) : 0.0;
 }
+
+/* Spline value with x held inside the grid (DarkSage asserts it is) */
+static double spline_clamped(const gsl_spline *sp, gsl_interp_accel *acc, const double xmin, const double xmax, double x)
+{
+    if(x < xmin) x = xmin;
+    if(x > xmax) x = xmax;
+    return gsl_spline_eval(sp, x, acc);
+}
+
 
 /* DarkSage cap on the intrahalo stars' mean radius, in Rvir: the limit of a truncated
  * Hernquist sphere of arbitrarily large scale length */
@@ -188,15 +196,6 @@ double darksage_nfw_potential(const int p, const double r, const struct GALAXY *
     return -run_params->G * galaxies[p].Mvir / r * log(1.0 + r / rs) / norm;
 }
 
-/* Linear interpolation of y(x) on the valid part of a grid with increasing x */
-static double grid_interp(const double *x, const double *y, const int first, const double xv)
-{
-    if(xv <= x[first]) return y[first];
-    for(int k = first + 1; k < N_RC_GRID; k++) {
-        if(xv <= x[k]) return y[k-1] + (y[k] - y[k-1]) * (xv - x[k-1]) / (x[k] - x[k-1]);
-    }
-    return y[N_RC_GRID - 1];
-}
 
 /* Radius where rotational support f_rot = v / sqrt(v^2 + sigma^2) reaches 0.5, as an exponential
  * scale (DarkSage update_rotation_support_scale_radius()); gas-only annuli use the cold-gas dispersion */
@@ -269,19 +268,7 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     double M_DM = g->Mvir - (M_hot_total + g->ColdGas + g->StellarMass + g->BlackHoleMass + g->ICS);
     if(M_DM < 0.0) M_DM = 0.0;
 
-    double conc;
-    if(run_params->ConcentrationOn > 0 && g->Concentration > 0.0f) {
-        conc = g->Concentration;
-    } else {
-        const double zc = (z > 5.0) ? 5.0 : z;
-        const double a_conc = 0.520 + (0.905 - 0.520) * exp(-0.617 * pow(zc, 1.21));
-        const double b_conc = -0.101 + 0.026 * zc;
-        conc = pow(10.0, a_conc + b_conc * (log10(g->Mvir * run_params->UnitMass_in_g / SOLAR_MASS) - 12.0));
-        if(g->Type == 0 && g->StellarMass > 0.0) {
-            const double X = log10(g->StellarMass / g->Mvir);
-            conc *= 1.0 + 3.0e-5 * exp(3.4 * (X + 4.5));   /* Di Cintio et al. (2014b) */
-        }
-    }
+    const double conc = darksage_concentration(g->Mvir, g->StellarMass, g->Type, z, run_params);   /* = ConcentrationOn 4 */
     const double r_s = Rvir / conc;
     g->HaloScaleRadius = (float)r_s;
     const double rho_norm = M_DM / (log(1.0 + Rvir / r_s) - Rvir / (Rvir + r_s));
@@ -298,10 +285,10 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     const double BTT = (total_stellar_gas > 0.0) ? g->BulgeMass / total_stellar_gas : 0.0;
     if(BTT >= 1.0) return;   /* no disc: keep the last radii */
 
-    /* Hernquist bulges, normalised to their mass within Rvir */
-    const double a_SB = hernquist_a_from_half_mass((g->InstabilityBulgeRadius > 0.0f) ? g->InstabilityBulgeRadius : g->BulgeRadius, Rvir);
-    const double a_CB = hernquist_a_from_half_mass((g->MergerBulgeRadius > 0.0f) ? g->MergerBulgeRadius : g->BulgeRadius, Rvir);
-    const double M_SB_inf = g->InstabilityBulgeMass * ((Rvir + a_SB) / Rvir) * ((Rvir + a_SB) / Rvir);
+    /* Hernquist bulges, normalised to their mass within Rvir; scale lengths from the last call */
+    const double a_SB = g->a_InstabBulge;
+    const double a_CB = g->a_MergerBulge;
+    const double M_SB_inf = g->SecularBulgeMass * ((Rvir + a_SB) / Rvir) * ((Rvir + a_SB) / Rvir);
     const double M_CB_inf = g->MergerBulgeMass * ((Rvir + a_CB) / Rvir) * ((Rvir + a_CB) / Rvir);
     if(g->ICSMeanRadius > ICS_MAX_MEAN_RADIUS * Rvir) g->ICSMeanRadius = (float)(ICS_MAX_MEAN_RADIUS * Rvir);
     const double a_ICS = darksage_ics_scale_radius(Rvir, g->ICSMeanRadius);
@@ -339,7 +326,7 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
         gr_j[i] = sqrt(f * v2) * r;
 
         if(i == N_RC_GRID - 1) {
-            gr_phi[i] = -G * M_int / r;
+            gr_phi[i] = 0.0;   /* potential differences are what matter (DarkSage) */
             if(gr_j[i] < run_params->DiscBinEdge[N_BINS] && n_grow < RC_MAX_GROW) {
                 r *= 10.0;   /* grid must reach j_max */
                 n_grow++;
@@ -355,30 +342,72 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     }
     if(i == 0) gr_phi[0] = gr_phi[1];   /* the potential flattens at the centre */
 
-    /* Step 4: annulus edges and their potentials */
+    /* Step 4: annulus edges and their potentials, by cubic spline (DarkSage gsl_interp_cspline) */
+    const int n_grid = N_RC_GRID - first;
+    gsl_interp_accel *acc = gsl_interp_accel_alloc();
+    gsl_spline *r_of_j = gsl_spline_alloc(gsl_interp_cspline, n_grid);
+    gsl_spline *phi_of_r = gsl_spline_alloc(gsl_interp_cspline, n_grid);
+    gsl_spline_init(r_of_j, &gr_j[first], &gr_r[first], n_grid);
+    gsl_spline_init(phi_of_r, &gr_r[first], &gr_phi[first], n_grid);
     g->DiscRadii[0] = 0.0f;
     for(int k = 1; k < N_BINS + 1; k++) {
-        g->DiscRadii[k] = (float)grid_interp(gr_j, gr_r, first, run_params->DiscBinEdge[k]);
+        g->DiscRadii[k] = (float)spline_clamped(r_of_j, acc, gr_j[first], gr_j[N_RC_GRID - 1], run_params->DiscBinEdge[k]);
         if(g->DiscRadii[k] <= g->DiscRadii[k-1]) g->DiscRadii[k] = 1.0001f * g->DiscRadii[k-1] + 1.0e-9f;
-        g->Potential[k] = (float)grid_interp(gr_r, gr_phi, first, g->DiscRadii[k]);
+        g->Potential[k] = (float)spline_clamped(phi_of_r, acc, gr_r[first], gr_r[N_RC_GRID - 1], g->DiscRadii[k]);
     }
     g->Potential[0] = (float)gr_phi[first];
+    if(g->Potential[0] >= 0.0f) g->Potential[0] = g->Potential[1];
 
     /* Step 5: the hot gas's mass-weighted potential (beta profile) and the potential at Rvir
      * that ejected gas must climb to -- the energetics of SupernovaRecipeOn 2 */
-    double pot = 0.0, mass = 0.0;
+    double pot = 0.0;
     for(int k = first; k < N_RC_GRID - 1; k++) {
-        double x0 = gr_r[k] / Rvir, x1 = gr_r[k+1] / Rvir;
-        if(x0 >= 1.0) break;
-        if(x1 > 1.0) x1 = 1.0;
+        const double x0 = gr_r[k] / Rvir, x1 = gr_r[k+1] / Rvir;
         const double dm = (x1 - c_beta * atan(x1 / c_beta)) - (x0 - c_beta * atan(x0 / c_beta));
-        const double phi_mid = 0.5 * (gr_phi[k] + gr_phi[k+1]);
-        pot += ((phi_mid < 0.0) ? phi_mid : 0.0) * dm;
-        mass += dm;
+        const double term = 0.5 * (gr_phi[k] + gr_phi[k+1]) * dm / (1.0 - c_beta * atan(1.0 / c_beta));
+        pot += (term < 0.0) ? term : 0.0;
+        if(gr_r[k+1] > Rvir) break;
     }
-    if(mass > 0.0) g->HotGasPotential = (float)(pot / mass);
-    const double phi_rvir = grid_interp(gr_r, gr_phi, first, Rvir);
+    g->HotGasPotential = (float)pot;
+    const double phi_rvir = spline_clamped(phi_of_r, acc, gr_r[first], gr_r[N_RC_GRID - 1], Rvir);
     g->EjectedPotential = (float)((phi_rvir > 0.9999 * g->HotGasPotential) ? phi_rvir : 0.9999 * g->HotGasPotential);
+    gsl_spline_free(r_of_j);
+    gsl_spline_free(phi_of_r);
+    gsl_interp_accel_free(acc);
+
+    /* Step 6: bulge scale lengths for the next call, from the potential gradient and each
+     * bulge's velocity dispersion (and the merger bulge's spin), averaged outwards from the
+     * centre until the running mean settles to 1% (DarkSage update_disc_radii()) */
+    const double j2_mb = g->SpinClassicalBulge[0] * g->SpinClassicalBulge[0] + g->SpinClassicalBulge[1] * g->SpinClassicalBulge[1]
+                       + g->SpinClassicalBulge[2] * g->SpinClassicalBulge[2];
+    const double s2_sb = 3.0 * g->VelDispBulge * g->VelDispBulge, s2_mb = 3.0 * g->VelDispMergerBulge * g->VelDispMergerBulge;
+    for(int b = 0; b < 2; b++) {
+        const double s2 = (b == 0) ? s2_sb : s2_mb;
+        const double j2 = (b == 0) ? 0.0 : j2_mb;
+        if(s2 <= 0.0) continue;
+        double a_av = 0.0, a_av_prev = 0.0;
+        for(int k = first; k < N_RC_GRID - 1; k++) {
+            const int n = k - first;
+            const double r1 = gr_r[k+1];
+            const double dphi_dr = (gr_phi[k+1] - gr_phi[k]) / (r1 - gr_r[k]);
+            const double a_new = 3.0 / ((dphi_dr - j2 / (r1 * r1 * r1)) / s2 - 1.0 / r1) - r1;
+            a_av = (n * a_av + a_new) / (n + 1);
+            if(fabs(a_av - a_av_prev) <= 0.01 * a_av) {
+                if(isfinite(a_av) && a_av > 0.0) {
+                    if(b == 0) g->a_InstabBulge = (float)a_av;
+                    else g->a_MergerBulge = (float)a_av;
+                }
+                break;
+            }
+            a_av_prev = a_av;
+        }
+    }
+    /* SAGE26's half-mass bulge radii follow (Hernquist within Rvir) */
+    g->InstabilityBulgeRadius = (float)hernquist_half_mass(g->a_InstabBulge, Rvir);
+    g->MergerBulgeRadius = (float)hernquist_half_mass(g->a_MergerBulge, Rvir);
+
+    /* the stellar-disc scale radius from the new radii (DarkSage) */
+    g->StellarDiscScaleRadius = (float)disc_scaleradius(g->DiscStars, g->StellarDiscScaleRadius, g);
 }
 
 /* ---------------------------------------------------------------------------
@@ -562,9 +591,8 @@ double darksage_host_mass_within(const struct GALAXY *c, const double r, const d
     const double c_beta = (c->c_beta > DS_MIN_C_BETA) ? c->c_beta : DS_MIN_C_BETA;
     M += M_hot * (x - c_beta * atan(x / c_beta)) / (1.0 - c_beta * atan(1.0 / c_beta));
 
-    const double a_SB = hernquist_a_from_half_mass((c->InstabilityBulgeRadius > 0.0f) ? c->InstabilityBulgeRadius : c->BulgeRadius, Rvir);
-    const double a_CB = hernquist_a_from_half_mass((c->MergerBulgeRadius > 0.0f) ? c->MergerBulgeRadius : c->BulgeRadius, Rvir);
-    M += c->InstabilityBulgeMass * ((Rvir + a_SB) / Rvir) * ((Rvir + a_SB) / Rvir) * (r / (r + a_SB)) * (r / (r + a_SB));
+    const double a_SB = c->a_InstabBulge, a_CB = c->a_MergerBulge;
+    M += c->SecularBulgeMass * ((Rvir + a_SB) / Rvir) * ((Rvir + a_SB) / Rvir) * (r / (r + a_SB)) * (r / (r + a_SB));
     M += c->MergerBulgeMass * ((Rvir + a_CB) / Rvir) * ((Rvir + a_CB) / Rvir) * (r / (r + a_CB)) * (r / (r + a_CB));
     const double a_ICS = darksage_ics_scale_radius(Rvir, c->ICSMeanRadius);
     M += c->ICS * ((Rvir + a_ICS) / Rvir) * ((Rvir + a_ICS) / Rvir) * (r / (r + a_ICS)) * (r / (r + a_ICS));

@@ -280,6 +280,10 @@ struct GALAXY
     float SecularBulgeMass;          /* Mass in secular bulge [10^10 Msun/h] */
     float SecularMetalsBulgeMass;    /* Metals in secular bulge */
     float SpinSecularBulge[3];       /* Secular bulge spin vector */
+    float VelDispMergerBulge;        /* Merger (classical) bulge velocity dispersion [km/s] */
+    float SpinClassicalBulge[3];     /* Merger (classical) bulge specific angular momentum vector */
+    float a_InstabBulge;             /* Hernquist scale length of the secular bulge [Mpc/h] (DarkSage) */
+    float a_MergerBulge;             /* Hernquist scale length of the merger bulge [Mpc/h] (DarkSage) */
     float R2_hot_av;                 /* Average <r^2> for hot gas */
 };
 
