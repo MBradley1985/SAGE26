@@ -20,8 +20,9 @@ it says otherwise. See
 ### Quasar burst timing
 
 - New output field `TimeOfLastQuasarBurst`, the lookback time of the last
-  quasar-mode accretion from either a merger or a disk instability, to the
-  substep. Output only: the existing datasets are bit-identical.
+  quasar-mode accretion from either a merger or a disk instability. It is
+  meaningful to the snapshot interval, not to the substep. Output only: the
+  existing datasets are bit-identical.
 
 ## v0.9 -- 2026-10-27
 
