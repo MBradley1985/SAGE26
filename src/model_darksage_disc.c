@@ -48,6 +48,8 @@ static const int RC_MAX_GROW = 10;
 static const double F_SUPPORT_MIN = 1.0e-5;
 /* DarkSage minimum core radius of the hot-gas beta profile (MIN_C_BETA) */
 static const double DS_MIN_C_BETA = 0.05;
+/* Coefficient of DarkSage's R2_hot_av for the beta profile (model_cooling.c) */
+static const double DS_R2_HOT_COEFF = 0.15343;
 /* DarkSage cold-gas velocity dispersion 11 + 11.3 z km/s [cm/s] */
 static const double DS_CS0_CGS = 1.1e6;
 static const double DS_CS1_CGS = 1.13e6;
@@ -265,6 +267,9 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     double c_beta = 0.20 * exp(-1.5 * z) - 0.039 * z + 0.28;
     if(c_beta < DS_MIN_C_BETA) c_beta = DS_MIN_C_BETA;
     g->c_beta = (float)c_beta;
+    /* <r^2> of the hot gas (DarkSage cooling_recipe()), for the ram-pressure shielding */
+    const double r_hot = Rvir * c_beta * c_beta / (1.0 - c_beta * atan(1.0 / c_beta)) * DS_R2_HOT_COEFF;
+    g->R2_hot_av = (float)(r_hot * r_hot);
     const double hot_norm = M_hot_total / (1.0 - c_beta * atan(1.0 / c_beta));
 
     const double total_stellar_gas = g->StellarMass + g->ColdGas;
