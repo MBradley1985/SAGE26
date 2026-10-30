@@ -19,6 +19,7 @@
 
 #include "model_misc.h"
 #include "model_darksage_disc.h"
+#include "model_darksage_instability.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -191,7 +192,8 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].DiscStars[i] = galaxies[p].DiscStarsMetals[i] = 0.0f;
         galaxies[p].DiscH2[i] = galaxies[p].DiscHI[i] = 0.0f;
         galaxies[p].DiscSFR[i] = galaxies[p].DiscDust[i] = 0.0f;
-        galaxies[p].VelDispStars[i] = 10.0f;   /* km/s; evolves through disc heating */
+        /* DarkSage init_galaxy(): the cold-gas dispersion 11 + 11.3 z km/s */
+        galaxies[p].VelDispStars[i] = (float)darksage_cold_gas_dispersion(run_params->ZZ[halos[halonr].SnapNum], run_params);
     }
     for(int i = 0; i < N_BINS + 1; i++) {
         galaxies[p].DiscRadii[i] = 0.0f;

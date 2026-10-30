@@ -296,7 +296,7 @@ static void rotate_vector(float v[3], const float axis[3], const double angle_de
 }
 
 /* Re-bin a disc tilted by angle acos(cos_angle): its j along the new axis is j cos(angle) */
-static void project_disc(const float DiscMass[N_BINS], const double cos_angle, double NewDisc[N_BINS],
+void darksage_project_disc(const float DiscMass[N_BINS], const double cos_angle, double NewDisc[N_BINS],
                          const struct params *run_params, const double Rvir, const double Vvir)
 {
     const double cos_ang = fabs(cos_angle);
@@ -379,8 +379,8 @@ void darksage_precess_gas(const int p, const double dt, struct GALAXY *galaxies,
     if(cos_precess < fabs(cos_theta)) cos_precess = fabs(cos_theta);
 
     double new_gas[N_BINS], new_metals[N_BINS];
-    project_disc(galaxies[p].DiscGas, cos_precess, new_gas, run_params, galaxies[p].Rvir, galaxies[p].Vvir);
-    project_disc(galaxies[p].DiscGasMetals, cos_precess, new_metals, run_params, galaxies[p].Rvir, galaxies[p].Vvir);
+    darksage_project_disc(galaxies[p].DiscGas, cos_precess, new_gas, run_params, galaxies[p].Rvir, galaxies[p].Vvir);
+    darksage_project_disc(galaxies[p].DiscGasMetals, cos_precess, new_metals, run_params, galaxies[p].Rvir, galaxies[p].Vvir);
     for(int i = 0; i < N_BINS; i++) {
         galaxies[p].DiscGas[i] = (float)new_gas[i];
         galaxies[p].DiscGasMetals[i] = (float)new_metals[i];
