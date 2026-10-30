@@ -28,7 +28,10 @@
 
 #include "model_darksage_stellar_pop.h"
 #include "model_misc.h"
+#include "model_darksage_feedback.h"
 
+/* DarkSage MIN_STARFORMATION: below this returned mass an annulus has no delayed outflow [10^10 Msun/h] */
+static const double DS_MIN_RETURNED = 1.0e-10;
 /* DarkSage number ratio of type Ia to type II supernovae (main.c Ratio_Ia_II) */
 static const double DS_RATIO_IA_II = 0.15;
 /* Stellar mass limits of the IMF integrals [Msun]: no mass return below 1, collapse to a black
@@ -166,6 +169,107 @@ void darksage_move_ages(float mass_from[N_AGE_BINS], float metals_from[N_AGE_BIN
             metals_to[k] += dz;
         }
     }
+}
+
+/* Mass lost by an age-binned component over this substep: the mass and metals returned, the new
+ * metals made by the returning stars (DarkSage: Yield (1 - Z) / FinalRecycleFraction per unit mass
+ * returned), and the SN energy (returned) */
+static double age_losses(float mass[N_AGE_BINS], float metals[N_AGE_BINS], const int k_now,
+                         const double *ret, const double *sn, const double inv_R_final, const double yield,
+                         double *lost, double *lost_metals, double *new_metals, const struct params *run_params)
+{
+    double energy = 0.0;
+    *lost = *lost_metals = *new_metals = 0.0;
+    for(int k = k_now + 1; k < N_AGE_BINS; k++) {
+        if(mass[k] <= 0.0f || ret[k] <= 0.0) continue;
+        const double Z = get_metallicity(mass[k], metals[k]);
+        energy += mass[k] * run_params->EnergySNcode * sn[k];
+        const double dm = ret[k] * mass[k], dz = ret[k] * metals[k];
+        mass[k] -= (float)dm;
+        metals[k] -= (float)dz;
+        *lost += dm;
+        *lost_metals += dz;
+        *new_metals += inv_R_final * dm * yield * (1.0 - Z);
+    }
+    return energy;
+}
+
+void darksage_delayed_feedback(const int p, const int centralgal, const double time, const double dt,
+                               struct GALAXY *galaxies, const struct params *run_params)
+{
+    struct GALAXY *g = &galaxies[p];
+    const int k_now = g->AgeBinNow;
+    if(k_now >= N_AGE_BINS - 1) return;
+
+    /* Step 1: fraction returned and supernovae per unit mass for each older bin over this substep */
+    double ret[N_AGE_BINS] = {0.0}, sn[N_AGE_BINS] = {0.0};
+    for(int k = k_now + 1; k < N_AGE_BINS; k++) {
+        const double t0 = 0.5 * (run_params->AgeBinEdge[k] + run_params->AgeBinEdge[k+1]) - (time + 0.5 * dt);
+        double out[2];
+        darksage_return_and_sn(t0, t0 + dt, run_params, out);
+        ret[k] = out[0];
+        sn[k] = out[1];
+    }
+    const double inv_R_final = 1.0 / run_params->FinalRecycleFraction;
+
+    /* Step 2: bulge populations -- their mass joins the fountain, their energy acts on the hot gas */
+    double lost, lost_z, new_z, energy_onto_hot = 0.0;
+    energy_onto_hot += age_losses(g->MergerBulgeMassAge, g->MergerBulgeMetalsAge, k_now, ret, sn, inv_R_final,
+                                  run_params->Yield, &lost, &lost_z, &new_z, run_params);
+    g->MergerBulgeMass -= lost;
+    g->BulgeMass -= lost;
+    g->StellarMass -= lost;
+    g->MetalsBulgeMass -= lost_z;
+    g->MetalsStellarMass -= lost_z;
+    darksage_add_to_fountain(centralgal, lost, lost_z + new_z, galaxies, run_params);
+    energy_onto_hot += age_losses(g->InstabilityBulgeMassAge, g->InstabilityBulgeMetalsAge, k_now, ret, sn, inv_R_final,
+                                  run_params->Yield, &lost, &lost_z, &new_z, run_params);
+    g->InstabilityBulgeMass -= lost;
+    g->SecularBulgeMass -= lost;
+    g->BulgeMass -= lost;
+    g->StellarMass -= lost;
+    g->MetalsBulgeMass -= lost_z;
+    g->MetalsStellarMass -= lost_z;
+    darksage_add_to_fountain(centralgal, lost, lost_z + new_z, galaxies, run_params);
+
+    /* intrahalo stars: as the bulges.  ICS_disrupt / ICS_accrete / ICS_sum_mt stay records of the
+     * mass deposited, so in DarkSAGEMode they no longer sum to ICS */
+    energy_onto_hot += age_losses(g->ICSAge, g->MetalsICSAge, k_now, ret, sn, inv_R_final,
+                                  run_params->Yield, &lost, &lost_z, &new_z, run_params);
+    g->ICS -= lost;
+    g->MetalsICS -= lost_z;
+    if(g->ICS < 0.0f) g->ICS = 0.0f;
+    if(g->MetalsICS < 0.0f) g->MetalsICS = 0.0f;
+    darksage_add_to_fountain(centralgal, lost, lost_z + new_z, galaxies, run_params);
+
+    /* Step 3: disc populations -- their mass returns to the annulus, their energy drives its outflow */
+    for(int i = 0; i < N_BINS; i++) {
+        const double energy = age_losses(g->DiscStarsAge[i], g->DiscStarsMetalsAge[i], k_now, ret, sn, inv_R_final,
+                                         run_params->Yield, &lost, &lost_z, &new_z, run_params);
+        if(lost <= 0.0) continue;
+        g->DiscStars[i] -= (float)lost;
+        g->DiscStarsMetals[i] -= (float)lost_z;
+        g->StellarMass -= lost;
+        g->MetalsStellarMass -= lost_z;
+        g->DiscGas[i] += (float)lost;
+        g->DiscGasMetals[i] += (float)(lost_z + new_z);
+        /* DarkSage skips the outflow when the returned mass is negligible (MIN_STARFORMATION) */
+        if(energy > 0.0 && lost > DS_MIN_RETURNED) {
+            energy_onto_hot += darksage_energy_feedback(p, centralgal, i, energy, galaxies, run_params);
+        }
+    }
+
+    /* Step 4: remaining energy ejects hot-phase gas */
+    darksage_hot_energy_ejection(p, centralgal, energy_onto_hot, galaxies, run_params);
+
+    double gas = 0.0, metals = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        if(g->DiscStars[i] < 0.0f) g->DiscStars[i] = 0.0f;
+        gas += g->DiscGas[i];
+        metals += g->DiscGasMetals[i];
+    }
+    g->ColdGas = gas;
+    g->MetalsColdGas = metals;
 }
 
 float darksage_age_mismatch(const struct GALAXY *g)

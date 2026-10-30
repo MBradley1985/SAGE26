@@ -37,6 +37,11 @@
     X(MetalsOutflowGas, 1, "Metals in the outflow gas.", "1.0e10 Msun/h") \
     X(AgeMismatch, 1, "Stellar mass whose age bins disagree with its component mass, as a fraction of StellarMass + ICS (diagnostic, should be ~0).", "Unitless") \
     X(ICSMeanRadius, 1, "Mass-weighted radius at which the intrahalo stars were deposited; sets their Hernquist profile.", "Mpc/h") \
+    X(FountainTime, 1, "Mass-weighted time left for the fountain gas to return to the hot phase.", "(Mpc/h)/(km/s)") \
+    X(OutflowTime, 1, "Mass-weighted time left for the outflowing gas to reach Rvir.", "(Mpc/h)/(km/s)") \
+    X(ReincTime, 1, "Mass-weighted time left for the ejected gas to fall back into the fountain.", "(Mpc/h)/(km/s)") \
+    X(OutflowSpecificEnergy, 1, "Specific energy of the outflowing gas.", "(km/s)^2") \
+    X(HotGasPotential, 1, "Mass-weighted potential of the hot (or CGM) gas.", "(km/s)^2") \
     X(SecularBulgeMass, 1, "Bulge mass built by annulus-0 disc instability.", "1.0e10 Msun/h") \
     X(VelDispBulge, 1, "Velocity dispersion of the secular bulge.", "km/s") \
     X(StellarDiscScaleRadius, 1, "Exponential scale radius fitted to the stellar annuli.", "Mpc/h") \

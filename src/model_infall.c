@@ -30,6 +30,7 @@
 #include "model_misc.h"
 #include "model_darksage_disc.h"
 #include "model_darksage_stellar_pop.h"
+#include "model_darksage_feedback.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -83,6 +84,10 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
         tot_BHMass += galaxies[i].BlackHoleMass;
         tot_coldMass += galaxies[i].ColdGas;
         tot_hotMass += galaxies[i].HotGas;
+        if(run_params->DarkSAGEMode == 1) {
+            /* DarkSage counts the fountain and outflowing gas as halo baryons (model_infall.c) */
+            tot_hotMass += galaxies[i].FountainGas + galaxies[i].OutflowGas;
+        }
         tot_ejected += galaxies[i].EjectedMass;
         tot_ejectedMetals += galaxies[i].MetalsEjectedMass;
         tot_ICS += galaxies[i].ICS;
@@ -93,6 +98,17 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
         if(i != centralgal) {
             // satellite ejected gas goes to central ejected reservior
             galaxies[i].EjectedMass = galaxies[i].MetalsEjectedMass = 0.0;
+
+            // DarkSAGEMode: a satellite's fountain and outflowing gas are inside the central's
+            // halo, so they join the central's fountain (DarkSage reincorporate_gas())
+            if(run_params->DarkSAGEMode == 1) {
+                darksage_add_to_fountain(centralgal, galaxies[i].FountainGas + galaxies[i].OutflowGas,
+                                         galaxies[i].MetalsFountainGas + galaxies[i].MetalsOutflowGas,
+                                         galaxies, run_params);
+                galaxies[i].FountainGas = galaxies[i].MetalsFountainGas = 0.0f;
+                galaxies[i].OutflowGas = galaxies[i].MetalsOutflowGas = 0.0f;
+                galaxies[i].FountainTime = galaxies[i].OutflowTime = 0.0f;
+            }
 
             // satellite ICS (and its assembly history) goes to central
             // if the satellite carried ICS it was a former group central

@@ -167,6 +167,23 @@ double darksage_satellite_radius(const struct GALAXY *c, const struct GALAXY *s,
     return sqrt(r2) * run_params->AA[s->SnapNum];
 }
 
+/*
+ * NFW potential at radius r [code units], normalised to Mvir within Rvir.
+ * At r = 0 it returns the finite central value -G Mvir / (r_s norm).
+ */
+double darksage_nfw_potential(const int p, const double r, const struct GALAXY *galaxies, const struct params *run_params)
+{
+    const double rs = galaxies[p].HaloScaleRadius;
+    if(r < 0.0 || rs <= 0.0) return 0.0;
+
+    const double c = galaxies[p].Rvir / rs;
+    const double norm = log(1.0 + c) - c / (1.0 + c);
+    if(norm <= 0.0) return 0.0;
+
+    if(r == 0.0) return -run_params->G * galaxies[p].Mvir / (rs * norm);
+    return -run_params->G * galaxies[p].Mvir / r * log(1.0 + r / rs) / norm;
+}
+
 /* Linear interpolation of y(x) on the valid part of a grid with increasing x */
 static double grid_interp(const double *x, const double *y, const int first, const double xv)
 {
@@ -219,6 +236,7 @@ static void update_rotation_support_scale_radius(const int p, struct GALAXY *gal
  *      j = V_rot r.  If the outermost j is below j_max, the radius grows x10.
  *      The potential is integrated inwards with dPhi/dr = V_circ^2 / r.
  *   4. Annulus edges at j = DiscBinEdge[i] and their potentials.
+ *   5. The hot gas's mass-weighted potential and the potential at Rvir.
  */
 void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_data *halos,
                        const struct params *run_params)
@@ -341,6 +359,22 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
         g->Potential[k] = (float)grid_interp(gr_r, gr_phi, first, g->DiscRadii[k]);
     }
     g->Potential[0] = (float)gr_phi[first];
+
+    /* Step 5: the hot gas's mass-weighted potential (beta profile) and the potential at Rvir
+     * that ejected gas must climb to -- the energetics of SupernovaRecipeOn 2 */
+    double pot = 0.0, mass = 0.0;
+    for(int k = first; k < N_RC_GRID - 1; k++) {
+        double x0 = gr_r[k] / Rvir, x1 = gr_r[k+1] / Rvir;
+        if(x0 >= 1.0) break;
+        if(x1 > 1.0) x1 = 1.0;
+        const double dm = (x1 - c_beta * atan(x1 / c_beta)) - (x0 - c_beta * atan(x0 / c_beta));
+        const double phi_mid = 0.5 * (gr_phi[k] + gr_phi[k+1]);
+        pot += ((phi_mid < 0.0) ? phi_mid : 0.0) * dm;
+        mass += dm;
+    }
+    if(mass > 0.0) g->HotGasPotential = (float)(pot / mass);
+    const double phi_rvir = grid_interp(gr_r, gr_phi, first, Rvir);
+    g->EjectedPotential = (float)((phi_rvir > 0.9999 * g->HotGasPotential) ? phi_rvir : 0.9999 * g->HotGasPotential);
 }
 
 /* ---------------------------------------------------------------------------

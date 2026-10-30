@@ -23,6 +23,7 @@
 #include "model_darksage_instability.h"
 #include "model_darksage_disc.h"
 #include "model_darksage_stellar_pop.h"
+#include "model_darksage_feedback.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -1212,10 +1213,16 @@ static void darksage_combine_stellar_discs(const int p, const double new_stars[N
  *   - ColdGas == sum(DiscGas), MetalsColdGas == sum(DiscGasMetals) on exit.
  */
 static void darksage_form_stars(const int p, const int centralgal, const double stars_bin[N_BINS],
-                                const double dt, const int step, const int ffb,
+                                const double *max_consume, const double dt, const int step, const int ffb,
                                 struct GALAXY *galaxies, const struct params *run_params)
 {
-    const double R = run_params->RecycleFraction;
+    /* Return fraction of the stars formed now: SAGE26's instantaneous RecycleFraction, or, with
+     * DarkSage's feedback (SupernovaRecipeOn == 2), the mass returned within half the current age
+     * bin, the rest following through darksage_delayed_feedback() */
+    double inst[2] = {run_params->RecycleFraction, 0.0};
+    const int ds_feedback = (run_params->SupernovaRecipeOn == 2);
+    if(ds_feedback) darksage_instant_return_and_sn(galaxies[p].AgeBinNow, run_params, inst);
+    const double R = inst[0];
     const float h = run_params->Hubble_h;
     double fire_scaling;
     const double eta = sn_reheat_loading(p, &fire_scaling, galaxies, run_params);
@@ -1227,12 +1234,58 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
     /* Step 1: star formation, reheating and yields in each annulus */
     double new_stars[N_BINS], new_stars_metals[N_BINS];
     double stars_sum = 0.0, new_stars_sum = 0.0, new_metals_sum = 0.0;
-    double reheated_sum = 0.0, reheated_metals = 0.0, metals_leaving_disk = 0.0;
+    double reheated_sum = 0.0, reheated_metals = 0.0, removed_sum = 0.0, metals_leaving_disk = 0.0;
     for(int i = 0; i < N_BINS; i++) {
         new_stars[i] = new_stars_metals[i] = 0.0;
         const double gas = galaxies[p].DiscGas[i];
         double stars = stars_bin[i];
         if(gas <= 0.0 || stars <= 0.0) continue;
+
+        if(ds_feedback) {
+            /* DarkSage's energy-driven feedback: the SN energy sets the reheated (fountain) and
+             * ejected (outflow) masses, which leave at 10% of the annulus metallicity */
+            double reheated, ejected, eject_e;
+            const double cap = (max_consume != NULL && max_consume[i] < gas) ? max_consume[i] : gas;
+            darksage_feedback_masses(p, centralgal, i, ffb, cap, &stars, &reheated, &ejected, &eject_e, galaxies, run_params);
+            const double removed = reheated + ejected;
+            const double Z = galaxies[p].DiscGasMetals[i] / gas;
+            new_stars[i] = (1.0 - R) * stars;
+            new_stars_metals[i] = Z * new_stars[i];
+            galaxies[p].DiscGas[i] -= new_stars[i] + removed;
+            galaxies[p].DiscGasMetals[i] -= new_stars_metals[i];
+            /* metals carried out: never so few that the annulus keeps more metals than gas
+             * (DarkSage update_from_feedback()) */
+            double Z_out = darksage_outflow_metallicity(Z, run_params);
+            if(removed > 0.0) {
+                const double Z_min = (galaxies[p].DiscGasMetals[i] - galaxies[p].DiscGas[i]) / removed;
+                if(Z_out < Z_min) Z_out = Z_min;
+            }
+            galaxies[p].DiscGasMetals[i] -= Z_out * removed;
+            darksage_add_to_fountain(centralgal, reheated, Z_out * reheated, galaxies, run_params);
+            darksage_add_to_outflow(centralgal, ejected, Z_out * ejected, eject_e, galaxies);
+            if(galaxies[p].DiscGas[i] < 0.0f) galaxies[p].DiscGas[i] = 0.0f;
+            if(galaxies[p].DiscGasMetals[i] < 0.0f) galaxies[p].DiscGasMetals[i] = 0.0f;
+
+            /* SNII yield of the stars returned now, Yield stars (1 - Z) R / FinalRecycleFraction (DarkSage) */
+            const double yield = run_params->Yield * stars * (1.0 - Z) * R / run_params->FinalRecycleFraction;
+            if(galaxies[p].DiscGas[i] > 0.0f) {
+                galaxies[p].DiscGasMetals[i] += (1.0 - FracZleaveDiskVal) * yield;
+                metals_leaving_disk += FracZleaveDiskVal * yield;
+                /* a nearly emptied annulus cannot hold more metals than gas: the excess leaves */
+                if(galaxies[p].DiscGasMetals[i] > galaxies[p].DiscGas[i]) {
+                    metals_leaving_disk += galaxies[p].DiscGasMetals[i] - galaxies[p].DiscGas[i];
+                    galaxies[p].DiscGasMetals[i] = galaxies[p].DiscGas[i];
+                }
+            } else {
+                metals_leaving_disk += yield;
+            }
+            if(dt > 0.0) galaxies[p].DiscSFR[i] += (float)(stars / dt);
+            stars_sum += stars;
+            new_stars_sum += new_stars[i];
+            new_metals_sum += new_stars_metals[i];
+            removed_sum += removed;
+            continue;
+        }
 
         if(stars > gas) stars = gas;
         double reheated = eta * stars;
@@ -1298,7 +1351,9 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
         }
     }
 
-    /* Step 4: reheated gas and hot-gas ejection go to the reservoirs */
+    /* Step 4: reheated gas and hot-gas ejection go to the reservoirs (SupernovaRecipeOn 2 has
+     * sent them to the fountain and outflow above) */
+    if(ds_feedback) galaxies[p].OutflowRate += removed_sum;
     if(run_params->SupernovaRecipeOn == 1) {
         const double ejected = sn_ejected_mass(p, stars_sum, &reheated_sum, fire_scaling, galaxies, run_params);
         const double Z_reheat = (reheated_sum > 0.0) ? reheated_metals / reheated_sum : 0.0;
@@ -1360,7 +1415,7 @@ static void starformation_ffb_darksage(const int p, const int centralgal, const 
         stars_bin[i] = run_params->EnhancedSFEfficiency * galaxies[p].DiscGas[i] / tdyn * dt;
     }
     galaxies[p].H2gas = 0.0f;
-    darksage_form_stars(p, centralgal, stars_bin, dt, step, 1, galaxies, run_params);
+    darksage_form_stars(p, centralgal, stars_bin, NULL, dt, step, 1, galaxies, run_params);
 }
 
 /*
@@ -1385,7 +1440,7 @@ static void starformation_and_feedback_darksage(const int p, const int centralga
     darksage_star_formation_rate(p, sfr_bin, galaxies, run_params);
     for(int i = 0; i < N_BINS; i++) stars_bin[i] = sfr_bin[i] * dt;
 
-    darksage_form_stars(p, centralgal, stars_bin, dt, step, 0, galaxies, run_params);
+    darksage_form_stars(p, centralgal, stars_bin, NULL, dt, step, 0, galaxies, run_params);
 }
 
 /*
@@ -1557,9 +1612,11 @@ void darksage_instability_burst(const int p, const int centralgal, const int i, 
 {
     if(stars <= 0.0 || dt <= 0.0) return;
 
-    double stars_bin[N_BINS] = {0.0};
+    double stars_bin[N_BINS] = {0.0}, cap[N_BINS];
+    for(int k = 0; k < N_BINS; k++) cap[k] = galaxies[p].DiscGas[k];
     stars_bin[i] = stars;
-    darksage_form_stars(p, centralgal, stars_bin, dt, step, 0, galaxies, run_params);
+    cap[i] = stars / (1.0 - run_params->RecycleFraction);   /* SupernovaRecipeOn 2: stars + feedback use at most the unstable gas */
+    darksage_form_stars(p, centralgal, stars_bin, cap, dt, step, 0, galaxies, run_params);
 }
 
 /*

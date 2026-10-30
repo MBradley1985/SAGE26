@@ -15,6 +15,8 @@ extern "C" {
     /* functions in model_darksage_disc.c */
     extern void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_data *halos,
                                   const struct params *run_params);
+    extern double darksage_nfw_potential(const int p, const double r, const struct GALAXY *galaxies,
+                                         const struct params *run_params);
     extern double darksage_ics_scale_radius(const double Rvir, const double R_av);
     extern void darksage_add_ics_radius(struct GALAXY *c, const double m, const double r);
     extern double darksage_satellite_mass(const struct GALAXY *s);

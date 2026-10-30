@@ -248,6 +248,12 @@ struct GALAXY
     float c_beta;                    /* Beta profile parameter for hot gas (init to 0.1) */
 
     /* FountainGas/OutflowGas reservoirs (only used when DarkSAGEOn=1 for hot-regime haloes) */
+    float OutflowSpecificEnergy;     /* Specific energy of the outflowing gas [(km/s)^2] (SupernovaRecipeOn 2) */
+    float EjectedSpecificEnergy;     /* Specific energy of the ejected gas at turnaround [(km/s)^2] */
+    float ReincTime;                 /* Time for ejected gas to fall back into the fountain */
+    float HotGasPotential;           /* Mass-weighted potential of the hot (or CGM) gas [(km/s)^2] */
+    float EjectedPotential;          /* Potential at Rvir, reached by ejected gas [(km/s)^2] */
+    float prevRvir;                  /* Rvir at the previous snapshot [Mpc/h] */
     float FountainGas;               /* Gas leaving disc but not halo */
     float MetalsFountainGas;         /* Metals in fountain gas */
     float OutflowGas;                /* Higher energy gas escaping beyond Rvir */
