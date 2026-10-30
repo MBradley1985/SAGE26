@@ -28,6 +28,7 @@
 
 #include "model_infall.h"
 #include "model_misc.h"
+#include "model_darksage_disc.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -68,6 +69,7 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
 {
     double tot_stellarMass, tot_BHMass, tot_coldMass, tot_hotMass, tot_ejected, tot_ICS;
     double tot_ejectedMetals, tot_ICSMetals;
+    double ics_mr = 0.0;   /* DarkSAGEMode: sum of mass x radius of the satellites' ICS */
     double infallingMass, reionization_modifier;
     double tot_CGMgas, tot_MetalsCGMgas;
 
@@ -105,6 +107,11 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
                 galaxies[i].ICS_disrupt = 0.0;
                 galaxies[i].ICS_accrete = 0.0;
                 galaxies[i].ICS_sum_mt = 0.0;
+            }
+            if(run_params->DarkSAGEMode == 1) {
+                /* deposited at the satellite's radius (DarkSage strip_from_satellite()) */
+                ics_mr += galaxies[i].ICS * darksage_satellite_radius(&galaxies[centralgal], &galaxies[i], run_params);
+                galaxies[i].ICSMeanRadius = 0.0f;
             }
             galaxies[i].ICS = galaxies[i].MetalsICS = 0.0;
 
@@ -194,6 +201,9 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
     }
 
     // the central galaxy keeps all the ICS (mostly for numerical convenience)
+    if(run_params->DarkSAGEMode == 1 && tot_ICS > 0.0) {
+        galaxies[centralgal].ICSMeanRadius = (float)((galaxies[centralgal].ICSMeanRadius * galaxies[centralgal].ICS + ics_mr) / tot_ICS);
+    }
     galaxies[centralgal].ICS = tot_ICS;
     galaxies[centralgal].MetalsICS = tot_ICSMetals;
 

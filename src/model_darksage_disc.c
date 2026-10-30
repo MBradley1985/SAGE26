@@ -9,7 +9,8 @@
  *     black hole), concentration from SAGE26's ConcentrationOn when set,
  *     otherwise Dutton & Maccio (2014) with the Di Cintio et al. (2014)
  *     baryonic modification;
- *   - Hernquist instability- and merger-driven bulges (SAGE26's bulge radii);
+ *   - Hernquist instability- and merger-driven bulges (SAGE26's bulge radii)
+ *     and intrahalo stars;
  *   - the black hole as a point mass;
  *   - exponential stellar and gas discs;
  *   - a beta-profile hot halo (hot / CGM, fountain and outflowing gas);
@@ -19,9 +20,11 @@
  * inwards, gives Potential[] at the edges.  Galaxies with no disc (B/T >= 1)
  * keep their last radii, as in DarkSage.
  *
- * Deviations from the source: the grid is interpolated linearly (DarkSage uses
- * a cubic spline); intrahalo stars follow the halo's NFW profile (DarkSage
- * gives them their own Hernquist profile).
+ * The intrahalo stars follow a Hernquist profile whose mass-weighted radius is
+ * ICSMeanRadius (DarkSage R_ICS_av, get_a_ICS()).
+ *
+ * Deviation from the source: the grid is interpolated linearly (DarkSage uses
+ * a cubic spline).
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -106,6 +109,62 @@ static double hernquist_a_from_half_mass(const double r_half, const double Rvir)
     return r_half / (1.0 + M_SQRT2);
 }
 
+/* DarkSage cap on the intrahalo stars' mean radius, in Rvir: the limit of a truncated
+ * Hernquist sphere of arbitrarily large scale length */
+static const double ICS_MAX_MEAN_RADIUS = 0.66;
+
+/*
+ * Hernquist scale length of the intrahalo stars (DarkSage get_a_ICS()): the a whose
+ * truncated (r < Rvir) profile has mass-weighted mean radius R_av, i.e. in units of Rvir
+ *   R_av = a (2 (a+1)^2 ln(1/a + 1) - 2a - 3),
+ * solved by bisection to 0.1 per cent.
+ */
+double darksage_ics_scale_radius(const double Rvir, const double R_av)
+{
+    if(Rvir <= 0.0 || R_av <= 0.0) return 0.0;
+    double target = R_av / Rvir;
+    if(target > ICS_MAX_MEAN_RADIUS) target = ICS_MAX_MEAN_RADIUS;
+
+    double left = 0.0, right = 100.0, a = 0.0;
+    for(int i = 0; i < 100; i++) {
+        a = 0.5 * (left + right);
+        const double R = a * (2.0 * (a + 1.0) * (a + 1.0) * log(1.0 / a + 1.0) - 2.0 * a - 3.0);
+        if(fabs(R - target) <= 1e-3 * target) break;
+        if(R < target) left = a;
+        else right = a;
+    }
+    return a * Rvir;
+}
+
+/* Add stars of mass m deposited at radius r to central c's intrahalo stars' mean radius;
+ * call before c->ICS grows (DarkSage model_infall.c, model_mergers.c) */
+void darksage_add_ics_radius(struct GALAXY *c, const double m, const double r)
+{
+    const double total = c->ICS + m;
+    if(total > 0.0) c->ICSMeanRadius = (float)((c->ICSMeanRadius * c->ICS + r * m) / total);
+}
+
+/* Satellite mass: Mvir, but never below its baryons (DarkSage get_satellite_mass()) */
+double darksage_satellite_mass(const struct GALAXY *s)
+{
+    const double baryons = s->StellarMass + s->ColdGas + s->HotGas + s->CGMgas + s->BlackHoleMass + s->EjectedMass
+                           + s->FountainGas + s->OutflowGas + s->ICS;
+    return (s->Mvir > baryons) ? s->Mvir : baryons;
+}
+
+/* Physical distance between galaxies s and c (comoving positions, periodic box) */
+double darksage_satellite_radius(const struct GALAXY *c, const struct GALAXY *s, const struct params *run_params)
+{
+    double r2 = 0.0;
+    for(int k = 0; k < 3; k++) {
+        double dx = s->Pos[k] - c->Pos[k];
+        if(dx > 0.5 * run_params->BoxSize) dx -= run_params->BoxSize;
+        if(dx < -0.5 * run_params->BoxSize) dx += run_params->BoxSize;
+        r2 += dx * dx;
+    }
+    return sqrt(r2) * run_params->AA[s->SnapNum];
+}
+
 /* Linear interpolation of y(x) on the valid part of a grid with increasing x */
 static double grid_interp(const double *x, const double *y, const int first, const double xv)
 {
@@ -153,8 +212,8 @@ static void update_rotation_support_scale_radius(const int p, struct GALAXY *gal
  *   1. Disc scale radii and the rotation-support scale radius from the annuli.
  *   2. Halo: the dark matter left after the baryons, NFW; c_beta(z) of the hot halo.
  *   3. If the galaxy has a disc (B/T < 1), build the grid inwards from
- *      max(10 j_max / Vvir, Rvir): enclosed spherical mass (halo, bulges, hot
- *      gas, black hole), the two discs, V_rot^2 = f_support V_circ^2 and
+ *      max(10 j_max / Vvir, Rvir): enclosed spherical mass (halo, bulges,
+ *      intrahalo stars, hot gas, black hole), the two discs, V_rot^2 = f_support V_circ^2 and
  *      j = V_rot r.  If the outermost j is below j_max, the radius grows x10.
  *      The potential is integrated inwards with dPhi/dr = V_circ^2 / r.
  *   4. Annulus edges at j = DiscBinEdge[i] and their potentials.
@@ -183,7 +242,7 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
 
     /* Step 2: halo and hot gas */
     const double M_hot_total = g->HotGas + g->CGMgas + g->FountainGas + g->OutflowGas;
-    double M_DM = g->Mvir - (M_hot_total + g->ColdGas + g->StellarMass + g->BlackHoleMass);
+    double M_DM = g->Mvir - (M_hot_total + g->ColdGas + g->StellarMass + g->BlackHoleMass + g->ICS);
     if(M_DM < 0.0) M_DM = 0.0;
 
     double conc;
@@ -217,6 +276,9 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     const double a_CB = hernquist_a_from_half_mass((g->MergerBulgeRadius > 0.0f) ? g->MergerBulgeRadius : g->BulgeRadius, Rvir);
     const double M_SB_inf = g->InstabilityBulgeMass * ((Rvir + a_SB) / Rvir) * ((Rvir + a_SB) / Rvir);
     const double M_CB_inf = g->MergerBulgeMass * ((Rvir + a_CB) / Rvir) * ((Rvir + a_CB) / Rvir);
+    if(g->ICSMeanRadius > ICS_MAX_MEAN_RADIUS * Rvir) g->ICSMeanRadius = (float)(ICS_MAX_MEAN_RADIUS * Rvir);
+    const double a_ICS = darksage_ics_scale_radius(Rvir, g->ICSMeanRadius);
+    const double M_ICS_inf = g->ICS * ((Rvir + a_ICS) / Rvir) * ((Rvir + a_ICS) / Rvir);
 
     double a_sdisc = g->StellarDiscScaleRadius, a_gdisc = g->GasDiscScaleRadius;
     if(a_sdisc <= 0.0) a_sdisc = g->DiskScaleRadius;
@@ -238,6 +300,7 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
         double M_int = rho_norm * (log(1.0 + rrat) - rrat / (1.0 + rrat));
         if(M_int < 0.0) M_int = 0.0;
         M_int += M_SB_inf * (r / (r + a_SB)) * (r / (r + a_SB)) + M_CB_inf * (r / (r + a_CB)) * (r / (r + a_CB));
+        M_int += M_ICS_inf * (r / (r + a_ICS)) * (r / (r + a_ICS));
         M_int += hot_norm * (x - c_beta * atan(x / c_beta)) + g->BlackHoleMass;
         double v2 = G * M_int / r;
         if(DiscStars > 0.0 && a_sdisc > 0.0) v2 += G * DiscStars / Rvir * v2_disc_cterm(x, Rvir / a_sdisc);

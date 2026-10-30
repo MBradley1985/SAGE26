@@ -187,6 +187,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].FountainGas = galaxies[p].MetalsFountainGas = 0.0f;
     galaxies[p].OutflowGas = galaxies[p].MetalsOutflowGas = 0.0f;
     galaxies[p].FountainTime = galaxies[p].OutflowTime = 0.0f;
+    galaxies[p].ICSMeanRadius = 0.0f;
     for(int i = 0; i < N_BINS; i++) {
         galaxies[p].DiscGas[i] = galaxies[p].DiscGasMetals[i] = 0.0f;
         galaxies[p].DiscStars[i] = galaxies[p].DiscStarsMetals[i] = 0.0f;
