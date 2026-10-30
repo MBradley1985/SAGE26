@@ -1,10 +1,27 @@
 /*
  * model_darksage_disc.c -- disc annulus radii from the rotation curve (DarkSAGEMode == 1).
  *
- * Each j-bin edge j_i is mapped to the radius r_i solving j_i = r_i V_circ(r_i),
- * with V_circ from an NFW halo (Dutton & Maccio 2014 concentration), a
- * Hernquist bulge, exponential stellar and gas discs and a beta-profile hot
- * halo (Stevens, Croton & Mutch 2016).  Radii are capped at the current Rvir.
+ * Follows DarkSage's update_disc_radii() (model_misc.c; Stevens, Croton &
+ * Mutch 2016 Sec. 3.2; Stevens et al. 2024 Sec. 4).  The rotation curve is
+ * built on a 51-point radial grid, spaced by ExponentBin inwards from
+ * max(10 j_max / Vvir, Rvir), from
+ *   - an NFW halo (the dark matter left after the disc, bulge, hot gas and
+ *     black hole), concentration from SAGE26's ConcentrationOn when set,
+ *     otherwise Dutton & Maccio (2014) with the Di Cintio et al. (2014)
+ *     baryonic modification;
+ *   - Hernquist instability- and merger-driven bulges (SAGE26's bulge radii);
+ *   - the black hole as a point mass;
+ *   - exponential stellar and gas discs;
+ *   - a beta-profile hot halo (hot / CGM, fountain and outflowing gas);
+ * with only the fraction f_support = 1 - exp(-r / RotSupportScaleRadius) of
+ * the support in rotation: V_rot^2 = f_support V_circ^2, j = V_rot r.  Annulus
+ * edge i sits at the radius where j = DiscBinEdge[i]; the potential, integrated
+ * inwards, gives Potential[] at the edges.  Galaxies with no disc (B/T >= 1)
+ * keep their last radii, as in DarkSage.
+ *
+ * Deviations from the source: the grid is interpolated linearly (DarkSage uses
+ * a cubic spline); intrahalo stars follow the halo's NFW profile (DarkSage
+ * gives them their own Hernquist profile).
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -18,9 +35,24 @@
 #include "model_darksage_disc.h"
 #include "model_halo_properties.h"
 
-/* Mass-percentile radii of an exponential disc, as multiples of the scale length's fit */
-static const double PERCENT_VALUES[9]     = {0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
-static const double PERCENT_CONVERSION[9] = {0.3567, 0.4214, 0.4765, 0.5268, 0.5752, 0.6244, 0.6785, 0.7491, 0.8684};
+/* Radial grid of the rotation curve (DarkSage NUM_R_BINS) */
+#define N_RC_GRID 51
+/* Innermost grid radius relative to the halo scale radius (DarkSage's rrat cut) */
+static const double RC_MIN_RRAT = 1.0e-8;
+/* Times the outermost grid radius may grow x10 to reach the largest j-bin edge */
+static const int RC_MAX_GROW = 10;
+/* Floor on the rotation-support fraction (DarkSage) */
+static const double F_SUPPORT_MIN = 1.0e-5;
+/* DarkSage minimum core radius of the hot-gas beta profile (MIN_C_BETA) */
+static const double DS_MIN_C_BETA = 0.05;
+/* DarkSage cold-gas velocity dispersion 11 + 11.3 z km/s [cm/s] */
+static const double DS_CS0_CGS = 1.1e6;
+static const double DS_CS1_CGS = 1.13e6;
+
+/* An exponential disc encloses 10%, 20%, ..., 90% of its mass within PERCENT_RADIUS
+ * scale lengths, so r_d = r_x / PERCENT_RADIUS (DarkSage main.c DiscScalePercentConversion) */
+static const double PERCENT_VALUES[9] = {0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
+static const double PERCENT_RADIUS[9] = {0.531812, 0.824388, 1.09735, 1.37642, 1.67835, 2.02231, 2.43922, 2.99431, 3.88927};
 
 /* Exponential-disc contribution to V_circ^2 (dimensionless); x = r/r_d, c = Rvir/r_d */
 static inline double v2_disc_cterm(const double x, const double c)
@@ -30,58 +62,66 @@ static inline double v2_disc_cterm(const double x, const double c)
     return (c + 4.8 * c * exp(-0.35 * cx - 3.5 * inv_cx)) / (cx + inv_cx * inv_cx + 2.0 * sqrt(inv_cx));
 }
 
-static double NFW_potential(const int p, const double r, const struct GALAXY *galaxies, const struct params *run_params)
-{
-    const double rs = galaxies[p].HaloScaleRadius;
-    if(r <= 0.0 || rs <= 0.0) return 0.0;
-
-    const double c = galaxies[p].Rvir / rs;
-    const double norm = log(1.0 + c) - c / (1.0 + c);
-    if(norm <= 0.0) return 0.0;
-
-    return -run_params->G * galaxies[p].Mvir / r * log(1.0 + r / rs) / norm;
-}
-
-/* Scale length from the radii enclosing 10..90% of an annulus mass distribution */
-static double disc_scaleradius(const int p, const float mass[N_BINS], const struct GALAXY *galaxies)
+/*
+ * Exponential scale length of an annulus mass distribution (DarkSage
+ * update_stellardisc_scaleradius()): the mean over x = 10%, ..., 90% of
+ * r_x / PERCENT_RADIUS[x], r_x interpolated from the cumulative mass.  An empty
+ * disc keeps its current value (the disc scale radius if it has none).
+ */
+static double disc_scaleradius(const float mass[N_BINS], const double current, const struct GALAXY *g)
 {
     double total = 0.0;
     for(int i = 0; i < N_BINS; i++) total += mass[i];
-    if(total <= 0.0) return galaxies[p].DiskScaleRadius;
+    if(total <= 0.0) return (current > 0.0) ? current : g->DiskScaleRadius;
 
     double cum[N_BINS + 1];
     cum[0] = 0.0;
     for(int i = 0; i < N_BINS; i++) cum[i+1] = cum[i] + mass[i] / total;
 
     double Rscale_sum = 0.0;
-    int n_found = 0, i_min = 1;
+    int i_min = 1;
     for(int j = 0; j < 9; j++) {
         for(int i = i_min; i < N_BINS + 1; i++) {
             if(cum[i] >= PERCENT_VALUES[j]) {
                 const double dcum = cum[i] - cum[i-1];
                 if(dcum > 0.0) {
-                    const double r = (galaxies[p].DiscRadii[i] * (PERCENT_VALUES[j] - cum[i-1])
-                                      + galaxies[p].DiscRadii[i-1] * (cum[i] - PERCENT_VALUES[j])) / dcum;
-                    Rscale_sum += r * PERCENT_CONVERSION[j];
-                    n_found++;
+                    const double r = (g->DiscRadii[i] * (PERCENT_VALUES[j] - cum[i-1])
+                                      + g->DiscRadii[i-1] * (cum[i] - PERCENT_VALUES[j])) / dcum;
+                    Rscale_sum += r / PERCENT_RADIUS[j];
                 }
                 i_min = i;
                 break;
             }
         }
     }
-
-    double rs = (n_found > 0) ? Rscale_sum / n_found : galaxies[p].DiskScaleRadius;
-    /* Floor at 1% of Rvir */
-    if(galaxies[p].Rvir > 0.0 && rs < 0.01 * galaxies[p].Rvir) rs = 0.01 * galaxies[p].Rvir;
-    return rs;
+    const double rs = Rscale_sum / 9.0;
+    return (rs > 0.0) ? rs : g->DiskScaleRadius;
 }
 
-/* Radius where rotational support f_rot = v/sqrt(v^2 + sigma^2) reaches 0.5, as an exponential scale */
+/* Hernquist scale length a whose mass within Rvir is half inside r_half */
+static double hernquist_a_from_half_mass(const double r_half, const double Rvir)
+{
+    if(r_half <= 0.0) return 0.0;
+    if(Rvir > M_SQRT2 * r_half) return r_half * Rvir * (M_SQRT2 - 1.0) / (Rvir - M_SQRT2 * r_half);
+    return r_half / (1.0 + M_SQRT2);
+}
+
+/* Linear interpolation of y(x) on the valid part of a grid with increasing x */
+static double grid_interp(const double *x, const double *y, const int first, const double xv)
+{
+    if(xv <= x[first]) return y[first];
+    for(int k = first + 1; k < N_RC_GRID; k++) {
+        if(xv <= x[k]) return y[k-1] + (y[k] - y[k-1]) * (xv - x[k-1]) / (x[k] - x[k-1]);
+    }
+    return y[N_RC_GRID - 1];
+}
+
+/* Radius where rotational support f_rot = v / sqrt(v^2 + sigma^2) reaches 0.5, as an exponential
+ * scale (DarkSage update_rotation_support_scale_radius()); gas-only annuli use the cold-gas dispersion */
 static void update_rotation_support_scale_radius(const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
     double rad_old = 0.0, f_rot_old = 0.0;
-    const double default_sigma = 8.0e5 / run_params->UnitVelocity_in_cm_per_s;   /* 8 km/s */
+    const double sigma_gas = (DS_CS0_CGS + DS_CS1_CGS * run_params->ZZ[galaxies[p].SnapNum]) / run_params->UnitVelocity_in_cm_per_s;
 
     for(int i = 0; i < N_BINS; i++) {
         const double r_in = galaxies[p].DiscRadii[i];
@@ -90,11 +130,10 @@ static void update_rotation_support_scale_radius(const int p, struct GALAXY *gal
         if(rad <= 0.0) continue;
 
         const double v_circ = 0.5 * (run_params->DiscBinEdge[i] + run_params->DiscBinEdge[i+1]) / rad;
-        const double sigma = (galaxies[p].DiscStars[i] > 0.0) ? galaxies[p].VelDispStars[i] : default_sigma;
-        const double v2_tot = v_circ * v_circ + sigma * sigma;
-        const double f_rot = (v2_tot > 0.0) ? v_circ / sqrt(v2_tot) : 0.0;
+        const double sigma = (galaxies[p].DiscStars[i] > 0.0) ? galaxies[p].VelDispStars[i] : sigma_gas;
+        const double f_rot = v_circ / sqrt(v_circ * v_circ + sigma * sigma);
 
-        if(f_rot >= 0.5 && f_rot > f_rot_old && rad > rad_old) {
+        if(f_rot >= 0.5 && f_rot > f_rot_old) {
             const double rad_50 = rad - (f_rot - 0.5) / (f_rot - f_rot_old) * (rad - rad_old);
             galaxies[p].RotSupportScaleRadius = rad_50 * 1.442695;   /* -1/ln(0.5) */
             return;
@@ -107,129 +146,133 @@ static void update_rotation_support_scale_radius(const int p, struct GALAXY *gal
         ? -rad_old / log(1.0 - f_rot_old) : galaxies[p].DiskScaleRadius;
 }
 
-/* Strictly increasing radii, capped at Rvir_cap */
-static void enforce_monotonic_radii(const int p, const double Rvir_cap, struct GALAXY *galaxies)
-{
-    const double dr_min = 0.001 * Rvir_cap;
-    for(int i = 1; i < N_BINS + 1; i++) {
-        if(galaxies[p].DiscRadii[i] <= galaxies[p].DiscRadii[i-1]) {
-            galaxies[p].DiscRadii[i] = galaxies[p].DiscRadii[i-1] + dr_min;
-        }
-        if(galaxies[p].DiscRadii[i] > Rvir_cap) galaxies[p].DiscRadii[i] = Rvir_cap;
-    }
-}
-
+/*
+ * update_disc_radii -- annulus radii and potentials of galaxy p from its rotation curve.
+ *
+ * Algorithm:
+ *   1. Disc scale radii and the rotation-support scale radius from the annuli.
+ *   2. Halo: the dark matter left after the baryons, NFW; c_beta(z) of the hot halo.
+ *   3. If the galaxy has a disc (B/T < 1), build the grid inwards from
+ *      max(10 j_max / Vvir, Rvir): enclosed spherical mass (halo, bulges, hot
+ *      gas, black hole), the two discs, V_rot^2 = f_support V_circ^2 and
+ *      j = V_rot r.  If the outermost j is below j_max, the radius grows x10.
+ *      The potential is integrated inwards with dPhi/dr = V_circ^2 / r.
+ *   4. Annulus edges at j = DiscBinEdge[i] and their potentials.
+ */
 void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_data *halos,
                        const struct params *run_params)
 {
-    if(galaxies[p].Vvir <= 0.0 || galaxies[p].Rvir <= 0.0) return;
+    struct GALAXY *g = &galaxies[p];
+    (void)halos;
+    if(g->Vvir <= 0.0 || g->Rvir <= 0.0 || g->Mvir <= 0.0) return;
 
-    /* Current (possibly stripped) virial radius; orphans keep their last Rvir */
-    double current_Rvir = get_virial_radius(galaxies[p].HaloNr, halos, run_params);
-    if(galaxies[p].Type == 2 || current_Rvir <= 0.0) current_Rvir = galaxies[p].Rvir;
-
-    const double Rvir = galaxies[p].Rvir;
-    const double Vvir = galaxies[p].Vvir;
+    const double Rvir = g->Rvir;
     const double G = run_params->G;
+    const double z = run_params->ZZ[g->SnapNum];
 
-    galaxies[p].StellarDiscScaleRadius = disc_scaleradius(p, galaxies[p].DiscStars, galaxies);
-    galaxies[p].GasDiscScaleRadius = disc_scaleradius(p, galaxies[p].DiscGas, galaxies);
+    /* Step 1: disc and rotation-support scale radii */
+    g->StellarDiscScaleRadius = (float)disc_scaleradius(g->DiscStars, g->StellarDiscScaleRadius, g);
+    g->GasDiscScaleRadius = (float)disc_scaleradius(g->DiscGas, g->GasDiscScaleRadius, g);
     update_rotation_support_scale_radius(p, galaxies, run_params);
 
     double DiscStars = 0.0, DiscGas = 0.0;
     for(int i = 0; i < N_BINS; i++) {
-        DiscStars += galaxies[p].DiscStars[i];
-        DiscGas += galaxies[p].DiscGas[i];
+        DiscStars += g->DiscStars[i];
+        DiscGas += g->DiscGas[i];
     }
 
-    /* Hot-phase mass for the beta profile: whichever halo reservoir is in use plus the fountain/outflow gas */
-    const double M_hot_total = galaxies[p].HotGas + galaxies[p].CGMgas + galaxies[p].FountainGas + galaxies[p].OutflowGas;
-
-    double M_DM = galaxies[p].Mvir - (M_hot_total + galaxies[p].ColdGas + galaxies[p].StellarMass
-                                      + galaxies[p].BlackHoleMass + galaxies[p].ICS);
+    /* Step 2: halo and hot gas */
+    const double M_hot_total = g->HotGas + g->CGMgas + g->FountainGas + g->OutflowGas;
+    double M_DM = g->Mvir - (M_hot_total + g->ColdGas + g->StellarMass + g->BlackHoleMass);
     if(M_DM < 0.0) M_DM = 0.0;
 
-    /* NFW concentration, Dutton & Maccio (2014) */
-    double z = run_params->ZZ[halos[galaxies[p].HaloNr].SnapNum];
-    if(z > 5.0) z = 5.0;
-    const double a_conc = 0.520 + (0.905 - 0.520) * exp(-0.617 * pow(z, 1.21));
-    const double b_conc = -0.101 + 0.026 * z;
-    const double log_Mvir = log10(galaxies[p].Mvir * run_params->UnitMass_in_g / SOLAR_MASS) - 12.0;
-    const double r_s = Rvir / pow(10.0, a_conc + b_conc * log_Mvir);
-    galaxies[p].HaloScaleRadius = r_s;
-
-    double rho_norm = M_DM / (log(1.0 + Rvir / r_s) - Rvir / (Rvir + r_s));
-    if(rho_norm < 0.0) rho_norm = 0.0;
-
-    const double total_stellar_gas = galaxies[p].StellarMass + galaxies[p].ColdGas;
-    const double BTT = (total_stellar_gas > 0.0) ? galaxies[p].BulgeMass / total_stellar_gas : 0.0;
-
-    if(galaxies[p].Mvir <= 0.0 || BTT >= 1.0) {
-        /* No disc: flat rotation curve */
-        for(int i = 0; i < N_BINS + 1; i++) {
-            const double r = run_params->DiscBinEdge[i] / Vvir;
-            galaxies[p].DiscRadii[i] = (r > current_Rvir) ? current_Rvir : r;
+    double conc;
+    if(run_params->ConcentrationOn > 0 && g->Concentration > 0.0f) {
+        conc = g->Concentration;
+    } else {
+        const double zc = (z > 5.0) ? 5.0 : z;
+        const double a_conc = 0.520 + (0.905 - 0.520) * exp(-0.617 * pow(zc, 1.21));
+        const double b_conc = -0.101 + 0.026 * zc;
+        conc = pow(10.0, a_conc + b_conc * (log10(g->Mvir * run_params->UnitMass_in_g / SOLAR_MASS) - 12.0));
+        if(g->Type == 0 && g->StellarMass > 0.0) {
+            const double X = log10(g->StellarMass / g->Mvir);
+            conc *= 1.0 + 3.0e-5 * exp(3.4 * (X + 4.5));   /* Di Cintio et al. (2014b) */
         }
-        enforce_monotonic_radii(p, current_Rvir, galaxies);
-        return;
     }
+    const double r_s = Rvir / conc;
+    g->HaloScaleRadius = (float)r_s;
+    const double rho_norm = M_DM / (log(1.0 + Rvir / r_s) - Rvir / (Rvir + r_s));
 
-    const double v_max = (galaxies[p].Vmax > Vvir) ? 2.0 * galaxies[p].Vmax : 2.0 * Vvir;
-    const double c_beta = galaxies[p].c_beta;
-    double a_stars = galaxies[p].StellarDiscScaleRadius;
-    double a_gas = galaxies[p].GasDiscScaleRadius;
-    if(a_stars <= 0.0) a_stars = galaxies[p].DiskScaleRadius;
-    if(a_gas <= 0.0) a_gas = galaxies[p].DiskScaleRadius;
+    double c_beta = 0.20 * exp(-1.5 * z) - 0.039 * z + 0.28;
+    if(c_beta < DS_MIN_C_BETA) c_beta = DS_MIN_C_BETA;
+    g->c_beta = (float)c_beta;
+    const double hot_norm = M_hot_total / (1.0 - c_beta * atan(1.0 / c_beta));
 
-    const double r_min = (0.01 / 1000.0 > 0.001 * current_Rvir) ? 0.01 / 1000.0 : 0.001 * current_Rvir;
+    const double total_stellar_gas = g->StellarMass + g->ColdGas;
+    const double BTT = (total_stellar_gas > 0.0) ? g->BulgeMass / total_stellar_gas : 0.0;
+    if(BTT >= 1.0) return;   /* no disc: keep the last radii */
 
-    for(int i = 0; i < N_BINS + 1; i++) {
-        const double j = run_params->DiscBinEdge[i];
-        double r = j / Vvir;   /* flat-curve initial guess */
+    /* Hernquist bulges, normalised to their mass within Rvir */
+    const double a_SB = hernquist_a_from_half_mass((g->InstabilityBulgeRadius > 0.0f) ? g->InstabilityBulgeRadius : g->BulgeRadius, Rvir);
+    const double a_CB = hernquist_a_from_half_mass((g->MergerBulgeRadius > 0.0f) ? g->MergerBulgeRadius : g->BulgeRadius, Rvir);
+    const double M_SB_inf = g->InstabilityBulgeMass * ((Rvir + a_SB) / Rvir) * ((Rvir + a_SB) / Rvir);
+    const double M_CB_inf = g->MergerBulgeMass * ((Rvir + a_CB) / Rvir) * ((Rvir + a_CB) / Rvir);
 
-        /* Iterate j = r V_circ(r) */
-        for(int iter = 0; iter < 20; iter++) {
-            if(r <= 0.0) { r = j / Vvir; break; }
+    double a_sdisc = g->StellarDiscScaleRadius, a_gdisc = g->GasDiscScaleRadius;
+    if(a_sdisc <= 0.0) a_sdisc = g->DiskScaleRadius;
+    if(a_gdisc <= 0.0) a_gdisc = g->DiskScaleRadius;
+    const double r_support = (g->RotSupportScaleRadius > 0.0f) ? g->RotSupportScaleRadius : g->DiskScaleRadius;
 
-            double v2 = G * rho_norm * (log(1.0 + r / r_s) - r / (r + r_s)) / r;   /* NFW */
-            if(v2 < 0.0) v2 = 0.0;
+    /* Step 3: the grid, from the outside in */
+    double gr_r[N_RC_GRID], gr_j[N_RC_GRID], gr_phi[N_RC_GRID], f_sup[N_RC_GRID];
+    int first = 0, n_grow = 0;
+    double r = 10.0 * run_params->DiscBinEdge[N_BINS] / g->Vvir;
+    if(r < Rvir) r = Rvir;
+    gr_r[0] = gr_j[0] = gr_phi[0] = 0.0;
+    int i;
+    for(i = N_RC_GRID - 1; i > 0; i--) {
+        const double rrat = r / r_s;
+        if(rrat < RC_MIN_RRAT) { first = i + 1; break; }
+        gr_r[i] = r;
+        const double x = r / Rvir;
+        double M_int = rho_norm * (log(1.0 + rrat) - rrat / (1.0 + rrat));
+        if(M_int < 0.0) M_int = 0.0;
+        M_int += M_SB_inf * (r / (r + a_SB)) * (r / (r + a_SB)) + M_CB_inf * (r / (r + a_CB)) * (r / (r + a_CB));
+        M_int += hot_norm * (x - c_beta * atan(x / c_beta)) + g->BlackHoleMass;
+        double v2 = G * M_int / r;
+        if(DiscStars > 0.0 && a_sdisc > 0.0) v2 += G * DiscStars / Rvir * v2_disc_cterm(x, Rvir / a_sdisc);
+        if(DiscGas > 0.0 && a_gdisc > 0.0) v2 += G * DiscGas / Rvir * v2_disc_cterm(x, Rvir / a_gdisc);
 
-            if(galaxies[p].BulgeMass > 0.0 && galaxies[p].BulgeRadius > 0.0) {
-                const double a_b = galaxies[p].BulgeRadius;   /* Hernquist */
-                v2 += G * galaxies[p].BulgeMass * r / ((r + a_b) * (r + a_b));
+        double f = 1.0 - exp(-r / r_support);
+        if(f < F_SUPPORT_MIN) f = F_SUPPORT_MIN;
+        f_sup[i] = f;
+        gr_j[i] = sqrt(f * v2) * r;
+
+        if(i == N_RC_GRID - 1) {
+            gr_phi[i] = -G * M_int / r;
+            if(gr_j[i] < run_params->DiscBinEdge[N_BINS] && n_grow < RC_MAX_GROW) {
+                r *= 10.0;   /* grid must reach j_max */
+                n_grow++;
+                i++;
+                continue;
             }
-            if(DiscStars > 0.0 && a_stars > 0.0) {
-                v2 += G * DiscStars / Rvir * v2_disc_cterm(r / a_stars, Rvir / a_stars);
-            }
-            if(DiscGas > 0.0 && a_gas > 0.0) {
-                v2 += G * DiscGas / Rvir * v2_disc_cterm(r / a_gas, Rvir / a_gas);
-            }
-            if(M_hot_total > 0.0 && c_beta > 0.0) {
-                const double cb_norm = 1.0 / (1.0 - c_beta * atan(1.0 / c_beta));
-                const double M_hot_enc = M_hot_total * cb_norm * (atan(r / Rvir / c_beta) - c_beta * atan(1.0 / c_beta));
-                if(M_hot_enc > 0.0) v2 += G * M_hot_enc / r;
-            }
-
-            double V_circ = sqrt(v2);
-            if(V_circ > v_max) V_circ = v_max;
-            if(V_circ < 0.1 * Vvir) V_circ = 0.1 * Vvir;
-
-            const double r_new = j / V_circ;
-            const int converged = fabs(r_new - r) < 1.0e-6 * r;
-            r = r_new;
-            if(converged) break;
+        } else {
+            if(!(gr_j[i] < gr_j[i+1])) gr_j[i] = 0.999 * gr_j[i+1];   /* keep j(r) invertible */
+            gr_phi[i] = gr_phi[i+1] - (gr_r[i+1] - gr_r[i]) * 0.5
+                        * (gr_j[i+1] * gr_j[i+1] / (f_sup[i+1] * gr_r[i+1] * gr_r[i+1] * gr_r[i+1]) + v2 / r);
         }
-
-        if(r > current_Rvir) r = current_Rvir;
-        if(r < r_min && j > 0.0) r = r_min;
-        galaxies[p].DiscRadii[i] = r;
+        r /= run_params->ExponentBin;
     }
+    if(i == 0) gr_phi[0] = gr_phi[1];   /* the potential flattens at the centre */
 
-    enforce_monotonic_radii(p, current_Rvir, galaxies);
-
-    for(int i = 0; i < N_BINS + 1; i++) {
-        galaxies[p].Potential[i] = NFW_potential(p, galaxies[p].DiscRadii[i], galaxies, run_params);
+    /* Step 4: annulus edges and their potentials */
+    g->DiscRadii[0] = 0.0f;
+    for(int k = 1; k < N_BINS + 1; k++) {
+        g->DiscRadii[k] = (float)grid_interp(gr_j, gr_r, first, run_params->DiscBinEdge[k]);
+        if(g->DiscRadii[k] <= g->DiscRadii[k-1]) g->DiscRadii[k] = 1.0001f * g->DiscRadii[k-1] + 1.0e-9f;
+        g->Potential[k] = (float)grid_interp(gr_r, gr_phi, first, g->DiscRadii[k]);
     }
+    g->Potential[0] = (float)gr_phi[first];
 }
 
 /* ---------------------------------------------------------------------------
