@@ -60,64 +60,7 @@ void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *gal
         galaxies[centralgal].EjectedMass -= reincorporated;
         galaxies[centralgal].MetalsEjectedMass -= metallicity * reincorporated;
         
-        if(run_params->DarkSAGEMode == 1 && !(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0)) {
-            // DarkSAGEMode, hot regime: EjectedMass -> FountainGas -> HotGas (reincorporate_fountain_gas).
-            // FountainTime is the mass-weighted dynamical time at which the gas joined the fountain.
-            const double t_dyn = get_dynamical_time(galaxies[centralgal].SnapNum, run_params);
-            if(galaxies[centralgal].FountainGas > 0.0) {
-                galaxies[centralgal].FountainTime =
-                    (galaxies[centralgal].FountainGas * galaxies[centralgal].FountainTime + reincorporated * t_dyn)
-                    / (galaxies[centralgal].FountainGas + reincorporated);
-            } else {
-                galaxies[centralgal].FountainTime = t_dyn;
-            }
-            galaxies[centralgal].FountainGas += reincorporated;
-            galaxies[centralgal].MetalsFountainGas += metallicity * reincorporated;
-        } else {
-            // Add to appropriate hot reservoir (regime-dependent); CGM haloes have no fountain
-            add_gas_to_hot_reservoir(&galaxies[centralgal], run_params, reincorporated, metallicity * reincorporated);
-        }
+        // Add to appropriate hot reservoir (regime-dependent)
+        add_gas_to_hot_reservoir(&galaxies[centralgal], run_params, reincorporated, metallicity * reincorporated);
     }
-}
-
-/*
- * reincorporate_fountain_gas -- DarkSAGEMode reservoir cycling for one central over dt.
- *
- * FountainGas returns to the hot reservoir (CGMgas for Regime 0 under
- * CGMrecipeOn) at rate FountainGas / FountainTime; OutflowGas reaches
- * EjectedMass at rate OutflowGas / OutflowTime.
- */
-void reincorporate_fountain_gas(const int centralgal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
-{
-    if(run_params->DarkSAGEMode != 1) return;
-
-    // FountainGas -> HotGas / CGMgas
-    if(galaxies[centralgal].FountainGas > 0.0 && galaxies[centralgal].FountainTime > 0.0) {
-        double frac = dt / galaxies[centralgal].FountainTime;
-        if(frac > 1.0) frac = 1.0;
-        const double returned = frac * galaxies[centralgal].FountainGas;
-        const double metallicity = get_metallicity(galaxies[centralgal].FountainGas, galaxies[centralgal].MetalsFountainGas);
-
-        galaxies[centralgal].FountainGas -= returned;
-        galaxies[centralgal].MetalsFountainGas -= metallicity * returned;
-        add_gas_to_hot_reservoir(&galaxies[centralgal], run_params, returned, metallicity * returned);
-    }
-
-    // OutflowGas -> EjectedMass
-    if(galaxies[centralgal].OutflowGas > 0.0 && galaxies[centralgal].OutflowTime > 0.0) {
-        double frac = dt / galaxies[centralgal].OutflowTime;
-        if(frac > 1.0) frac = 1.0;
-        const double transferred = frac * galaxies[centralgal].OutflowGas;
-        const double metallicity = get_metallicity(galaxies[centralgal].OutflowGas, galaxies[centralgal].MetalsOutflowGas);
-
-        galaxies[centralgal].OutflowGas -= transferred;
-        galaxies[centralgal].MetalsOutflowGas -= metallicity * transferred;
-        galaxies[centralgal].EjectedMass += transferred;
-        galaxies[centralgal].MetalsEjectedMass += metallicity * transferred;
-    }
-
-    if(galaxies[centralgal].FountainGas < 0.0f) galaxies[centralgal].FountainGas = 0.0f;
-    if(galaxies[centralgal].MetalsFountainGas < 0.0f) galaxies[centralgal].MetalsFountainGas = 0.0f;
-    if(galaxies[centralgal].OutflowGas < 0.0f) galaxies[centralgal].OutflowGas = 0.0f;
-    if(galaxies[centralgal].MetalsOutflowGas < 0.0f) galaxies[centralgal].MetalsOutflowGas = 0.0f;
 }

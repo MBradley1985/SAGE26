@@ -1594,7 +1594,6 @@ void update_from_star_formation(const int p, const double stars, const double me
  *
  * The caller has already removed reheated_mass (at metallicity) from the cold
  * disc.  Routing by reservoir:
- *   DarkSAGEMode, hot regime : Cold --> FountainGas --> OutflowGas
  *   CGM regime (CGMrecipeOn) : Cold --> CGMgas --> EjectedMass
  *   hot regime / no CGM      : Cold --> HotGas --> EjectedMass
  * ejected_mass is capped at the reservoir it leaves.  Adds reheated_mass to
@@ -1604,40 +1603,7 @@ static void route_feedback_to_reservoirs(const int p, const int centralgal, cons
                                          double ejected_mass, const double metallicity,
                                          struct GALAXY *galaxies, const struct params *run_params)
 {
-    if(run_params->DarkSAGEMode == 1 && !(run_params->CGMrecipeOn == 1 && galaxies[centralgal].Regime == 0)) {
-        // DarkSAGEMode, hot regime (Stevens+16 reservoirs):
-        //   Cold --> FountainGas --> HotGas      (reincorporate_fountain_gas, on FountainTime)
-        //   FountainGas --> OutflowGas --> Ejected (on OutflowTime = 2 x FountainTime)
-        const double t_fountain = get_dynamical_time(galaxies[p].SnapNum, run_params);
-
-        if(reheated_mass > 0.0) {
-            galaxies[centralgal].FountainTime = (galaxies[centralgal].FountainGas > 0.0)
-                ? (galaxies[centralgal].FountainGas * galaxies[centralgal].FountainTime + reheated_mass * t_fountain)
-                  / (galaxies[centralgal].FountainGas + reheated_mass)
-                : t_fountain;
-            galaxies[centralgal].FountainGas += reheated_mass;
-            galaxies[centralgal].MetalsFountainGas += metallicity * reheated_mass;
-        }
-
-        if(ejected_mass > galaxies[centralgal].FountainGas) {
-            ejected_mass = galaxies[centralgal].FountainGas;
-        }
-        if(ejected_mass > 0.0) {
-            const double metallicityFountain = get_metallicity(galaxies[centralgal].FountainGas,
-                                                               galaxies[centralgal].MetalsFountainGas);
-            galaxies[centralgal].OutflowTime = (galaxies[centralgal].OutflowGas > 0.0)
-                ? (galaxies[centralgal].OutflowGas * galaxies[centralgal].OutflowTime + ejected_mass * 2.0 * t_fountain)
-                  / (galaxies[centralgal].OutflowGas + ejected_mass)
-                : 2.0 * t_fountain;
-            galaxies[centralgal].FountainGas -= ejected_mass;
-            galaxies[centralgal].MetalsFountainGas -= metallicityFountain * ejected_mass;
-            galaxies[centralgal].OutflowGas += ejected_mass;
-            galaxies[centralgal].MetalsOutflowGas += metallicityFountain * ejected_mass;
-        }
-
-        if(galaxies[centralgal].FountainGas < 0.0f) galaxies[centralgal].FountainGas = 0.0f;
-        if(galaxies[centralgal].MetalsFountainGas < 0.0f) galaxies[centralgal].MetalsFountainGas = 0.0f;
-    } else if(run_params->CGMrecipeOn == 1) {
+    if(run_params->CGMrecipeOn == 1) {
         if(galaxies[centralgal].Regime == 0) {
             // CGM-regime: Cold --> CGM --> Ejected
 

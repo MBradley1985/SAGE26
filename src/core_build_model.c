@@ -542,11 +542,6 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                     reincorporate_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
                 }
 
-                /* FountainGas cycling: FountainGas → HotGas, OutflowGas → EjectedMass */
-                if(run_params->DarkSAGEMode == 1) {
-                    reincorporate_fountain_gas(centralgal, deltaT / effective_steps, galaxies, run_params);
-                }
-
             } else if(galaxies[p].Type == 1) {
                 // Satellites hand their baryon excess to the central once per
                 // substep, in the same place and on the same cadence as the
