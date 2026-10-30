@@ -38,6 +38,7 @@
 
 #include "model_darksage_stripping.h"
 #include "model_darksage_disc.h"
+#include "model_darksage_stellar_pop.h"
 #include "model_misc.h"
 
 /* Move a fraction f of annulus i's gas to the satellite's hot reservoir */
@@ -115,6 +116,7 @@ int darksage_ram_pressure_stripping(const int centralgal, const int gal, const d
                 s->StellarMass -= m;
                 s->MetalsStellarMass -= s->DiscStarsMetals[j];
                 s->DiscStars[j] = s->DiscStarsMetals[j] = 0.0f;
+                darksage_move_ages(s->DiscStarsAge[j], s->DiscStarsMetalsAge[j], 1.0, c->ICSAge, c->MetalsICSAge);
             }
             break;
         }

@@ -256,6 +256,17 @@ struct GALAXY
     float OutflowTime;               /* Time for outflow to reach EjectedMass */
 
     /* DarkSAGEMode: Enhanced disk physics */
+    float DiscStarsAge[N_BINS][N_AGE_BINS];        /* stellar disc mass by annulus and age bin */
+    float DiscStarsMetalsAge[N_BINS][N_AGE_BINS];
+    float MergerBulgeMassAge[N_AGE_BINS];          /* bulges and intrahalo stars by age bin */
+    float MergerBulgeMetalsAge[N_AGE_BINS];
+    float InstabilityBulgeMassAge[N_AGE_BINS];
+    float InstabilityBulgeMetalsAge[N_AGE_BINS];
+    float ICSAge[N_AGE_BINS];
+    float MetalsICSAge[N_AGE_BINS];
+    int32_t AgeBinNow;               /* age bin of the current substep */
+    double TimeNow;                  /* lookback time of the current substep [code time] */
+    float AgeMismatch;               /* stellar mass whose age bins disagree with its component, / (M* + ICS) (diagnostic) */
     float ICSMeanRadius;             /* mass-weighted radius at which the intrahalo stars were deposited [Mpc/h] (DarkSage R_ICS_av) */
     float VelDispStars[N_BINS];      /* Stellar velocity dispersion per annulus [km/s] */
     float VelDispBulge;              /* Secular bulge velocity dispersion [km/s] */
@@ -606,6 +617,9 @@ struct params
     double     FirstBin;                // First j-bin edge [kpc km/s] (default 100)
     double     ExponentBin;             // j-bin geometric growth factor (default 1.4)
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
+    double     AgeBinEdge[N_AGE_BINS+1]; // DarkSAGEMode: stellar age-bin edges in lookback time [code time] (computed)
+    double     FinalRecycleFraction;     // DarkSAGEMode: mass a stellar population returns over its lifetime (IMF, computed)
+    double     GammaHI[ABSOLUTEMAXSNAPS]; // DarkSAGEMode: HI photoionisation rate of the UV background per snapshot [1/code time]
     double     GasSinkRate;             // Unstable gas sink fraction (default 0.1)
     double     ThetaThresh;             // Coplanar threshold [deg] (default 5.0)
     double     DegPerTdyn;              // Precession rate [deg/tdyn] (default 1.0)

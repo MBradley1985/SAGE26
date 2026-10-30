@@ -188,6 +188,15 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].OutflowGas = galaxies[p].MetalsOutflowGas = 0.0f;
     galaxies[p].FountainTime = galaxies[p].OutflowTime = 0.0f;
     galaxies[p].ICSMeanRadius = 0.0f;
+    for(int k = 0; k < N_AGE_BINS; k++) {
+        for(int i = 0; i < N_BINS; i++) galaxies[p].DiscStarsAge[i][k] = galaxies[p].DiscStarsMetalsAge[i][k] = 0.0f;
+        galaxies[p].MergerBulgeMassAge[k] = galaxies[p].MergerBulgeMetalsAge[k] = 0.0f;
+        galaxies[p].InstabilityBulgeMassAge[k] = galaxies[p].InstabilityBulgeMetalsAge[k] = 0.0f;
+        galaxies[p].ICSAge[k] = galaxies[p].MetalsICSAge[k] = 0.0f;
+    }
+    galaxies[p].AgeBinNow = 0;
+    galaxies[p].TimeNow = 0.0;
+    galaxies[p].AgeMismatch = 0.0f;
     for(int i = 0; i < N_BINS; i++) {
         galaxies[p].DiscGas[i] = galaxies[p].DiscGasMetals[i] = 0.0f;
         galaxies[p].DiscStars[i] = galaxies[p].DiscStarsMetals[i] = 0.0f;

@@ -35,6 +35,7 @@
     X(MetalsFountainGas, 1, "Metals in the fountain gas.", "1.0e10 Msun/h") \
     X(OutflowGas, 1, "Gas leaving the halo, joining EjectedMass on OutflowTime.", "1.0e10 Msun/h") \
     X(MetalsOutflowGas, 1, "Metals in the outflow gas.", "1.0e10 Msun/h") \
+    X(AgeMismatch, 1, "Stellar mass whose age bins disagree with its component mass, as a fraction of StellarMass + ICS (diagnostic, should be ~0).", "Unitless") \
     X(ICSMeanRadius, 1, "Mass-weighted radius at which the intrahalo stars were deposited; sets their Hernquist profile.", "Mpc/h") \
     X(SecularBulgeMass, 1, "Bulge mass built by annulus-0 disc instability.", "1.0e10 Msun/h") \
     X(VelDispBulge, 1, "Velocity dispersion of the secular bulge.", "km/s") \

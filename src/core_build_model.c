@@ -38,6 +38,7 @@
 #include "model_reincorporation.h"
 #include "model_darksage_disc.h"
 #include "model_darksage_stripping.h"
+#include "model_darksage_stellar_pop.h"
 #include "model_starformation_and_feedback.h"
 
 #include "model_cooling_heating.h"
@@ -528,6 +529,10 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
             const double deltaT = galaxies[p].dT;
             const double time = halo_age + deltaT - (step + 0.5) * (deltaT / effective_steps);
+            if(run_params->DarkSAGEMode == 1) {
+                galaxies[p].AgeBinNow = darksage_age_bin(time, run_params);   /* stars formed now go here */
+                galaxies[p].TimeNow = time;
+            }
 
             // For the central galaxy only
             if(p == centralgal) {
@@ -710,8 +715,12 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                     galaxies[p].DiscStarsMetals[last_physical_bin] += galaxies[p].DiscStarsMetals[i];
                     galaxies[p].DiscStars[i] = 0.0;
                     galaxies[p].DiscStarsMetals[i] = 0.0;
+                    darksage_move_ages(galaxies[p].DiscStarsAge[i], galaxies[p].DiscStarsMetalsAge[i], 1.0,
+                                       galaxies[p].DiscStarsAge[last_physical_bin],
+                                       galaxies[p].DiscStarsMetalsAge[last_physical_bin]);
                 }
             }
+            galaxies[p].AgeMismatch = darksage_age_mismatch(&galaxies[p]);
         }
     }
 

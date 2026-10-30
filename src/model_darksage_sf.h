@@ -15,9 +15,6 @@ extern "C" {
     /* functions in model_darksage_sf.c */
     extern double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
                                                struct GALAXY *galaxies, const struct params *run_params);
-    extern void darksage_update_disc_from_sf(const int p, const double stars, const double reheated_mass,
-                                             const double dt, const double sfr_bin[N_BINS],
-                                             struct GALAXY *galaxies, const struct params *run_params);
     extern void darksage_remove_disc_gas(const int p, const double mass, const float weight[N_BINS],
                                          struct GALAXY *galaxies);
     extern void darksage_sync_disc_metals(const int p, struct GALAXY *galaxies);

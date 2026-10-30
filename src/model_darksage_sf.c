@@ -149,54 +149,6 @@ double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
     return total_sfr;
 }
 
-void darksage_update_disc_from_sf(const int p, const double stars, const double reheated_mass,
-                                  const double dt, const double sfr_bin[N_BINS],
-                                  struct GALAXY *galaxies, const struct params *run_params)
-{
-    double sfr_sum = 0.0;
-    for(int i = 0; i < N_BINS; i++) sfr_sum += sfr_bin[i];
-
-    if(sfr_sum <= 0.0 || (stars <= 0.0 && reheated_mass <= 0.0)) return;
-
-    const double R = run_params->RecycleFraction;
-    double shortfall = 0.0;
-
-    // New stars carry the gas-disc spin into the stellar disc (mass-weighted with the existing disc stars)
-    double disc_stars = 0.0;
-    for(int i = 0; i < N_BINS; i++) disc_stars += galaxies[p].DiscStars[i];
-    evolve_spin(galaxies[p].SpinStars, disc_stars, galaxies[p].SpinGas, (1.0 - R) * stars);
-
-    for(int i = 0; i < N_BINS; i++) {
-        const double w = sfr_bin[i] / sfr_sum;
-        if(dt > 0.0) galaxies[p].DiscSFR[i] += (float)(w * stars / dt);
-        if(w <= 0.0 || galaxies[p].DiscGas[i] <= 0.0) continue;
-
-        const double Z = galaxies[p].DiscGasMetals[i] / galaxies[p].DiscGas[i];
-        double stars_i = (1.0 - R) * w * stars;
-        double reheat_i = w * reheated_mass;
-        const double removed = stars_i + reheat_i;
-        if(removed > galaxies[p].DiscGas[i]) {
-            /* Annulus runs short: stars still form here, the missing gas comes from the other annuli below */
-            const double f = galaxies[p].DiscGas[i] / removed;
-            shortfall += removed - galaxies[p].DiscGas[i];
-            galaxies[p].DiscStars[i] += stars_i * (1.0 - f);
-            galaxies[p].DiscStarsMetals[i] += Z * stars_i * (1.0 - f);
-            stars_i *= f;
-            reheat_i *= f;
-        }
-
-        galaxies[p].DiscGas[i] -= stars_i + reheat_i;
-        galaxies[p].DiscGasMetals[i] -= Z * (stars_i + reheat_i);
-        galaxies[p].DiscStars[i] += stars_i;
-        galaxies[p].DiscStarsMetals[i] += Z * stars_i;
-
-        if(galaxies[p].DiscGas[i] < 0.0f) galaxies[p].DiscGas[i] = 0.0f;
-        if(galaxies[p].DiscGasMetals[i] < 0.0f) galaxies[p].DiscGasMetals[i] = 0.0f;
-    }
-
-    if(shortfall > 0.0) darksage_remove_disc_gas(p, shortfall, galaxies[p].DiscGas, galaxies);
-}
-
 void darksage_remove_disc_gas(const int p, const double mass, const float weight[N_BINS],
                               struct GALAXY *galaxies)
 {
