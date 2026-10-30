@@ -88,7 +88,7 @@ extern "C" {
      * SF prescriptions that track molecular gas (H2gas/H1gas): every
      * prescription except 0 (Croton+06 cold-gas threshold) and 2
      * (Somerville+25 cold-gas efficiency). SFprescription is validated to
-     * [0, 7] at parameter-read time, so the two-term form is exact.
+     * [0, 8] at parameter-read time, so the two-term form is exact.
      */
     static inline int sf_prescription_tracks_h2(const int sfprescription)
     {

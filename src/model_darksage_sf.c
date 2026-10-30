@@ -30,12 +30,94 @@
 #include "model_h2_chemistry.h"
 #include "model_starformation_and_feedback.h"
 #include "model_misc.h"
+#include "model_darksage_stellar_pop.h"
+#include "model_darksage_instability.h"
 
 /* Same constants as the bulk recipes in model_starformation_and_feedback.c */
 static const double DS_SF_DISK_RADIUS_FRAC = 3.0;   /* star-forming radius in disc scale radii (SF_DISK_RADIUS_FRAC) */
 static const double DS_SOMERVILLE25_SIGMA_CRIT = 30.0 / (M_PI * 4.302e-3);  /* Msun/pc^2 */
 static const double DS_SOMERVILLE25_F_DENSE    = 0.5;
 static const double DS_Z_SOLAR_ASPLUND09       = 0.014;
+
+/* SFprescription == 8, DarkSage update_HI_H2() with H2prescription 0 (Stevens et al. 2024 Sec. 6):
+ * H2/HI = DS_H2_FACTOR (P / P_0)^DS_H2_EXPONENT (Blitz & Rosolowsky 2006 as fitted by Fu et al. 2010),
+ * P_0 = 5.93e-12 dyn cm^-2; neutral-fraction constants of DarkSage core_init.c [cgs] */
+static const double DS_P0_CGS = 5.93e-12;
+static const double DS_H2_FACTOR = 1.0;
+static const double DS_H2_EXPONENT = 0.92;
+static const double DS_UNI_ION_HIST = 0.24949;
+static const double DS_UNI_FNEUT_BG = 2.351e-5;
+
+/*
+ * H2 mass of annulus i under DarkSage's H2 prescription (update_HI_H2(), H2prescription 0).
+ *
+ *   1. Midplane pressure P = (pi/2) G Sigma_gas (Sigma_gas + (sigma_gas / sigma_*) Sigma_*) h^2,
+ *      the stars counting only when the stellar and gas discs are within ThetaThresh;
+ *      H2/HI = (P / P_0)^0.92.
+ *   2. Neutral fraction from the annulus's own young stars: its recent SFR (from the youngest
+ *      populated age bin) keeps f_ion^2 ~ SFR sigma^2 area^2 / M_gas^3 of the hydrogen ionised,
+ *      f_neutral = 1 - sqrt(uni_ion_hist (3X+1) (sigma area / X)^2 SFR / M_gas^3).
+ *   3. The UV background caps it: gamma = uni_fneut_bg (3X+1) Gamma_HI(z) / X (sigma area / M_gas)^2,
+ *      f_neutral <= 1 + gamma - sqrt(gamma^2 + 2 gamma).
+ *   4. H2 = X f_neutral M_gas / (1 / (H2/HI) + 1).
+ * Code units; X = DARKSAGE_X_H.  *f_neutral_out receives the neutral fraction.
+ */
+static double h2_darksage(const int p, const int i, const double gas, double *f_neutral_out,
+                          const struct GALAXY *galaxies, const struct params *run_params)
+{
+    const struct GALAXY *g = &galaxies[p];
+    const double X = DARKSAGE_X_H;
+    const double h = run_params->Hubble_h;
+    const double r_in = g->DiscRadii[i], r_out = g->DiscRadii[i+1];
+    const double area = M_PI * (r_out * r_out - r_in * r_in);
+    *f_neutral_out = 1.0;
+    if(area <= 0.0 || gas <= 0.0) return 0.0;
+
+    const double sigma_gas = darksage_cold_gas_dispersion(run_params->ZZ[g->SnapNum], run_params);
+    const double cos_angle = g->SpinStars[0] * g->SpinGas[0] + g->SpinStars[1] * g->SpinGas[1] + g->SpinStars[2] * g->SpinGas[2];
+    const int coplanar = (cos_angle >= cos(run_params->ThetaThresh * M_PI / 180.0));
+
+    /* Step 1: pressure-based H2/HI */
+    double P;
+    if(coplanar && g->DiscStars[i] > 0.0f && g->VelDispStars[i] > 0.0f) {
+        P = 0.5 * M_PI * run_params->G * gas * (gas + sigma_gas / g->VelDispStars[i] * g->DiscStars[i]) / (area * area) * h * h;
+    } else {
+        P = 0.5 * M_PI * run_params->G * (gas / area) * (gas / area) * h * h;
+    }
+    const double P0 = DS_P0_CGS / run_params->UnitMass_in_g * run_params->UnitLength_in_cm
+                      * run_params->UnitTime_in_s * run_params->UnitTime_in_s;
+    const double ratio = DS_H2_FACTOR * pow(P / P0, DS_H2_EXPONENT);
+
+    /* Step 2: recent SFR of the annulus from its youngest populated age bin */
+    const int k = g->AgeBinNow;
+    double sfr_guess = 0.0;
+    const double t_left = run_params->AgeBinEdge[k+1] - g->TimeNow;
+    if(g->DiscStarsAge[i][k] > 0.0f && t_left > 0.0) {
+        double inst[2];
+        darksage_instant_return_and_sn(k, run_params, inst);
+        sfr_guess = g->DiscStarsAge[i][k] / ((1.0 - inst[0]) * t_left);
+    } else if(k < N_AGE_BINS - 1 && g->DiscStarsAge[i][k+1] > 0.0f) {
+        double out[2];
+        darksage_return_and_sn(g->TimeNow, 0.5 * (run_params->AgeBinEdge[k+2] + run_params->AgeBinEdge[k+1]), run_params, out);
+        sfr_guess = g->DiscStarsAge[i][k+1] / ((1.0 - out[0]) * (run_params->AgeBinEdge[k+2] - run_params->AgeBinEdge[k+1]));
+    }
+    const double UL = run_params->UnitLength_in_cm, UM = run_params->UnitMass_in_g, UT = run_params->UnitTime_in_s;
+    const double uni_ion_hist = DS_UNI_ION_HIST * pow(UL, 6.0) / (UM * UM * UT * UT * UT) / h;
+    const double uni_fneut_bg = DS_UNI_FNEUT_BG * pow(UL, 6.0) / (UM * UM * UT * UT * UT) / h;
+    const double sa = sigma_gas * area;
+    double f_neutral = 1.0 - sqrt(uni_ion_hist * (3.0 * X + 1.0) * (sa / X) * (sa / X) * sfr_guess / (gas * gas * gas));
+
+    /* Step 3: the UV background caps it */
+    const double gamma = uni_fneut_bg * (3.0 * X + 1.0) * run_params->GammaHI[g->SnapNum] / X * (sa / gas) * (sa / gas);
+    double f_max = 1.0 + gamma - sqrt(gamma * gamma + 2.0 * gamma);
+    if(f_max < 0.0) f_max = 0.0;
+    if(f_neutral > f_max) f_neutral = f_max;
+    if(f_neutral < 0.0) f_neutral = 0.0;
+    *f_neutral_out = f_neutral;
+
+    /* Step 4 */
+    return (ratio > 0.0) ? X * f_neutral * gas / (1.0 / ratio + 1.0) : 0.0;
+}
 
 /* KMT09 two-phase fit, as inlined in sfr_kmt09() */
 static double fH2_kmt09(const double Sigma_gas, const double Z)
@@ -102,16 +184,20 @@ double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
         }
         if(f_H2 < 0.0) f_H2 = 0.0;
         if(f_H2 > 1.0) f_H2 = 1.0;
-        const double h2 = f_H2 * gas * HYDROGEN_MASS_FRAC;
+        double f_neutral = 1.0;
+        const double h2 = (sfp == 8) ? h2_darksage(p, i, gas, &f_neutral, galaxies, run_params)
+                                     : f_H2 * gas * HYDROGEN_MASS_FRAC;
+        galaxies[p].DiscFNeutral[i] = (float)f_neutral;
         galaxies[p].DiscH2[i] = h2;
         total_h2 += h2;
 
         /* --- star formation law --- */
         double sfr = 0.0;
-        if(FG_TDEP(run_params) && sf_prescription_tracks_h2(sfp)) {
-            /* SFR = M_mol / t_dep, as sfr_fixing_gas_tdep() */
-            const double t_dep = h2_depletion_time_gyr(Sigma_gas, CODE_LENGTH_TO_PC(r_mid, h), v_circ,
-                                                       run_params->H2DepletionMode);
+        if((FG_TDEP(run_params) || sfp == 8) && sf_prescription_tracks_h2(sfp)) {
+            /* SFR = M_mol / t_dep, as sfr_fixing_gas_tdep(); SFprescription 8 on its own uses
+             * DarkSage's law, M_H2 / 2.30 Gyr (H2DepletionMode 5) */
+            const int mode = FG_TDEP(run_params) ? run_params->H2DepletionMode : 5;
+            const double t_dep = h2_depletion_time_gyr(Sigma_gas, CODE_LENGTH_TO_PC(r_mid, h), v_circ, mode);
             if(t_dep > 0.0) sfr = (h2 / HYDROGEN_MASS_FRAC) / (t_dep * gyr_to_code);
         } else if(sfp == 0) {
             /* Croton+06: the bulk threshold m_crit = 0.19 Vvir reff grows linearly with r,

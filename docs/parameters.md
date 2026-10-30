@@ -58,7 +58,7 @@ optional parameters take the listed default if omitted.
 
 | Parameter | Type | No | Default | Values and meaning |
 |-----------|------|----|---------|-------------------|
-| `SFprescription` | int | no | `1` | Star formation prescription: 0=Croton+06; 1=Blitz & Rosolowsky 06 H₂; 2=Somerville+25 SFR; 3=Somerville+25 SFR+H₂; 4=Krumholz & Dekel 12; 5=KMT 09; 6=Krumholz 13; 7=Gnedin & Draine 14. |
+| `SFprescription` | int | no | `1` | Star formation prescription: 0=Croton+06; 1=Blitz & Rosolowsky 06 H₂; 2=Somerville+25 SFR; 3=Somerville+25 SFR+H₂; 4=Krumholz & Dekel 12; 5=KMT 09; 6=Krumholz 13; 7=Gnedin & Draine 14; 8=DarkSage (DarkSAGEMode = 1 only): H₂ per annulus from the mid-plane pressure, H₂/HI = (P/P₀)^0.92 with the stars weighted by σ_gas/σ_* (Blitz & Rosolowsky 2006 as in Stevens et al. 2024 Sec. 6), the neutral fraction set by the annulus's recent star formation (from the stellar age bins) and capped by the Faucher-Giguère (2020) UV background; SFR = M_H₂ / 2.30 Gyr unless H2DepletionMode 1-5 picks another depletion law. |
 | `AGNrecipeOn` | int | no | `2` | AGN feedback: 0=off; 1=empirical; 2=Bondi-Hoyle; 3=cold cloud accretion. |
 | `SupernovaRecipeOn` | 0/1 | no | `1` | SN feedback: 0=off; 1=Croton+16 reheating/ejection. |
 | `ReionizationOn` | 0/1 | no | `1` | Reionization suppression of infall: 0=off; 1=Kravtsov+04 analytic fit. |

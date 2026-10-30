@@ -1311,6 +1311,15 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
      * is below the neutral threshold */
     double h2_sum = 0.0, hi_sum = 0.0;
     for(int i = 0; i < N_BINS; i++) {
+        if(run_params->SFprescription == 8) {
+            /* SFprescription 8 (DarkSage): the annulus keeps its own neutral fraction of its hydrogen */
+            const double neutral = DARKSAGE_X_H * galaxies[p].DiscFNeutral[i] * galaxies[p].DiscGas[i];
+            if(galaxies[p].DiscH2[i] > neutral) galaxies[p].DiscH2[i] = (float)neutral;
+            galaxies[p].DiscHI[i] = (float)(neutral - galaxies[p].DiscH2[i]);
+            h2_sum += galaxies[p].DiscH2[i];
+            hi_sum += galaxies[p].DiscHI[i];
+            continue;
+        }
         const double hydrogen = HYDROGEN_MASS_FRAC * galaxies[p].DiscGas[i];
         if(galaxies[p].DiscH2[i] > hydrogen) galaxies[p].DiscH2[i] = (float)hydrogen;
 

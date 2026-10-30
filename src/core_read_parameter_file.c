@@ -526,10 +526,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
 #undef CHECK_VALID_ENUM_IN_PARAM_FILE
 
 
-    /* SF prescription must be one of the eight implemented recipes; the
+    /* SF prescription must be one of the nine implemented recipes; the
        H2-tracking predicate (sf_prescription_tracks_h2) relies on this range. */
-    if(run_params->SFprescription < 0 || run_params->SFprescription > 7) {
-        fprintf(stderr,"Error: SFprescription = %d is not valid; it must be in [0, 7].\n", run_params->SFprescription);
+    if(run_params->SFprescription < 0 || run_params->SFprescription > 8) {
+        fprintf(stderr,"Error: SFprescription = %d is not valid; it must be in [0, 8].\n", run_params->SFprescription);
         fprintf(stderr,"Please change the value for the parameter 'SFprescription' in the parameter file (%s)\n", fname);
         ABORT(EXIT_FAILURE);
     }
@@ -577,6 +577,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     }
     /* In DarkSAGEMode the disc annuli replace the radial integration, and mode 5 (the DarkSage
        H2 law) only exists there. */
+    if(run_params->SFprescription == 8 && run_params->DarkSAGEMode != 1) {
+        fprintf(stderr, "Error: SFprescription = 8 (DarkSage H2 and SFR per annulus) needs DarkSAGEMode = 1.\n");
+        ABORT(EXIT_FAILURE);
+    }
     if(run_params->H2DepletionMode == 5 && run_params->DarkSAGEMode != 1) {
         fprintf(stderr, "Error: H2DepletionMode = 5 (DarkSage H2 law) needs DarkSAGEMode = 1.\n");
         ABORT(EXIT_FAILURE);

@@ -266,6 +266,7 @@ struct GALAXY
     float MetalsICSAge[N_AGE_BINS];
     int32_t AgeBinNow;               /* age bin of the current substep */
     double TimeNow;                  /* lookback time of the current substep [code time] */
+    float DiscFNeutral[N_BINS];      /* neutral fraction of each annulus's hydrogen (SFprescription 8; else 1) */
     float AgeMismatch;               /* stellar mass whose age bins disagree with its component, / (M* + ICS) (diagnostic) */
     float ICSMeanRadius;             /* mass-weighted radius at which the intrahalo stars were deposited [Mpc/h] (DarkSage R_ICS_av) */
     float VelDispStars[N_BINS];      /* Stellar velocity dispersion per annulus [km/s] */

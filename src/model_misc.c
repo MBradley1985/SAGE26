@@ -197,6 +197,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].AgeBinNow = 0;
     galaxies[p].TimeNow = 0.0;
     galaxies[p].AgeMismatch = 0.0f;
+    for(int i = 0; i < N_BINS; i++) galaxies[p].DiscFNeutral[i] = 1.0f;
     for(int i = 0; i < N_BINS; i++) {
         galaxies[p].DiscGas[i] = galaxies[p].DiscGasMetals[i] = 0.0f;
         galaxies[p].DiscStars[i] = galaxies[p].DiscStarsMetals[i] = 0.0f;
