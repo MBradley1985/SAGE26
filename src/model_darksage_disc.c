@@ -23,9 +23,6 @@
  * The intrahalo stars follow a Hernquist profile whose mass-weighted radius is
  * ICSMeanRadius (DarkSage R_ICS_av, get_a_ICS()).
  *
- * Deviation from the source: the grid is interpolated linearly (DarkSage uses
- * a cubic spline).
- *
  * SAGE26 -- released under MIT (see LICENSE).
  */
 

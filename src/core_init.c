@@ -80,9 +80,9 @@ void init(struct params *run_params)
 
     /* DarkSAGEMode: specific angular momentum bin edges, j_0 = 0 and j_i = DS_FIRST_BIN DS_EXPONENT_BIN^(i-1) */
     if(run_params->DarkSAGEMode >= 1) {
-        /* DS_FIRST_BIN [kpc km/s] -> code units [(Mpc/h)(km/s)] */
+        /* DS_FIRST_BIN [kpc/h km/s] -> code units [(Mpc/h)(km/s)] (DarkSage main.c) */
         const double j_unit = (CM_PER_MPC / 1e3 / run_params->UnitLength_in_cm)
-                            / (1e5 / run_params->UnitVelocity_in_cm_per_s);
+                            / (run_params->UnitVelocity_in_cm_per_s / 1e5);
         run_params->DiscBinEdge[0] = 0.0;
         for(int i = 1; i < N_BINS + 1; i++) {
             run_params->DiscBinEdge[i] = DS_FIRST_BIN * j_unit * pow(DS_EXPONENT_BIN, i - 1);

@@ -24,7 +24,7 @@
 #define  N_BINS           30         /* Number of radial annuli for disk structure (DarkSAGEMode) */
 
 /* DarkSAGEMode constants, DarkSage's values (millennium.par; Stevens et al. 2024) */
-#define  DS_FIRST_BIN         1.0     /* first specific angular momentum bin edge [kpc km/s], j_i = DS_FIRST_BIN DS_EXPONENT_BIN^(i-1) */
+#define  DS_FIRST_BIN         1.0     /* first specific angular momentum bin edge [kpc/h km/s], j_i = DS_FIRST_BIN DS_EXPONENT_BIN^(i-1) */
 #define  DS_EXPONENT_BIN      1.4     /* geometric growth of the j-bin edges, and of the rotation-curve grid */
 #define  DS_THETA_THRESH_DEG  10.0    /* gas and stellar discs closer than this are treated as coplanar [deg] */
 #define  DS_DEG_PER_TDYN      5.0     /* precession of the gas disc towards the stellar disc [deg per dynamical time] */

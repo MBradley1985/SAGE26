@@ -478,23 +478,6 @@ double get_metallicity(const double gas, const double metals)
 }
 
 /* Return the larger of two doubles. */
-/* ---------------------------------------------------------------------------
- * DarkSAGEMode: spin vectors (unit vectors, mass-weighted on mixing)
- * -------------------------------------------------------------------------*/
-
-/* spin_old <- unit vector along m_old spin_old + m_add spin_add; unchanged on exact cancellation */
-void evolve_spin(float spin_old[3], const double m_old, const float spin_add[3], const double m_add)
-{
-    if(m_add <= 0.0 || m_old + m_add <= 0.0) return;
-
-    double J[3];
-    for(int j = 0; j < 3; j++) J[j] = m_old * spin_old[j] + m_add * spin_add[j];
-    const double mag = sqrt(J[0] * J[0] + J[1] * J[1] + J[2] * J[2]);
-    if(mag > 0.0) {
-        for(int j = 0; j < 3; j++) spin_old[j] = (float)(J[j] / mag);
-    }
-}
-
 double dmax(const double x, const double y)
 {
     return (x > y) ? x:y;
