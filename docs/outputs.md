@@ -306,14 +306,14 @@ These fields are always present in both writers and always accumulate.
 
 ## DarkSAGEMode annuli (`DarkSAGEMode >= 1`)
 
-HDF5 output only, written when `DarkSAGEMode` is 1 or 2 (files from
+HDF5 output only, written when `DarkSAGEMode` is 1, 2 or 3 (files from
 `DarkSAGEMode = 0` are unchanged). Per-annulus fields are 2-D datasets of
 shape (ngalaxies, 30), or (ngalaxies, 31) for the annulus edges. The
 annuli sum to the bulk fields: `DiscGas` to `ColdGas`, `DiscGasMetals` to
 `MetalsColdGas`, `DiscStars` to `StellarMass - BulgeMass` (the bulge is not
 in the annuli), `DiscStarsMetals` to `MetalsStellarMass - MetalsBulgeMass`,
 `DiscH2` to `H2gas`, `DiscHI` to `H1gas` and `DiscSFR` to `SfrDisk`. In
-these modes `DiskRadius` is measured from the annuli, J_disc / (2 M_disc
+modes 2 and 3 `DiskRadius` is measured from the annuli, J_disc / (2 M_disc
 V_disc) over gas and disc stars, V_disc being the disc's own rotation speed
 (half the mass-weighted mean radius), rather than from the halo spin. The
 radii, rotation curve and half-mass radii are refreshed at the end of each

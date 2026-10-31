@@ -38,26 +38,24 @@ reheated, becomes unstable, feeds the black hole or bursts.
 - Mode 1 shares those bulk masses over the annuli: star formation and H2 by
   the same law evaluated per annulus, the instability's gas and stars from
   the annuli the Toomre Q marks unstable. The annuli sum to the bulk fields.
-- Mode 2 evaluates the star-formation law on each annulus's own surface
-  density; the galaxy's star formation is the sum.
+  `DiskScaleRadius` stays at SAGE26's halo-spin value, so every shared output
+  is identical to SAGE26: SAGE26 with radially resolved discs and angular
+  momentum tracking, and nothing else changed.
+- Mode 2 is mode 1 with `DiskScaleRadius` measured from the annuli: half the
+  mass-weighted mean radius of the gas and disc stars, using the disc's own
+  rotation speed. This is the one change it makes to SAGE26's physics.
+- Mode 3 is mode 2 with the star-formation law evaluated on each annulus's
+  own surface density; the galaxy's star formation is the sum.
 
-In both, `DiskScaleRadius` is measured from the annuli: half the
-mass-weighted mean radius of the gas and disc stars, using the disc's own
-rotation speed. This is the one change mode 1 makes to SAGE26's physics. With
-`DarkSAGEPinDiskRadius = 1` the radius stays at SAGE26's halo-spin value, and
-mode 1 then reproduces SAGE26 exactly in every shared output: SAGE26 with
-radially resolved discs and angular momentum tracking, and nothing else
-changed.
-
-**Known behaviour.** The stellar discs are more compact than observed
+**Known behaviour** (modes 2 and 3). The stellar discs are more compact than observed
 (about 0.3 dex below Lange et al. 2016 at z = 0), as in DarkSage's own runs
 on the same trees. Black holes in galaxies below 10^9.5 Msun are about
 0.4 dex heavier than in SAGE26, matching DarkSage. Gas-rich small discs come
 out larger than SAGE26's, so they form stars less efficiently: the cosmic star
 formation rate density is 0.1-0.15 dex lower at z > 2 and converges with
 SAGE26 below z ~ 1, and small haloes hold up to ~0.1 dex less stellar mass.
-All of these enter through the disc scale radius and vanish with
-`DarkSAGEPinDiskRadius = 1`.
+All of these enter through the disc scale radius (modes 2 and 3) and are
+absent in mode 1.
 
 ## DustySAGEMode: dust
 
@@ -110,6 +108,6 @@ summing to `ColdDust`). It moves with the annulus gas in every annulus
 operation, new stars and reheated gas take the dust of their own annulus,
 the yields go to the annuli forming stars (else the stellar disc, else the
 gas), and grain growth and SN destruction act on each annulus's gas, metals,
-dust, H2 and star formation. DarkSAGEMode 1 shares the galaxy-wide dust rates
-over the annuli; DarkSAGEMode 2 sums the annuli's own. Neither source has
+dust, H2 and star formation. DarkSAGEMode 1-2 share the galaxy-wide dust rates
+over the annuli; DarkSAGEMode 3 sums the annuli's own. Neither source has
 dust in annuli, so this combination follows the DarkSAGEMode pattern above.

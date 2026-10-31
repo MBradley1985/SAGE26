@@ -194,11 +194,9 @@ cap) rather than a fixed count.
 | Value | Mode |
 |-------|------|
 | 0 | Off |
-| 1 | 30 annuli in specific angular momentum share SAGE26's bulk recipes; the annuli sum to the bulk |
-| 2 | As 1, but the star-formation law is evaluated on each annulus's own surface density |
-
-`DarkSAGEPinDiskRadius = 1` keeps SAGE26's halo-spin disc radius instead of the
-annuli's; DarkSAGEMode 1 then reproduces SAGE26 exactly, with the annuli as added detail.
+| 1 | 30 annuli in specific angular momentum share SAGE26's bulk recipes, with SAGE26's disc radius: output identical to SAGE26, the annuli as added detail |
+| 2 | As 1, but the disc radius is measured from the annuli |
+| 3 | As 2, and the star-formation law is evaluated on each annulus's own surface density |
 
 ### Dust (`DustySAGEMode`)
 

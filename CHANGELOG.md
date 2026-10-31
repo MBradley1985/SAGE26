@@ -16,14 +16,13 @@ it says otherwise. See
   30 annuli of specific angular momentum, following DarkSage (Stevens et al.
   2016, 2024): rotation-curve radii, gas and stellar spins, precession, cooling
   and merger gas placed by j, per-annulus H2, star formation and instability.
-  Mode 1 shares SAGE26's bulk recipes over the annuli; mode 2 evaluates the
-  star-formation law per annulus. `DiskScaleRadius` comes from the annuli.
+  Mode 1 shares SAGE26's bulk recipes over the annuli and keeps SAGE26's
+  `DiskScaleRadius`, so its output is identical to SAGE26; mode 2 measures
+  `DiskScaleRadius` from the annuli; mode 3 also evaluates the star-formation
+  law per annulus.
   New outputs: `DiscRadii`, `DiscVcirc`, `DiscGas`, `DiscGasMetals`,
   `DiscStars`, `DiscStarsMetals`, `DiscH2`, `DiscHI`, `DiscSFR`,
   `VelDispStars`, spins, bulge dispersions, disc scale and half-mass radii.
-- New `DarkSAGEPinDiskRadius` (default 0): 1 keeps SAGE26's halo-spin
-  `DiskScaleRadius`, so DarkSAGEMode 1 reproduces SAGE26 exactly with the
-  annuli as added detail. Replaces the `DARKSAGE_PIN_DISK_RADIUS` build flag.
 - New `ConcentrationOn = 4` (Dutton & Macciò 2014, DarkSage) and
   `H2DepletionMode = 5` (DarkSage, M_H2 / 2.30 Gyr).
 - With `DarkSAGEMode = 0` the output is bit-identical to before.

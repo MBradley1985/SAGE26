@@ -712,7 +712,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         // Using the stale value + clamp would silently fall back to ColdGas for most events.
         const int cgal = merger_centralgal;
         double h2gas_fresh = 0.0;
-        if(run_params->DarkSAGEMode == 2) {
+        if(run_params->DarkSAGEMode == 3) {
             double sfr_unused[N_BINS];
             darksage_star_formation_rate(cgal, sfr_unused, galaxies, run_params);   // sets H2gas and DiscH2[]
             h2gas_fresh = galaxies[cgal].H2gas;
@@ -914,8 +914,8 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     if(run_params->DarkSAGEMode >= 1) {
         double burst_weight[N_BINS];
         const int by_h2 = (run_params->StarburstColdGasOn == 0 && sf_prescription_tracks_h2(run_params->SFprescription));
-        if(by_h2 && run_params->DarkSAGEMode == 1) {
-            // mode 1's DiscH2 dates from the last star formation; the H2 law on the annuli as they
+        if(by_h2 && run_params->DarkSAGEMode <= 2) {
+            // in modes 1-2 DiscH2 dates from the last star formation; the H2 law on the annuli as they
             // are now (merged gas included) says where the burst's H2 is
             double sfr_unused[N_BINS];
             darksage_annulus_rates(merger_centralgal, sfr_unused, burst_weight, galaxies, run_params);

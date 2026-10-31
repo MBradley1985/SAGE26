@@ -17,7 +17,7 @@ extern "C" {
     /* SFprescription / H2DepletionMode SFR and H2 of each annulus, galaxy untouched */
     extern void darksage_annulus_rates(const int p, double sfr_bin[N_BINS], double h2_bin[N_BINS],
                                        const struct GALAXY *galaxies, const struct params *run_params);
-    /* Same, setting DiscH2, H2gas and H2DepletionTime_Gyr from the annuli (DarkSAGEMode 2);
+    /* Same, setting DiscH2, H2gas and H2DepletionTime_Gyr from the annuli (DarkSAGEMode 3);
      * returns the total SFR */
     extern double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
                                                struct GALAXY *galaxies, const struct params *run_params);
@@ -33,7 +33,12 @@ extern "C" {
      * and the annulus dust to ColdDust (darksage_sync_disc_dust()) */
     extern void darksage_sync_disc_metals(const int p, struct GALAXY *galaxies);
     extern void darksage_sync_disc_dust(const int p, struct GALAXY *galaxies);
-    /* Rescale the annulus H2 and HI to H2gas and H1gas */
+    /* Share total over the annuli in proportion to shape, none above cap: an annulus that would pass
+     * its cap is filled to it and the rest shared again; what no shape places goes by the room left,
+     * anything beyond every cap by gas.  The annuli sum to total. */
+    extern void darksage_share_capped(float arr[N_BINS], const double total, const double shape[N_BINS],
+                                      const double cap[N_BINS], const float gas[N_BINS]);
+    /* Share H2gas and H1gas over the annuli keeping their shapes, each annulus within its hydrogen */
     extern void darksage_sync_disc_phases(const int p, struct GALAXY *galaxies);
     extern void darksage_add_disc_metals(const int p, const double metals, const double weight[N_BINS],
                                          struct GALAXY *galaxies);

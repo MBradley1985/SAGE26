@@ -14,7 +14,7 @@
  *   - DarkSAGEMode (no source: Dusty-SAGE has no annuli, DarkSage no dust): the annuli carry the
  *     cold dust, DiscDust, moving with their gas; the yields go to the annuli forming stars, and
  *     growth and destruction act on each annulus's gas, metals, H2 and star formation.
- *     DarkSAGEMode 1 shares the galaxy-wide rates over the annuli, mode 2 sums the annuli's own.
+ *     DarkSAGEMode 1-2 share the galaxy-wide rates over the annuli, mode 3 sums the annuli's own.
  * Known source bugs fixed here (SAGE26_investigation.md Sec. 5): the yield metallicity bin is
  * the one containing Z (the source's test never matched, so zero-metallicity yields were always
  * used); the lookup time is a double (the source truncated it to an int); the lognormal IMF
@@ -299,8 +299,8 @@ static int production_shares(const struct GALAXY *g, double share[N_BINS])
     return 0;
 }
 
-/* DarkSAGEMode: local[i] is what annulus i does by itself.  DarkSAGEMode 2 keeps it (the galaxy
- * total is the sum, the annuli are evaluated separately); mode 1 shares the galaxy-wide total
+/* DarkSAGEMode: local[i] is what annulus i does by itself.  DarkSAGEMode 3 keeps it (the galaxy
+ * total is the sum, the annuli are evaluated separately); modes 1-2 share the galaxy-wide total
  * `bulk` over the annuli in its proportions, or in fallback[]'s if it is zero everywhere (as the
  * bulk SAGE26 recipes are shared over the annuli).  Returns the galaxy total. */
 static double annulus_amounts(double local[N_BINS], const double bulk, const float fallback[N_BINS],
@@ -308,7 +308,7 @@ static double annulus_amounts(double local[N_BINS], const double bulk, const flo
 {
     double sum = 0.0, fsum = 0.0;
     for(int i = 0; i < N_BINS; i++) sum += local[i];
-    if(run_params->DarkSAGEMode == 2) return sum;
+    if(run_params->DarkSAGEMode == 3) return sum;
     for(int i = 0; i < N_BINS; i++) fsum += fallback[i];
     for(int i = 0; i < N_BINS; i++) {
         if(sum > 0.0) local[i] *= bulk / sum;
@@ -421,7 +421,7 @@ static void dust_growth(const int p, const double dt, struct GALAXY *galaxies, c
             if(all_metals) g->DiscGasMetals[i] -= (float)local[i];
             capped += local[i];
         }
-        if(run_params->DarkSAGEMode == 2) grow = capped;
+        if(run_params->DarkSAGEMode == 3) grow = capped;
     }
     if(grow <= 0.0) return;
     if(all_metals && grow > g->MetalsColdGas) grow = g->MetalsColdGas;

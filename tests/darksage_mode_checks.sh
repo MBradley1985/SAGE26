@@ -2,10 +2,10 @@
 # DARKSAGEMODE INTEGRATION CHECKS
 #
 # Validates, on the Millennium trees:
-#   1. Pinned radius: with DarkSAGEPinDiskRadius = 1 (DiskScaleRadius kept at SAGE26's value),
-#      DarkSAGEMode 1 gives output identical to DarkSAGEMode 0 in every field the two share --
-#      the annuli only resolve SAGE26's bulk evolution.
-#   2. Annulus sums: in DarkSAGEMode 1 and 2 (normal build) the annuli sum to the bulk fields
+#   1. Pinned radius: DarkSAGEMode 1 (DiskScaleRadius kept at SAGE26's value) gives output
+#      identical to DarkSAGEMode 0 in every field the two share -- the annuli only resolve
+#      SAGE26's bulk evolution.
+#   2. Annulus sums: in DarkSAGEMode 2 and 3 the annuli sum to the bulk fields
 #      (gas, gas metals, disc stars, disc star metals, disc SFR); prints the worst mismatch.
 #   3. Passive dust: DustySAGEMode 1 gives output identical to DustySAGEMode 0 in every field the
 #      two share (dust is written in addition).
@@ -20,20 +20,19 @@ W=$ROOT/tests/test_output/darksage
 rm -rf "$W" && mkdir -p "$W"
 trap 'rm -rf "$W"' EXIT   # the runs are ~30 GB: delete them however the script ends
 
-run_mode() {   # binary mode outdir [pin]
+run_mode() {   # binary mode outdir
     mkdir -p "$3"
     sed -e "s|^OutputDir .*|OutputDir          $3/|" -e "s|^DarkSAGEMode .*|DarkSAGEMode                $2|" $PAR > "$3.par"
-    printf "\nDarkSAGEPinDiskRadius %s\n" "${4:-0}" >> "$3.par"
     mpirun -np 8 "$1" "$3.par" > "$3.log" 2>&1
 }
 
 echo "--- 1. pinned radius: mode 1 against mode 0"
 run_mode "$ROOT/sage" 0 "$W/pinned_mode0"
-run_mode "$ROOT/sage" 1 "$W/pinned_mode1" 1
+run_mode "$ROOT/sage" 1 "$W/pinned_mode1"
 $PYTHON tests/darksage_compare_runs.py "$W/pinned_mode0" "$W/pinned_mode1" 63 50 40 30 20 | tail -1
 
-echo "--- 2. annulus sums in modes 1 and 2"
-for m in 1 2; do
+echo "--- 2. annulus sums in modes 2 and 3"
+for m in 2 3; do
     run_mode "$ROOT/sage" $m "$W/mode$m"
     $PYTHON tests/darksage_annuli_sums.py "$W/mode$m" 63 40 20
 done

@@ -1357,7 +1357,7 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
 
 /*
  * darksage_mirror_star_formation -- the annulus side of a bulk SAGE26 star-formation event
- * (DarkSAGEMode 1, and feedback-free bursts in every DarkSAGEMode).  gas_used of cold gas,
+ * (DarkSAGEMode 1-2, and feedback-free bursts in every DarkSAGEMode).  gas_used of cold gas,
  * stars_locked of it locked into stars and the rest reheated, leaves the annuli in proportion
  * to weight; the stars join the stellar annuli where they formed
  * (darksage_combine_stellar_discs()) and DiscSFR records the rate, stars / dt with
@@ -1389,37 +1389,36 @@ static void darksage_mirror_star_formation(const int p, const double gas_used, c
 }
 
 /*
- * darksage_set_phases -- DarkSAGEMode 1: share SAGE26's H2gas and H1gas over the annuli.  H2
+ * darksage_set_phases -- DarkSAGEMode 1-2: share SAGE26's H2gas and H1gas over the annuli.  H2
  * follows h2_shape (the prescription's per-annulus H2; NULL: none), HI the hydrogen each
  * annulus has left beyond its H2, zero where the annulus column is below SIGMA_HI_CRIT (as in
- * DarkSAGEMode 2); either falls back to the gas profile when its shape is empty.
+ * DarkSAGEMode 3).  No annulus holds more H2, or H2 + HI, than its hydrogen
+ * (darksage_share_capped()); H2 falls back to the gas profile, and HI to the hydrogen left,
+ * when its shape is empty.
  */
 static void darksage_set_phases(const int p, const double h2_shape[N_BINS], struct GALAXY *galaxies,
                                 const struct params *run_params)
 {
     struct GALAXY *g = &galaxies[p];
     const float h = run_params->Hubble_h;
-    double h2[N_BINS], hi[N_BINS], h2_sum = 0.0, hi_sum = 0.0, gas_sum = 0.0;
+    double h2[N_BINS], hi[N_BINS], cap[N_BINS], h2_sum = 0.0;
     for(int i = 0; i < N_BINS; i++) {
         h2[i] = (h2_shape != NULL && h2_shape[i] > 0.0) ? h2_shape[i] : 0.0;
         h2_sum += h2[i];
-        gas_sum += g->DiscGas[i];
+        cap[i] = HYDROGEN_MASS_FRAC * g->DiscGas[i];
     }
+    if(h2_sum <= 0.0) for(int i = 0; i < N_BINS; i++) h2[i] = g->DiscGas[i];
+    /* no annulus holds more H2 than its hydrogen: the shape was set before this substep's star
+     * formation took gas out of the annuli */
+    darksage_share_capped(g->DiscH2, g->H2gas, h2, cap, g->DiscGas);
     for(int i = 0; i < N_BINS; i++) {
-        const double h2_i = (h2_sum > 0.0) ? g->H2gas * h2[i] / h2_sum
-                                           : ((gas_sum > 0.0) ? g->H2gas * g->DiscGas[i] / gas_sum : 0.0);
-        g->DiscH2[i] = (float)h2_i;
         const double r_in = CODE_LENGTH_TO_PC(g->DiscRadii[i], h), r_out = CODE_LENGTH_TO_PC(g->DiscRadii[i+1], h);
         const double area_pc2 = M_PI * (r_out * r_out - r_in * r_in);
         const double sigma_gas = (area_pc2 > 0.0) ? CODE_MASS_TO_MSUN(g->DiscGas[i], h) / area_pc2 : 0.0;
-        const double left = HYDROGEN_MASS_FRAC * g->DiscGas[i] - h2_i;
-        hi[i] = (sigma_gas >= SIGMA_HI_CRIT && left > 0.0) ? left : 0.0;
-        hi_sum += hi[i];
+        cap[i] = (cap[i] > g->DiscH2[i]) ? cap[i] - g->DiscH2[i] : 0.0;
+        hi[i] = (sigma_gas >= SIGMA_HI_CRIT) ? cap[i] : 0.0;
     }
-    for(int i = 0; i < N_BINS; i++) {
-        g->DiscHI[i] = (float)((hi_sum > 0.0) ? g->H1gas * hi[i] / hi_sum
-                                              : ((gas_sum > 0.0) ? g->H1gas * g->DiscGas[i] / gas_sum : 0.0));
-    }
+    darksage_share_capped(g->DiscHI, g->H1gas, hi, cap, g->DiscGas);
 }
 
 /* Feedback-free bursts are shared over the annuli by DiscGas / t_dyn,i, each annulus's own
@@ -1501,18 +1500,18 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         return;  // Exit early - FFB path complete
     }
 
-    // DarkSAGEMode 2: the SF law is evaluated on each annulus; mode 1 runs the bulk path below
-    // and mirrors it onto the annuli
-    if(run_params->DarkSAGEMode == 2) {
+    // DarkSAGEMode 3: the SF law is evaluated on each annulus; modes 1-2 run the bulk path below
+    // and mirror it onto the annuli
+    if(run_params->DarkSAGEMode == 3) {
         starformation_and_feedback_darksage(p, centralgal, time, dt, halonr, step, galaxies, run_params);
         return;
     }
 
     double stars, ejected_mass, metallicity;
 
-    // DarkSAGEMode 1: the same law on each annulus gives the shape the bulk SFR and H2 are
+    // DarkSAGEMode 1-2: the same law on each annulus gives the shape the bulk SFR and H2 are
     // shared by
-    const int mirror = (run_params->DarkSAGEMode == 1);
+    const int mirror = (run_params->DarkSAGEMode == 1 || run_params->DarkSAGEMode == 2);
     double sfr_shape[N_BINS], h2_shape[N_BINS];
     if(mirror) {
         darksage_annulus_rates(p, sfr_shape, h2_shape, galaxies, run_params);
@@ -1601,7 +1600,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     // update from SN feedback
     update_from_feedback(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
 
-    // DarkSAGEMode 1: the gas the bulk used and the stars it formed, in the annuli (from the masses
+    // DarkSAGEMode 1-2: the gas the bulk used and the stars it formed, in the annuli (from the masses
     // booked above, not the change in the float ColdGas, which misses events below its precision)
     if(mirror) {
         darksage_mirror_star_formation(p, (1.0 - run_params->RecycleFraction) * stars + ((run_params->SupernovaRecipeOn == 1) ? reheated_mass : 0.0),

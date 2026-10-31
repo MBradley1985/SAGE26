@@ -584,12 +584,12 @@ double darksage_host_mass_within(const struct GALAXY *c, const double r, const d
  *   r_d = sum_i m_i r_i / (2 M_disc),  m_i = DiscGas_i + DiscStars_i,
  * r_i the centre of annulus i, i.e. half the disc's mass-weighted mean radius.  Gas and disc
  * stars together; an empty disc keeps the current (SAGE26) value.
- * With DarkSAGEPinDiskRadius = 1 the radius is left at SAGE26's (halo-spin) value, so
- * DarkSAGEMode 1 reproduces SAGE26 exactly and the annuli only resolve it.
+ * DarkSAGEMode 1 leaves the radius at SAGE26's (halo-spin) value, so it reproduces SAGE26
+ * exactly and the annuli only resolve it.
  */
 void darksage_set_disk_scale_radius(const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
-    if(run_params->DarkSAGEPinDiskRadius) return;
+    if(run_params->DarkSAGEMode == 1) return;
     struct GALAXY *g = &galaxies[p];
     double M = 0.0, MR = 0.0;
     for(int i = 0; i < N_BINS; i++) {

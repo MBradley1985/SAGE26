@@ -1631,7 +1631,6 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     if(run_params->DarkSAGEMode >= 1) {
         // Only when on, so DarkSAGEMode == 0 headers are unchanged
         CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DarkSAGEMode", run_params->DarkSAGEMode, H5T_NATIVE_INT);
-        CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DarkSAGEPinDiskRadius", run_params->DarkSAGEPinDiskRadius, H5T_NATIVE_INT);
         /* DarkSAGEMode constants (macros.h); the attribute macro needs addressable values */
         const double ds_firstbin = DS_FIRST_BIN;
         const double ds_exponentbin = DS_EXPONENT_BIN;

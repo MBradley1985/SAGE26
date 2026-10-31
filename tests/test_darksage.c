@@ -21,6 +21,7 @@
 #include "../src/core_allvars.h"
 #include "../src/macros.h"
 #include "../src/model_darksage_sf.h"
+#include "../src/model_starformation_and_feedback.h"
 #include "../src/model_darksage_disc.h"
 #include "../src/model_darksage_mergers.h"
 #include "../src/model_darksage_instability.h"
@@ -43,7 +44,7 @@ static void setup_params(struct params *rp)
     rp->Hubble_h = 0.73;
     rp->BoxSize = 62.5;
     rp->AA[0] = 1.0;
-    rp->DarkSAGEMode = 1;
+    rp->DarkSAGEMode = 2;   /* annuli with DiskScaleRadius from them; 1 pins it to SAGE26's */
     const double j_unit = (CM_PER_MPC / 1e3 / rp->UnitLength_in_cm) / (1e5 / rp->UnitVelocity_in_cm_per_s);
     rp->DiscBinEdge[0] = 0.0;
     for(int i = 1; i < N_BINS + 1; i++) rp->DiscBinEdge[i] = DS_FIRST_BIN * j_unit * pow(DS_EXPONENT_BIN, i - 1);
@@ -162,11 +163,11 @@ void test_cooling_deposit_and_disc_radius(void) {
     darksage_set_disk_scale_radius(0, e, &rp);
     ASSERT_TRUE(e[0].DiskScaleRadius == 0.0123f, "Empty disc keeps its DiskScaleRadius");
 
-    /* DarkSAGEPinDiskRadius: the radius stays at SAGE26's (halo-spin) value whatever the annuli hold */
-    rp.DarkSAGEPinDiskRadius = 1;
+    /* DarkSAGEMode 1: the radius stays at SAGE26's (halo-spin) value whatever the annuli hold */
+    rp.DarkSAGEMode = 1;
     g[0].DiskScaleRadius = 0.0123f;
     darksage_set_disk_scale_radius(0, g, &rp);
-    ASSERT_TRUE(g[0].DiskScaleRadius == 0.0123f, "DarkSAGEPinDiskRadius = 1 keeps SAGE26's DiskScaleRadius");
+    ASSERT_TRUE(g[0].DiskScaleRadius == 0.0123f, "DarkSAGEMode 1 keeps SAGE26's DiskScaleRadius");
 }
 
 void test_cooling_spin_follows_angular_momentum(void) {
@@ -342,6 +343,32 @@ void test_unstable_profile(void) {
     ASSERT_TRUE(bounded, "No annulus loses more than it holds");
 }
 
+void test_phases_within_hydrogen(void) {
+    BEGIN_TEST("darksage_sync_disc_phases: H2 and HI shared over the annuli, each within its hydrogen");
+
+    /* The annulus H2 keeps its radial shape but no annulus may hold more H2 than its hydrogen,
+     * 0.74 x DiscGas, nor more H2 + HI: an H2 profile concentrated where the gas has since gone
+     * (removed by star formation, feedback or stripping) used to give DiscH2 >> DiscGas.  The
+     * overflow goes to the annuli that still have room, so the annuli still sum to H2gas, H1gas. */
+    struct params rp;
+    setup_params(&rp);
+    struct GALAXY g[1];
+    setup_galaxy(&g[0], &rp);
+    g[0].DiscGas[0] = 0.1f; g[0].DiscGas[1] = 1.0f;
+    g[0].ColdGas = 1.1f;
+    g[0].DiscH2[0] = 1.0f;                       /* all the H2 in annulus 0 */
+    g[0].H2gas = 0.5f; g[0].H1gas = 0.3f;        /* 0.8 <= 0.74 x 1.1 */
+    darksage_sync_disc_phases(0, g);
+    ASSERT_CLOSE(0.5, sum(g[0].DiscH2), SUM_RTOL, "Annuli sum to H2gas");
+    ASSERT_CLOSE(0.3, sum(g[0].DiscHI), SUM_RTOL, "Annuli sum to H1gas");
+    int ok = 1;
+    for(int i = 0; i < N_BINS; i++) {
+        if(g[0].DiscH2[i] + g[0].DiscHI[i] > HYDROGEN_MASS_FRAC * g[0].DiscGas[i] * (1.0 + 1e-6) + 1e-12) ok = 0;
+    }
+    ASSERT_TRUE(ok, "No annulus holds more H2 + HI than its hydrogen");
+    ASSERT_CLOSE(HYDROGEN_MASS_FRAC * 0.1, g[0].DiscH2[0], SUM_RTOL, "Annulus 0 filled to its hydrogen, the rest moved out");
+}
+
 int main(void) {
     BEGIN_TEST_SUITE("DarkSAGEMode annuli");
 
@@ -353,6 +380,7 @@ int main(void) {
     test_half_mass_radius_uniform_disc();
     test_merge_gas_conserves();
     test_unstable_profile();
+    test_phases_within_hydrogen();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

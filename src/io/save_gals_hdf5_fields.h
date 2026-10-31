@@ -28,7 +28,7 @@
     X(DiscGasMetals, N_BINS, "Cold gas metals in each annulus.", "1.0e10 Msun/h") \
     X(DiscStars, N_BINS, "Stellar disc mass in each annulus.", "1.0e10 Msun/h") \
     X(DiscStarsMetals, N_BINS, "Stellar disc metals in each annulus.", "1.0e10 Msun/h") \
-    X(DiscH2, N_BINS, "H2 mass in each annulus (mode 1: H2gas shared by the per-annulus H2 law; mode 2: that law, summing to H2gas).", "1.0e10 Msun/h") \
+    X(DiscH2, N_BINS, "H2 mass in each annulus (modes 1-2: H2gas shared by the per-annulus H2 law; mode 3: that law, summing to H2gas).", "1.0e10 Msun/h") \
     X(DiscHI, N_BINS, "HI mass in each annulus, summing to H1gas.", "1.0e10 Msun/h") \
     X(DiscSFR, N_BINS, "Star formation rate in each annulus, averaged over the snapshot's substeps.", "Msun/yr") \
     X(VelDispStars, N_BINS, "Stellar velocity dispersion in each annulus.", "km/s") \

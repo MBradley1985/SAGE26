@@ -260,11 +260,11 @@ void test_dust_annuli_physics(void) {
     BEGIN_TEST("dust_evolve (DarkSAGEMode): local growth and destruction, annuli sum to ColdDust");
 
     /* Growth needs H2 and SN destruction needs star formation: both act in annulus 0 only.
-     * DarkSAGEMode 1 keeps SAGE26's galaxy-wide totals (as for the bulk SF recipes); mode 2 sums
+     * DarkSAGEMode 1-2 keep SAGE26's galaxy-wide totals (as for the bulk SF recipes); mode 3 sums
      * the annuli.  Either way the annuli must sum to ColdDust, and in DustySAGEMode 2 metals +
      * dust are conserved. */
     const double dt = 1.0 * SEC_PER_MEGAYEAR / 3.08568e19;
-    for(int dark = 1; dark <= 2; dark++) {
+    for(int dark = 1; dark <= 3; dark++) {
         struct params rp;
         struct GALAXY g[1], bulk[1];
         setup_annuli(&rp, g, dark, 2);
@@ -276,25 +276,25 @@ void test_dust_annuli_physics(void) {
         ASSERT_GREATER_THAN(g[0].DiscDust[0], 0.001, "Dust grows where the H2 is");
         ASSERT_CLOSE(0.001, g[0].DiscDust[1], DUST_RTOL, "No growth without H2");
         ASSERT_CLOSE(before, g[0].MetalsColdGas + g[0].ColdDust, DUST_RTOL, "Metals + dust conserved");
-        if(dark == 1) {
+        if(dark <= 2) {
             setup_annuli(&rp, bulk, 0, 2);
             bulk[0].DustStarsStep = 0.0f;
             dust_evolve(0, 0, dt, bulk, &rp);
-            ASSERT_CLOSE(bulk[0].ColdDust, g[0].ColdDust, DUST_RTOL, "DarkSAGEMode 1: the galaxy-wide growth");
+            ASSERT_CLOSE(bulk[0].ColdDust, g[0].ColdDust, DUST_RTOL, "DarkSAGEMode 1-2: the galaxy-wide growth");
         }
 
-        /* Unequal dust: mode 2's growth is annulus 0's own, that of a galaxy holding just its gas */
+        /* Unequal dust: mode 3's growth is annulus 0's own, that of a galaxy holding just its gas */
         setup_annuli(&rp, g, dark, 2);
         g[0].DustStarsStep = 0.0f;
         g[0].DiscDust[0] = 0.0015f; g[0].DiscDust[1] = 0.0005f;
         dust_evolve(0, 0, dt, g, &rp);
-        if(dark == 2) {
+        if(dark == 3) {
             setup(&rp, bulk, 2);
             bulk[0].HotGas = 0.0f; bulk[0].HotDust = 0.0f; bulk[0].MetalsHotGas = 0.0f;
             bulk[0].ColdGas = 0.5f; bulk[0].MetalsColdGas = 0.0075f; bulk[0].ColdDust = 0.0015f; bulk[0].H2gas = 0.3f;
             bulk[0].DustStarsStep = 0.0f;
             dust_evolve(0, 0, dt, bulk, &rp);
-            ASSERT_CLOSE(bulk[0].ColdDust - 0.0015, g[0].ColdDust - 0.002, 1e-4, "DarkSAGEMode 2: the annuli's own growth");
+            ASSERT_CLOSE(bulk[0].ColdDust - 0.0015, g[0].ColdDust - 0.002, 1e-4, "DarkSAGEMode 3: the annuli's own growth");
         }
 
         /* Annuli not yet carrying ColdDust (all zero) take its profile first, then grow */

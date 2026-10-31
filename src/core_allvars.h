@@ -618,8 +618,7 @@ struct params
     /* DarkSAGEMode: Full DarkSage physics with radially-resolved disk structure */
     /* When DarkSAGEMode=1: Enables radial bins, Toomre Q instability, precession, j-conservation */
     /* When DarkSAGEMode=0: Standard SAGE behavior */
-    int32_t    DarkSAGEMode;            // 0: standard SAGE; 1: full DarkSage physics
-    int32_t    DarkSAGEPinDiskRadius;   // DarkSAGEMode: 1 keeps SAGE26's DiskScaleRadius (halo spin) instead of the annuli's
+    int32_t    DarkSAGEMode;            // 0: off; 1: annuli, SAGE26's DiskScaleRadius; 2: annuli, DiskScaleRadius from them; 3: as 2, SF law per annulus
     int32_t    DustySAGEMode;           // 0: no dust; 1: passive dust within SAGE26's metals; 2: Dusty-SAGE yields and dust
     int32_t    DustSNIIYields;          // 0: Woosley & Weaver 1995; 1: Nomoto et al. 2006
     int32_t    DustSNIaYields;          // 0: Iwamoto et al. 1999; 1: Seitenzahl et al. 2013

@@ -4,9 +4,9 @@
  * Applies the same SFprescription / H2DepletionMode laws as
  * model_starformation_and_feedback.c, but per disc annulus (DiscGas[i],
  * DiscStars[i], DiscRadii[i]) following Stevens, Croton & Mutch (2016).
- * DarkSAGEMode 2 forms its stars with these rates (the annuli are themselves a
+ * DarkSAGEMode 3 forms its stars with these rates (the annuli are themselves a
  * radial integration over the actual disc, so H2RadialIntegrationOn and
- * H2DiskAreaOption are not used there); DarkSAGEMode 1 uses them only as the
+ * H2DiskAreaOption are not used there); DarkSAGEMode 1-2 use them only as the
  * shape over which SAGE26's bulk rate is shared.  The helpers below move gas,
  * stars and metals in and out of the annuli for every mode.
  *
@@ -274,13 +274,66 @@ void darksage_sync_disc_dust(const int p, struct GALAXY *galaxies)
     rescale_to(galaxies[p].DiscDust, galaxies[p].ColdDust, galaxies[p].DiscGas);
 }
 
-/* Rescale the annulus H2 and HI to H2gas and H1gas, keeping their radial shapes (the bulk
- * phases are adjusted after star formation by bursts and clamps that the annuli do not see) */
+void darksage_share_capped(float arr[N_BINS], const double total, const double shape[N_BINS],
+                           const double cap[N_BINS], const float gas[N_BINS])
+{
+    double out[N_BINS] = {0.0}, left = (total > 0.0) ? total : 0.0;
+    int full[N_BINS] = {0};
+
+    /* in proportion to shape, filling any annulus that would pass its cap and sharing the rest
+     * again among the others */
+    for(int pass = 0; pass < N_BINS && left > 0.0; pass++) {
+        double s = 0.0;
+        for(int i = 0; i < N_BINS; i++) if(!full[i] && shape[i] > 0.0 && cap[i] > out[i]) s += shape[i];
+        if(s <= 0.0) break;
+        double placed = 0.0;
+        int capped = 0;
+        for(int i = 0; i < N_BINS; i++) {
+            if(full[i] || shape[i] <= 0.0 || cap[i] <= out[i]) continue;
+            if(out[i] + left * shape[i] / s >= cap[i]) {
+                placed += cap[i] - out[i];
+                out[i] = cap[i];
+                full[i] = capped = 1;
+            }
+        }
+        if(!capped) {
+            for(int i = 0; i < N_BINS; i++) if(!full[i] && shape[i] > 0.0 && cap[i] > out[i]) out[i] += left * shape[i] / s;
+            left = 0.0;
+        }
+        left -= placed;
+    }
+
+    /* what the shape cannot place: by the room left, then (beyond every cap) by the gas */
+    if(left > 0.0) {
+        double room = 0.0;
+        for(int i = 0; i < N_BINS; i++) room += (cap[i] > out[i]) ? cap[i] - out[i] : 0.0;
+        const double f = (room > 0.0) ? ((left < room) ? left / room : 1.0) : 0.0;
+        for(int i = 0; i < N_BINS; i++) if(cap[i] > out[i]) out[i] += f * (cap[i] - out[i]);
+        left -= f * room;
+    }
+    if(left > 0.0) {
+        double g_sum = 0.0;
+        for(int i = 0; i < N_BINS; i++) g_sum += gas[i];
+        for(int i = 0; i < N_BINS; i++) out[i] += (g_sum > 0.0) ? left * gas[i] / g_sum : left / N_BINS;
+    }
+    for(int i = 0; i < N_BINS; i++) arr[i] = (float)out[i];
+}
+
+/* Share H2gas and H1gas over the annuli keeping their radial shapes, no annulus holding more H2,
+ * or H2 + HI, than its hydrogen (the bulk phases are adjusted after star formation by bursts and
+ * clamps that the annuli do not see, and gas may have left an annulus since its H2 was set) */
 void darksage_sync_disc_phases(const int p, struct GALAXY *galaxies)
 {
     struct GALAXY *g = &galaxies[p];
-    rescale_to(g->DiscH2, g->H2gas, g->DiscGas);
-    rescale_to(g->DiscHI, g->H1gas, g->DiscGas);
+    double h2_shape[N_BINS], hi_shape[N_BINS], cap[N_BINS];
+    for(int i = 0; i < N_BINS; i++) {
+        h2_shape[i] = g->DiscH2[i];
+        hi_shape[i] = g->DiscHI[i];
+        cap[i] = HYDROGEN_MASS_FRAC * g->DiscGas[i];
+    }
+    darksage_share_capped(g->DiscH2, g->H2gas, h2_shape, cap, g->DiscGas);
+    for(int i = 0; i < N_BINS; i++) cap[i] = (cap[i] > g->DiscH2[i]) ? cap[i] - g->DiscH2[i] : 0.0;
+    darksage_share_capped(g->DiscHI, g->H1gas, hi_shape, cap, g->DiscGas);
 }
 
 void darksage_add_disc_metals(const int p, const double metals, const double weight[N_BINS],
