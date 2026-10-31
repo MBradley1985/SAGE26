@@ -13,7 +13,8 @@
 CC = gcc
 ROOT_DIR := $(shell cd .. && pwd)
 CFLAGS = -std=gnu99 -Wall -Wextra -g -O2 -I../src -DROOT_DIR='"$(ROOT_DIR)"' $(shell gsl-config --cflags)
-LDFLAGS = -lm $(shell gsl-config --libs)
+# rpath as in the main Makefile, so the tests find a GSL outside the system library path (e.g. conda)
+LDFLAGS = -lm $(shell gsl-config --libs) -Xlinker -rpath -Xlinker $(shell gsl-config --prefix)/lib
 
 # Directories
 SRC_DIR = ../src
