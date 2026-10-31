@@ -333,6 +333,21 @@ V_disc) over gas and disc stars, V_disc being the disc's own rotation speed
 | `SpinClassicalBulge` | (Mpc / h) (km / s) | Specific angular momentum vector of the merger bulge. |
 | `ICSMeanRadius` | Mpc / h | Mass-weighted radius at which the intrahalo stars were deposited. |
 
+## DustySAGEMode dust (`DustySAGEMode >= 1`)
+
+HDF5 output only, written when `DustySAGEMode` is 1 or 2 (files from
+`DustySAGEMode = 0` are unchanged). In mode 1 each reservoir's dust is part
+of its metals (`MetalsColdGas` etc. include it); in mode 2 it is held
+outside them, so the total metals of the cold gas are `MetalsColdGas +
+ColdDust`.
+
+| Field | Units | Description |
+|-------|-------|-------------|
+| `ColdDust`, `HotDust`, `CGMDust`, `EjectedDust` | 1.0e10 Msun / h | Dust in the cold, hot halo, CGM and ejected gas. |
+| `DustFormationRate` | Msun / yr | Dust made by AGB stars and SNII, averaged over the snapshot. |
+| `DustGrowthRate` | Msun / yr | Dust grown by accretion in the cold gas, averaged over the snapshot. |
+| `DustDestructionRate` | Msun / yr | Dust destroyed by supernova shocks, averaged over the snapshot. |
+
 ## Cumulative star formation history (`SaveFullSFH = 1`)
 
 HDF5 output only. When `SaveFullSFH = 1`, two extra 2-D datasets are

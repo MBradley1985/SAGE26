@@ -7,6 +7,8 @@
 #      share -- the annuli only resolve SAGE26's bulk evolution.
 #   2. Annulus sums: in DarkSAGEMode 1 and 2 (normal build) the annuli sum to the bulk fields
 #      (gas, gas metals, disc stars, disc star metals, disc SFR); prints the worst mismatch.
+#   3. Passive dust: DustySAGEMode 1 gives output identical to DustySAGEMode 0 in every field the
+#      two share (dust is written in addition).
 #
 # Run from the SAGE26 root: bash tests/darksage_mode_checks.sh   (PYTHON=... to pick python)
 set -e
@@ -34,3 +36,11 @@ for m in 1 2; do
     run_mode "$ROOT/sage" $m "$W/mode$m"
     $PYTHON tests/darksage_annuli_sums.py "$W/mode$m" 63 40 20
 done
+
+echo "--- 3. passive dust: DustySAGEMode 1 against 0 (DarkSAGEMode 0)"
+run_mode "$ROOT/sage" 0 "$W/dust0"
+mkdir -p "$W/dust1"
+sed -e "s|^OutputDir .*|OutputDir          $W/dust1/|" -e "s|^DarkSAGEMode .*|DarkSAGEMode                0|" $PAR > "$W/dust1.par"
+printf "\nDustySAGEMode               1\n" >> "$W/dust1.par"
+mpirun -np 8 "$ROOT/sage" "$W/dust1.par" > "$W/dust1.log" 2>&1
+$PYTHON tests/darksage_compare_runs.py "$W/dust0" "$W/dust1" 63 40 20 | tail -1
