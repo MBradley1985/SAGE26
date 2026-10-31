@@ -249,6 +249,7 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
             galaxies[ngal].RadioModeBHaccretionMass = 0.0;
             galaxies[ngal].OutflowRate = 0.0;
             galaxies[ngal].DustFormationRate = galaxies[ngal].DustGrowthRate = galaxies[ngal].DustDestructionRate = 0.0f;
+            galaxies[ngal].DustSubsteps = 0;
 
             for(int step = 0; step < STEPS; step++) {
                 galaxies[ngal].SfrDisk[step] = galaxies[ngal].SfrBulge[step] = 0.0;
@@ -691,6 +692,9 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         }
 
         if(run_params->DarkSAGEMode >= 1) {
+            // the radii the output carries follow the snapshot's final masses (DarkSage
+            // core_build_model.c refreshes them here, before output)
+            update_disc_radii(p, galaxies, halos, run_params);
             darksage_sync_disc_phases(p, galaxies);
             darksage_set_half_mass_radii(p, galaxies);
         }

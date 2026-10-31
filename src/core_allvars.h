@@ -162,6 +162,7 @@ struct GALAXY
     float EjectedDust;
     float DustSfh[ABSOLUTEMAXSNAPS]; /* snapshot-mean SFR history the delayed yields read [code units] */
     float DustStarsStep;             /* stars formed in the current substep (destruction, SFH) */
+    int DustSubsteps;                /* substeps of the current snapshot so far (dust_evolve()) */
     float DustMetalsStep;            /* metals SAGE26 put into the cold gas this substep (mode 1 cap) */
     float DustFormationRate;         /* dust made this snapshot; Msun/yr after evolve_galaxies() */
     float DustGrowthRate;            /* dust grown in the ISM this snapshot; Msun/yr after evolve_galaxies() */

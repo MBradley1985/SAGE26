@@ -324,6 +324,71 @@ void test_dust_zero_dt_resets(void) {
     ASSERT_TRUE(g[0].DustStarsStep == 0.0f && g[0].DustMetalsStep == 0.0f, "Counters cleared");
 }
 
+/* The galaxy of setup() in physical units [1e10 Msun, Mpc, Myr] expressed in code units for h */
+static void setup_physical(struct params *rp, struct GALAXY *g, const double h)
+{
+    setup(rp, g, 2);
+    rp->Hubble_h = h;
+    g->ColdGas = (float)(1.0 * h); g->MetalsColdGas = (float)(0.015 * h); g->ColdDust = (float)(0.002 * h);
+    g->H2gas = (float)(0.3 * h);
+    g->HotGas = (float)(5.0 * h); g->MetalsHotGas = (float)(0.02 * h); g->HotDust = (float)(0.001 * h);
+    g->Rvir = (float)(0.2 * h);
+    g->DustStarsStep = (float)(0.01 * h);
+}
+
+void test_dust_h_invariant(void) {
+    BEGIN_TEST("dust_evolve: grain growth, SN destruction and sputtering independent of h");
+
+    /* The same galaxy in physical units, written in code units (1e10 Msun/h, Mpc/h, code time
+     * (Mpc/h)/(km/s)) for two values of h, must lose and grow the same physical dust.  The source
+     * left 1/h out of every dust timescale and h^2 out of the sputtering density. */
+    double cold[2], hot[2];
+    const double hs[2] = {0.73, 1.0};
+    for(int k = 0; k < 2; k++) {
+        struct params rp;
+        struct GALAXY g[1];
+        setup_physical(&rp, g, hs[k]);
+        const double dt = 1.0 * SEC_PER_MEGAYEAR * hs[k] / rp.UnitTime_in_s;   /* 1 Myr */
+        for(int n = 0; n < 50; n++) {
+            g[0].DustStarsStep = (float)(0.01 * hs[k]);
+            dust_evolve(0, 0, dt, g, &rp);
+        }
+        cold[k] = g[0].ColdDust / hs[k];
+        hot[k] = g[0].HotDust / hs[k];
+    }
+    ASSERT_CLOSE(cold[1], cold[0], 1e-4, "Cold dust (growth, SN destruction) the same for h = 0.73 and 1");
+    ASSERT_CLOSE(hot[1], hot[0], 1e-4, "Hot dust (sputtering) the same for h = 0.73 and 1");
+}
+
+void test_dust_current_sfr(void) {
+    BEGIN_TEST("dust_production: yields from the current snapshot's mean SFR so far, not a partial sum");
+
+    /* Constant SFR all along: the first and the last substep of a snapshot must make the same
+     * yields.  The snapshot's SFH entry is a sum over its substeps, so the first substep holds
+     * only 1/N of the SFR that prompt SNII progenitors (< 40 Myr) were born with. */
+    double made[2];
+    for(int k = 0; k < 2; k++) {
+        struct params rp;
+        struct GALAXY g[1];
+        setup(&rp, g, 2);
+        rp.Snaplistlen = 2;
+        double age[3] = {0.0, 1.0, 0.0};
+        rp.Age = age + 1;
+        dust_init(&rp);
+        for(int i = 0; i < ABSOLUTEMAXSNAPS; i++) rp.DustTime[i] = 100.0 * i;   /* Myr */
+        const double dt = 10.0 * SEC_PER_MEGAYEAR * rp.Hubble_h / rp.UnitTime_in_s;   /* 10 substeps */
+        for(int i = 0; i < 50; i++) g[0].DustSfh[i] = 1.0f;
+        g[0].H2gas = 0.0f; g[0].HotGas = 0.0f; g[0].HotDust = 0.0f;
+        g[0].DustStarsStep = (float)(1.0 * dt);   /* SFR 1 */
+        g[0].DustSfh[50] = (k == 0) ? 0.0f : 0.9f;   /* first, or last, of the 10 substeps */
+        g[0].DustSubsteps = (k == 0) ? 0 : 9;
+        dust_evolve(0, 0, dt, g, &rp);
+        made[k] = g[0].DustFormationRate;
+    }
+    ASSERT_GREATER_THAN(made[1], 0.0, "Yields make dust");
+    ASSERT_CLOSE(made[1], made[0], 1e-3, "First substep makes what the last does");
+}
+
 int main(void) {
     BEGIN_TEST_SUITE("DustySAGEMode dust bookkeeping");
 
@@ -338,6 +403,8 @@ int main(void) {
     test_dust_annuli_follow_gas();
     test_dust_annuli_physics();
     test_dust_zero_dt_resets();
+    test_dust_h_invariant();
+    test_dust_current_sfr();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

@@ -23,7 +23,10 @@
  * every merger burst, making that substep's metals twice.  Also changed from the source: the
  * snapshot times are physical Myr (the source left out 1/h); mode-2 grain growth is limited by
  * all the cold metals, gas phase + dust (Asano et al. 2013), not the gas phase alone; satellites'
- * hot dust is sputtered too; and a merged satellite's star-formation history joins the central's.
+ * hot dust is sputtered too; a merged satellite's star-formation history joins the central's;
+ * the growth, destruction and sputtering timescales and the sputtering density carry the h
+ * factors of code time and density (the source left them out); and the yields read the current
+ * snapshot's mean SFR so far, not its partial sum over the substeps done.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -203,13 +206,18 @@ static double lifetime(const double m)
 static double sfr_at(const struct GALAXY *g, const double tau, const struct params *run_params)
 {
     const int now = g->SnapNum;
+    /* DustSfh[now] sums this snapshot's substeps so far, each / SubstepsUsed: its mean SFR so far
+     * is DustSfh[now] x SubstepsUsed / DustSubsteps (the source read the partial sum) */
+    const double sfr_now = (g->DustSubsteps > 0)
+                         ? g->DustSfh[now] * sfr_rate_divisor(g->SubstepsUsed) / g->DustSubsteps : g->DustSfh[now];
     const double t = run_params->DustTime[now] - tau;
     if(t < run_params->DustTime[0]) return 0.0;
     int i = 0;
     while(i < now && run_params->DustTime[i+1] < t) i++;
-    if(i >= now) return g->DustSfh[now];
+    if(i >= now) return sfr_now;
     const double f = (t - run_params->DustTime[i]) / (run_params->DustTime[i+1] - run_params->DustTime[i]);
-    return g->DustSfh[i] + f * (g->DustSfh[i+1] - g->DustSfh[i]);
+    const double next = (i + 1 == now) ? sfr_now : g->DustSfh[i+1];
+    return g->DustSfh[i] + f * (next - g->DustSfh[i]);
 }
 
 /* Yield metallicity bin: Z_grid[j] <= Z < Z_grid[j+1] (the source's test never matched) */
@@ -383,7 +391,7 @@ static double growth_amount(const double gas, const double metals, const double 
     const double gas_phase = metals - dust;
     if(gas <= 0.0 || dust <= 0.0 || gas_phase <= 0.0) return 0.0;
     const double Z = metals / gas;
-    const double tacc = DUST_TACC0_MYR * SEC_PER_MEGAYEAR / run_params->UnitTime_in_s * DUST_ZREF / Z;
+    const double tacc = DUST_TACC0_MYR * SEC_PER_MEGAYEAR * run_params->Hubble_h / run_params->UnitTime_in_s * DUST_ZREF / Z;
     const double grow = (1.0 - dust / metals) * (h2 / gas) * dust / tacc * dt;
     if(grow <= 0.0) return 0.0;
     return (grow > gas_phase) ? gas_phase : grow;
@@ -434,7 +442,7 @@ static double destruction_amount(const double gas, const double metals, const do
     if(gas <= 0.0 || dust <= 0.0 || !(rsn > 0.0)) return 0.0;
     const double Z = get_metallicity(gas, metals);
     const double m_swept = DUST_MSWEPT_MSUN * pow(Z / DUST_ZREF + 0.039, -0.289) * run_params->Hubble_h / 1.0e10;
-    const double tsn = gas / (DUST_SN_ETA * m_swept * rsn) / (run_params->UnitTime_in_s / SEC_PER_YEAR);
+    const double tsn = gas / (DUST_SN_ETA * m_swept * rsn) * SEC_PER_YEAR * run_params->Hubble_h / run_params->UnitTime_in_s;
     const double lost = dust / tsn * dt;
     return (lost > dust) ? dust : lost;
 }
@@ -486,7 +494,8 @@ static void dust_destruction(const int p, const double dt, struct GALAXY *galaxi
  * da/dt = rho x, x = -3.2e-18 / m_p / ((T0/T)^2.5 + 1) cm^4 g^-1 s^-1, over the substep, and
  * the dust is lost on tau = 0.17 Gyr (a / 0.1 um)(1e-27 g cm^-3 / rho)((T0/T)^2.5 + 1), at
  * dM/dt = M / (tau / 3).  Fixes three source bugs that switched it off: da/dt is rho x (the
- * source divided), 4/3 is not integer division, and rho is in units of 1e-27 g cm^-3.
+ * source divided), 4/3 is not integer division, and rho is in units of 1e-27 g cm^-3; and the
+ * code density and time carry their h factors (the source left them out).
  * Returns the dust sputtered, which returns to the metals (mode 2). */
 static double sputter(const double gas, float *dust, const double Rvir, const double Vvir, const double dt,
                       const struct params *run_params)
@@ -494,15 +503,15 @@ static double sputter(const double gas, float *dust, const double Rvir, const do
     if(*dust <= 0.0f || gas <= 0.0 || Vvir <= 0.0 || Rvir <= 0.0) return 0.0;
     const double temp = DUST_TVIR_COEFF * Vvir * Vvir;
     const double tfac = pow(DUST_SPUTTER_T0 / temp, DUST_SPUTTER_OMEGA) + 1.0;
-    const double a0 = DUST_GRAIN_CM / run_params->UnitLength_in_cm;
-    const double x = -DUST_SPUTTER_RATE_CGS / PROTONMASS / tfac
-                     / (run_params->UnitLength_in_cm / run_params->UnitDensity_in_cgs / run_params->UnitTime_in_s);
-    const double rho = gas / (4.0 / 3.0 * M_PI * Rvir * Rvir * Rvir);
-    double a = a0 + rho * x * dt;
-    if(a < DUST_GRAIN_MIN_FRAC * a0) a = DUST_GRAIN_MIN_FRAC * a0;
-    const double rho_27 = rho * run_params->UnitDensity_in_cgs / 1.0e-27;
-    const double tau = DUST_SPUTTER_TAU0_MYR * SEC_PER_MEGAYEAR / run_params->UnitTime_in_s * (a / a0) / rho_27 * tfac;
-    double lost = *dust / (tau / 3.0) * dt;
+    /* in cgs: code density is h^2 UnitDensity, code time UnitTime / h */
+    const double h = run_params->Hubble_h;
+    const double x = -DUST_SPUTTER_RATE_CGS / PROTONMASS / tfac;
+    const double rho = gas / (4.0 / 3.0 * M_PI * Rvir * Rvir * Rvir) * run_params->UnitDensity_in_cgs * h * h;
+    const double dt_s = dt * run_params->UnitTime_in_s / h;
+    double a = DUST_GRAIN_CM + rho * x * dt_s;
+    if(a < DUST_GRAIN_MIN_FRAC * DUST_GRAIN_CM) a = DUST_GRAIN_MIN_FRAC * DUST_GRAIN_CM;
+    const double tau_s = DUST_SPUTTER_TAU0_MYR * SEC_PER_MEGAYEAR * (a / DUST_GRAIN_CM) / (rho / 1.0e-27) * tfac;
+    double lost = *dust / (tau_s / 3.0) * dt_s;
     if(lost > *dust) lost = *dust;
     *dust -= (float)lost;
     return lost;
@@ -533,6 +542,7 @@ void dust_evolve(const int p, const int centralgal, const double dt, struct GALA
     /* this substep's star formation joins the history the yields read (snapshot-mean SFR) */
     const int snap = g->SnapNum;
     if(snap >= 0 && snap < ABSOLUTEMAXSNAPS) g->DustSfh[snap] += (float)(g->DustStarsStep / (dt * sfr_rate_divisor(g->SubstepsUsed)));
+    g->DustSubsteps++;
 
     /* DarkSAGEMode: the annuli carry the cold dust (ColdDust == sum(DiscDust)) */
     if(run_params->DarkSAGEMode >= 1) darksage_sync_disc_dust(p, galaxies);
