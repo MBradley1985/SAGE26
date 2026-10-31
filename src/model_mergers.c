@@ -858,6 +858,18 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     
     galaxies[merger_centralgal].BulgeMass += recycled_stars;
     galaxies[merger_centralgal].MetalsBulgeMass += metallicity * recycled_stars;
+
+    // DarkSAGEMode: the burst's stars are born at the cold-gas dispersion, like new disc stars
+    // (DarkSage combine_stellar_discs()), and mix into the dispersion of the bulge they join,
+    // which keeps (bulge mass) x sigma^2 the bulge's kinetic-energy sum
+    if(run_params->DarkSAGEMode >= 1 && recycled_stars > 0.0) {
+        struct GALAXY *g = &galaxies[merger_centralgal];
+        const double s_new = darksage_cold_gas_dispersion(run_params->ZZ[g->SnapNum], run_params);
+        const double m_old = burst_to_merger_bulge ? g->MergerBulgeMass : g->InstabilityBulgeMass;
+        float *sigma = burst_to_merger_bulge ? &g->VelDispMergerBulge : &g->VelDispBulge;
+        const double m = (m_old > 0.0) ? m_old : 0.0;
+        *sigma = (float)sqrt((m * (*sigma) * (*sigma) + recycled_stars * s_new * s_new) / (m + recycled_stars));
+    }
     
     if(burst_to_merger_bulge) {
         // Add to merger-driven bulge
@@ -882,8 +894,15 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     if(run_params->DarkSAGEMode >= 1) {
         double burst_weight[N_BINS];
         const int by_h2 = (run_params->StarburstColdGasOn == 0 && sf_prescription_tracks_h2(run_params->SFprescription));
-        for(int i = 0; i < N_BINS; i++) {
-            burst_weight[i] = by_h2 ? galaxies[merger_centralgal].DiscH2[i] : galaxies[merger_centralgal].DiscGas[i];
+        if(by_h2 && run_params->DarkSAGEMode == 1) {
+            // mode 1's DiscH2 dates from the last star formation; the H2 law on the annuli as they
+            // are now (merged gas included) says where the burst's H2 is
+            double sfr_unused[N_BINS];
+            darksage_annulus_rates(merger_centralgal, sfr_unused, burst_weight, galaxies, run_params);
+        } else {
+            for(int i = 0; i < N_BINS; i++) {
+                burst_weight[i] = by_h2 ? galaxies[merger_centralgal].DiscH2[i] : galaxies[merger_centralgal].DiscGas[i];
+            }
         }
         darksage_remove_disc_gas(merger_centralgal, (1.0 - run_params->RecycleFraction) * stars + reheated_mass,
                                  burst_weight, NULL, galaxies);

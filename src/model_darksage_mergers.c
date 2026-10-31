@@ -15,10 +15,11 @@
  * As in the DarkSage source, retrograde gas is not shrunk afterwards (its
  * deal_with_galaxy_merger() shrinks the satellite's disc, which has already
  * been merged), and a major-merger segment's j is sqrt(sum_k (n_k j_k)^2).
- * Major or minor follows SAGE26's mass ratio and ThreshMajorMerger.  All of the
- * satellite's stars join the merger-driven (classical) bulge (model_mergers.c),
- * whose spin and velocity dispersion are set here as in DarkSage; the bursts
- * and black holes are SAGE26's.
+ * Major or minor follows SAGE26's mass ratio and ThreshMajorMerger.  The
+ * satellite's stars join the bulge SAGE26's add_galaxies_together() puts them in
+ * (model_mergers.c); the bulges' spin and velocity dispersions are set here,
+ * following DarkSage where all of them join the merger bulge.  The bursts and
+ * black holes are SAGE26's.
  *
  * Code units throughout (10^10 Msun/h, Mpc/h, km/s).
  *
@@ -218,8 +219,9 @@ static void merge_gas_major(const int t, const int p, const double dpos[3], cons
  * the merger bulge.  For each central bulge
  *   sigma^2 = [M sigma^2 of the bulge + sum over the stars it receives of m (sigma^2 + v_r^2)]
  *             / (bulge + stars received),
- * v_r being the satellite's orbital speed; in a major merger the central's own m v_r^2 also
- * goes to the merger bulge, which make_bulge_from_burst() then builds from everything.
+ * v_r being the satellite's radial velocity; in a major merger the central's own m v_r^2 also
+ * goes to the merger bulge (to the instability bulge if the merger bulge receives nothing,
+ * so it is not lost), which make_bulge_from_burst() then builds from everything.
  * Merger-bulge spin: minor -- the mass-weighted spins of both merger bulges and, if it joins,
  * the satellite's disc J; major -- the two progenitors' orbital j about the centre of momentum.
  * The instability bulge carries no spin (DarkSage).  The satellite's intrahalo stars join the
@@ -259,7 +261,8 @@ static void merge_bulge_kinematics(const int t, const int p, const int major, co
     }
 
     if(major) {
-        msig2_cb += ms_t * vr_t * vr_t;
+        if(cb_t + m_cb > 0.0) msig2_cb += ms_t * vr_t * vr_t;
+        else msig2_ib += ms_t * vr_t * vr_t;
         for(int k = 0; k < 3; k++) {
             const double s = (ms_p + ms_t > 0.0) ? (j_p[k] * ms_p + j_t[k] * ms_t) / (ms_p + ms_t) : 0.0;
             gt->SpinClassicalBulge[k] = isfinite(s) ? (float)s : 0.0f;
