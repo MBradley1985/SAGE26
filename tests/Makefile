@@ -12,8 +12,8 @@
 # Compiler settings
 CC = gcc
 ROOT_DIR := $(shell cd .. && pwd)
-CFLAGS = -std=gnu99 -Wall -Wextra -g -O2 -I../src -DROOT_DIR='"$(ROOT_DIR)"'
-LDFLAGS = -lm
+CFLAGS = -std=gnu99 -Wall -Wextra -g -O2 -I../src -DROOT_DIR='"$(ROOT_DIR)"' $(shell gsl-config --cflags)
+LDFLAGS = -lm $(shell gsl-config --libs)
 
 # Directories
 SRC_DIR = ../src
@@ -33,6 +33,13 @@ PROJECT_SOURCES = \
 	$(SRC_DIR)/model_infall.c \
 	$(SRC_DIR)/model_disk_instability.c \
 	$(SRC_DIR)/model_mergers.c \
+	$(SRC_DIR)/model_darksage_disc.c \
+	$(SRC_DIR)/model_darksage_sf.c \
+	$(SRC_DIR)/model_darksage_feedback.c \
+	$(SRC_DIR)/model_darksage_instability.c \
+	$(SRC_DIR)/model_darksage_mergers.c \
+	$(SRC_DIR)/model_darksage_stellar_pop.c \
+	$(SRC_DIR)/model_darksage_stripping.c \
 	$(SRC_DIR)/core_cool_func.c
 
 # Test files
