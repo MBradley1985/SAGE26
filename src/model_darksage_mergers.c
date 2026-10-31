@@ -211,43 +211,72 @@ static void merge_gas_major(const int t, const int p, const double dpos[3], cons
 }
 
 /*
- * Merger-driven bulge after all of the satellite's stars have joined it (DarkSage
- * add_galaxies_together()), from the pre-merger masses:
- *   sigma^2 = [sum of M sigma^2 over the central's merger bulge, the satellite's bulges and
- *              disc annuli, plus M* v_r^2 of the orbit] / (merger bulge + satellite stars),
- *   spin: minor -- the mass-weighted spins of both merger bulges and the satellite's disc J;
- *         major -- the two progenitors' orbital j about the centre of momentum.
- * The satellite's intrahalo stars join the central's ICS, so they are not counted.
+ * Bulge kinematics after the satellite's stars have joined the central's bulges, from the
+ * pre-merger masses (DarkSage add_galaxies_together()).  The stars go where SAGE26's
+ * add_galaxies_together() puts them: each satellite bulge into the same central bulge, the
+ * satellite's disc into the instability bulge if the central stays disc-dominated, else into
+ * the merger bulge.  For each central bulge
+ *   sigma^2 = [M sigma^2 of the bulge + sum over the stars it receives of m (sigma^2 + v_r^2)]
+ *             / (bulge + stars received),
+ * v_r being the satellite's orbital speed; in a major merger the central's own m v_r^2 also
+ * goes to the merger bulge, which make_bulge_from_burst() then builds from everything.
+ * Merger-bulge spin: minor -- the mass-weighted spins of both merger bulges and, if it joins,
+ * the satellite's disc J; major -- the two progenitors' orbital j about the centre of momentum.
+ * The instability bulge carries no spin (DarkSage).  The satellite's intrahalo stars join the
+ * central's ICS, so they are not counted.
  */
 static void merge_bulge_kinematics(const int t, const int p, const int major, const double j_t[3], const double j_p[3],
                                    const double vr_t, const double vr_p, struct GALAXY *galaxies,
                                    const struct params *run_params)
 {
     struct GALAXY *gt = &galaxies[t], *gp = &galaxies[p];
-    const double cb_t = gt->MergerBulgeMass, ms_t = gt->StellarMass, ms_p = gp->StellarMass;
-    double msig2 = ms_p * vr_p * vr_p
-                 + cb_t * gt->VelDispMergerBulge * gt->VelDispMergerBulge
-                 + gp->MergerBulgeMass * gp->VelDispMergerBulge * gp->VelDispMergerBulge
-                 + gp->InstabilityBulgeMass * gp->VelDispBulge * gp->VelDispBulge;
-    double J_disc = 0.0;
+    const double cb_t = gt->MergerBulgeMass, ib_t = gt->InstabilityBulgeMass;
+    const double ms_t = gt->StellarMass, ms_p = gp->StellarMass;
+    const double vr2 = vr_p * vr_p;
+
+    double m_disc = 0.0, msig2_disc = 0.0, J_disc = 0.0;
     for(int i = 0; i < N_BINS; i++) {
-        msig2 += gp->DiscStars[i] * gp->VelDispStars[i] * gp->VelDispStars[i];
+        m_disc += gp->DiscStars[i];
+        msig2_disc += gp->DiscStars[i] * gp->VelDispStars[i] * gp->VelDispStars[i];
         J_disc += gp->DiscStars[i] * 0.5 * (run_params->DiscBinEdge[i] + run_params->DiscBinEdge[i+1]);
     }
 
+    /* Same test as add_galaxies_together(): the central's disc fraction once the satellite's
+     * stars are in its bulge */
+    const double sat_disc = ms_p - gp->BulgeMass;
+    const int disc_to_ib = (sat_disc > 0.0 && ms_t + ms_p > 0.0 && (ms_t - gt->BulgeMass) / (ms_t + ms_p) > 0.5);
+
+    double m_cb = gp->MergerBulgeMass;
+    double msig2_cb = gp->MergerBulgeMass * (gp->VelDispMergerBulge * gp->VelDispMergerBulge + vr2);
+    double m_ib = gp->InstabilityBulgeMass;
+    double msig2_ib = gp->InstabilityBulgeMass * (gp->VelDispBulge * gp->VelDispBulge + vr2);
+    if(disc_to_ib) {
+        m_ib += m_disc;
+        msig2_ib += msig2_disc + m_disc * vr2;
+    } else {
+        m_cb += m_disc;
+        msig2_cb += msig2_disc + m_disc * vr2;
+    }
+
     if(major) {
-        msig2 += ms_t * vr_t * vr_t;
+        msig2_cb += ms_t * vr_t * vr_t;
         for(int k = 0; k < 3; k++) {
             const double s = (ms_p + ms_t > 0.0) ? (j_p[k] * ms_p + j_t[k] * ms_t) / (ms_p + ms_t) : 0.0;
             gt->SpinClassicalBulge[k] = isfinite(s) ? (float)s : 0.0f;
         }
-    } else if(cb_t + ms_p > 0.0) {
+    } else if(cb_t + m_cb > 0.0) {
+        const double J_in = disc_to_ib ? 0.0 : J_disc;
         for(int k = 0; k < 3; k++) {
             gt->SpinClassicalBulge[k] = (float)((cb_t * gt->SpinClassicalBulge[k] + gp->MergerBulgeMass * gp->SpinClassicalBulge[k]
-                                                 + J_disc * gp->SpinStars[k]) / (cb_t + ms_p));
+                                                 + J_in * gp->SpinStars[k]) / (cb_t + m_cb));
         }
     }
-    if(cb_t + ms_p > 0.0) gt->VelDispMergerBulge = (float)sqrt(msig2 / (cb_t + ms_p));
+    if(cb_t + m_cb > 0.0) {
+        gt->VelDispMergerBulge = (float)sqrt((cb_t * gt->VelDispMergerBulge * gt->VelDispMergerBulge + msig2_cb) / (cb_t + m_cb));
+    }
+    if(ib_t + m_ib > 0.0) {
+        gt->VelDispBulge = (float)sqrt((ib_t * gt->VelDispBulge * gt->VelDispBulge + msig2_ib) / (ib_t + m_ib));
+    }
 }
 
 void darksage_merge_gas(const int t, const int p, struct GALAXY *galaxies, const struct params *run_params)

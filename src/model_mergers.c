@@ -278,9 +278,8 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     // This must be decided BEFORE the starburst
     int burst_to_merger_bulge = 0;  // 0 = instability, 1 = merger
     
-    if(mass_ratio > run_params->ThreshMajorMerger || run_params->DarkSAGEMode == 1) {
-        // Major merger: all stars go to merger-driven bulge.  DarkSAGEMode: every merger-made
-        // star is in the merger-driven bulge (DarkSage); the secular bulge is instability-built
+    if(mass_ratio > run_params->ThreshMajorMerger) {
+        // Major merger: all stars go to merger-driven bulge
         burst_to_merger_bulge = 1;
     } else {
         // Minor merger: depends on morphology
@@ -483,7 +482,7 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
         combine_spins_merger(t, p, galaxies);
 
         // Satellite gas joins the central's annuli by its orbital angular momentum (DarkSage
-        // add_galaxies_together()); its stars all join the bulge below, so DiscStars are not added
+        // add_galaxies_together()); its stars all join a bulge below, so DiscStars are not added
         darksage_merge_gas(t, p, galaxies, run_params);
     }
 
@@ -532,34 +531,28 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].BulgeMass += galaxies[p].StellarMass;
     galaxies[t].MetalsBulgeMass += galaxies[p].MetalsStellarMass;
 
-    if(run_params->DarkSAGEMode == 1) {
-        // DarkSage add_galaxies_together(): every satellite star joins the merger-driven
-        // (classical) bulge; the secular bulge only grows by disc instability
-        galaxies[t].MergerBulgeMass += galaxies[p].StellarMass;
-    } else {
-        // Transfer the satellite's bulge component breakdown to the central
-        galaxies[t].InstabilityBulgeMass += galaxies[p].InstabilityBulgeMass;
-        galaxies[t].MergerBulgeMass += galaxies[p].MergerBulgeMass;
+    // Transfer the satellite's bulge component breakdown to the central
+    galaxies[t].InstabilityBulgeMass += galaxies[p].InstabilityBulgeMass;
+    galaxies[t].MergerBulgeMass += galaxies[p].MergerBulgeMass;
 
-        // The satellite's DISK mass (StellarMass - BulgeMass) becomes new bulge mass
-        // Track this based on the central's current morphology (Tonini+2016 logic)
-        const double satellite_disk_mass = galaxies[p].StellarMass - galaxies[p].BulgeMass;
+    // The satellite's DISK mass (StellarMass - BulgeMass) becomes new bulge mass
+    // Track this based on the central's current morphology (Tonini+2016 logic)
+    const double satellite_disk_mass = galaxies[p].StellarMass - galaxies[p].BulgeMass;
 
-        if(satellite_disk_mass > 0.0) {
-            const double disk_mass = galaxies[t].StellarMass - galaxies[t].BulgeMass;
-            const double disk_fraction = (galaxies[t].StellarMass > 0.0) ?
-                                         disk_mass / galaxies[t].StellarMass : 0.0;
-            if(disk_fraction > 0.5) {
-                // Disc-dominated: minor merger triggers instability
-                galaxies[t].InstabilityBulgeMass += satellite_disk_mass;
-                const double old_disk_radius = galaxies[t].DiskScaleRadius;
+    if(satellite_disk_mass > 0.0) {
+        const double disk_mass = galaxies[t].StellarMass - galaxies[t].BulgeMass;
+        const double disk_fraction = (galaxies[t].StellarMass > 0.0) ?
+                                     disk_mass / galaxies[t].StellarMass : 0.0;
+        if(disk_fraction > 0.5) {
+            // Disc-dominated: minor merger triggers instability
+            galaxies[t].InstabilityBulgeMass += satellite_disk_mass;
+            const double old_disk_radius = galaxies[t].DiskScaleRadius;
 
-                // UPDATE: Tonini incremental radius evolution (equation 16)
-                update_instability_bulge_radius(t, satellite_disk_mass, old_disk_radius, galaxies, run_params);
-            } else {
-                // Spheroid-dominated: grows merger bulge
-                galaxies[t].MergerBulgeMass += satellite_disk_mass;
-            }
+            // UPDATE: Tonini incremental radius evolution (equation 16)
+            update_instability_bulge_radius(t, satellite_disk_mass, old_disk_radius, galaxies, run_params);
+        } else {
+            // Spheroid-dominated: grows merger bulge
+            galaxies[t].MergerBulgeMass += satellite_disk_mass;
         }
     }
 
