@@ -59,6 +59,7 @@ EnhancedStarFormationOn     1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: 
 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 SaveFullSFH                 0   %0: switch off
+SaveFullMH                  0   %0: switch off; 1: also save stellar metal mass per SFH bin (needs SaveFullSFH = 1)
 StarburstColdGasOn          1   %0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 
 SubstepResolution           1.0   %multiplier on the adaptive substep count (scales the STEPS floor and MAX_STEPS cap); 1.0 = unscaled

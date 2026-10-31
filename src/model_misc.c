@@ -143,6 +143,12 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
             galaxies[p].SFHMassBulge[snap] = 0.0;
         }
     }
+    if(run_params->SaveFullMH) {
+        for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
+            galaxies[p].MHMetalsDisk[snap] = 0.0;
+            galaxies[p].MHMetalsBulge[snap] = 0.0;
+        }
+    }
     // Initialize ICS assembly tracking (cumulative mass through each channel)
     galaxies[p].ICS_disrupt = 0.0;
     galaxies[p].ICS_accrete = 0.0;
@@ -164,6 +170,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].RadioModeBHaccretionMass = 0.0;
     galaxies[p].TimeOfLastMajorMerger = -1.0;
     galaxies[p].TimeOfLastMinorMerger = -1.0;
+    galaxies[p].TimeOfLastQuasarBurst = -1.0;
     galaxies[p].OutflowRate = 0.0;
     galaxies[p].RcoolToRvir = -1.0;
     galaxies[p].MassLoading = 0.0;

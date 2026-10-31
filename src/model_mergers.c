@@ -273,7 +273,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
 
     // grow black hole through accretion from cold disk during mergers
     if(run_params->AGNrecipeOn) {
-        grow_black_hole(merger_centralgal, mass_ratio, galaxies, run_params);
+        grow_black_hole(merger_centralgal, mass_ratio, time, galaxies, run_params);
     }
 
     // Determine which bulge component will receive burst stars
@@ -350,9 +350,10 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
  *
  * Scales the accreted mass by (mass_ratio / (mass_ratio + BlackHoleCouplingFactor))
  * and removes it from the cold gas reservoir.  Computes quasar-mode energy
- * output for AGNrecipeOn == 1 via quasar_mode_wind().
+ * output for AGNrecipeOn == 1 via quasar_mode_wind().  Records `time`, the
+ * lookback time of this substep, as the galaxy's last quasar burst.
  */
-void grow_black_hole(const int merger_centralgal, const double mass_ratio, struct GALAXY *galaxies, const struct params *run_params)
+void grow_black_hole(const int merger_centralgal, const double mass_ratio, const double time, struct GALAXY *galaxies, const struct params *run_params)
 {
     double BHaccrete, metallicity;
 
@@ -386,6 +387,9 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, struc
         quasar_mode_wind(merger_centralgal, BHaccrete, galaxies, run_params);
 
         galaxies[merger_centralgal].QuasarModeBHaccretionMass += BHaccrete;
+        if(BHaccrete > 0.0) {
+            galaxies[merger_centralgal].TimeOfLastQuasarBurst = time;
+        }
     }
 }
 
@@ -601,6 +605,11 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
             galaxies[t].SFHMassBulge[snap] += galaxies[p].SFHMassDisk[snap] + galaxies[p].SFHMassBulge[snap];
         }
     }
+    if(run_params->SaveFullMH) {
+        for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
+            galaxies[t].MHMetalsBulge[snap] += galaxies[p].MHMetalsDisk[snap] + galaxies[p].MHMetalsBulge[snap];
+        }
+    }
 }
 
 // ============================================================================
@@ -611,7 +620,9 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
  * move_disk_sfh_to_bulge -- move a fraction of galaxy p's disk star-formation
  * history into its bulge history, when that fraction of the disk's stars joins
  * the bulge.  The disk is taken as well mixed, so the moved stars carry the
- * disk's age distribution; with this, SFHMassBulge sums to BulgeMass.
+ * disk's age distribution; with this, SFHMassBulge sums to BulgeMass.  The same
+ * fraction of each metal history bin moves too, so MHMetalsBulge sums to
+ * MetalsBulgeMass.
  */
 void move_disk_sfh_to_bulge(const int p, const double fraction, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -624,6 +635,14 @@ void move_disk_sfh_to_bulge(const int p, const double fraction, struct GALAXY *g
         const float moved = (float)(f * galaxies[p].SFHMassDisk[snap]);
         galaxies[p].SFHMassDisk[snap] -= moved;
         galaxies[p].SFHMassBulge[snap] += moved;
+    }
+
+    if(run_params->SaveFullMH) {
+        for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) {
+            const float moved_metals = (float)(f * galaxies[p].MHMetalsDisk[snap]);
+            galaxies[p].MHMetalsDisk[snap] -= moved_metals;
+            galaxies[p].MHMetalsBulge[snap] += moved_metals;
+        }
     }
 }
 
@@ -894,6 +913,9 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         const int snapnum = galaxies[merger_centralgal].SnapNum;
         if(snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS) {
             galaxies[merger_centralgal].SFHMassBulge[snapnum] += (1.0 - burst_R) * stars;
+            if(run_params->SaveFullMH) {
+                galaxies[merger_centralgal].MHMetalsBulge[snapnum] += metallicity * (1.0 - burst_R) * stars;
+            }
         }
     }
 

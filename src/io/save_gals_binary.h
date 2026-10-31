@@ -89,6 +89,7 @@ extern "C" {
       float RadioModeBHaccretionMass;
       float TimeOfLastMajorMerger;
       float TimeOfLastMinorMerger;
+      float TimeOfLastQuasarBurst;
       float OutflowRate;
 
       /* infall properties */

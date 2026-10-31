@@ -106,7 +106,7 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
 
             const double unstable_gas_fraction = unstable_gas / galaxies[p].ColdGas;
             if(run_params->AGNrecipeOn > 0) {
-                grow_black_hole(p, unstable_gas_fraction, galaxies, run_params);
+                grow_black_hole(p, unstable_gas_fraction, time, galaxies, run_params);
             }
 
             collisional_starburst_recipe(unstable_gas_fraction, p, centralgal, time, dt, halonr, 1, step, 

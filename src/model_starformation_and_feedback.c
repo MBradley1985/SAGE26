@@ -1583,6 +1583,9 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         const int snapnum = galaxies[p].SnapNum;
         if(snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS) {
             galaxies[p].SFHMassDisk[snapnum] += (1.0 - run_params->RecycleFraction) * stars;
+            if(run_params->SaveFullMH) {
+                galaxies[p].MHMetalsDisk[snapnum] += metallicity * (1.0 - run_params->RecycleFraction) * stars;
+            }
         }
     }
 
@@ -1894,6 +1897,9 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
         const int snapnum = galaxies[p].SnapNum;
         if(snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS) {
             galaxies[p].SFHMassDisk[snapnum] += (1.0 - run_params->RecycleFraction) * stars;
+            if(run_params->SaveFullMH) {
+                galaxies[p].MHMetalsDisk[snapnum] += metallicity * (1.0 - run_params->RecycleFraction) * stars;
+            }
         }
     }
 

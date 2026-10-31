@@ -20,6 +20,7 @@ optional parameters take the listed default if omitted.
 | `OutputFormat` | string | no | `sage_hdf5` | `sage_hdf5`, `sage_binary`, or `lhalo_binary_output`. The last converts any supported input tree format to lhalo-binary and writes no galaxy catalogue. |
 | `NumOutputs` | int | no | `-1` | Number of snapshot outputs; `-1` = all snapshots. |
 | `SaveFullSFH` | 0/1 | no | `0` | Store per-snapshot SFR history arrays (`SFHMassDisk`, `SFHMassBulge`). |
+| `SaveFullMH` | 0/1 | no | `0` | Store the metal mass in the stars of each SFH bin (`MHMetalsDisk`, `MHMetalsBulge`). Needs `SaveFullSFH = 1`. |
 
 ---
 

@@ -42,6 +42,10 @@ struct HDF5_GALAXY_OUTPUT
 #define DARKSAGE_FIELD_STRUCT_MEMBER(name, width, desc, unit) float *ds_##name;
     DARKSAGE_OUTPUT_FIELDS(DARKSAGE_FIELD_STRUCT_MEMBER)
 #undef DARKSAGE_FIELD_STRUCT_MEMBER
+
+    /* metallicity history - metal mass in the stars of the SFH bins (controlled by SaveFullMH) */
+    float *MHMetalsDisk;     /* Shape: [ngalaxies, SimMaxSnaps] - metals in stars formed in disk at each snapshot */
+    float *MHMetalsBulge;    /* Shape: [ngalaxies, SimMaxSnaps] - metals in stars formed in bulge at each snapshot */
 };
     
     // Proto-Types //

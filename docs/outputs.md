@@ -57,6 +57,7 @@ field reference. Everything else is in code units.
 +- Snap_<N>/         (one group per output snapshot)
    +- SnapNum, Type, GalaxyIndex, ...   (one dataset per field)
    +- SFHMassDisk, SFHMassBulge          (only if SaveFullSFH = 1)
+   +- MHMetalsDisk, MHMetalsBulge        (only if SaveFullMH = 1)
 ```
 
 Each galaxy-property dataset has two HDF5 attributes:
@@ -241,6 +242,7 @@ section below) and the unit actually written.
 |-------|-------|-------------|
 | `TimeOfLastMajorMerger` | Myr | Code-time of the last major merger, converted to Myr. |
 | `TimeOfLastMinorMerger` | Myr | Code-time of the last minor merger, converted to Myr. |
+| `TimeOfLastQuasarBurst` | Myr / h | Lookback time to z=0 of the last quasar-mode accretion (`grow_black_hole`, from a merger or disk instability), at the midpoint of its substep. Negative if the galaxy has had none. Only the snapshot interval is physical: orphan mergers fire late in the interval because of the linear `Mvir` ramp, and instabilities fire at its start when `Vmax` or the disk radius changes, so the position within the interval is not a real burst time. |
 | `TimeOfInfall` | Myr | Code-time at which this galaxy became a satellite (zero for Type 0). |
 
 ### Two-regime cooling (CGM model)

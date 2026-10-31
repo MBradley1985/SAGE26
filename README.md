@@ -30,6 +30,7 @@ of halo properties. Test trees for the
 | Separate merger/instability bulge tracking | `BulgeSizeOn` | Tonini et al. (2016) |
 | ICS assembly tracking | always on | — |
 | Full star formation history arrays | `SaveFullSFH` | — |
+| Full stellar metallicity history arrays | `SaveFullMH` | — |
 | Concentration | `ConcentrationOn` | Ishiyama+21 lookup table, Vmax/Vvir, Vmax/Vvir with subhalo infall freeze |
 | ConsistentTrees, Genesis, Gadget-4 tree readers | `TreeType` | — |
 | HDF5 output + libsage.so for Python/PSO | `OutputFormat` | — |
@@ -199,6 +200,7 @@ ICS assembly tracking (`ICS_disrupt`, `ICS_accrete`, `ICS_sum_mt`) is always on.
 |-----------|--------|--------|
 | `OutputFormat` | string | `sage_hdf5`, `sage_binary`, or `lhalo_binary_output` to convert the input trees to lhalo-binary instead of running the model |
 | `SaveFullSFH` | 0/1 | Track per-snapshot SFR history arrays |
+| `SaveFullMH` | 0/1 | Track the metal mass in the stars of each SFH bin (needs `SaveFullSFH = 1`) |
 | `NumOutputs` | int | Number of snapshot outputs; `-1` = all snapshots |
 
 ### Supported tree formats (`TreeType`)

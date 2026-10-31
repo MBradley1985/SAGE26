@@ -8,6 +8,22 @@ below reproduces the committed regression baseline dataset-for-dataset unless
 it says otherwise. See
 [docs/developer/REGRESSION_BASELINE.md](docs/developer/REGRESSION_BASELINE.md).
 
+## Unreleased
+
+### Stellar metallicity histories
+
+- New `SaveFullMH` toggle (default 0, needs `SaveFullSFH = 1`) writes
+  `MHMetalsDisk` and `MHMetalsBulge`, the metal mass in the stars of each
+  `SFHMassDisk`/`SFHMassBulge` bin. Output only: the existing datasets are
+  bit-identical.
+
+### Quasar burst timing
+
+- New output field `TimeOfLastQuasarBurst`, the lookback time of the last
+  quasar-mode accretion from either a merger or a disk instability. It is
+  meaningful to the snapshot interval, not to the substep. Output only: the
+  existing datasets are bit-identical.
+
 ## v0.9 -- 2026-10-27
 
 ### Reproducible regime draws (not bit-identical)

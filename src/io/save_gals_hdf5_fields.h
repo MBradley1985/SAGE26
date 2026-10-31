@@ -9,8 +9,9 @@
  * line in save_hdf5_galaxies() that fills the buffer value.
  *
  * Not listed here (special cases handled explicitly): TaskForestNr (internal
- * per-tree bookkeeping, never written) and SFHMassDisk/SFHMassBulge (2-D
- * star-formation-history datasets with their own shape and write path).
+ * per-tree bookkeeping, never written), SFHMassDisk/SFHMassBulge and
+ * MHMetalsDisk/MHMetalsBulge (2-D star-formation and metallicity history
+ * datasets with their own shape and write path).
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -218,6 +219,9 @@
     X(TimeOfLastMinorMerger, TimeOfLastMinorMerger, float, H5T_NATIVE_FLOAT, \
       "Time since this galaxy had a minor merger.", \
       "Myr") \
+    X(TimeOfLastQuasarBurst, TimeOfLastQuasarBurst, float, H5T_NATIVE_FLOAT, \
+      "Lookback time to z=0 of this galaxy's last quasar-mode accretion, from a merger or disk instability; negative if none.", \
+      "Myr/h") \
     X(OutflowRate, OutflowRate, float, H5T_NATIVE_FLOAT, \
       "Rate at which cold gas is reheated to hot gas.", \
       "Msun/yr") \
