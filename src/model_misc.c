@@ -18,6 +18,8 @@
 #include "core_allvars.h"
 
 #include "model_misc.h"
+#include "model_darksage_disc.h"
+#include "model_darksage_instability.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -121,6 +123,11 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].MetalsEjectedMass = 0.0;
     galaxies[p].MetalsICS = 0.0;
     galaxies[p].MetalsCGMgas = 0.0;
+    galaxies[p].ColdDust = galaxies[p].HotDust = galaxies[p].CGMDust = galaxies[p].EjectedDust = 0.0;
+    galaxies[p].DustStarsStep = galaxies[p].DustMetalsStep = galaxies[p].DustFormationRate = 0.0f;
+    galaxies[p].DustSubsteps = 0;
+    galaxies[p].DustGrowthRate = galaxies[p].DustDestructionRate = 0.0f;
+    for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) galaxies[p].DustSfh[snap] = 0.0f;
 
     galaxies[p].SubstepsUsed = STEPS;   /* overwritten by evolve_galaxies before any output */
 
@@ -159,6 +166,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     }
 
     galaxies[p].DiskScaleRadius = get_disk_radius(halonr, p, halos, galaxies);
+    galaxies[p].SpinDiskRadius = galaxies[p].DiskScaleRadius;
     get_bulge_radius(p, galaxies, run_params);
     galaxies[p].MergTime = 999.9f;
     galaxies[p].Cooling = 0.0;
@@ -188,7 +196,55 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
 
     galaxies[p].g_max = 0.0;
 
+    /* DarkSAGEMode annuli: zeroed always so the outputs are clean when the mode is off */
+    galaxies[p].ICSMeanRadius = 0.0f;
+    for(int i = 0; i < N_BINS; i++) {
+        galaxies[p].DiscGas[i] = galaxies[p].DiscGasMetals[i] = 0.0f;
+        galaxies[p].DiscStars[i] = galaxies[p].DiscStarsMetals[i] = 0.0f;
+        galaxies[p].DiscH2[i] = galaxies[p].DiscHI[i] = 0.0f;
+        galaxies[p].DiscSFR[i] = galaxies[p].DiscDust[i] = 0.0f;
+        /* DarkSage init_galaxy(): the cold-gas dispersion 11 + 11.3 z km/s */
+        galaxies[p].VelDispStars[i] = (float)darksage_cold_gas_dispersion(run_params->ZZ[halos[halonr].SnapNum], run_params);
+    }
+    for(int i = 0; i < N_BINS + 1; i++) {
+        galaxies[p].DiscRadii[i] = 0.0f;
+        galaxies[p].Potential[i] = 0.0f;
+        galaxies[p].DiscVcirc[i] = 0.0f;
+    }
+    for(int j = 0; j < 3; j++) {
+        galaxies[p].SpinGas[j] = galaxies[p].SpinStars[j] = galaxies[p].SpinHot[j] = 0.0f;
+    }
+    galaxies[p].VelDispBulge = 0.0f;
+    /* DarkSage init_galaxy(): merger bulge at the cold-gas dispersion, bulge scale lengths placeholders
+     * until update_disc_radii() solves them */
+    galaxies[p].VelDispMergerBulge = (float)darksage_cold_gas_dispersion(run_params->ZZ[halos[halonr].SnapNum], run_params);
+    for(int j = 0; j < 3; j++) galaxies[p].SpinClassicalBulge[j] = 0.0f;
+    galaxies[p].a_InstabBulge = galaxies[p].a_MergerBulge = 0.08284f * galaxies[p].DiskScaleRadius;
+    galaxies[p].R2_hot_av = 0.0f;
+    galaxies[p].CoolScaleRadius = galaxies[p].GasDiscScaleRadius = galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;
+    galaxies[p].GasDiscHalfMassRadius = galaxies[p].StellarDiscHalfMassRadius = 0.0f;
+    galaxies[p].HaloScaleRadius = galaxies[p].Rvir / 10.0;   /* r_s = Rvir/c with c ~ 10 until update_disc_radii() */
+    galaxies[p].RotSupportScaleRadius = 0.0f;
+    galaxies[p].c_beta = 0.1f;   /* hot-gas beta-profile core */
 
+    if(run_params->DarkSAGEMode >= 1) {
+        /* Gas, stellar and hot spins start along the halo spin */
+        const double spin_mag = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
+                                     halos[halonr].Spin[1] * halos[halonr].Spin[1] +
+                                     halos[halonr].Spin[2] * halos[halonr].Spin[2]);
+        if(spin_mag > 0.0) {
+            for(int j = 0; j < 3; j++) {
+                galaxies[p].SpinGas[j] = galaxies[p].SpinStars[j] = galaxies[p].SpinHot[j] = (float)(halos[halonr].Spin[j] / spin_mag);
+            }
+        }
+
+        /* Flat-curve radii r = j / Vvir capped at Rvir, then refined from the rotation curve */
+        for(int i = 0; i < N_BINS + 1; i++) {
+            const double r = (galaxies[p].Vvir > 0.0) ? run_params->DiscBinEdge[i] / galaxies[p].Vvir : 0.0;
+            galaxies[p].DiscRadii[i] = (r < galaxies[p].Rvir) ? r : galaxies[p].Rvir;
+        }
+        update_disc_radii(p, galaxies, halos, run_params);
+    }
 }
 
 double get_disk_radius(const int halonr, const int p, const struct halo_data *halos, const struct GALAXY *galaxies)

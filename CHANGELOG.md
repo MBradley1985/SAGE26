@@ -10,6 +10,36 @@ it says otherwise. See
 
 ## Unreleased
 
+### Radially resolved discs (DarkSAGEMode)
+
+- New `DarkSAGEMode` (default 0): galaxies carry their gas and stellar discs in
+  30 annuli of specific angular momentum, following DarkSage (Stevens et al.
+  2016, 2024): rotation-curve radii, gas and stellar spins, precession, cooling
+  and merger gas placed by j, per-annulus H2, star formation and instability.
+  Mode 1 shares SAGE26's bulk recipes over the annuli; mode 2 evaluates the
+  star-formation law per annulus. `DiskScaleRadius` comes from the annuli.
+  New outputs: `DiscRadii`, `DiscVcirc`, `DiscGas`, `DiscGasMetals`,
+  `DiscStars`, `DiscStarsMetals`, `DiscH2`, `DiscHI`, `DiscSFR`,
+  `VelDispStars`, spins, bulge dispersions, disc scale and half-mass radii.
+- New `ConcentrationOn = 4` (Dutton & Macciò 2014, DarkSage) and
+  `H2DepletionMode = 5` (DarkSage, M_H2 / 2.30 Gyr).
+- With `DarkSAGEMode = 0` the output is bit-identical to before.
+
+### Dust (DustySAGEMode)
+
+- New `DustySAGEMode` (default 0): cold, hot, CGM and ejected dust following
+  Dusty-SAGE (Triani et al. 2020), with delayed AGB and SNII yields, grain
+  growth, SN destruction and thermal sputtering. Mode 1 keeps SAGE26's metals
+  unchanged (every non-dust output bit-identical to mode 0); mode 2 replaces
+  SAGE26's metal production with the delayed yields and holds dust outside
+  the metals. Several source bugs are fixed; see
+  `docs/physics/darksage_and_dust.md`.
+- New parameters `DustSNIIYields`, `DustSNIaYields`, `DustBinaryFraction`;
+  new outputs `ColdDust`, `HotDust`, `CGMDust`, `EjectedDust`,
+  `DustFormationRate`, `DustGrowthRate`, `DustDestructionRate`, and
+  `DiscDust` when `DarkSAGEMode` is also on.
+- With `DustySAGEMode = 0` the output is bit-identical to before.
+
 ### Stellar metallicity histories
 
 - New `SaveFullMH` toggle (default 0, needs `SaveFullSFH = 1`) writes

@@ -84,6 +84,44 @@ extern "C" {
         }
     }
 
+    /* SAGE26's instantaneous metal yield; DustySAGEMode 2 replaces it with Dusty-SAGE's delayed
+     * yields (model_dust.c), so it is 0 there */
+    static inline double sage26_yield(const struct params *run_params)
+    {
+        return (run_params->DustySAGEMode == 2) ? 0.0 : run_params->Yield;
+    }
+
+    /* DustySAGEMode: dust-to-gas ratio of a reservoir (0 when empty).  Dust moves with gas at this
+     * ratio wherever SAGE26 moves gas (Dusty-SAGE). */
+    static inline double dust_to_gas(const double gas, const double dust)
+    {
+        return (gas > 0.0 && dust > 0.0) ? dust / gas : 0.0;
+    }
+
+    /* Move the dust carried by `mass` of gas leaving a reservoir of `gas` with *dust_from into
+     * *dust_to (NULL: the dust leaves the model with the gas).  Call before the gas moves.
+     * Returns the dust moved. */
+    static inline double dust_move(float *dust_from, const double gas, const double mass, float *dust_to)
+    {
+        double d = (mass > 0.0) ? dust_to_gas(gas, *dust_from) * mass : 0.0;
+        if(d > *dust_from) d = *dust_from;
+        if(d <= 0.0) return 0.0;
+        *dust_from -= (float)d;
+        if(dust_to != NULL) *dust_to += (float)d;
+        return d;
+    }
+
+    /* Deposit dust into the hot-phase reservoir the gas goes to (add_gas_to_hot_reservoir()) */
+    static inline void add_dust_to_hot_reservoir(struct GALAXY *central, const struct params *run_params, const double dust)
+    {
+        if(dust <= 0.0) return;
+        if(run_params->CGMrecipeOn == 1 && central->Regime == 0) {
+            central->CGMDust += dust;
+        } else {
+            central->HotDust += dust;
+        }
+    }
+
     /*
      * SF prescriptions that track molecular gas (H2gas/H1gas): every
      * prescription except 0 (Croton+06 cold-gas threshold) and 2

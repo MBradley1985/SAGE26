@@ -18,6 +18,47 @@
 
 #pragma once
 
+/* DarkSAGEMode outputs, written only when DarkSAGEMode >= 1 so DarkSAGEMode == 0 files are unchanged.
+ * X(DatasetName == GALAXY member, width, description, units); width 1 is a 1-D dataset,
+ * width > 1 a 2-D [ngal, width] dataset (one column per annulus or annulus edge). */
+#define DARKSAGE_OUTPUT_FIELDS(X) \
+    X(DiscRadii, N_BINS + 1, "Radius of each annulus edge (j-bin edge mapped through the rotation curve).", "Mpc/h") \
+    X(DiscVcirc, N_BINS + 1, "Circular velocity at each annulus edge, from the rotation curve (the rotation speed j/r is lower where rotational support is partial).", "km/s") \
+    X(DiscGas, N_BINS, "Cold gas mass in each annulus.", "1.0e10 Msun/h") \
+    X(DiscGasMetals, N_BINS, "Cold gas metals in each annulus.", "1.0e10 Msun/h") \
+    X(DiscStars, N_BINS, "Stellar disc mass in each annulus.", "1.0e10 Msun/h") \
+    X(DiscStarsMetals, N_BINS, "Stellar disc metals in each annulus.", "1.0e10 Msun/h") \
+    X(DiscH2, N_BINS, "H2 mass in each annulus (mode 1: H2gas shared by the per-annulus H2 law; mode 2: that law, summing to H2gas).", "1.0e10 Msun/h") \
+    X(DiscHI, N_BINS, "HI mass in each annulus, summing to H1gas.", "1.0e10 Msun/h") \
+    X(DiscSFR, N_BINS, "Star formation rate in each annulus, averaged over the snapshot's substeps.", "Msun/yr") \
+    X(VelDispStars, N_BINS, "Stellar velocity dispersion in each annulus.", "km/s") \
+    X(SpinGas, 3, "Unit vector of the gas-disc angular momentum.", "Unitless") \
+    X(SpinStars, 3, "Unit vector of the stellar-disc angular momentum.", "Unitless") \
+    X(ICSMeanRadius, 1, "Mass-weighted radius at which the intrahalo stars were deposited; sets their Hernquist profile.", "Mpc/h") \
+    X(VelDispBulge, 1, "Velocity dispersion of the instability-built (secular) bulge.", "km/s") \
+    X(VelDispMergerBulge, 1, "Velocity dispersion of the merger-driven (classical) bulge.", "km/s") \
+    X(SpinClassicalBulge, 3, "Specific angular momentum vector of the merger-driven bulge.", "(Mpc/h)(km/s)") \
+    X(StellarDiscScaleRadius, 1, "Exponential scale radius fitted to the disc-star annuli (StellarMass - BulgeMass; DarkSage method).", "Mpc/h") \
+    X(GasDiscScaleRadius, 1, "Exponential scale radius fitted to the cold-gas annuli (all of ColdGas; DarkSage method).", "Mpc/h") \
+    X(StellarDiscHalfMassRadius, 1, "Radius enclosing half the disc stars (StellarMass - BulgeMass) in the annuli.", "Mpc/h") \
+    X(GasDiscHalfMassRadius, 1, "Radius enclosing half the cold gas (all of ColdGas) in the annuli.", "Mpc/h")
+
+/* DustySAGEMode outputs, written only when DustySAGEMode >= 1 (same X() form, written by the same
+ * code as DARKSAGE_OUTPUT_FIELDS).  Mode 1 counts the dust inside the reservoirs' metals, mode 2
+ * outside them. */
+#define DUSTY_OUTPUT_FIELDS(X) \
+    X(ColdDust, 1, "Dust in the cold gas.", "1.0e10 Msun/h") \
+    X(HotDust, 1, "Dust in the hot halo gas.", "1.0e10 Msun/h") \
+    X(CGMDust, 1, "Dust in the CGM gas.", "1.0e10 Msun/h") \
+    X(EjectedDust, 1, "Dust in the ejected gas.", "1.0e10 Msun/h") \
+    X(DustFormationRate, 1, "Dust made by stars (AGB, SNII), averaged over the snapshot.", "Msun/yr") \
+    X(DustGrowthRate, 1, "Dust grown by accretion in the cold gas, averaged over the snapshot.", "Msun/yr") \
+    X(DustDestructionRate, 1, "Dust destroyed by supernova shocks, averaged over the snapshot.", "Msun/yr")
+
+/* Outputs of DarkSAGEMode and DustySAGEMode together, written only when both are on (same X() form) */
+#define DARK_DUSTY_OUTPUT_FIELDS(X) \
+    X(DiscDust, N_BINS, "Dust in the cold gas of each annulus, summing to ColdDust.", "1.0e10 Msun/h")
+
 #define GALAXY_OUTPUT_FIELDS(X) \
     X(SnapNum, SnapNum, int32_t, H5T_NATIVE_INT, \
       "Snapshot the galaxy is located at.", \

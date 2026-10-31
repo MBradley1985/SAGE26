@@ -36,6 +36,9 @@
 #include "model_mergers.h"
 #include "model_infall.h"
 #include "model_reincorporation.h"
+#include "model_darksage_disc.h"
+#include "model_darksage_sf.h"
+#include "model_dust.h"
 #include "model_starformation_and_feedback.h"
 
 #include "model_cooling_heating.h"
@@ -245,11 +248,24 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
             galaxies[ngal].QuasarModeBHaccretionMass = 0.0;
             galaxies[ngal].RadioModeBHaccretionMass = 0.0;
             galaxies[ngal].OutflowRate = 0.0;
+            galaxies[ngal].DustFormationRate = galaxies[ngal].DustGrowthRate = galaxies[ngal].DustDestructionRate = 0.0f;
+            galaxies[ngal].DustSubsteps = 0;
 
             for(int step = 0; step < STEPS; step++) {
                 galaxies[ngal].SfrDisk[step] = galaxies[ngal].SfrBulge[step] = 0.0;
                 galaxies[ngal].SfrDiskColdGas[step] = galaxies[ngal].SfrDiskColdGasMetals[step] = 0.0;
                 galaxies[ngal].SfrBulgeColdGas[step] = galaxies[ngal].SfrBulgeColdGasMetals[step] = 0.0;
+            }
+
+            // DarkSAGEMode: Zero DiscSFR array for this output step
+            if(run_params->DarkSAGEMode >= 1) {
+                for(int bin_i = 0; bin_i < N_BINS; bin_i++) {
+                    galaxies[ngal].DiscSFR[bin_i] = 0.0;
+                }
+
+                // Update disc radii as halo grows - rotation curve depends on current mass distribution
+                // This also fixes galaxies that started with Vvir=0 (zero disc radii)
+                update_disc_radii(ngal, galaxies, halos, run_params);
             }
 
             // this deals with the central galaxies of (sub)halos
@@ -300,7 +316,20 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                         }
 
                         galaxies[ngal].DiskScaleRadius = get_disk_radius(halonr, ngal, halos, galaxies);
+                        galaxies[ngal].SpinDiskRadius = galaxies[ngal].DiskScaleRadius;
                         get_bulge_radius(ngal, galaxies, run_params);
+
+                        // DarkSAGEMode: newly cooling gas follows the current halo, like DiskScaleRadius above:
+                        // its j-profile scale and the hot-gas spin direction are refreshed every snapshot
+                        if(run_params->DarkSAGEMode >= 1) {
+                            galaxies[ngal].CoolScaleRadius = galaxies[ngal].DiskScaleRadius;
+                            const double spin_mag = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
+                                                         halos[halonr].Spin[1] * halos[halonr].Spin[1] +
+                                                         halos[halonr].Spin[2] * halos[halonr].Spin[2]);
+                            if(spin_mag > 0.0) {
+                                for(int j = 0; j < 3; j++) galaxies[ngal].SpinHot[j] = (float)(halos[halonr].Spin[j] / spin_mag);
+                            }
+                        }
 
                         galaxies[ngal].Type = 0;
                     } else {
@@ -483,6 +512,15 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         galaxies[p].SubstepsUsed = effective_steps;
     }
 
+    // DarkSAGEMode: Zero DiscSFR arrays before accumulating over timesteps
+    if(run_params->DarkSAGEMode >= 1) {
+        for(int p = 0; p < ngal; p++) {
+            for(int i = 0; i < N_BINS; i++) {
+                galaxies[p].DiscSFR[i] = 0.0;
+            }
+        }
+    }
+
     for(int step = 0; step < effective_steps; step++) {
 
         // Loop over all galaxies in the halo
@@ -494,6 +532,9 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
             const double deltaT = galaxies[p].dT;
             const double time = halo_age + deltaT - (step + 0.5) * (deltaT / effective_steps);
+            if(run_params->DarkSAGEMode >= 1) {
+                darksage_set_disk_scale_radius(p, galaxies, run_params);
+            }
 
             // For the central galaxy only
             if(p == centralgal) {
@@ -518,13 +559,32 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
             } else {
                 coolingGas = cooling_recipe(p, deltaT / effective_steps, galaxies, run_params);
+                const double cold_before = galaxies[p].ColdGas, cold_metals_before = galaxies[p].MetalsColdGas;
+                const double cold_dust_before = galaxies[p].ColdDust;
                 cool_gas_onto_galaxy(p, coolingGas, galaxies);
+                // DarkSAGEMode: the gas SAGE26 just cooled joins the annuli by its j
+                if(run_params->DarkSAGEMode >= 1) {
+                    darksage_deposit_cooling(p, galaxies[p].ColdGas - cold_before, galaxies[p].MetalsColdGas - cold_metals_before,
+                                             galaxies[p].ColdDust - cold_dust_before,
+                                             galaxies[p].RcoolToRvir > 0.0f && galaxies[p].RcoolToRvir < 1.0f,
+                                             galaxies, run_params);
+                }
+            }
+
+            // DarkSAGEMode: refresh the annulus radii from the rotation curve every substep
+            // after the first (DarkSage core_build_model.c)
+            if(run_params->DarkSAGEMode >= 1 && step != 0) {
+                update_disc_radii(p, galaxies, halos, run_params);
             }
 
             // stars form and then explode!
             // Map adaptive step to fixed STEPS bins for SFR arrays
             int step_bin = (step * STEPS) / effective_steps;
             if(step_bin >= STEPS) step_bin = STEPS - 1;
+            // DarkSAGEMode: the disc scale radius the recipes read follows the annuli
+            if(run_params->DarkSAGEMode >= 1) {
+                darksage_set_disk_scale_radius(p, galaxies, run_params);
+            }
             starformation_and_feedback(p, centralgal, time, deltaT / effective_steps, halonr, step_bin, galaxies, run_params);
         }
 
@@ -597,6 +657,18 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
             }
         }
+
+        // DustySAGEMode: the substep's dust physics, once per surviving galaxy, after its star
+        // formation and any merger burst
+        if(run_params->DustySAGEMode >= 1) {
+            for(int p = 0; p < ngal; p++) {
+                if(galaxies[p].mergeType > 0) continue;
+                dust_evolve(p, centralgal, galaxies[p].dT / effective_steps, galaxies, run_params);
+                if(run_params->DarkSAGEMode >= 1 && run_params->DustySAGEMode == 2) {
+                    darksage_sync_disc_metals(p, galaxies);   /* mode 2 changes the cold metals */
+                }
+            }
+        }
     } // Go on to the next STEPS substep
 
     // Extra miscellaneous stuff before finishing this halo
@@ -612,6 +684,20 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         galaxies[p].Cooling *= inv_deltaT;
         galaxies[p].Heating *= inv_deltaT;
         galaxies[p].OutflowRate *= inv_deltaT;
+        {
+            const float to_rate = (float)(inv_deltaT * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS);
+            galaxies[p].DustFormationRate *= to_rate;
+            galaxies[p].DustGrowthRate *= to_rate;
+            galaxies[p].DustDestructionRate *= to_rate;
+        }
+
+        if(run_params->DarkSAGEMode >= 1) {
+            // the radii the output carries follow the snapshot's final masses (DarkSage
+            // core_build_model.c refreshes them here, before output)
+            update_disc_radii(p, galaxies, halos, run_params);
+            darksage_sync_disc_phases(p, galaxies);
+            darksage_set_half_mass_radii(p, galaxies);
+        }
     }
 
 

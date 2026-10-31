@@ -131,6 +131,15 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->Exponent_Forest_Dist_Scheme = 0.7;
     run_params->KarpovModeOn               = 0; /* 0: full Karpov+2023 recipe, 1: low-metallicity floor (Z/Z_sun = 0.01) for reheated and ejected gas */
 
+    // DarkSAGEMode: 0 = standard SAGE26; 1, 2 = SAGE26 with radially resolved discs (1: bulk recipes shared over the annuli; 2: recipes per annulus)
+    run_params->DarkSAGEMode               = 0; /* default: standard SAGE behavior */
+    // DustySAGEMode: 0 = no dust; 1 = passive dust within SAGE26's metals; 2 = Dusty-SAGE yields and dust
+    run_params->DustySAGEMode              = 0;
+    run_params->DustSNIIYields             = 0;    /* Dusty-SAGE defaults */
+    run_params->DustSNIaYields             = 0;
+    run_params->DustBinaryFraction         = 0.1;
+
+
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
 #define REG(tag, addr, type, req) do {         \
     strncpy(ParamTag[NParam], tag, MAXTAGLEN); \
@@ -211,6 +220,12 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("H2RadialRMaxFactor",         &(run_params->H2RadialRMaxFactor),         DOUBLE, 0);
     REG("EnhancedSFEfficiency",       &(run_params->EnhancedSFEfficiency),       DOUBLE, 0);
     REG("KarpovModeOn",               &(run_params->KarpovModeOn),               INT, 0);
+
+    REG("DarkSAGEMode",                &(run_params->DarkSAGEMode),               INT, 0);
+    REG("DustySAGEMode",               &(run_params->DustySAGEMode),              INT, 0);
+    REG("DustSNIIYields",              &(run_params->DustSNIIYields),             INT, 0);
+    REG("DustSNIaYields",              &(run_params->DustSNIaYields),             INT, 0);
+    REG("DustBinaryFraction",          &(run_params->DustBinaryFraction),         DOUBLE, 0);
 
 #undef REG
 
@@ -529,7 +544,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"DiskInstabilityOn",      run_params->DiskInstabilityOn,      0, 1},
             {"CGMrecipeOn",            run_params->CGMrecipeOn,            0, 1},
             {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
-            {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
+            {"ConcentrationOn",        run_params->ConcentrationOn,        0, 4},
             {"EnhancedStarFormationOn", run_params->EnhancedStarFormationOn, 0, 2},
             {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 3},
             {"H2DiskAreaOption",       run_params->H2DiskAreaOption,       0, 2},
@@ -538,6 +553,11 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"SaveFullMH",             run_params->SaveFullMH,             0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"H2DepletionMode",        run_params->H2DepletionMode,        0, H2DEPLETIONMODE_MAX},
+            {"KarpovModeOn",            run_params->KarpovModeOn,            0, 1},
+            {"DarkSAGEMode",           run_params->DarkSAGEMode,           0, 2},
+            {"DustySAGEMode",          run_params->DustySAGEMode,          0, 2},
+            {"DustSNIIYields",         run_params->DustSNIIYields,         0, 1},
+            {"DustSNIaYields",         run_params->DustSNIaYields,         0, 1}
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {
@@ -564,7 +584,11 @@ int read_parameter_file(const char *fname, struct params *run_params)
                 run_params->H2DepletionMode, run_params->SFprescription);
         ABORT(EXIT_FAILURE);
     }
-    if(run_params->H2DepletionMode > 1 && !run_params->H2RadialIntegrationOn) {
+    /* The local laws (modes 2-4) need the radial integration, or in DarkSAGEMode 2 the disc
+       annuli; DarkSAGEMode 1 runs the bulk recipes and needs the radial integration as mode 0
+       does.  Modes 1 and 5 are constant depletion times and need neither. */
+    if(run_params->H2DepletionMode >= 2 && run_params->H2DepletionMode <= 4
+       && run_params->DarkSAGEMode != 2 && !run_params->H2RadialIntegrationOn) {
         fprintf(stderr, "Error: H2DepletionMode = %d needs H2RadialIntegrationOn = 1.\n", run_params->H2DepletionMode);
         ABORT(EXIT_FAILURE);
     }

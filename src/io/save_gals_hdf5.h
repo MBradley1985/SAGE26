@@ -38,6 +38,13 @@ struct HDF5_GALAXY_OUTPUT
     float *SFHMassDisk;      /* Shape: [ngalaxies, SimMaxSnaps] - mass formed in disk at each snapshot */
     float *SFHMassBulge;     /* Shape: [ngalaxies, SimMaxSnaps] - mass formed in bulge at each snapshot */
 
+    /* DarkSAGEMode outputs (DARKSAGE_OUTPUT_FIELDS); [ngalaxies, width] each, NULL when the mode is off */
+#define DARKSAGE_FIELD_STRUCT_MEMBER(name, width, desc, unit) float *ds_##name;
+    DARKSAGE_OUTPUT_FIELDS(DARKSAGE_FIELD_STRUCT_MEMBER)
+    DUSTY_OUTPUT_FIELDS(DARKSAGE_FIELD_STRUCT_MEMBER)   /* DustySAGEMode outputs, NULL when off */
+    DARK_DUSTY_OUTPUT_FIELDS(DARKSAGE_FIELD_STRUCT_MEMBER)   /* both modes, NULL unless both are on */
+#undef DARKSAGE_FIELD_STRUCT_MEMBER
+
     /* metallicity history - metal mass in the stars of the SFH bins (controlled by SaveFullMH) */
     float *MHMetalsDisk;     /* Shape: [ngalaxies, SimMaxSnaps] - metals in stars formed in disk at each snapshot */
     float *MHMetalsBulge;    /* Shape: [ngalaxies, SimMaxSnaps] - metals in stars formed in bulge at each snapshot */

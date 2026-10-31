@@ -180,7 +180,7 @@ section below) and the unit actually written.
 | `Vvir` | km / s | Virial velocity of this galaxy's halo. |
 | `Vmax` | km / s | Maximum circular velocity of this galaxy's halo. |
 | `VelDisp` | km / s | Velocity dispersion of this galaxy's halo. |
-| `Concentration` | -- | NFW halo concentration from the Ishiyama+21 c-M relation (set when `ConcentrationOn = 1`). |
+| `Concentration` | -- | NFW halo concentration from the method chosen by `ConcentrationOn` (1: Ishiyama+21; 2, 3: V_max/V_vir; 4: DarkSAGE). |
 | `g_max` | code units (UnitLength / UnitTime^2) | Peak NFW gravitational acceleration used for the Boylan-Kolchin (2025) feedback-free-burst threshold (HDF5 dtype: float64). Set per snapshot by `EnhancedStarFormationOn = 2` (the BK25 method) and reset to 0 for non-FFB haloes; not a running maximum across snapshots, and unrelated to CGM cooling. |
 
 ### Baryonic reservoirs
@@ -303,6 +303,53 @@ The result is in code-time units; multiply by
 `UnitTime_in_Megayears` (read from the HDF5 header) to convert to Myr.
 
 These fields are always present in both writers and always accumulate.
+
+## DarkSAGEMode annuli (`DarkSAGEMode >= 1`)
+
+HDF5 output only, written when `DarkSAGEMode` is 1 or 2 (files from
+`DarkSAGEMode = 0` are unchanged). Per-annulus fields are 2-D datasets of
+shape (ngalaxies, 30), or (ngalaxies, 31) for the annulus edges. The
+annuli sum to the bulk fields: `DiscGas` to `ColdGas`, `DiscGasMetals` to
+`MetalsColdGas`, `DiscStars` to `StellarMass - BulgeMass` (the bulge is not
+in the annuli), `DiscStarsMetals` to `MetalsStellarMass - MetalsBulgeMass`,
+`DiscH2` to `H2gas`, `DiscHI` to `H1gas` and `DiscSFR` to `SfrDisk`. In
+these modes `DiskRadius` is measured from the annuli, J_disc / (2 M_disc
+V_disc) over gas and disc stars, V_disc being the disc's own rotation speed
+(half the mass-weighted mean radius), rather than from the halo spin. The
+radii, rotation curve and half-mass radii are refreshed at the end of each
+snapshot, so they follow the written masses.
+
+| Field | Units | Description |
+|-------|-------|-------------|
+| `DiscRadii` | Mpc / h | Radius of each annulus edge (j-bin edge through the rotation curve). |
+| `DiscVcirc` | km / s | Circular velocity at each annulus edge, from the same rotation curve. The rotation speed j/r is lower in the centre, where rotational support is partial. |
+| `DiscGas`, `DiscGasMetals` | 1.0e10 Msun / h | Cold gas and its metals in each annulus. |
+| `DiscStars`, `DiscStarsMetals` | 1.0e10 Msun / h | Disc stars and their metals in each annulus. |
+| `DiscH2`, `DiscHI` | 1.0e10 Msun / h | H2 and HI in each annulus. H2 and HI half-mass radii can be computed from these. |
+| `DiscSFR` | Msun / yr | Star formation rate in each annulus, averaged over the snapshot like `SfrDisk`. |
+| `VelDispStars` | km / s | Stellar velocity dispersion in each annulus. |
+| `SpinGas`, `SpinStars` | -- | Unit vectors of the gas- and stellar-disc angular momenta. |
+| `GasDiscScaleRadius`, `StellarDiscScaleRadius` | Mpc / h | Exponential scale radii fitted to the cold-gas annuli (all of `ColdGas`) and the disc-star annuli (`StellarMass - BulgeMass`), DarkSage's method. |
+| `GasDiscHalfMassRadius`, `StellarDiscHalfMassRadius` | Mpc / h | Radii enclosing half the cold gas and half the disc stars in the annuli. |
+| `VelDispBulge`, `VelDispMergerBulge` | km / s | Velocity dispersions of the instability and merger bulges. |
+| `SpinClassicalBulge` | (Mpc / h) (km / s) | Specific angular momentum vector of the merger bulge. |
+| `ICSMeanRadius` | Mpc / h | Mass-weighted radius at which the intrahalo stars were deposited. |
+
+## DustySAGEMode dust (`DustySAGEMode >= 1`)
+
+HDF5 output only, written when `DustySAGEMode` is 1 or 2 (files from
+`DustySAGEMode = 0` are unchanged). In mode 1 each reservoir's dust is part
+of its metals (`MetalsColdGas` etc. include it); in mode 2 it is held
+outside them, so the total metals of the cold gas are `MetalsColdGas +
+ColdDust`.
+
+| Field | Units | Description |
+|-------|-------|-------------|
+| `ColdDust`, `HotDust`, `CGMDust`, `EjectedDust` | 1.0e10 Msun / h | Dust in the cold, hot halo, CGM and ejected gas. |
+| `DustFormationRate` | Msun / yr | Dust made by AGB stars and SNII, averaged over the snapshot. |
+| `DustGrowthRate` | Msun / yr | Dust grown by accretion in the cold gas, averaged over the snapshot. |
+| `DustDestructionRate` | Msun / yr | Dust destroyed by supernova shocks, averaged over the snapshot. |
+| `DiscDust` | 1.0e10 Msun / h | `[ngal, 30]`, written only when `DarkSAGEMode` is also on: dust in the cold gas of each annulus, summing to `ColdDust`. |
 
 ## Cumulative star formation history (`SaveFullSFH = 1`)
 

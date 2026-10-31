@@ -161,6 +161,12 @@ run_test_if_exists 16 "Halo Assembly & Mergers" "./test_build/test_halo_mergers"
 run_test_if_exists 17 "AGN Feedback" "./test_build/test_agn_feedback" \
     "Testing radio/quasar modes, Eddington limits, and heating..." 18
 
+run_test_if_exists 18 "DarkSAGEMode Annuli" "./test_build/test_darksage" \
+    "Testing annulus mass, metal and size bookkeeping..." 30
+
+run_test_if_exists 19 "DustySAGEMode Dust" "./test_build/test_dust" \
+    "Testing dust bookkeeping and conservation..." 17
+
 # Count total passes, fails, and skipped tests
 PASSED=0
 FAILED=0

@@ -25,9 +25,11 @@
 #endif
 
 #include "core_allvars.h"
+#include "macros.h"
 #include "core_init.h"
 #include "core_mymalloc.h"
 #include "core_cool_func.h"
+#include "model_dust.h"
 
 
 /* These functions do not need to be exposed externally */
@@ -67,6 +69,10 @@ void init(struct params *run_params)
         run_params->Age[i] = time_to_present(run_params->ZZ[i], run_params);
     }
 
+    if(run_params->DustySAGEMode >= 1) {
+        dust_init(run_params);
+    }
+
     run_params->a0 = 1.0 / (1.0 + run_params->Reionization_z0);
     run_params->ar = 1.0 / (1.0 + run_params->Reionization_zr);
 
@@ -76,6 +82,17 @@ void init(struct params *run_params)
         fprintf(stdout, "cooling functions read\n\n");
     }
 #endif
+
+    /* DarkSAGEMode: specific angular momentum bin edges, j_0 = 0 and j_i = DS_FIRST_BIN DS_EXPONENT_BIN^(i-1) */
+    if(run_params->DarkSAGEMode >= 1) {
+        /* DS_FIRST_BIN [kpc/h km/s] -> code units [(Mpc/h)(km/s)] (DarkSage main.c) */
+        const double j_unit = (CM_PER_MPC / 1e3 / run_params->UnitLength_in_cm)
+                            / (run_params->UnitVelocity_in_cm_per_s / 1e5);
+        run_params->DiscBinEdge[0] = 0.0;
+        for(int i = 1; i < N_BINS + 1; i++) {
+            run_params->DiscBinEdge[i] = DS_FIRST_BIN * j_unit * pow(DS_EXPONENT_BIN, i - 1);
+        }
+    }
 }
 
 

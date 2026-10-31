@@ -154,6 +154,20 @@ struct GALAXY
     float MetalsICS;
     float MetalsCGMgas;
 
+    /* DustySAGEMode: dust in each gas reservoir [same units]; zero when the mode is off.  Mode 1
+     * counts it inside the reservoir's metals, mode 2 outside them (Dusty-SAGE) */
+    float ColdDust;
+    float HotDust;
+    float CGMDust;
+    float EjectedDust;
+    float DustSfh[ABSOLUTEMAXSNAPS]; /* snapshot-mean SFR history the delayed yields read [code units] */
+    float DustStarsStep;             /* stars formed in the current substep (destruction, SFH) */
+    int DustSubsteps;                /* substeps of the current snapshot so far (dust_evolve()) */
+    float DustMetalsStep;            /* metals SAGE26 put into the cold gas this substep (mode 1 cap) */
+    float DustFormationRate;         /* dust made this snapshot; Msun/yr after evolve_galaxies() */
+    float DustGrowthRate;            /* dust grown in the ISM this snapshot; Msun/yr after evolve_galaxies() */
+    float DustDestructionRate;       /* dust destroyed by SNe this snapshot; Msun/yr after evolve_galaxies() */
+
     /* per-substep SFR trackers; converted to Msun/yr at output */
     float SfrDisk[STEPS];              /* disk SFR per substep [10^10 Msun/h / code time] */
     float SfrBulge[STEPS];             /* bulge (starburst) SFR per substep [10^10 Msun/h / code time] */
@@ -224,6 +238,45 @@ struct GALAXY
     float mdot_stream;  /* cold-stream inflow rate from CGMgas [10^10 Msun/h / code time] */
 
     double g_max; /* peak NFW gravitational acceleration for the BK25 FFB threshold, code units (UnitLength/UnitTime^2) */
+
+    /* DarkSAGEMode: radially-resolved disk structure (only used when DarkSAGEOn=1) */
+    float DiscRadii[N_BINS+1];       /* Physical radius of each annulus boundary [Mpc/h] */
+    float DiscGas[N_BINS];           /* Cold gas mass in each annulus */
+    float DiscStars[N_BINS];         /* Stellar mass in each annulus */
+    float DiscGasMetals[N_BINS];     /* Gas-phase metals in each annulus */
+    float DiscStarsMetals[N_BINS];   /* Stellar metals in each annulus */
+    float DiscH2[N_BINS];            /* H2 mass in each annulus */
+    float DiscHI[N_BINS];            /* HI mass in each annulus */
+    float DiscSFR[N_BINS];           /* Star formation rate in each annulus */
+    float DiscDust[N_BINS];          /* Dust mass in each annulus (if DustOn=1) */
+
+    /* DarkSAGEMode: angular momentum tracking */
+    float SpinGas[3];                /* Gas disk spin vector */
+    float SpinStars[3];              /* Stellar disk spin vector */
+    float SpinHot[3];                /* Hot gas spin vector */
+    float CoolScaleRadius;           /* Scale radius of cooling gas */
+    float SpinDiskRadius;            /* SAGE26's halo-spin disc radius (get_disk_radius()), which sets the cooling scale */
+    float GasDiscScaleRadius;        /* Gas disk scale radius */
+    float StellarDiscScaleRadius;    /* Stellar disk scale radius */
+    float GasDiscHalfMassRadius;     /* Radius enclosing half the cold gas in the annuli [Mpc/h] */
+    float StellarDiscHalfMassRadius; /* Radius enclosing half the disc stars in the annuli [Mpc/h] */
+
+    /* DarkSAGEMode: Rotation curve and potential (only used when DarkSAGEOn=1) */
+    float HaloScaleRadius;           /* NFW scale radius r_s = Rvir/c */
+    float RotSupportScaleRadius;     /* Radius where f_rot = 0.5 */
+    float Potential[N_BINS+1];       /* Gravitational potential at each radius */
+    float DiscVcirc[N_BINS+1];       /* Circular velocity at each annulus edge, from the rotation curve [km/s] */
+    float c_beta;                    /* Beta profile parameter for hot gas (init to 0.1) */
+
+    /* DarkSAGEMode: Enhanced disk physics */
+    float ICSMeanRadius;             /* mass-weighted radius at which the intrahalo stars were deposited [Mpc/h] (DarkSage R_ICS_av) */
+    float VelDispStars[N_BINS];      /* Stellar velocity dispersion per annulus [km/s] */
+    float VelDispBulge;              /* Instability-built (secular) bulge velocity dispersion [km/s] */
+    float VelDispMergerBulge;        /* Merger (classical) bulge velocity dispersion [km/s] */
+    float SpinClassicalBulge[3];     /* Merger (classical) bulge specific angular momentum vector */
+    float a_InstabBulge;             /* Hernquist scale length of the secular bulge [Mpc/h] (DarkSage) */
+    float a_MergerBulge;             /* Hernquist scale length of the merger bulge [Mpc/h] (DarkSage) */
+    float R2_hot_av;                 /* Average <r^2> for hot gas */
 };
 
 
@@ -453,10 +506,11 @@ struct save_info {
 };
 
 
-/* H2DepletionMode (see docs/parameters.md): 0 off; 1-4 every H2 recipe forms stars at
+/* H2DepletionMode (see docs/parameters.md): 0 off; 1-5 every H2 recipe forms stars at
  * SFR = M_mol / t_dep instead of eff M_H2 / t_dyn, with t_dep from
- *   1  nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9 */
-#define H2DEPLETIONMODE_MAX 4
+ *   1  nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9;
+ *   5  DarkSage eps_H2 (Stevens+24 eq. 63) */
+#define H2DEPLETIONMODE_MAX 5
 #define FG_TDEP(p)         ((p)->H2DepletionMode > 0)
 
 struct params
@@ -513,7 +567,7 @@ struct params
     int32_t    SaveFullMH;                // 1 = additionally save the per-snapshot MHMetalsDisk/MHMetalsBulge
                                           // histories, the metal mass in the stars of the SFH bins (needs SaveFullSFH = 1)
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
-    int32_t    H2DepletionMode;           // 0 off (default); SFR = M_mol / t_dep with 1 nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9
+    int32_t    H2DepletionMode;           // 0 off (default); SFR = M_mol / t_dep with 1 nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9; 5 DarkSage
 
     /* baryonic physics calibration parameters */
     double RecycleFraction;       /* fraction of stellar mass returned to cold gas by SN */
@@ -560,6 +614,22 @@ struct params
     /* reionization filter-mass scale factors (Kravtsov+2004 / Gnedin 2000) */
     double a0;  /* scale factor at which the filter mass M_F reaches its peak */
     double ar;  /* scale factor at which reionization completes (used in M_F integral) */
+
+    /* DarkSAGEMode: Full DarkSage physics with radially-resolved disk structure */
+    /* When DarkSAGEMode=1: Enables radial bins, Toomre Q instability, precession, j-conservation */
+    /* When DarkSAGEMode=0: Standard SAGE behavior */
+    int32_t    DarkSAGEMode;            // 0: standard SAGE; 1: full DarkSage physics
+    int32_t    DustySAGEMode;           // 0: no dust; 1: passive dust within SAGE26's metals; 2: Dusty-SAGE yields and dust
+    int32_t    DustSNIIYields;          // 0: Woosley & Weaver 1995; 1: Nomoto et al. 2006
+    int32_t    DustSNIaYields;          // 0: Iwamoto et al. 1999; 1: Seitenzahl et al. 2013
+    double     DustBinaryFraction;      // fraction of 3-16 Msun stars in SNIa binaries
+    int32_t    DustCountAGB, DustCountSN;                              // stellar masses per yield table (computed)
+    double     DustMassAGB[DUST_MAXYIELDS], DustMassSN[DUST_MAXYIELDS];  // their masses [Msun]
+    double     DustQAGB[3][DUST_MAXYIELDS][DUST_METALGRID];  // AGB C, N, O yields [Msun per star]
+    double     DustQSN[7][DUST_MAXYIELDS][DUST_METALGRID];   // SNII C, O, Mg, Si, S, Ca, Fe yields
+    double     DustQSNIa[3];                                // SNIa Cr, Fe, Ni yields per event
+    double     DustTime[ABSOLUTEMAXSNAPS];                  // time since the first snapshot, source units
+    double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
 
     int32_t nsnapshots;
     int32_t LastSnapshotNr;

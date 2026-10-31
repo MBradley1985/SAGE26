@@ -319,10 +319,28 @@ double concentration_from_vmax_vvir(const double Vmax, const double Vvir)
 }
 
 /*
+ * DarkSage's concentration (update_disc_radii()): Dutton & Maccio (2014) c(M200c, z), with z
+ * capped at 5, times the Di Cintio et al. (2014b) baryonic factor for centrals with stars,
+ *   c = c_DM (1 + 3e-5 exp(3.4 (X + 4.5))), X = log10(StellarMass / Mvir).
+ */
+double darksage_concentration(const double Mvir, const double StellarMass, const int type, const double z,
+                              const struct params *run_params)
+{
+    if(Mvir <= 0.0) return 0.0;
+    const double zc = (z > 5.0) ? 5.0 : z;
+    const double a = 0.520 + (0.905 - 0.520) * exp(-0.617 * pow(zc, 1.21));
+    const double b = -0.101 + 0.026 * zc;
+    double c = pow(10.0, a + b * (log10(Mvir * run_params->UnitMass_in_g / SOLAR_MASS) - 12.0));
+    if(type == 0 && StellarMass > 0.0) c *= 1.0 + 3.0e-5 * exp(3.4 * (log10(StellarMass / Mvir) + 4.5));
+    return c;
+}
+
+/*
  * Return the halo concentration for galaxy p using the selected method.
  *
  * ConcentrationOn 0: disabled (returns 0); 1: Ishiyama+21 table interpolation;
- * 2: derived from Vmax/Vvir; 3: Duffy+2008 power law.
+ * 2: derived from Vmax/Vvir; 3: Vmax/Vvir with infall values for satellites;
+ * 4: DarkSage (Dutton & Maccio 2014 with the Di Cintio et al. 2014 baryonic factor).
  */
 double get_halo_concentration(const int p, const double z, const struct GALAXY *galaxies,
                                const struct params *run_params)
@@ -334,6 +352,10 @@ double get_halo_concentration(const int p, const double z, const struct GALAXY *
     if(run_params->ConcentrationOn == 2) {
         // Vmax/Vvir from simulation for all galaxy types
         return concentration_from_vmax_vvir(galaxies[p].Vmax, galaxies[p].Vvir);
+    }
+
+    if(run_params->ConcentrationOn == 4) {
+        return darksage_concentration(galaxies[p].Mvir, galaxies[p].StellarMass, galaxies[p].Type, z, run_params);
     }
 
     if(run_params->ConcentrationOn == 3) {

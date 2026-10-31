@@ -19,6 +19,23 @@
 #define  MAXGALFAC        1
 #define  ABSOLUTEMAXSNAPS 200  /* The largest number of snapshots for any simulation */
 
+/* DustySAGEMode stellar yield tables (Dusty-SAGE macros.h, core_init.c) */
+#define  DUST_MAXYIELDS   100   /* stellar masses per yield table */
+#define  DUST_METALGRID   7     /* metallicities per yield table */
+#define  DUST_TABLE_ROWS  200   /* rows read from a yield file */
+#define  DUST_TABLE_COLS  17    /* columns read from a yield file */
+
+
+/* DarkSAGEMode (radially-resolved disks) constants */
+#define  N_BINS           30         /* Number of radial annuli for disk structure (DarkSAGEMode) */
+
+/* DarkSAGEMode constants, DarkSage's values (millennium.par; Stevens et al. 2024) */
+#define  DS_FIRST_BIN         1.0     /* first specific angular momentum bin edge [kpc/h km/s], j_i = DS_FIRST_BIN DS_EXPONENT_BIN^(i-1) */
+#define  DS_EXPONENT_BIN      1.4     /* geometric growth of the j-bin edges, and of the rotation-curve grid */
+#define  DS_THETA_THRESH_DEG  10.0    /* gas and stellar discs closer than this are treated as coplanar [deg] */
+#define  DS_DEG_PER_TDYN      5.0     /* precession of the gas disc towards the stellar disc [deg per dynamical time] */
+#define  DS_QTOT_MIN          1.0     /* minimum two-fluid Toomre Q for a stable annulus */
+
 /* physical constants in cgs */
 #define  GRAVITY     6.672e-8        /* gravitational constant [cm^3 g^-1 s^-2] */
 #define  SOLAR_MASS  1.989e33        /* solar mass [g] */

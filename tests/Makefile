@@ -12,8 +12,8 @@
 # Compiler settings
 CC = gcc
 ROOT_DIR := $(shell cd .. && pwd)
-CFLAGS = -std=gnu99 -Wall -Wextra -g -O2 -I../src -DROOT_DIR='"$(ROOT_DIR)"'
-LDFLAGS = -lm
+CFLAGS = -std=gnu99 -Wall -Wextra -g -O2 -I../src -DROOT_DIR='"$(ROOT_DIR)"' $(shell gsl-config --cflags)
+LDFLAGS = -lm $(shell gsl-config --libs)
 
 # Directories
 SRC_DIR = ../src
@@ -33,6 +33,11 @@ PROJECT_SOURCES = \
 	$(SRC_DIR)/model_infall.c \
 	$(SRC_DIR)/model_disk_instability.c \
 	$(SRC_DIR)/model_mergers.c \
+	$(SRC_DIR)/model_darksage_disc.c \
+	$(SRC_DIR)/model_darksage_sf.c \
+	$(SRC_DIR)/model_darksage_instability.c \
+	$(SRC_DIR)/model_darksage_mergers.c \
+	$(SRC_DIR)/model_dust.c \
 	$(SRC_DIR)/core_cool_func.c
 
 # Test files
@@ -56,6 +61,8 @@ TEST_SOURCES = \
 	test_agn_feedback.c \
 	test_ffb_concentration.c \
 	test_halo_ids.c \
+	test_darksage.c \
+	test_dust.c \
 # Function to check if all dependencies exist for a test
 # Usage: $(call check_test_deps,test_name)
 define check_test_deps
@@ -228,6 +235,12 @@ test_physics: $(OUTPUT_DIR)/test_physics_validation
 
 test_ffb: $(OUTPUT_DIR)/test_ffb_concentration
 	$(OUTPUT_DIR)/test_ffb_concentration
+
+test_darksage: $(OUTPUT_DIR)/test_darksage
+	$(OUTPUT_DIR)/test_darksage
+
+test_dust: $(OUTPUT_DIR)/test_dust
+	$(OUTPUT_DIR)/test_dust
 
 # Quick test (just conservation laws - fastest)
 quick: $(OUTPUT_DIR)/test_conservation
