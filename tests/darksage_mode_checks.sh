@@ -11,12 +11,14 @@
 #      two share (dust is written in addition).
 #
 # Run from the SAGE26 root: bash tests/darksage_mode_checks.sh   (PYTHON=... to pick python)
+# The model runs are deleted when the script exits.
 set -e
 ROOT=$(pwd)
 PYTHON=${PYTHON:-python3}
 PAR=input/millennium_darkSAGE.par
 W=$ROOT/tests/test_output/darksage
 rm -rf "$W" && mkdir -p "$W/pinned_build"
+trap 'rm -rf "$W"' EXIT   # the runs are ~30 GB: delete them however the script ends
 
 run_mode() {   # binary mode outdir
     mkdir -p "$3"
