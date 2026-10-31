@@ -18,7 +18,7 @@
 
 #pragma once
 
-/* DarkSAGEMode outputs, written only when DarkSAGEMode == 1 so DarkSAGEMode == 0 files are unchanged.
+/* DarkSAGEMode outputs, written only when DarkSAGEMode >= 1 so DarkSAGEMode == 0 files are unchanged.
  * X(DatasetName == GALAXY member, width, description, units); width 1 is a 1-D dataset,
  * width > 1 a 2-D [ngal, width] dataset (one column per annulus or annulus edge). */
 #define DARKSAGE_OUTPUT_FIELDS(X) \

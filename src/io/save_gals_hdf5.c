@@ -393,7 +393,7 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
         }
     }
 
-    if(run_params->DarkSAGEMode == 1) {
+    if(run_params->DarkSAGEMode >= 1) {
         for(int32_t snap_idx = 0; snap_idx < run_params->NumSnapOutputs; snap_idx++) {
             const int32_t ds_status = create_darksage_datasets(file_id, snap_idx, run_params);
             if(ds_status != EXIT_SUCCESS) return ds_status;
@@ -452,7 +452,7 @@ int32_t initialize_hdf5_galaxy_files(const int filenr, struct save_info *save_in
 
 #define DARKSAGE_FIELD_MALLOC(name, width, desc, unit) \
         save_info->buffer_output_gals[snap_idx].ds_##name = NULL; \
-        if(run_params->DarkSAGEMode == 1) { \
+        if(run_params->DarkSAGEMode >= 1) { \
             save_info->buffer_output_gals[snap_idx].ds_##name = malloc((size_t) save_info->buffer_size * (width) * sizeof(float)); \
             CHECK_POINTER_AND_RETURN_ON_NULL(save_info->buffer_output_gals[snap_idx].ds_##name, \
                                              "Failed to allocate the DarkSAGE output buffer for " #name); \
@@ -1008,7 +1008,7 @@ static int32_t prepare_galaxy_for_hdf5_output(const struct GALAXY *g, struct sav
         }
     }
 
-    if(run_params->DarkSAGEMode == 1) {
+    if(run_params->DarkSAGEMode >= 1) {
         // Each field is a float scalar or float array member of GALAXY, copied as `width` floats
 #define DARKSAGE_FIELD_PACK(name, width, desc, unit) \
         memcpy(&save_info->buffer_output_gals[output_snap_idx].ds_##name[(size_t) gals_in_buffer * (width)], \
@@ -1282,7 +1282,7 @@ static int32_t trigger_buffer_write(const int32_t snap_idx, const int32_t num_to
         }
     }
 
-    if(run_params->DarkSAGEMode == 1) {
+    if(run_params->DarkSAGEMode >= 1) {
         const int32_t ds_status = write_darksage_datasets(snap_idx, num_to_write, save_info, run_params);
         if(ds_status != EXIT_SUCCESS) return ds_status;
     }
@@ -1560,7 +1560,7 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
 
     CREATE_AND_WRITE_1D_ARRAY(file_id, "Header/output_snapshots", dims, run_params->ListOutputSnaps, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "NumOutputs", run_params->NumSnapOutputs, H5T_NATIVE_INT);
-    if(run_params->DarkSAGEMode == 1) {
+    if(run_params->DarkSAGEMode >= 1) {
         // Only when on, so DarkSAGEMode == 0 headers are unchanged
         CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DarkSAGEMode", run_params->DarkSAGEMode, H5T_NATIVE_INT);
         /* DarkSAGEMode constants (macros.h); the attribute macro needs addressable values */

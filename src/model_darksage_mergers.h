@@ -1,5 +1,5 @@
 /*
- * model_darksage_mergers.h -- public interface for merger gas placement (DarkSAGEMode == 1).
+ * model_darksage_mergers.h -- public interface for merger gas placement (DarkSAGEMode >= 1).
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */

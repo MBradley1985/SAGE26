@@ -1,5 +1,5 @@
 /*
- * model_darksage_mergers.c -- where merging gas goes (DarkSAGEMode == 1).
+ * model_darksage_mergers.c -- where merging gas goes (DarkSAGEMode >= 1).
  *
  * Follows Stevens et al. (2024) Secs. 12.2-12.3 and DarkSage's
  * add_galaxies_together() (model_mergers.c):

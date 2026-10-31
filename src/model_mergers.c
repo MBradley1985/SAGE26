@@ -367,7 +367,7 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
         galaxies[merger_centralgal].BlackHoleMass += BHaccrete;
         galaxies[merger_centralgal].ColdGas -= BHaccrete;
         galaxies[merger_centralgal].MetalsColdGas -= metallicity * BHaccrete;
-        if(run_params->DarkSAGEMode == 1) {
+        if(run_params->DarkSAGEMode >= 1) {
             darksage_remove_disc_gas(merger_centralgal, BHaccrete, NULL, NULL, galaxies);
         }
         if(galaxies[merger_centralgal].MetalsColdGas < 0.0) {
@@ -411,7 +411,7 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
         galaxies[gal].EjectedMass += galaxies[gal].ColdGas;
         galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsColdGas;
 
-        if(run_params->DarkSAGEMode == 1) {
+        if(run_params->DarkSAGEMode >= 1) {
             for(int i = 0; i < N_BINS; i++) {
                 galaxies[gal].DiscGas[i] = 0.0f;
                 galaxies[gal].DiscGasMetals[i] = 0.0f;
@@ -477,7 +477,7 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
  */
 void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
-    if(run_params->DarkSAGEMode == 1) {
+    if(run_params->DarkSAGEMode >= 1) {
         // Mass-weighted spins, using the masses before they are combined
         combine_spins_merger(t, p, galaxies);
 
@@ -645,6 +645,8 @@ void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
         galaxies[p].SfrDiskColdGas[step] = 0.0;
         galaxies[p].SfrDiskColdGasMetals[step] = 0.0;
     }
+    // DarkSAGEMode: the annuli's star formation goes with it (all zero otherwise)
+    for(int i = 0; i < N_BINS; i++) galaxies[p].DiscSFR[i] = 0.0f;
 }
 
 // ============================================================================
@@ -690,7 +692,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         // Using the stale value + clamp would silently fall back to ColdGas for most events.
         const int cgal = merger_centralgal;
         double h2gas_fresh = 0.0;
-        if(run_params->DarkSAGEMode == 1) {
+        if(run_params->DarkSAGEMode == 2) {
             double sfr_unused[N_BINS];
             darksage_star_formation_rate(cgal, sfr_unused, galaxies, run_params);   // sets H2gas and DiscH2[]
             h2gas_fresh = galaxies[cgal].H2gas;
@@ -931,7 +933,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }
 
-    if(run_params->DarkSAGEMode == 1) darksage_sync_disc_metals(merger_centralgal, galaxies);
+    if(run_params->DarkSAGEMode >= 1) darksage_sync_disc_metals(merger_centralgal, galaxies);
 }
 
 // ============================================================================
@@ -953,7 +955,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     
     add_gas_to_hot_reservoir(&galaxies[centralgal], run_params, total_gas, total_metals_gas);
 
-    if(run_params->DarkSAGEMode == 1) {
+    if(run_params->DarkSAGEMode >= 1) {
         for(int i = 0; i < N_BINS; i++) {
             galaxies[gal].DiscGas[i] = galaxies[gal].DiscGasMetals[i] = 0.0f;
             galaxies[gal].DiscStars[i] = galaxies[gal].DiscStarsMetals[i] = 0.0f;
@@ -965,7 +967,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     galaxies[centralgal].MetalsEjectedMass += galaxies[gal].MetalsEjectedMass;
 
     // DarkSAGEMode: the stars are deposited at the satellite's radius (DarkSage disrupt_satellite_to_ICS())
-    if(run_params->DarkSAGEMode == 1) {
+    if(run_params->DarkSAGEMode >= 1) {
         darksage_add_ics_radius(&galaxies[centralgal], galaxies[gal].ICS + galaxies[gal].StellarMass,
                                 darksage_satellite_radius(&galaxies[centralgal], &galaxies[gal], run_params));
         galaxies[gal].ICSMeanRadius = 0.0f;

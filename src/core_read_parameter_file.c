@@ -131,7 +131,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->Exponent_Forest_Dist_Scheme = 0.7;
     run_params->KarpovModeOn               = 0; /* 0: full Karpov+2023 recipe, 1: low-metallicity floor (Z/Z_sun = 0.01) for reheated and ejected gas */
 
-    // DarkSAGEMode: 0 = standard SAGE; 1 = full DarkSage physics (radially-resolved disk structure, Toomre Q instability, precession, j-conservation)
+    // DarkSAGEMode: 0 = standard SAGE26; 1, 2 = SAGE26 with radially resolved discs (1: bulk recipes shared over the annuli; 2: recipes per annulus)
     run_params->DarkSAGEMode               = 0; /* default: standard SAGE behavior */
 
 
@@ -545,7 +545,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"H2DepletionMode",        run_params->H2DepletionMode,        0, H2DEPLETIONMODE_MAX},
             {"KarpovModeOn",            run_params->KarpovModeOn,            0, 1},
-            {"DarkSAGEMode",           run_params->DarkSAGEMode,           0, 1}
+            {"DarkSAGEMode",           run_params->DarkSAGEMode,           0, 2}
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {
@@ -575,7 +575,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     /* The local laws (modes 2-4) need the radial integration, or in DarkSAGEMode the disc
        annuli; modes 1 and 5 are constant depletion times and need neither. */
     if(run_params->H2DepletionMode >= 2 && run_params->H2DepletionMode <= 4
-       && run_params->DarkSAGEMode != 1 && !run_params->H2RadialIntegrationOn) {
+       && run_params->DarkSAGEMode == 0 && !run_params->H2RadialIntegrationOn) {
         fprintf(stderr, "Error: H2DepletionMode = %d needs H2RadialIntegrationOn = 1.\n", run_params->H2DepletionMode);
         ABORT(EXIT_FAILURE);
     }

@@ -108,7 +108,7 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
                 galaxies[i].ICS_accrete = 0.0;
                 galaxies[i].ICS_sum_mt = 0.0;
             }
-            if(run_params->DarkSAGEMode == 1) {
+            if(run_params->DarkSAGEMode >= 1) {
                 /* deposited at the satellite's radius (DarkSage strip_from_satellite()); from beyond
                  * Rvir the mass joins without changing the mean radius (darksage_add_ics_radius()) */
                 const double r_sat = darksage_satellite_radius(&galaxies[centralgal], &galaxies[i], run_params);
@@ -206,7 +206,7 @@ double infall_recipe(const int centralgal, const int ngal, const double Zcurr, s
     }
 
     // the central galaxy keeps all the ICS (mostly for numerical convenience)
-    if(run_params->DarkSAGEMode == 1 && galaxies[centralgal].ICS + ics_m > 0.0) {
+    if(run_params->DarkSAGEMode >= 1 && galaxies[centralgal].ICS + ics_m > 0.0) {
         galaxies[centralgal].ICSMeanRadius = (float)((galaxies[centralgal].ICSMeanRadius * galaxies[centralgal].ICS + ics_mr)
                                                      / (galaxies[centralgal].ICS + ics_m));
     }

@@ -1,5 +1,5 @@
 /*
- * model_darksage_disc.c -- disc annulus radii from the rotation curve (DarkSAGEMode == 1).
+ * model_darksage_disc.c -- disc annulus radii from the rotation curve (DarkSAGEMode >= 1).
  *
  * Follows DarkSage's update_disc_radii() (model_misc.c; Stevens, Croton &
  * Mutch 2016 Sec. 3.2; Stevens et al. 2024 Sec. 4).  The rotation curve is

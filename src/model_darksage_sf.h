@@ -1,5 +1,5 @@
 /*
- * model_darksage_sf.h -- public interface for annulus-resolved H2 and SF (DarkSAGEMode == 1).
+ * model_darksage_sf.h -- public interface for annulus-resolved H2 and SF (DarkSAGEMode >= 1).
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -14,6 +14,11 @@ extern "C" {
 
 
     /* functions in model_darksage_sf.c */
+    /* SFprescription / H2DepletionMode SFR and H2 of each annulus, galaxy untouched */
+    extern void darksage_annulus_rates(const int p, double sfr_bin[N_BINS], double h2_bin[N_BINS],
+                                       const struct GALAXY *galaxies, const struct params *run_params);
+    /* Same, setting DiscH2, H2gas and H2DepletionTime_Gyr from the annuli (DarkSAGEMode 2);
+     * returns the total SFR */
     extern double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
                                                struct GALAXY *galaxies, const struct params *run_params);
     /* Take mass from the gas (stars) annuli in proportion to weight (NULL: to what they hold),

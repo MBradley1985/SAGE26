@@ -1,20 +1,21 @@
 /*
- * model_darksage_sf.c -- annulus-resolved H2 and star formation (DarkSAGEMode == 1).
+ * model_darksage_sf.c -- annulus-resolved H2 and star formation (DarkSAGEMode >= 1).
  *
  * Applies the same SFprescription / H2DepletionMode laws as
  * model_starformation_and_feedback.c, but per disc annulus (DiscGas[i],
  * DiscStars[i], DiscRadii[i]) following Stevens, Croton & Mutch (2016).
- * The annuli are themselves a radial integration over the actual disc, so
- * H2RadialIntegrationOn and H2DiskAreaOption are not used in this mode.
+ * DarkSAGEMode 2 forms its stars with these rates (the annuli are themselves a
+ * radial integration over the actual disc, so H2RadialIntegrationOn and
+ * H2DiskAreaOption are not used there); DarkSAGEMode 1 uses them only as the
+ * shape over which SAGE26's bulk rate is shared.  The helpers below move gas,
+ * stars and metals in and out of the annuli for every mode.
  *
  * The dynamical-time laws use the galaxy's t_dyn = 3 r_s / Vvir in every
  * annulus, as the bulk laws do (and DarkSage's SFprescription 2): an
  * annulus's own r_i / v_circ,i (~1 Myr at the centre) empties the inner disc.
  * The local circular velocity enters only the depletion-time laws.
  *
- * The annuli are the state: these functions supply the per-annulus SFR; the
- * stars, feedback and yields are booked annulus by annulus in
- * model_starformation_and_feedback.c.
+ * The stars, feedback and yields are booked in model_starformation_and_feedback.c.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -49,25 +50,16 @@ static double fH2_kmt09(const double Sigma_gas, const double Z)
     return (s < 2.0) ? 1.0 - (3.0 * s) / (4.0 + s) : 0.0;
 }
 
-double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
-                                    struct GALAXY *galaxies, const struct params *run_params)
+void darksage_annulus_rates(const int p, double sfr_bin[N_BINS], double h2_bin[N_BINS],
+                            const struct GALAXY *galaxies, const struct params *run_params)
 {
     const int sfp = run_params->SFprescription;
     const float h = run_params->Hubble_h;
     const double rs_pc = CODE_LENGTH_TO_PC(galaxies[p].DiskScaleRadius, h);
     const double gyr_to_code = SEC_PER_GIGAYEAR * run_params->Hubble_h / run_params->UnitTime_in_s;
 
-    double total_sfr = 0.0, total_h2 = 0.0;
-
-    for(int i = 0; i < N_BINS; i++) {
-        sfr_bin[i] = 0.0;
-        galaxies[p].DiscH2[i] = 0.0;
-    }
-    galaxies[p].H2gas = 0.0;
-
-    if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) {
-        return 0.0;
-    }
+    for(int i = 0; i < N_BINS; i++) sfr_bin[i] = h2_bin[i] = 0.0;
+    if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) return;
     /* Galaxy dynamical time, as the bulk laws */
     const double tdyn = DS_SF_DISK_RADIUS_FRAC * galaxies[p].DiskScaleRadius / galaxies[p].Vvir;
 
@@ -103,8 +95,7 @@ double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
         if(f_H2 < 0.0) f_H2 = 0.0;
         if(f_H2 > 1.0) f_H2 = 1.0;
         const double h2 = f_H2 * gas * HYDROGEN_MASS_FRAC;
-        galaxies[p].DiscH2[i] = h2;
-        total_h2 += h2;
+        h2_bin[i] = h2;
 
         /* --- star formation law --- */
         double sfr = 0.0;
@@ -133,10 +124,24 @@ double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
         }
 
         sfr_bin[i] = (sfr > 0.0) ? sfr : 0.0;
-        total_sfr += sfr_bin[i];
     }
+}
 
-    if(sf_prescription_tracks_h2(sfp)) {
+double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
+                                    struct GALAXY *galaxies, const struct params *run_params)
+{
+    double h2_bin[N_BINS], total_sfr = 0.0, total_h2 = 0.0;
+    darksage_annulus_rates(p, sfr_bin, h2_bin, galaxies, run_params);
+    for(int i = 0; i < N_BINS; i++) {
+        galaxies[p].DiscH2[i] = (float)h2_bin[i];
+        total_sfr += sfr_bin[i];
+        total_h2 += h2_bin[i];
+    }
+    galaxies[p].H2gas = 0.0;
+    if(galaxies[p].Vvir <= 0.0 || galaxies[p].DiskScaleRadius <= 0.0) return 0.0;
+
+    if(sf_prescription_tracks_h2(run_params->SFprescription)) {
+        const double gyr_to_code = SEC_PER_GIGAYEAR * run_params->Hubble_h / run_params->UnitTime_in_s;
         galaxies[p].H2gas = total_h2;
         if(galaxies[p].H2gas > galaxies[p].ColdGas * HYDROGEN_MASS_FRAC) {
             galaxies[p].H2gas = galaxies[p].ColdGas * HYDROGEN_MASS_FRAC;

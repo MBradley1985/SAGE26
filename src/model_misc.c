@@ -220,7 +220,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].RotSupportScaleRadius = 0.0f;
     galaxies[p].c_beta = 0.1f;   /* hot-gas beta-profile core */
 
-    if(run_params->DarkSAGEMode == 1) {
+    if(run_params->DarkSAGEMode >= 1) {
         /* Gas, stellar and hot spins start along the halo spin */
         const double spin_mag = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
                                      halos[halonr].Spin[1] * halos[halonr].Spin[1] +

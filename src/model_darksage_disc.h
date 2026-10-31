@@ -1,5 +1,5 @@
 /*
- * model_darksage_disc.h -- public interface for disc annulus radii (DarkSAGEMode == 1).
+ * model_darksage_disc.h -- public interface for disc annulus radii (DarkSAGEMode >= 1).
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */

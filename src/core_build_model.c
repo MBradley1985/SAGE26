@@ -254,7 +254,7 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
             }
 
             // DarkSAGEMode: Zero DiscSFR array for this output step
-            if(run_params->DarkSAGEMode == 1) {
+            if(run_params->DarkSAGEMode >= 1) {
                 for(int bin_i = 0; bin_i < N_BINS; bin_i++) {
                     galaxies[ngal].DiscSFR[bin_i] = 0.0;
                 }
@@ -316,7 +316,7 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
 
                         // DarkSAGEMode: newly cooling gas follows the current halo, like DiskScaleRadius above:
                         // its j-profile scale and the hot-gas spin direction are refreshed every snapshot
-                        if(run_params->DarkSAGEMode == 1) {
+                        if(run_params->DarkSAGEMode >= 1) {
                             galaxies[ngal].CoolScaleRadius = galaxies[ngal].DiskScaleRadius;
                             const double spin_mag = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
                                                          halos[halonr].Spin[1] * halos[halonr].Spin[1] +
@@ -508,7 +508,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
     }
 
     // DarkSAGEMode: Zero DiscSFR arrays before accumulating over timesteps
-    if(run_params->DarkSAGEMode == 1) {
+    if(run_params->DarkSAGEMode >= 1) {
         for(int p = 0; p < ngal; p++) {
             for(int i = 0; i < N_BINS; i++) {
                 galaxies[p].DiscSFR[i] = 0.0;
@@ -563,7 +563,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
             // DarkSAGEMode: refresh the annulus radii from the rotation curve every substep
             // after the first (DarkSage core_build_model.c)
-            if(run_params->DarkSAGEMode == 1 && step != 0) {
+            if(run_params->DarkSAGEMode >= 1 && step != 0) {
                 update_disc_radii(p, galaxies, halos, run_params);
             }
 
