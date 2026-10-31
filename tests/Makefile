@@ -60,6 +60,7 @@ TEST_SOURCES = \
 	test_agn_feedback.c \
 	test_ffb_concentration.c \
 	test_halo_ids.c \
+	test_darksage.c \
 # Function to check if all dependencies exist for a test
 # Usage: $(call check_test_deps,test_name)
 define check_test_deps
@@ -232,6 +233,9 @@ test_physics: $(OUTPUT_DIR)/test_physics_validation
 
 test_ffb: $(OUTPUT_DIR)/test_ffb_concentration
 	$(OUTPUT_DIR)/test_ffb_concentration
+
+test_darksage: $(OUTPUT_DIR)/test_darksage
+	$(OUTPUT_DIR)/test_darksage
 
 # Quick test (just conservation laws - fastest)
 quick: $(OUTPUT_DIR)/test_conservation
