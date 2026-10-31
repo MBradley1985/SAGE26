@@ -9,6 +9,8 @@
  * - Radial integration over the exponential disk (hydrogen budget invariant)
  * - HI bookkeeping through starformation_and_feedback():
  *     H1 = (1 - f_ion) * (X_H * ColdGas - H2)  >= 0 by construction
+ * - H2DepletionMode 5 (DarkSage constant depletion time), with and without
+ *   the radial integration
  *
  * Reference values pin the frozen single-precision behaviour of the fits
  * (see docs/physics/units.md); they were generated with the unit-test build
@@ -24,6 +26,7 @@
 #include "../src/core_allvars.h"
 #include "../src/model_misc.h"
 #include "../src/model_starformation_and_feedback.h"
+#include "../src/model_h2_chemistry.h"
 
 /* Tolerance for pinned float-precision reference values: tight enough to
  * catch any real change to the fits, loose enough for cross-platform libm. */
@@ -315,6 +318,57 @@ void test_hi_partition_fully_ionized_dwarf() {
                 "Phases within the hydrogen budget");
 }
 
+/* DarkSage's eps_H2 = 4.35e-4 Myr^-1 (Stevens et al. 2024 eq. 63, DarkSage source value) acts on
+ * M_H2; the depletion law acts on M_mol = M_H2 / X_H, so t_dep = 1 / (eps_H2 X_H) [Gyr] */
+static const double DARKSAGE_TDEP_GYR = 1.0 / (0.435 * HYDROGEN_MASS_FRAC);
+/* t_dep is returned in double from constants: only round-off separates it from the reference */
+static const double TDEP_RTOL = 1e-12;
+/* dt = 1e-6 code time removes ~1e-7 of the gas, so H2gas is the same in both runs to well
+ * within this; the ratio otherwise follows from the two constant depletion times alone */
+static const double SFR_RATIO_RTOL = 1e-5;
+/* H2DepletionTime_Gyr is stored as a float */
+static const double FLOAT_RTOL = 1e-6;
+
+void test_tdep_darksage_constant() {
+    BEGIN_TEST("H2DepletionMode 5: constant DarkSage depletion time at every surface density");
+
+    /* Mode 5 has no dependence on the local disc, so it must give the same t_dep for
+     * any Sigma_gas, r and v_circ -- including an empty point, where the local laws
+     * (modes 2-4) return 0. */
+    const double sigma[3] = {0.0, 10.0, 1000.0};
+    for(int k = 0; k < 3; k++) {
+        ASSERT_CLOSE(DARKSAGE_TDEP_GYR, h2_depletion_time_gyr(sigma[k], 1000.0, 200.0, 5), TDEP_RTOL,
+                     "t_dep = 1 / (eps_H2 X_H) for any Sigma_gas");
+    }
+}
+
+void test_tdep_darksage_without_radial_integration() {
+    BEGIN_TEST("H2DepletionMode 5: forms stars on the bulk path without the radial integration");
+
+    /* With H2RadialIntegrationOn = 0, H2gas comes from the single-slab BR06 estimate,
+     * which does not depend on H2DepletionMode.  Modes 1 and 5 are both constant
+     * depletion times, so on the same galaxy SFR_5 / SFR_1 = t_dep,1 / t_dep,5 =
+     * 1 Gyr / DARKSAGE_TDEP_GYR.  A mode that never sets its depletion time forms no
+     * stars and fails the first assertion. */
+    struct params rp;
+    setup_br06_radial_params(&rp);
+    rp.H2RadialIntegrationOn = 0;
+    rp.UnitTime_in_s = 3.08568e19;   /* (Mpc)/(km/s) */
+
+    struct GALAXY gal1[2], gal5[2];
+    rp.H2DepletionMode = 1;
+    run_sf_driver(gal1, &rp, 1.0, 0.003, 2.0);
+    rp.H2DepletionMode = 5;
+    run_sf_driver(gal5, &rp, 1.0, 0.003, 2.0);
+
+    ASSERT_GREATER_THAN(gal5[0].SfrDisk[0], 0.0, "Mode 5 forms stars without the radial integration");
+    ASSERT_GREATER_THAN(gal1[0].SfrDisk[0], 0.0, "Mode 1 forms stars without the radial integration");
+    ASSERT_CLOSE(1.0 / DARKSAGE_TDEP_GYR, gal5[0].SfrDisk[0] / gal1[0].SfrDisk[0], SFR_RATIO_RTOL,
+                 "SFR_5 / SFR_1 = t_dep,1 / t_dep,5");
+    ASSERT_CLOSE(DARKSAGE_TDEP_GYR, gal5[0].H2DepletionTime_Gyr, FLOAT_RTOL,
+                 "H2DepletionTime_Gyr output holds the DarkSage depletion time");
+}
+
 int main() {
     BEGIN_TEST_SUITE("H2 Chemistry and Gas-Phase Partition");
 
@@ -331,6 +385,8 @@ int main() {
     test_hi_partition_atomic_remainder();
     test_hi_partition_density_dependence();
     test_hi_partition_fully_ionized_dwarf();
+    test_tdep_darksage_constant();
+    test_tdep_darksage_without_radial_integration();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

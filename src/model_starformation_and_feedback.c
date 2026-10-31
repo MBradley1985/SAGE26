@@ -720,16 +720,19 @@ static double sfr_gd14(const int p, struct GALAXY *galaxies, const struct params
  * H2DepletionMode > 0 -- SFR = M_mol / t_dep for every H2 prescription, in place of its
  * efficiency x M_H2 / t_dyn law.  M_mol = H2gas / HYDROGEN_MASS_FRAC (helium included,
  * as in all the depletion-time laws).  t_dep follows H2DepletionMode (see
- * h2_depletion_time_gyr in model_h2_chemistry.c): mode 1 is the constant 1 Gyr; modes 2-4
- * are local laws, integrated over the disk in calculate_molecular_fraction_radial_integration,
- * which stores the effective M_mol / SFR in H2DepletionTime_Gyr.
+ * h2_depletion_time_gyr in model_h2_chemistry.c): modes 1 (1 Gyr) and 5 (DarkSage) are
+ * constants, set here; modes 2-4 are local laws, integrated over the disk in
+ * calculate_molecular_fraction_radial_integration, which stores the effective M_mol / SFR in
+ * H2DepletionTime_Gyr.
  *
  * Returns the instantaneous SFR strdot [10^10 Msun/h / code time].
  */
 static double sfr_fixing_gas_tdep(const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
-    if(run_params->H2DepletionMode == 1) {
-        galaxies[p].H2DepletionTime_Gyr = (galaxies[p].H2gas > 0.0) ? 1.0f : -1.0f;
+    const int mode = run_params->H2DepletionMode;
+    if(mode == 1 || mode == 5) {
+        /* constant depletion times: no dependence on the disc */
+        galaxies[p].H2DepletionTime_Gyr = (galaxies[p].H2gas > 0.0) ? (float)h2_depletion_time_gyr(0.0, 0.0, 0.0, mode) : -1.0f;
     }
     if(galaxies[p].H2gas <= 0.0 || galaxies[p].H2DepletionTime_Gyr <= 0.0f) {
         return 0.0;

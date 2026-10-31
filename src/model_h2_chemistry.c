@@ -145,7 +145,7 @@ float calculate_molecular_fraction_BR06(float gas_surface_density_msun_pc2, floa
  *      fixed eps_H2 = 4.35e-4 Myr^-1 of the DarkSage source (SFE_H2 in
  *      model_starformation_and_feedback.c; the paper quotes (2.35 Gyr)^-1),
  *      after Bigiel et al. (2011).  It acts on M_H2, not M_mol, so the
- *      returned t_dep is (1 / eps_H2) / HYDROGEN_MASS_FRAC.  DarkSAGEMode only.
+ *      returned t_dep is (1 / eps_H2) / HYDROGEN_MASS_FRAC.
  */
 static const double KMT09_TDEP_GYR     = 2.6;
 static const double KRUMHOLZ_SIGMA_GMC = 85.0;     /* Msun/pc^2 */
