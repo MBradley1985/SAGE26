@@ -228,7 +228,7 @@ static void merge_bulge_kinematics(const int t, const int p, const int major, co
     double msig2 = ms_p * vr_p * vr_p
                  + cb_t * gt->VelDispMergerBulge * gt->VelDispMergerBulge
                  + gp->MergerBulgeMass * gp->VelDispMergerBulge * gp->VelDispMergerBulge
-                 + gp->SecularBulgeMass * gp->VelDispBulge * gp->VelDispBulge;
+                 + gp->InstabilityBulgeMass * gp->VelDispBulge * gp->VelDispBulge;
     double J_disc = 0.0;
     for(int i = 0; i < N_BINS; i++) {
         msig2 += gp->DiscStars[i] * gp->VelDispStars[i] * gp->VelDispStars[i];

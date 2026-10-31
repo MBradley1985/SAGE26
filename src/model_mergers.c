@@ -627,7 +627,7 @@ void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
     // DarkSage stars_to_bulge(): the merger bulge's dispersion becomes the mass-weighted
     // quadrature sum over the components it is built from (DarkSAGEMode quantities only)
     double msig2 = galaxies[p].MergerBulgeMass * galaxies[p].VelDispMergerBulge * galaxies[p].VelDispMergerBulge
-                 + galaxies[p].SecularBulgeMass * galaxies[p].VelDispBulge * galaxies[p].VelDispBulge;
+                 + galaxies[p].InstabilityBulgeMass * galaxies[p].VelDispBulge * galaxies[p].VelDispBulge;
     for(int i = 0; i < N_BINS; i++) msig2 += galaxies[p].DiscStars[i] * galaxies[p].VelDispStars[i] * galaxies[p].VelDispStars[i];
     if(galaxies[p].StellarMass > 0.0f) galaxies[p].VelDispMergerBulge = (float)sqrt(msig2 / galaxies[p].StellarMass);
 
@@ -636,9 +636,6 @@ void make_bulge_from_burst(const int p, struct GALAXY *galaxies)
     galaxies[p].MergerBulgeMass = galaxies[p].StellarMass;      // All merger-driven
     galaxies[p].InstabilityBulgeMass = 0.0;                      // Destroyed
     galaxies[p].MetalsBulgeMass = galaxies[p].MetalsStellarMass;
-    // DarkSAGEMode's instability-built (secular) bulge goes with it (DarkSage stars_to_bulge())
-    galaxies[p].SecularBulgeMass = galaxies[p].SecularMetalsBulgeMass = 0.0f;
-    for(int k = 0; k < 3; k++) galaxies[p].SpinSecularBulge[k] = 0.0f;
 
     // DarkSAGEMode: the stellar disc is destroyed (arrays are all zero otherwise)
     for(int i = 0; i < N_BINS; i++) {

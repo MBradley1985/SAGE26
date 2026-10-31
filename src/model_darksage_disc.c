@@ -269,7 +269,7 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     /* Hernquist bulges, normalised to their mass within Rvir; scale lengths from the last call */
     const double a_SB = g->a_InstabBulge;
     const double a_CB = g->a_MergerBulge;
-    const double M_SB_inf = g->SecularBulgeMass * ((Rvir + a_SB) / Rvir) * ((Rvir + a_SB) / Rvir);
+    const double M_SB_inf = g->InstabilityBulgeMass * ((Rvir + a_SB) / Rvir) * ((Rvir + a_SB) / Rvir);
     const double M_CB_inf = g->MergerBulgeMass * ((Rvir + a_CB) / Rvir) * ((Rvir + a_CB) / Rvir);
     if(g->ICSMeanRadius > ICS_MAX_MEAN_RADIUS * Rvir) g->ICSMeanRadius = (float)(ICS_MAX_MEAN_RADIUS * Rvir);
     const double a_ICS = darksage_ics_scale_radius(Rvir, g->ICSMeanRadius);
@@ -560,7 +560,7 @@ double darksage_host_mass_within(const struct GALAXY *c, const double r, const d
     M += M_hot * (x - c_beta * atan(x / c_beta)) / (1.0 - c_beta * atan(1.0 / c_beta));
 
     const double a_SB = c->a_InstabBulge, a_CB = c->a_MergerBulge;
-    M += c->SecularBulgeMass * ((Rvir + a_SB) / Rvir) * ((Rvir + a_SB) / Rvir) * (r / (r + a_SB)) * (r / (r + a_SB));
+    M += c->InstabilityBulgeMass * ((Rvir + a_SB) / Rvir) * ((Rvir + a_SB) / Rvir) * (r / (r + a_SB)) * (r / (r + a_SB));
     M += c->MergerBulgeMass * ((Rvir + a_CB) / Rvir) * ((Rvir + a_CB) / Rvir) * (r / (r + a_CB)) * (r / (r + a_CB));
     const double a_ICS = darksage_ics_scale_radius(Rvir, c->ICSMeanRadius);
     M += c->ICS * ((Rvir + a_ICS) / Rvir) * ((Rvir + a_ICS) / Rvir) * (r / (r + a_ICS)) * (r / (r + a_ICS));

@@ -153,12 +153,7 @@ static void sink_unstable_stars(const int p, const int i, const double unstable_
         g->DiscStarsMetals[i-1] += Z * m_down;
     } else {
         /* Disc -> secular (instability-driven) bulge; StellarMass is unchanged */
-        for(int s = 0; s < 3; s++) {
-            g->SpinSecularBulge[s] = (float)(g->SpinSecularBulge[s] * g->SecularBulgeMass / (g->SecularBulgeMass + m_down));
-        }
-        g->VelDispBulge = mix_dispersion(g->SecularBulgeMass, g->VelDispBulge, m_down, sigma);
-        g->SecularBulgeMass += m_down;
-        g->SecularMetalsBulgeMass += Z * m_down;
+        g->VelDispBulge = mix_dispersion(g->InstabilityBulgeMass, g->VelDispBulge, m_down, sigma);
         g->BulgeMass += m_down;
         g->InstabilityBulgeMass += m_down;
         g->MetalsBulgeMass += Z * m_down;

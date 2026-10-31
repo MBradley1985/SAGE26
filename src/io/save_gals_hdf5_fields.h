@@ -33,7 +33,6 @@
     X(SpinGas, 3, "Unit vector of the gas-disc angular momentum.", "Unitless") \
     X(SpinStars, 3, "Unit vector of the stellar-disc angular momentum.", "Unitless") \
     X(ICSMeanRadius, 1, "Mass-weighted radius at which the intrahalo stars were deposited; sets their Hernquist profile.", "Mpc/h") \
-    X(SecularBulgeMass, 1, "Bulge mass built by annulus-0 disc instability.", "1.0e10 Msun/h") \
     X(VelDispBulge, 1, "Velocity dispersion of the secular bulge.", "km/s") \
     X(VelDispMergerBulge, 1, "Velocity dispersion of the merger-driven (classical) bulge.", "km/s") \
     X(SpinClassicalBulge, 3, "Specific angular momentum vector of the merger-driven bulge.", "(Mpc/h)(km/s)") \

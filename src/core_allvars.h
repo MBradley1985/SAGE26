@@ -254,10 +254,7 @@ struct GALAXY
     /* DarkSAGEMode: Enhanced disk physics */
     float ICSMeanRadius;             /* mass-weighted radius at which the intrahalo stars were deposited [Mpc/h] (DarkSage R_ICS_av) */
     float VelDispStars[N_BINS];      /* Stellar velocity dispersion per annulus [km/s] */
-    float VelDispBulge;              /* Secular bulge velocity dispersion [km/s] */
-    float SecularBulgeMass;          /* Mass in secular bulge [10^10 Msun/h] */
-    float SecularMetalsBulgeMass;    /* Metals in secular bulge */
-    float SpinSecularBulge[3];       /* Secular bulge spin vector */
+    float VelDispBulge;              /* Instability-built (secular) bulge velocity dispersion [km/s] */
     float VelDispMergerBulge;        /* Merger (classical) bulge velocity dispersion [km/s] */
     float SpinClassicalBulge[3];     /* Merger (classical) bulge specific angular momentum vector */
     float a_InstabBulge;             /* Hernquist scale length of the secular bulge [Mpc/h] (DarkSage) */
