@@ -16,10 +16,17 @@ extern "C" {
     /* functions in model_darksage_sf.c */
     extern double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
                                                struct GALAXY *galaxies, const struct params *run_params);
-    extern void darksage_remove_disc_gas(const int p, const double mass, const float weight[N_BINS],
+    /* Take mass from the gas (stars) annuli in proportion to weight (NULL: to what they hold),
+     * at each annulus's metallicity; taken (may be NULL) receives what left each annulus */
+    extern void darksage_remove_disc_gas(const int p, const double mass, const double weight[N_BINS], double taken[N_BINS],
                                          struct GALAXY *galaxies);
+    extern void darksage_remove_disc_stars(const int p, const double mass, const double weight[N_BINS], double taken[N_BINS],
+                                           struct GALAXY *galaxies);
+    /* While set (non-NULL), weight replaces the caller's in darksage_remove_disc_gas() */
+    extern void darksage_set_gas_removal_weights(const double *weight);
+    /* Rescale the gas and disc-star annulus metals to MetalsColdGas and MetalsStellarMass - MetalsBulgeMass */
     extern void darksage_sync_disc_metals(const int p, struct GALAXY *galaxies);
-    extern void darksage_add_disc_metals(const int p, const double metals, const double sfr_bin[N_BINS],
+    extern void darksage_add_disc_metals(const int p, const double metals, const double weight[N_BINS],
                                          struct GALAXY *galaxies);
 
 #ifdef __cplusplus

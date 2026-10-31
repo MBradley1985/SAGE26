@@ -149,84 +149,135 @@ double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],
     return total_sfr;
 }
 
-void darksage_remove_disc_gas(const int p, const double mass, const float weight[N_BINS],
-                              struct GALAXY *galaxies)
+/* Weights that replace the caller's in darksage_remove_disc_gas() while set (instability gas) */
+static const double *gas_removal_override = NULL;
+
+void darksage_set_gas_removal_weights(const double *weight)
 {
-    if(mass <= 0.0) return;
+    gas_removal_override = weight;
+}
 
-    double w_sum = 0.0;
-    for(int i = 0; i < N_BINS; i++) w_sum += weight[i];
-    if(w_sum <= 0.0) return;
-
-    double removed = 0.0;
+/*
+ * remove_weighted -- take mass from arr[] in proportion to weight[], each element giving at
+ * most what it holds; what an element cannot give comes from the others in proportion to what
+ * they still hold, so exactly min(mass, sum(arr)) leaves.  taken[] receives what left each element.
+ */
+static void remove_weighted(float arr[N_BINS], const double mass, const double weight[N_BINS], double taken[N_BINS])
+{
+    double w_sum = 0.0, have = 0.0;
     for(int i = 0; i < N_BINS; i++) {
-        if(galaxies[p].DiscGas[i] <= 0.0f) continue;
-        double m_i = mass * weight[i] / w_sum;
-        if(m_i > galaxies[p].DiscGas[i]) m_i = galaxies[p].DiscGas[i];
-        const double Z = galaxies[p].DiscGasMetals[i] / galaxies[p].DiscGas[i];
-        /* H2 and HI leave with the gas, keeping the annulus's fractions */
-        const double keep = 1.0 - m_i / galaxies[p].DiscGas[i];
-        galaxies[p].DiscH2[i] *= (float)keep;
-        galaxies[p].DiscHI[i] *= (float)keep;
-        galaxies[p].DiscGas[i] -= m_i;
-        galaxies[p].DiscGasMetals[i] -= Z * m_i;
-        if(galaxies[p].DiscGas[i] < 0.0f) galaxies[p].DiscGas[i] = 0.0f;
-        if(galaxies[p].DiscGasMetals[i] < 0.0f) galaxies[p].DiscGasMetals[i] = 0.0f;
-        removed += m_i;
+        taken[i] = 0.0;
+        if(arr[i] <= 0.0f) continue;
+        have += arr[i];
+        if(weight != NULL && weight[i] > 0.0) w_sum += weight[i];
     }
+    const double want = (mass < have) ? mass : have;
+    if(want <= 0.0) return;
 
-    /* Annuli that ran short: take the rest from all annuli in proportion to their remaining gas,
-     * so the annuli lose exactly what the bulk ColdGas lost */
-    const double shortfall = mass - removed;
-    if(shortfall > 1.0e-6 * mass && weight != galaxies[p].DiscGas) {
-        darksage_remove_disc_gas(p, shortfall, galaxies[p].DiscGas, galaxies);
-    } else if(shortfall > 1.0e-6 * mass) {
-        /* Already gas-weighted: only possible if the annuli hold less than mass in total; empty them */
+    double left = want;
+    if(w_sum > 0.0) {
         for(int i = 0; i < N_BINS; i++) {
-            galaxies[p].DiscGas[i] = galaxies[p].DiscGasMetals[i] = 0.0f;
-            galaxies[p].DiscH2[i] = galaxies[p].DiscHI[i] = 0.0f;
+            if(arr[i] <= 0.0f || weight[i] <= 0.0) continue;
+            double m = want * weight[i] / w_sum;
+            if(m > arr[i]) m = arr[i];
+            taken[i] = m;
+            left -= m;
         }
     }
-
-    /* Galaxy H2 and HI follow the annuli */
-    double h2 = 0.0, hi = 0.0;
-    for(int i = 0; i < N_BINS; i++) {
-        h2 += galaxies[p].DiscH2[i];
-        hi += galaxies[p].DiscHI[i];
+    if(left > 0.0) {
+        double rest = 0.0;
+        for(int i = 0; i < N_BINS; i++) if(arr[i] > 0.0f) rest += arr[i] - taken[i];
+        if(rest > 0.0) {
+            for(int i = 0; i < N_BINS; i++) if(arr[i] > 0.0f) taken[i] += left * (arr[i] - taken[i]) / rest;
+        }
     }
-    galaxies[p].H2gas = (float)h2;
-    galaxies[p].H1gas = (float)hi;
+    for(int i = 0; i < N_BINS; i++) {
+        arr[i] -= (float)taken[i];
+        if(arr[i] < 0.0f) arr[i] = 0.0f;
+    }
 }
 
-/* The bulk removes metals at the galaxy-average metallicity, the annuli at their local one;
- * rescale the annulus metals to the bulk total, keeping the radial metallicity profile */
+void darksage_remove_disc_gas(const int p, const double mass, const double weight[N_BINS], double taken[N_BINS],
+                              struct GALAXY *galaxies)
+{
+    double t[N_BINS];
+    if(taken == NULL) taken = t;
+    if(mass <= 0.0) {
+        for(int i = 0; i < N_BINS; i++) taken[i] = 0.0;
+        return;
+    }
+    if(gas_removal_override != NULL) weight = gas_removal_override;
+
+    struct GALAXY *g = &galaxies[p];
+    float before[N_BINS];
+    for(int i = 0; i < N_BINS; i++) before[i] = g->DiscGas[i];
+    remove_weighted(g->DiscGas, mass, weight, taken);
+    for(int i = 0; i < N_BINS; i++) {
+        if(before[i] <= 0.0f) continue;
+        /* metals at the annulus's metallicity; H2 and HI keep the annulus's fractions */
+        const double keep = 1.0 - taken[i] / before[i];
+        g->DiscGasMetals[i] = (float)(g->DiscGasMetals[i] * keep);
+        g->DiscH2[i] = (float)(g->DiscH2[i] * keep);
+        g->DiscHI[i] = (float)(g->DiscHI[i] * keep);
+    }
+}
+
+void darksage_remove_disc_stars(const int p, const double mass, const double weight[N_BINS], double taken[N_BINS],
+                                struct GALAXY *galaxies)
+{
+    double t[N_BINS];
+    if(taken == NULL) taken = t;
+    struct GALAXY *g = &galaxies[p];
+    float before[N_BINS];
+    for(int i = 0; i < N_BINS; i++) before[i] = g->DiscStars[i];
+    remove_weighted(g->DiscStars, mass, weight, taken);
+    for(int i = 0; i < N_BINS; i++) {
+        if(before[i] > 0.0f) g->DiscStarsMetals[i] = (float)(g->DiscStarsMetals[i] * (1.0 - taken[i] / before[i]));
+    }
+}
+
+/* Rescale arr[] so it sums to target, keeping its shape; an empty arr[] takes the shape of shape[] */
+static void rescale_to(float arr[N_BINS], const double target, const float shape[N_BINS])
+{
+    double sum = 0.0, shape_sum = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        sum += arr[i];
+        shape_sum += shape[i];
+    }
+    const double t = (target > 0.0) ? target : 0.0;
+    if(sum > 0.0) {
+        for(int i = 0; i < N_BINS; i++) arr[i] = (float)(arr[i] * t / sum);
+    } else if(shape_sum > 0.0) {
+        for(int i = 0; i < N_BINS; i++) arr[i] = (float)(t * shape[i] / shape_sum);
+    }
+}
+
+/* The bulk moves metals at galaxy-average metallicities, the annuli at their local ones; rescale
+ * the annulus metals to the bulk totals, keeping the radial metallicity profiles */
 void darksage_sync_disc_metals(const int p, struct GALAXY *galaxies)
 {
-    double z_sum = 0.0, gas_sum = 0.0;
-    for(int i = 0; i < N_BINS; i++) {
-        z_sum += galaxies[p].DiscGasMetals[i];
-        gas_sum += galaxies[p].DiscGas[i];
-    }
-    const double target = (galaxies[p].MetalsColdGas > 0.0f) ? galaxies[p].MetalsColdGas : 0.0;
-
-    if(z_sum > 0.0) {
-        const double f = target / z_sum;
-        for(int i = 0; i < N_BINS; i++) galaxies[p].DiscGasMetals[i] = (float)(galaxies[p].DiscGasMetals[i] * f);
-    } else if(gas_sum > 0.0) {
-        for(int i = 0; i < N_BINS; i++) galaxies[p].DiscGasMetals[i] = (float)(target * galaxies[p].DiscGas[i] / gas_sum);
-    }
+    struct GALAXY *g = &galaxies[p];
+    rescale_to(g->DiscGasMetals, g->MetalsColdGas, g->DiscGas);
+    rescale_to(g->DiscStarsMetals, g->MetalsStellarMass - g->MetalsBulgeMass, g->DiscStars);
 }
 
-void darksage_add_disc_metals(const int p, const double metals, const double sfr_bin[N_BINS],
+void darksage_add_disc_metals(const int p, const double metals, const double weight[N_BINS],
                               struct GALAXY *galaxies)
 {
     if(metals <= 0.0) return;
+    struct GALAXY *g = &galaxies[p];
 
-    double sfr_sum = 0.0;
-    for(int i = 0; i < N_BINS; i++) sfr_sum += sfr_bin[i];
-    if(sfr_sum <= 0.0) return;
-
+    /* where the weights say, among annuli that still hold gas; else in proportion to the gas */
+    double w_sum = 0.0, gas_sum = 0.0;
     for(int i = 0; i < N_BINS; i++) {
-        galaxies[p].DiscGasMetals[i] += metals * sfr_bin[i] / sfr_sum;
+        gas_sum += g->DiscGas[i];
+        if(g->DiscGas[i] > 0.0f && weight != NULL && weight[i] > 0.0) w_sum += weight[i];
+    }
+    for(int i = 0; i < N_BINS; i++) {
+        if(w_sum > 0.0) {
+            if(g->DiscGas[i] > 0.0f && weight[i] > 0.0) g->DiscGasMetals[i] += (float)(metals * weight[i] / w_sum);
+        } else if(gas_sum > 0.0) {
+            g->DiscGasMetals[i] += (float)(metals * g->DiscGas[i] / gas_sum);
+        }
     }
 }

@@ -1365,20 +1365,20 @@ static void starformation_ffb_darksage(const int p, const int centralgal, const 
  * (darksage_star_formation_rate()) and the stars form there with SN feedback
  * (darksage_form_stars()).
  */
-static void starformation_and_feedback_darksage(const int p, const int centralgal, const double dt, const int step,
+static void starformation_and_feedback_darksage(const int p, const int centralgal, const double time, const double dt,
+                                                const int halonr, const int step,
                                                 struct GALAXY *galaxies, const struct params *run_params)
 {
-    /* Instabilities first, so passive star formation only uses gas that is stable on the
-     * scale of an annulus (Stevens et al. 2024 Sec. 7; DarkSage core_build_model.c) */
-    if(run_params->DiskInstabilityOn) {
-        check_disk_instability_darksage(p, centralgal, dt, step, galaxies, run_params);
-    }
-
     double sfr_bin[N_BINS], stars_bin[N_BINS];
     darksage_star_formation_rate(p, sfr_bin, galaxies, run_params);
     for(int i = 0; i < N_BINS; i++) stars_bin[i] = sfr_bin[i] * dt;
 
     darksage_form_stars(p, centralgal, stars_bin, dt, step, 0, galaxies, run_params);
+
+    // SAGE26's disc instability, as in the bulk path; the annuli choose where it takes from
+    if(run_params->DiskInstabilityOn) {
+        check_disk_instability(p, centralgal, halonr, time, dt, step, galaxies, run_params);
+    }
 }
 
 /*
@@ -1427,7 +1427,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
     }
 
     if(run_params->DarkSAGEMode == 1) {
-        starformation_and_feedback_darksage(p, centralgal, dt, step, galaxies, run_params);
+        starformation_and_feedback_darksage(p, centralgal, time, dt, halonr, step, galaxies, run_params);
         return;
     }
 
@@ -1539,23 +1539,6 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         
         add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }
-}
-
-/*
- * darksage_instability_burst -- DarkSAGEMode stars formed from the unstable
- * gas left in annulus i after part of it sinks (check_disk_instability_darksage(),
- * DarkSage deal_with_unstable_gas()).  It turns into stars there, with the same
- * SN feedback, SfrDisk / SFH tracking and yields as quiescent star formation
- * (darksage_form_stars()).
- */
-void darksage_instability_burst(const int p, const int centralgal, const int i, const double stars, const double dt,
-                                const int step, struct GALAXY *galaxies, const struct params *run_params)
-{
-    if(stars <= 0.0 || dt <= 0.0) return;
-
-    double stars_bin[N_BINS] = {0.0};
-    stars_bin[i] = stars;
-    darksage_form_stars(p, centralgal, stars_bin, dt, step, 0, galaxies, run_params);
 }
 
 /*

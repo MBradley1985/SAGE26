@@ -1566,13 +1566,11 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
         /* DarkSAGEMode constants (macros.h); the attribute macro needs addressable values */
         const double ds_firstbin = DS_FIRST_BIN;
         const double ds_exponentbin = DS_EXPONENT_BIN;
-        const double ds_gassinkrate = DS_GAS_SINK_RATE;
         const double ds_qtotmin = DS_QTOT_MIN;
         const double ds_thetathresh = DS_THETA_THRESH_DEG;
         const double ds_degpertdyn = DS_DEG_PER_TDYN;
         CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FirstBin", ds_firstbin, H5T_NATIVE_DOUBLE);
         CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ExponentBin", ds_exponentbin, H5T_NATIVE_DOUBLE);
-        CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "GasSinkRate", ds_gassinkrate, H5T_NATIVE_DOUBLE);
         CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "QTotMin", ds_qtotmin, H5T_NATIVE_DOUBLE);
         CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ThetaThresh", ds_thetathresh, H5T_NATIVE_DOUBLE);
         CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DegPerTdyn", ds_degpertdyn, H5T_NATIVE_DOUBLE);

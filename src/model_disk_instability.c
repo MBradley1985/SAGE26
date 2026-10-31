@@ -23,6 +23,8 @@
 #include "model_disk_instability.h"
 #include "model_misc.h"
 #include "model_mergers.h"
+#include "model_darksage_instability.h"
+#include "model_darksage_sf.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -43,12 +45,22 @@ static const double TOOMRE_DISK_FACTOR = 3.0;
  * Tonini+ 2016 eq. 15), and any excess gas is burst via
  * collisional_starburst_recipe().  Saves DiskScaleRadius before any mass
  * transfer so the Tonini formula uses the pre-instability disc scale.
+ * In DarkSAGEMode the masses are the same; the annuli's Toomre Q only picks
+ * which annuli lose them (model_darksage_instability.c).
  */
 void check_disk_instability(const int p, const int centralgal, const int halonr, const double time, const double dt, const int step,
                             struct GALAXY *galaxies, const struct params *run_params)
 {
     // Here we calculate the stability of the stellar and gaseous disk as discussed in Mo, Mao & White (1998).
     // For unstable stars and gas, we transfer the required amount to the bulge to make the disk stable again
+
+    // DarkSAGEMode: the annuli that must lose gas and stars to be stable (Toomre Q), measured before
+    // anything moves; they choose where the unstable mass found below leaves from
+    double gas_w[N_BINS], star_w[N_BINS];
+    const int annuli = (run_params->DarkSAGEMode >= 1);
+    if(annuli) {
+        darksage_unstable_profile(p, gas_w, star_w, galaxies, run_params);
+    }
 
     // Disk mass has to be > 0.0
     const double diskmass = galaxies[p].ColdGas + (galaxies[p].StellarMass - galaxies[p].BulgeMass);
@@ -87,6 +99,10 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
             // UPDATE: Tonini incremental radius evolution (equation 15)
             // Pass the OLD disc radius explicitly to ensure we use pre-instability value
             update_instability_bulge_radius(p, unstable_stars, old_disk_radius, galaxies, run_params);
+
+            if(annuli) {
+                darksage_instability_stars_to_bulge(p, unstable_stars, star_w, galaxies);
+            }
         }
 
         // Disc scale radius is unchanged by instability: the remaining disk retains the
@@ -105,6 +121,10 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
 #endif
 
             const double unstable_gas_fraction = unstable_gas / galaxies[p].ColdGas;
+            // DarkSAGEMode: the black hole and the burst take their gas from the unstable annuli
+            if(annuli) {
+                darksage_set_gas_removal_weights(gas_w);
+            }
             if(run_params->AGNrecipeOn > 0) {
                 grow_black_hole(p, unstable_gas_fraction, time, galaxies, run_params);
             }
@@ -112,6 +132,9 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
             collisional_starburst_recipe(unstable_gas_fraction, p, centralgal, time, dt, halonr, 1, step, 
                              0, galaxies[p].DiskScaleRadius,  // burst_to_merger_bulge=0, use current disc radius
                              galaxies, run_params);
+            if(annuli) {
+                darksage_set_gas_removal_weights(NULL);
+            }
         }
     }
 }
