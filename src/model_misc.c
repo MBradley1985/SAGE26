@@ -494,12 +494,6 @@ void evolve_spin(float spin_old[3], const double m_old, const float spin_add[3],
     }
 }
 
-/* Cooling gas brings the hot/CGM spin to the gas disc.  Call before ColdGas is incremented. */
-void update_spin_gas_cooling(const int gal, const double cooling_mass, struct GALAXY *galaxies)
-{
-    evolve_spin(galaxies[gal].SpinGas, galaxies[gal].ColdGas, galaxies[gal].SpinHot, cooling_mass);
-}
-
 /* Merger of p into t.  Call before the masses are combined.  The gas-disc axis is set by
  * darksage_merge_gas() and the stellar disc keeps its own (the satellite's stars join the
  * bulge); hot gas and bulge spins mix by mass */

@@ -543,31 +543,21 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 strip_from_satellite(centralgal, p, Zcurr, effective_steps, galaxies, run_params);
             }
 
-            // // Determine the cooling gas given the halo properties
-            // double coolingGas;
-            // if(run_params->CGMrecipeOn == 1) {
-
-            //     cooling_recipe_regime_aware(p, deltaT / effective_steps, galaxies, run_params);
-
-            // } else {
-            //     coolingGas = cooling_recipe(p, deltaT / effective_steps, galaxies, run_params);
-            //     cool_gas_onto_galaxy(p, coolingGas, galaxies);
-            // }
-
             // Determine the cooling gas given the halo properties
-              const double dt_step = deltaT / effective_steps;
-              if(run_params->CGMrecipeOn == 1) {
-                // deposits internally (bulk ColdGas, or annuli when DarkSAGEMode=1)
-                cooling_recipe_regime_aware(p, dt_step, galaxies, run_params);
+            double coolingGas;
+            if(run_params->CGMrecipeOn == 1) {
 
-                } else {
-                    const double coolingGas = cooling_recipe(p, dt_step, galaxies, run_params);
+                cooling_recipe_regime_aware(p, deltaT / effective_steps, galaxies, run_params);
 
-                    if(run_params->DarkSAGEMode == 1) {
-                        cool_gas_onto_galaxy_darksage(p, coolingGas, galaxies, run_params);
-
-                    } else {
-                    cool_gas_onto_galaxy(p, coolingGas, galaxies);
+            } else {
+                coolingGas = cooling_recipe(p, deltaT / effective_steps, galaxies, run_params);
+                const double cold_before = galaxies[p].ColdGas, cold_metals_before = galaxies[p].MetalsColdGas;
+                cool_gas_onto_galaxy(p, coolingGas, galaxies);
+                // DarkSAGEMode: the gas SAGE26 just cooled joins the annuli by its j
+                if(run_params->DarkSAGEMode >= 1) {
+                    darksage_deposit_cooling(p, galaxies[p].ColdGas - cold_before, galaxies[p].MetalsColdGas - cold_metals_before,
+                                             galaxies[p].RcoolToRvir > 0.0f && galaxies[p].RcoolToRvir < 1.0f,
+                                             cold_before, galaxies, run_params);
                 }
             }
 

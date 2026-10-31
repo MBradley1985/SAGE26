@@ -66,28 +66,6 @@ extern "C" {
      */
     static inline void add_metals_to_hot_reservoir(struct GALAXY *central, const struct params *run_params, const double metals)
     {
-        /* DarkSAGEMode: metals only go where there is gas -- the regime's hot reservoir, else the
-         * other hot phase (gas left over from a regime change), else the ejected gas */
-        if(run_params->DarkSAGEMode == 1) {
-            const int cgm = (run_params->CGMrecipeOn == 1 && central->Regime == 0);
-            float *target_gas = cgm ? &central->CGMgas : &central->HotGas;
-            float *target_metals = cgm ? &central->MetalsCGMgas : &central->MetalsHotGas;
-            if(*target_gas <= 0.0f) {
-                if((cgm ? central->HotGas : central->CGMgas) > 0.0f) {
-                    target_metals = cgm ? &central->MetalsHotGas : &central->MetalsCGMgas;
-                } else if(central->EjectedMass > 0.0f) {
-                    target_metals = &central->MetalsEjectedMass;
-                } else if(central->ColdGas > 0.0f) {
-                    /* no halo gas at all: the metals stay in the central's disc, spread like its gas */
-                    for(int i = 0; i < N_BINS; i++) {
-                        central->DiscGasMetals[i] += (float)(metals * central->DiscGas[i] / central->ColdGas);
-                    }
-                    target_metals = &central->MetalsColdGas;
-                }
-            }
-            *target_metals += metals;
-            return;
-        }
         if(run_params->CGMrecipeOn == 1 && central->Regime == 0) {
             central->MetalsCGMgas += metals;
         } else {
@@ -178,7 +156,6 @@ extern "C" {
     extern double get_bulge_radius(const int p, struct GALAXY *galaxies, const struct params *run_params);
     extern double dmax(const double x, const double y);
     extern void evolve_spin(float spin_old[3], const double m_old, const float spin_add[3], const double m_add);
-    extern void update_spin_gas_cooling(const int gal, const double cooling_mass, struct GALAXY *galaxies);
     extern void combine_spins_merger(const int t, const int p, struct GALAXY *galaxies);
     extern void update_instability_bulge_radius(const int p, const double delta_mass,
                                      const double old_disk_radius,

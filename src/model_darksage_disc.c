@@ -105,12 +105,6 @@ static double disc_scaleradius(const float mass[N_BINS], const double current, c
     return (rs > 0.0) ? rs : g->DiskScaleRadius;
 }
 
-/* Half-mass radius, within Rvir, of a Hernquist profile with scale length a (DarkSage core_save.c) */
-static double hernquist_half_mass(const double a, const double Rvir)
-{
-    return (a > 0.0) ? a * Rvir / (Rvir * (M_SQRT2 - 1.0) + M_SQRT2 * a) : 0.0;
-}
-
 /* Spline value with x held inside the grid (DarkSage asserts it is) */
 static double spline_clamped(const gsl_spline *sp, gsl_interp_accel *acc, const double xmin, const double xmax, double x)
 {
@@ -370,10 +364,6 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
             a_av_prev = a_av;
         }
     }
-    /* SAGE26's half-mass bulge radii follow (Hernquist within Rvir) */
-    g->InstabilityBulgeRadius = (float)hernquist_half_mass(g->a_InstabBulge, Rvir);
-    g->MergerBulgeRadius = (float)hernquist_half_mass(g->a_MergerBulge, Rvir);
-
     /* the stellar-disc scale radius from the new radii (DarkSage) */
     g->StellarDiscScaleRadius = (float)disc_scaleradius(g->DiscStars, g->StellarDiscScaleRadius, g);
 }
