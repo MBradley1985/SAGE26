@@ -572,10 +572,11 @@ int read_parameter_file(const char *fname, struct params *run_params)
                 run_params->H2DepletionMode, run_params->SFprescription);
         ABORT(EXIT_FAILURE);
     }
-    /* The local laws (modes 2-4) need the radial integration, or in DarkSAGEMode the disc
-       annuli; modes 1 and 5 are constant depletion times and need neither. */
+    /* The local laws (modes 2-4) need the radial integration, or in DarkSAGEMode 2 the disc
+       annuli; DarkSAGEMode 1 runs the bulk recipes and needs the radial integration as mode 0
+       does.  Modes 1 and 5 are constant depletion times and need neither. */
     if(run_params->H2DepletionMode >= 2 && run_params->H2DepletionMode <= 4
-       && run_params->DarkSAGEMode == 0 && !run_params->H2RadialIntegrationOn) {
+       && run_params->DarkSAGEMode != 2 && !run_params->H2RadialIntegrationOn) {
         fprintf(stderr, "Error: H2DepletionMode = %d needs H2RadialIntegrationOn = 1.\n", run_params->H2DepletionMode);
         ABORT(EXIT_FAILURE);
     }
