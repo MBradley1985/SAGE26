@@ -133,6 +133,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
     // DarkSAGEMode: 0 = standard SAGE26; 1, 2 = SAGE26 with radially resolved discs (1: bulk recipes shared over the annuli; 2: recipes per annulus)
     run_params->DarkSAGEMode               = 0; /* default: standard SAGE behavior */
+    run_params->DarkSAGEPinDiskRadius      = 0; /* default: DiskScaleRadius from the annuli */
     // DustySAGEMode: 0 = no dust; 1 = passive dust within SAGE26's metals; 2 = Dusty-SAGE yields and dust
     run_params->DustySAGEMode              = 0;
     run_params->DustSNIIYields             = 0;    /* Dusty-SAGE defaults */
@@ -222,6 +223,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("KarpovModeOn",               &(run_params->KarpovModeOn),               INT, 0);
 
     REG("DarkSAGEMode",                &(run_params->DarkSAGEMode),               INT, 0);
+    REG("DarkSAGEPinDiskRadius",       &(run_params->DarkSAGEPinDiskRadius),      INT, 0);
     REG("DustySAGEMode",               &(run_params->DustySAGEMode),              INT, 0);
     REG("DustSNIIYields",              &(run_params->DustSNIIYields),             INT, 0);
     REG("DustSNIaYields",              &(run_params->DustSNIaYields),             INT, 0);
@@ -555,6 +557,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"H2DepletionMode",        run_params->H2DepletionMode,        0, H2DEPLETIONMODE_MAX},
             {"KarpovModeOn",            run_params->KarpovModeOn,            0, 1},
             {"DarkSAGEMode",           run_params->DarkSAGEMode,           0, 2},
+            {"DarkSAGEPinDiskRadius",  run_params->DarkSAGEPinDiskRadius,  0, 1},
             {"DustySAGEMode",          run_params->DustySAGEMode,          0, 2},
             {"DustSNIIYields",         run_params->DustSNIIYields,         0, 1},
             {"DustSNIaYields",         run_params->DustSNIaYields,         0, 1}

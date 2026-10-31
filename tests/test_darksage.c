@@ -128,7 +128,7 @@ void test_remove_stars_exact(void) {
 }
 
 void test_cooling_deposit_and_disc_radius(void) {
-    BEGIN_TEST("Cooling deposit conserves mass and metals; its disc has r_d = sum(m r) / (2 M)");
+    BEGIN_TEST("Cooling deposit conserves mass and metals; its disc has r_d = sum(m r) / (2 M), unless pinned");
 
     /* Asserts: darksage_deposit_cooling adds exactly the cooled mass, metals and dust, and with
      * quasi_static = 0 the gas follows f(j) ~ j exp(-j / j_s), j_s = Vvir * SpinDiskRadius.
@@ -161,6 +161,12 @@ void test_cooling_deposit_and_disc_radius(void) {
     e[0].DiskScaleRadius = 0.0123f;
     darksage_set_disk_scale_radius(0, e, &rp);
     ASSERT_TRUE(e[0].DiskScaleRadius == 0.0123f, "Empty disc keeps its DiskScaleRadius");
+
+    /* DarkSAGEPinDiskRadius: the radius stays at SAGE26's (halo-spin) value whatever the annuli hold */
+    rp.DarkSAGEPinDiskRadius = 1;
+    g[0].DiskScaleRadius = 0.0123f;
+    darksage_set_disk_scale_radius(0, g, &rp);
+    ASSERT_TRUE(g[0].DiskScaleRadius == 0.0123f, "DarkSAGEPinDiskRadius = 1 keeps SAGE26's DiskScaleRadius");
 }
 
 void test_cooling_spin_follows_angular_momentum(void) {

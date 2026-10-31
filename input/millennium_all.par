@@ -71,6 +71,7 @@ KarpovModeOn                0   %0: switch off
 H2DepletionMode             0   %0 off; SFR = M_mol / t_dep in every H2 recipe with 1 nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9; 5 DarkSage M_H2 / 2.30 Gyr
 
 DarkSAGEMode                0   %0: switch off; 1: SAGE26 bulk recipes shared over 30 radial annuli (DiskScaleRadius from the annuli); 2: SF law evaluated per annulus
+DarkSAGEPinDiskRadius       0   %DarkSAGEMode: 0: DiskScaleRadius from the annuli; 1: keep SAGE26's (halo spin), so DarkSAGEMode 1 reproduces SAGE26 exactly
 DustySAGEMode               0   %0: switch off; 1: passive dust within SAGE26's metals; 2: Dusty-SAGE delayed yields and dust
 DustSNIIYields              0   %DustySAGEMode SNII yields: 0: Woosley & Weaver 1995; 1: Nomoto et al. 2006
 DustSNIaYields              0   %DustySAGEMode SNIa yields: 0: Iwamoto et al. 1999; 1: Seitenzahl et al. 2013

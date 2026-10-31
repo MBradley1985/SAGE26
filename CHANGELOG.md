@@ -21,6 +21,9 @@ it says otherwise. See
   New outputs: `DiscRadii`, `DiscVcirc`, `DiscGas`, `DiscGasMetals`,
   `DiscStars`, `DiscStarsMetals`, `DiscH2`, `DiscHI`, `DiscSFR`,
   `VelDispStars`, spins, bulge dispersions, disc scale and half-mass radii.
+- New `DarkSAGEPinDiskRadius` (default 0): 1 keeps SAGE26's halo-spin
+  `DiskScaleRadius`, so DarkSAGEMode 1 reproduces SAGE26 exactly with the
+  annuli as added detail. Replaces the `DARKSAGE_PIN_DISK_RADIUS` build flag.
 - New `ConcentrationOn = 4` (Dutton & Macciò 2014, DarkSage) and
   `H2DepletionMode = 5` (DarkSage, M_H2 / 2.30 Gyr).
 - With `DarkSAGEMode = 0` the output is bit-identical to before.

@@ -43,13 +43,21 @@ reheated, becomes unstable, feeds the black hole or bursts.
 
 In both, `DiskScaleRadius` is measured from the annuli: half the
 mass-weighted mean radius of the gas and disc stars, using the disc's own
-rotation speed.
+rotation speed. This is the one change mode 1 makes to SAGE26's physics. With
+`DarkSAGEPinDiskRadius = 1` the radius stays at SAGE26's halo-spin value, and
+mode 1 then reproduces SAGE26 exactly in every shared output: SAGE26 with
+radially resolved discs and angular momentum tracking, and nothing else
+changed.
 
 **Known behaviour.** The stellar discs are more compact than observed
 (about 0.3 dex below Lange et al. 2016 at z = 0), as in DarkSage's own runs
 on the same trees. Black holes in galaxies below 10^9.5 Msun are about
-0.4 dex heavier than in SAGE26, matching DarkSage; the change enters through
-the disc scale radius.
+0.4 dex heavier than in SAGE26, matching DarkSage. Gas-rich small discs come
+out larger than SAGE26's, so they form stars less efficiently: the cosmic star
+formation rate density is 0.1-0.15 dex lower at z > 2 and converges with
+SAGE26 below z ~ 1, and small haloes hold up to ~0.1 dex less stellar mass.
+All of these enter through the disc scale radius and vanish with
+`DarkSAGEPinDiskRadius = 1`.
 
 ## DustySAGEMode: dust
 

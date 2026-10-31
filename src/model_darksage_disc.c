@@ -584,16 +584,13 @@ double darksage_host_mass_within(const struct GALAXY *c, const double r, const d
  *   r_d = sum_i m_i r_i / (2 M_disc),  m_i = DiscGas_i + DiscStars_i,
  * r_i the centre of annulus i, i.e. half the disc's mass-weighted mean radius.  Gas and disc
  * stars together; an empty disc keeps the current (SAGE26) value.
- * Compiled with DARKSAGE_PIN_DISK_RADIUS the radius is left at SAGE26's value, for testing
- * that DarkSAGEMode 1 then reproduces DarkSAGEMode 0.
+ * With DarkSAGEPinDiskRadius = 1 the radius is left at SAGE26's (halo-spin) value, so
+ * DarkSAGEMode 1 reproduces SAGE26 exactly and the annuli only resolve it.
  */
 void darksage_set_disk_scale_radius(const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
-#ifdef DARKSAGE_PIN_DISK_RADIUS
-    (void)p; (void)galaxies; (void)run_params;
-#else
+    if(run_params->DarkSAGEPinDiskRadius) return;
     struct GALAXY *g = &galaxies[p];
-    (void)run_params;
     double M = 0.0, MR = 0.0;
     for(int i = 0; i < N_BINS; i++) {
         const double m = g->DiscGas[i] + g->DiscStars[i];
@@ -601,7 +598,6 @@ void darksage_set_disk_scale_radius(const int p, struct GALAXY *galaxies, const 
         MR += m * 0.5 * (g->DiscRadii[i] + g->DiscRadii[i+1]);
     }
     if(M > 0.0 && MR > 0.0) g->DiskScaleRadius = (float)(MR / (2.0 * M));
-#endif
 }
 
 /* Radius enclosing half the mass of an annulus profile; within an annulus the surface density
