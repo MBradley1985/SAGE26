@@ -37,6 +37,7 @@ PROJECT_SOURCES = \
 	$(SRC_DIR)/model_darksage_sf.c \
 	$(SRC_DIR)/model_darksage_instability.c \
 	$(SRC_DIR)/model_darksage_mergers.c \
+	$(SRC_DIR)/model_dust.c \
 	$(SRC_DIR)/core_cool_func.c
 
 # Test files

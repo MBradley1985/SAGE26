@@ -38,6 +38,7 @@
 #include "model_reincorporation.h"
 #include "model_darksage_disc.h"
 #include "model_darksage_sf.h"
+#include "model_dust.h"
 #include "model_starformation_and_feedback.h"
 
 #include "model_cooling_heating.h"
@@ -247,6 +248,7 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
             galaxies[ngal].QuasarModeBHaccretionMass = 0.0;
             galaxies[ngal].RadioModeBHaccretionMass = 0.0;
             galaxies[ngal].OutflowRate = 0.0;
+            galaxies[ngal].DustFormationRate = 0.0f;
 
             for(int step = 0; step < STEPS; step++) {
                 galaxies[ngal].SfrDisk[step] = galaxies[ngal].SfrBulge[step] = 0.0;
@@ -652,6 +654,18 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
             }
         }
+
+        // DustySAGEMode: the substep's dust physics, once per surviving galaxy, after its star
+        // formation and any merger burst
+        if(run_params->DustySAGEMode >= 1) {
+            for(int p = 0; p < ngal; p++) {
+                if(galaxies[p].mergeType > 0) continue;
+                dust_evolve(p, centralgal, galaxies[p].dT / effective_steps, galaxies, run_params);
+                if(run_params->DarkSAGEMode >= 1 && run_params->DustySAGEMode == 2) {
+                    darksage_sync_disc_metals(p, galaxies);   /* mode 2 changes the cold metals */
+                }
+            }
+        }
     } // Go on to the next STEPS substep
 
     // Extra miscellaneous stuff before finishing this halo
@@ -667,6 +681,8 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         galaxies[p].Cooling *= inv_deltaT;
         galaxies[p].Heating *= inv_deltaT;
         galaxies[p].OutflowRate *= inv_deltaT;
+        galaxies[p].DustFormationRate *= (float)(inv_deltaT * run_params->UnitMass_in_g / run_params->UnitTime_in_s
+                                                 * SEC_PER_YEAR / SOLAR_MASS);
 
         if(run_params->DarkSAGEMode >= 1) {
             darksage_sync_disc_phases(p, galaxies);

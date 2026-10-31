@@ -135,6 +135,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->DarkSAGEMode               = 0; /* default: standard SAGE behavior */
     // DustySAGEMode: 0 = no dust; 1 = passive dust within SAGE26's metals; 2 = Dusty-SAGE yields and dust
     run_params->DustySAGEMode              = 0;
+    run_params->DustSNIIYields             = 0;    /* Dusty-SAGE defaults */
+    run_params->DustSNIaYields             = 0;
+    run_params->DustBinaryFraction         = 0.1;
 
 
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
@@ -220,6 +223,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
     REG("DarkSAGEMode",                &(run_params->DarkSAGEMode),               INT, 0);
     REG("DustySAGEMode",               &(run_params->DustySAGEMode),              INT, 0);
+    REG("DustSNIIYields",              &(run_params->DustSNIIYields),             INT, 0);
+    REG("DustSNIaYields",              &(run_params->DustSNIaYields),             INT, 0);
+    REG("DustBinaryFraction",          &(run_params->DustBinaryFraction),         DOUBLE, 0);
 
 #undef REG
 
@@ -549,7 +555,9 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"H2DepletionMode",        run_params->H2DepletionMode,        0, H2DEPLETIONMODE_MAX},
             {"KarpovModeOn",            run_params->KarpovModeOn,            0, 1},
             {"DarkSAGEMode",           run_params->DarkSAGEMode,           0, 2},
-            {"DustySAGEMode",          run_params->DustySAGEMode,          0, 2}
+            {"DustySAGEMode",          run_params->DustySAGEMode,          0, 2},
+            {"DustSNIIYields",         run_params->DustSNIIYields,         0, 1},
+            {"DustSNIaYields",         run_params->DustSNIaYields,         0, 1}
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {

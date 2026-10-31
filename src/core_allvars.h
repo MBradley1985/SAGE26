@@ -160,6 +160,10 @@ struct GALAXY
     float HotDust;
     float CGMDust;
     float EjectedDust;
+    float DustSfh[ABSOLUTEMAXSNAPS]; /* snapshot-mean SFR history the delayed yields read [code units] */
+    float DustStarsStep;             /* stars formed in the current substep (destruction, SFH) */
+    float DustMetalsStep;            /* metals SAGE26 put into the cold gas this substep (mode 1 cap) */
+    float DustFormationRate;         /* dust made this snapshot; Msun/yr after evolve_galaxies() */
 
     /* per-substep SFR trackers; converted to Msun/yr at output */
     float SfrDisk[STEPS];              /* disk SFR per substep [10^10 Msun/h / code time] */
@@ -613,6 +617,15 @@ struct params
     /* When DarkSAGEMode=0: Standard SAGE behavior */
     int32_t    DarkSAGEMode;            // 0: standard SAGE; 1: full DarkSage physics
     int32_t    DustySAGEMode;           // 0: no dust; 1: passive dust within SAGE26's metals; 2: Dusty-SAGE yields and dust
+    int32_t    DustSNIIYields;          // 0: Woosley & Weaver 1995; 1: Nomoto et al. 2006
+    int32_t    DustSNIaYields;          // 0: Iwamoto et al. 1999; 1: Seitenzahl et al. 2013
+    double     DustBinaryFraction;      // fraction of 3-16 Msun stars in SNIa binaries
+    int32_t    DustCountAGB, DustCountSN;                              // stellar masses per yield table (computed)
+    double     DustMassAGB[DUST_MAXYIELDS], DustMassSN[DUST_MAXYIELDS];  // their masses [Msun]
+    double     DustQAGB[3][DUST_MAXYIELDS][DUST_METALGRID];  // AGB C, N, O yields [Msun per star]
+    double     DustQSN[7][DUST_MAXYIELDS][DUST_METALGRID];   // SNII C, O, Mg, Si, S, Ca, Fe yields
+    double     DustQSNIa[3];                                // SNIa Cr, Fe, Ni yields per event
+    double     DustTime[ABSOLUTEMAXSNAPS];                  // time since the first snapshot, source units
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
 
     int32_t nsnapshots;

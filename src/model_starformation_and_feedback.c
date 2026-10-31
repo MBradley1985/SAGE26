@@ -1254,9 +1254,10 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
         /* SNII yield, instantaneous recycling: the FracZleaveDisk share
          * (Krumholz & Dekel 2011 eq. 22) leaves the disc, the rest stays in
          * the annulus that formed the stars -- unless it has no gas left */
-        const double yield = run_params->Yield * stars;
+        const double yield = sage26_yield(run_params) * stars;
         if(galaxies[p].DiscGas[i] > 0.0f) {
             galaxies[p].DiscGasMetals[i] += (1.0 - FracZleaveDiskVal) * yield;
+            galaxies[p].DustMetalsStep += (1.0 - FracZleaveDiskVal) * yield;
             metals_leaving_disk += FracZleaveDiskVal * yield;
             /* a nearly emptied annulus cannot hold more metals than gas: the excess leaves */
             if(galaxies[p].DiscGasMetals[i] > galaxies[p].DiscGas[i]) {
@@ -1268,6 +1269,7 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
         }
 
         if(dt > 0.0) galaxies[p].DiscSFR[i] += (float)(stars / dt);
+        galaxies[p].DustStarsStep += stars;
         stars_sum += stars;
         new_stars_sum += new_stars[i];
         new_metals_sum += new_stars_metals[i];
@@ -1605,19 +1607,20 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / KD11_METAL_HALO_MASS);  /* Krumholz & Dekel 2011 Eq. 22 */
         
         // Metals that stay in disk (same for all regimes)
-        galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        galaxies[p].MetalsColdGas += sage26_yield(run_params) * (1.0 - FracZleaveDiskVal) * stars;
+        galaxies[p].DustMetalsStep += sage26_yield(run_params) * (1.0 - FracZleaveDiskVal) * stars;
         if(mirror) {
-            darksage_add_disc_metals(p, run_params->Yield * (1.0 - FracZleaveDiskVal) * stars, sfr_shape, galaxies);
+            darksage_add_disc_metals(p, sage26_yield(run_params) * (1.0 - FracZleaveDiskVal) * stars, sfr_shape, galaxies);
         }
         
         // Metals that leave disk - regime dependent
-        const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
+        const double metals_leaving_disk = sage26_yield(run_params) * FracZleaveDiskVal * stars;
         
         add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, metals_leaving_disk);
         
     } else {
         // All metals leave disk when ColdGas is very low - regime dependent
-        const double all_metals = run_params->Yield * stars;
+        const double all_metals = sage26_yield(run_params) * stars;
         
         add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }
@@ -1641,6 +1644,7 @@ void update_from_star_formation(const int p, const double stars, const double me
     // DustySAGEMode: the stars lock up their gas's dust.  In mode 2 the dust is not in MetalsColdGas,
     // so it joins the stellar metals here (Dusty-SAGE update_from_star_formation())
     const double locked_dust = dust_move(&galaxies[p].ColdDust, galaxies[p].ColdGas, (1 - RecycleFraction) * stars, NULL);
+    galaxies[p].DustStarsStep += stars;
     if(run_params->DustySAGEMode == 2) galaxies[p].MetalsStellarMass += locked_dust;
     // update gas and metals from star formation
     galaxies[p].ColdGas -= (1 - RecycleFraction) * stars;
@@ -1927,15 +1931,16 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     if(galaxies[p].ColdGas > 1.0e-8) {
         const double FracZleaveDiskVal = run_params->FracZleaveDisk
                                          * exp(-1.0 * galaxies[centralgal].Mvir / KD11_METAL_HALO_MASS);
-        galaxies[p].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        galaxies[p].MetalsColdGas += sage26_yield(run_params) * (1.0 - FracZleaveDiskVal) * stars;
+        galaxies[p].DustMetalsStep += sage26_yield(run_params) * (1.0 - FracZleaveDiskVal) * stars;
         if(run_params->DarkSAGEMode >= 1) {
-            darksage_add_disc_metals(p, run_params->Yield * (1.0 - FracZleaveDiskVal) * stars, ffb_weight, galaxies);
+            darksage_add_disc_metals(p, sage26_yield(run_params) * (1.0 - FracZleaveDiskVal) * stars, ffb_weight, galaxies);
         }
 
-        const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
+        const double metals_leaving_disk = sage26_yield(run_params) * FracZleaveDiskVal * stars;
         add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, metals_leaving_disk);
     } else {
-        const double all_metals = run_params->Yield * stars;
+        const double all_metals = sage26_yield(run_params) * stars;
         add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }
 

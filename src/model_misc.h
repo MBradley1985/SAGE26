@@ -84,6 +84,13 @@ extern "C" {
         }
     }
 
+    /* SAGE26's instantaneous metal yield; DustySAGEMode 2 replaces it with Dusty-SAGE's delayed
+     * yields (model_dust.c), so it is 0 there */
+    static inline double sage26_yield(const struct params *run_params)
+    {
+        return (run_params->DustySAGEMode == 2) ? 0.0 : run_params->Yield;
+    }
+
     /* DustySAGEMode: dust-to-gas ratio of a reservoir (0 when empty).  Dust moves with gas at this
      * ratio wherever SAGE26 moves gas (Dusty-SAGE). */
     static inline double dust_to_gas(const double gas, const double dust)

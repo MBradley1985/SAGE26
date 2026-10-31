@@ -947,20 +947,21 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         const double FracZleaveDiskVal = run_params->FracZleaveDisk * exp(-1.0 * galaxies[centralgal].Mvir / KD11_METAL_HALO_MASS);
         
         // Metals that stay in disk
-        galaxies[merger_centralgal].MetalsColdGas += run_params->Yield * (1.0 - FracZleaveDiskVal) * stars;
+        galaxies[merger_centralgal].MetalsColdGas += sage26_yield(run_params) * (1.0 - FracZleaveDiskVal) * stars;
+        galaxies[merger_centralgal].DustMetalsStep += sage26_yield(run_params) * (1.0 - FracZleaveDiskVal) * stars;
         if(run_params->DarkSAGEMode >= 1) {
-            darksage_add_disc_metals(merger_centralgal, run_params->Yield * (1.0 - FracZleaveDiskVal) * stars,
+            darksage_add_disc_metals(merger_centralgal, sage26_yield(run_params) * (1.0 - FracZleaveDiskVal) * stars,
                                      NULL, galaxies);
         }
         
         // Metals that leave disk - regime dependent
-        const double metals_leaving_disk = run_params->Yield * FracZleaveDiskVal * stars;
+        const double metals_leaving_disk = sage26_yield(run_params) * FracZleaveDiskVal * stars;
         
         add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, metals_leaving_disk);
     } else {
         // MAJOR MERGER or very low cold gas: ALL metals leave disk
         // No functional disk left, so all metals go directly to CGM/HotGas
-        const double all_metals = run_params->Yield * stars;
+        const double all_metals = sage26_yield(run_params) * stars;
         
         add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, all_metals);
     }

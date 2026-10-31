@@ -19,6 +19,12 @@
 #define  MAXGALFAC        1
 #define  ABSOLUTEMAXSNAPS 200  /* The largest number of snapshots for any simulation */
 
+/* DustySAGEMode stellar yield tables (Dusty-SAGE macros.h, core_init.c) */
+#define  DUST_MAXYIELDS   100   /* stellar masses per yield table */
+#define  DUST_METALGRID   7     /* metallicities per yield table */
+#define  DUST_TABLE_ROWS  200   /* rows read from a yield file */
+#define  DUST_TABLE_COLS  17    /* columns read from a yield file */
+
 
 /* DarkSAGEMode (radially-resolved disks) constants */
 #define  N_BINS           30         /* Number of radial annuli for disk structure (DarkSAGEMode) */

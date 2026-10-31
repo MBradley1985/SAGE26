@@ -124,6 +124,8 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].MetalsICS = 0.0;
     galaxies[p].MetalsCGMgas = 0.0;
     galaxies[p].ColdDust = galaxies[p].HotDust = galaxies[p].CGMDust = galaxies[p].EjectedDust = 0.0;
+    galaxies[p].DustStarsStep = galaxies[p].DustMetalsStep = galaxies[p].DustFormationRate = 0.0f;
+    for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) galaxies[p].DustSfh[snap] = 0.0f;
 
     galaxies[p].SubstepsUsed = STEPS;   /* overwritten by evolve_galaxies before any output */
 

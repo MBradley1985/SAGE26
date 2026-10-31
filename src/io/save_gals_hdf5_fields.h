@@ -50,7 +50,8 @@
     X(ColdDust, 1, "Dust in the cold gas.", "1.0e10 Msun/h") \
     X(HotDust, 1, "Dust in the hot halo gas.", "1.0e10 Msun/h") \
     X(CGMDust, 1, "Dust in the CGM gas.", "1.0e10 Msun/h") \
-    X(EjectedDust, 1, "Dust in the ejected gas.", "1.0e10 Msun/h")
+    X(EjectedDust, 1, "Dust in the ejected gas.", "1.0e10 Msun/h") \
+    X(DustFormationRate, 1, "Dust made by stars (AGB, SNII), averaged over the snapshot.", "Msun/yr")
 
 #define GALAXY_OUTPUT_FIELDS(X) \
     X(SnapNum, SnapNum, int32_t, H5T_NATIVE_INT, \

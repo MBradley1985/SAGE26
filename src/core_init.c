@@ -29,6 +29,7 @@
 #include "core_init.h"
 #include "core_mymalloc.h"
 #include "core_cool_func.h"
+#include "model_dust.h"
 
 
 /* These functions do not need to be exposed externally */
@@ -66,6 +67,10 @@ void init(struct params *run_params)
     for(int i = 0; i < run_params->Snaplistlen; i++) {
         run_params->ZZ[i] = 1 / run_params->AA[i] - 1;
         run_params->Age[i] = time_to_present(run_params->ZZ[i], run_params);
+    }
+
+    if(run_params->DustySAGEMode >= 1) {
+        dust_init(run_params);
     }
 
     run_params->a0 = 1.0 / (1.0 + run_params->Reionization_z0);
