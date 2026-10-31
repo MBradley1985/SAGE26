@@ -595,3 +595,30 @@ void darksage_set_disk_scale_radius(const int p, struct GALAXY *galaxies, const 
     if(M > 0.0 && J > 0.0) g->DiskScaleRadius = (float)(J / (2.0 * M * g->Vvir));
 #endif
 }
+
+/* Radius enclosing half the mass of an annulus profile; within an annulus the surface density
+ * is taken as uniform, so the enclosed mass is linear in r^2.  0 for an empty profile. */
+static double half_mass_radius(const float mass[N_BINS], const float radii[N_BINS + 1])
+{
+    double total = 0.0;
+    for(int i = 0; i < N_BINS; i++) total += mass[i];
+    if(total <= 0.0) return 0.0;
+    double cum = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        if(mass[i] > 0.0f && cum + mass[i] >= 0.5 * total) {
+            const double f = (0.5 * total - cum) / mass[i];
+            const double r2 = radii[i] * radii[i] + f * (radii[i+1] * radii[i+1] - radii[i] * radii[i]);
+            return sqrt(r2);
+        }
+        cum += mass[i];
+    }
+    return radii[N_BINS];
+}
+
+/* Half-mass radii of the cold gas (all of ColdGas) and of the disc stars (StellarMass - BulgeMass) */
+void darksage_set_half_mass_radii(const int p, struct GALAXY *galaxies)
+{
+    struct GALAXY *g = &galaxies[p];
+    g->GasDiscHalfMassRadius = (float)half_mass_radius(g->DiscGas, g->DiscRadii);
+    g->StellarDiscHalfMassRadius = (float)half_mass_radius(g->DiscStars, g->DiscRadii);
+}

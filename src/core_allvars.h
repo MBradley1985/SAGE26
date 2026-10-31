@@ -245,6 +245,8 @@ struct GALAXY
     float SpinDiskRadius;            /* SAGE26's halo-spin disc radius (get_disk_radius()), which sets the cooling scale */
     float GasDiscScaleRadius;        /* Gas disk scale radius */
     float StellarDiscScaleRadius;    /* Stellar disk scale radius */
+    float GasDiscHalfMassRadius;     /* Radius enclosing half the cold gas in the annuli [Mpc/h] */
+    float StellarDiscHalfMassRadius; /* Radius enclosing half the disc stars in the annuli [Mpc/h] */
 
     /* DarkSAGEMode: Rotation curve and potential (only used when DarkSAGEOn=1) */
     float HaloScaleRadius;           /* NFW scale radius r_s = Rvir/c */

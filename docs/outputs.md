@@ -304,6 +304,33 @@ The result is in code-time units; multiply by
 
 These fields are always present in both writers and always accumulate.
 
+## DarkSAGEMode annuli (`DarkSAGEMode >= 1`)
+
+HDF5 output only, written when `DarkSAGEMode` is 1 or 2 (files from
+`DarkSAGEMode = 0` are unchanged). Per-annulus fields are 2-D datasets of
+shape (ngalaxies, 30), or (ngalaxies, 31) for the annulus edges. The
+annuli sum to the bulk fields: `DiscGas` to `ColdGas`, `DiscGasMetals` to
+`MetalsColdGas`, `DiscStars` to `StellarMass - BulgeMass` (the bulge is not
+in the annuli), `DiscStarsMetals` to `MetalsStellarMass - MetalsBulgeMass`,
+`DiscH2` to `H2gas`, `DiscHI` to `H1gas` and `DiscSFR` to `SfrDisk`. In
+these modes `DiskRadius` is measured from the annuli, J_disc / (2 M_disc
+V_vir) over gas and disc stars, rather than from the halo spin.
+
+| Field | Units | Description |
+|-------|-------|-------------|
+| `DiscRadii` | Mpc / h | Radius of each annulus edge (j-bin edge through the rotation curve). |
+| `DiscGas`, `DiscGasMetals` | 1.0e10 Msun / h | Cold gas and its metals in each annulus. |
+| `DiscStars`, `DiscStarsMetals` | 1.0e10 Msun / h | Disc stars and their metals in each annulus. |
+| `DiscH2`, `DiscHI` | 1.0e10 Msun / h | H2 and HI in each annulus. H2 and HI half-mass radii can be computed from these. |
+| `DiscSFR` | Msun / yr | Star formation rate in each annulus, averaged over the snapshot like `SfrDisk`. |
+| `VelDispStars` | km / s | Stellar velocity dispersion in each annulus. |
+| `SpinGas`, `SpinStars` | -- | Unit vectors of the gas- and stellar-disc angular momenta. |
+| `GasDiscScaleRadius`, `StellarDiscScaleRadius` | Mpc / h | Exponential scale radii fitted to the cold-gas annuli (all of `ColdGas`) and the disc-star annuli (`StellarMass - BulgeMass`), DarkSage's method. |
+| `GasDiscHalfMassRadius`, `StellarDiscHalfMassRadius` | Mpc / h | Radii enclosing half the cold gas and half the disc stars in the annuli. |
+| `VelDispBulge`, `VelDispMergerBulge` | km / s | Velocity dispersions of the instability and merger bulges. |
+| `SpinClassicalBulge` | (Mpc / h) (km / s) | Specific angular momentum vector of the merger bulge. |
+| `ICSMeanRadius` | Mpc / h | Mass-weighted radius at which the intrahalo stars were deposited. |
+
 ## Cumulative star formation history (`SaveFullSFH = 1`)
 
 HDF5 output only. When `SaveFullSFH = 1`, two extra 2-D datasets are

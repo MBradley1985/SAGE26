@@ -31,6 +31,8 @@ extern "C" {
     extern void darksage_set_gas_removal_weights(const double *weight);
     /* Rescale the gas and disc-star annulus metals to MetalsColdGas and MetalsStellarMass - MetalsBulgeMass */
     extern void darksage_sync_disc_metals(const int p, struct GALAXY *galaxies);
+    /* Rescale the annulus H2 and HI to H2gas and H1gas */
+    extern void darksage_sync_disc_phases(const int p, struct GALAXY *galaxies);
     extern void darksage_add_disc_metals(const int p, const double metals, const double weight[N_BINS],
                                          struct GALAXY *galaxies);
 

@@ -217,6 +217,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].a_InstabBulge = galaxies[p].a_MergerBulge = 0.08284f * galaxies[p].DiskScaleRadius;
     galaxies[p].R2_hot_av = 0.0f;
     galaxies[p].CoolScaleRadius = galaxies[p].GasDiscScaleRadius = galaxies[p].StellarDiscScaleRadius = galaxies[p].DiskScaleRadius;
+    galaxies[p].GasDiscHalfMassRadius = galaxies[p].StellarDiscHalfMassRadius = 0.0f;
     galaxies[p].HaloScaleRadius = galaxies[p].Rvir / 10.0;   /* r_s = Rvir/c with c ~ 10 until update_disc_radii() */
     galaxies[p].RotSupportScaleRadius = 0.0f;
     galaxies[p].c_beta = 0.1f;   /* hot-gas beta-profile core */

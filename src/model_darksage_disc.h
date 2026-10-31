@@ -18,6 +18,8 @@ extern "C" {
     extern double darksage_ics_scale_radius(const double Rvir, const double R_av);
     /* DiskScaleRadius from the annuli, J_disc / (2 M_disc Vvir); kept if the disc is empty */
     extern void darksage_set_disk_scale_radius(const int p, struct GALAXY *galaxies, const struct params *run_params);
+    /* GasDiscHalfMassRadius and StellarDiscHalfMassRadius from the annuli */
+    extern void darksage_set_half_mass_radii(const int p, struct GALAXY *galaxies);
     extern void darksage_add_ics_radius(struct GALAXY *c, const double m, const double r);
     extern double darksage_satellite_mass(const struct GALAXY *s);
     extern double darksage_satellite_radius(const struct GALAXY *c, const struct GALAXY *s, const struct params *run_params);

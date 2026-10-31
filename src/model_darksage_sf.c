@@ -266,6 +266,15 @@ void darksage_sync_disc_metals(const int p, struct GALAXY *galaxies)
     rescale_to(g->DiscStarsMetals, g->MetalsStellarMass - g->MetalsBulgeMass, g->DiscStars);
 }
 
+/* Rescale the annulus H2 and HI to H2gas and H1gas, keeping their radial shapes (the bulk
+ * phases are adjusted after star formation by bursts and clamps that the annuli do not see) */
+void darksage_sync_disc_phases(const int p, struct GALAXY *galaxies)
+{
+    struct GALAXY *g = &galaxies[p];
+    rescale_to(g->DiscH2, g->H2gas, g->DiscGas);
+    rescale_to(g->DiscHI, g->H1gas, g->DiscGas);
+}
+
 void darksage_add_disc_metals(const int p, const double metals, const double weight[N_BINS],
                               struct GALAXY *galaxies)
 {

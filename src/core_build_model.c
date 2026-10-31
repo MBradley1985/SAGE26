@@ -37,6 +37,7 @@
 #include "model_infall.h"
 #include "model_reincorporation.h"
 #include "model_darksage_disc.h"
+#include "model_darksage_sf.h"
 #include "model_starformation_and_feedback.h"
 
 #include "model_cooling_heating.h"
@@ -666,6 +667,11 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         galaxies[p].Cooling *= inv_deltaT;
         galaxies[p].Heating *= inv_deltaT;
         galaxies[p].OutflowRate *= inv_deltaT;
+
+        if(run_params->DarkSAGEMode >= 1) {
+            darksage_sync_disc_phases(p, galaxies);
+            darksage_set_half_mass_radii(p, galaxies);
+        }
     }
 
 
