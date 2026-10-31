@@ -12,8 +12,6 @@ extern "C" {
 
     #include "core_allvars.h"
 
-    /* DarkSage's hydrogen mass fraction of cold gas, used by SFprescription 8 (DarkSage X_H) */
-    #define DARKSAGE_X_H 0.76
 
     /* functions in model_darksage_sf.c */
     extern double darksage_star_formation_rate(const int p, double sfr_bin[N_BINS],

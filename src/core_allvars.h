@@ -251,37 +251,9 @@ struct GALAXY
     float Potential[N_BINS+1];       /* Gravitational potential at each radius */
     float c_beta;                    /* Beta profile parameter for hot gas (init to 0.1) */
 
-    /* FountainGas/OutflowGas reservoirs (only used when DarkSAGEOn=1 for hot-regime haloes) */
-    float OutflowSpecificEnergy;     /* Specific energy of the outflowing gas [(km/s)^2] (SupernovaRecipeOn 2) */
-    float EjectedSpecificEnergy;     /* Specific energy of the ejected gas at turnaround [(km/s)^2] */
-    float ReincTime;                 /* Time for ejected gas to fall back into the fountain */
-    float HotGasPotential;           /* Mass-weighted potential of the hot (or CGM) gas [(km/s)^2] */
-    float EjectedPotential;          /* Potential at Rvir, reached by ejected gas [(km/s)^2] */
-    float prevRvir;                  /* Rvir at the previous snapshot [Mpc/h] */
-    float FountainGas;               /* Gas leaving disc but not halo */
-    float MetalsFountainGas;         /* Metals in fountain gas */
-    float OutflowGas;                /* Higher energy gas escaping beyond Rvir */
-    float MetalsOutflowGas;          /* Metals in outflow gas */
-    float FountainTime;              /* Time for fountain gas to return to hot gas */
-    float OutflowTime;               /* Time for outflow to reach EjectedMass */
-
     /* DarkSAGEMode: Enhanced disk physics */
-    float DiscStarsAge[N_BINS][N_AGE_BINS];        /* stellar disc mass by annulus and age bin */
-    float DiscStarsMetalsAge[N_BINS][N_AGE_BINS];
-    float MergerBulgeMassAge[N_AGE_BINS];          /* bulges and intrahalo stars by age bin */
-    float MergerBulgeMetalsAge[N_AGE_BINS];
-    float InstabilityBulgeMassAge[N_AGE_BINS];
-    float InstabilityBulgeMetalsAge[N_AGE_BINS];
-    float ICSAge[N_AGE_BINS];
-    float MetalsICSAge[N_AGE_BINS];
-    int32_t AgeBinNow;               /* age bin of the current substep */
-    double TimeNow;                  /* lookback time of the current substep [code time] */
-    float DiscFNeutral[N_BINS];      /* neutral fraction of each annulus's hydrogen (SFprescription 8; else 1) */
-    float AgeMismatch;               /* stellar mass whose age bins disagree with its component, / (M* + ICS) (diagnostic) */
     float ICSMeanRadius;             /* mass-weighted radius at which the intrahalo stars were deposited [Mpc/h] (DarkSage R_ICS_av) */
     float VelDispStars[N_BINS];      /* Stellar velocity dispersion per annulus [km/s] */
-    float VelDispStarsAge[N_BINS][N_AGE_BINS];  /* ... per annulus and age bin (DarkSage; VelDispStars follows) */
-    float VelDispBulgeAge[N_AGE_BINS];          /* secular bulge dispersion per age bin (VelDispBulge follows) */
     float VelDispBulge;              /* Secular bulge velocity dispersion [km/s] */
     float SecularBulgeMass;          /* Mass in secular bulge [10^10 Msun/h] */
     float SecularMetalsBulgeMass;    /* Metals in secular bulge */
@@ -629,14 +601,10 @@ struct params
     double ar;  /* scale factor at which reionization completes (used in M_F integral) */
 
     /* DarkSAGEMode: Full DarkSage physics with radially-resolved disk structure */
-    /* When DarkSAGEMode=1: Enables radial bins, Toomre Q instability, precession, j-conservation, */
-    /*                    fountain gas reservoirs (for hot-regime haloes only) */
+    /* When DarkSAGEMode=1: Enables radial bins, Toomre Q instability, precession, j-conservation */
     /* When DarkSAGEMode=0: Standard SAGE behavior */
     int32_t    DarkSAGEMode;            // 0: standard SAGE; 1: full DarkSage physics
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
-    double     AgeBinEdge[N_AGE_BINS+1]; // DarkSAGEMode: stellar age-bin edges in lookback time [code time] (computed)
-    double     FinalRecycleFraction;     // DarkSAGEMode: mass a stellar population returns over its lifetime (IMF, computed)
-    double     GammaHI[ABSOLUTEMAXSNAPS]; // DarkSAGEMode: HI photoionisation rate of the UV background per snapshot [1/code time]
 
     int32_t nsnapshots;
     int32_t LastSnapshotNr;

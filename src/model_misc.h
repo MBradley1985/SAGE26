@@ -110,7 +110,7 @@ extern "C" {
      * SF prescriptions that track molecular gas (H2gas/H1gas): every
      * prescription except 0 (Croton+06 cold-gas threshold) and 2
      * (Somerville+25 cold-gas efficiency). SFprescription is validated to
-     * [0, 8] at parameter-read time, so the two-term form is exact.
+     * [0, 7] at parameter-read time, so the two-term form is exact.
      */
     static inline int sf_prescription_tracks_h2(const int sfprescription)
     {
@@ -180,7 +180,6 @@ extern "C" {
     extern void evolve_spin(float spin_old[3], const double m_old, const float spin_add[3], const double m_add);
     extern void update_spin_gas_cooling(const int gal, const double cooling_mass, struct GALAXY *galaxies);
     extern void combine_spins_merger(const int t, const int p, struct GALAXY *galaxies);
-    extern double get_dynamical_time(const int snapnum, const struct params *run_params);
     extern void update_instability_bulge_radius(const int p, const double delta_mass,
                                      const double old_disk_radius,
                                      struct GALAXY *galaxies, const struct params *run_params);

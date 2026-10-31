@@ -22,7 +22,6 @@
 
 /* DarkSAGEMode (radially-resolved disks) constants */
 #define  N_BINS           30         /* Number of radial annuli for disk structure (DarkSAGEMode) */
-#define  N_AGE_BINS       30         /* Stellar age bins (DarkSAGEMode, DarkSage N_AGE_BINS) */
 
 /* DarkSAGEMode constants, DarkSage's values (millennium.par; Stevens et al. 2024) */
 #define  DS_FIRST_BIN         1.0     /* first specific angular momentum bin edge [kpc km/s], j_i = DS_FIRST_BIN DS_EXPONENT_BIN^(i-1) */

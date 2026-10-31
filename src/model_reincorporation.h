@@ -17,10 +17,6 @@ extern "C" {
     #include "core_allvars.h"
 
     /* functions in model_reincorporation.c */
-    extern void darksage_reincorporate_gas(const int centralgal, const double dt, struct GALAXY *galaxies,
-                                           const struct params *run_params);
-    extern void darksage_fountain_from_growth(const int centralgal, struct GALAXY *galaxies,
-                                              const struct params *run_params);
     extern void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *galaxies, const struct params *run_params);
 
 #ifdef __cplusplus

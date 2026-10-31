@@ -131,7 +131,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->Exponent_Forest_Dist_Scheme = 0.7;
     run_params->KarpovModeOn               = 0; /* 0: full Karpov+2023 recipe, 1: low-metallicity floor (Z/Z_sun = 0.01) for reheated and ejected gas */
 
-    // DarkSAGEMode: 0 = standard SAGE; 1 = full DarkSage physics (radially-resolved disk structure, Toomre Q instability, precession, j-conservation, fountain gas reservoirs)
+    // DarkSAGEMode: 0 = standard SAGE; 1 = full DarkSage physics (radially-resolved disk structure, Toomre Q instability, precession, j-conservation)
     run_params->DarkSAGEMode               = 0; /* default: standard SAGE behavior */
 
 
@@ -516,10 +516,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
 #undef CHECK_VALID_ENUM_IN_PARAM_FILE
 
 
-    /* SF prescription must be one of the nine implemented recipes; the
+    /* SF prescription must be one of the eight implemented recipes; the
        H2-tracking predicate (sf_prescription_tracks_h2) relies on this range. */
-    if(run_params->SFprescription < 0 || run_params->SFprescription > 8) {
-        fprintf(stderr,"Error: SFprescription = %d is not valid; it must be in [0, 8].\n", run_params->SFprescription);
+    if(run_params->SFprescription < 0 || run_params->SFprescription > 7) {
+        fprintf(stderr,"Error: SFprescription = %d is not valid; it must be in [0, 7].\n", run_params->SFprescription);
         fprintf(stderr,"Please change the value for the parameter 'SFprescription' in the parameter file (%s)\n", fname);
         ABORT(EXIT_FAILURE);
     }
@@ -530,7 +530,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     {
         const struct { const char *name; int32_t value; int32_t min; int32_t max; } option_ranges[] = {
             {"AGNrecipeOn",            run_params->AGNrecipeOn,            0, 3},
-            {"SupernovaRecipeOn",      run_params->SupernovaRecipeOn,      0, 2},
+            {"SupernovaRecipeOn",      run_params->SupernovaRecipeOn,      0, 1},
             {"ReionizationOn",         run_params->ReionizationOn,         0, 1},
             {"DiskInstabilityOn",      run_params->DiskInstabilityOn,      0, 1},
             {"CGMrecipeOn",            run_params->CGMrecipeOn,            0, 1},
@@ -574,14 +574,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     }
     /* In DarkSAGEMode the disc annuli replace the radial integration, and mode 5 (the DarkSage
        H2 law) only exists there. */
-    if(run_params->SupernovaRecipeOn == 2 && run_params->DarkSAGEMode != 1) {
-        fprintf(stderr, "Error: SupernovaRecipeOn = 2 (DarkSage energy-driven feedback) needs DarkSAGEMode = 1.\n");
-        ABORT(EXIT_FAILURE);
-    }
-    if(run_params->SFprescription == 8 && run_params->DarkSAGEMode != 1) {
-        fprintf(stderr, "Error: SFprescription = 8 (DarkSage H2 and SFR per annulus) needs DarkSAGEMode = 1.\n");
-        ABORT(EXIT_FAILURE);
-    }
     if(run_params->H2DepletionMode == 5 && run_params->DarkSAGEMode != 1) {
         fprintf(stderr, "Error: H2DepletionMode = 5 (DarkSage H2 law) needs DarkSAGEMode = 1.\n");
         ABORT(EXIT_FAILURE);

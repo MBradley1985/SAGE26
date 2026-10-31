@@ -13,7 +13,7 @@
  *     and intrahalo stars;
  *   - the black hole as a point mass;
  *   - exponential stellar and gas discs;
- *   - a beta-profile hot halo (hot / CGM, fountain and outflowing gas);
+ *   - a beta-profile hot halo (hot / CGM gas);
  * with only the fraction f_support = 1 - exp(-r / RotSupportScaleRadius) of
  * the support in rotation: V_rot^2 = f_support V_circ^2, j = V_rot r.  Annulus
  * edge i sits at the radius where j = DiscBinEdge[i]; the potential, integrated
@@ -162,7 +162,7 @@ void darksage_add_ics_radius(struct GALAXY *c, const double m, const double r)
 double darksage_satellite_mass(const struct GALAXY *s)
 {
     const double baryons = s->StellarMass + s->ColdGas + s->HotGas + s->CGMgas + s->BlackHoleMass + s->EjectedMass
-                           + s->FountainGas + s->OutflowGas + s->ICS;
+                           + s->ICS;
     return (s->Mvir > baryons) ? s->Mvir : baryons;
 }
 
@@ -178,24 +178,6 @@ double darksage_satellite_radius(const struct GALAXY *c, const struct GALAXY *s,
     }
     return sqrt(r2) * run_params->AA[s->SnapNum];
 }
-
-/*
- * NFW potential at radius r [code units], normalised to Mvir within Rvir.
- * At r = 0 it returns the finite central value -G Mvir / (r_s norm).
- */
-double darksage_nfw_potential(const int p, const double r, const struct GALAXY *galaxies, const struct params *run_params)
-{
-    const double rs = galaxies[p].HaloScaleRadius;
-    if(r < 0.0 || rs <= 0.0) return 0.0;
-
-    const double c = galaxies[p].Rvir / rs;
-    const double norm = log(1.0 + c) - c / (1.0 + c);
-    if(norm <= 0.0) return 0.0;
-
-    if(r == 0.0) return -run_params->G * galaxies[p].Mvir / (rs * norm);
-    return -run_params->G * galaxies[p].Mvir / r * log(1.0 + r / rs) / norm;
-}
-
 
 /* Radius where rotational support f_rot = v / sqrt(v^2 + sigma^2) reaches 0.5, as an exponential
  * scale (DarkSage update_rotation_support_scale_radius()); gas-only annuli use the cold-gas dispersion */
@@ -239,7 +221,6 @@ static void update_rotation_support_scale_radius(const int p, struct GALAXY *gal
  *      j = V_rot r.  If the outermost j is below j_max, the radius grows x10.
  *      The potential is integrated inwards with dPhi/dr = V_circ^2 / r.
  *   4. Annulus edges at j = DiscBinEdge[i] and their potentials.
- *   5. The hot gas's mass-weighted potential and the potential at Rvir.
  */
 void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_data *halos,
                        const struct params *run_params)
@@ -264,7 +245,7 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     }
 
     /* Step 2: halo and hot gas */
-    const double M_hot_total = g->HotGas + g->CGMgas + g->FountainGas + g->OutflowGas;
+    const double M_hot_total = g->HotGas + g->CGMgas;
     double M_DM = g->Mvir - (M_hot_total + g->ColdGas + g->StellarMass + g->BlackHoleMass + g->ICS);
     if(M_DM < 0.0) M_DM = 0.0;
 
@@ -358,19 +339,6 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     g->Potential[0] = (float)gr_phi[first];
     if(g->Potential[0] >= 0.0f) g->Potential[0] = g->Potential[1];
 
-    /* Step 5: the hot gas's mass-weighted potential (beta profile) and the potential at Rvir
-     * that ejected gas must climb to -- the energetics of SupernovaRecipeOn 2 */
-    double pot = 0.0;
-    for(int k = first; k < N_RC_GRID - 1; k++) {
-        const double x0 = gr_r[k] / Rvir, x1 = gr_r[k+1] / Rvir;
-        const double dm = (x1 - c_beta * atan(x1 / c_beta)) - (x0 - c_beta * atan(x0 / c_beta));
-        const double term = 0.5 * (gr_phi[k] + gr_phi[k+1]) * dm / (1.0 - c_beta * atan(1.0 / c_beta));
-        pot += (term < 0.0) ? term : 0.0;
-        if(gr_r[k+1] > Rvir) break;
-    }
-    g->HotGasPotential = (float)pot;
-    const double phi_rvir = spline_clamped(phi_of_r, acc, gr_r[first], gr_r[N_RC_GRID - 1], Rvir);
-    g->EjectedPotential = (float)((phi_rvir > 0.9999 * g->HotGasPotential) ? phi_rvir : 0.9999 * g->HotGasPotential);
     gsl_spline_free(r_of_j);
     gsl_spline_free(phi_of_r);
     gsl_interp_accel_free(acc);
@@ -586,7 +554,7 @@ double darksage_host_mass_within(const struct GALAXY *c, const double r, const d
         M += M_DM * (log(1.0 + r / r_s) - r / (r + r_s)) / (log(1.0 + Rvir / r_s) - Rvir / (Rvir + r_s));
     }
 
-    const double M_hot = c->HotGas + c->CGMgas + c->FountainGas + c->OutflowGas;
+    const double M_hot = c->HotGas + c->CGMgas;
     const double x = r / Rvir;
     const double c_beta = (c->c_beta > DS_MIN_C_BETA) ? c->c_beta : DS_MIN_C_BETA;
     M += M_hot * (x - c_beta * atan(x / c_beta)) / (1.0 - c_beta * atan(1.0 / c_beta));

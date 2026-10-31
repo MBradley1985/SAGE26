@@ -190,24 +190,8 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
 
     galaxies[p].g_max = 0.0;
 
-    /* DarkSAGEMode reservoirs and annuli: zeroed always so the outputs are clean when the mode is off */
-    galaxies[p].FountainGas = galaxies[p].MetalsFountainGas = 0.0f;
-    galaxies[p].OutflowGas = galaxies[p].MetalsOutflowGas = 0.0f;
-    galaxies[p].FountainTime = galaxies[p].OutflowTime = 0.0f;
+    /* DarkSAGEMode annuli: zeroed always so the outputs are clean when the mode is off */
     galaxies[p].ICSMeanRadius = 0.0f;
-    galaxies[p].OutflowSpecificEnergy = galaxies[p].EjectedSpecificEnergy = galaxies[p].ReincTime = 0.0f;
-    galaxies[p].HotGasPotential = galaxies[p].EjectedPotential = 0.0f;
-    galaxies[p].prevRvir = galaxies[p].Rvir;
-    for(int k = 0; k < N_AGE_BINS; k++) {
-        for(int i = 0; i < N_BINS; i++) galaxies[p].DiscStarsAge[i][k] = galaxies[p].DiscStarsMetalsAge[i][k] = 0.0f;
-        galaxies[p].MergerBulgeMassAge[k] = galaxies[p].MergerBulgeMetalsAge[k] = 0.0f;
-        galaxies[p].InstabilityBulgeMassAge[k] = galaxies[p].InstabilityBulgeMetalsAge[k] = 0.0f;
-        galaxies[p].ICSAge[k] = galaxies[p].MetalsICSAge[k] = 0.0f;
-    }
-    galaxies[p].AgeBinNow = 0;
-    galaxies[p].TimeNow = 0.0;
-    galaxies[p].AgeMismatch = 0.0f;
-    for(int i = 0; i < N_BINS; i++) galaxies[p].DiscFNeutral[i] = 1.0f;
     for(int i = 0; i < N_BINS; i++) {
         galaxies[p].DiscGas[i] = galaxies[p].DiscGasMetals[i] = 0.0f;
         galaxies[p].DiscStars[i] = galaxies[p].DiscStarsMetals[i] = 0.0f;
@@ -215,7 +199,6 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
         galaxies[p].DiscSFR[i] = galaxies[p].DiscDust[i] = 0.0f;
         /* DarkSage init_galaxy(): the cold-gas dispersion 11 + 11.3 z km/s */
         galaxies[p].VelDispStars[i] = (float)darksage_cold_gas_dispersion(run_params->ZZ[halos[halonr].SnapNum], run_params);
-        for(int k = 0; k < N_AGE_BINS; k++) galaxies[p].VelDispStarsAge[i][k] = galaxies[p].VelDispStars[i];
     }
     for(int i = 0; i < N_BINS + 1; i++) {
         galaxies[p].DiscRadii[i] = 0.0f;
@@ -229,7 +212,6 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     /* DarkSage init_galaxy(): merger bulge at the cold-gas dispersion, bulge scale lengths placeholders
      * until update_disc_radii() solves them */
     galaxies[p].VelDispMergerBulge = (float)darksage_cold_gas_dispersion(run_params->ZZ[halos[halonr].SnapNum], run_params);
-    for(int k = 0; k < N_AGE_BINS; k++) galaxies[p].VelDispBulgeAge[k] = galaxies[p].VelDispMergerBulge;
     for(int j = 0; j < 3; j++) galaxies[p].SpinClassicalBulge[j] = 0.0f;
     galaxies[p].a_InstabBulge = galaxies[p].a_MergerBulge = 0.08284f * galaxies[p].DiskScaleRadius;
     galaxies[p].SecularBulgeMass = galaxies[p].SecularMetalsBulgeMass = 0.0f;
@@ -526,16 +508,6 @@ void combine_spins_merger(const int t, const int p, struct GALAXY *galaxies)
 {
     evolve_spin(galaxies[t].SpinHot, galaxies[t].HotGas, galaxies[p].SpinHot, galaxies[p].HotGas);
     evolve_spin(galaxies[t].SpinBulge, galaxies[t].BulgeMass, galaxies[p].SpinBulge, galaxies[p].BulgeMass);
-}
-
-/* Fountain return time 0.1 / H(z) [code units] */
-double get_dynamical_time(const int snapnum, const struct params *run_params)
-{
-    const double zplus1 = 1.0 + run_params->ZZ[snapnum];
-    const double Omega_k = 1.0 - run_params->Omega - run_params->OmegaLambda;
-    const double H_sqr = run_params->Hubble * run_params->Hubble *
-                         (run_params->Omega * zplus1 * zplus1 * zplus1 + Omega_k * zplus1 * zplus1 + run_params->OmegaLambda);
-    return (H_sqr > 0.0) ? 0.1 / sqrt(H_sqr) : 1.0;
 }
 
 double dmax(const double x, const double y)

@@ -27,7 +27,6 @@
 #include "core_allvars.h"
 #include "macros.h"
 #include "core_init.h"
-#include "model_darksage_stellar_pop.h"
 #include "core_mymalloc.h"
 #include "core_cool_func.h"
 
@@ -88,9 +87,6 @@ void init(struct params *run_params)
         for(int i = 1; i < N_BINS + 1; i++) {
             run_params->DiscBinEdge[i] = DS_FIRST_BIN * j_unit * pow(DS_EXPONENT_BIN, i - 1);
         }
-
-        /* Stellar age bins and the UV background (DarkSage main.c) */
-        darksage_init_age_bins(run_params);
     }
 }
 
