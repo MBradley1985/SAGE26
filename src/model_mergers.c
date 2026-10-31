@@ -481,9 +481,6 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
 void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
     if(run_params->DarkSAGEMode >= 1) {
-        // Mass-weighted spins, using the masses before they are combined
-        combine_spins_merger(t, p, galaxies);
-
         // Satellite gas joins the central's annuli by its orbital angular momentum (DarkSage
         // add_galaxies_together()); its stars all join a bulge below, so DiscStars are not added
         darksage_merge_gas(t, p, galaxies, run_params);

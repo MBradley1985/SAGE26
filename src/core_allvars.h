@@ -240,7 +240,6 @@ struct GALAXY
     float SpinGas[3];                /* Gas disk spin vector */
     float SpinStars[3];              /* Stellar disk spin vector */
     float SpinHot[3];                /* Hot gas spin vector */
-    float SpinBulge[3];              /* Bulge spin vector */
     float CoolScaleRadius;           /* Scale radius of cooling gas */
     float SpinDiskRadius;            /* SAGE26's halo-spin disc radius (get_disk_radius()), which sets the cooling scale */
     float GasDiscScaleRadius;        /* Gas disk scale radius */

@@ -186,12 +186,50 @@ void test_cooling_spin_follows_angular_momentum(void) {
     for(int i = 0; i < N_BINS; i++) J0 += r[0].DiscGas[i] * 0.5 * (rp.DiscBinEdge[i] + rp.DiscBinEdge[i+1]);
     r[0].SpinHot[2] = -1.0f;
     const double m_retro = 0.2;
-    const double J_cool = 2.0 * m_retro * r[0].Vvir * r[0].SpinDiskRadius;
     darksage_deposit_cooling(0, m_retro, 0.0, 0, r, &rp);
     double J1 = 0.0;
     for(int i = 0; i < N_BINS; i++) J1 += r[0].DiscGas[i] * 0.5 * (rp.DiscBinEdge[i] + rp.DiscBinEdge[i+1]);
     ASSERT_TRUE(r[0].SpinGas[2] > 0.99f, "Axis stays with the more massive prograde disc");
     ASSERT_LESS_THAN(J1, J0, "Collision removes more than the retrograde gas brought (J1 < J_disc)");
+}
+
+void test_precession(void) {
+    BEGIN_TEST("Precession: needs a stellar axis and disc stars; bulge-dominated galaxies follow the bulge");
+
+    /* Asserts (DarkSage precess_gas()): a zero stellar spin or a galaxy with no disc stars
+     * leaves the gas disc untouched -- no projection, so no gas moves inwards -- and in a
+     * galaxy whose merger bulge holds more than half the stars the gas turns towards the
+     * bulge's spin, not the stellar disc's.  Setup: gas along z, a long step so the gas
+     * reaches the axis it precesses to.  (Exactly perpendicular spins do not precess, as in
+     * DarkSage, so the bulge is tilted 45 degrees from the gas.) */
+    struct params rp;
+    setup_params(&rp);
+    struct GALAXY g[1];
+    setup_galaxy(&g[0], &rp);
+    g[0].SpinDiskRadius = 0.004f;
+    darksage_deposit_cooling(0, 1.0, 0.0, 0, g, &rp);
+    float gas0[N_BINS];
+    for(int i = 0; i < N_BINS; i++) gas0[i] = g[0].DiscGas[i];
+    g[0].StellarMass = 1.0f;
+    g[0].DiscStars[3] = 0.5f;
+    for(int k = 0; k < 3; k++) g[0].SpinStars[k] = 0.0f;
+    darksage_precess_gas(0, 1.0, g, &rp);
+    int same = 1;
+    for(int i = 0; i < N_BINS; i++) if(g[0].DiscGas[i] != gas0[i]) same = 0;
+    ASSERT_TRUE(same, "Zero stellar spin: gas disc unchanged");
+
+    g[0].SpinStars[0] = 1.0f;   /* stars along x, but no disc stars */
+    g[0].DiscStars[3] = 0.0f;
+    darksage_precess_gas(0, 1.0, g, &rp);
+    same = 1;
+    for(int i = 0; i < N_BINS; i++) if(g[0].DiscGas[i] != gas0[i]) same = 0;
+    ASSERT_TRUE(same && g[0].SpinGas[2] == 1.0f, "No disc stars: no precession");
+
+    g[0].DiscStars[3] = 0.1f;
+    g[0].MergerBulgeMass = 0.9f;      /* bulge-dominated, bulge spinning along y */
+    g[0].SpinClassicalBulge[1] = g[0].SpinClassicalBulge[2] = 0.01f;   /* 45 deg from the gas; the disc (x) is at 90 */
+    darksage_precess_gas(0, 1.0e3, g, &rp);
+    ASSERT_CLOSE(1.0 / M_SQRT2, g[0].SpinGas[1], 1e-5, "Gas aligns with the merger bulge's axis (y+z), not the disc's (x)");
 }
 
 void test_half_mass_radius_uniform_disc(void) {
@@ -296,6 +334,7 @@ int main(void) {
     test_remove_stars_exact();
     test_cooling_deposit_and_disc_radius();
     test_cooling_spin_follows_angular_momentum();
+    test_precession();
     test_half_mass_radius_uniform_disc();
     test_merge_gas_conserves();
     test_unstable_profile();

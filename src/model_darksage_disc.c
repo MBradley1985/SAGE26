@@ -441,29 +441,47 @@ void darksage_project_disc(const float DiscMass[N_BINS], const double cos_angle,
     }
 }
 
+/*
+ * darksage_precess_gas -- precess the gas disc towards the stellar axis (DarkSage precess_gas()):
+ * the axis is the merger (classical) bulge's spin in a galaxy that bulge dominates, else the
+ * stellar disc's.  The gas turns by DS_DEG_PER_TDYN per local dynamical time, mass-weighted
+ * over the annuli, until |cos| reaches PRECESS_ALIGNED_COS, its j projected as it tilts.
+ * Only galaxies with gas and disc stars precess.  The gas spin is turned about the unit
+ * normal of the two spins; DarkSage passes rotate() the unnormalised cross product, which
+ * turns the spin by less than the angle the mass is projected through.
+ */
+static const double PRECESS_ALIGNED_COS = 0.999;
+
 void darksage_precess_gas(const int p, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
-    double gas_sum = 0.0;
-    for(int i = 0; i < N_BINS; i++) gas_sum += galaxies[p].DiscGas[i];
-    if(gas_sum <= 0.0 || dt <= 0.0) return;
+    struct GALAXY *g = &galaxies[p];
+    double gas_sum = 0.0, star_sum = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        gas_sum += g->DiscGas[i];
+        star_sum += g->DiscStars[i];
+    }
+    if(gas_sum <= 0.0 || star_sum <= 0.0 || g->StellarMass <= 0.0 || dt <= 0.0) return;
 
-    float *SpinGas = galaxies[p].SpinGas;
-    const float *SpinStars = galaxies[p].SpinStars;
+    float *SpinGas = g->SpinGas;
+    float StarSpin[3];
+    const double cb_j = sqrt(g->SpinClassicalBulge[0] * g->SpinClassicalBulge[0] + g->SpinClassicalBulge[1] * g->SpinClassicalBulge[1]
+                             + g->SpinClassicalBulge[2] * g->SpinClassicalBulge[2]);
+    const int bulge_axis = (g->MergerBulgeMass > 0.5 * g->StellarMass && cb_j > 0.0);
+    for(int k = 0; k < 3; k++) StarSpin[k] = bulge_axis ? (float)(g->SpinClassicalBulge[k] / cb_j) : g->SpinStars[k];
+    if(StarSpin[0] * StarSpin[0] + StarSpin[1] * StarSpin[1] + StarSpin[2] * StarSpin[2] == 0.0f) return;
 
-    double cos_theta = SpinGas[0] * SpinStars[0] + SpinGas[1] * SpinStars[1] + SpinGas[2] * SpinStars[2];
+    double cos_theta = SpinGas[0] * StarSpin[0] + SpinGas[1] * StarSpin[1] + SpinGas[2] * StarSpin[2];
     if(cos_theta > 1.0) cos_theta = 1.0;
     if(cos_theta < -1.0) cos_theta = -1.0;
-
-    /* Already (counter-)aligned within DS_THETA_THRESH_DEG */
-    if(fabs(cos_theta) > cos(DS_THETA_THRESH_DEG * M_PI / 180.0)) return;
+    if(cos_theta == 0.0 || fabs(cos_theta) >= PRECESS_ALIGNED_COS) return;
 
     /* Mass-weighted precession angle: DS_DEG_PER_TDYN per local t_dyn = r^2 / j */
     double deg = 0.0;
     for(int i = 0; i < N_BINS; i++) {
         const double j_edge = run_params->DiscBinEdge[i+1];
-        const double r_out = galaxies[p].DiscRadii[i+1];
-        if(galaxies[p].DiscGas[i] <= 0.0 || j_edge <= 0.0 || r_out <= 0.0) continue;
-        deg += DS_DEG_PER_TDYN * dt / (r_out * r_out / j_edge) * galaxies[p].DiscGas[i] / gas_sum;
+        const double r_out = g->DiscRadii[i+1];
+        if(g->DiscGas[i] <= 0.0 || j_edge <= 0.0 || r_out <= 0.0) continue;
+        deg += DS_DEG_PER_TDYN * dt / (r_out * r_out / j_edge) * g->DiscGas[i] / gas_sum;
     }
     if(deg <= 0.0) return;
 
@@ -472,24 +490,24 @@ void darksage_precess_gas(const int p, const double dt, struct GALAXY *galaxies,
     if(cos_precess < fabs(cos_theta)) cos_precess = fabs(cos_theta);
 
     double new_gas[N_BINS], new_metals[N_BINS];
-    darksage_project_disc(galaxies[p].DiscGas, cos_precess, new_gas, run_params, galaxies[p].Rvir, galaxies[p].Vvir);
-    darksage_project_disc(galaxies[p].DiscGasMetals, cos_precess, new_metals, run_params, galaxies[p].Rvir, galaxies[p].Vvir);
+    darksage_project_disc(g->DiscGas, cos_precess, new_gas, run_params, g->Rvir, g->Vvir);
+    darksage_project_disc(g->DiscGasMetals, cos_precess, new_metals, run_params, g->Rvir, g->Vvir);
     for(int i = 0; i < N_BINS; i++) {
-        galaxies[p].DiscGas[i] = (float)new_gas[i];
-        galaxies[p].DiscGasMetals[i] = (float)new_metals[i];
+        g->DiscGas[i] = (float)new_gas[i];
+        g->DiscGasMetals[i] = (float)new_metals[i];
     }
 
     if(cos_precess == fabs(cos_theta)) {
         /* Reached (counter-)alignment */
         const float sign = (cos_theta >= 0.0) ? 1.0f : -1.0f;
-        for(int j = 0; j < 3; j++) SpinGas[j] = sign * SpinStars[j];
+        for(int j = 0; j < 3; j++) SpinGas[j] = sign * StarSpin[j];
         return;
     }
 
     /* Rotate SpinGas towards +/-SpinStars about their common normal */
-    float axis[3] = {SpinGas[1] * SpinStars[2] - SpinGas[2] * SpinStars[1],
-                     SpinGas[2] * SpinStars[0] - SpinGas[0] * SpinStars[2],
-                     SpinGas[0] * SpinStars[1] - SpinGas[1] * SpinStars[0]};
+    float axis[3] = {SpinGas[1] * StarSpin[2] - SpinGas[2] * StarSpin[1],
+                     SpinGas[2] * StarSpin[0] - SpinGas[0] * StarSpin[2],
+                     SpinGas[0] * StarSpin[1] - SpinGas[1] * StarSpin[0]};
     if(cos_theta < 0.0) {
         for(int j = 0; j < 3; j++) axis[j] = -axis[j];
     }
@@ -503,25 +521,6 @@ void darksage_precess_gas(const int p, const double dt, struct GALAXY *galaxies,
     if(spin_mag > 0.0) {
         for(int j = 0; j < 3; j++) SpinGas[j] = (float)(SpinGas[j] / spin_mag);
     }
-}
-
-/*
- * Hot-gas density of galaxy c at physical radius r, from HotGas + CGMgas, in
- * DarkSage's beta profile (Stevens et al. 2024 eq. 11).
- * As DarkSage's ram_pressure_stripping(), C_beta enters squared (the paper's
- * eq. 11 has one power).
- */
-double darksage_hot_density(const struct GALAXY *c, const double r, const struct params *run_params)
-{
-    const double Rvir = c->Rvir;
-    const double M_hot = c->HotGas + c->CGMgas;
-    (void)run_params;
-    if(Rvir <= 0.0 || M_hot <= 0.0) return 0.0;
-
-    const double c_beta = (c->c_beta > DS_MIN_C_BETA) ? c->c_beta : DS_MIN_C_BETA;
-    const double cb_term = 1.0 / (1.0 - c_beta * atan(1.0 / c_beta));
-    const double x = r / (c_beta * Rvir);
-    return M_hot * cb_term * cb_term / (4.0 * M_PI * c_beta * c_beta * Rvir * Rvir * Rvir * (1.0 + x * x));
 }
 
 /*

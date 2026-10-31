@@ -207,7 +207,6 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     }
     for(int j = 0; j < 3; j++) {
         galaxies[p].SpinGas[j] = galaxies[p].SpinStars[j] = galaxies[p].SpinHot[j] = 0.0f;
-        galaxies[p].SpinBulge[j] = 0.0f;
     }
     galaxies[p].VelDispBulge = 0.0f;
     /* DarkSage init_galaxy(): merger bulge at the cold-gas dispersion, bulge scale lengths placeholders
@@ -494,15 +493,6 @@ void evolve_spin(float spin_old[3], const double m_old, const float spin_add[3],
     if(mag > 0.0) {
         for(int j = 0; j < 3; j++) spin_old[j] = (float)(J[j] / mag);
     }
-}
-
-/* Merger of p into t.  Call before the masses are combined.  The gas-disc axis is set by
- * darksage_merge_gas() and the stellar disc keeps its own (the satellite's stars join the
- * bulge); hot gas and bulge spins mix by mass */
-void combine_spins_merger(const int t, const int p, struct GALAXY *galaxies)
-{
-    evolve_spin(galaxies[t].SpinHot, galaxies[t].HotGas, galaxies[p].SpinHot, galaxies[p].HotGas);
-    evolve_spin(galaxies[t].SpinBulge, galaxies[t].BulgeMass, galaxies[p].SpinBulge, galaxies[p].BulgeMass);
 }
 
 double dmax(const double x, const double y)
