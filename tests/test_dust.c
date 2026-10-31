@@ -3,7 +3,9 @@
  *
  * Validates: dust moves with gas at the source reservoir's dust-to-gas ratio and is conserved
  * (dust_move()), never more than the reservoir holds; the hot-phase deposit follows the regime
- * the gas goes to (add_dust_to_hot_reservoir()); and an empty reservoir moves no dust.
+ * the gas goes to (add_dust_to_hot_reservoir()); an empty reservoir moves no dust; and dust_evolve()
+ * without star formation conserves metals + dust in mode 2, leaves the metals alone and keeps
+ * dust below them in mode 1, and sputters hot-halo dust.
  *
  * Run: cd tests && make test_build/test_dust && ./test_build/test_dust
  */
@@ -15,6 +17,7 @@
 #include "test_framework.h"
 #include "../src/core_allvars.h"
 #include "../src/model_misc.h"
+#include "../src/model_dust.h"
 
 /* float reservoirs, double arithmetic: round-off only */
 static const double DUST_RTOL = 1e-6;
@@ -62,11 +65,72 @@ void test_dust_follows_regime(void) {
     ASSERT_CLOSE(0.003, g.HotDust, DUST_RTOL, "No CGM recipe: always the hot halo");
 }
 
+/* Millennium code units; snapshot times far past the first SNe; no yield tables, so no stellar
+ * production -- growth, destruction and sputtering alone act */
+static void setup(struct params *rp, struct GALAXY *g, const int mode)
+{
+    memset(rp, 0, sizeof(*rp));
+    rp->UnitLength_in_cm = 3.08568e24;
+    rp->UnitVelocity_in_cm_per_s = 1.0e5;
+    rp->UnitMass_in_g = 1.989e43;
+    rp->UnitTime_in_s = rp->UnitLength_in_cm / rp->UnitVelocity_in_cm_per_s;
+    rp->UnitDensity_in_cgs = rp->UnitMass_in_g / pow(rp->UnitLength_in_cm, 3);
+    rp->Hubble_h = 0.73;
+    rp->DustySAGEMode = mode;
+    for(int i = 0; i < ABSOLUTEMAXSNAPS; i++) rp->DustTime[i] = 100.0 * i;
+    memset(g, 0, sizeof(*g));
+    g->SnapNum = 50;
+    g->SubstepsUsed = 10;
+    g->Vvir = 200.0; g->Rvir = 0.2;
+    g->ColdGas = 1.0f; g->MetalsColdGas = 0.015f; g->ColdDust = 0.002f; g->H2gas = 0.3f;
+    g->HotGas = 5.0f; g->MetalsHotGas = 0.02f; g->HotDust = 0.001f;
+    g->DustStarsStep = 0.01f;   /* stars this substep: SN destruction acts */
+}
+
+static double metals_and_dust(const struct GALAXY *g, const int mode)
+{
+    double m = g->MetalsColdGas + g->MetalsHotGas + g->MetalsCGMgas + g->MetalsEjectedMass;
+    if(mode == 2) m += g->ColdDust + g->HotDust + g->CGMDust + g->EjectedDust;
+    return m;
+}
+
+void test_dust_evolve_conserves(void) {
+    BEGIN_TEST("dust_evolve: metals + dust conserved (mode 2), metals untouched and dust <= metals (mode 1)");
+
+    /* Without stellar yields, grain growth turns gas-phase metals into dust, SN destruction and
+     * sputtering turn dust back into metals: mode 2 must conserve metals + dust; in mode 1, where
+     * dust is part of the metals, the metals must not change and dust must stay below them.  The
+     * hot-halo dust must be sputtered (the source's bugs had switched that off).  Many substeps
+     * of 1 Myr. */
+    const double dt = 1.0 * SEC_PER_MEGAYEAR / 3.08568e19;
+    for(int mode = 1; mode <= 2; mode++) {
+        struct params rp;
+        struct GALAXY g[1];
+        setup(&rp, g, mode);
+        const double before = metals_and_dust(&g[0], mode);
+        const float metals_cold0 = g[0].MetalsColdGas, hot_dust0 = g[0].HotDust;
+        for(int k = 0; k < 200; k++) {
+            g[0].DustStarsStep = 0.01f;
+            dust_evolve(0, 0, dt, g, &rp);
+        }
+        if(mode == 2) {
+            ASSERT_CLOSE(before, metals_and_dust(&g[0], mode), 1e-5, "Mode 2: metals + dust conserved");
+        } else {
+            ASSERT_TRUE(g[0].MetalsColdGas == metals_cold0, "Mode 1: cold metals unchanged");
+            ASSERT_TRUE(g[0].ColdDust <= g[0].MetalsColdGas, "Mode 1: dust never exceeds the metals");
+        }
+        ASSERT_GREATER_THAN(g[0].DustGrowthRate, 0.0, "Grain growth acted");
+        ASSERT_GREATER_THAN(g[0].DustDestructionRate, 0.0, "SN destruction acted");
+        ASSERT_LESS_THAN(g[0].HotDust, hot_dust0, "Hot-halo dust is sputtered");
+    }
+}
+
 int main(void) {
     BEGIN_TEST_SUITE("DustySAGEMode dust bookkeeping");
 
     test_dust_moves_with_gas();
     test_dust_follows_regime();
+    test_dust_evolve_conserves();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

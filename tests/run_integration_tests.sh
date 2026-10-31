@@ -165,7 +165,7 @@ run_test_if_exists 18 "DarkSAGEMode Annuli" "./test_build/test_darksage" \
     "Testing annulus mass, metal and size bookkeeping..." 30
 
 run_test_if_exists 19 "DustySAGEMode Dust" "./test_build/test_dust" \
-    "Testing dust bookkeeping..." 8
+    "Testing dust bookkeeping and conservation..." 17
 
 # Count total passes, fails, and skipped tests
 PASSED=0

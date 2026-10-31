@@ -164,6 +164,8 @@ struct GALAXY
     float DustStarsStep;             /* stars formed in the current substep (destruction, SFH) */
     float DustMetalsStep;            /* metals SAGE26 put into the cold gas this substep (mode 1 cap) */
     float DustFormationRate;         /* dust made this snapshot; Msun/yr after evolve_galaxies() */
+    float DustGrowthRate;            /* dust grown in the ISM this snapshot; Msun/yr after evolve_galaxies() */
+    float DustDestructionRate;       /* dust destroyed by SNe this snapshot; Msun/yr after evolve_galaxies() */
 
     /* per-substep SFR trackers; converted to Msun/yr at output */
     float SfrDisk[STEPS];              /* disk SFR per substep [10^10 Msun/h / code time] */

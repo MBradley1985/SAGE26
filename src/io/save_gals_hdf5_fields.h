@@ -51,7 +51,9 @@
     X(HotDust, 1, "Dust in the hot halo gas.", "1.0e10 Msun/h") \
     X(CGMDust, 1, "Dust in the CGM gas.", "1.0e10 Msun/h") \
     X(EjectedDust, 1, "Dust in the ejected gas.", "1.0e10 Msun/h") \
-    X(DustFormationRate, 1, "Dust made by stars (AGB, SNII), averaged over the snapshot.", "Msun/yr")
+    X(DustFormationRate, 1, "Dust made by stars (AGB, SNII), averaged over the snapshot.", "Msun/yr") \
+    X(DustGrowthRate, 1, "Dust grown by accretion in the cold gas, averaged over the snapshot.", "Msun/yr") \
+    X(DustDestructionRate, 1, "Dust destroyed by supernova shocks, averaged over the snapshot.", "Msun/yr")
 
 #define GALAXY_OUTPUT_FIELDS(X) \
     X(SnapNum, SnapNum, int32_t, H5T_NATIVE_INT, \

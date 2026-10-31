@@ -37,6 +37,19 @@ static const double AGB_LOW = 1.0, AGB_UP = 6.0, BINARY_LOW = 3.0, BINARY_UP = 1
 static const double SNIA_GAMMA = 2.0;     /* binary mass-ratio distribution exponent (Arrigoni+10 eq. 10) */
 static const double SNIA_MU_MAX = 0.5;    /* maximum secondary-to-binary mass ratio */
 enum { N_INTEG = 20 };                    /* points of the source's integration grids */
+/* Growth, destruction and sputtering constants (Asano et al. 2013; Popping et al. 2017; source values) */
+static const double DUST_TACC0_MYR = 20.0;        /* grain-growth time at Z = DUST_ZREF */
+static const double DUST_ZREF = 0.02;
+static const double DUST_SN_MLOW = 8.0;           /* lowest SN progenitor mass [Msun] */
+static const double DUST_MSWEPT_MSUN = 1535.0;    /* ISM swept clean per SN at Z = 0 */
+static const double DUST_SN_ETA = 0.1;            /* destruction efficiency */
+static const double DUST_TVIR_COEFF = 35.9;       /* T = 35.9 Vvir^2 [K (km/s)^-2] */
+static const double DUST_SPUTTER_T0 = 2.0e6;      /* [K] */
+static const double DUST_SPUTTER_OMEGA = 2.5;
+static const double DUST_SPUTTER_RATE_CGS = 3.2e-18;   /* [cm^4 s^-1] */
+static const double DUST_SPUTTER_TAU0_MYR = 170.0;
+static const double DUST_GRAIN_CM = 1.0e-5;       /* initial grain radius, 0.1 um */
+static const double DUST_GRAIN_MIN_FRAC = 1.0e-3; /* grains shrink no further than this (the source asserts a > 0) */
 /* Condensation efficiencies (Popping et al. 2017; fixed in the source) */
 static const double DELTA_AGB = 0.2, DELTA_SN = 0.2;
 /* Cold gas needed for yields to stay in the disc, and to make dust [10^10 Msun/h] (source) */
@@ -301,6 +314,103 @@ static void dust_production(const int p, const int centralgal, const double dt, 
     if(dust > 0.0) g->DustFormationRate += (float)dust;   /* mass, a rate after evolve_galaxies() */
 }
 
+/* Grain growth in the ISM (Asano et al. 2013 eq. 20; Dusty-SAGE accrete_dust()):
+ *   dD/dt = (1 - D / Z_metals) f_H2 D / tau_acc,  tau_acc = 20 Myr x 0.02 / Z,
+ * f_H2 = H2gas / ColdGas, Z = MetalsColdGas / ColdGas.  As in the source, Z_metals is
+ * MetalsColdGas: all the cold metals in mode 1, the gas-phase ones in mode 2 (where the source
+ * therefore stops growth at dust = gas-phase metals). */
+static void dust_growth(const int p, const double dt, struct GALAXY *galaxies, const struct params *run_params)
+{
+    struct GALAXY *g = &galaxies[p];
+    if(g->ColdGas <= 0.0f || g->MetalsColdGas <= g->ColdDust || g->ColdDust <= 0.0f) return;
+    const double Z = g->MetalsColdGas / g->ColdGas;
+    if(Z <= 0.0) return;
+    const double tacc = DUST_TACC0_MYR * SEC_PER_MEGAYEAR / run_params->UnitTime_in_s * DUST_ZREF / Z;
+    const double f_h2 = g->H2gas / g->ColdGas;
+    double grow = (1.0 - g->ColdDust / g->MetalsColdGas) * f_h2 * g->ColdDust / tacc * dt;
+    if(grow <= 0.0) return;
+    if(run_params->DustySAGEMode == 1) {
+        if(grow > g->MetalsColdGas - g->ColdDust) grow = g->MetalsColdGas - g->ColdDust;
+    } else if(grow > g->MetalsColdGas) {
+        grow = g->MetalsColdGas;
+    }
+    g->ColdDust += (float)grow;
+    if(run_params->DustySAGEMode == 2) g->MetalsColdGas -= (float)grow;
+    g->DustGrowthRate += (float)grow;
+}
+
+/* Destruction by supernova shocks (Asano et al. 2013 eqs. 12, 14; Dusty-SAGE destruct_dust()):
+ * the SN rate R = stars / dt / m_*, m_* = int m phi dm / int_8^40 phi dm on the source's mass
+ * grid; each SN sweeps m_swept = 1535 (Z/0.02 + 0.039)^-0.289 Msun clean with efficiency 0.1,
+ * so tau_SN = ColdGas / (0.1 m_swept R) and dD/dt = D / tau_SN.  The destroyed dust returns
+ * to the gas-phase metals (mode 2). */
+static void dust_destruction(const int p, const double dt, struct GALAXY *galaxies, const struct params *run_params)
+{
+    struct GALAXY *g = &galaxies[p];
+    const double stars = g->DustStarsStep;
+    if(stars <= 0.0 || g->ColdGas <= 0.0f || g->ColdDust <= 0.0f) return;
+    if(run_params->DustTime[g->SnapNum] <= lifetime(SN_UP)) return;   /* no SN yet (source) */
+
+    double mass[N_INTEG], phi[N_INTEG], mphi[N_INTEG];
+    for(int i = 0; i < N_INTEG; i++) {
+        mass[i] = 1.0 + (SN_UP - 1.0) / (N_INTEG - i);
+        phi[i] = imf(mass[i]);
+        mphi[i] = mass[i] * phi[i];
+    }
+    const double mstar = integrate(mass, mphi, N_INTEG, mass[0], SN_UP) / integrate(mass, phi, N_INTEG, DUST_SN_MLOW, SN_UP);
+    if(!(mstar > 0.0)) return;
+    const double Z = get_metallicity(g->ColdGas, g->MetalsColdGas);
+    const double m_swept = DUST_MSWEPT_MSUN * pow(Z / DUST_ZREF + 0.039, -0.289) * run_params->Hubble_h / 1.0e10;
+    const double rsn = stars / dt / mstar * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS;
+    if(!(rsn > 0.0)) return;
+    const double tsn = g->ColdGas / (DUST_SN_ETA * m_swept * rsn) / (run_params->UnitTime_in_s / SEC_PER_YEAR);
+    double lost = g->ColdDust / tsn * dt;
+    if(lost > g->ColdDust) lost = g->ColdDust;
+    g->ColdDust -= (float)lost;
+    if(run_params->DustySAGEMode == 2) g->MetalsColdGas += (float)lost;
+    g->DustDestructionRate += (float)lost;
+}
+
+/* Thermal sputtering of dust in hot gas of density rho at the virial temperature (Popping et
+ * al. 2017 Sec. 3.5; Dusty-SAGE dust_thermal_sputtering()).  Grains of a = 0.1 um shrink at
+ * da/dt = rho x, x = -3.2e-18 / m_p / ((T0/T)^2.5 + 1) cm^4 g^-1 s^-1, over the substep, and
+ * the dust is lost on tau = 0.17 Gyr (a / 0.1 um)(1e-27 g cm^-3 / rho)((T0/T)^2.5 + 1), at
+ * dM/dt = M / (tau / 3).  Fixes three source bugs that switched it off: da/dt is rho x (the
+ * source divided), 4/3 is not integer division, and rho is in units of 1e-27 g cm^-3.
+ * Returns the dust sputtered, which returns to the metals (mode 2). */
+static double sputter(const double gas, float *dust, const double Rvir, const double Vvir, const double dt,
+                      const struct params *run_params)
+{
+    if(*dust <= 0.0f || gas <= 0.0 || Vvir <= 0.0 || Rvir <= 0.0) return 0.0;
+    const double temp = DUST_TVIR_COEFF * Vvir * Vvir;
+    const double tfac = pow(DUST_SPUTTER_T0 / temp, DUST_SPUTTER_OMEGA) + 1.0;
+    const double a0 = DUST_GRAIN_CM / run_params->UnitLength_in_cm;
+    const double x = -DUST_SPUTTER_RATE_CGS / PROTONMASS / tfac
+                     / (run_params->UnitLength_in_cm / run_params->UnitDensity_in_cgs / run_params->UnitTime_in_s);
+    const double rho = gas / (4.0 / 3.0 * M_PI * Rvir * Rvir * Rvir);
+    double a = a0 + rho * x * dt;
+    if(a < DUST_GRAIN_MIN_FRAC * a0) a = DUST_GRAIN_MIN_FRAC * a0;
+    const double rho_27 = rho * run_params->UnitDensity_in_cgs / 1.0e-27;
+    const double tau = DUST_SPUTTER_TAU0_MYR * SEC_PER_MEGAYEAR / run_params->UnitTime_in_s * (a / a0) / rho_27 * tfac;
+    double lost = *dust / (tau / 3.0) * dt;
+    if(lost > *dust) lost = *dust;
+    *dust -= (float)lost;
+    return lost;
+}
+
+/* Sputtering of the hot, CGM and ejected dust of central c (the source sputters the central's) */
+static void dust_sputtering(const int c, const double dt, struct GALAXY *galaxies, const struct params *run_params)
+{
+    struct GALAXY *g = &galaxies[c];
+    const int metals = (run_params->DustySAGEMode == 2);
+    double d = sputter(g->HotGas, &g->HotDust, g->Rvir, g->Vvir, dt, run_params);
+    if(metals) g->MetalsHotGas += (float)d;
+    d = sputter(g->CGMgas, &g->CGMDust, g->Rvir, g->Vvir, dt, run_params);
+    if(metals) g->MetalsCGMgas += (float)d;
+    d = sputter(g->EjectedMass, &g->EjectedDust, g->Rvir, g->Vvir, dt, run_params);
+    if(metals) g->MetalsEjectedMass += (float)d;
+}
+
 void dust_evolve(const int p, const int centralgal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     struct GALAXY *g = &galaxies[p];
@@ -311,6 +421,9 @@ void dust_evolve(const int p, const int centralgal, const double dt, struct GALA
     if(snap >= 0 && snap < ABSOLUTEMAXSNAPS) g->DustSfh[snap] += (float)(g->DustStarsStep / (dt * sfr_rate_divisor(g->SubstepsUsed)));
 
     dust_production(p, centralgal, dt, galaxies, run_params);
+    dust_growth(p, dt, galaxies, run_params);
+    dust_destruction(p, dt, galaxies, run_params);
+    if(p == centralgal) dust_sputtering(p, dt, galaxies, run_params);
 
     g->DustStarsStep = 0.0f;
     g->DustMetalsStep = 0.0f;

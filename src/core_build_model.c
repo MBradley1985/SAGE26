@@ -248,7 +248,7 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
             galaxies[ngal].QuasarModeBHaccretionMass = 0.0;
             galaxies[ngal].RadioModeBHaccretionMass = 0.0;
             galaxies[ngal].OutflowRate = 0.0;
-            galaxies[ngal].DustFormationRate = 0.0f;
+            galaxies[ngal].DustFormationRate = galaxies[ngal].DustGrowthRate = galaxies[ngal].DustDestructionRate = 0.0f;
 
             for(int step = 0; step < STEPS; step++) {
                 galaxies[ngal].SfrDisk[step] = galaxies[ngal].SfrBulge[step] = 0.0;
@@ -681,8 +681,12 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         galaxies[p].Cooling *= inv_deltaT;
         galaxies[p].Heating *= inv_deltaT;
         galaxies[p].OutflowRate *= inv_deltaT;
-        galaxies[p].DustFormationRate *= (float)(inv_deltaT * run_params->UnitMass_in_g / run_params->UnitTime_in_s
-                                                 * SEC_PER_YEAR / SOLAR_MASS);
+        {
+            const float to_rate = (float)(inv_deltaT * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS);
+            galaxies[p].DustFormationRate *= to_rate;
+            galaxies[p].DustGrowthRate *= to_rate;
+            galaxies[p].DustDestructionRate *= to_rate;
+        }
 
         if(run_params->DarkSAGEMode >= 1) {
             darksage_sync_disc_phases(p, galaxies);
