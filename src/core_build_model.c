@@ -562,7 +562,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 if(run_params->DarkSAGEMode >= 1) {
                     darksage_deposit_cooling(p, galaxies[p].ColdGas - cold_before, galaxies[p].MetalsColdGas - cold_metals_before,
                                              galaxies[p].RcoolToRvir > 0.0f && galaxies[p].RcoolToRvir < 1.0f,
-                                             cold_before, galaxies, run_params);
+                                             galaxies, run_params);
                 }
             }
 

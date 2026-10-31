@@ -139,7 +139,7 @@ void test_cooling_deposit_and_disc_radius(void) {
     struct GALAXY g[1];
     setup_galaxy(&g[0], &rp);
     g[0].SpinDiskRadius = 0.004f;   /* 4 Mpc/h x 1e-3: a few-kpc disc */
-    darksage_deposit_cooling(0, 2.0, 0.04, 0, 0.0, g, &rp);
+    darksage_deposit_cooling(0, 2.0, 0.04, 0, g, &rp);
     ASSERT_CLOSE(2.0, sum(g[0].DiscGas), SUM_RTOL, "Annuli gain exactly the cooled mass");
     ASSERT_CLOSE(0.04, sum(g[0].DiscGasMetals), SUM_RTOL, "Annuli gain exactly the cooled metals");
 
@@ -152,6 +152,46 @@ void test_cooling_deposit_and_disc_radius(void) {
     e[0].DiskScaleRadius = 0.0123f;
     darksage_set_disk_scale_radius(0, e, &rp);
     ASSERT_TRUE(e[0].DiskScaleRadius == 0.0123f, "Empty disc keeps its DiskScaleRadius");
+}
+
+void test_cooling_spin_follows_angular_momentum(void) {
+    BEGIN_TEST("Cooling: disc axis weighted by angular momentum, counter-rotating gas loses j");
+
+    /* Asserts: as DarkSage's cool_gas_onto_galaxy(), the new gas-disc axis is
+     * SpinHot J_cool + SpinGas J_disc (normalised), J_cool = 2 m Vvir CoolScaleRadius.
+     * Case 1: a disc along z receives gas along x with J_cool = J_disc: the axis must end
+     * at 45 degrees, (x + z)/sqrt(2), whatever the masses (a mass weighting would not give
+     * this).  Case 2: gas cooling along -z onto a disc along +z with J_cool < J_disc keeps
+     * the axis but the collision removes 2 J_retro: the disc ends with less angular
+     * momentum than J_disc + J_cool, by more than the counter-rotating gas brought. */
+    struct params rp;
+    setup_params(&rp);
+    struct GALAXY g[1];
+    setup_galaxy(&g[0], &rp);
+    g[0].SpinDiskRadius = 0.004f;
+    darksage_deposit_cooling(0, 1.0, 0.0, 0, g, &rp);   /* a disc along z, J_disc known */
+    double J_disc = 0.0;
+    for(int i = 0; i < N_BINS; i++) J_disc += g[0].DiscGas[i] * 0.5 * (rp.DiscBinEdge[i] + rp.DiscBinEdge[i+1]);
+    g[0].SpinHot[0] = 1.0f; g[0].SpinHot[2] = 0.0f;
+    const double m_cool = J_disc / (2.0 * g[0].Vvir * g[0].SpinDiskRadius);   /* J_cool = J_disc */
+    darksage_deposit_cooling(0, m_cool, 0.0, 0, g, &rp);
+    ASSERT_CLOSE(1.0 / M_SQRT2, g[0].SpinGas[0], 1e-5, "Axis x-component 1/sqrt(2)");
+    ASSERT_CLOSE(1.0 / M_SQRT2, g[0].SpinGas[2], 1e-5, "Axis z-component 1/sqrt(2)");
+
+    struct GALAXY r[1];
+    setup_galaxy(&r[0], &rp);
+    r[0].SpinDiskRadius = 0.004f;
+    darksage_deposit_cooling(0, 1.0, 0.0, 0, r, &rp);
+    double J0 = 0.0;
+    for(int i = 0; i < N_BINS; i++) J0 += r[0].DiscGas[i] * 0.5 * (rp.DiscBinEdge[i] + rp.DiscBinEdge[i+1]);
+    r[0].SpinHot[2] = -1.0f;
+    const double m_retro = 0.2;
+    const double J_cool = 2.0 * m_retro * r[0].Vvir * r[0].SpinDiskRadius;
+    darksage_deposit_cooling(0, m_retro, 0.0, 0, r, &rp);
+    double J1 = 0.0;
+    for(int i = 0; i < N_BINS; i++) J1 += r[0].DiscGas[i] * 0.5 * (rp.DiscBinEdge[i] + rp.DiscBinEdge[i+1]);
+    ASSERT_TRUE(r[0].SpinGas[2] > 0.99f, "Axis stays with the more massive prograde disc");
+    ASSERT_LESS_THAN(J1, J0, "Collision removes more than the retrograde gas brought (J1 < J_disc)");
 }
 
 void test_half_mass_radius_uniform_disc(void) {
@@ -255,6 +295,7 @@ int main(void) {
     test_remove_gas_exact_and_local_metallicity();
     test_remove_stars_exact();
     test_cooling_deposit_and_disc_radius();
+    test_cooling_spin_follows_angular_momentum();
     test_half_mass_radius_uniform_disc();
     test_merge_gas_conserves();
     test_unstable_profile();

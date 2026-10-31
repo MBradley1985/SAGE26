@@ -42,6 +42,7 @@
 
 #include "model_cooling_heating.h"
 #include "model_misc.h"
+#include "model_darksage_disc.h"
 
 /* -------------------------------------------------------------------------
  * File-scope empirical constants (lifted per STYLE_C.md SS8).
@@ -434,20 +435,61 @@ static void set_cool_scale_radius(const int gal, const int quasi_static, struct 
  * darksage_deposit_cooling -- DarkSAGEMode deposit of gas the SAGE26 cooling has
  * just moved into ColdGas (mass and metals, code units).
  *
- * Distributes the mass over the disc annuli with an exponential j-profile,
- * f(j) ~ j exp(-j/j_scale), j_scale = Vvir * CoolScaleRadius (Stevens, Croton &
- * Mutch 2016), the metals following the mass, and mixes the hot-gas spin into
- * the gas disc weighted by cold_before, the ColdGas before the cooling.  The
- * bulk reservoirs are SAGE26's and are not touched.  quasi_static selects the
+ * As DarkSage's cool_gas_onto_galaxy() (Stevens, Croton & Mutch 2016 Sec. 3.3):
+ *   1. The new gas-disc axis is the angular-momentum-weighted mean of the hot gas
+ *      (J_cool = 2 m Vvir CoolScaleRadius) and the existing disc (J_disc from the
+ *      annuli); with no disc it is the hot-gas axis.
+ *   2. If the axis tilts by more than cos = 0.99, the existing disc is projected
+ *      onto it, every j scaled by |cos| (darksage_project_disc()).
+ *   3. The cooled mass joins the annuli with an exponential j-profile,
+ *      f(j) ~ j exp(-j/j_scale), j_scale = Vvir * CoolScaleRadius, the metals
+ *      following the mass.
+ *   4. If the old disc or the cooling gas counter-rotates relative to the new axis,
+ *      the disc shrinks by (J_sum - 2 J_retro) / J_sum (retrograde_gas_collision()).
+ * The bulk reservoirs are SAGE26's and are not touched.  quasi_static selects the
  * Stevens et al. (2017) cooling scale (set_cool_scale_radius()).
  */
 void darksage_deposit_cooling(const int gal, const double mass, const double metals, const int quasi_static,
-                              const double cold_before, struct GALAXY *galaxies, const struct params *run_params)
+                              struct GALAXY *galaxies, const struct params *run_params)
 {
     if(mass <= 0.0) return;
+    struct GALAXY *g = &galaxies[gal];
     set_cool_scale_radius(gal, quasi_static, galaxies);
     const double metallicity = metals / mass;
 
+    /* Step 1: new disc axis from the angular momenta */
+    const double J_cool = 2.0 * mass * g->Vvir * g->CoolScaleRadius;
+    double J_disc = 0.0, disc_gas = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        disc_gas += g->DiscGas[i];
+        J_disc += g->DiscGas[i] * 0.5 * (run_params->DiscBinEdge[i] + run_params->DiscBinEdge[i+1]);
+    }
+    double new_spin[3], cos_disc = 1.0, cos_halo = 1.0;
+    for(int k = 0; k < 3; k++) new_spin[k] = g->SpinHot[k];
+    if(disc_gas > 0.0) {
+        for(int k = 0; k < 3; k++) new_spin[k] = g->SpinHot[k] * J_cool + g->SpinGas[k] * J_disc;
+        const double n = sqrt(new_spin[0] * new_spin[0] + new_spin[1] * new_spin[1] + new_spin[2] * new_spin[2]);
+        if(n > 0.0) {
+            for(int k = 0; k < 3; k++) new_spin[k] /= n;
+            cos_disc = g->SpinGas[0] * new_spin[0] + g->SpinGas[1] * new_spin[1] + g->SpinGas[2] * new_spin[2];
+            cos_halo = g->SpinHot[0] * new_spin[0] + g->SpinHot[1] * new_spin[1] + g->SpinHot[2] * new_spin[2];
+        } else {
+            for(int k = 0; k < 3; k++) new_spin[k] = g->SpinGas[k];
+        }
+    }
+
+    /* Step 2: project the existing disc onto the new axis */
+    double proj[N_BINS], proj_z[N_BINS];
+    if(cos_disc < 0.99 && cos_disc != 0.0) {
+        darksage_project_disc(g->DiscGas, fabs(cos_disc), proj, run_params, g->Rvir, g->Vvir);
+        darksage_project_disc(g->DiscGasMetals, fabs(cos_disc), proj_z, run_params, g->Rvir, g->Vvir);
+        for(int i = 0; i < N_BINS; i++) {
+            g->DiscGas[i] = (float)proj[i];
+            g->DiscGasMetals[i] = (float)proj_z[i];
+        }
+    }
+
+    /* Step 3: the cooled gas joins the annuli by its j-profile */
     // Find the last bin with physical area (r_out > r_in); bins capped at Rvir have zero area
     int last_physical_bin = N_BINS - 1;
     for(int i = N_BINS - 1; i >= 0; i--) {
@@ -496,7 +538,21 @@ void darksage_deposit_cooling(const int gal, const double mass, const double met
         galaxies[gal].DiscGasMetals[last_physical_bin] += metallicity * overflow_gas;
     }
 
-    evolve_spin(galaxies[gal].SpinGas, cold_before, galaxies[gal].SpinHot, mass);
+    /* Step 4: new axis, and counter-rotating gas collides and loses angular momentum */
+    for(int k = 0; k < 3; k++) g->SpinGas[k] = (float)new_spin[k];
+    if(cos_disc < -1.0e-5 || cos_halo < -1.0e-5) {
+        const double J_sum = J_disc * fabs(cos_disc) + J_cool * fabs(cos_halo);
+        const double J_retro = (cos_disc < 0.0) ? J_disc * fabs(cos_disc) : J_cool * fabs(cos_halo);
+        if(J_sum > 0.0 && J_sum >= 2.0 * J_retro) {
+            const double ratio = (J_sum - 2.0 * J_retro) / J_sum;
+            darksage_project_disc(g->DiscGas, ratio, proj, run_params, g->Rvir, g->Vvir);
+            darksage_project_disc(g->DiscGasMetals, ratio, proj_z, run_params, g->Rvir, g->Vvir);
+            for(int i = 0; i < N_BINS; i++) {
+                g->DiscGas[i] = (float)proj[i];
+                g->DiscGasMetals[i] = (float)proj_z[i];
+            }
+        }
+    }
 }
 
 /*
@@ -578,8 +634,7 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
         }
         const double metallicity = get_metallicity(galaxies[gal].CGMgas, galaxies[gal].MetalsCGMgas);
         if(run_params->DarkSAGEMode >= 1) {
-            darksage_deposit_cooling(gal, cgm_cooling, metallicity * cgm_cooling, 0, galaxies[gal].ColdGas,
-                                     galaxies, run_params);
+            darksage_deposit_cooling(gal, cgm_cooling, metallicity * cgm_cooling, 0, galaxies, run_params);
         }
         galaxies[gal].ColdGas += cgm_cooling;
         galaxies[gal].MetalsColdGas += metallicity * cgm_cooling;
@@ -596,7 +651,7 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
         if(run_params->DarkSAGEMode >= 1) {
             darksage_deposit_cooling(gal, hot_cooling, metallicity * hot_cooling,
                                      galaxies[gal].RcoolToRvir > 0.0f && galaxies[gal].RcoolToRvir < 1.0f,
-                                     galaxies[gal].ColdGas, galaxies, run_params);
+                                     galaxies, run_params);
         }
         galaxies[gal].ColdGas += hot_cooling;
         galaxies[gal].MetalsColdGas += metallicity * hot_cooling;
