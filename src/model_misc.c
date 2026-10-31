@@ -204,6 +204,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     for(int i = 0; i < N_BINS + 1; i++) {
         galaxies[p].DiscRadii[i] = 0.0f;
         galaxies[p].Potential[i] = 0.0f;
+        galaxies[p].DiscVcirc[i] = 0.0f;
     }
     for(int j = 0; j < 3; j++) {
         galaxies[p].SpinGas[j] = galaxies[p].SpinStars[j] = galaxies[p].SpinHot[j] = 0.0f;

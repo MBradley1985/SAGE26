@@ -23,6 +23,7 @@
  * width > 1 a 2-D [ngal, width] dataset (one column per annulus or annulus edge). */
 #define DARKSAGE_OUTPUT_FIELDS(X) \
     X(DiscRadii, N_BINS + 1, "Radius of each annulus edge (j-bin edge mapped through the rotation curve).", "Mpc/h") \
+    X(DiscVcirc, N_BINS + 1, "Circular velocity at each annulus edge, from the rotation curve (the rotation speed j/r is lower where rotational support is partial).", "km/s") \
     X(DiscGas, N_BINS, "Cold gas mass in each annulus.", "1.0e10 Msun/h") \
     X(DiscGasMetals, N_BINS, "Cold gas metals in each annulus.", "1.0e10 Msun/h") \
     X(DiscStars, N_BINS, "Stellar disc mass in each annulus.", "1.0e10 Msun/h") \

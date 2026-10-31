@@ -320,6 +320,7 @@ V_disc) over gas and disc stars, V_disc being the disc's own rotation speed
 | Field | Units | Description |
 |-------|-------|-------------|
 | `DiscRadii` | Mpc / h | Radius of each annulus edge (j-bin edge through the rotation curve). |
+| `DiscVcirc` | km / s | Circular velocity at each annulus edge, from the same rotation curve. The rotation speed j/r is lower in the centre, where rotational support is partial. |
 | `DiscGas`, `DiscGasMetals` | 1.0e10 Msun / h | Cold gas and its metals in each annulus. |
 | `DiscStars`, `DiscStarsMetals` | 1.0e10 Msun / h | Disc stars and their metals in each annulus. |
 | `DiscH2`, `DiscHI` | 1.0e10 Msun / h | H2 and HI in each annulus. H2 and HI half-mass radii can be computed from these. |

@@ -211,7 +211,8 @@ static void update_rotation_support_scale_radius(const int p, struct GALAXY *gal
  *      intrahalo stars, hot gas, black hole), the two discs, V_rot^2 = f_support V_circ^2 and
  *      j = V_rot r.  If the outermost j is below j_max, the radius grows x10.
  *      The potential is integrated inwards with dPhi/dr = V_circ^2 / r.
- *   4. Annulus edges at j = DiscBinEdge[i] and their potentials.
+ *   4. Annulus edges at j = DiscBinEdge[i], their potentials and circular velocities
+ *      (V_c, before the rotational support that sets j = sqrt(f_support) V_c r).
  */
 void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_data *halos,
                        const struct params *run_params)
@@ -272,11 +273,11 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     const double r_support = (g->RotSupportScaleRadius > 0.0f) ? g->RotSupportScaleRadius : g->DiskScaleRadius;
 
     /* Step 3: the grid, from the outside in */
-    double gr_r[N_RC_GRID], gr_j[N_RC_GRID], gr_phi[N_RC_GRID], f_sup[N_RC_GRID];
+    double gr_r[N_RC_GRID], gr_j[N_RC_GRID], gr_phi[N_RC_GRID], f_sup[N_RC_GRID], gr_vc[N_RC_GRID];
     int first = 0, n_grow = 0;
     double r = 10.0 * run_params->DiscBinEdge[N_BINS] / g->Vvir;
     if(r < Rvir) r = Rvir;
-    gr_r[0] = gr_j[0] = gr_phi[0] = 0.0;
+    gr_r[0] = gr_j[0] = gr_phi[0] = gr_vc[0] = 0.0;
     int i;
     for(i = N_RC_GRID - 1; i > 0; i--) {
         const double rrat = r / r_s;
@@ -295,6 +296,7 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
         double f = 1.0 - exp(-r / r_support);
         if(f < F_SUPPORT_MIN) f = F_SUPPORT_MIN;
         f_sup[i] = f;
+        gr_vc[i] = sqrt(v2);   /* circular velocity, before rotational support */
         gr_j[i] = sqrt(f * v2) * r;
 
         if(i == N_RC_GRID - 1) {
@@ -319,19 +321,24 @@ void update_disc_radii(const int p, struct GALAXY *galaxies, const struct halo_d
     gsl_interp_accel *acc = gsl_interp_accel_alloc();
     gsl_spline *r_of_j = gsl_spline_alloc(gsl_interp_cspline, n_grid);
     gsl_spline *phi_of_r = gsl_spline_alloc(gsl_interp_cspline, n_grid);
+    gsl_spline *vc_of_r = gsl_spline_alloc(gsl_interp_cspline, n_grid);
     gsl_spline_init(r_of_j, &gr_j[first], &gr_r[first], n_grid);
     gsl_spline_init(phi_of_r, &gr_r[first], &gr_phi[first], n_grid);
+    gsl_spline_init(vc_of_r, &gr_r[first], &gr_vc[first], n_grid);
     g->DiscRadii[0] = 0.0f;
+    g->DiscVcirc[0] = 0.0f;
     for(int k = 1; k < N_BINS + 1; k++) {
         g->DiscRadii[k] = (float)spline_clamped(r_of_j, acc, gr_j[first], gr_j[N_RC_GRID - 1], run_params->DiscBinEdge[k]);
         if(g->DiscRadii[k] <= g->DiscRadii[k-1]) g->DiscRadii[k] = 1.0001f * g->DiscRadii[k-1] + 1.0e-9f;
         g->Potential[k] = (float)spline_clamped(phi_of_r, acc, gr_r[first], gr_r[N_RC_GRID - 1], g->DiscRadii[k]);
+        g->DiscVcirc[k] = (float)spline_clamped(vc_of_r, acc, gr_r[first], gr_r[N_RC_GRID - 1], g->DiscRadii[k]);
     }
     g->Potential[0] = (float)gr_phi[first];
     if(g->Potential[0] >= 0.0f) g->Potential[0] = g->Potential[1];
 
     gsl_spline_free(r_of_j);
     gsl_spline_free(phi_of_r);
+    gsl_spline_free(vc_of_r);
     gsl_interp_accel_free(acc);
 
     /* Step 6: bulge scale lengths for the next call, from the potential gradient and each

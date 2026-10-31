@@ -251,6 +251,7 @@ struct GALAXY
     float HaloScaleRadius;           /* NFW scale radius r_s = Rvir/c */
     float RotSupportScaleRadius;     /* Radius where f_rot = 0.5 */
     float Potential[N_BINS+1];       /* Gravitational potential at each radius */
+    float DiscVcirc[N_BINS+1];       /* Circular velocity at each annulus edge, from the rotation curve [km/s] */
     float c_beta;                    /* Beta profile parameter for hot gas (init to 0.1) */
 
     /* DarkSAGEMode: Enhanced disk physics */
