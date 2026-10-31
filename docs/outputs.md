@@ -314,7 +314,8 @@ annuli sum to the bulk fields: `DiscGas` to `ColdGas`, `DiscGasMetals` to
 in the annuli), `DiscStarsMetals` to `MetalsStellarMass - MetalsBulgeMass`,
 `DiscH2` to `H2gas`, `DiscHI` to `H1gas` and `DiscSFR` to `SfrDisk`. In
 these modes `DiskRadius` is measured from the annuli, J_disc / (2 M_disc
-V_vir) over gas and disc stars, rather than from the halo spin.
+V_disc) over gas and disc stars, V_disc being the disc's own rotation speed
+(half the mass-weighted mean radius), rather than from the halo spin.
 
 | Field | Units | Description |
 |-------|-------|-------------|

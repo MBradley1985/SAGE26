@@ -128,12 +128,13 @@ void test_remove_stars_exact(void) {
 }
 
 void test_cooling_deposit_and_disc_radius(void) {
-    BEGIN_TEST("Cooling deposit conserves mass and metals; its disc has r_d = J / (2 M Vvir)");
+    BEGIN_TEST("Cooling deposit conserves mass and metals; its disc has r_d = sum(m r) / (2 M)");
 
     /* Asserts: darksage_deposit_cooling adds exactly the cooled mass and metals, and with
      * quasi_static = 0 the gas follows f(j) ~ j exp(-j / j_s), j_s = Vvir * SpinDiskRadius.
-     * Its mean j is 2 j_s, so darksage_set_disk_scale_radius must return
-     * J / (2 M Vvir) = j_s / Vvir = SpinDiskRadius, to the accuracy of the j-binning. */
+     * Its mean j is 2 j_s; on a flat rotation curve at Vvir its mean radius is 2 j_s / Vvir, so
+     * darksage_set_disk_scale_radius, half the mass-weighted mean radius, must return
+     * j_s / Vvir = SpinDiskRadius, to the accuracy of the j-binning. */
     struct params rp;
     setup_params(&rp);
     struct GALAXY g[1];
@@ -145,6 +146,12 @@ void test_cooling_deposit_and_disc_radius(void) {
 
     darksage_set_disk_scale_radius(0, g, &rp);
     ASSERT_CLOSE(0.004, g[0].DiskScaleRadius, BINNING_RTOL, "r_d of the deposited disc = SpinDiskRadius");
+
+    /* the radius follows the disc's own rotation: on a rotation curve at 2 Vvir (annulus edges at
+     * r = j / (2 Vvir)) the same j-profile gives half the scale radius */
+    for(int i = 0; i < N_BINS + 1; i++) g[0].DiscRadii[i] = (float)(rp.DiscBinEdge[i] / (2.0 * g[0].Vvir));
+    darksage_set_disk_scale_radius(0, g, &rp);
+    ASSERT_CLOSE(0.002, g[0].DiskScaleRadius, BINNING_RTOL, "r_d halves when the disc rotates at 2 Vvir");
 
     /* an empty disc keeps whatever radius it had */
     struct GALAXY e[1];
