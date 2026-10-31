@@ -416,6 +416,20 @@ if __name__ == '__main__':
 
 # --------------------------------------------------------
 
+    # Scatter-plot thinning that picks the same galaxies however the run is split over files:
+    # the selection is put in an order fixed by the galaxies' own properties, then drawn with a
+    # fixed seed.  (random.sample on w depends on the file order, so a 4-task run and a serial
+    # run of the same model showed different points.)
+    _thin_rank = np.empty(len(StellarMass), dtype=np.int64)
+    _thin_rank[np.lexsort((ColdGas, HotGas, BulgeMass, BlackHoleMass, Mvir, StellarMass))] = np.arange(len(StellarMass))
+
+    def thin(w, n):
+        w = np.asarray(w)
+        if len(w) <= n:
+            return w
+        w = w[np.argsort(_thin_rank[w], kind='stable')]
+        return np.random.default_rng(2222).choice(w, n, replace=False)
+
     print('Plotting the stellar mass function, divided by sSFR')
 
     plt.figure()  # New figure
@@ -731,7 +745,7 @@ if __name__ == '__main__':
 
     w = np.where((Type == 0) & (StellarMass + ColdGas > 0.0) & 
       (BulgeMass / StellarMass > 0.1) & (BulgeMass / StellarMass < 0.5))[0]
-    if(len(w) > dilute): w = sample(list(range(len(w))), dilute)
+    if(len(w) > dilute): w = thin(w, dilute)
 
     mass = np.log10( (StellarMass[w] + ColdGas[w]) )
     vel = np.log10(Vmax[w])
@@ -777,7 +791,7 @@ if __name__ == '__main__':
     ax = plt.subplot(111)  # 1 plot on the figure
 
     w = np.where(StellarMass > 0.01)[0]
-    if(len(w) > dilute): w = sample(list(w), dilute)
+    if(len(w) > dilute): w = thin(w, dilute)
     mass = np.log10(StellarMass[w])
     sSFR = np.log10( (SfrDisk[w] + SfrBulge[w]) / StellarMass[w] )
     plt.scatter(mass, sSFR, marker='x', s=1, c='k', alpha=0.9, label='Model galaxies')
@@ -816,7 +830,7 @@ if __name__ == '__main__':
 
     w = np.where((StellarMass + ColdGas > 0.0) & 
       (BulgeMass / StellarMass > 0.1) & (BulgeMass / StellarMass < 0.5))[0]
-    if(len(w) > dilute): w = sample(list(w), dilute)
+    if(len(w) > dilute): w = thin(w, dilute)
     
     mass = np.log10(StellarMass[w])
     fraction = ColdGas[w] / (StellarMass[w] + ColdGas[w])
@@ -852,7 +866,7 @@ if __name__ == '__main__':
     ax = plt.subplot(111)  # 1 plot on the figure
 
     w = np.where((Type == 0) & (ColdGas / (StellarMass + ColdGas) > 0.1) & (StellarMass > 1.0e8))[0]
-    if(len(w) > dilute): w = sample(list(w), dilute)
+    if(len(w) > dilute): w = thin(w, dilute)
     
     mass = np.log10(StellarMass[w])
     Z = np.log10((MetalsColdGas[w]) / ColdGas[w] / 0.02) + 9.0  # Convert to 12 + log(O/H) scale, assuming solar metallicity of 0.02 and that all metals are oxygen (for simplicity)    
@@ -960,7 +974,7 @@ if __name__ == '__main__':
     ax = plt.subplot(111)  # 1 plot on the figure
 
     w = np.where((BulgeMass > 1.0e8) & (BlackHoleMass > 01.0e6))[0]
-    if(len(w) > dilute): w = sample(list(w), dilute)
+    if(len(w) > dilute): w = thin(w, dilute)
 
     bh = np.log10(BlackHoleMass[w])
     bulge = np.log10(BulgeMass[w])
@@ -1478,7 +1492,7 @@ if __name__ == '__main__':
 
     w = np.where((Type == 0) & (Mvir > 1.0e10) & (StellarMass > 0.0))[0]
     dilute_mass_reservoir = 10000
-    if(len(w) > dilute_mass_reservoir): w = sample(list(w), dilute_mass_reservoir)
+    if(len(w) > dilute_mass_reservoir): w = thin(w, dilute_mass_reservoir)
 
     HaloMass = np.log10(Mvir[w])
     plt.scatter(HaloMass, np.log10(StellarMass[w]), marker='x', s=0.3, c='w', alpha=0.5, label='Stars')
@@ -1512,7 +1526,7 @@ if __name__ == '__main__':
     plt.figure(figsize=(18, 5))  # New figure
 
     w = np.where((Mvir > 0.0) & (StellarMass > 1.0e9))[0]
-    if(len(w) > dilute): w = sample(list(w), dilute)
+    if(len(w) > dilute): w = thin(w, dilute)
 
     xx = Posx[w]
     yy = Posy[w]
@@ -1568,7 +1582,7 @@ if __name__ == '__main__':
     ax = fig.add_subplot(111, projection='3d')
 
     w = np.where((Mvir > 0.0) & (StellarMass > 1.0e9))[0]
-    if(len(w) > dilute): w = sample(list(w), dilute)
+    if(len(w) > dilute): w = thin(w, dilute)
 
     xx = Posx[w]
     yy = Posy[w]
@@ -1629,7 +1643,7 @@ if __name__ == '__main__':
 
     w2 = np.where(StellarMass > 0.01)[0]
     dilute_sfr = 10000
-    if(len(w2) > dilute_sfr): w2 = sample(list(w2), dilute_sfr)
+    if(len(w2) > dilute_sfr): w2 = thin(w2, dilute_sfr)
     mass = np.log10(StellarMass[w2])
     starformationrate =  (SfrDisk[w2] + SfrBulge[w2])
 
@@ -1664,7 +1678,7 @@ if __name__ == '__main__':
               '(FIRE mass-loading mode off).\n')
         plt.close()
     else:
-        if(len(w) > dilute): w = sample(list(w), dilute)
+        if(len(w) > dilute): w = thin(w, dilute)
 
         log10_stellar_mass = np.log10(StellarMass[w])
         mass_loading = MassLoading[w]
@@ -1691,7 +1705,7 @@ if __name__ == '__main__':
     plt.figure()
 
     w = np.where((Mvir > 0.0) & (StellarMass > 0.0))[0]
-    if(len(w) > dilute): w = sample(list(w), dilute)
+    if(len(w) > dilute): w = thin(w, dilute)
 
     log10_halo_mass = np.log10(Mvir[w])
     log10_stellar_mass = np.log10(StellarMass[w])
@@ -1735,7 +1749,7 @@ if __name__ == '__main__':
     dilute = 100000
 
     w2 = np.where(StellarMass > 0.0)[0]
-    if(len(w2) > dilute): w2 = sample(list(range(len(w2))), dilute)
+    if(len(w2) > dilute): w2 = thin(w2, dilute)
     mass = np.log10(StellarMass[w2])
     starformationrate = (SfrDisk[w2] + SfrBulge[w2])
     sSFR = np.full_like(starformationrate, -99.0)
@@ -1859,7 +1873,7 @@ if __name__ == '__main__':
 
     for ax, w, title in [(ax_cen, w_cen, 'Centrals'), (ax_sat, w_sat, 'Satellites')]:
         if len(w) > dilute:
-            sel = sorted(sample(list(w), dilute))
+            sel = sorted(thin(w, dilute))
         else:
             sel = w
 
@@ -1899,7 +1913,7 @@ if __name__ == '__main__':
         (HaloAccretionRate > 0.0)
     )[0]
     if len(w) > dilute:
-        w = sample(list(w), dilute)
+        w = thin(w, dilute)
 
     log_acc = np.log10(HaloAccretionRate[w])
     log_sfr = np.log10(SFR[w])
@@ -2052,7 +2066,7 @@ if __name__ == '__main__':
         print('  Skipping ejection_vs_vvir: no galaxies with SFR > 0, MassLoading > 0, and Vvir > 0.\n')
         plt.close()
     else:
-        if(len(w) > dilute): w = sample(list(w), dilute)
+        if(len(w) > dilute): w = thin(w, dilute)
 
     MassLoading = read_hdf(file_list, Snapshot, 'MassLoading')[w]
     Vvir = read_hdf(file_list, Snapshot, 'Vvir')[w]
@@ -2143,7 +2157,7 @@ if __name__ == '__main__':
         print('  Skipping disk_radius_vs_stellar_mass: no galaxies with StellarMass > 0 and DiskRadius > 0.\n')
         plt.close()
     else:
-        if(len(w) > dilute): w = sample(list(w), dilute)
+        if(len(w) > dilute): w = thin(w, dilute)
 
     # log_stellar_mass = np.log10(StellarMass[w])
     # log_disk_radius = np.log10(DiskRadius[w])
@@ -2212,7 +2226,7 @@ if __name__ == '__main__':
         print('  Skipping half_mass_radius_vs_stellar_mass: no galaxies with M* > 1e8 and a size.\n')
         plt.close()
     else:
-        if len(w) > dilute: w = sample(list(w), dilute)
+        if len(w) > dilute: w = thin(w, dilute)
         w = np.array(w)
         DiskMass = StellarMass[w] - BulgeMass[w]
         half_mass_radius = (DiskMass * DiskRadius[w] + BulgeMass[w] * BulgeRadius[w]) / StellarMass[w]

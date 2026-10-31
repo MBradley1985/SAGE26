@@ -348,6 +348,24 @@ void test_zero_disk_radius_protection() {
     }
 }
 
+void test_h1_h2_within_hydrogen() {
+    BEGIN_TEST("update_from_star_formation: H1gas + H2gas stay within the cold gas's hydrogen");
+
+    /* Star formation takes cold gas after H2gas and H1gas were set; they must then fit in the
+     * hydrogen left, 0.74 ColdGas, together -- capped separately, their sum exceeded it.  H2 keeps
+     * its value if it fits, H1 takes what hydrogen is left. */
+    struct params rp = {0};
+    rp.SFprescription = 1;
+    rp.RecycleFraction = 0.5;
+    struct GALAXY g[1] = {{0}};
+    g[0].ColdGas = 1.0f; g[0].MetalsColdGas = 0.02f;
+    g[0].H2gas = 0.5f; g[0].H1gas = 0.24f;            /* 0.74 of the cold gas */
+    update_from_star_formation(0, 0.2, 0.02, g, &rp);  /* ColdGas -> 0.9 */
+    ASSERT_CLOSE(0.5, g[0].H2gas, 1e-6, "H2gas unchanged when it fits");
+    ASSERT_CLOSE(0.74 * 0.9 - 0.5, g[0].H1gas, 1e-5, "H1gas = the hydrogen left after H2");
+    ASSERT_TRUE(g[0].H1gas + g[0].H2gas <= 0.74f * g[0].ColdGas * 1.000001f, "H1 + H2 within the hydrogen");
+}
+
 int main() {
     BEGIN_TEST_SUITE("Star Formation Recipes");
     
@@ -362,6 +380,7 @@ int main() {
     test_disk_size_effect_on_sf();
     test_sf_depletion_timescale();
     test_zero_disk_radius_protection();
+    test_h1_h2_within_hydrogen();
     
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

@@ -379,10 +379,7 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
         }
         const int sf_bh = run_params->SFprescription;
         if(sf_bh != 0 && sf_bh != 2) {
-            const float max_h_bh = (galaxies[merger_centralgal].ColdGas > 0.0f)
-                                    ? galaxies[merger_centralgal].ColdGas * HYDROGEN_MASS_FRAC : 0.0f;
-            if(galaxies[merger_centralgal].H2gas > max_h_bh) galaxies[merger_centralgal].H2gas = max_h_bh;
-            if(galaxies[merger_centralgal].H1gas > max_h_bh) galaxies[merger_centralgal].H1gas = max_h_bh;
+            clamp_phases_to_hydrogen(&galaxies[merger_centralgal]);
         }
 
         quasar_mode_wind(merger_centralgal, BHaccrete, galaxies, run_params);

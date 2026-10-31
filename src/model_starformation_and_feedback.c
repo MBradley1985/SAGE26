@@ -1669,9 +1669,7 @@ double update_from_star_formation(const int p, const double stars, const double 
     // remain consistent with the remaining cold gas. Only applies to H2-tracking
     // prescriptions (0=Croton and 2=Somerville-noH2 never set H2gas/H1gas).
     if(sf_prescription_tracks_h2(run_params->SFprescription)) {
-        const float max_h = (galaxies[p].ColdGas > 0.0f) ? galaxies[p].ColdGas * HYDROGEN_MASS_FRAC : 0.0f;
-        if(galaxies[p].H2gas > max_h) galaxies[p].H2gas = max_h;
-        if(galaxies[p].H1gas > max_h) galaxies[p].H1gas = max_h;
+        clamp_phases_to_hydrogen(&galaxies[p]);
     }
 
     return locked_dust;
@@ -1809,9 +1807,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
         galaxies[p].ColdGas -= reheated_mass;
         galaxies[p].MetalsColdGas -= metallicity * reheated_mass;
         if(sf_prescription_tracks_h2(run_params->SFprescription)) {
-            const float max_h_fb = (galaxies[p].ColdGas > 0.0f) ? galaxies[p].ColdGas * HYDROGEN_MASS_FRAC : 0.0f;
-            if(galaxies[p].H2gas > max_h_fb) galaxies[p].H2gas = max_h_fb;
-            if(galaxies[p].H1gas > max_h_fb) galaxies[p].H1gas = max_h_fb;
+            clamp_phases_to_hydrogen(&galaxies[p]);
         }
 
         route_feedback_to_reservoirs(p, centralgal, reheated_mass, ejected_mass, metallicity, reheated_dust, galaxies, run_params);

@@ -10,6 +10,17 @@ it says otherwise. See
 
 ## Unreleased
 
+### H1gas within the cold gas's hydrogen (H1gas not bit-identical)
+
+- After star formation, feedback and black-hole accretion take cold gas,
+  `H2gas` and `H1gas` were each capped at 0.74 ColdGas, so their sum could
+  exceed the hydrogen (3% of galaxies at z=0, 72% at z~5). `H2gas` is still
+  capped first and is unchanged; `H1gas` now takes the hydrogen left
+  (`clamp_phases_to_hydrogen()`). Only `H1gas` (and `DiscHI`) change; it feeds
+  no other recipe, so every other output is bit-identical. Median `H1gas`
+  falls by up to 15% at z~2 and more at z~5 in small galaxies; z=0 HI mass
+  functions and fractions are unchanged.
+
 ### Radially resolved discs (DarkSAGEMode)
 
 - New `DarkSAGEMode` (default 0): galaxies carry their gas and stellar discs in

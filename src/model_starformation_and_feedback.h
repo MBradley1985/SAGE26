@@ -19,6 +19,17 @@ extern "C" {
 
     #include "core_allvars.h"
 
+    /* After cold gas has been removed, fit H2gas and H1gas back into its hydrogen, 0.74 ColdGas:
+     * H2gas first (unchanged if it fits), H1gas in the hydrogen left.  Capped separately, as before,
+     * their sum could exceed the hydrogen.  float, as the SAGE26 clamps it replaces. */
+    static inline void clamp_phases_to_hydrogen(struct GALAXY *g)
+    {
+        const float max_h = (g->ColdGas > 0.0f) ? g->ColdGas * HYDROGEN_MASS_FRAC : 0.0f;
+        if(g->H2gas > max_h) g->H2gas = max_h;
+        const float max_h1 = max_h - g->H2gas;
+        if(g->H1gas > max_h1) g->H1gas = (max_h1 > 0.0f) ? max_h1 : 0.0f;
+    }
+
     /* functions in model_starformation_and_feedback.c */
     extern void starformation_and_feedback(const int p, const int centralgal, const double time, const double dt, const int halonr, const int step,
                                            struct GALAXY *galaxies, const struct params *run_params);
