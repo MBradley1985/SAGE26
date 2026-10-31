@@ -154,6 +154,13 @@ struct GALAXY
     float MetalsICS;
     float MetalsCGMgas;
 
+    /* DustySAGEMode: dust in each gas reservoir [same units]; zero when the mode is off.  Mode 1
+     * counts it inside the reservoir's metals, mode 2 outside them (Dusty-SAGE) */
+    float ColdDust;
+    float HotDust;
+    float CGMDust;
+    float EjectedDust;
+
     /* per-substep SFR trackers; converted to Msun/yr at output */
     float SfrDisk[STEPS];              /* disk SFR per substep [10^10 Msun/h / code time] */
     float SfrBulge[STEPS];             /* bulge (starburst) SFR per substep [10^10 Msun/h / code time] */
@@ -605,6 +612,7 @@ struct params
     /* When DarkSAGEMode=1: Enables radial bins, Toomre Q instability, precession, j-conservation */
     /* When DarkSAGEMode=0: Standard SAGE behavior */
     int32_t    DarkSAGEMode;            // 0: standard SAGE; 1: full DarkSage physics
+    int32_t    DustySAGEMode;           // 0: no dust; 1: passive dust within SAGE26's metals; 2: Dusty-SAGE yields and dust
     double     DiscBinEdge[N_BINS+1];   // Specific angular momentum bin edges (computed)
 
     int32_t nsnapshots;

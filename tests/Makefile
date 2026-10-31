@@ -61,6 +61,7 @@ TEST_SOURCES = \
 	test_ffb_concentration.c \
 	test_halo_ids.c \
 	test_darksage.c \
+	test_dust.c \
 # Function to check if all dependencies exist for a test
 # Usage: $(call check_test_deps,test_name)
 define check_test_deps
@@ -236,6 +237,9 @@ test_ffb: $(OUTPUT_DIR)/test_ffb_concentration
 
 test_darksage: $(OUTPUT_DIR)/test_darksage
 	$(OUTPUT_DIR)/test_darksage
+
+test_dust: $(OUTPUT_DIR)/test_dust
+	$(OUTPUT_DIR)/test_dust
 
 # Quick test (just conservation laws - fastest)
 quick: $(OUTPUT_DIR)/test_conservation

@@ -133,6 +133,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
     // DarkSAGEMode: 0 = standard SAGE26; 1, 2 = SAGE26 with radially resolved discs (1: bulk recipes shared over the annuli; 2: recipes per annulus)
     run_params->DarkSAGEMode               = 0; /* default: standard SAGE behavior */
+    // DustySAGEMode: 0 = no dust; 1 = passive dust within SAGE26's metals; 2 = Dusty-SAGE yields and dust
+    run_params->DustySAGEMode              = 0;
 
 
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
@@ -217,6 +219,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("KarpovModeOn",               &(run_params->KarpovModeOn),               INT, 0);
 
     REG("DarkSAGEMode",                &(run_params->DarkSAGEMode),               INT, 0);
+    REG("DustySAGEMode",               &(run_params->DustySAGEMode),              INT, 0);
 
 #undef REG
 
@@ -545,7 +548,8 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"H2DepletionMode",        run_params->H2DepletionMode,        0, H2DEPLETIONMODE_MAX},
             {"KarpovModeOn",            run_params->KarpovModeOn,            0, 1},
-            {"DarkSAGEMode",           run_params->DarkSAGEMode,           0, 2}
+            {"DarkSAGEMode",           run_params->DarkSAGEMode,           0, 2},
+            {"DustySAGEMode",          run_params->DustySAGEMode,          0, 2}
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {

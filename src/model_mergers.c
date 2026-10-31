@@ -368,6 +368,7 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
 
         metallicity = get_metallicity(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].MetalsColdGas);
         galaxies[merger_centralgal].BlackHoleMass += BHaccrete;
+        dust_move(&galaxies[merger_centralgal].ColdDust, galaxies[merger_centralgal].ColdGas, BHaccrete, NULL);
         galaxies[merger_centralgal].ColdGas -= BHaccrete;
         galaxies[merger_centralgal].MetalsColdGas -= metallicity * BHaccrete;
         if(run_params->DarkSAGEMode >= 1) {
@@ -413,6 +414,8 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
     if(quasar_energy > cold_gas_energy) {
         galaxies[gal].EjectedMass += galaxies[gal].ColdGas;
         galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsColdGas;
+        galaxies[gal].EjectedDust += galaxies[gal].ColdDust;
+        galaxies[gal].ColdDust = 0.0f;
 
         if(run_params->DarkSAGEMode >= 1) {
             for(int i = 0; i < N_BINS; i++) {
@@ -436,6 +439,8 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
             if(quasar_energy > cold_gas_energy + cgm_gas_energy) {
                 galaxies[gal].EjectedMass += galaxies[gal].CGMgas;
                 galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsCGMgas;
+                galaxies[gal].EjectedDust += galaxies[gal].CGMDust;
+                galaxies[gal].CGMDust = 0.0f;
 
                 galaxies[gal].CGMgas = 0.0;
                 galaxies[gal].MetalsCGMgas = 0.0;
@@ -447,6 +452,8 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
             if(quasar_energy > cold_gas_energy + hot_gas_energy) {
                 galaxies[gal].EjectedMass += galaxies[gal].HotGas;
                 galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsHotGas;
+                galaxies[gal].EjectedDust += galaxies[gal].HotDust;
+                galaxies[gal].HotDust = 0.0f;
 
                 galaxies[gal].HotGas = 0.0;
                 galaxies[gal].MetalsHotGas = 0.0;
@@ -459,6 +466,8 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
         if(quasar_energy > cold_gas_energy + hot_gas_energy) {
             galaxies[gal].EjectedMass += galaxies[gal].HotGas;
             galaxies[gal].MetalsEjectedMass += galaxies[gal].MetalsHotGas;
+            galaxies[gal].EjectedDust += galaxies[gal].HotDust;
+            galaxies[gal].HotDust = 0.0f;
 
             galaxies[gal].HotGas = 0.0;
             galaxies[gal].MetalsHotGas = 0.0;
@@ -488,6 +497,10 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
 
     galaxies[t].ColdGas += galaxies[p].ColdGas;
     galaxies[t].MetalsColdGas += galaxies[p].MetalsColdGas;
+    galaxies[t].ColdDust += galaxies[p].ColdDust;
+    galaxies[t].HotDust += galaxies[p].HotDust;
+    galaxies[t].CGMDust += galaxies[p].CGMDust;
+    galaxies[t].EjectedDust += galaxies[p].EjectedDust;
 
     galaxies[t].StellarMass += galaxies[p].StellarMass;
     galaxies[t].MetalsStellarMass += galaxies[p].MetalsStellarMass;
@@ -973,6 +986,8 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     const double total_metals_gas = galaxies[gal].MetalsColdGas + galaxies[gal].MetalsHotGas + galaxies[gal].MetalsCGMgas;
     
     add_gas_to_hot_reservoir(&galaxies[centralgal], run_params, total_gas, total_metals_gas);
+    add_dust_to_hot_reservoir(&galaxies[centralgal], run_params,
+                              galaxies[gal].ColdDust + galaxies[gal].HotDust + galaxies[gal].CGMDust);
 
     if(run_params->DarkSAGEMode >= 1) {
         for(int i = 0; i < N_BINS; i++) {
@@ -984,6 +999,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     // Transfer ejected mass (same for all regimes)
     galaxies[centralgal].EjectedMass += galaxies[gal].EjectedMass;
     galaxies[centralgal].MetalsEjectedMass += galaxies[gal].MetalsEjectedMass;
+    galaxies[centralgal].EjectedDust += galaxies[gal].EjectedDust;
 
     // DarkSAGEMode: the stars are deposited at the satellite's radius (DarkSage disrupt_satellite_to_ICS())
     if(run_params->DarkSAGEMode >= 1) {
@@ -1030,6 +1046,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
     galaxies[gal].HotGas          = galaxies[gal].MetalsHotGas      = 0.0f;
     galaxies[gal].CGMgas          = galaxies[gal].MetalsCGMgas      = 0.0f;
     galaxies[gal].EjectedMass     = galaxies[gal].MetalsEjectedMass = 0.0f;
+    galaxies[gal].ColdDust = galaxies[gal].HotDust = galaxies[gal].CGMDust = galaxies[gal].EjectedDust = 0.0f;
     galaxies[gal].ICS             = galaxies[gal].MetalsICS         = 0.0f;
     galaxies[gal].ICS_disrupt     = galaxies[gal].ICS_accrete       = 0.0f;
     galaxies[gal].ICS_sum_mt      = 0.0f;

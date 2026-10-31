@@ -1037,7 +1037,7 @@ if(run_params->SupernovaRecipeOn == 1) {
 }
 
 static void route_feedback_to_reservoirs(const int p, const int centralgal, const double reheated_mass,
-                                         double ejected_mass, const double metallicity,
+                                         double ejected_mass, const double metallicity, const double reheated_dust,
                                          struct GALAXY *galaxies, const struct params *run_params);
 
 /* Angular momentum of a set of annuli, sum of j_mid m */
@@ -1201,6 +1201,7 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
 {
     const double R = run_params->RecycleFraction;
     const float h = run_params->Hubble_h;
+    const double dtg = dust_to_gas(galaxies[p].ColdGas, galaxies[p].ColdDust);   /* DustySAGEMode, galaxy-wide */
     double fire_scaling;
     double eta = sn_reheat_loading(p, &fire_scaling, galaxies, run_params);
     /* KarpovModeOn: sn_ejected_mass() sets its own reheated mass, so take its loading per unit
@@ -1274,6 +1275,17 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
         reheated_metals += Z * reheated;
     }
 
+    /* DustySAGEMode: the stars and the reheated gas take the cold gas's dust, at its dust-to-gas
+     * ratio before star formation (galaxy-wide dust) */
+    double locked_dust = dtg * new_stars_sum, reheated_dust = dtg * reheated_sum;
+    if(locked_dust + reheated_dust > galaxies[p].ColdDust) {
+        const double f = (locked_dust + reheated_dust > 0.0) ? galaxies[p].ColdDust / (locked_dust + reheated_dust) : 0.0;
+        locked_dust *= f;
+        reheated_dust *= f;
+    }
+    galaxies[p].ColdDust -= (float)(locked_dust + reheated_dust);
+    if(run_params->DustySAGEMode == 2) galaxies[p].MetalsStellarMass += locked_dust;
+
     /* Step 2: the new stars join the stellar disc (DarkSage combine_stellar_discs()) */
     if(new_stars_sum > 0.0) {
         darksage_combine_stellar_discs(p, new_stars, new_stars_metals, galaxies, run_params);
@@ -1304,7 +1316,7 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
         double reheated_check = reheated_sum;
         const double ejected = sn_ejected_mass(p, stars_sum, &reheated_check, fire_scaling, galaxies, run_params);
         const double Z_reheat = (reheated_sum > 0.0) ? reheated_metals / reheated_sum : 0.0;
-        route_feedback_to_reservoirs(p, centralgal, reheated_sum, ejected, Z_reheat, galaxies, run_params);
+        route_feedback_to_reservoirs(p, centralgal, reheated_sum, ejected, Z_reheat, reheated_dust, galaxies, run_params);
     }
     add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, metals_leaving_disk);
 
@@ -1626,6 +1638,10 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 void update_from_star_formation(const int p, const double stars, const double metallicity, struct GALAXY *galaxies, const struct params *run_params)
 {
     const double RecycleFraction = run_params->RecycleFraction;
+    // DustySAGEMode: the stars lock up their gas's dust.  In mode 2 the dust is not in MetalsColdGas,
+    // so it joins the stellar metals here (Dusty-SAGE update_from_star_formation())
+    const double locked_dust = dust_move(&galaxies[p].ColdDust, galaxies[p].ColdGas, (1 - RecycleFraction) * stars, NULL);
+    if(run_params->DustySAGEMode == 2) galaxies[p].MetalsStellarMass += locked_dust;
     // update gas and metals from star formation
     galaxies[p].ColdGas -= (1 - RecycleFraction) * stars;
     galaxies[p].MetalsColdGas -= metallicity * (1 - RecycleFraction) * stars;
@@ -1651,10 +1667,11 @@ void update_from_star_formation(const int p, const double stars, const double me
  *   CGM regime (CGMrecipeOn) : Cold --> CGMgas --> EjectedMass
  *   hot regime / no CGM      : Cold --> HotGas --> EjectedMass
  * ejected_mass is capped at the reservoir it leaves.  Adds reheated_mass to
- * galaxies[p].OutflowRate.
+ * galaxies[p].OutflowRate.  DustySAGEMode: reheated_dust (already taken from the cold dust)
+ * goes with the reheated gas, and the ejected gas takes its reservoir's dust-to-gas share.
  */
 static void route_feedback_to_reservoirs(const int p, const int centralgal, const double reheated_mass,
-                                         double ejected_mass, const double metallicity,
+                                         double ejected_mass, const double metallicity, const double reheated_dust,
                                          struct GALAXY *galaxies, const struct params *run_params)
 {
     if(run_params->CGMrecipeOn == 1) {
@@ -1664,6 +1681,7 @@ static void route_feedback_to_reservoirs(const int p, const int centralgal, cons
             // Add reheated gas to CGM
             galaxies[centralgal].CGMgas += reheated_mass;
             galaxies[centralgal].MetalsCGMgas += metallicity * reheated_mass;
+            galaxies[centralgal].CGMDust += reheated_dust;
 
             // Check if ejection is possible from CGM
             if(ejected_mass > galaxies[centralgal].CGMgas) {
@@ -1677,6 +1695,7 @@ static void route_feedback_to_reservoirs(const int p, const int centralgal, cons
             }
 
             // Eject from CGM to EjectedMass
+            dust_move(&galaxies[centralgal].CGMDust, galaxies[centralgal].CGMgas, ejected_mass, &galaxies[centralgal].EjectedDust);
             galaxies[centralgal].CGMgas -= ejected_mass;
             galaxies[centralgal].MetalsCGMgas -= metalsCGM_to_eject;
             galaxies[centralgal].EjectedMass += ejected_mass;
@@ -1688,6 +1707,7 @@ static void route_feedback_to_reservoirs(const int p, const int centralgal, cons
             // Add reheated gas to HotGas
             galaxies[centralgal].HotGas += reheated_mass;
             galaxies[centralgal].MetalsHotGas += metallicity * reheated_mass;
+            galaxies[centralgal].HotDust += reheated_dust;
 
             // Check if ejection is possible from HotGas
             if(ejected_mass > galaxies[centralgal].HotGas) {
@@ -1701,6 +1721,7 @@ static void route_feedback_to_reservoirs(const int p, const int centralgal, cons
             }
 
             // Eject from HotGas to EjectedMass
+            dust_move(&galaxies[centralgal].HotDust, galaxies[centralgal].HotGas, ejected_mass, &galaxies[centralgal].EjectedDust);
             galaxies[centralgal].HotGas -= ejected_mass;
             galaxies[centralgal].MetalsHotGas -= metalsHot_to_eject;
             galaxies[centralgal].EjectedMass += ejected_mass;
@@ -1712,6 +1733,7 @@ static void route_feedback_to_reservoirs(const int p, const int centralgal, cons
         // Add reheated gas to HotGas
         galaxies[centralgal].HotGas += reheated_mass;
         galaxies[centralgal].MetalsHotGas += metallicity * reheated_mass;
+        galaxies[centralgal].HotDust += reheated_dust;
 
         // Check if ejection is possible from HotGas
         if(ejected_mass > galaxies[centralgal].HotGas) {
@@ -1725,6 +1747,7 @@ static void route_feedback_to_reservoirs(const int p, const int centralgal, cons
         }
 
         // Eject from HotGas to EjectedMass
+        dust_move(&galaxies[centralgal].HotDust, galaxies[centralgal].HotGas, ejected_mass, &galaxies[centralgal].EjectedDust);
         galaxies[centralgal].HotGas -= ejected_mass;
         galaxies[centralgal].MetalsHotGas -= metalsHot_to_eject;
         galaxies[centralgal].EjectedMass += ejected_mass;
@@ -1763,6 +1786,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
 
     if(run_params->SupernovaRecipeOn == 1) {
         // Remove reheated mass from cold gas (same for all regimes)
+        const double reheated_dust = dust_move(&galaxies[p].ColdDust, galaxies[p].ColdGas, reheated_mass, NULL);
         galaxies[p].ColdGas -= reheated_mass;
         galaxies[p].MetalsColdGas -= metallicity * reheated_mass;
         if(sf_prescription_tracks_h2(run_params->SFprescription)) {
@@ -1771,7 +1795,7 @@ void update_from_feedback(const int p, const int centralgal, double reheated_mas
             if(galaxies[p].H1gas > max_h_fb) galaxies[p].H1gas = max_h_fb;
         }
 
-        route_feedback_to_reservoirs(p, centralgal, reheated_mass, ejected_mass, metallicity, galaxies, run_params);
+        route_feedback_to_reservoirs(p, centralgal, reheated_mass, ejected_mass, metallicity, reheated_dust, galaxies, run_params);
     }
 }
 

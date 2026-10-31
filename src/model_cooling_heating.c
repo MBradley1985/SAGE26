@@ -151,8 +151,10 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
         const double temp = VIRIAL_TEMP_COEFF * galaxies[gal].Vvir * galaxies[gal].Vvir;  // in Kelvin
 
         double logZ = -10.0;
-        if(galaxies[gal].MetalsHotGas > 0) {
-            logZ = log10(galaxies[gal].MetalsHotGas / galaxies[gal].HotGas);
+        // DustySAGEMode 2 keeps the dust outside the metals; the cooling sees both (Dusty-SAGE)
+        const float hot_metals = galaxies[gal].MetalsHotGas + ((run_params->DustySAGEMode == 2) ? galaxies[gal].HotDust : 0.0f);   /* float, as the SAGE26 ratio */
+        if(hot_metals > 0) {
+            logZ = log10(hot_metals / galaxies[gal].HotGas);
         }
 
         double lambda = get_metaldependent_cooling_rate(log10(temp), logZ);
@@ -328,8 +330,9 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
         const double temp = VIRIAL_TEMP_COEFF * galaxies[gal].Vvir * galaxies[gal].Vvir;  // in Kelvin
 
         double logZ = -10.0;
-        if(galaxies[gal].MetalsCGMgas > 0) {
-            logZ = log10(galaxies[gal].MetalsCGMgas / galaxies[gal].CGMgas);
+        const float cgm_metals = galaxies[gal].MetalsCGMgas + ((run_params->DustySAGEMode == 2) ? galaxies[gal].CGMDust : 0.0f);
+        if(cgm_metals > 0) {
+            logZ = log10(cgm_metals / galaxies[gal].CGMgas);
         }
 
         double lambda = get_metaldependent_cooling_rate(log10(temp), logZ);
@@ -636,6 +639,7 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
         if(run_params->DarkSAGEMode >= 1) {
             darksage_deposit_cooling(gal, cgm_cooling, metallicity * cgm_cooling, 0, galaxies, run_params);
         }
+        dust_move(&galaxies[gal].CGMDust, galaxies[gal].CGMgas, cgm_cooling, &galaxies[gal].ColdDust);
         galaxies[gal].ColdGas += cgm_cooling;
         galaxies[gal].MetalsColdGas += metallicity * cgm_cooling;
         galaxies[gal].CGMgas -= cgm_cooling;
@@ -653,6 +657,7 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
                                      galaxies[gal].RcoolToRvir > 0.0f && galaxies[gal].RcoolToRvir < 1.0f,
                                      galaxies, run_params);
         }
+        dust_move(&galaxies[gal].HotDust, galaxies[gal].HotGas, hot_cooling, &galaxies[gal].ColdDust);
         galaxies[gal].ColdGas += hot_cooling;
         galaxies[gal].MetalsColdGas += metallicity * hot_cooling;
         galaxies[gal].HotGas -= hot_cooling;
@@ -770,6 +775,7 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
                                                    galaxies[centralgal].MetalsHotGas);
         galaxies[centralgal].BlackHoleMass += AGNaccreted;
         galaxies[centralgal].RadioModeBHaccretionMass += AGNaccreted;
+        dust_move(&galaxies[centralgal].HotDust, galaxies[centralgal].HotGas, AGNaccreted, NULL);
         galaxies[centralgal].HotGas        -= AGNaccreted;
         galaxies[centralgal].MetalsHotGas  -= metallicity * AGNaccreted;
 
@@ -818,6 +824,7 @@ static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const 
         const double metallicity = get_metallicity(galaxies[centralgal].CGMgas, galaxies[centralgal].MetalsCGMgas);
         galaxies[centralgal].BlackHoleMass  += AGNaccreted;
         galaxies[centralgal].RadioModeBHaccretionMass += AGNaccreted;
+        dust_move(&galaxies[centralgal].CGMDust, galaxies[centralgal].CGMgas, AGNaccreted, NULL);
         galaxies[centralgal].CGMgas         -= AGNaccreted;
         galaxies[centralgal].MetalsCGMgas   -= metallicity * AGNaccreted;
 
@@ -859,6 +866,7 @@ void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct 
     if(coolingGas > 0.0) {
         if(coolingGas < galaxies[centralgal].HotGas) {
             const double metallicity = get_metallicity(galaxies[centralgal].HotGas, galaxies[centralgal].MetalsHotGas);
+            dust_move(&galaxies[centralgal].HotDust, galaxies[centralgal].HotGas, coolingGas, &galaxies[centralgal].ColdDust);
             galaxies[centralgal].ColdGas += coolingGas;
             galaxies[centralgal].MetalsColdGas += metallicity * coolingGas;
             galaxies[centralgal].HotGas -= coolingGas;
@@ -866,6 +874,8 @@ void cool_gas_onto_galaxy(const int centralgal, const double coolingGas, struct 
         } else {
             galaxies[centralgal].ColdGas += galaxies[centralgal].HotGas;
             galaxies[centralgal].MetalsColdGas += galaxies[centralgal].MetalsHotGas;
+            galaxies[centralgal].ColdDust += galaxies[centralgal].HotDust;
+            galaxies[centralgal].HotDust = 0.0;
             galaxies[centralgal].HotGas = 0.0;
             galaxies[centralgal].MetalsHotGas = 0.0;
         }

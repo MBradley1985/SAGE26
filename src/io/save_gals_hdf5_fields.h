@@ -43,6 +43,15 @@
     X(StellarDiscHalfMassRadius, 1, "Radius enclosing half the disc stars (StellarMass - BulgeMass) in the annuli.", "Mpc/h") \
     X(GasDiscHalfMassRadius, 1, "Radius enclosing half the cold gas (all of ColdGas) in the annuli.", "Mpc/h")
 
+/* DustySAGEMode outputs, written only when DustySAGEMode >= 1 (same X() form, written by the same
+ * code as DARKSAGE_OUTPUT_FIELDS).  Mode 1 counts the dust inside the reservoirs' metals, mode 2
+ * outside them. */
+#define DUSTY_OUTPUT_FIELDS(X) \
+    X(ColdDust, 1, "Dust in the cold gas.", "1.0e10 Msun/h") \
+    X(HotDust, 1, "Dust in the hot halo gas.", "1.0e10 Msun/h") \
+    X(CGMDust, 1, "Dust in the CGM gas.", "1.0e10 Msun/h") \
+    X(EjectedDust, 1, "Dust in the ejected gas.", "1.0e10 Msun/h")
+
 #define GALAXY_OUTPUT_FIELDS(X) \
     X(SnapNum, SnapNum, int32_t, H5T_NATIVE_INT, \
       "Snapshot the galaxy is located at.", \

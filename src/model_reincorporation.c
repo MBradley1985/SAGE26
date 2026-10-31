@@ -56,7 +56,9 @@ void reincorporate_gas(const int centralgal, const double dt, struct GALAXY *gal
 
         const double metallicity = get_metallicity(galaxies[centralgal].EjectedMass, galaxies[centralgal].MetalsEjectedMass);
         
-        // Remove from ejected reservoir (same for all regimes)
+        // Remove from ejected reservoir (same for all regimes); the dust goes with the gas
+        const double dust = dust_move(&galaxies[centralgal].EjectedDust, galaxies[centralgal].EjectedMass, reincorporated, NULL);
+        add_dust_to_hot_reservoir(&galaxies[centralgal], run_params, dust);
         galaxies[centralgal].EjectedMass -= reincorporated;
         galaxies[centralgal].MetalsEjectedMass -= metallicity * reincorporated;
         

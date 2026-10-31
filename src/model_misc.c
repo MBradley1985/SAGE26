@@ -123,6 +123,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].MetalsEjectedMass = 0.0;
     galaxies[p].MetalsICS = 0.0;
     galaxies[p].MetalsCGMgas = 0.0;
+    galaxies[p].ColdDust = galaxies[p].HotDust = galaxies[p].CGMDust = galaxies[p].EjectedDust = 0.0;
 
     galaxies[p].SubstepsUsed = STEPS;   /* overwritten by evolve_galaxies before any output */
 
