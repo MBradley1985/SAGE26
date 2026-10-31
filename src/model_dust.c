@@ -404,13 +404,16 @@ static void dust_growth(const int p, const double dt, struct GALAXY *galaxies, c
                                      g->DiscDust[i], g->DiscH2[i], dt, run_params);
         }
         grow = annulus_amounts(local, grow, g->DiscDust, run_params);
+        double capped = 0.0;
         for(int i = 0; i < N_BINS; i++) {
+            /* no annulus grows more than its gas-phase metals (mode 1 shares may ask for more) */
+            const double gas_phase = all_metals ? g->DiscGasMetals[i] : g->DiscGasMetals[i] - g->DiscDust[i];
+            if(local[i] > gas_phase) local[i] = (gas_phase > 0.0) ? gas_phase : 0.0;
             g->DiscDust[i] += (float)local[i];
-            if(all_metals) {
-                g->DiscGasMetals[i] -= (float)local[i];
-                if(g->DiscGasMetals[i] < 0.0f) g->DiscGasMetals[i] = 0.0f;
-            }
+            if(all_metals) g->DiscGasMetals[i] -= (float)local[i];
+            capped += local[i];
         }
+        if(run_params->DarkSAGEMode == 2) grow = capped;
     }
     if(grow <= 0.0) return;
     if(all_metals && grow > g->MetalsColdGas) grow = g->MetalsColdGas;
@@ -522,7 +525,10 @@ static void dust_sputtering(const int p, const double dt, struct GALAXY *galaxie
 void dust_evolve(const int p, const int centralgal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     struct GALAXY *g = &galaxies[p];
-    if(dt <= 0.0) return;
+    if(dt <= 0.0) {
+        g->DustStarsStep = g->DustMetalsStep = 0.0f;
+        return;
+    }
 
     /* this substep's star formation joins the history the yields read (snapshot-mean SFR) */
     const int snap = g->SnapNum;

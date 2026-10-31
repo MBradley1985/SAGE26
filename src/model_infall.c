@@ -406,9 +406,10 @@ void add_infall_to_hot(const int gal, double infallingGas, struct GALAXY *galaxi
             // CGM-regime: use CGMgas reservoir
 
             // if the halo has lost mass, subtract from CGM metals first
+            // the lost gas takes its dust (mode 2 dust can sit in gas with no gas-phase metals)
+            if(infallingGas < 0.0) dust_move(&galaxies[gal].CGMDust, galaxies[gal].CGMgas, -infallingGas, NULL);
             if(infallingGas < 0.0 && galaxies[gal].MetalsCGMgas > 0.0) {
                 metallicity = get_metallicity(galaxies[gal].CGMgas, galaxies[gal].MetalsCGMgas);
-                dust_move(&galaxies[gal].CGMDust, galaxies[gal].CGMgas, -infallingGas, NULL);
                 galaxies[gal].MetalsCGMgas += infallingGas*metallicity;
                 if(galaxies[gal].MetalsCGMgas < 0.0) galaxies[gal].MetalsCGMgas = 0.0;
             }
@@ -421,9 +422,10 @@ void add_infall_to_hot(const int gal, double infallingGas, struct GALAXY *galaxi
             // Hot-ICM-regime: use HotGas reservoir
 
             // if the halo has lost mass, subtract from hot metals first
+            // the lost gas takes its dust (mode 2 dust can sit in gas with no gas-phase metals)
+            if(infallingGas < 0.0) dust_move(&galaxies[gal].HotDust, galaxies[gal].HotGas, -infallingGas, NULL);
             if(infallingGas < 0.0 && galaxies[gal].MetalsHotGas > 0.0) {
                 metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);
-                dust_move(&galaxies[gal].HotDust, galaxies[gal].HotGas, -infallingGas, NULL);
                 galaxies[gal].MetalsHotGas += infallingGas*metallicity;
                 if(galaxies[gal].MetalsHotGas < 0.0) galaxies[gal].MetalsHotGas = 0.0;
             }
@@ -436,9 +438,10 @@ void add_infall_to_hot(const int gal, double infallingGas, struct GALAXY *galaxi
         // Original SAGE behavior: use HotGas reservoir
         
         // if the halo has lost mass, subtract hot metals mass next, then the hot gas
+        // the lost gas takes its dust (mode 2 dust can sit in gas with no gas-phase metals)
+        if(infallingGas < 0.0) dust_move(&galaxies[gal].HotDust, galaxies[gal].HotGas, -infallingGas, NULL);
         if(infallingGas < 0.0 && galaxies[gal].MetalsHotGas > 0.0) {
             metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);
-            dust_move(&galaxies[gal].HotDust, galaxies[gal].HotGas, -infallingGas, NULL);
             galaxies[gal].MetalsHotGas += infallingGas*metallicity;
             if(galaxies[gal].MetalsHotGas < 0.0) galaxies[gal].MetalsHotGas = 0.0;
         }

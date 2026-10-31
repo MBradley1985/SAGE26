@@ -312,6 +312,18 @@ void test_dust_annuli_physics(void) {
     }
 }
 
+void test_dust_zero_dt_resets(void) {
+    BEGIN_TEST("dust_evolve: a zero-length substep still clears the substep's star and metal counters");
+
+    /* Otherwise they carry into the next substep, inflating its SN rate and mode-1 cap */
+    struct params rp;
+    struct GALAXY g[1];
+    setup(&rp, g, 2);
+    g[0].DustMetalsStep = 0.001f;
+    dust_evolve(0, 0, 0.0, g, &rp);
+    ASSERT_TRUE(g[0].DustStarsStep == 0.0f && g[0].DustMetalsStep == 0.0f, "Counters cleared");
+}
+
 int main(void) {
     BEGIN_TEST_SUITE("DustySAGEMode dust bookkeeping");
 
@@ -325,6 +337,7 @@ int main(void) {
     test_dust_locked_reported();
     test_dust_annuli_follow_gas();
     test_dust_annuli_physics();
+    test_dust_zero_dt_resets();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

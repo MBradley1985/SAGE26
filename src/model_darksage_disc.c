@@ -541,6 +541,7 @@ double darksage_host_mass_within(const struct GALAXY *c, const double r, const d
     const double Rvir = c->Rvir;
     (void)run_params;
     if(r >= Rvir) return c->Mvir;
+    if(r <= 0.0) return 0.0;   /* r / (r + a) is 0/0 for a zero scale length */
 
     double M = 0.0;
     const double M_DM = c->Mvir - c->HotGas - c->CGMgas - c->ColdGas - c->StellarMass - c->BlackHoleMass - m_sat;

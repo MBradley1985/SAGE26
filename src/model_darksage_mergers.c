@@ -175,16 +175,25 @@ static void merge_gas_major(const int t, const int p, const double dpos[3], cons
         const double *r_off = (gal == p) ? r_p : r_t;
         const double *v_off = (gal == p) ? v_p : v_t;
         const double s[3] = {galaxies[gal].SpinGas[0], galaxies[gal].SpinGas[1], galaxies[gal].SpinGas[2]};
-        if(dot3(s, s) <= 0.0) continue;
-        double e1[3], e2[3];
-        perpendicular(s, e1);
-        cross3(s, e1, e2);   /* e1 x e2 = s: the annulus rotates about s */
+        const int has_axis = (dot3(s, s) > 0.0);
+        double e1[3] = {0.0, 0.0, 0.0}, e2[3] = {0.0, 0.0, 0.0};
+        if(has_axis) {
+            perpendicular(s, e1);
+            cross3(s, e1, e2);   /* e1 x e2 = s: the annulus rotates about s */
+        }
 
         for(int i = 0; i < N_BINS; i++) {
             if(galaxies[gal].DiscGas[i] <= 0.0f) continue;
             const double r_ann = sqrt(0.5 * (galaxies[gal].DiscRadii[i] * galaxies[gal].DiscRadii[i]
                                              + galaxies[gal].DiscRadii[i+1] * galaxies[gal].DiscRadii[i+1]));
-            if(r_ann <= 0.0) continue;
+            if(!has_axis || r_ann <= 0.0) {
+                /* no disc axis or radius to place it by (DarkSage would divide by zero): the gas
+                 * keeps its annulus rather than leaving the annuli */
+                new_gas[i] += galaxies[gal].DiscGas[i];
+                new_metals[i] += galaxies[gal].DiscGasMetals[i];
+                new_dust[i] += galaxies[gal].DiscDust[i];
+                continue;
+            }
             const double v_ann = 0.5 * (run_params->DiscBinEdge[i] + run_params->DiscBinEdge[i+1]) / r_ann;
             const double dm = galaxies[gal].DiscGas[i] / N_ANNULUS_SEGMENTS;
             const double dz = galaxies[gal].DiscGasMetals[i] / N_ANNULUS_SEGMENTS;
