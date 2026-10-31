@@ -31,7 +31,9 @@ of halo properties. Test trees for the
 | ICS assembly tracking | always on | — |
 | Full star formation history arrays | `SaveFullSFH` | — |
 | Full stellar metallicity history arrays | `SaveFullMH` | — |
-| Concentration | `ConcentrationOn` | Ishiyama+21 lookup table, Vmax/Vvir, Vmax/Vvir with subhalo infall freeze |
+| Concentration | `ConcentrationOn` | Ishiyama+21 lookup table, Vmax/Vvir, Vmax/Vvir with subhalo infall freeze, Dutton & Macciò (2014) |
+| Radially resolved discs in specific angular momentum annuli | `DarkSAGEMode` | Stevens et al. (2016, 2024) |
+| Dust production, growth, destruction and sputtering | `DustySAGEMode` | Triani et al. (2020) |
 | ConsistentTrees, Genesis, Gadget-4 tree readers | `TreeType` | — |
 | HDF5 output + libsage.so for Python/PSO | `OutputFormat` | — |
 
@@ -176,6 +178,7 @@ cap) rather than a fixed count.
 | 1 | Ishiyama+2021 lookup table |
 | 2 | V_max / V_vir from the simulation |
 | 3 | V_max / V_vir with subhalo infall freeze for satellites |
+| 4 | Dutton & Macciò (2014) with the Di Cintio et al. (2014) baryonic factor (DarkSage) |
 
 ### H2 star formation (auxiliary switches)
 
@@ -184,7 +187,27 @@ cap) rather than a fixed count.
 | `H2DiskAreaOption` | 0–2 | Disk area for H2 surface density: 0=π r_s²; 1=π (3 r_s)²; 2=2π r_s² |
 | `H2RadialIntegrationOn` | 0/1 | Radial ring integration for H2 fraction (slower, more accurate) |
 | `H2RadialNBins` | int | Number of radial bins for ring integration |
-| `H2DepletionMode` | 0-4 | 0 off; SFR = M_mol / t_dep (no SfrEfficiency) with 1 nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9 |
+| `H2DepletionMode` | 0-5 | 0 off; SFR = M_mol / t_dep (no SfrEfficiency) with 1 nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9; 5 DarkSage, M_H2 / 2.30 Gyr |
+
+### Radially resolved discs (`DarkSAGEMode`)
+
+| Value | Mode |
+|-------|------|
+| 0 | Off |
+| 1 | 30 annuli in specific angular momentum share SAGE26's bulk recipes; the annuli sum to the bulk |
+| 2 | As 1, but the star-formation law is evaluated on each annulus's own surface density |
+
+### Dust (`DustySAGEMode`)
+
+| Value | Mode |
+|-------|------|
+| 0 | Off |
+| 1 | Passive dust inside SAGE26's metals; every non-dust output identical to 0 |
+| 2 | Dusty-SAGE delayed yields replace SAGE26's metal production; dust held outside the metals |
+
+`DustSNIIYields`, `DustSNIaYields` and `DustBinaryFraction` choose the yield
+tables and the SNIa binary fraction. With both modes on, the dust is carried
+by the annuli. See `docs/physics/darksage_and_dust.md`.
 
 ### Mergers and ICS tracking
 
