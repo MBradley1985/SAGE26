@@ -568,3 +568,30 @@ double darksage_host_mass_within(const struct GALAXY *c, const double r, const d
     M += c->BlackHoleMass;
     return (M < c->Mvir) ? M : c->Mvir;
 }
+
+/*
+ * darksage_set_disk_scale_radius -- DarkSAGEMode >= 1: SAGE26's DiskScaleRadius measured from
+ * the annuli instead of the halo spin.  For an exponential disc on a flat rotation curve
+ * j_disc = 2 V r_d, so
+ *   r_d = J_disc / (2 M_disc Vvir),  J_disc = sum_i (DiscGas_i + DiscStars_i) j_i,
+ * j_i the centre of annulus i's j-bin and V = Vvir as in get_disk_radius() (Mo, Mao & White
+ * 1998).  Gas and disc stars together; an empty disc keeps the current (SAGE26) value.
+ * Compiled with DARKSAGE_PIN_DISK_RADIUS the radius is left at SAGE26's value, for testing
+ * that DarkSAGEMode 1 then reproduces DarkSAGEMode 0.
+ */
+void darksage_set_disk_scale_radius(const int p, struct GALAXY *galaxies, const struct params *run_params)
+{
+#ifdef DARKSAGE_PIN_DISK_RADIUS
+    (void)p; (void)galaxies; (void)run_params;
+#else
+    struct GALAXY *g = &galaxies[p];
+    if(g->Vvir <= 0.0) return;
+    double M = 0.0, J = 0.0;
+    for(int i = 0; i < N_BINS; i++) {
+        const double m = g->DiscGas[i] + g->DiscStars[i];
+        M += m;
+        J += m * 0.5 * (run_params->DiscBinEdge[i] + run_params->DiscBinEdge[i+1]);
+    }
+    if(M > 0.0 && J > 0.0) g->DiskScaleRadius = (float)(J / (2.0 * M * g->Vvir));
+#endif
+}

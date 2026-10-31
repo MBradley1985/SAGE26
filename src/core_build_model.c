@@ -312,6 +312,7 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                         }
 
                         galaxies[ngal].DiskScaleRadius = get_disk_radius(halonr, ngal, halos, galaxies);
+                        galaxies[ngal].SpinDiskRadius = galaxies[ngal].DiskScaleRadius;
                         get_bulge_radius(ngal, galaxies, run_params);
 
                         // DarkSAGEMode: newly cooling gas follows the current halo, like DiskScaleRadius above:
@@ -527,6 +528,9 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
             const double deltaT = galaxies[p].dT;
             const double time = halo_age + deltaT - (step + 0.5) * (deltaT / effective_steps);
+            if(run_params->DarkSAGEMode >= 1) {
+                darksage_set_disk_scale_radius(p, galaxies, run_params);
+            }
 
             // For the central galaxy only
             if(p == centralgal) {
@@ -571,6 +575,10 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
             // Map adaptive step to fixed STEPS bins for SFR arrays
             int step_bin = (step * STEPS) / effective_steps;
             if(step_bin >= STEPS) step_bin = STEPS - 1;
+            // DarkSAGEMode: the disc scale radius the recipes read follows the annuli
+            if(run_params->DarkSAGEMode >= 1) {
+                darksage_set_disk_scale_radius(p, galaxies, run_params);
+            }
             starformation_and_feedback(p, centralgal, time, deltaT / effective_steps, halonr, step_bin, galaxies, run_params);
         }
 

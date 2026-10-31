@@ -268,6 +268,9 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
     const double new_merger_radius = calculate_merger_remnant_radius(&galaxies[merger_centralgal], &galaxies[p]);
 
     add_galaxies_together(merger_centralgal, p, galaxies, run_params);
+    if(run_params->DarkSAGEMode >= 1) {
+        darksage_set_disk_scale_radius(merger_centralgal, galaxies, run_params);
+    }
 
     // grow black hole through accretion from cold disk during mergers
     if(run_params->AGNrecipeOn) {

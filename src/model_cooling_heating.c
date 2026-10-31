@@ -415,16 +415,18 @@ static const double STEVENS17_COOL_CONST = 1.15;
  * cooling_recipe()).  Gas cooling out of a hot halo whose cooling radius is inside Rvir
  * (quasi-static cooling) carries the Stevens et al. (2017) eq. 18 scale; infall-
  * dominated cooling (r_cool >= Rvir) and the SAGE26 CGM regime keep the disc scale
- * radius.
+ * radius.  Both use the radius from the halo spin (SpinDiskRadius, DarkSage's
+ * DiskScaleRadius), not the one measured from the annuli, which the cooled gas itself
+ * sets.
  */
 static void set_cool_scale_radius(const int gal, const int quasi_static, struct GALAXY *galaxies)
 {
     struct GALAXY *g = &galaxies[gal];
-    if(quasi_static && g->DiskScaleRadius > 0.0 && g->Rvir > 0.0) {
-        g->CoolScaleRadius = (float)(pow(10.0, STEVENS17_COOL_SLOPE * log10(M_SQRT2 * g->DiskScaleRadius / g->Rvir)
+    if(quasi_static && g->SpinDiskRadius > 0.0 && g->Rvir > 0.0) {
+        g->CoolScaleRadius = (float)(pow(10.0, STEVENS17_COOL_SLOPE * log10(M_SQRT2 * g->SpinDiskRadius / g->Rvir)
                                           - STEVENS17_COOL_CONST) * g->Rvir);
     } else {
-        g->CoolScaleRadius = g->DiskScaleRadius;
+        g->CoolScaleRadius = g->SpinDiskRadius;
     }
 }
 
