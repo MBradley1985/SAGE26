@@ -130,7 +130,7 @@ void test_remove_stars_exact(void) {
 void test_cooling_deposit_and_disc_radius(void) {
     BEGIN_TEST("Cooling deposit conserves mass and metals; its disc has r_d = sum(m r) / (2 M)");
 
-    /* Asserts: darksage_deposit_cooling adds exactly the cooled mass and metals, and with
+    /* Asserts: darksage_deposit_cooling adds exactly the cooled mass, metals and dust, and with
      * quasi_static = 0 the gas follows f(j) ~ j exp(-j / j_s), j_s = Vvir * SpinDiskRadius.
      * Its mean j is 2 j_s; on a flat rotation curve at Vvir its mean radius is 2 j_s / Vvir, so
      * darksage_set_disk_scale_radius, half the mass-weighted mean radius, must return
@@ -140,9 +140,11 @@ void test_cooling_deposit_and_disc_radius(void) {
     struct GALAXY g[1];
     setup_galaxy(&g[0], &rp);
     g[0].SpinDiskRadius = 0.004f;   /* 4 Mpc/h x 1e-3: a few-kpc disc */
-    darksage_deposit_cooling(0, 2.0, 0.04, 0, g, &rp);
+    darksage_deposit_cooling(0, 2.0, 0.04, 0.01, 0, g, &rp);
     ASSERT_CLOSE(2.0, sum(g[0].DiscGas), SUM_RTOL, "Annuli gain exactly the cooled mass");
     ASSERT_CLOSE(0.04, sum(g[0].DiscGasMetals), SUM_RTOL, "Annuli gain exactly the cooled metals");
+    ASSERT_CLOSE(0.01, sum(g[0].DiscDust), SUM_RTOL, "Annuli gain exactly the cooled dust (DustySAGEMode) ...");
+    ASSERT_CLOSE(g[0].DiscGas[3] * 0.005, g[0].DiscDust[3], SUM_RTOL, "... at the cooled gas's dust-to-gas ratio");
 
     darksage_set_disk_scale_radius(0, g, &rp);
     ASSERT_CLOSE(0.004, g[0].DiskScaleRadius, BINNING_RTOL, "r_d of the deposited disc = SpinDiskRadius");
@@ -176,24 +178,24 @@ void test_cooling_spin_follows_angular_momentum(void) {
     struct GALAXY g[1];
     setup_galaxy(&g[0], &rp);
     g[0].SpinDiskRadius = 0.004f;
-    darksage_deposit_cooling(0, 1.0, 0.0, 0, g, &rp);   /* a disc along z, J_disc known */
+    darksage_deposit_cooling(0, 1.0, 0.0, 0.0, 0, g, &rp);   /* a disc along z, J_disc known */
     double J_disc = 0.0;
     for(int i = 0; i < N_BINS; i++) J_disc += g[0].DiscGas[i] * 0.5 * (rp.DiscBinEdge[i] + rp.DiscBinEdge[i+1]);
     g[0].SpinHot[0] = 1.0f; g[0].SpinHot[2] = 0.0f;
     const double m_cool = J_disc / (2.0 * g[0].Vvir * g[0].SpinDiskRadius);   /* J_cool = J_disc */
-    darksage_deposit_cooling(0, m_cool, 0.0, 0, g, &rp);
+    darksage_deposit_cooling(0, m_cool, 0.0, 0.0, 0, g, &rp);
     ASSERT_CLOSE(1.0 / M_SQRT2, g[0].SpinGas[0], 1e-5, "Axis x-component 1/sqrt(2)");
     ASSERT_CLOSE(1.0 / M_SQRT2, g[0].SpinGas[2], 1e-5, "Axis z-component 1/sqrt(2)");
 
     struct GALAXY r[1];
     setup_galaxy(&r[0], &rp);
     r[0].SpinDiskRadius = 0.004f;
-    darksage_deposit_cooling(0, 1.0, 0.0, 0, r, &rp);
+    darksage_deposit_cooling(0, 1.0, 0.0, 0.0, 0, r, &rp);
     double J0 = 0.0;
     for(int i = 0; i < N_BINS; i++) J0 += r[0].DiscGas[i] * 0.5 * (rp.DiscBinEdge[i] + rp.DiscBinEdge[i+1]);
     r[0].SpinHot[2] = -1.0f;
     const double m_retro = 0.2;
-    darksage_deposit_cooling(0, m_retro, 0.0, 0, r, &rp);
+    darksage_deposit_cooling(0, m_retro, 0.0, 0.0, 0, r, &rp);
     double J1 = 0.0;
     for(int i = 0; i < N_BINS; i++) J1 += r[0].DiscGas[i] * 0.5 * (rp.DiscBinEdge[i] + rp.DiscBinEdge[i+1]);
     ASSERT_TRUE(r[0].SpinGas[2] > 0.99f, "Axis stays with the more massive prograde disc");
@@ -214,7 +216,7 @@ void test_precession(void) {
     struct GALAXY g[1];
     setup_galaxy(&g[0], &rp);
     g[0].SpinDiskRadius = 0.004f;
-    darksage_deposit_cooling(0, 1.0, 0.0, 0, g, &rp);
+    darksage_deposit_cooling(0, 1.0, 0.0, 0.0, 0, g, &rp);
     float gas0[N_BINS];
     for(int i = 0; i < N_BINS; i++) gas0[i] = g[0].DiscGas[i];
     g[0].StellarMass = 1.0f;

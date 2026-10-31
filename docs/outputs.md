@@ -347,6 +347,7 @@ ColdDust`.
 | `DustFormationRate` | Msun / yr | Dust made by AGB stars and SNII, averaged over the snapshot. |
 | `DustGrowthRate` | Msun / yr | Dust grown by accretion in the cold gas, averaged over the snapshot. |
 | `DustDestructionRate` | Msun / yr | Dust destroyed by supernova shocks, averaged over the snapshot. |
+| `DiscDust` | 1.0e10 Msun / h | `[ngal, 30]`, written only when `DarkSAGEMode` is also on: dust in the cold gas of each annulus, summing to `ColdDust`. |
 
 ## Cumulative star formation history (`SaveFullSFH = 1`)
 

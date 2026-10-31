@@ -559,10 +559,12 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
             } else {
                 coolingGas = cooling_recipe(p, deltaT / effective_steps, galaxies, run_params);
                 const double cold_before = galaxies[p].ColdGas, cold_metals_before = galaxies[p].MetalsColdGas;
+                const double cold_dust_before = galaxies[p].ColdDust;
                 cool_gas_onto_galaxy(p, coolingGas, galaxies);
                 // DarkSAGEMode: the gas SAGE26 just cooled joins the annuli by its j
                 if(run_params->DarkSAGEMode >= 1) {
                     darksage_deposit_cooling(p, galaxies[p].ColdGas - cold_before, galaxies[p].MetalsColdGas - cold_metals_before,
+                                             galaxies[p].ColdDust - cold_dust_before,
                                              galaxies[p].RcoolToRvir > 0.0f && galaxies[p].RcoolToRvir < 1.0f,
                                              galaxies, run_params);
                 }

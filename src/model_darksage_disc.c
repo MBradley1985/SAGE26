@@ -493,12 +493,14 @@ void darksage_precess_gas(const int p, const double dt, struct GALAXY *galaxies,
     double cos_precess = cos(deg * M_PI / 180.0);
     if(cos_precess < fabs(cos_theta)) cos_precess = fabs(cos_theta);
 
-    double new_gas[N_BINS], new_metals[N_BINS];
+    double new_gas[N_BINS], new_metals[N_BINS], new_dust[N_BINS];
     darksage_project_disc(g->DiscGas, cos_precess, new_gas, run_params, g->Rvir, g->Vvir);
     darksage_project_disc(g->DiscGasMetals, cos_precess, new_metals, run_params, g->Rvir, g->Vvir);
+    darksage_project_disc(g->DiscDust, cos_precess, new_dust, run_params, g->Rvir, g->Vvir);
     for(int i = 0; i < N_BINS; i++) {
         g->DiscGas[i] = (float)new_gas[i];
         g->DiscGasMetals[i] = (float)new_metals[i];
+        g->DiscDust[i] = (float)new_dust[i];
     }
 
     if(cos_precess == fabs(cos_theta)) {

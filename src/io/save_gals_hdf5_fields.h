@@ -55,6 +55,10 @@
     X(DustGrowthRate, 1, "Dust grown by accretion in the cold gas, averaged over the snapshot.", "Msun/yr") \
     X(DustDestructionRate, 1, "Dust destroyed by supernova shocks, averaged over the snapshot.", "Msun/yr")
 
+/* Outputs of DarkSAGEMode and DustySAGEMode together, written only when both are on (same X() form) */
+#define DARK_DUSTY_OUTPUT_FIELDS(X) \
+    X(DiscDust, N_BINS, "Dust in the cold gas of each annulus, summing to ColdDust.", "1.0e10 Msun/h")
+
 #define GALAXY_OUTPUT_FIELDS(X) \
     X(SnapNum, SnapNum, int32_t, H5T_NATIVE_INT, \
       "Snapshot the galaxy is located at.", \

@@ -222,6 +222,7 @@ void darksage_remove_disc_gas(const int p, const double mass, const double weigh
         /* metals at the annulus's metallicity; H2 and HI keep the annulus's fractions */
         const double keep = 1.0 - taken[i] / before[i];
         g->DiscGasMetals[i] = (float)(g->DiscGasMetals[i] * keep);
+        g->DiscDust[i] = (float)(g->DiscDust[i] * keep);
         g->DiscH2[i] = (float)(g->DiscH2[i] * keep);
         g->DiscHI[i] = (float)(g->DiscHI[i] * keep);
     }
@@ -264,6 +265,13 @@ void darksage_sync_disc_metals(const int p, struct GALAXY *galaxies)
     struct GALAXY *g = &galaxies[p];
     rescale_to(g->DiscGasMetals, g->MetalsColdGas, g->DiscGas);
     rescale_to(g->DiscStarsMetals, g->MetalsStellarMass - g->MetalsBulgeMass, g->DiscStars);
+    darksage_sync_disc_dust(p, galaxies);
+}
+
+/* DustySAGEMode: rescale the annulus dust to ColdDust, keeping its radial profile */
+void darksage_sync_disc_dust(const int p, struct GALAXY *galaxies)
+{
+    rescale_to(galaxies[p].DiscDust, galaxies[p].ColdDust, galaxies[p].DiscGas);
 }
 
 /* Rescale the annulus H2 and HI to H2gas and H1gas, keeping their radial shapes (the bulk

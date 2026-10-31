@@ -11,6 +11,10 @@
  *     capped by the metals SAGE26 put into the cold gas in the substep.
  *   - Mode 2: the delayed yields replace SAGE26's metal production and dust is taken out of
  *     MetalsColdGas, as in Dusty-SAGE (MetalYieldsOn = 1).
+ *   - DarkSAGEMode (no source: Dusty-SAGE has no annuli, DarkSage no dust): the annuli carry the
+ *     cold dust, DiscDust, moving with their gas; the yields go to the annuli forming stars, and
+ *     growth and destruction act on each annulus's gas, metals, H2 and star formation.
+ *     DarkSAGEMode 1 shares the galaxy-wide rates over the annuli, mode 2 sums the annuli's own.
  * Known source bugs fixed here (SAGE26_investigation.md Sec. 5): the yield metallicity bin is
  * the one containing Z (the source's test never matched, so zero-metallicity yields were always
  * used); the lookup time is a double (the source truncated it to an int); the lognormal IMF
@@ -34,6 +38,7 @@
 #include "macros.h"
 #include "model_dust.h"
 #include "model_misc.h"
+#include "model_darksage_sf.h"
 
 /* Mass ranges of the channels [Msun] (Dusty-SAGE produce_metals_dust()) */
 static const double AGB_LOW = 1.0, AGB_UP = 6.0, BINARY_LOW = 3.0, BINARY_UP = 16.0, SN_UP = 40.0;
@@ -271,6 +276,39 @@ static void element_rates(const struct GALAXY *g, const double Z, double agb[3],
     }
 }
 
+/* DarkSAGEMode: where the substep's yields go -- the annuli forming stars this snapshot (DiscSFR),
+ * else the stellar disc, else the gas; only annuli holding gas.  Returns 0 if none holds gas. */
+static int production_shares(const struct GALAXY *g, double share[N_BINS])
+{
+    const float *w[3] = {g->DiscSFR, g->DiscStars, g->DiscGas};
+    for(int k = 0; k < 3; k++) {
+        double sum = 0.0;
+        for(int i = 0; i < N_BINS; i++) sum += (g->DiscGas[i] > 0.0f) ? w[k][i] : 0.0;
+        if(sum <= 0.0) continue;
+        for(int i = 0; i < N_BINS; i++) share[i] = (g->DiscGas[i] > 0.0f) ? w[k][i] / sum : 0.0;
+        return 1;
+    }
+    return 0;
+}
+
+/* DarkSAGEMode: local[i] is what annulus i does by itself.  DarkSAGEMode 2 keeps it (the galaxy
+ * total is the sum, the annuli are evaluated separately); mode 1 shares the galaxy-wide total
+ * `bulk` over the annuli in its proportions, or in fallback[]'s if it is zero everywhere (as the
+ * bulk SAGE26 recipes are shared over the annuli).  Returns the galaxy total. */
+static double annulus_amounts(double local[N_BINS], const double bulk, const float fallback[N_BINS],
+                              const struct params *run_params)
+{
+    double sum = 0.0, fsum = 0.0;
+    for(int i = 0; i < N_BINS; i++) sum += local[i];
+    if(run_params->DarkSAGEMode == 2) return sum;
+    for(int i = 0; i < N_BINS; i++) fsum += fallback[i];
+    for(int i = 0; i < N_BINS; i++) {
+        if(sum > 0.0) local[i] *= bulk / sum;
+        else local[i] = (fsum > 0.0) ? bulk * fallback[i] / fsum : 0.0;
+    }
+    return bulk;
+}
+
 /*
  * dust_production -- one substep of metal and dust production for galaxy p (Dusty-SAGE
  * produce_metals_dust()).  Mode 2 adds the yields to MetalsColdGas (to the central's hot phase
@@ -278,7 +316,8 @@ static void element_rates(const struct GALAXY *g, const double Z, double agb[3],
  * makes dust, capped by the metals SAGE26 put into the cold gas this substep (DustMetalsStep).
  * Dust: AGB stars condense delta (C - 0.75 O) if C/O > 1, else delta (C + N + O); SNII
  * condense delta (C + O) + 16 delta (Mg/24 + Si/28 + S/32 + Ca/40 + Fe/56) (Popping et al.
- * 2017 eqs. 4-6); SNIa dust is off, as in the source.
+ * 2017 eqs. 4-6); SNIa dust is off, as in the source.  DarkSAGEMode: the metals and dust go to
+ * the annuli by production_shares().
  */
 static void dust_production(const int p, const int centralgal, const double dt, struct GALAXY *galaxies,
                             const struct params *run_params)
@@ -287,12 +326,17 @@ static void dust_production(const int p, const int centralgal, const double dt, 
     const double Z = get_metallicity(g->ColdGas, g->MetalsColdGas);
     double agb[3], sn[7], snia[3];
     element_rates(g, Z, agb, sn, snia, run_params);
+    double share[N_BINS];
+    const int annuli = (run_params->DarkSAGEMode >= 1) && production_shares(g, share);
 
     if(run_params->DustySAGEMode == 2) {
         double yield = 0.0;
         for(int e = 0; e < 3; e++) yield += agb[e] + snia[e];
         for(int e = 0; e < 7; e++) yield += sn[e];
-        if(g->ColdGas > YIELD_COLD_MIN) g->MetalsColdGas += yield * dt;
+        if(g->ColdGas > YIELD_COLD_MIN) {
+            g->MetalsColdGas += yield * dt;
+            if(annuli) for(int i = 0; i < N_BINS; i++) g->DiscGasMetals[i] += (float)(yield * dt * share[i]);
+        }
         else add_metals_to_hot_reservoir(&galaxies[centralgal], run_params, yield * dt);
     }
     if(g->ColdGas <= DUST_COLD_MIN) return;
@@ -315,30 +359,63 @@ static void dust_production(const int p, const int centralgal, const double dt, 
         g->ColdDust += (float)dust;
         g->MetalsColdGas -= (float)dust;
     }
+    if(annuli && dust > 0.0) {
+        for(int i = 0; i < N_BINS; i++) {
+            g->DiscDust[i] += (float)(dust * share[i]);
+            if(run_params->DustySAGEMode == 2) {
+                g->DiscGasMetals[i] -= (float)(dust * share[i]);
+                if(g->DiscGasMetals[i] < 0.0f) g->DiscGasMetals[i] = 0.0f;
+            }
+        }
+    }
     if(dust > 0.0) g->DustFormationRate += (float)dust;   /* mass, a rate after evolve_galaxies() */
 }
 
 /* Grain growth in the ISM (Asano et al. 2013 eq. 20; Dusty-SAGE accrete_dust()):
  *   dD/dt = (1 - D / Z_metals) f_H2 D / tau_acc,  tau_acc = 20 Myr x 0.02 / Z,
- * f_H2 = H2gas / ColdGas, Z = Z_metals / ColdGas, Z_metals all the cold metals as in Asano:
+ * f_H2 = H2 / gas, Z = Z_metals / gas, Z_metals all the cold metals as in Asano:
  * MetalsColdGas in mode 1, MetalsColdGas + ColdDust in mode 2 (the source used MetalsColdGas in
  * mode 2 too, which stops growth at dust = gas-phase metals, D/Z = 0.5).  Growth draws on the
- * gas-phase metals, Z_metals - D. */
+ * gas-phase metals, Z_metals - D.  growth_amount() is the growth in gas of these masses over dt. */
+static double growth_amount(const double gas, const double metals, const double dust, const double h2,
+                            const double dt, const struct params *run_params)
+{
+    const double gas_phase = metals - dust;
+    if(gas <= 0.0 || dust <= 0.0 || gas_phase <= 0.0) return 0.0;
+    const double Z = metals / gas;
+    const double tacc = DUST_TACC0_MYR * SEC_PER_MEGAYEAR / run_params->UnitTime_in_s * DUST_ZREF / Z;
+    const double grow = (1.0 - dust / metals) * (h2 / gas) * dust / tacc * dt;
+    if(grow <= 0.0) return 0.0;
+    return (grow > gas_phase) ? gas_phase : grow;
+}
+
+/* Grain growth of galaxy p over dt; DarkSAGEMode: in each annulus from its own gas, metals, dust
+ * and H2 (annulus_amounts()) */
 static void dust_growth(const int p, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     struct GALAXY *g = &galaxies[p];
-    if(g->ColdGas <= 0.0f || g->ColdDust <= 0.0f) return;
-    const double metals = (run_params->DustySAGEMode == 2) ? (double)g->MetalsColdGas + g->ColdDust : g->MetalsColdGas;
-    const double gas_phase = metals - g->ColdDust;
-    if(gas_phase <= 0.0) return;
-    const double Z = metals / g->ColdGas;
-    const double tacc = DUST_TACC0_MYR * SEC_PER_MEGAYEAR / run_params->UnitTime_in_s * DUST_ZREF / Z;
-    const double f_h2 = g->H2gas / g->ColdGas;
-    double grow = (1.0 - g->ColdDust / metals) * f_h2 * g->ColdDust / tacc * dt;
+    const int all_metals = (run_params->DustySAGEMode == 2);
+    double grow = growth_amount(g->ColdGas, g->MetalsColdGas + (all_metals ? g->ColdDust : 0.0f), g->ColdDust,
+                                g->H2gas, dt, run_params);
+    if(run_params->DarkSAGEMode >= 1) {
+        double local[N_BINS];
+        for(int i = 0; i < N_BINS; i++) {
+            local[i] = growth_amount(g->DiscGas[i], g->DiscGasMetals[i] + (all_metals ? g->DiscDust[i] : 0.0f),
+                                     g->DiscDust[i], g->DiscH2[i], dt, run_params);
+        }
+        grow = annulus_amounts(local, grow, g->DiscDust, run_params);
+        for(int i = 0; i < N_BINS; i++) {
+            g->DiscDust[i] += (float)local[i];
+            if(all_metals) {
+                g->DiscGasMetals[i] -= (float)local[i];
+                if(g->DiscGasMetals[i] < 0.0f) g->DiscGasMetals[i] = 0.0f;
+            }
+        }
+    }
     if(grow <= 0.0) return;
-    if(grow > gas_phase) grow = gas_phase;
+    if(all_metals && grow > g->MetalsColdGas) grow = g->MetalsColdGas;
     g->ColdDust += (float)grow;
-    if(run_params->DustySAGEMode == 2) g->MetalsColdGas -= (float)grow;
+    if(all_metals) g->MetalsColdGas -= (float)grow;
     g->DustGrowthRate += (float)grow;
 }
 
@@ -346,7 +423,21 @@ static void dust_growth(const int p, const double dt, struct GALAXY *galaxies, c
  * the SN rate R = stars / dt / m_*, m_* = int m phi dm / int_8^40 phi dm on the source's mass
  * grid; each SN sweeps m_swept = 1535 (Z/0.02 + 0.039)^-0.289 Msun clean with efficiency 0.1,
  * so tau_SN = ColdGas / (0.1 m_swept R) and dD/dt = D / tau_SN.  The destroyed dust returns
- * to the gas-phase metals (mode 2). */
+ * to the gas-phase metals (mode 2).  destruction_amount() is the dust destroyed in gas of these
+ * masses over dt at SN rate rsn [1/yr]. */
+static double destruction_amount(const double gas, const double metals, const double dust, const double rsn,
+                                 const double dt, const struct params *run_params)
+{
+    if(gas <= 0.0 || dust <= 0.0 || !(rsn > 0.0)) return 0.0;
+    const double Z = get_metallicity(gas, metals);
+    const double m_swept = DUST_MSWEPT_MSUN * pow(Z / DUST_ZREF + 0.039, -0.289) * run_params->Hubble_h / 1.0e10;
+    const double tsn = gas / (DUST_SN_ETA * m_swept * rsn) / (run_params->UnitTime_in_s / SEC_PER_YEAR);
+    const double lost = dust / tsn * dt;
+    return (lost > dust) ? dust : lost;
+}
+
+/* SN destruction in galaxy p over dt; DarkSAGEMode: in each annulus from its own gas, metals and
+ * dust, with the SNe where the stars are forming this snapshot (DiscSFR, else the gas) */
 static void dust_destruction(const int p, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     struct GALAXY *g = &galaxies[p];
@@ -362,12 +453,25 @@ static void dust_destruction(const int p, const double dt, struct GALAXY *galaxi
     }
     const double mstar = integrate(mass, mphi, N_INTEG, mass[0], SN_UP) / integrate(mass, phi, N_INTEG, DUST_SN_MLOW, SN_UP);
     if(!(mstar > 0.0)) return;
-    const double Z = get_metallicity(g->ColdGas, g->MetalsColdGas);
-    const double m_swept = DUST_MSWEPT_MSUN * pow(Z / DUST_ZREF + 0.039, -0.289) * run_params->Hubble_h / 1.0e10;
     const double rsn = stars / dt / mstar * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS;
-    if(!(rsn > 0.0)) return;
-    const double tsn = g->ColdGas / (DUST_SN_ETA * m_swept * rsn) / (run_params->UnitTime_in_s / SEC_PER_YEAR);
-    double lost = g->ColdDust / tsn * dt;
+    double lost = destruction_amount(g->ColdGas, g->MetalsColdGas, g->ColdDust, rsn, dt, run_params);
+    if(run_params->DarkSAGEMode >= 1) {
+        double sfr_sum = 0.0, gas_sum = 0.0, local[N_BINS];
+        for(int i = 0; i < N_BINS; i++) {
+            sfr_sum += g->DiscSFR[i];
+            gas_sum += g->DiscGas[i];
+        }
+        for(int i = 0; i < N_BINS; i++) {
+            const double f = (sfr_sum > 0.0) ? g->DiscSFR[i] / sfr_sum : ((gas_sum > 0.0) ? g->DiscGas[i] / gas_sum : 0.0);
+            local[i] = destruction_amount(g->DiscGas[i], g->DiscGasMetals[i], g->DiscDust[i], rsn * f, dt, run_params);
+        }
+        lost = annulus_amounts(local, lost, g->DiscDust, run_params);
+        for(int i = 0; i < N_BINS; i++) {
+            if(local[i] > g->DiscDust[i]) local[i] = g->DiscDust[i];
+            g->DiscDust[i] -= (float)local[i];
+            if(run_params->DustySAGEMode == 2) g->DiscGasMetals[i] += (float)local[i];
+        }
+    }
     if(lost > g->ColdDust) lost = g->ColdDust;
     g->ColdDust -= (float)lost;
     if(run_params->DustySAGEMode == 2) g->MetalsColdGas += (float)lost;
@@ -424,10 +528,13 @@ void dust_evolve(const int p, const int centralgal, const double dt, struct GALA
     const int snap = g->SnapNum;
     if(snap >= 0 && snap < ABSOLUTEMAXSNAPS) g->DustSfh[snap] += (float)(g->DustStarsStep / (dt * sfr_rate_divisor(g->SubstepsUsed)));
 
+    /* DarkSAGEMode: the annuli carry the cold dust (ColdDust == sum(DiscDust)) */
+    if(run_params->DarkSAGEMode >= 1) darksage_sync_disc_dust(p, galaxies);
     dust_production(p, centralgal, dt, galaxies, run_params);
     dust_growth(p, dt, galaxies, run_params);
     dust_destruction(p, dt, galaxies, run_params);
     dust_sputtering(p, dt, galaxies, run_params);
+    if(run_params->DarkSAGEMode >= 1) darksage_sync_disc_dust(p, galaxies);
 
     g->DustStarsStep = 0.0f;
     g->DustMetalsStep = 0.0f;

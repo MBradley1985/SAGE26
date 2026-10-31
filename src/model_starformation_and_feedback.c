@@ -1201,7 +1201,6 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
 {
     const double R = run_params->RecycleFraction;
     const float h = run_params->Hubble_h;
-    const double dtg = dust_to_gas(galaxies[p].ColdGas, galaxies[p].ColdDust);   /* DustySAGEMode, galaxy-wide */
     double fire_scaling;
     double eta = sn_reheat_loading(p, &fire_scaling, galaxies, run_params);
     /* KarpovModeOn: sn_ejected_mass() sets its own reheated mass, so take its loading per unit
@@ -1224,6 +1223,7 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
     double new_stars[N_BINS], new_stars_metals[N_BINS];
     double stars_sum = 0.0, new_stars_sum = 0.0, new_metals_sum = 0.0;
     double reheated_sum = 0.0, reheated_metals = 0.0, metals_leaving_disk = 0.0;
+    double locked_dust = 0.0, reheated_dust = 0.0;
     for(int i = 0; i < N_BINS; i++) {
         new_stars[i] = new_stars_metals[i] = 0.0;
         const double gas = galaxies[p].DiscGas[i];
@@ -1246,6 +1246,17 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
         const double Z = galaxies[p].DiscGasMetals[i] / gas;
         new_stars[i] = (1.0 - R) * stars;
         new_stars_metals[i] = Z * new_stars[i];
+        /* DustySAGEMode: the stars and the reheated gas take the annulus's dust */
+        const double dtg = galaxies[p].DiscDust[i] / gas;
+        const double dust_out = (dtg * (new_stars[i] + reheated) < galaxies[p].DiscDust[i])
+                              ? dtg * (new_stars[i] + reheated) : galaxies[p].DiscDust[i];
+        if(dust_out > 0.0) {
+            const double f_locked = new_stars[i] / (new_stars[i] + reheated);
+            locked_dust += f_locked * dust_out;
+            reheated_dust += (1.0 - f_locked) * dust_out;
+            galaxies[p].DiscDust[i] -= (float)dust_out;
+            if(galaxies[p].DiscDust[i] < 0.0f) galaxies[p].DiscDust[i] = 0.0f;
+        }
         galaxies[p].DiscGas[i] -= new_stars[i] + reheated;
         galaxies[p].DiscGasMetals[i] -= Z * (new_stars[i] + reheated);
         if(galaxies[p].DiscGas[i] < 0.0f) galaxies[p].DiscGas[i] = 0.0f;
@@ -1277,9 +1288,7 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
         reheated_metals += Z * reheated;
     }
 
-    /* DustySAGEMode: the stars and the reheated gas take the cold gas's dust, at its dust-to-gas
-     * ratio before star formation (galaxy-wide dust) */
-    double locked_dust = dtg * new_stars_sum, reheated_dust = dtg * reheated_sum;
+    /* the annuli's dust leaves the galaxy total (ColdDust == sum(DiscDust)) */
     if(locked_dust + reheated_dust > galaxies[p].ColdDust) {
         const double f = (locked_dust + reheated_dust > 0.0) ? galaxies[p].ColdDust / (locked_dust + reheated_dust) : 0.0;
         locked_dust *= f;

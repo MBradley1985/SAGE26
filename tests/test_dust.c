@@ -22,6 +22,7 @@
 #include "../src/model_dust.h"
 #include "../src/model_mergers.h"
 #include "../src/model_starformation_and_feedback.h"
+#include "../src/model_darksage_sf.h"
 
 /* float reservoirs, double arithmetic: round-off only */
 static const double DUST_RTOL = 1e-6;
@@ -221,6 +222,96 @@ void test_dust_locked_reported(void) {
     }
 }
 
+/* Two-annulus disc for the DarkSAGEMode dust tests: equal gas, metals and dust, but all the H2
+ * and all the star formation in annulus 0 */
+static void setup_annuli(struct params *rp, struct GALAXY *g, const int dark, const int dusty)
+{
+    setup(rp, g, dusty);
+    rp->DarkSAGEMode = dark;
+    g->HotGas = 0.0f; g->HotDust = 0.0f; g->MetalsHotGas = 0.0f;
+    for(int i = 0; i < 2; i++) {
+        g->DiscGas[i] = 0.5f; g->DiscGasMetals[i] = 0.0075f; g->DiscDust[i] = 0.001f;
+        g->DiscStars[i] = 1.0f;
+    }
+    g->DiscH2[0] = 0.3f;
+    g->DiscSFR[0] = 1.0f;
+}
+
+void test_dust_annuli_follow_gas(void) {
+    BEGIN_TEST("darksage_remove_disc_gas / sync: annulus dust leaves with the gas and sums to ColdDust");
+
+    /* Removing half an annulus's gas takes half its dust; the sync rescales the annuli to
+     * ColdDust, keeping the profile. */
+    struct params rp;
+    struct GALAXY g[1];
+    setup_annuli(&rp, g, 1, 2);
+    double w[N_BINS] = {0.0};
+    w[0] = 1.0;
+    darksage_remove_disc_gas(0, 0.25, w, NULL, g);
+    ASSERT_CLOSE(0.0005, g[0].DiscDust[0], DUST_RTOL, "Half the gas leaves annulus 0 with half its dust");
+    ASSERT_CLOSE(0.001, g[0].DiscDust[1], DUST_RTOL, "Annulus 1 untouched");
+    g[0].ColdDust = 0.003f;
+    darksage_sync_disc_dust(0, g);
+    ASSERT_CLOSE(0.001, g[0].DiscDust[0], DUST_RTOL, "Sync rescales to ColdDust ...");
+    ASSERT_CLOSE(0.002, g[0].DiscDust[1], DUST_RTOL, "... keeping the profile");
+}
+
+void test_dust_annuli_physics(void) {
+    BEGIN_TEST("dust_evolve (DarkSAGEMode): local growth and destruction, annuli sum to ColdDust");
+
+    /* Growth needs H2 and SN destruction needs star formation: both act in annulus 0 only.
+     * DarkSAGEMode 1 keeps SAGE26's galaxy-wide totals (as for the bulk SF recipes); mode 2 sums
+     * the annuli.  Either way the annuli must sum to ColdDust, and in DustySAGEMode 2 metals +
+     * dust are conserved. */
+    const double dt = 1.0 * SEC_PER_MEGAYEAR / 3.08568e19;
+    for(int dark = 1; dark <= 2; dark++) {
+        struct params rp;
+        struct GALAXY g[1], bulk[1];
+        setup_annuli(&rp, g, dark, 2);
+        g[0].DustStarsStep = 0.0f;   /* growth only */
+        const double before = g[0].MetalsColdGas + g[0].ColdDust;
+        dust_evolve(0, 0, dt, g, &rp);
+        const double sum = g[0].DiscDust[0] + g[0].DiscDust[1];
+        ASSERT_CLOSE(g[0].ColdDust, sum, DUST_RTOL, "Annuli sum to ColdDust");
+        ASSERT_GREATER_THAN(g[0].DiscDust[0], 0.001, "Dust grows where the H2 is");
+        ASSERT_CLOSE(0.001, g[0].DiscDust[1], DUST_RTOL, "No growth without H2");
+        ASSERT_CLOSE(before, g[0].MetalsColdGas + g[0].ColdDust, DUST_RTOL, "Metals + dust conserved");
+        if(dark == 1) {
+            setup_annuli(&rp, bulk, 0, 2);
+            bulk[0].DustStarsStep = 0.0f;
+            dust_evolve(0, 0, dt, bulk, &rp);
+            ASSERT_CLOSE(bulk[0].ColdDust, g[0].ColdDust, DUST_RTOL, "DarkSAGEMode 1: the galaxy-wide growth");
+        }
+
+        /* Unequal dust: mode 2's growth is annulus 0's own, that of a galaxy holding just its gas */
+        setup_annuli(&rp, g, dark, 2);
+        g[0].DustStarsStep = 0.0f;
+        g[0].DiscDust[0] = 0.0015f; g[0].DiscDust[1] = 0.0005f;
+        dust_evolve(0, 0, dt, g, &rp);
+        if(dark == 2) {
+            setup(&rp, bulk, 2);
+            bulk[0].HotGas = 0.0f; bulk[0].HotDust = 0.0f; bulk[0].MetalsHotGas = 0.0f;
+            bulk[0].ColdGas = 0.5f; bulk[0].MetalsColdGas = 0.0075f; bulk[0].ColdDust = 0.0015f; bulk[0].H2gas = 0.3f;
+            bulk[0].DustStarsStep = 0.0f;
+            dust_evolve(0, 0, dt, bulk, &rp);
+            ASSERT_CLOSE(bulk[0].ColdDust - 0.0015, g[0].ColdDust - 0.002, 1e-4, "DarkSAGEMode 2: the annuli's own growth");
+        }
+
+        /* Annuli not yet carrying ColdDust (all zero) take its profile first, then grow */
+        setup_annuli(&rp, g, dark, 2);
+        g[0].DustStarsStep = 0.0f;
+        g[0].DiscDust[0] = g[0].DiscDust[1] = 0.0f;
+        dust_evolve(0, 0, dt, g, &rp);
+        ASSERT_GREATER_THAN(g[0].DiscDust[0], g[0].DiscDust[1], "Annuli synced to ColdDust before the physics: growth where the H2 is");
+
+        setup_annuli(&rp, g, dark, 2);
+        g[0].H2gas = 0.0f; g[0].DiscH2[0] = 0.0f;   /* destruction only */
+        dust_evolve(0, 0, dt, g, &rp);
+        ASSERT_LESS_THAN(g[0].DiscDust[0], g[0].DiscDust[1], "SNe destroy dust where the stars form");
+        ASSERT_CLOSE(g[0].ColdDust, g[0].DiscDust[0] + g[0].DiscDust[1], DUST_RTOL, "Annuli sum to ColdDust");
+    }
+}
+
 int main(void) {
     BEGIN_TEST_SUITE("DustySAGEMode dust bookkeeping");
 
@@ -232,6 +323,8 @@ int main(void) {
     test_dust_sputters_satellites();
     test_dust_merger_keeps_sfh();
     test_dust_locked_reported();
+    test_dust_annuli_follow_gas();
+    test_dust_annuli_physics();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

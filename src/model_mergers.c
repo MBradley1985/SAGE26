@@ -420,7 +420,7 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
         if(run_params->DarkSAGEMode >= 1) {
             for(int i = 0; i < N_BINS; i++) {
                 galaxies[gal].DiscGas[i] = 0.0f;
-                galaxies[gal].DiscGasMetals[i] = 0.0f;
+                galaxies[gal].DiscGasMetals[i] = galaxies[gal].DiscDust[i] = 0.0f;
                 galaxies[gal].DiscH2[i] = galaxies[gal].DiscHI[i] = 0.0f;
             }
             galaxies[gal].H2gas = galaxies[gal].H1gas = 0.0f;
@@ -999,7 +999,7 @@ void disrupt_satellite_to_ICS(const int centralgal, const int gal, const double 
 
     if(run_params->DarkSAGEMode >= 1) {
         for(int i = 0; i < N_BINS; i++) {
-            galaxies[gal].DiscGas[i] = galaxies[gal].DiscGasMetals[i] = 0.0f;
+            galaxies[gal].DiscGas[i] = galaxies[gal].DiscGasMetals[i] = galaxies[gal].DiscDust[i] = 0.0f;
             galaxies[gal].DiscStars[i] = galaxies[gal].DiscStarsMetals[i] = 0.0f;
         }
     }

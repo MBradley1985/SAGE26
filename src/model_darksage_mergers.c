@@ -87,10 +87,11 @@ static double merge_gas_minor(const int t, const int p, const double dpos[3], co
     const double sep = sqrt(dot3(dpos, dpos));
     const double v_rad = (sep > 0.0) ? dot3(dvel, dpos) / sep : 0.0;
 
-    double gas_sat = 0.0, metals_sat = 0.0;
+    double gas_sat = 0.0, metals_sat = 0.0, dust_sat = 0.0;
     for(int i = 0; i < N_BINS; i++) {
         gas_sat += galaxies[p].DiscGas[i];
         metals_sat += galaxies[p].DiscGasMetals[i];
+        dust_sat += galaxies[p].DiscDust[i];
     }
     if(gas_sat <= 0.0) return v_rad;
 
@@ -119,6 +120,7 @@ static double merge_gas_minor(const int t, const int p, const double dpos[3], co
     for(int i = i_min; i < i_max; i++) {
         galaxies[t].DiscGas[i] += (float)(gas_sat / n_bins);
         galaxies[t].DiscGasMetals[i] += (float)(metals_sat / n_bins);
+        galaxies[t].DiscDust[i] += (float)(dust_sat / n_bins);
     }
     return v_rad;
 }
@@ -166,7 +168,7 @@ static void merge_gas_major(const int t, const int p, const double dpos[3], cons
         for(int k = 0; k < 3; k++) n_new[k] /= n_mag;
     }
 
-    double new_gas[N_BINS] = {0.0}, new_metals[N_BINS] = {0.0};
+    double new_gas[N_BINS] = {0.0}, new_metals[N_BINS] = {0.0}, new_dust[N_BINS] = {0.0};
     const int gals[2] = {p, t};
     for(int g = 0; g < 2; g++) {
         const int gal = gals[g];
@@ -186,6 +188,7 @@ static void merge_gas_major(const int t, const int p, const double dpos[3], cons
             const double v_ann = 0.5 * (run_params->DiscBinEdge[i] + run_params->DiscBinEdge[i+1]) / r_ann;
             const double dm = galaxies[gal].DiscGas[i] / N_ANNULUS_SEGMENTS;
             const double dz = galaxies[gal].DiscGasMetals[i] / N_ANNULUS_SEGMENTS;
+            const double dd = galaxies[gal].DiscDust[i] / N_ANNULUS_SEGMENTS;
             for(int seg = 0; seg < N_ANNULUS_SEGMENTS; seg++) {
                 const double phi = 2.0 * M_PI * seg / N_ANNULUS_SEGMENTS;
                 double r[3], v[3], j[3];
@@ -199,6 +202,7 @@ static void merge_gas_major(const int t, const int p, const double dpos[3], cons
                 const int bin = j_bin(j_seg, run_params);
                 new_gas[bin] += dm;
                 new_metals[bin] += dz;
+                new_dust[bin] += dd;
             }
         }
     }
@@ -206,7 +210,8 @@ static void merge_gas_major(const int t, const int p, const double dpos[3], cons
     for(int i = 0; i < N_BINS; i++) {
         galaxies[t].DiscGas[i] = (float)new_gas[i];
         galaxies[t].DiscGasMetals[i] = (float)new_metals[i];
-        galaxies[p].DiscGas[i] = galaxies[p].DiscGasMetals[i] = 0.0f;
+        galaxies[t].DiscDust[i] = (float)new_dust[i];
+        galaxies[p].DiscGas[i] = galaxies[p].DiscGasMetals[i] = galaxies[p].DiscDust[i] = 0.0f;
     }
     for(int k = 0; k < 3; k++) galaxies[t].SpinGas[k] = (float)n_new[k];
 }
@@ -310,5 +315,5 @@ void darksage_merge_gas(const int t, const int p, struct GALAXY *galaxies, const
         vr_p = merge_gas_minor(t, p, dpos, dvel, galaxies, run_params);
     }
     merge_bulge_kinematics(t, p, major, j_t, j_p, vr_t, vr_p, galaxies, run_params);
-    for(int i = 0; i < N_BINS; i++) gp->DiscGas[i] = gp->DiscGasMetals[i] = 0.0f;
+    for(int i = 0; i < N_BINS; i++) gp->DiscGas[i] = gp->DiscGasMetals[i] = gp->DiscDust[i] = 0.0f;
 }

@@ -42,6 +42,7 @@ struct HDF5_GALAXY_OUTPUT
 #define DARKSAGE_FIELD_STRUCT_MEMBER(name, width, desc, unit) float *ds_##name;
     DARKSAGE_OUTPUT_FIELDS(DARKSAGE_FIELD_STRUCT_MEMBER)
     DUSTY_OUTPUT_FIELDS(DARKSAGE_FIELD_STRUCT_MEMBER)   /* DustySAGEMode outputs, NULL when off */
+    DARK_DUSTY_OUTPUT_FIELDS(DARKSAGE_FIELD_STRUCT_MEMBER)   /* both modes, NULL unless both are on */
 #undef DARKSAGE_FIELD_STRUCT_MEMBER
 
     /* metallicity history - metal mass in the stars of the SFH bins (controlled by SaveFullMH) */
