@@ -21,6 +21,7 @@
 #include "../src/model_misc.h"
 #include "../src/model_dust.h"
 #include "../src/model_mergers.h"
+#include "../src/model_starformation_and_feedback.h"
 
 /* float reservoirs, double arithmetic: round-off only */
 static const double DUST_RTOL = 1e-6;
@@ -195,6 +196,31 @@ void test_dust_merger_keeps_sfh(void) {
     ASSERT_CLOSE(0.05, g[0].DustMetalsStep, DUST_RTOL, "This substep's SAGE26 metals carried");
 }
 
+void test_dust_locked_reported(void) {
+    BEGIN_TEST("update_from_star_formation: reports the dust it locks into stellar metals");
+
+    /* In mode 2 the stars' share of the cold dust joins MetalsStellarMass; the caller must know
+     * how much, to add it where the stars go (the bulge in a burst) and to the metal histories.
+     * In mode 1 the dust is already in the metals, so none is added. */
+    for(int mode = 1; mode <= 2; mode++) {
+        struct params rp;
+        memset(&rp, 0, sizeof(rp));
+        rp.DustySAGEMode = mode;
+        rp.RecycleFraction = 0.5;
+        struct GALAXY g[1];
+        memset(g, 0, sizeof(g));
+        g[0].ColdGas = 1.0f; g[0].MetalsColdGas = 0.02f; g[0].ColdDust = 0.01f;
+        const double locked = update_from_star_formation(0, 0.2, 0.02, g, &rp);
+        if(mode == 2) {
+            ASSERT_CLOSE(0.001, locked, DUST_RTOL, "Mode 2: the stars' dust share (dust-to-gas x stars kept)");
+            ASSERT_CLOSE(0.002 + 0.001, g[0].MetalsStellarMass, DUST_RTOL, "Mode 2: in the stellar metals");
+        } else {
+            ASSERT_TRUE(locked == 0.0, "Mode 1: no dust added to the stellar metals");
+            ASSERT_CLOSE(0.002, g[0].MetalsStellarMass, DUST_RTOL, "Mode 1: stellar metals from the gas metallicity");
+        }
+    }
+}
+
 int main(void) {
     BEGIN_TEST_SUITE("DustySAGEMode dust bookkeeping");
 
@@ -205,6 +231,7 @@ int main(void) {
     test_dust_growth_past_half();
     test_dust_sputters_satellites();
     test_dust_merger_keeps_sfh();
+    test_dust_locked_reported();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

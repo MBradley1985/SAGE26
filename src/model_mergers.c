@@ -861,7 +861,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     galaxies[merger_centralgal].SfrBulgeColdGasMetals[step] += galaxies[merger_centralgal].MetalsColdGas;
 
     metallicity = get_metallicity(galaxies[merger_centralgal].ColdGas, galaxies[merger_centralgal].MetalsColdGas);
-    update_from_star_formation(merger_centralgal, stars, metallicity, galaxies, run_params);
+    const double locked_dust = update_from_star_formation(merger_centralgal, stars, metallicity, galaxies, run_params);
 
     // Track star formation history for bulge starbursts
     if(run_params->SaveFullSFH) {
@@ -869,7 +869,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
         if(snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS) {
             galaxies[merger_centralgal].SFHMassBulge[snapnum] += (1.0 - run_params->RecycleFraction) * stars;
             if(run_params->SaveFullMH) {
-                galaxies[merger_centralgal].MHMetalsBulge[snapnum] += metallicity * (1.0 - run_params->RecycleFraction) * stars;
+                galaxies[merger_centralgal].MHMetalsBulge[snapnum] += metallicity * (1.0 - run_params->RecycleFraction) * stars + locked_dust;
             }
         }
     }
@@ -877,7 +877,7 @@ void collisional_starburst_recipe(const double mass_ratio, const int merger_cent
     const double recycled_stars = (1 - run_params->RecycleFraction) * stars;
     
     galaxies[merger_centralgal].BulgeMass += recycled_stars;
-    galaxies[merger_centralgal].MetalsBulgeMass += metallicity * recycled_stars;
+    galaxies[merger_centralgal].MetalsBulgeMass += metallicity * recycled_stars + locked_dust;
 
     // DarkSAGEMode: the burst's stars take the dispersion of the bulge they join; an empty bulge
     // with no dispersion yet takes the cold-gas dispersion, the merger bulge's initial value

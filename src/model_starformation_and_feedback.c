@@ -1309,6 +1309,9 @@ static void darksage_form_stars(const int p, const int centralgal, const double 
         const int snapnum = galaxies[p].SnapNum;
         if(snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS) {
             galaxies[p].SFHMassDisk[snapnum] += new_stars_sum;
+            if(run_params->SaveFullMH) {
+                galaxies[p].MHMetalsDisk[snapnum] += new_metals_sum + ((run_params->DustySAGEMode == 2) ? locked_dust : 0.0);
+            }
         }
     }
 
@@ -1563,7 +1566,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
 
     // update for star formation
     metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
-    update_from_star_formation(p, stars, metallicity, galaxies, run_params);
+    const double locked_dust = update_from_star_formation(p, stars, metallicity, galaxies, run_params);
 
     // Track star formation history - accumulate stellar mass formed at this snapshot
     // Note: RecycleFraction * stars is instantly recycled, so actual stellar mass added is (1 - RecycleFraction) * stars
@@ -1572,7 +1575,7 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
         if(snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS) {
             galaxies[p].SFHMassDisk[snapnum] += (1.0 - run_params->RecycleFraction) * stars;
             if(run_params->SaveFullMH) {
-                galaxies[p].MHMetalsDisk[snapnum] += metallicity * (1.0 - run_params->RecycleFraction) * stars;
+                galaxies[p].MHMetalsDisk[snapnum] += metallicity * (1.0 - run_params->RecycleFraction) * stars + locked_dust;
             }
         }
     }
@@ -1638,14 +1641,16 @@ void starformation_and_feedback(const int p, const int centralgal, const double 
  * immediately), increments StellarMass, and tracks metals consistently.
  * Called for each SF event within starformation_and_feedback().
  */
-void update_from_star_formation(const int p, const double stars, const double metallicity, struct GALAXY *galaxies, const struct params *run_params)
+double update_from_star_formation(const int p, const double stars, const double metallicity, struct GALAXY *galaxies, const struct params *run_params)
 {
     const double RecycleFraction = run_params->RecycleFraction;
     // DustySAGEMode: the stars lock up their gas's dust.  In mode 2 the dust is not in MetalsColdGas,
-    // so it joins the stellar metals here (Dusty-SAGE update_from_star_formation())
-    const double locked_dust = dust_move(&galaxies[p].ColdDust, galaxies[p].ColdGas, (1 - RecycleFraction) * stars, NULL);
+    // so it joins the stellar metals here (Dusty-SAGE update_from_star_formation()); the caller
+    // adds it where the stars go and to the metal histories
+    double locked_dust = dust_move(&galaxies[p].ColdDust, galaxies[p].ColdGas, (1 - RecycleFraction) * stars, NULL);
     galaxies[p].DustStarsStep += stars;
     if(run_params->DustySAGEMode == 2) galaxies[p].MetalsStellarMass += locked_dust;
+    else locked_dust = 0.0;
     // update gas and metals from star formation
     galaxies[p].ColdGas -= (1 - RecycleFraction) * stars;
     galaxies[p].MetalsColdGas -= metallicity * (1 - RecycleFraction) * stars;
@@ -1660,6 +1665,8 @@ void update_from_star_formation(const int p, const double stars, const double me
         if(galaxies[p].H2gas > max_h) galaxies[p].H2gas = max_h;
         if(galaxies[p].H1gas > max_h) galaxies[p].H1gas = max_h;
     }
+
+    return locked_dust;
 }
 
 /*
@@ -1890,14 +1897,14 @@ void starformation_ffb(const int p, const int centralgal, const double dt, const
     galaxies[p].SfrDiskColdGasMetals[step] = galaxies[p].MetalsColdGas;
 
     metallicity = get_metallicity(galaxies[p].ColdGas, galaxies[p].MetalsColdGas);
-    update_from_star_formation(p, stars, metallicity, galaxies, run_params);
+    const double locked_dust = update_from_star_formation(p, stars, metallicity, galaxies, run_params);
 
     if(run_params->SaveFullSFH) {
         const int snapnum = galaxies[p].SnapNum;
         if(snapnum >= 0 && snapnum < ABSOLUTEMAXSNAPS) {
             galaxies[p].SFHMassDisk[snapnum] += (1.0 - run_params->RecycleFraction) * stars;
             if(run_params->SaveFullMH) {
-                galaxies[p].MHMetalsDisk[snapnum] += metallicity * (1.0 - run_params->RecycleFraction) * stars;
+                galaxies[p].MHMetalsDisk[snapnum] += metallicity * (1.0 - run_params->RecycleFraction) * stars + locked_dust;
             }
         }
     }
