@@ -16,7 +16,10 @@
  * used); the lookup time is a double (the source truncated it to an int); the lognormal IMF
  * term is squared; the Nomoto metallicity grid reads 0.004 (an octal 0004 in the source).
  * The yields are made once per galaxy per substep: the source also called its production in
- * every merger burst, making that substep's metals twice.
+ * every merger burst, making that substep's metals twice.  Also changed from the source: the
+ * snapshot times are physical Myr (the source left out 1/h); mode-2 grain growth is limited by
+ * all the cold metals, gas phase + dust (Asano et al. 2013), not the gas phase alone; satellites'
+ * hot dust is sputtered too; and a merged satellite's star-formation history joins the central's.
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
@@ -146,10 +149,11 @@ void dust_init(struct params *run_params)
         run_params->DustQSNIa[0] = 0.00857; run_params->DustQSNIa[1] = 0.622; run_params->DustQSNIa[2] = 0.069;
     }
 
-    /* Time since the first snapshot of each snapshot, as the source: code time x UnitTime in Myr
-     * (no 1/h, so these are Myr x h, while the stellar lifetimes below are Myr) */
+    /* Time since the first snapshot of each snapshot [Myr], physical like the stellar lifetimes
+     * below (code time is s/h; the source left out the 1/h) */
     for(int i = 0; i < run_params->Snaplistlen && i < ABSOLUTEMAXSNAPS; i++) {
-        run_params->DustTime[i] = (run_params->Age[0] - run_params->Age[i]) * run_params->UnitTime_in_s / SEC_PER_MEGAYEAR;
+        run_params->DustTime[i] = (run_params->Age[0] - run_params->Age[i]) * run_params->UnitTime_in_s
+                                / SEC_PER_MEGAYEAR / run_params->Hubble_h;
     }
 }
 
@@ -316,24 +320,23 @@ static void dust_production(const int p, const int centralgal, const double dt, 
 
 /* Grain growth in the ISM (Asano et al. 2013 eq. 20; Dusty-SAGE accrete_dust()):
  *   dD/dt = (1 - D / Z_metals) f_H2 D / tau_acc,  tau_acc = 20 Myr x 0.02 / Z,
- * f_H2 = H2gas / ColdGas, Z = MetalsColdGas / ColdGas.  As in the source, Z_metals is
- * MetalsColdGas: all the cold metals in mode 1, the gas-phase ones in mode 2 (where the source
- * therefore stops growth at dust = gas-phase metals). */
+ * f_H2 = H2gas / ColdGas, Z = Z_metals / ColdGas, Z_metals all the cold metals as in Asano:
+ * MetalsColdGas in mode 1, MetalsColdGas + ColdDust in mode 2 (the source used MetalsColdGas in
+ * mode 2 too, which stops growth at dust = gas-phase metals, D/Z = 0.5).  Growth draws on the
+ * gas-phase metals, Z_metals - D. */
 static void dust_growth(const int p, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     struct GALAXY *g = &galaxies[p];
-    if(g->ColdGas <= 0.0f || g->MetalsColdGas <= g->ColdDust || g->ColdDust <= 0.0f) return;
-    const double Z = g->MetalsColdGas / g->ColdGas;
-    if(Z <= 0.0) return;
+    if(g->ColdGas <= 0.0f || g->ColdDust <= 0.0f) return;
+    const double metals = (run_params->DustySAGEMode == 2) ? (double)g->MetalsColdGas + g->ColdDust : g->MetalsColdGas;
+    const double gas_phase = metals - g->ColdDust;
+    if(gas_phase <= 0.0) return;
+    const double Z = metals / g->ColdGas;
     const double tacc = DUST_TACC0_MYR * SEC_PER_MEGAYEAR / run_params->UnitTime_in_s * DUST_ZREF / Z;
     const double f_h2 = g->H2gas / g->ColdGas;
-    double grow = (1.0 - g->ColdDust / g->MetalsColdGas) * f_h2 * g->ColdDust / tacc * dt;
+    double grow = (1.0 - g->ColdDust / metals) * f_h2 * g->ColdDust / tacc * dt;
     if(grow <= 0.0) return;
-    if(run_params->DustySAGEMode == 1) {
-        if(grow > g->MetalsColdGas - g->ColdDust) grow = g->MetalsColdGas - g->ColdDust;
-    } else if(grow > g->MetalsColdGas) {
-        grow = g->MetalsColdGas;
-    }
+    if(grow > gas_phase) grow = gas_phase;
     g->ColdDust += (float)grow;
     if(run_params->DustySAGEMode == 2) g->MetalsColdGas -= (float)grow;
     g->DustGrowthRate += (float)grow;
@@ -398,10 +401,11 @@ static double sputter(const double gas, float *dust, const double Rvir, const do
     return lost;
 }
 
-/* Sputtering of the hot, CGM and ejected dust of central c (the source sputters the central's) */
-static void dust_sputtering(const int c, const double dt, struct GALAXY *galaxies, const struct params *run_params)
+/* Sputtering of the hot, CGM and ejected dust of galaxy p, central or satellite (the source
+ * sputtered only the central's; SAGE26 satellites keep hot gas) */
+static void dust_sputtering(const int p, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
-    struct GALAXY *g = &galaxies[c];
+    struct GALAXY *g = &galaxies[p];
     const int metals = (run_params->DustySAGEMode == 2);
     double d = sputter(g->HotGas, &g->HotDust, g->Rvir, g->Vvir, dt, run_params);
     if(metals) g->MetalsHotGas += (float)d;
@@ -423,7 +427,7 @@ void dust_evolve(const int p, const int centralgal, const double dt, struct GALA
     dust_production(p, centralgal, dt, galaxies, run_params);
     dust_growth(p, dt, galaxies, run_params);
     dust_destruction(p, dt, galaxies, run_params);
-    if(p == centralgal) dust_sputtering(p, dt, galaxies, run_params);
+    dust_sputtering(p, dt, galaxies, run_params);
 
     g->DustStarsStep = 0.0f;
     g->DustMetalsStep = 0.0f;

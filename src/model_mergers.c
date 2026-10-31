@@ -501,6 +501,13 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].HotDust += galaxies[p].HotDust;
     galaxies[t].CGMDust += galaxies[p].CGMDust;
     galaxies[t].EjectedDust += galaxies[p].EjectedDust;
+    if(run_params->DustySAGEMode >= 1) {
+        // The merged stars keep returning delayed yields: their history, and this substep's
+        // stars and SAGE26 metals (the satellite gets no dust_evolve()), join the central's
+        for(int snap = 0; snap < ABSOLUTEMAXSNAPS; snap++) galaxies[t].DustSfh[snap] += galaxies[p].DustSfh[snap];
+        galaxies[t].DustStarsStep += galaxies[p].DustStarsStep;
+        galaxies[t].DustMetalsStep += galaxies[p].DustMetalsStep;
+    }
 
     galaxies[t].StellarMass += galaxies[p].StellarMass;
     galaxies[t].MetalsStellarMass += galaxies[p].MetalsStellarMass;

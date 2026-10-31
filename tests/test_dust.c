@@ -5,7 +5,9 @@
  * (dust_move()), never more than the reservoir holds; the hot-phase deposit follows the regime
  * the gas goes to (add_dust_to_hot_reservoir()); an empty reservoir moves no dust; and dust_evolve()
  * without star formation conserves metals + dust in mode 2, leaves the metals alone and keeps
- * dust below them in mode 1, and sputters hot-halo dust.
+ * dust below them in mode 1, and sputters hot-halo dust; the snapshot times are physical Myr like
+ * the stellar lifetimes; mode-2 grain growth continues past dust = gas-phase metals; satellites'
+ * hot dust is sputtered; and a merger hands the satellite's star-formation history to the central.
  *
  * Run: cd tests && make test_build/test_dust && ./test_build/test_dust
  */
@@ -18,6 +20,7 @@
 #include "../src/core_allvars.h"
 #include "../src/model_misc.h"
 #include "../src/model_dust.h"
+#include "../src/model_mergers.h"
 
 /* float reservoirs, double arithmetic: round-off only */
 static const double DUST_RTOL = 1e-6;
@@ -125,12 +128,83 @@ void test_dust_evolve_conserves(void) {
     }
 }
 
+void test_dust_time_physical(void) {
+    BEGIN_TEST("dust_init: snapshot times in physical Myr, like the stellar lifetimes");
+
+    /* Code time is (Mpc/h)/(km/s), i.e. s/h; a code-time span of 1 is 977.8/h Myr.  The source
+     * left out the 1/h, putting snapshot times in Myr x h against lifetimes in Myr. */
+    struct params rp;
+    memset(&rp, 0, sizeof(rp));
+    rp.UnitTime_in_s = 3.08568e24 / 1.0e5;
+    rp.Hubble_h = 0.73;
+    rp.Snaplistlen = 2;
+    double age[3] = {0.0, 1.0, 0.0};
+    rp.Age = age + 1;
+    dust_init(&rp);
+    ASSERT_CLOSE(1.0 * rp.UnitTime_in_s / SEC_PER_MEGAYEAR / 0.73, rp.DustTime[1], 1e-9,
+                 "Time since the first snapshot is code time x UnitTime / h");
+}
+
+void test_dust_growth_past_half(void) {
+    BEGIN_TEST("dust_growth (mode 2): grows past dust = gas-phase metals, towards all the metals");
+
+    /* Asano et al. (2013) eq. 20 limits growth by D / Z with Z all the metals.  In mode 2 the
+     * dust is outside MetalsColdGas, so with dust = gas-phase metals (D/Z = 0.5) growth must
+     * continue; the source used the gas-phase metals and stopped there. */
+    struct params rp;
+    struct GALAXY g[1];
+    setup(&rp, g, 2);
+    g[0].MetalsColdGas = 0.01f; g[0].ColdDust = 0.01f;
+    g[0].HotGas = 0.0f; g[0].HotDust = 0.0f; g[0].MetalsHotGas = 0.0f;
+    g[0].DustStarsStep = 0.0f;   /* no SN destruction */
+    const double before = g[0].MetalsColdGas + g[0].ColdDust;
+    dust_evolve(0, 0, 1.0 * SEC_PER_MEGAYEAR / 3.08568e19, g, &rp);
+    ASSERT_GREATER_THAN(g[0].ColdDust, 0.01, "Dust grows past the gas-phase metals");
+    ASSERT_CLOSE(before, g[0].MetalsColdGas + g[0].ColdDust, DUST_RTOL, "Metals + dust conserved");
+}
+
+void test_dust_sputters_satellites(void) {
+    BEGIN_TEST("dust_evolve: a satellite's hot dust is sputtered too");
+
+    /* SAGE26 satellites keep hot gas; the source sputtered only the central's dust */
+    struct params rp;
+    struct GALAXY g[2];
+    setup(&rp, &g[0], 2);
+    setup(&rp, &g[1], 2);
+    const float hot_dust0 = g[1].HotDust;
+    dust_evolve(1, 0, 1.0 * SEC_PER_MEGAYEAR / 3.08568e19, g, &rp);
+    ASSERT_LESS_THAN(g[1].HotDust, hot_dust0, "Satellite hot dust is sputtered");
+}
+
+void test_dust_merger_keeps_sfh(void) {
+    BEGIN_TEST("add_galaxies_together: the satellite's star-formation history joins the central's");
+
+    /* The merged stars keep returning delayed yields: their history and this substep's stars
+     * (not yet in the history; the satellite gets no dust_evolve()) must pass to the central. */
+    struct params rp;
+    memset(&rp, 0, sizeof(rp));
+    rp.DustySAGEMode = 2;
+    struct GALAXY g[2];
+    memset(g, 0, sizeof(g));
+    g[0].DustSfh[10] = 1.0f; g[1].DustSfh[10] = 2.0f; g[1].DustSfh[20] = 3.0f;
+    g[0].DustStarsStep = 0.1f; g[1].DustStarsStep = 0.2f; g[1].DustMetalsStep = 0.05f;
+    add_galaxies_together(0, 1, g, &rp);
+    ASSERT_CLOSE(3.0, g[0].DustSfh[10], DUST_RTOL, "Histories add");
+    ASSERT_CLOSE(3.0, g[0].DustSfh[20], DUST_RTOL, "Satellite-only snapshots carried");
+    ASSERT_CLOSE(0.3, g[0].DustStarsStep, DUST_RTOL, "This substep's stars carried");
+    ASSERT_CLOSE(0.05, g[0].DustMetalsStep, DUST_RTOL, "This substep's SAGE26 metals carried");
+}
+
 int main(void) {
     BEGIN_TEST_SUITE("DustySAGEMode dust bookkeeping");
 
     test_dust_moves_with_gas();
     test_dust_follows_regime();
     test_dust_evolve_conserves();
+    test_dust_time_physical();
+    test_dust_growth_past_half();
+    test_dust_sputters_satellites();
+    test_dust_merger_keeps_sfh();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();
