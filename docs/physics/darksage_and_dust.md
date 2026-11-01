@@ -70,9 +70,20 @@ The gas metallicity follows SAGE26's (`Yield` 0.025).
 (about 0.3 dex below Lange et al. 2016 at z = 0), as in DarkSage's own runs
 on the same trees. Black holes in galaxies below 10^9.5 Msun are about
 0.4 dex heavier than in SAGE26, matching DarkSage. Gas-rich small discs come
-out larger than SAGE26's, so they form stars less efficiently: the cosmic star
-formation rate density is 0.1-0.15 dex lower at z > 2 and converges with
-SAGE26 below z ~ 1, and small haloes hold up to ~0.1 dex less stellar mass.
+out larger than SAGE26's (by ~0.15 dex at z ~ 2): SAGE26's halo-spin radius
+assumes the disc rotates at Vvir, while the annuli follow the rotation curve,
+which is slower inside a low-mass halo. They form stars less efficiently: the
+cosmic star formation rate density is 0.07-0.15 dex lower at 1 < z < 6, and
+the median central holds ~0.1 dex less stellar mass. Satellites' discs also
+grow as their subhaloes are stripped (+0.4 dex after losing 0.5-1 dex of halo
+mass, z ~ 2), since, as in DarkSage, their rotation curve follows the current
+Mvir while SAGE26 holds Rvir at its peak. The gas-rich satellites tip more
+mergers past SAGE26's major-merger threshold, as its mass ratio counts cold
+gas (28% of mergers onto centrals in 10^11.5-10^12.5 Msun haloes, against
+15-20% in SAGE26). The pure bulges these leave barely form H2, as in SAGE26,
+so the stellar-to-halo mass ratio of those haloes has a low tail: its 10th
+percentile is ~1 dex below SAGE26's at z = 0-2, and the median 0.1-0.5 dex
+below it.
 All of these enter through the disc scale radius (modes 2 and 3) and are
 absent in mode 1.
 
