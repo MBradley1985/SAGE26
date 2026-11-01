@@ -325,7 +325,7 @@ for the full policy.
 
 ---
 
-## Parameter calibration (SAGE-PSO)
+## Parameter calibration (SAGEswarm)
 
 Automated parameter calibration via Particle Swarm Optimization is available as a separate
 package: [SAGE-PSO](https://github.com/MBradley1985/SAGE-PSO). It drives `libsage.so` to
@@ -380,24 +380,6 @@ and the original SAGE paper:
 ```
 
 Original SAGE is also available on [ascl.net](http://ascl.net/1601.006).
-
-If you use `DarkSAGEMode`, please also cite the DarkSage paper,
-[Stevens, Croton & Mutch (2016), MNRAS, 461, 859](http://adsabs.harvard.edu/abs/2016MNRAS.461..859S).
-If you use `DustySAGEMode`, please also cite Dusty-SAGE:
-
-```bibtex
-@article{triani2020dust,
-  author  = {Triani, Dian P. and Sinha, Manodeep and Croton, Darren J. and
-             Pacifici, Camilla and Dwek, Eli},
-  title   = {The origin of dust in galaxies across cosmic time},
-  journal = {MNRAS},
-  year    = {2020},
-  volume  = {493},
-  pages   = {2490-2505},
-  doi     = {10.1093/mnras/staa446},
-  eprint  = {2002.05343},
-}
-```
 
 ---
 
