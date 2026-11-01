@@ -6,7 +6,8 @@
  * the gas goes to (add_dust_to_hot_reservoir()); an empty reservoir moves no dust; and dust_evolve()
  * without star formation conserves metals + dust in mode 2, leaves the metals alone and keeps
  * dust below them in mode 1, and sputters hot-halo dust; the snapshot times are physical Myr like
- * the stellar lifetimes; mode-2 grain growth continues past dust = gas-phase metals; satellites'
+ * the stellar lifetimes; mode-2 grain growth continues past dust = gas-phase metals, and stops
+ * at DustGrowthMaxDtoZ when that is set; satellites'
  * hot dust is sputtered; and a merger hands the satellite's star-formation history to the central.
  *
  * Run: cd tests && make test_build/test_dust && ./test_build/test_dust
@@ -82,6 +83,7 @@ static void setup(struct params *rp, struct GALAXY *g, const int mode)
     rp->UnitDensity_in_cgs = rp->UnitMass_in_g / pow(rp->UnitLength_in_cm, 3);
     rp->Hubble_h = 0.73;
     rp->DustySAGEMode = mode;
+    rp->DustGrowthMaxDtoZ = 1.0;   /* the parameter file's default */
     for(int i = 0; i < ABSOLUTEMAXSNAPS; i++) rp->DustTime[i] = 100.0 * i;
     memset(g, 0, sizeof(*g));
     g->SnapNum = 50;
@@ -163,6 +165,40 @@ void test_dust_growth_past_half(void) {
     dust_evolve(0, 0, 1.0 * SEC_PER_MEGAYEAR / 3.08568e19, g, &rp);
     ASSERT_GREATER_THAN(g[0].ColdDust, 0.01, "Dust grows past the gas-phase metals");
     ASSERT_CLOSE(before, g[0].MetalsColdGas + g[0].ColdDust, DUST_RTOL, "Metals + dust conserved");
+}
+
+void test_dust_growth_ceiling(void) {
+    BEGIN_TEST("dust_growth: DustGrowthMaxDtoZ stops growth at that dust-to-metals ratio");
+
+    /* With f = DustGrowthMaxDtoZ growth goes as (1 - D / (f Z_metals)).  Start each mode at
+     * D/Z = 0.3 with plenty of H2 and no SN destruction, set f = 0.5, and grow for 2 Gyr in
+     * 1 Myr substeps: the ratio must approach 0.5 (growth acted) and never pass it.  Without a
+     * ceiling (f = 1) the same galaxy must pass 0.5, so the ceiling is what stops it.  D/Z is
+     * dust / all the metals: MetalsColdGas in mode 1, MetalsColdGas + ColdDust in mode 2. */
+    const double dt = 1.0 * SEC_PER_MEGAYEAR / 3.08568e19;
+    for(int mode = 1; mode <= 2; mode++) {
+        for(int capped = 0; capped < 2; capped++) {
+            struct params rp;
+            struct GALAXY g[1];
+            setup(&rp, g, mode);
+            rp.DustGrowthMaxDtoZ = capped ? 0.5 : 1.0;
+            g[0].MetalsColdGas = (mode == 1) ? 0.02f : 0.014f;
+            g[0].ColdDust = 0.006f;              /* D/Z = 0.3 either way */
+            g[0].HotGas = 0.0f; g[0].HotDust = 0.0f; g[0].MetalsHotGas = 0.0f;
+            double max_dz = 0.0;
+            for(int k = 0; k < 2000; k++) {
+                g[0].DustStarsStep = 0.0f;
+                dust_evolve(0, 0, dt, g, &rp);
+                const double z_all = g[0].MetalsColdGas + ((mode == 2) ? g[0].ColdDust : 0.0f);
+                if(g[0].ColdDust / z_all > max_dz) max_dz = g[0].ColdDust / z_all;
+            }
+            if(capped) {
+                ASSERT_IN_RANGE(max_dz, 0.45, 0.5 * (1.0 + DUST_RTOL), mode == 1 ? "Mode 1: D/Z reaches 0.5 and stops" : "Mode 2: D/Z reaches 0.5 and stops");
+            } else {
+                ASSERT_GREATER_THAN(max_dz, 0.6, mode == 1 ? "Mode 1: no ceiling, D/Z passes 0.5" : "Mode 2: no ceiling, D/Z passes 0.5");
+            }
+        }
+    }
 }
 
 void test_dust_sputters_satellites(void) {
@@ -397,6 +433,7 @@ int main(void) {
     test_dust_evolve_conserves();
     test_dust_time_physical();
     test_dust_growth_past_half();
+    test_dust_growth_ceiling();
     test_dust_sputters_satellites();
     test_dust_merger_keeps_sfh();
     test_dust_locked_reported();
