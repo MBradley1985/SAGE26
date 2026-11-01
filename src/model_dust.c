@@ -380,7 +380,9 @@ static void dust_production(const int p, const int centralgal, const double dt, 
 }
 
 /* Grain growth in the ISM (Asano et al. 2013 eq. 20; Dusty-SAGE accrete_dust()):
- *   dD/dt = (1 - D / Z_metals) f_H2 D / tau_acc,  tau_acc = 20 Myr x 0.02 / Z,
+ *   dD/dt = (1 - D / (f_max Z_metals)) f_H2 D / tau_acc,  tau_acc = 20 Myr x 0.02 / Z,
+ * f_max = DustGrowthMaxDtoZ, the most of the metals growth can lock in dust (1 in Asano; the
+ * source's gas-phase form stops at 0.5 in mode 2),
  * f_H2 = H2 / gas, Z = Z_metals / gas, Z_metals all the cold metals as in Asano:
  * MetalsColdGas in mode 1, MetalsColdGas + ColdDust in mode 2 (the source used MetalsColdGas in
  * mode 2 too, which stops growth at dust = gas-phase metals, D/Z = 0.5).  Growth draws on the
@@ -389,10 +391,11 @@ static double growth_amount(const double gas, const double metals, const double 
                             const double dt, const struct params *run_params)
 {
     const double gas_phase = metals - dust;
-    if(gas <= 0.0 || dust <= 0.0 || gas_phase <= 0.0) return 0.0;
+    const double ceiling = run_params->DustGrowthMaxDtoZ * metals;
+    if(gas <= 0.0 || dust <= 0.0 || gas_phase <= 0.0 || dust >= ceiling) return 0.0;
     const double Z = metals / gas;
     const double tacc = DUST_TACC0_MYR * SEC_PER_MEGAYEAR * run_params->Hubble_h / run_params->UnitTime_in_s * DUST_ZREF / Z;
-    const double grow = (1.0 - dust / metals) * (h2 / gas) * dust / tacc * dt;
+    const double grow = (1.0 - dust / ceiling) * (h2 / gas) * dust / tacc * dt;
     if(grow <= 0.0) return 0.0;
     return (grow > gas_phase) ? gas_phase : grow;
 }

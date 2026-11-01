@@ -624,6 +624,7 @@ struct params
     int32_t    DustSNIIYields;          // 0: Woosley & Weaver 1995; 1: Nomoto et al. 2006
     int32_t    DustSNIaYields;          // 0: Iwamoto et al. 1999; 1: Seitenzahl et al. 2013
     double     DustBinaryFraction;      // fraction of 3-16 Msun stars in SNIa binaries
+    double     DustGrowthMaxDtoZ;       // grain growth stops at this dust-to-metals ratio (1: Asano et al. 2013)
     int32_t    DustCountAGB, DustCountSN;                              // stellar masses per yield table (computed)
     double     DustMassAGB[DUST_MAXYIELDS], DustMassSN[DUST_MAXYIELDS];  // their masses [Msun]
     double     DustQAGB[3][DUST_MAXYIELDS][DUST_METALGRID];  // AGB C, N, O yields [Msun per star]

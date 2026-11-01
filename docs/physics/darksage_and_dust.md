@@ -41,11 +41,27 @@ reheated, becomes unstable, feeds the black hole or bursts.
   `DiskScaleRadius` stays at SAGE26's halo-spin value, so every shared output
   is identical to SAGE26: SAGE26 with radially resolved discs and angular
   momentum tracking, and nothing else changed.
+- `DarkSAGERadialFlowsOn` (any mode) adds DarkSage's radial flows inside the
+  disc: after SAGE26's instability has taken its mass, annuli still Toomre
+  unstable pass 66% of their unstable gas (1) and also their unstable stars
+  (2, DarkSage's 1 - 0.34 c_s / sigma) to the neighbouring annuli, from the
+  outside in, with the disc's angular momentum kept. Only the annuli change.
+  Without it the annuli have no radial flow.
 - Mode 2 is mode 1 with `DiskScaleRadius` measured from the annuli: half the
   mass-weighted mean radius of the gas and disc stars, using the disc's own
   rotation speed. This is the one change it makes to SAGE26's physics.
 - Mode 3 is mode 2 with the star-formation law evaluated on each annulus's
   own surface density; the galaxy's star formation is the sum.
+
+**Known behaviour** (mode 1, Millennium, star-forming disc centrals of
+10^10-10^11 Msun). Stellar metallicity rises outwards (about 0.65 to 1.0 Zsun
+from 0.25 to 2 stellar half-mass radii): the discs grow inside out, the inner
+stars formed when the gas was poorer, and the gas metallicity rises about
+threefold after z ~ 2, more than its radial gradient. `DarkSAGERadialFlowsOn 2`
+flattens it (0.9 to 0.95 Zsun) but does not make it fall outwards, and shrinks
+the annulus stellar half-mass radius by about 25%; gas alone (1) moves little
+gas, as SAGE26's instability has already taken the unstable gas. The gas
+metallicity follows SAGE26's (`Yield` 0.025).
 
 **Known behaviour** (modes 2 and 3). The stellar discs are more compact than observed
 (about 0.3 dex below Lange et al. 2016 at z = 0), as in DarkSage's own runs
@@ -75,10 +91,16 @@ mergers, disruption).
   Iwamoto et al. 1999 or Seitenzahl et al. 2013 yields), with Popping et al.
   (2017) condensation. SNIa dust is off, as in Dusty-SAGE.
 - Grain growth in molecular gas (Asano et al. 2013 eq. 20), limited by all
-  the cold metals. It needs H2, so it is off with `SFprescription` 0 or 2.
+  the cold metals, or by the fraction `DustGrowthMaxDtoZ` of them. It needs
+  H2, so it is off with `SFprescription` 0 or 2.
 - Destruction by SN shocks (Asano et al. 2013).
 - Thermal sputtering in the hot, CGM and ejected gas of centrals and
   satellites (Popping et al. 2017).
+
+**Known behaviour.** Above about Zsun, grain growth outpaces destruction and
+takes the dust-to-metals ratio to 0.8-0.9 (dust-to-gas ~0.02 in mode 1 disc
+centrals of 10^10-10^11 Msun). `DustGrowthMaxDtoZ 0.5` holds it at ~0.42,
+halves the dust-to-gas, and lowers the z = 0 cold-dust density by ~0.3 dex.
 
 **Modes.**
 - Mode 1, passive: SAGE26's metals are unchanged and the dust is part of

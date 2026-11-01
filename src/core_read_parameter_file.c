@@ -140,6 +140,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->DustSNIIYields             = 0;    /* Dusty-SAGE defaults */
     run_params->DustSNIaYields             = 0;
     run_params->DustBinaryFraction         = 0.1;
+    run_params->DustGrowthMaxDtoZ          = 1.0;
 
 
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
@@ -229,6 +230,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("DustSNIIYields",              &(run_params->DustSNIIYields),             INT, 0);
     REG("DustSNIaYields",              &(run_params->DustSNIaYields),             INT, 0);
     REG("DustBinaryFraction",          &(run_params->DustBinaryFraction),         DOUBLE, 0);
+    REG("DustGrowthMaxDtoZ",           &(run_params->DustGrowthMaxDtoZ),          DOUBLE, 0);
 
 #undef REG
 
@@ -572,6 +574,12 @@ int read_parameter_file(const char *fname, struct params *run_params)
                 ABORT(EXIT_FAILURE);
             }
         }
+    }
+
+    /* A dust-to-metals ceiling is a fraction of the metals. */
+    if(!(run_params->DustGrowthMaxDtoZ > 0.0 && run_params->DustGrowthMaxDtoZ <= 1.0)) {
+        fprintf(stderr, "Error: DustGrowthMaxDtoZ = %g is not valid; it must be in (0, 1].\n", run_params->DustGrowthMaxDtoZ);
+        ABORT(EXIT_FAILURE);
     }
 
     /* The metal histories only give a metallicity when divided by the SFH mass bins. */
