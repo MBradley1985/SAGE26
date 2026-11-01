@@ -21,6 +21,8 @@ extern "C" {
     /* Annulus side of SAGE26 moving unstable_stars of disc stars to the instability bulge */
     extern void darksage_instability_stars_to_bulge(const int p, const double unstable_stars, const double star_w[N_BINS],
                                                     struct GALAXY *galaxies);
+    /* DarkSAGERadialFlowsOn: gas still unstable sinks to the neighbouring annuli (annuli only) */
+    extern void darksage_instability_gas_sink(const int p, struct GALAXY *galaxies, const struct params *run_params);
 
 #ifdef __cplusplus
 }

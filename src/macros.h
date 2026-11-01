@@ -35,6 +35,7 @@
 #define  DS_THETA_THRESH_DEG  10.0    /* gas and stellar discs closer than this are treated as coplanar [deg] */
 #define  DS_DEG_PER_TDYN      5.0     /* precession of the gas disc towards the stellar disc [deg per dynamical time] */
 #define  DS_QTOT_MIN          1.0     /* minimum two-fluid Toomre Q for a stable annulus */
+#define  DS_GAS_SINK_RATE     0.66    /* fraction of an annulus's unstable gas that sinks to its neighbours (GasSinkRate) */
 
 /* physical constants in cgs */
 #define  GRAVITY     6.672e-8        /* gravitational constant [cm^3 g^-1 s^-2] */
