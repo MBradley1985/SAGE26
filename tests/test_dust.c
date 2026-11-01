@@ -6,8 +6,8 @@
  * the gas goes to (add_dust_to_hot_reservoir()); an empty reservoir moves no dust; and dust_evolve()
  * without star formation conserves metals + dust in mode 2, leaves the metals alone and keeps
  * dust below them in mode 1, and sputters hot-halo dust; the snapshot times are physical Myr like
- * the stellar lifetimes; mode-2 grain growth continues past dust = gas-phase metals, and stops
- * at DustGrowthMaxDtoZ when that is set; satellites'
+ * the stellar lifetimes; mode-2 grain growth continues past dust = gas-phase metals without a
+ * ceiling, and stops at DustGrowthMaxDtoZ (0.5 by default); satellites'
  * hot dust is sputtered; and a merger hands the satellite's star-formation history to the central.
  *
  * Run: cd tests && make test_build/test_dust && ./test_build/test_dust
@@ -83,7 +83,7 @@ static void setup(struct params *rp, struct GALAXY *g, const int mode)
     rp->UnitDensity_in_cgs = rp->UnitMass_in_g / pow(rp->UnitLength_in_cm, 3);
     rp->Hubble_h = 0.73;
     rp->DustySAGEMode = mode;
-    rp->DustGrowthMaxDtoZ = 1.0;   /* the parameter file's default */
+    rp->DustGrowthMaxDtoZ = 0.5;   /* the parameter file's default */
     for(int i = 0; i < ABSOLUTEMAXSNAPS; i++) rp->DustTime[i] = 100.0 * i;
     memset(g, 0, sizeof(*g));
     g->SnapNum = 50;
@@ -150,14 +150,16 @@ void test_dust_time_physical(void) {
 }
 
 void test_dust_growth_past_half(void) {
-    BEGIN_TEST("dust_growth (mode 2): grows past dust = gas-phase metals, towards all the metals");
+    BEGIN_TEST("dust_growth (mode 2, DustGrowthMaxDtoZ 1): grows past dust = gas-phase metals");
 
-    /* Asano et al. (2013) eq. 20 limits growth by D / Z with Z all the metals.  In mode 2 the
-     * dust is outside MetalsColdGas, so with dust = gas-phase metals (D/Z = 0.5) growth must
-     * continue; the source used the gas-phase metals and stopped there. */
+    /* Asano et al. (2013) eq. 20 as written (DustGrowthMaxDtoZ = 1) limits growth by D / Z with
+     * Z all the metals.  In mode 2 the dust is outside MetalsColdGas, so with dust = gas-phase
+     * metals (D/Z = 0.5) growth must continue; the source, and the default ceiling of 0.5, stop
+     * there. */
     struct params rp;
     struct GALAXY g[1];
     setup(&rp, g, 2);
+    rp.DustGrowthMaxDtoZ = 1.0;
     g[0].MetalsColdGas = 0.01f; g[0].ColdDust = 0.01f;
     g[0].HotGas = 0.0f; g[0].HotDust = 0.0f; g[0].MetalsHotGas = 0.0f;
     g[0].DustStarsStep = 0.0f;   /* no SN destruction */

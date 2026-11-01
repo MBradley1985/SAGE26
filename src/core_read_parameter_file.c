@@ -140,7 +140,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->DustSNIIYields             = 0;    /* Dusty-SAGE defaults */
     run_params->DustSNIaYields             = 0;
     run_params->DustBinaryFraction         = 0.1;
-    run_params->DustGrowthMaxDtoZ          = 1.0;
+    run_params->DustGrowthMaxDtoZ          = 0.5; /* where the Dusty-SAGE source's growth stops */
 
 
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */

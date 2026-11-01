@@ -381,8 +381,8 @@ static void dust_production(const int p, const int centralgal, const double dt, 
 
 /* Grain growth in the ISM (Asano et al. 2013 eq. 20; Dusty-SAGE accrete_dust()):
  *   dD/dt = (1 - D / (f_max Z_metals)) f_H2 D / tau_acc,  tau_acc = 20 Myr x 0.02 / Z,
- * f_max = DustGrowthMaxDtoZ, the most of the metals growth can lock in dust (1 in Asano; the
- * source's gas-phase form stops at 0.5 in mode 2),
+ * f_max = DustGrowthMaxDtoZ, the most of the metals growth can lock in dust: 0.5 by default,
+ * where the source's form (limited by the gas-phase metals) stops; 1 is Asano as written,
  * f_H2 = H2 / gas, Z = Z_metals / gas, Z_metals all the cold metals as in Asano:
  * MetalsColdGas in mode 1, MetalsColdGas + ColdDust in mode 2 (the source used MetalsColdGas in
  * mode 2 too, which stops growth at dust = gas-phase metals, D/Z = 0.5).  Growth draws on the

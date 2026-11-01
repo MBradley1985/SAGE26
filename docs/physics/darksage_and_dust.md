@@ -90,17 +90,18 @@ mergers, disruption).
   1996 lifetimes; Karakas 2010, Woosley & Weaver 1995 or Nomoto et al. 2006,
   Iwamoto et al. 1999 or Seitenzahl et al. 2013 yields), with Popping et al.
   (2017) condensation. SNIa dust is off, as in Dusty-SAGE.
-- Grain growth in molecular gas (Asano et al. 2013 eq. 20), limited by all
-  the cold metals, or by the fraction `DustGrowthMaxDtoZ` of them. It needs
-  H2, so it is off with `SFprescription` 0 or 2.
+- Grain growth in molecular gas (Asano et al. 2013 eq. 20), stopping at the
+  dust-to-metals ratio `DustGrowthMaxDtoZ` (0.5, where the source stops). It
+  needs H2, so it is off with `SFprescription` 0 or 2.
 - Destruction by SN shocks (Asano et al. 2013).
 - Thermal sputtering in the hot, CGM and ejected gas of centrals and
   satellites (Popping et al. 2017).
 
 **Known behaviour.** Above about Zsun, grain growth outpaces destruction and
-takes the dust-to-metals ratio to 0.8-0.9 (dust-to-gas ~0.02 in mode 1 disc
-centrals of 10^10-10^11 Msun). `DustGrowthMaxDtoZ 0.5` holds it at ~0.42,
-halves the dust-to-gas, and lowers the z = 0 cold-dust density by ~0.3 dex.
+holds the dust-to-metals ratio near the ceiling: ~0.42 in mode 1 disc
+centrals of 10^10-10^11 Msun (dust-to-gas ~0.01). With `DustGrowthMaxDtoZ 1`
+(Asano as written) it reaches 0.8-0.9, the dust-to-gas doubles and the z = 0
+cold-dust density is ~0.3 dex higher.
 
 **Modes.**
 - Mode 1, passive: SAGE26's metals are unchanged and the dust is part of
@@ -118,7 +119,8 @@ octal constant), and three errors that switched sputtering off. Changed: the
 yields are made once per substep (the source made them again in every merger
 burst); snapshot times and the growth, destruction and sputtering timescales
 carry their factors of h; the yields read the current snapshot's mean star
-formation rate so far; growth is limited by gas-phase metals plus dust;
+formation rate so far; growth is limited by all the metals, with the
+source's stopping point (dust-to-metals 0.5) kept as `DustGrowthMaxDtoZ`;
 satellites' hot dust is sputtered; and a merged satellite's star-formation
 history joins the central's. Grains are floored at 0.1% of their initial
 size.
