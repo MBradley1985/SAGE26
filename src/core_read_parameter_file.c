@@ -135,7 +135,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->DarkSAGEMode               = 0; /* default: standard SAGE behavior */
     // DustySAGEMode: 0 = no dust; 1 = passive dust within SAGE26's metals; 2 = Dusty-SAGE yields and dust
     run_params->DustySAGEMode              = 0;
-    // DarkSAGERadialFlowsOn: 0 = off; 1 = unstable gas sinks to the neighbouring annuli (DarkSAGEMode >= 1)
+    // DarkSAGERadialFlowsOn: 0 = off; 1 = unstable gas sinks to the neighbouring annuli; 2 = gas and stars (DarkSAGEMode >= 1)
     run_params->DarkSAGERadialFlowsOn      = 0;
     run_params->DustSNIIYields             = 0;    /* Dusty-SAGE defaults */
     run_params->DustSNIaYields             = 0;
@@ -559,7 +559,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"KarpovModeOn",            run_params->KarpovModeOn,            0, 1},
             {"DarkSAGEMode",           run_params->DarkSAGEMode,           0, 3},
             {"DustySAGEMode",          run_params->DustySAGEMode,          0, 2},
-            {"DarkSAGERadialFlowsOn",  run_params->DarkSAGERadialFlowsOn,  0, 1},
+            {"DarkSAGERadialFlowsOn",  run_params->DarkSAGERadialFlowsOn,  0, 2},
             {"DustSNIIYields",         run_params->DustSNIIYields,         0, 1},
             {"DustSNIaYields",         run_params->DustSNIaYields,         0, 1}
         };

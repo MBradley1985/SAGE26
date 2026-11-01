@@ -143,11 +143,14 @@ void darksage_unstable_profile(const int p, double gas_w[N_BINS], double star_w[
  *   2. DS_GAS_SINK_RATE u_i leaves annulus i: the outermost annulus gives it all to annulus i-1;
  *      the others send m_down to i-1 and m_up to i+1 with m_down j_lose = m_up j_gain, j_lose and
  *      j_gain the steps between the j-bin midpoints, so the disc keeps its angular momentum;
- *   3. metals, dust, H2 and HI go with the gas in the annulus's proportions.
+ *   3. metals, dust, H2 and HI go with the gas in the annulus's proportions;
+ *   4. with DarkSAGERadialFlowsOn 2, unstable stars do the same: a fraction
+ *      1 - (1 - DS_GAS_SINK_RATE) c_s / sigma of m_star (1 - Q_star / Q_star_min) (DarkSage's
+ *      StarSinkRate, DiskInstabilityOn 1), with their metals and velocity dispersion.
  * Differences from DarkSage: SAGE26 has already decided the instability's star formation and
  * black-hole growth, so the rest of u_i stays where it is, and annulus 0 (whose m_down DarkSage
- * feeds to the black hole) keeps its gas.  Only the annuli change: ColdGas, MetalsColdGas and
- * ColdDust are untouched.
+ * feeds to the black hole, and the stars' to the bulge) keeps its mass.  Only the annuli change:
+ * ColdGas, MetalsColdGas, ColdDust and the disc's stellar mass and metals are untouched.
  */
 void darksage_instability_gas_sink(const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
@@ -159,24 +162,45 @@ void darksage_instability_gas_sink(const int p, struct GALAXY *galaxies, const s
     for(int i = N_BINS - 1; i > 0; i--) {
         double unstable_gas, unstable_stars;
         annulus_unstable(i, g, c_s, coplanar, &unstable_gas, &unstable_stars, run_params);
-        const double sink = DS_GAS_SINK_RATE * unstable_gas;
-        if(sink <= 0.0 || g->DiscGas[i] <= 0.0f) continue;
-
-        double m_down = sink, m_up = 0.0;
+        /* the j-conserving split: m_down j_lose = m_up j_gain (all inwards from the last annulus) */
+        double f_up = 0.0;
         if(i < N_BINS - 1) {
             const double j_gain = 0.5 * (edge[i+2] - edge[i]);
             const double j_lose = 0.5 * (edge[i+1] - edge[i-1]);
-            m_up = j_lose / (j_gain + j_lose) * sink;
-            m_down = sink - m_up;
+            f_up = j_lose / (j_gain + j_lose);
         }
-        /* gas, metals, dust, H2 and HI all move in the same proportion */
-        float *arr[5] = {g->DiscGas, g->DiscGasMetals, g->DiscDust, g->DiscH2, g->DiscHI};
-        const double f_down = m_down / g->DiscGas[i], f_up = m_up / g->DiscGas[i];
-        for(int k = 0; k < 5; k++) {
-            const double m = arr[k][i];
-            arr[k][i] = (float)(m * (1.0 - f_down - f_up));
-            arr[k][i-1] += (float)(m * f_down);
-            if(i < N_BINS - 1) arr[k][i+1] += (float)(m * f_up);
+
+        const double sink = DS_GAS_SINK_RATE * unstable_gas;
+        if(sink > 0.0 && g->DiscGas[i] > 0.0f) {
+            /* gas, metals, dust, H2 and HI all move in the same proportion */
+            float *arr[5] = {g->DiscGas, g->DiscGasMetals, g->DiscDust, g->DiscH2, g->DiscHI};
+            const double f_down = (1.0 - f_up) * sink / g->DiscGas[i], f_upm = f_up * sink / g->DiscGas[i];
+            for(int k = 0; k < 5; k++) {
+                const double m = arr[k][i];
+                arr[k][i] = (float)(m * (1.0 - f_down - f_upm));
+                arr[k][i-1] += (float)(m * f_down);
+                if(i < N_BINS - 1) arr[k][i+1] += (float)(m * f_upm);
+            }
+        }
+
+        /* DarkSAGERadialFlowsOn 2: unstable stars migrate the same way, a fraction
+         * 1 - (1 - GasSinkRate) c_s / sigma of them (DarkSage StarSinkRate), mixing dispersions by mass */
+        const double sigma = g->VelDispStars[i];
+        if(run_params->DarkSAGERadialFlowsOn < 2 || unstable_stars <= 0.0 || g->DiscStars[i] <= 0.0f || sigma <= 0.0) continue;
+        double moved = (1.0 - (1.0 - DS_GAS_SINK_RATE) * c_s / sigma) * unstable_stars;
+        if(moved > g->DiscStars[i]) moved = g->DiscStars[i];
+        if(moved <= 0.0) continue;
+        const double z = g->DiscStarsMetals[i] / g->DiscStars[i];
+        const double to[2] = {(1.0 - f_up) * moved, f_up * moved};
+        g->DiscStars[i] -= (float)moved;
+        g->DiscStarsMetals[i] = (float)(z * g->DiscStars[i]);
+        for(int k = 0; k < 2; k++) {
+            const int j = (k == 0) ? i - 1 : i + 1;
+            if(to[k] <= 0.0) continue;
+            const double m_old = g->DiscStars[j], s_old = g->VelDispStars[j];
+            g->VelDispStars[j] = (float)sqrt((m_old * s_old * s_old + to[k] * sigma * sigma) / (m_old + to[k]));
+            g->DiscStars[j] += (float)to[k];
+            g->DiscStarsMetals[j] += (float)(z * to[k]);
         }
     }
 }
