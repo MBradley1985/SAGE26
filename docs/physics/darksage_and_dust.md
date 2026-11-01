@@ -37,31 +37,34 @@ annulus in the centre-of-momentum frame.
 reheated, becomes unstable, feeds the black hole or bursts.
 - Mode 1 shares those bulk masses over the annuli: star formation and H2 by
   the same law evaluated per annulus, the instability's gas and stars from
-  the annuli the Toomre Q marks unstable. The annuli sum to the bulk fields.
+  the annuli the Toomre Q marks unstable. Annuli still unstable after that
+  then pass 66% of their unstable gas, and 1 - 0.34 c_s / sigma of their
+  unstable stars, to the neighbouring annuli, from the outside in, with the
+  disc's angular momentum kept (DarkSage, `DiskInstabilityOn` 1); the rest
+  stays put, as SAGE26 has decided the burst and black-hole growth, and the
+  innermost annulus keeps its mass. The annuli sum to the bulk fields.
   `DiskScaleRadius` stays at SAGE26's halo-spin value, so every shared output
   is identical to SAGE26: SAGE26 with radially resolved discs and angular
   momentum tracking, and nothing else changed.
-- `DarkSAGERadialFlowsOn` (any mode) adds DarkSage's radial flows inside the
-  disc: after SAGE26's instability has taken its mass, annuli still Toomre
-  unstable pass 66% of their unstable gas (1) and also their unstable stars
-  (2, DarkSage's 1 - 0.34 c_s / sigma) to the neighbouring annuli, from the
-  outside in, with the disc's angular momentum kept. Only the annuli change.
-  Without it the annuli have no radial flow.
 - Mode 2 is mode 1 with `DiskScaleRadius` measured from the annuli: half the
   mass-weighted mean radius of the gas and disc stars, using the disc's own
   rotation speed. This is the one change it makes to SAGE26's physics.
 - Mode 3 is mode 2 with the star-formation law evaluated on each annulus's
   own surface density; the galaxy's star formation is the sum.
 
-**Known behaviour** (mode 1, Millennium, star-forming disc centrals of
-10^10-10^11 Msun). Stellar metallicity rises outwards (about 0.65 to 1.0 Zsun
-from 0.25 to 2 stellar half-mass radii): the discs grow inside out, the inner
-stars formed when the gas was poorer, and the gas metallicity rises about
-threefold after z ~ 2, more than its radial gradient. `DarkSAGERadialFlowsOn 2`
-flattens it (0.9 to 0.95 Zsun) but does not make it fall outwards, and shrinks
-the annulus stellar half-mass radius by about 25%; gas alone (1) moves little
-gas, as SAGE26's instability has already taken the unstable gas. The gas
-metallicity follows SAGE26's (`Yield` 0.025).
+**Known behaviour** (Millennium, star-forming disc centrals of
+10^10-10^11 Msun). The discs grow inside out: the inner stars formed when the
+gas was poorer, and the gas metallicity rises about threefold after z ~ 2,
+more than its radial gradient, so without the flows between annuli the
+stellar metallicity would rise outwards (0.65 to 1.0 Zsun from 0.25 to 2
+stellar half-mass radii in mode 1). The migrating stars flatten it: about
+0.9 to 0.95 Zsun in modes 1 and 2; in mode 3 it peaks near the half-mass
+radius and falls beyond (about 1.0 to 0.9 Zsun at 2 half-mass radii). The
+flows make the annulus stellar half-mass radius about 25% smaller in mode 1;
+in modes 2 and 3 they shrink `DiskScaleRadius` by ~4% and lower the
+bulge-to-total ratio at 10^10.5-10^11 Msun by a few hundredths, and leave the
+stellar mass function, star formation and black holes essentially unchanged.
+The gas metallicity follows SAGE26's (`Yield` 0.025).
 
 **Known behaviour** (modes 2 and 3). The stellar discs are more compact than observed
 (about 0.3 dex below Lange et al. 2016 at z = 0), as in DarkSage's own runs

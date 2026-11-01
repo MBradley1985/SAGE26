@@ -9,8 +9,8 @@
  * disc built by the cooling j-profile has the DiskScaleRadius that profile
  * implies, a uniform disc has its half-mass radius at R / sqrt(2), and the
  * Toomre profile is zero for a stable disc and positive for an unstable one;
- * the radial flows (DarkSAGERadialFlowsOn) conserve gas, metals, dust, stars and
- * angular momentum while moving unstable mass both ways.
+ * the flows between annuli conserve gas, metals, dust, stars and angular
+ * momentum while moving unstable mass both ways.
  *
  * Run: cd tests && make test_build/test_darksage && ./test_build/test_darksage
  */
@@ -354,7 +354,7 @@ static double ang_mom(const float *m, const struct params *rp)
 }
 
 void test_gas_sink_conserves_and_flows(void) {
-    BEGIN_TEST("darksage_instability_gas_sink: unstable gas (and stars) spread over the annuli, conserved");
+    BEGIN_TEST("darksage_instability_sink: unstable gas and stars spread over the annuli, conserved");
 
     /* A heavy disc in annuli 5-14 (Toomre unstable, as in test_unstable_profile) with uniform
      * metallicity 0.02, dust-to-gas 0.01 and coplanar stars.  The sink moves mass only between
@@ -363,12 +363,11 @@ void test_gas_sink_conserves_and_flows(void) {
      * disc's inner edge, empty before, must receive gas (annulus 4), and an annulus outside the
  * innermost unstable one must gain gas (the share sent out; the outer annuli are stable, as
  * Q grows with r on a flat rotation curve, so it stays inside the disc).
-     * DarkSAGERadialFlowsOn 1 must leave the stars alone; 2 must move them the same way,
-     * conserving their mass, metals and angular momentum. */
-    for(int flows = 1; flows <= 2; flows++) {
+     * The unstable stars must move the same way, conserving their mass, metals and angular
+     * momentum. */
+    {
         struct params rp;
         setup_params(&rp);
-        rp.DarkSAGERadialFlowsOn = flows;
         struct GALAXY g[1];
         setup_galaxy(&g[0], &rp);
         g[0].SpinGas[2] = g[0].SpinStars[2] = 1.0f;
@@ -388,10 +387,9 @@ void test_gas_sink_conserves_and_flows(void) {
         const double gas = sum(g[0].DiscGas), metals = sum(g[0].DiscGasMetals), dust = sum(g[0].DiscDust);
         const double stars = sum(g[0].DiscStars), star_metals = sum(g[0].DiscStarsMetals);
         const double J_gas = ang_mom(g[0].DiscGas, &rp), J_stars = ang_mom(g[0].DiscStars, &rp);
-        float stars0[N_BINS], gas0[N_BINS];
-        memcpy(stars0, g[0].DiscStars, sizeof(stars0));
+        float gas0[N_BINS];
         memcpy(gas0, g[0].DiscGas, sizeof(gas0));
-        darksage_instability_gas_sink(0, g, &rp);
+        darksage_instability_sink(0, g, &rp);
 
         ASSERT_CLOSE(gas, sum(g[0].DiscGas), SUM_RTOL, "Gas conserved");
         ASSERT_CLOSE(metals, sum(g[0].DiscGasMetals), SUM_RTOL, "Gas metals conserved");
@@ -402,14 +400,10 @@ void test_gas_sink_conserves_and_flows(void) {
         for(int i = 6; i < N_BINS; i++) if(g[0].DiscGas[i] > gas0[i] * (1.0 + SUM_RTOL)) gained_out = 1;
         ASSERT_TRUE(gained_out, "And some moves out, to keep the angular momentum");
         ASSERT_CLOSE(0.02, g[0].DiscGasMetals[4] / g[0].DiscGas[4], SUM_RTOL, "Moved gas keeps its metallicity");
-        if(flows == 1) {
-            ASSERT_TRUE(memcmp(stars0, g[0].DiscStars, sizeof(stars0)) == 0, "Mode 1: stars untouched");
-        } else {
-            ASSERT_CLOSE(stars, sum(g[0].DiscStars), SUM_RTOL, "Mode 2: stars conserved");
-            ASSERT_CLOSE(star_metals, sum(g[0].DiscStarsMetals), SUM_RTOL, "Mode 2: stellar metals conserved");
-            ASSERT_CLOSE(J_stars, ang_mom(g[0].DiscStars, &rp), SUM_RTOL, "Mode 2: stellar angular momentum conserved");
-            ASSERT_GREATER_THAN(g[0].DiscStars[4], 0.0, "Mode 2: stars migrate inwards");
-        }
+        ASSERT_CLOSE(stars, sum(g[0].DiscStars), SUM_RTOL, "Stars conserved");
+        ASSERT_CLOSE(star_metals, sum(g[0].DiscStarsMetals), SUM_RTOL, "Stellar metals conserved");
+        ASSERT_CLOSE(J_stars, ang_mom(g[0].DiscStars, &rp), SUM_RTOL, "Stellar angular momentum conserved");
+        ASSERT_GREATER_THAN(g[0].DiscStars[4], 0.0, "Stars migrate inwards");
     }
 }
 

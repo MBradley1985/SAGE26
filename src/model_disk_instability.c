@@ -138,8 +138,8 @@ void check_disk_instability(const int p, const int centralgal, const int halonr,
         }
     }
 
-    // DarkSAGERadialFlowsOn: gas the annuli still find unstable sinks to its neighbours, inside the disc
-    if(annuli && run_params->DarkSAGERadialFlowsOn) {
-        darksage_instability_gas_sink(p, galaxies, run_params);
+    // DarkSAGEMode: gas and stars the annuli still find unstable move to their neighbours, inside the disc
+    if(annuli) {
+        darksage_instability_sink(p, galaxies, run_params);
     }
 }

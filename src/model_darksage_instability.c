@@ -9,8 +9,8 @@
  * Wiegert (2011) two-fluid weighting W = 2 sigma c_s / (sigma^2 + c_s^2), and
  * the mass each annulus would have to lose to become stable weights the
  * removal.  Gas and stellar discs more than DS_THETA_THRESH_DEG degrees apart
- * are tested as separate one-component discs.  With DarkSAGERadialFlowsOn,
- * gas still unstable then sinks to the neighbouring annuli as in DarkSage.
+ * are tested as separate one-component discs.  Gas and stars still unstable
+ * then move to the neighbouring annuli as in DarkSage.
  *
  * Code units throughout (10^10 Msun/h, Mpc/h, km/s).
  *
@@ -133,9 +133,10 @@ void darksage_unstable_profile(const int p, double gas_w[N_BINS], double star_w[
 }
 
 /*
- * darksage_instability_gas_sink -- DarkSAGERadialFlowsOn: unstable gas sinks through the disc
- * (the gas_sink step of DarkSage's deal_with_unstable_gas(); Stevens, Croton & Mutch 2016
- * Sec. 3.7).  Call after SAGE26's instability has taken its mass.
+ * darksage_instability_sink -- unstable gas and stars move through the disc (DarkSage
+ * check_disk_instability() with DiskInstabilityOn 1 and the gas_sink step of
+ * deal_with_unstable_gas(); Stevens, Croton & Mutch 2016 Sec. 3.7).  Call after SAGE26's
+ * instability has taken its mass.
  *
  * Algorithm, from the outermost annulus inwards as DarkSage (gas an annulus receives is tested
  * when its turn comes):
@@ -144,7 +145,7 @@ void darksage_unstable_profile(const int p, double gas_w[N_BINS], double star_w[
  *      the others send m_down to i-1 and m_up to i+1 with m_down j_lose = m_up j_gain, j_lose and
  *      j_gain the steps between the j-bin midpoints, so the disc keeps its angular momentum;
  *   3. metals, dust, H2 and HI go with the gas in the annulus's proportions;
- *   4. with DarkSAGERadialFlowsOn 2, unstable stars do the same: a fraction
+ *   4. unstable stars do the same: a fraction
  *      1 - (1 - DS_GAS_SINK_RATE) c_s / sigma of m_star (1 - Q_star / Q_star_min) (DarkSage's
  *      StarSinkRate, DiskInstabilityOn 1), with their metals and velocity dispersion.
  * Differences from DarkSage: SAGE26 has already decided the instability's star formation and
@@ -152,7 +153,7 @@ void darksage_unstable_profile(const int p, double gas_w[N_BINS], double star_w[
  * feeds to the black hole, and the stars' to the bulge) keeps its mass.  Only the annuli change:
  * ColdGas, MetalsColdGas, ColdDust and the disc's stellar mass and metals are untouched.
  */
-void darksage_instability_gas_sink(const int p, struct GALAXY *galaxies, const struct params *run_params)
+void darksage_instability_sink(const int p, struct GALAXY *galaxies, const struct params *run_params)
 {
     struct GALAXY *g = &galaxies[p];
     const double *edge = run_params->DiscBinEdge;
@@ -183,10 +184,10 @@ void darksage_instability_gas_sink(const int p, struct GALAXY *galaxies, const s
             }
         }
 
-        /* DarkSAGERadialFlowsOn 2: unstable stars migrate the same way, a fraction
-         * 1 - (1 - GasSinkRate) c_s / sigma of them (DarkSage StarSinkRate), mixing dispersions by mass */
+        /* unstable stars migrate the same way, a fraction 1 - (1 - GasSinkRate) c_s / sigma of
+         * them (DarkSage StarSinkRate), mixing dispersions by mass */
         const double sigma = g->VelDispStars[i];
-        if(run_params->DarkSAGERadialFlowsOn < 2 || unstable_stars <= 0.0 || g->DiscStars[i] <= 0.0f || sigma <= 0.0) continue;
+        if(unstable_stars <= 0.0 || g->DiscStars[i] <= 0.0f || sigma <= 0.0) continue;
         double moved = (1.0 - (1.0 - DS_GAS_SINK_RATE) * c_s / sigma) * unstable_stars;
         if(moved > g->DiscStars[i]) moved = g->DiscStars[i];
         if(moved <= 0.0) continue;
