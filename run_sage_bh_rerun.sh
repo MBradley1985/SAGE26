@@ -5,7 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=10
 #SBATCH --cpus-per-task=1
-#SBATCH --mem-per-cpu=4000MB
+#SBATCH --mem-per-cpu=60G
 #SBATCH --time=12:00:00
 
 # RERUN of the two broken runs only (millennium_powerlaw_cap_scheme14, miniuchuu_vanilla).

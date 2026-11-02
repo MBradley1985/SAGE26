@@ -2,7 +2,7 @@
 
 #SBATCH --job-name=sage_scenarios_plots
 #SBATCH --output=slurm-plots-%A_%a.out
-#SBATCH --array=0-11
+#SBATCH --array=0-1
 #SBATCH --cpus-per-task=1
 #SBATCH --time=08:00:00
 #SBATCH --mem=60G
@@ -22,20 +22,22 @@ ml numpy/1.24.2-scipy-bundle-2023.02
 ml matplotlib/3.7.0
 
 RUN_DIRS=(
-  # ---- Millennium (other scenarios + vanilla already run) ----
-  "/fred/oz004/jwillingham/millennium_powerlaw_cap_scheme14"
-  "/fred/oz004/jwillingham/millennium_seed_mstar_threshold"
-  # ---- mini-Uchuu ----
-  "/fred/oz004/jwillingham/miniuchuu_baseline_heavy_eddlim"
-  "/fred/oz004/jwillingham/miniuchuu_unlimited_heavy"
-  "/fred/oz004/jwillingham/miniuchuu_unlimited_light"
-  "/fred/oz004/jwillingham/miniuchuu_early_merger_burst_scheme3"
-  "/fred/oz004/jwillingham/miniuchuu_early_z_unlimited_scheme11"
-  "/fred/oz004/jwillingham/miniuchuu_low_mass_host_scheme13"
-  "/fred/oz004/jwillingham/miniuchuu_continuous_cold_cloud_radioeff"
-  "/fred/oz004/jwillingham/miniuchuu_powerlaw_cap_scheme14"
-  "/fred/oz004/jwillingham/miniuchuu_seed_mstar_threshold"
-  "/fred/oz004/jwillingham/miniuchuu_vanilla"
+  # # ---- Millennium (other scenarios + vanilla already run) ----
+  # "/fred/oz004/jwillingham/millennium_powerlaw_cap_scheme14"
+  # "/fred/oz004/jwillingham/millennium_seed_mstar_threshold"
+  # # ---- mini-Uchuu ----
+  # "/fred/oz004/jwillingham/miniuchuu_baseline_heavy_eddlim"
+  # "/fred/oz004/jwillingham/miniuchuu_unlimited_heavy"
+  # "/fred/oz004/jwillingham/miniuchuu_unlimited_light"
+  # "/fred/oz004/jwillingham/miniuchuu_early_merger_burst_scheme3"
+  # "/fred/oz004/jwillingham/miniuchuu_early_z_unlimited_scheme11"
+  # "/fred/oz004/jwillingham/miniuchuu_low_mass_host_scheme13"
+  # "/fred/oz004/jwillingham/miniuchuu_continuous_cold_cloud_radioeff"
+  # "/fred/oz004/jwillingham/miniuchuu_powerlaw_cap_scheme14"
+  # "/fred/oz004/jwillingham/miniuchuu_seed_mstar_threshold"
+  # "/fred/oz004/jwillingham/miniuchuu_vanilla"
+  "/fred/oz004/jwillingham/baseline_time1"
+  "/fred/oz004/jwillingham/baseline_time2"
 )
 
 DIR=${RUN_DIRS[$SLURM_ARRAY_TASK_ID]}
