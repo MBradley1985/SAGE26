@@ -3,7 +3,7 @@
 #SBATCH --job-name=sage_scenarios
 #SBATCH --output=slurm-sage-%A_%a.out
 #SBATCH --error=slurm-sage-%A_%a.err
-#SBATCH --array=0-2
+#SBATCH --array=0-3
 #SBATCH --cpus-per-task=1
 #SBATCH --time=06:30:00
 #SBATCH --mem=10G
@@ -18,12 +18,12 @@ CONFIG_FILES=(
   # "input/scenarios/baseline_heavy_eddlim.par"
   # "input/scenarios/unlimited_heavy.par"
   # "input/scenarios/unlimited_light.par"
-  # "input/scenarios/early_merger_burst_scheme3.par"
-  # "input/scenarios/early_z_unlimited_scheme11.par"
-  # "input/scenarios/low_mass_host_scheme13.par"
-  # "input/scenarios/continuous_cold_cloud_radioeff.par"
-  "input/scenarios/baseline_time1.par"
-  "input/scenarios/baseline_time2.par"
+   "input/scenarios/early_merger_burst_scheme3.par"
+   "input/scenarios/early_z_unlimited_scheme11.par"
+   "input/scenarios/low_mass_host_scheme13.par"
+   "input/scenarios/continuous_cold_cloud_radioeff.par"
+  # "input/scenarios/baseline_time1.par"
+  # "input/scenarios/baseline_time2.par"
 )
 
 CONFIG_FILE=${CONFIG_FILES[$SLURM_ARRAY_TASK_ID]}

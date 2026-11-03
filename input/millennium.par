@@ -88,7 +88,7 @@ LowMassHostThreshold        0.1     %AGNAccretionScheme=13: unlimited accretion 
 ColdAccretionBHEfficiency   0      %Cold accretion (precipitation/CCA) BH efficiency (CGMRecipeOn=0) : 1.0e-5
 BHSeedMinHaloMass           0.86    %Minimum halo mass for seeding in 10^10 Msun/h (1.0 = 10^10 Msun/h)
 BHAccretionNorm             10.0    %The normalisation factor in front of BH Quasar Mode Accretion timescale (default =10)
-BHMassScalingIndex          0.5     %Scaling factor for the BH-Bulge Mass relation, used in the BH Quasar Mode Accretion timescale
+BHMassScalingIndex          0.25     %Scaling factor for the BH-Bulge Mass relation, used in the BH Quasar Mode Accretion timescale
 
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
 ThresholdSatDisruption      10.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption 1.0
