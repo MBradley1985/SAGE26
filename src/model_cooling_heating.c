@@ -183,16 +183,6 @@ double cooling_recipe_hot(const int gal, const int halo_snapnum, const double dt
 
         galaxies[gal].RcoolToRvir = rcool / galaxies[gal].Rvir;
 
-        // rcool is left uncapped on both paths.  Only hot-regime haloes reach
-        // this function, and for them rcool > Rvir is the physical signature of
-        // a corona that cools faster than it can be shock-heated -- the very
-        // condition that selects cold-stream accretion below, exactly as in
-        // Croton et al. (2016).  Capping it to Rvir erased that signature: the
-        // cold-stream branch became unreachable and the affected haloes (70% of
-        // galaxies at z = 0 rising to 99.7% at z = 6, carrying 57-99% of the
-        // cooling mass) instead cooled at 0.5 * m_hot / t_cool, half the SAGE16
-        // rate.  CGM-regime haloes never come here: cooling_recipe_cgm() pins
-        // its own rcool = Rvir purely to feed the AGN-heating call.
 
         coolingGas = 0.0;
 
@@ -205,25 +195,6 @@ double cooling_recipe_hot(const int gal, const int halo_snapnum, const double dt
                 // factor 2 at rcool = Rvir; that is the published behaviour.
                 coolingGas = galaxies[gal].HotGas / tcool * dt;
 
-                // Uncomment for the cold accretion onto the BH (rcool > Rvir) channel.
-                // Cold accretion onto the BH: rcool > Rvir
-                // double coldAccretionMass = run_params->ColdAccretionBHEfficiency * coolingGas;
-
-                // double coldAccretionRate = eddington_limited_accretion_rate(
-                //     coldAccretionMass / dt, 1, galaxies[gal].BlackHoleMass, halo_snapnum, 0,
-                //     run_params, galaxies[gal].BHAccretionType, galaxies[gal].BHMaxaccretionRate,
-                //     galaxies[gal].BHEddingtonRateLimit, galaxies[gal].BHMassatAccretion);
-                // coldAccretionMass = coldAccretionRate * dt;
-                // if(coldAccretionMass > coolingGas) coldAccretionMass = coolingGas;
-
-                // if(coldAccretionMass > 0.0) {
-                //     const double metallicity = get_metallicity(galaxies[gal].HotGas, galaxies[gal].MetalsHotGas);
-                //     galaxies[gal].BlackHoleMass             += coldAccretionMass;
-                //     galaxies[gal].ColdAccretionBHaccretionMass[halo_snapnum] += coldAccretionMass;
-                //     galaxies[gal].HotGas                    -= coldAccretionMass;
-                //     galaxies[gal].MetalsHotGas               -= metallicity * coldAccretionMass;
-                //     coolingGas                                -= coldAccretionMass;
-                // }
             } else {
                 // Quasi-static cooling flow.
                 coolingGas = (galaxies[gal].HotGas / galaxies[gal].Rvir) * (rcool / (2.0 * tcool)) * dt;

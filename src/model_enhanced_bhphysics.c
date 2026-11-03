@@ -188,11 +188,11 @@ double eddington_limited_accretion_rate(double accretion_rate, int eddington_fla
     edd_rate = (double)BHEddingtonRateLimit[snapnum];
 
     if(eddington_flag == 1) {
-        // Schemes 14/15 relax the cap on the quasar-mode channels (merger = 1, instability = 2) to
+        // Schemes 14 relax the cap on the quasar-mode channels (merger = 1, instability = 2) to
         // lambda_max(M_BH, z) * Eddington.  Radio mode (type 0) keeps the hard cap at 1.
         // BHEddingtonRateLimit still records the plain Eddington rate.
         double cap_rate = edd_rate;
-        if((run_params->AGNAccretionScheme == 14 || run_params->AGNAccretionScheme == 15) &&
+        if((run_params->AGNAccretionScheme == 14) &&
            bh_accretion_type != 0 && valid_snap) {
             cap_rate = edd_rate * lambda_max_cap(black_hole_mass, run_params->ZZ[snapnum], run_params);
         }
@@ -205,20 +205,6 @@ double eddington_limited_accretion_rate(double accretion_rate, int eddington_fla
     return return_rate;
 }
 
-
-static int scenario_disk_only_unlimited(const struct GALAXY *gal, int eddtype,
-                                         const struct params *run_params)
-{
-    // Instability channel runs free; merger channel stays capped.
-    return (eddtype == 2) ? 0 : 1;
-}
-
-static int scenario_merger_only_unlimited(const struct GALAXY *gal, int eddtype,
-                                           const struct params *run_params)
-{
-    // Merger channel runs free; instability channel stays capped.
-    return (eddtype == 1) ? 0 : 1;
-}
 
 static int scenario_first_event_unlimited(const struct GALAXY *gal, int eddtype,
                                            const struct params *run_params)
@@ -243,79 +229,19 @@ static int scenario_first_event_unlimited(const struct GALAXY *gal, int eddtype,
 static const double VVIR_SMALL_HALO_KMS = 75.5;   // Vvir at Mvir=10 code units (~1.4e11 Msun)
 static const double VVIR_LARGE_HALO_KMS = 123.5;  // Vvir at Mvir=6e11 Msun (MSHOCK_DB06_MSUN/DEKEL06_M_SHOCK_MSUN)
 
-static int scenario_small_halo_unlimited(const struct GALAXY *gal, int eddtype,
-                                          const struct params *run_params)
-{
-    return (gal->Vvir < VVIR_SMALL_HALO_KMS) ? 0 : 1;
-}
 
-static int scenario_massive_halo_unlimited(const struct GALAXY *gal, int eddtype,
-                                            const struct params *run_params)
-{
-    return (gal->Vvir > VVIR_LARGE_HALO_KMS) ? 0 : 1;
-}
-
-static int scenario_conc_bulge_unlimited(const struct GALAXY *gal, int eddtype,
-                                          const struct params *run_params)
-{
-    // Bulge-to-total stellar mass ratio above a cut -> unlimited.
-    if (gal->StellarMass <= 0.0) return 1;
-    const double bulge_frac = gal->BulgeMass / gal->StellarMass;
-    return (bulge_frac > 0.7) ? 0 : 1;
-}
-
-static int scenario_minor_merger_unlimited(const struct GALAXY *gal, double mass_ratio,
-                                            const struct params *run_params)
-{
-    return (mass_ratio <= run_params->ThreshMajorMerger) ? 0 : 1;
-}
-
-static int scenario_major_merger_unlimited(const struct GALAXY *gal, double mass_ratio,
-                                            const struct params *run_params)
-{
-    return (mass_ratio > run_params->ThreshMajorMerger) ? 0 : 1;
-}
-
-static int scenario_disk_dominated_unlimited(const struct GALAXY *gal, int eddtype,
-                                          const struct params *run_params)
-{
-    // Bulge-to-total stellar mass ratio above a cut -> unlimited.
-    if (gal->StellarMass <= 0.0) return 1;
-    const double bulge_frac = gal->BulgeMass / gal->StellarMass;
-    return (bulge_frac < 0.3) ? 0 : 1;
-}
 
 // A SUSTAINED early-universe exemption rather than a single event (cf.
 // scenario_first_event_unlimited, scheme 3). Every merger/instability event
 // for this galaxy runs unlimited as long as z > EarlyUniverseZCut; once the
 // galaxy's current redshift drops below the cutoff, every later event is
-// capped as normal. Tests the same "early universe permits unimpeded
-// growth" idea as scheme 3, but as a time window instead of one lucky
-// burst. Ported from the bh_investigation sandbox ("EarlyWindow"): at
-// BlackHoleGrowthRate=0.06 it reproduces R2's high-z LRD-like f_BH fraction
-// (~0.06) while causing somewhat less z=0 BH-bulge relation offset once
-// combined with a longer reincorporation time -- see bh_investigation/
-// GROWTH_STORIES.md and the "persistent/delayed-recovery" discussion there.
+// capped as normal. 
 static int scenario_early_universe_unlimited(const struct GALAXY *gal, const struct params *run_params)
 {
     const double z = run_params->ZZ[gal->SnapNum];
     return (z > run_params->EarlyUniverseZCut) ? 0 : 1;
 }
 
-// Exempts merger/instability events whose host is STILL below
-// LowMassHostThreshold in StellarMass at event time. LRD hosts are observed
-// to be unusually compact and low-mass while caught accreting (Kocevski+23,
-// Labbe+23: M_star~1e8-1e10 Msun). Growing a BH to any appreciable absolute
-// mass while M_star is still small mechanically produces a high f_BH =
-// M_BH/M_star as an OUTCOME of the exempted event, rather than requiring an
-// already-elevated f_BH as a precondition (gating on CURRENT f_BH was tried
-// in the sandbox and found inert: the galaxies that cross an f_BH threshold
-// under normal capping turn out to be gas-poor/quenched, with no further
-// accretion demand for an exemption to act on). Ported from the
-// bh_investigation sandbox ("LowMassHost"): at BlackHoleGrowthRate=0.06 it
-// matches R2's high-z LRD-like f_BH fraction while causing measurably less
-// z=0 BH-bulge relation offset than R2 (+0.175 vs +0.267 dex in sandbox
-// mini-Millennium testing) -- see bh_investigation/GROWTH_STORIES.md.
 static int scenario_lowmass_host_unlimited(const struct GALAXY *gal, const struct params *run_params)
 {
     return (gal->StellarMass < run_params->LowMassHostThreshold) ? 0 : 1;
@@ -325,26 +251,11 @@ double effective_bh_growth_rate(const struct GALAXY *gal, const struct params *r
 {
     double rate = run_params->BlackHoleGrowthRate;
 
-    // Decouples the "first quasar-mode event unlimited" scenario (R2,
-    // AGNAccretionScheme=3) from a global BlackHoleGrowthRate boost. Boosting
-    // BlackHoleGrowthRate globally inflates both the one special unlimited
-    // burst AND every ordinary capped event afterward -- the latter is what
-    // actually sets the z=0 relation, since it's the bulk of post-burst
-    // growth. This applies the boost only to the qualifying first event
-    // itself (same condition scenario_first_event_unlimited() uses:
-    // !QuasarModeEventOccurred), leaving every later, capped event at the
-    // true fiducial rate. Gated on the same EddingtonLimitOn+
-    // AGNAccretionScheme==3 combination R2 requires, not a freestanding
-    // switch, so it can't silently create a "not yet capped" regime under a
-    // different scenario where the boost wouldn't be undone by a cap at all.
+ 
     if(run_params->EddingtonLimitOn && run_params->AGNAccretionScheme == 3 &&
        !gal->QuasarModeEventOccurred) {
         rate *= run_params->FirstEventGrowthBoost;
     }
-
-    // Schemes 15 and 17: smooth mass/redshift-dependent boost on the demanded gas fraction.
-    if((run_params->AGNAccretionScheme == 15 || run_params->AGNAccretionScheme == 17) && run_params->BHBoostB0 > 1.0)
-        rate *= bh_demand_boost(gal->BlackHoleMass, run_params->ZZ[gal->SnapNum], run_params);
 
     return rate;
 }
@@ -354,20 +265,10 @@ int accretion_scenario(int scenario_id, const struct GALAXY *gal,
 {
     switch (scenario_id) {
         case 0: return run_params->EddingtonLimitOn;          // current global behaviour: capped everywhere
-        case 1: return scenario_disk_only_unlimited(gal, eddtype, run_params);
-        case 2: return scenario_merger_only_unlimited(gal, eddtype, run_params);
         case 3: return scenario_first_event_unlimited(gal, eddtype, run_params);
-        case 4: return scenario_small_halo_unlimited(gal, eddtype, run_params);
-        case 5: return scenario_massive_halo_unlimited(gal, eddtype, run_params);
-        case 6: return scenario_conc_bulge_unlimited(gal, eddtype, run_params);
-        case 7: return scenario_minor_merger_unlimited(gal, mass_ratio, run_params);
-        case 8: return scenario_major_merger_unlimited(gal, mass_ratio, run_params);
-        case 9: return scenario_disk_dominated_unlimited(gal, eddtype, run_params);
         case 11: return scenario_early_universe_unlimited(gal, run_params);
         case 13: return scenario_lowmass_host_unlimited(gal, run_params);
         case 14: return run_params->EddingtonLimitOn;   // power-law lambda_max cap (applied in eddington_limited_accretion_rate)
-        case 15: return run_params->EddingtonLimitOn;   // demand boost B(M_BH,z) + power-law cap
-        case 17: return 0;                              // demand boost B(M_BH,z) only: merger/instability growth is never Eddington-capped (EddingtonLimitOn is irrelevant)
         default: return run_params->EddingtonLimitOn;         // safe fallback
     }
 }

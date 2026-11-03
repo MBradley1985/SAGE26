@@ -503,13 +503,7 @@ void deal_with_galaxy_merger(const int p, const int merger_centralgal, const int
         // Eddington cap on the demand.  NOTE: this is the single call site for
         // eddington_limited_accretion_rate on the merger channel; grow_black_hole
         // does not re-apply it in the joint path (see there).
-        //
-        // Always call the limiter, even with EddingtonLimitOn==0: it unconditionally
-        // records BHAccretionType/BHMaxaccretionRate/BHEddingtonRateLimit/BHMassatAccretion
-        // for this snapshot, which is what the accretion plots key merger events off of.
-        // Master switch still wins on whether the rate is actually capped -- eddflag=0
-        // means eddington_limited_accretion_rate returns the rate unclamped (mirrors the
-        // legacy path in grow_black_hole()).
+       
         if(BHaccrete_demanded > 0.0) {
         double bh_rate = BHaccrete_demanded / bh_accretiontime;
         int eddflag = run_params->EddingtonLimitOn
@@ -698,12 +692,7 @@ void grow_black_hole(const int merger_centralgal, const double mass_ratio, const
         galaxies[merger_centralgal].tacc[snap] = (float)accretiontime;
 
         /* ---- EDDINGTON LIMITING ---- */
-        // Joint path: the Eddington cap was already applied to the demand at
-        // budget time (single call site, so tracking fields are written once).
-        // Re-applying it here on the same rate with the same accretiontime
-        // would be a no-op at best and a double-record at worst, so skip it.
-        // Legacy path: apply it here as before.
-        // proposed
+    
         if(!joint_budget) {
             double BHaccreterate = BHaccrete / accretiontime;
 
