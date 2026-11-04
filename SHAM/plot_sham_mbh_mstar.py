@@ -34,6 +34,7 @@ sys.path.insert(0, HERE)
 import bh_lrd_analysis as lrd
 from lrd_literature_data import PANG26, FURTAK23, JONES25_LRD_SOURCES
 from plot_sham_fbh import GRID_RC, DEFAULT_GRID_Z, SHAM_COLOR, percentile_track
+from plot_sham_bulge import bulge_fraction
 
 MULTIZ_C_XLIM = lrd.PANEL_C_XLIM          # (6, 11)   log M*
 MULTIZ_C_YLIM = lrd.PANEL_C_YLIM          # (3, 9)    log M_BH
@@ -57,7 +58,7 @@ def lit_for_z(z):
     return pm, fm, jm
 
 
-def draw_mbh_mstar(ax, d, xlim, ylim, show_lit=True, n_scatter=12_000):
+def draw_mbh_mstar(ax, d, xlim, ylim, show_lit=True, n_scatter=12_000, bt_A=None):
     """One redshift's M_BH-M_* panel (SHAM galaxies + obs). Returns legend handles."""
     z = float(d['z'])
     ms, mb = d['logmstar'], d['logmbh']
@@ -65,6 +66,9 @@ def draw_mbh_mstar(ax, d, xlim, ylim, show_lit=True, n_scatter=12_000):
     ms, mb = ms[ok], mb[ok]
     ms_i, mb_i = d['logmstar_int'][ok], d['logmbh_int'][ok]
     extrap = ms_i < float(d['smf_data_min'])
+    if bt_A is not None:       # total M* -> bulge mass with the (z-independent, assumed) B/T relation
+        ms = ms + np.log10(bulge_fraction(ms, bt_A))
+        ms_i = ms_i + np.log10(bulge_fraction(ms_i, bt_A))
     x_lo, x_hi = xlim
     y_lo, y_hi = ylim
     ax.minorticks_on()
@@ -81,7 +85,7 @@ def draw_mbh_mstar(ax, d, xlim, ylim, show_lit=True, n_scatter=12_000):
         xl = x_lo + 0.12 * (x_hi - x_lo)
         yl = xl + np.log10(ratio)
         if y_lo < yl < y_hi:
-            ax.text(xl, yl - 0.12, rf'$M_{{\rm BH}}/M_\star = {ratio:g}$', fontsize=6.5,
+            ax.text(xl, yl - 0.12, rf'$M_{{\rm BH}}/M_{{\rm {"bulge" if bt_A is not None else "*"}}} = {ratio:g}$', fontsize=6.5,
                     ha='left', va='top', rotation=rot, rotation_mode='anchor')
 
     # SHAM galaxies: filled = M* inside the SMF data range, open = Schechter extrapolation
@@ -130,7 +134,7 @@ def draw_mbh_mstar(ax, d, xlim, ylim, show_lit=True, n_scatter=12_000):
     return handles
 
 
-def plot_grid(dlist, out, targets, ncols=3, show_lit=True):
+def plot_grid(dlist, out, targets, ncols=3, show_lit=True, bt_A=None):
     zs = np.array([float(d['z']) for d in dlist])
     chosen = []
     for zt in targets:
@@ -169,7 +173,7 @@ def plot_grid(dlist, out, targets, ncols=3, show_lit=True):
                 ax.text(0.95, 0.05, rf'$z \approx {zt:g}$', transform=ax.transAxes, ha='right',
                         va='bottom', fontsize=10)
             else:
-                for hh in draw_mbh_mstar(ax, d, (x_lo, x_hi), (y_lo, y_hi), show_lit):
+                for hh in draw_mbh_mstar(ax, d, (x_lo, x_hi), (y_lo, y_hi), show_lit, bt_A=bt_A):
                     legend_by_label.setdefault(hh.get_label(), hh)
             ax.set_xticks(np.arange(int(np.floor(x_lo)) + 1, int(np.ceil(x_hi))))
             ax.set_yticks(np.arange(int(np.floor(y_lo)) + 1, int(np.ceil(y_hi))))
@@ -186,7 +190,8 @@ def plot_grid(dlist, out, targets, ncols=3, show_lit=True):
         fig.subplots_adjust(left=left, right=right, top=top, bottom=bottom, wspace=0.0, hspace=0.0)
         bigax = fig.add_axes([left, bottom, right - left, top - bottom], frameon=False)
         bigax.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
-        bigax.set_xlabel(r'$M_\star\ [M_\odot]$', fontsize=13, labelpad=9)
+        bigax.set_xlabel(r'$M_{\rm bulge}\ [M_\odot]$ (SHAM: from $M_\star$ via assumed B/T; observations plotted at $M_\star$)'
+                         if bt_A is not None else r'$M_\star\ [M_\odot]$', fontsize=13 if bt_A is None else 11, labelpad=9)
         bigax.set_ylabel(r'$M_{\rm BH}\ [M_\odot]$', fontsize=13, labelpad=14)
         if legend_by_label:
             flat[0].legend(handles=list(legend_by_label.values()), loc='upper left', fontsize=8,
@@ -204,14 +209,19 @@ def main():
     ap.add_argument('--grid-z', type=float, nargs='+', default=DEFAULT_GRID_Z)
     ap.add_argument('--ncols', type=int, default=3)
     ap.add_argument('--no-lit', action='store_true')
+    ap.add_argument('--bulge', action='store_true',
+                    help='use bulge mass on the x axis: M_bulge = B/T(M*) M*, B/T = min(0.9, A (M*/1e11)^0.5), '
+                         'same relation at every z (assumption); observations stay at their M*')
+    ap.add_argument('--bt-A', type=float, default=0.55, help='B/T normalisation A for --bulge')
     a = ap.parse_args()
 
     dlist = load_snaps(a.sham_dir, a.snaps)
     if not dlist:
         sys.exit(f'no sham_snap*.npz found in {a.sham_dir}')
     os.makedirs(a.out_dir, exist_ok=True)
-    plot_grid(dlist, os.path.join(a.out_dir, 'sham_mbh_mstar_grid.png'), a.grid_z,
-              ncols=a.ncols, show_lit=not a.no_lit)
+    name = 'sham_mbh_mbulge_grid.png' if a.bulge else 'sham_mbh_mstar_grid.png'
+    plot_grid(dlist, os.path.join(a.out_dir, name), a.grid_z, ncols=a.ncols, show_lit=not a.no_lit,
+              bt_A=a.bt_A if a.bulge else None)
 
 
 if __name__ == '__main__':

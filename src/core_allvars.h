@@ -564,7 +564,18 @@ struct params
     double BHSeedMinHaloMass; // Minimum halo mass for seeding in units of 10^10 Msun/h
     double BHSeedMinStellarMass; // Minimum host StellarMass for seeding, 10^10 Msun/h (0 = no stellar-mass gate)
 
-    int32_t BlackHoleSeedingOn; // 0: off, 1: on
+    /* BlackHoleSeedingOn == 3: halo-mass-dependent truncated power-law seeds.
+     * p(M_seed|Mh) ~ M_seed^-alpha(Mh) on [BHSeedMassMin, BHSeedMassMax] (Msun), with
+     * alpha(Mh) = alphaLow + (alphaHigh - alphaLow) * sigmoid((log10 Mh - LogMc)/SigmaH). */
+    double BHSeedMassMin;       // Lower seed-mass bound [Msun]
+    double BHSeedMassMax;       // Upper seed-mass bound [Msun]
+    double BHSeedAlphaLow;      // Slope p ~ M^-alpha in low-mass halos
+    double BHSeedAlphaHigh;     // Slope p ~ M^-alpha in high-mass halos
+    double BHSeedLogMc;         // log10 of the halo mass [Msun] at the slope transition
+    double BHSeedSigmaH;        // Transition width [dex]
+    double BHSeedHaloScatter;   // Gaussian scatter [dex] applied to log10 Mh before the sigmoid (0 = none)
+
+    int32_t BlackHoleSeedingOn; // 0: off, 1: light, 2: heavy, 3: halo-mass-dependent power law
     int32_t BHExsituGrowthOn; // 0: off, 1: on
     int32_t EddingtonLimitOn; // 0: off, 1: on
     int32_t AGNDynamicAccretionOn; // 0: off, 1: on

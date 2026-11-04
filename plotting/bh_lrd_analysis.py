@@ -57,8 +57,10 @@ Reference lines:
     red  dotted -> Mdot_BH = 0.05 M_sun/yr   (alternative threshold)
 Contours enclose 68 / 95 / 99.7 % of the plotted BHs.
 
-NOTE ON f_BH:  the per-epoch stellar mass is not stored alongside the accretion
-history, so f_BH is computed from the catalogue-level StellarMass.  Pass
+NOTE ON f_BH:  M_star is taken from the Snap_<c> group of the plotted history
+column c (matched to the history galaxy by GalaxyIndex), i.e. at the same epoch as
+the accretion event.  If Snap_<c> was not written (NumOutputs list), or the galaxy is
+absent from it, M_star is NaN and the event drops out of the f_BH selection.  Pass
 --no-fbh to disable the f_BH split (all selected BHs drawn red) if you'd rather
 not mix epochs.  See the comment in compute_selection() for details.
 
@@ -344,14 +346,15 @@ def read_epoch(file_list, snap_col, h_h, catalogue=None, window=0, cols=None):
         mdot_msun_yr   [M_sun/yr]
         mdot_edd       [M_sun/yr]
         acc_type       {0,1,2,-1}
-        stellar_mass   [M_sun]   (catalogue-level; see f_BH caveat)
+        stellar_mass   [M_sun]   (StellarMass of Snap_<c> at the event column; NaN if unavailable)
         seed_mass      [M_sun]   (catalogue-level BHSeedMass, for mask_ungrown_seeds())
+        halo_len       [particles] (catalogue-level Len, for a resolution cut)
         cat_group      str       (which group was read)
     """
     mass_conv = 1e10 / h_h
     rate_conv = mass_conv / (UNIT_TIME_IN_S / SEC_PER_YEAR)
 
-    out_bh, out_mdot, out_edd, out_type, out_star, out_seed = [], [], [], [], [], []
+    out_bh, out_mdot, out_edd, out_type, out_star, out_seed, out_len = [], [], [], [], [], [], []
     cat_used = None
     cols = cols if cols is not None else list(range(snap_col - window, snap_col + window + 1))
 
@@ -367,9 +370,12 @@ def read_epoch(file_list, snap_col, h_h, catalogue=None, window=0, cols=None):
                       if 'BHMassatAccretion' in grp else None)
             type_h = (grp['BHAccretionType'][:]
                       if 'BHAccretionType' in grp else None)
-            star   = grp['StellarMass'][:]              # [Ngal] catalogue-level
+            star_fin = grp['StellarMass'][:]            # [Ngal] catalogue-level (z_final)
+            gal_id   = grp['GalaxyIndex'][:]
             seed   = (grp['BHSeedMass'][:] if 'BHSeedMass' in grp
-                      else np.zeros(star.shape[0]))       # [Ngal] catalogue-level
+                      else np.zeros(star_fin.shape[0]))   # [Ngal] catalogue-level
+            hlen   = (grp['Len'][:] if 'Len' in grp
+                      else np.full(star_fin.shape[0], np.iinfo(np.int32).max))  # [Ngal] halo particle count
 
             for c in cols:
                 if c < 0 or c >= mdot_h.shape[1]:
@@ -396,14 +402,26 @@ def read_epoch(file_list, snap_col, h_h, catalogue=None, window=0, cols=None):
                 out_mdot.append(mdot_c[ev] * rate_conv)
                 out_edd.append(edd_c[ev]  * rate_conv)
                 out_type.append(type_c[ev])
-                out_star.append(star[ev]  * mass_conv)
+                # M_star at the SAME epoch as the accretion event: Snap_<c>/StellarMass,
+                # matched to the history (final-snapshot) galaxy via GalaxyIndex.
+                snap_grp = hf.get(f'Snap_{c}')
+                if snap_grp is None or 'StellarMass' not in snap_grp:
+                    star_c = np.full(ev.sum(), np.nan)
+                else:
+                    row = {k: i for i, k in enumerate(snap_grp['GalaxyIndex'][:])}
+                    sm_c = snap_grp['StellarMass'][:]
+                    star_c = np.array([sm_c[row[k]] * mass_conv if k in row else np.nan
+                                       for k in gal_id[ev]])
+                out_star.append(star_c)
                 out_seed.append(seed[ev]  * mass_conv)
+                out_len.append(hlen[ev])
 
     if not out_bh:
         return {
             'bh_mass': np.array([]), 'mdot_msun_yr': np.array([]),
             'mdot_edd': np.array([]), 'acc_type': np.array([]),
             'stellar_mass': np.array([]), 'seed_mass': np.array([]),
+            'halo_len': np.array([], dtype=np.int64),
             'cat_group': cat_used,
         }
 
@@ -414,6 +432,7 @@ def read_epoch(file_list, snap_col, h_h, catalogue=None, window=0, cols=None):
         'acc_type'     : np.concatenate(out_type),
         'stellar_mass' : np.concatenate(out_star),
         'seed_mass'    : np.concatenate(out_seed),
+        'halo_len'     : np.concatenate(out_len),
         'cat_group'    : cat_used,
     }
 
@@ -532,8 +551,9 @@ def compute_selection(bh_mass, mdot, medd, star, bhar_floor):
     edd_pass  = mdot >= np.where(medd > 0, medd, np.inf)
     f_bh      = bh_mass / np.where(star > 0, star, np.inf)
     fbh_pass  = f_bh >= LRD_FBHM_THRESH
-    lrd_red   = bhar_pass & edd_pass & fbh_pass
-    lrd_blue  = bhar_pass & edd_pass & ~fbh_pass
+    has_star  = np.isfinite(star)       # NaN = no Snap_<c> M_star at this epoch -> not classifiable
+    lrd_red   = bhar_pass & edd_pass & fbh_pass & has_star
+    lrd_blue  = bhar_pass & edd_pass & ~fbh_pass & has_star
     return f_bh, lrd_red, lrd_blue
 
 
@@ -2410,8 +2430,7 @@ def main():
                    help='Skip LRD selection overlay.')
     p.add_argument('--no-fbh', action='store_true',
                    help='Disable the f_BH red/blue split (all selected = red). '
-                        'Use if mixing the per-epoch M_BH with catalogue-level '
-                        'M_star is a concern.')
+                        'Use if the per-epoch M_star (Snap_<c>) is unavailable.')
     p.add_argument('--no-lit', action='store_true',
                    help='Skip the literature overlay (Pang+26, Mathee+24, '
                         'Labbe+25, Furtak+23, Lin+25) on panels a-e.')
@@ -2529,43 +2548,45 @@ def main():
                      show_lit=(not args.no_lit),
                      mask_seeds=(not args.no_mask_seeds))
 
-    if not args.no_panel_d:
-        out_d = Path(args.output_d) if args.output_d else \
-            d / f'lrd_lbol_mbh_scatter_snap{args.snapshot:02d}.png'
-        print('Plotting panel d...')
-        plot_panel_d(data, args.snapshot, out_d,
-                     show_lrd=(not args.no_lrd),
-                     bhar_floor=args.bhar_floor,
-                     z_override=z,
-                     show_lit=(not args.no_lit),
-                     mask_seeds=(not args.no_mask_seeds))
+    # Panels d (L_bol vs M_BH), e (M_1450 vs M_BH) and f (bolometric LF) are
+    # disabled by default until the L_bol conversion is reworked.
+#     if not args.no_panel_d:
+#         out_d = Path(args.output_d) if args.output_d else \
+#             d / f'lrd_lbol_mbh_scatter_snap{args.snapshot:02d}.png'
+#         print('Plotting panel d...')
+#         plot_panel_d(data, args.snapshot, out_d,
+#                      show_lrd=(not args.no_lrd),
+#                      bhar_floor=args.bhar_floor,
+#                      z_override=z,
+#                      show_lit=(not args.no_lit),
+#                      mask_seeds=(not args.no_mask_seeds))
 
-    if not args.no_panel_e:
-        out_e = Path(args.output_e) if args.output_e else \
-            d / f'lrd_m1450_mbh_scatter_snap{args.snapshot:02d}.png'
-        print('Plotting panel e...')
-        plot_panel_e(data, args.snapshot, out_e,
-                     show_lrd=(not args.no_lrd),
-                     bhar_floor=args.bhar_floor,
-                     z_override=z,
-                     show_lit=(not args.no_lit),
-                     mask_seeds=(not args.no_mask_seeds))
+#     if not args.no_panel_e:
+#         out_e = Path(args.output_e) if args.output_e else \
+#             d / f'lrd_m1450_mbh_scatter_snap{args.snapshot:02d}.png'
+#         print('Plotting panel e...')
+#         plot_panel_e(data, args.snapshot, out_e,
+#                      show_lrd=(not args.no_lrd),
+#                      bhar_floor=args.bhar_floor,
+#                      z_override=z,
+#                      show_lit=(not args.no_lit),
+#                      mask_seeds=(not args.no_mask_seeds))
 
-    if not args.no_panel_f:
-        volume_h3 = args.sim_volume if args.sim_volume is not None \
-            else read_box_volume_h3(files)
-        print(f'Volume (panel f): {volume_h3:.4e} (Mpc/h)^3')
-        out_f = Path(args.output_f) if args.output_f else \
-            d / f'lrd_bolometric_luminosity_function_snap{args.snapshot:02d}.png'
-        print('Plotting panel f...')
-        plot_panel_f(data, args.snapshot, out_f, volume_h3,
-                     show_lrd=(not args.no_lrd),
-                     bhar_floor=args.bhar_floor,
-                     z_override=z,
-                     n_bins=args.lf_bins,
-                     h_h=h_h,
-                     show_lit=(not args.no_lit),
-                     mask_seeds=(not args.no_mask_seeds))
+#     if not args.no_panel_f:
+#         volume_h3 = args.sim_volume if args.sim_volume is not None \
+#             else read_box_volume_h3(files)
+#         print(f'Volume (panel f): {volume_h3:.4e} (Mpc/h)^3')
+#         out_f = Path(args.output_f) if args.output_f else \
+#             d / f'lrd_bolometric_luminosity_function_snap{args.snapshot:02d}.png'
+#         print('Plotting panel f...')
+#         plot_panel_f(data, args.snapshot, out_f, volume_h3,
+#                      show_lrd=(not args.no_lrd),
+#                      bhar_floor=args.bhar_floor,
+#                      z_override=z,
+#                      n_bins=args.lf_bins,
+#                      h_h=h_h,
+#                      show_lit=(not args.no_lit),
+#                      mask_seeds=(not args.no_mask_seeds))
 
 
 if __name__ == '__main__':

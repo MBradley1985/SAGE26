@@ -136,6 +136,13 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->BlackHoleSeedingOn = 0;
     run_params->BHSeedMinHaloMass = 1.0;
     run_params->BHSeedMinStellarMass = 0.0; // Default: no stellar-mass seeding gate
+    run_params->BHSeedMassMin = 1.0e2;      // BlackHoleSeedingOn=3 defaults
+    run_params->BHSeedMassMax = 1.0e7;
+    run_params->BHSeedAlphaLow = 2.0;
+    run_params->BHSeedAlphaHigh = -0.5;
+    run_params->BHSeedLogMc = 10.5;
+    run_params->BHSeedSigmaH = 1.0;
+    run_params->BHSeedHaloScatter = 0.0;
     run_params->BHEddLambda0 = 100.0;
     run_params->BHEddM0 = 1.0e6;
     run_params->BHEddAlpha = 0.5;
@@ -212,6 +219,13 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("BlackHoleSeedingOn",    &(run_params->BlackHoleSeedingOn),   INT, 0);
     REG("BHSeedMinHaloMass",     &(run_params->BHSeedMinHaloMass),    DOUBLE, 0);
     REG("BHSeedMinStellarMass",  &(run_params->BHSeedMinStellarMass), DOUBLE, 0);
+    REG("BHSeedMassMin",         &(run_params->BHSeedMassMin),        DOUBLE, 0);
+    REG("BHSeedMassMax",         &(run_params->BHSeedMassMax),        DOUBLE, 0);
+    REG("BHSeedAlphaLow",        &(run_params->BHSeedAlphaLow),       DOUBLE, 0);
+    REG("BHSeedAlphaHigh",       &(run_params->BHSeedAlphaHigh),      DOUBLE, 0);
+    REG("BHSeedLogMc",           &(run_params->BHSeedLogMc),          DOUBLE, 0);
+    REG("BHSeedSigmaH",          &(run_params->BHSeedSigmaH),         DOUBLE, 0);
+    REG("BHSeedHaloScatter",     &(run_params->BHSeedHaloScatter),    DOUBLE, 0);
     REG("BHEddLambda0",          &(run_params->BHEddLambda0),         DOUBLE, 0);
     REG("BHEddM0",               &(run_params->BHEddM0),              DOUBLE, 0);
     REG("BHEddAlpha",            &(run_params->BHEddAlpha),           DOUBLE, 0);

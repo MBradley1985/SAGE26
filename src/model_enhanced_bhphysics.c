@@ -107,6 +107,42 @@ double seed_black_hole(const int p, const struct GALAXY *galaxies, const struct 
         }
     }
 
+    // Halo-mass-dependent truncated power law: p(M) ~ M^-alpha(Mh) on [Mmin, Mmax],
+    // with alpha(Mh) interpolated between AlphaLow and AlphaHigh by a sigmoid in log10(Mh).
+    if(run_params->BlackHoleSeedingOn == 3) {
+        if(galaxies[p].Mvir > run_params->BHSeedMinHaloMass && galaxies[p].BlackHoleMass <= 0.0) {
+            const double mmin = run_params->BHSeedMassMin;
+            const double mmax = run_params->BHSeedMassMax;
+            double log_mh = log10(galaxies[p].Mvir * 1.0e10 / run_params->Hubble_h); // Msun
+
+            // Optional scatter in the halo proxy (Box-Muller, two uniform draws)
+            if(run_params->BHSeedHaloScatter > 0.0) {
+                const double u1 = ((double)rand() + 1.0) / ((double)RAND_MAX + 2.0);
+                const double u2 = (double)rand() / (double)RAND_MAX;
+                log_mh += run_params->BHSeedHaloScatter * sqrt(-2.0 * log(u1)) * cos(2.0 * M_PI * u2);
+            }
+
+            const double s = 1.0 / (1.0 + exp(-(log_mh - run_params->BHSeedLogMc) / run_params->BHSeedSigmaH));
+            const double alpha = run_params->BHSeedAlphaLow
+                               + (run_params->BHSeedAlphaHigh - run_params->BHSeedAlphaLow) * s;
+
+            const double u = (double)rand() / ((double)RAND_MAX + 1.0); // [0,1)
+            double seed_mass; // Msun
+            if(fabs(alpha - 1.0) < 1.0e-6) {
+                seed_mass = mmin * pow(mmax / mmin, u); // log-uniform
+            } else {
+                const double e = 1.0 - alpha;
+                const double a = pow(mmin, e);
+                const double b = pow(mmax, e);
+                seed_mass = pow(a + u * (b - a), 1.0 / e);
+            }
+            if(seed_mass < mmin) seed_mass = mmin;
+            if(seed_mass > mmax) seed_mass = mmax;
+
+            return seed_mass / (1.0e10 / run_params->Hubble_h); // code units
+        }
+    }
+
     return 0.0; // Default fallback
 }
 
