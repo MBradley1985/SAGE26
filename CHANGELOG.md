@@ -10,6 +10,14 @@ it says otherwise. See
 
 ## Unreleased
 
+### ConcentrationScatter parameter
+
+- The log-normal scatter in halo concentration for the BK25 threshold
+  (`EnhancedStarFormationOn = 2`) was fixed at σ_ln c = 0.2 in the code; it is
+  now the parameter `ConcentrationScatter` (default 0.2), so the width of the
+  transition can be varied without a rebuild. At the default the output is
+  bit-identical.
+
 ### H1gas within the cold gas's hydrogen (H1gas not bit-identical)
 
 - After star formation, feedback and black-hole accretion take cold gas,

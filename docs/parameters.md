@@ -87,6 +87,7 @@ optional parameters take the listed default if omitted.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `EnhancedSFEfficiency` | double | no | `0.2` | Maximum star formation efficiency during FFB bursts. `0.2` matches observations; `1.0` is the theoretical maximum. |
+| `ConcentrationScatter` | double | no | `0.2` | Log-normal scatter σ in ln(c) applied to each halo's Ishiyama+21 concentration for the BK25 threshold (`EnhancedStarFormationOn = 2`); sets the width of the transition. `0.2` is the spread for relaxed haloes (Jing 2000); `0` gives a sharp threshold. |
 
 ---
 

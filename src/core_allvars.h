@@ -578,6 +578,7 @@ struct params
     double BaryonFrac;            /* cosmic baryon fraction Omega_b/Omega_m [dimensionless] */
     double SfrEfficiency;         /* SF efficiency per dynamical time [dimensionless] */
     double EnhancedSFEfficiency;  /* maximum SF efficiency in the feedback-free burst regime [dimensionless] */
+    double ConcentrationScatter;  /* log-normal scatter sigma in ln(c) for the BK25 threshold (EnhancedStarFormationOn=2) */
     double FeedbackReheatingEpsilon;   /* SN mass-loading: reheated mass per unit stars formed [dimensionless] */
     double FeedbackEjectionEfficiency; /* fraction of SN energy available to eject gas from the halo [dimensionless] */
     double RadioModeEfficiency;   /* radio-mode AGN heating efficiency [dimensionless] */

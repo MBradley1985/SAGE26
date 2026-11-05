@@ -35,6 +35,7 @@ static void init_millennium_params(struct params *rp)
            * rp->UnitMass_in_g * rp->UnitTime_in_s * rp->UnitTime_in_s;
     rp->EnergySNcode = rp->EnergySN / rp->UnitMass_in_g
                      / rp->UnitVelocity_in_cm_per_s / rp->UnitVelocity_in_cm_per_s;
+    rp->ConcentrationScatter = 0.2;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -790,6 +791,45 @@ void test_ffb_li24_and_bk25_select_the_same_haloes()
 /* ═══════════════════════════════════════════════════════════════════
  *  main
  * ═══════════════════════════════════════════════════════════════════ */
+void test_ffb_mode2_scatter_width_is_a_parameter()
+{
+    BEGIN_TEST("EnhancedStarFormationOn=2 scatter width is set by ConcentrationScatter");
+
+    struct params rp;
+    init_millennium_params(&rp);
+    rp.EnhancedStarFormationOn = 2;
+
+    /* The same halos and snapshot are classified at three widths, so each halo
+     * keeps its draw.  With no scatter every identical halo has the table
+     * concentration and one g_max; a wider scatter spreads them further. */
+    const double z = 10.0;
+    const int N = 64;
+    const double widths[3] = {0.0, 0.2, 0.4};
+    double spread[3];
+
+    for(int w = 0; w < 3; w++) {
+        rp.ConcentrationScatter = widths[w];
+        struct GALAXY gals[64];
+        memset(gals, 0, sizeof(gals));
+        for(int i = 0; i < N; i++) {
+            gals[i].Mvir = 10.0;
+            gals[i].Rvir = 0.015;
+            gals[i].MostBoundID = 1000003LL * (i + 1);
+        }
+        determine_and_store_ffb_regime(N, z, 0, gals, &rp);
+
+        double gmin = gals[0].g_max, gmax = gals[0].g_max;
+        for(int i = 0; i < N; i++) {
+            if(gals[i].g_max < gmin) gmin = gals[i].g_max;
+            if(gals[i].g_max > gmax) gmax = gals[i].g_max;
+        }
+        spread[w] = log(gmax / gmin);
+    }
+
+    ASSERT_CLOSE(0.0, spread[0], 1e-12, "No scatter gives every identical halo the same g_max");
+    ASSERT_GREATER_THAN(spread[2], spread[1], "A wider scatter spreads g_max further");
+}
+
 int main()
 {
     BEGIN_TEST_SUITE("FFB & Concentration");
@@ -829,6 +869,7 @@ int main()
     test_ffb_mode2_basic_threshold();
     test_ffb_mode2_scatter_splits_identical_halos();
     test_ffb_mode2_gmax_brackets_table_concentration();
+    test_ffb_mode2_scatter_width_is_a_parameter();
     test_ffb_mode2_deterministic();
     test_ffb_li24_and_bk25_select_the_same_haloes();
 

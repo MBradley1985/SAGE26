@@ -36,13 +36,6 @@ static const double PC_IN_CM              =  3.08568e18;
  * Units: M_sun / pc^2 (pre-multiplication by G to get acceleration). */
 static const double BK25_G_CRIT_MSUN_PC2 = 3100.0;
 
-/* Width of the log-normal scatter in halo concentration, sigma_c in ln(c),
- * applied to the BK25 threshold.  0.2 is the measured spread at fixed halo
- * mass (Jing 2000; Bullock et al. 2001; Dolag et al. 2004).  It is what turns
- * the sharp acceleration threshold into a smooth transition across the halo
- * population. */
-static const double FFB_CONC_SIGMA = 0.2;
-
 /* Exponent n in the Li et al. (2024) eq. 2 threshold mass,
  * M_v,ffb / 10^10.8 Msun ~ ((1+z)/10)^n.  Their value is -6.2.  The 10^10.8
  * normalisation is pinned at z = 9, where (1+z)/10 = 1, so the exponent
@@ -256,7 +249,8 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
             // BK25 acceleration-based with log-normal concentration scatter.
             // The Ishiyama+21 table gives the mean concentration; individual halos
             // scatter around it following p(c)dc ~ exp(-(ln c - ln c0)^2 / 2sigma_c^2) d(ln c)
-            // with sigma_c ~ 0.2 (Jing 2000; Bullock+01; Dolag+04).
+            // with sigma_c = ConcentrationScatter, default 0.2, the measured spread at
+            // fixed mass (Jing 2000; Bullock+01; Dolag+04).
             // Each halo draws its own concentration quantile, giving a smooth
             // FFB transition across the halo population rather than a single
             // sharp mass threshold.
@@ -283,7 +277,7 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
                 if(u < 1.0e-6) u = 1.0e-6;
                 if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
                 const double z_normal = inverse_normal_cdf(u);
-                c = c * exp(FFB_CONC_SIGMA * z_normal);
+                c = c * exp(run_params->ConcentrationScatter * z_normal);
                 if(c < 1.0) c = 1.0;
             }
 

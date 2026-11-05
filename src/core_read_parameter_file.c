@@ -102,6 +102,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->CGMrecipeOn                = 1;
     run_params->FIREmodeOn                 = 1;
     run_params->EnhancedSFEfficiency       = 0.2;
+    run_params->ConcentrationScatter       = 0.2;
     run_params->ConcentrationOn            = 3;
     run_params->EnhancedStarFormationOn    = 1;
     run_params->BulgeSizeOn                = 3;
@@ -127,7 +128,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->Reionization_z0            = 8.0;
     run_params->Reionization_zr            = 7.0;
     run_params->ThresholdSatDisruption     = 1.0;
-    run_params->MergerTimeFactor           = 0.75;  /* as input/millennium.par (published value 2.0) */
+    run_params->MergerTimeFactor           = 2.0;  /* as input/millennium.par (published value 2.0) */
     run_params->Exponent_Forest_Dist_Scheme = 0.7;
     run_params->KarpovModeOn               = 0; /* 0: full Karpov+2023 recipe, 1: low-metallicity floor (Z/Z_sun = 0.01) for reheated and ejected gas */
 
@@ -220,6 +221,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("MergerTimeFactor",           &(run_params->MergerTimeFactor),           DOUBLE, 0);
     REG("H2RadialRMaxFactor",         &(run_params->H2RadialRMaxFactor),         DOUBLE, 0);
     REG("EnhancedSFEfficiency",       &(run_params->EnhancedSFEfficiency),       DOUBLE, 0);
+    REG("ConcentrationScatter",       &(run_params->ConcentrationScatter),       DOUBLE, 0);
     REG("KarpovModeOn",               &(run_params->KarpovModeOn),               INT, 0);
 
     REG("DarkSAGEMode",                &(run_params->DarkSAGEMode),               INT, 0);
