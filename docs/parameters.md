@@ -137,7 +137,7 @@ optional parameters take the listed default if omitted.
 |-----------|-------|---------|-------------|
 | `ThreshMajorMerger` | dimensionless | `0.3` | Mass ratio above which a merger is classified as major. |
 | `ThresholdSatDisruption` | dimensionless | `1.0` | M_vir-to-baryonic mass ratio below which a satellite is disrupted rather than merged. |
-| `MergerTimeFactor` | dimensionless | `0.75` (published value 2.0) | Scales the Binney & Tremaine (1987) dynamical-friction merger timescale. It also sets how accreted stellar mass splits between the intracluster component and the BCG: when a satellite's subhalo is lost from the tree, its stars go to the ICS if the clock is still running (`MergTime > 0`) and onto the central if it has expired. |
+| `MergerTimeFactor` | dimensionless | `2.0` (the published value) | Scales the Binney & Tremaine (1987) dynamical-friction merger timescale. It also sets how accreted stellar mass splits between the intracluster component and the BCG: when a satellite's subhalo is lost from the tree, its stars go to the ICS if the clock is still running (`MergTime > 0`) and onto the central if it has expired. |
 
 ### Gas cycling
 
