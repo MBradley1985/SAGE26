@@ -43,10 +43,8 @@ warnings.filterwarnings("ignore")
 # path is taken from the SAGE26 top directory. 'color' and 'ls' are optional and override
 # the automatic choice below for that model only.
 MODELS = [
-    # {'dir': 'output/millennium/',          'label': 'SAGE26 Millennium'},
-    # {'dir': 'output/millennium_vanilla/',  'label': 'SAGE26 vanilla'},
-    {'dir': 'output/microuchuu_DarknDusty/',      'label': 'SAGE26 microUchuu'},
-    {'dir': 'output/millennium_DarknDusty/', 'label': 'SAGE26 Millennium Dark & Dusty', 'color': 'purple'},
+    {'dir': 'output/millennium/',          'label': 'SAGE26 Millennium'},
+    {'dir': 'output/millennium_vanilla/',  'label': 'SAGE26 vanilla'},
 ]
 
 OUTPUT_DIR = 'output/compare_plots/'    # relative to the SAGE26 top directory
