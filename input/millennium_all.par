@@ -47,6 +47,7 @@ BoxSize         62.5 % Size of the simulation box in Mpc/h.
 
 SFprescription              1   %0: original Croton et al. 2006; 1: BR06 H2 Stars; 2: Somerville et al. 2025 SFR; 3: Somerville et al. 2025 SFR + H2; 4: KD12 H2 Stars; 5: KMT09; 6: K13; 7: GD14
 AGNrecipeOn                 2   %0: switch off; 1: empirical model; 2: Bondi-Hoyle model; 3: cold cloud accretion model
+RheatMode                   0   %AGN heating radius: 0: SAGE16/SAGE26 code order (suppress, then cap and r_heat against the suppressed cooling); 1: as 0, r_heat relaxes on t_cool(r_heat); 2: as 1, Croton et al. 2016 eqs. 18-20 order (pre-2015 SAGE); 3: as 2, no relaxation (needs RadioModeEfficiency ~0.3)
 SupernovaRecipeOn           1   %0: switch off; 1: original Croton et al. 2016 (FIRE scaling with FIREmodeOn)
 ReionizationOn              1   %0: switch off
 DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through instabilities w. instability starbursts
@@ -75,6 +76,7 @@ DustySAGEMode               0   %0: switch off; 1: passive dust within SAGE26's 
 DustSNIIYields              0   %DustySAGEMode SNII yields: 0: Woosley & Weaver 1995; 1: Nomoto et al. 2006
 DustSNIaYields              0   %DustySAGEMode SNIa yields: 0: Iwamoto et al. 1999; 1: Seitenzahl et al. 2013
 DustBinaryFraction          0.1 %DustySAGEMode: fraction of 3-16 Msun stars in SNIa binaries
+DustGrowthMaxDtoZ           0.5 %DustySAGEMode: grain growth stops at this dust-to-metals ratio, in (0, 1]; 0.5 as the Dusty-SAGE source, 1 is Asano et al. (2013)
 
 %------------------------------------------
 %----- SAGE model parameters --------------
@@ -82,6 +84,7 @@ DustBinaryFraction          0.1 %DustySAGEMode: fraction of 3-16 Msun stars in S
 
 SfrEfficiency               0.05    %efficiency of SF; unused for SFprescription=3,6
 EnhancedSFEfficiency        0.2     %0.2 fits observations best, 1.0 is theoretical maximum
+ConcentrationScatter        0.2     %log-normal scatter in ln(c) for the BK25 threshold (EnhancedStarFormationOn=2); 0 gives a sharp threshold
 
 FeedbackReheatingEpsilon    2.9     %mass of cold gas reheated due to SF (see Martin 1999) (SupernovaRecipeOn=1)
 FeedbackEjectionEfficiency  0.3     %mixing efficiency of SN energy with hot gas to unbind and eject some (SupernovaRecipeOn=1)
@@ -94,6 +97,7 @@ BlackHoleGrowthRate         0.015   %fraction of cold gas added to the BH during
 
 ThreshMajorMerger           0.3     %major merger when mass ratio greater than this
 ThresholdSatDisruption      1.0     %Mvir-to-baryonic mass ratio threshold for satellite merger or disruption
+MergerTimeFactor            2.0     %scales the Binney & Tremaine (1987) dynamical-friction merger time; 2.0 is the published value
 
 Yield                       0.025   %fraction of SF mass produced as metals
 RecycleFraction             0.43    %fraction of SF mass instantaneously recycled back to cold

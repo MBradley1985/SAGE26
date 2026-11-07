@@ -1551,6 +1551,7 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     // Recipe flags.
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SFprescription", run_params->SFprescription, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "AGNrecipeOn", run_params->AGNrecipeOn, H5T_NATIVE_INT);
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RheatMode", run_params->RheatMode, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SupernovaRecipeOn", run_params->SupernovaRecipeOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "ReionizationOn", run_params->ReionizationOn, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "DiskInstabilityOn", run_params->DiskInstabilityOn, H5T_NATIVE_INT);
