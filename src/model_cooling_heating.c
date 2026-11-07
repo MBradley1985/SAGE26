@@ -705,7 +705,7 @@ static void agn_accretion_compute(const int centralgal, const double dt, const d
                                    const double coolingGas, const double rcool,
                                    const double reservoir_mass,
                                    const struct GALAXY *galaxies, const struct params *run_params,
-                                   double *AGNaccreted_out, double *AGNheating_out)
+                                   double *AGNaccreted_out, double *AGNheating_out, double *AGNuncapped_out)
 {
     const double Vvir   = galaxies[centralgal].Vvir;
     const double Mvir   = galaxies[centralgal].Mvir;
@@ -736,6 +736,10 @@ static void agn_accretion_compute(const int centralgal, const double dt, const d
 
     double AGNaccreted = AGNrate * dt;
     if(AGNaccreted > reservoir_mass) AGNaccreted = reservoir_mass;
+
+    // Diagnostic only: the accretion before the cooling cap below (Croton+16 eq. 16, Eddington-
+    // and reservoir-limited); nothing in the model uses it
+    *AGNuncapped_out = AGNaccreted;
 
     // Heating coefficient: AGN_HEATING_COEFF_KMS = sqrt(2*eta*c^2)
     double AGNheating = 0.0;
@@ -775,15 +779,16 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
             "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
 
     if(galaxies[centralgal].HotGas > 0.0) {
-        double AGNaccreted, AGNheating;
+        double AGNaccreted, AGNheating, AGNuncapped;
         agn_accretion_compute(centralgal, dt, x, coolingGas, rcool,
                                galaxies[centralgal].HotGas,
-                               galaxies, run_params, &AGNaccreted, &AGNheating);
+                               galaxies, run_params, &AGNaccreted, &AGNheating, &AGNuncapped);
 
         const double metallicity = get_metallicity(galaxies[centralgal].HotGas,
                                                    galaxies[centralgal].MetalsHotGas);
         galaxies[centralgal].BlackHoleMass += AGNaccreted;
         galaxies[centralgal].RadioModeBHaccretionMass += AGNaccreted;
+        galaxies[centralgal].RadioModeBHaccretionMassUncapped += AGNuncapped;
         dust_move(&galaxies[centralgal].HotDust, galaxies[centralgal].HotGas, AGNaccreted, NULL);
         galaxies[centralgal].HotGas        -= AGNaccreted;
         galaxies[centralgal].MetalsHotGas  -= metallicity * AGNaccreted;
@@ -826,13 +831,14 @@ static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const 
             "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
 
     if(galaxies[centralgal].CGMgas > 0.0) {
-        double AGNaccreted, AGNheating;
+        double AGNaccreted, AGNheating, AGNuncapped;
         agn_accretion_compute(centralgal, dt, x, coolingGas, rcool,
                               galaxies[centralgal].CGMgas, galaxies, run_params,
-                              &AGNaccreted, &AGNheating);
+                              &AGNaccreted, &AGNheating, &AGNuncapped);
         const double metallicity = get_metallicity(galaxies[centralgal].CGMgas, galaxies[centralgal].MetalsCGMgas);
         galaxies[centralgal].BlackHoleMass  += AGNaccreted;
         galaxies[centralgal].RadioModeBHaccretionMass += AGNaccreted;
+        galaxies[centralgal].RadioModeBHaccretionMassUncapped += AGNuncapped;
         dust_move(&galaxies[centralgal].CGMDust, galaxies[centralgal].CGMgas, AGNaccreted, NULL);
         galaxies[centralgal].CGMgas         -= AGNaccreted;
         galaxies[centralgal].MetalsCGMgas   -= metallicity * AGNaccreted;

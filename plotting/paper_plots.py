@@ -42,7 +42,7 @@ except ImportError:
 # ========================== CONFIGURATION ==========================
 
 # File paths
-PRIMARY_DIR = './output/millennium_beta_clock_075_h2_deplete/'
+PRIMARY_DIR = './output/millennium/'
 VANILLA_DIR = './output/millennium_vanilla/'
 NOFFB_DIR = './output/millennium_noffb/'
 NOCGM_DIR = './output/millennium_nocgm/'
@@ -58,7 +58,7 @@ FFB_BK25_FFB100_DIR = './output/millennium_mbk100/'
 FFB_NOSIGMOID_DIR = './output/millennium_nosigmoid/'
 # CGM_DYN_DIR = './output/millennium_cgmdyn/'
 # DISK_SMOOTH_DIR = './output/millennium_disk2/'
-MINIUCHUU_DIR = './output/microuchuu_beta_clock_075_h2_deplete/'
+MINIUCHUU_DIR = './output/microuchuu_DarkandDusty/'
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
 
@@ -5457,9 +5457,10 @@ def _stacked_sfr_with_ratio(snapdata, colors_fn, comparison_color, comparison_lw
                             sfr_ylim, figsize, outname, tag_colors, linear=False,
                             select_z=None):
     """
-    Shared body of plots 12f and 12h: for each model, an SFR panel (tracked
-    galaxies plus the same haloes in the no-FFB run) above a panel of the
-    per-halo SFR boost relative to the no-FFB run.  *select_z* is passed to
+    Shared body of plots 12f, 12h and 12i: one column per model (FFB left,
+    MBK25 right), each an SFR panel (tracked galaxies plus the same haloes in
+    the no-FFB run) above a panel of the per-halo SFR boost relative to the
+    no-FFB run.  *select_z* is passed to
     ffb_tracked_sample().
     """
     sample = ffb_tracked_sample(snapdata, select_z=select_z)
@@ -5473,10 +5474,11 @@ def _stacked_sfr_with_ratio(snapdata, colors_fn, comparison_color, comparison_lw
     # Plasma versions: tracked lines as thin as the no-FFB comparison lines.
     track_lw = comparison_lw if colors is not None else None
 
-    fig, axes = plt.subplots(4, 1, figsize=figsize, sharex=True,
-                             gridspec_kw={'height_ratios': [3, 1.4, 3, 1.4]})
+    fig, axes = plt.subplots(2, 2, figsize=figsize, sharex=True, sharey='row',
+                             gridspec_kw={'height_ratios': [3, 1.4]})
+    ymax = 0.0
     for i, (run, tag) in enumerate([('FFB', 'FFB'), ('MBK25', 'MBK25')]):
-        ax_s, ax_r = axes[2 * i], axes[2 * i + 1]
+        ax_s, ax_r = axes[0, i], axes[1, i]
         c = colors if colors is not None else tag_colors[tag]
         n_exit = _draw_tracked(ax_s, sample, run, c, x='z', y='sfr', x_keep=keep,
                                comparison_color=comparison_color,
@@ -5505,8 +5507,8 @@ def _stacked_sfr_with_ratio(snapdata, colors_fn, comparison_color, comparison_lw
                       f'(N = {int(np.sum(sel))} halo-snapshots)')
 
         if linear:
-            # Raw SFRs: start at zero, top just above the largest plotted value.
-            ymax = 0.0
+            # Raw SFRs: start at zero, top just above the largest value plotted
+            # in either column (the columns share the axis).
             for line in ax_s.get_lines():
                 xd, yd = np.asarray(line.get_xdata(), float), np.asarray(line.get_ydata(), float)
                 ok = (xd >= z_min) & np.isfinite(yd)
@@ -5516,7 +5518,6 @@ def _stacked_sfr_with_ratio(snapdata, colors_fn, comparison_color, comparison_lw
         else:
             ax_s.set_yscale('log')
             ax_s.set_ylim(*sfr_ylim)
-        ax_s.set_ylabel(r'$\mathrm{SFR}\;[M_{\odot}\,\mathrm{yr}^{-1}]$')
         # Model tag top right, except in 12f where the legend sits there.
         if colors is None:
             ax_s.text(0.98, 0.04, tag, transform=ax_s.transAxes, ha='right',
@@ -5543,13 +5544,15 @@ def _stacked_sfr_with_ratio(snapdata, colors_fn, comparison_color, comparison_lw
         # Ticks kept clear of the panel edges so labels never collide.
         ax_r.set_ylim(-1.5, 3.0)
         ax_r.set_yticks([-1, 0, 1, 2])
-        ax_r.set_ylabel(r'$\Delta\log\,\mathrm{SFR}$' + '\n' + f'({tag} $-$ no-{tag})',
-                        fontsize='small')
+        ax_r.set_xlabel('Redshift')
 
-    axes[-1].set_xlabel('Redshift')
-    axes[0].set_xlim(z_min, z_hi)
+    # The columns share each row's y-axis, so only the left column is labelled.
+    axes[0, 0].set_ylabel(r'$\mathrm{SFR}\;[M_{\odot}\,\mathrm{yr}^{-1}]$')
+    axes[1, 0].set_ylabel(r'$\Delta\log\,\mathrm{SFR}$' + '\n'
+                          + r'(FFB/MBK25 $-$ no-FFB/MBK25)', fontsize='small')
+    axes[0, 0].set_xlim(z_min, z_hi)
     fig.tight_layout()
-    fig.subplots_adjust(hspace=0.0)
+    fig.subplots_adjust(hspace=0.0, wspace=0.0)
     save_figure(fig, os.path.join(OUTPUT_DIR, outname + OUTPUT_FORMAT))
 
 
@@ -5561,7 +5564,7 @@ def plot_12f_sfh_ffb_transitions_stacked(snapdata):
     """
     print('Plot 12f: stacked SFH transition figure (FFB + MBK25)')
     _stacked_sfr_with_ratio(snapdata, lambda n: None, 'firebrick', 1.0,
-                            (1.01e-3, 0.99e5), (8, 13),
+                            (1.01e-3, 0.99e5), (14, 7),
                             'SFH_FFB_transitions_stacked',
                             {'FFB': 'k', 'MBK25': 'mediumpurple'})
 
@@ -5631,7 +5634,7 @@ def plot_12h_sfh_ffb_transitions_sfr(snapdata):
     """
     print('Plot 12h: FFB exits in SFR, stacked (FFB + MBK25)')
     _stacked_sfr_with_ratio(snapdata, _plasma_colors, '0.6', 0.9,
-                            (1.01e-3, 1.99e4), (8, 13),
+                            (1.01e-3, 1.99e4), (14, 7),
                             'SFH_FFB_transitions_sfr_stacked', None,
                             select_z=_TRACK_SELECT_Z_SFR_STACKED)
 
@@ -5643,7 +5646,7 @@ def plot_12i_sfh_ffb_transitions_sfr_linear(snapdata):
     """
     print('Plot 12i: FFB exits in SFR, stacked, linear SFR axis (FFB + MBK25)')
     _stacked_sfr_with_ratio(snapdata, _plasma_colors, '0.6', 0.9,
-                            None, (8, 13),
+                            None, (14, 7),
                             'SFH_FFB_transitions_sfr_stacked_linear', None, linear=True,
                             select_z=_TRACK_SELECT_Z_SFR_STACKED)
 
@@ -12097,12 +12100,12 @@ def plot_36_selection_thresholds_mz():
     """
     Two-panel comparison of the FFB selection thresholds in the (z, M_vir) plane.
 
-    Left  (MBK25):  threshold mass locus g_max(M, z, c) = g_crit at the median
+    Left  (Li+24 / Dekel): the Eq.-1 threshold line M_ffb(z), with the Li+24
+                    sigmoid-selected FFB centrals scattered on top.
+    Right (MBK25):  threshold mass locus g_max(M, z, c) = g_crit at the median
                     concentration c = 3.2, with the selected FFB centrals from the
                     mode-4 (c-scatter) run scattered on top, coloured by their
                     halo concentration.
-    Right (Li+24 / Dekel): the Eq.-1 threshold line M_ffb(z), with the Li+24
-                    sigmoid-selected FFB centrals scattered on top.
 
     The point is to show the two selections pick out the same region of the
     (z, M_vir) plane.
@@ -12178,10 +12181,10 @@ def plot_36_selection_thresholds_mz():
     z_mbk, m_mbk, c_mbk = _dilute(z_mbk, m_mbk, c_mbk)
     z_dek, m_dek, _ = _dilute(z_dek, m_dek, np.full(len(m_dek), np.nan))
 
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(10.5, 5.0), sharey=True,
+    fig, (ax_ffb, ax_mbk) = plt.subplots(1, 2, figsize=(10.5, 5.0), sharey=True,
                                    constrained_layout=True)
 
-    # ---------------- Left panel: MBK25 ----------------
+    # ---------------- Right panel: MBK25 ----------------
     # The threshold drawn at the median concentration, c = 3.2 (the median-c
     # threshold solved self-consistently below stays within 3.19-3.27 over
     # 6 < z < 12).
@@ -12193,19 +12196,18 @@ def plot_36_selection_thresholds_mz():
         # Coloured by the concentration the selection actually used.
         print('  MBK25 selection c  (5/50/95 pct): %.2f / %.2f / %.2f'
               % tuple(np.percentile(c_mbk, [5, 50, 95])))
-        sc = axL.scatter(z_mbk, np.log10(m_mbk), s=6, alpha=1.0,
+        sc = ax_mbk.scatter(z_mbk, np.log10(m_mbk), s=6, alpha=1.0,
                          c=c_mbk, cmap=conc_cmap,
                          vmin=np.percentile(c_mbk, 5),
                          vmax=np.percentile(c_mbk, 95),
                          edgecolors='none', rasterized=True, zorder=2)
-        cbar = fig.colorbar(sc, ax=axL, location='right', pad=0.02, aspect=30)
+        cbar = fig.colorbar(sc, ax=ax_mbk, location='right', pad=0.02, aspect=30)
         cbar.set_label('Halo concentration', fontsize='small')
 
-    axL.plot(z_grid, np.log10(mbk25_threshold_mass_msun(z_grid, C_MEDIAN)),
+    ax_mbk.plot(z_grid, np.log10(mbk25_threshold_mass_msun(z_grid, C_MEDIAN)),
              lw=2.2, color='mediumpurple', zorder=3)
 
-    axL.set_xlabel(r'Redshift $z$')
-    axL.set_ylabel(r'$\log_{10}\ M_{\rm vir}\ [M_\odot]$')
+    ax_mbk.set_xlabel(r'Redshift $z$')
 
     from matplotlib.lines import Line2D
     mbk_handles = [
@@ -12215,29 +12217,30 @@ def plot_36_selection_thresholds_mz():
         Line2D([], [], color='mediumpurple', lw=2.2,
                label=fr'$M_{{\rm MBK25}}(z)$, $c={C_MEDIAN:g}$'),
     ]
-    axL.legend(handles=mbk_handles, loc='upper right', frameon=False, fontsize=8)
+    ax_mbk.legend(handles=mbk_handles, loc='upper right', frameon=False, fontsize=8)
 
-    # ---------------- Right panel: Li+24 / Dekel ----------------
+    # ---------------- Left panel: Li+24 / Dekel ----------------
     if len(m_dek):
-        axR.scatter(z_dek, np.log10(m_dek), s=6, alpha=0.45, color='0.45',
+        ax_ffb.scatter(z_dek, np.log10(m_dek), s=6, alpha=0.45, color='0.45',
                     edgecolors='none', rasterized=True, zorder=1)
 
     # Eq.-1 threshold line.
     delta_log_M = 0.15                                   # matches ffb_fraction()
     M_line = np.array([ffb_threshold_mass_msun(z) for z in z_grid])
     log_line = np.log10(M_line)
-    axR.plot(z_grid, log_line, lw=2.2, color='firebrick', zorder=3)
+    ax_ffb.plot(z_grid, log_line, lw=2.2, color='firebrick', zorder=3)
 
-    axR.set_xlabel(r'Redshift $z$')
+    ax_ffb.set_xlabel(r'Redshift $z$')
+    ax_ffb.set_ylabel(r'$\log_{10}\ M_{\rm vir}\ [M_\odot]$')
     dek_handles = [
         Line2D([], [], marker='o', linestyle='none', color='0.35',
                markersize=4, label='FFB galaxies'),
         Line2D([], [], color='firebrick', lw=2.2, label=r'$M_{\rm FFB}(z)$'),
     ]
-    axR.legend(handles=dek_handles, loc='upper right', frameon=False, fontsize=8)
+    ax_ffb.legend(handles=dek_handles, loc='upper right', frameon=False, fontsize=8)
 
     # Common limits for both panels, one redshift tick per unit.
-    for ax in (axL, axR):
+    for ax in (ax_mbk, ax_ffb):
         ax.set_xlim(z_grid.min(), z_grid.max())
         ax.set_ylim(9.5, 13.5)
         ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))

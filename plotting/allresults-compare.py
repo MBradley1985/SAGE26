@@ -43,9 +43,10 @@ warnings.filterwarnings("ignore")
 # path is taken from the SAGE26 top directory. 'color' and 'ls' are optional and override
 # the automatic choice below for that model only.
 MODELS = [
-    {'dir': 'output/millennium/',          'label': 'SAGE26'},
+    # {'dir': 'output/millennium/',          'label': 'SAGE26 Millennium'},
     # {'dir': 'output/millennium_vanilla/',  'label': 'SAGE26 vanilla'},
-    {'dir': 'output/millennium_DarknDusty/', 'label': 'DarkSAGE + Dusty', 'color': 'purple'},
+    {'dir': 'output/microuchuu_DarknDusty/',      'label': 'SAGE26 microUchuu'},
+    {'dir': 'output/millennium_DarknDusty/', 'label': 'SAGE26 Millennium Dark & Dusty', 'color': 'purple'},
 ]
 
 OUTPUT_DIR = 'output/compare_plots/'    # relative to the SAGE26 top directory
@@ -111,7 +112,7 @@ def imf_shift(native):
     return _IMF_ABOVE_CHABRIER_DEX[target] - _IMF_ABOVE_CHABRIER_DEX[native]
 
 
-# Fields stored in 1e10 Msun/h; Model.get returns them in Msun
+# Fields stored in code mass units (1e10 Msun/h); Model.get returns them in Msun
 MASS_FIELDS = {
     'CentralMvir', 'Mvir', 'StellarMass', 'MetalsStellarMass', 'BulgeMass', 'BlackHoleMass',
     'ColdGas', 'MetalsColdGas', 'MetalsEjectedMass', 'HotGas', 'MetalsHotGas', 'EjectedMass',
@@ -119,6 +120,9 @@ MASS_FIELDS = {
     'H2gas', 'H1gas', 'infallMvir', 'infallStellarMass', 'MetalsBulgeMass',
     'MetalsIntraClusterStars',
 }
+
+SOLAR_MASS_G = 1.989e33     # solar mass [g], as in src/macros.h
+CM_PER_KPC = 3.085678e21    # [cm per kpc], CM_PER_MPC / 1e3 in src/macros.h
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TOP_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, '..'))
@@ -205,6 +209,10 @@ def read_simulation_params(filepath):
 
         runtime = f['Header/Runtime']
         params['VolumeFraction'] = float(runtime.attrs['frac_volume_processed'])
+        params['BaryonFrac'] = float(runtime.attrs['BaryonFrac'])
+        params['MShockMsun'] = float(runtime.attrs['MShockMsun'])
+        params['UnitMass_Msun'] = float(runtime.attrs['UnitMass_in_g']) / SOLAR_MASS_G
+        params['UnitLength_kpc'] = float(runtime.attrs['UnitLength_in_cm']) / CM_PER_KPC
 
         params['redshifts'] = np.array(f['Header/snapshot_redshifts'])
 
@@ -259,7 +267,13 @@ class Model:
         params = read_simulation_params(self.files[0])
         self.Hubble_h = params['Hubble_h']
         self.BoxSize = params['BoxSize']
+        self.Omega = params['Omega']
+        self.OmegaLambda = params['OmegaLambda']
         self.PartMass = params['PartMass']
+        self.BaryonFrac = params['BaryonFrac']
+        self.MShockMsun = params['MShockMsun']
+        self.UnitMass_Msun = params['UnitMass_Msun']      # code mass unit in Msun/h
+        self.UnitLength_kpc = params['UnitLength_kpc']    # code length unit in kpc/h
         self.redshifts = params['redshifts']
         self.available_snapshots = params['available_snapshots']
         self.VolumeFraction = sum(read_simulation_params(f)['VolumeFraction'] for f in self.files)
@@ -282,6 +296,7 @@ class Model:
         self._thin_rank = {}
 
         print(f"  {self.label}: {len(self.files)} file(s), h = {self.Hubble_h}, "
+              f"Omega_m = {self.Omega}, Omega_L = {self.OmegaLambda}, f_b = {self.BaryonFrac}, "
               f"box = {self.BoxSize} Mpc/h, volume fraction = {self.VolumeFraction}, "
               f"local snap = {self.local_snap} (z = {self.redshift(self.local_snap):.3f})")
 
@@ -304,7 +319,7 @@ class Model:
     def mask(self, snap):
         """Boolean mask of the galaxies at snap that pass the particle-length and Mvir cuts."""
         if snap not in self._masks:
-            mvir = self._read_raw(snap, 'Mvir') * 1.0e10 / self.Hubble_h
+            mvir = self._read_raw(snap, 'Mvir') * self.UnitMass_Msun / self.Hubble_h
             keep = mvir >= MVIR_CUT
             if 'Len' in self.fields:
                 keep &= self._read_raw(snap, 'Len') >= PARTICLE_LEN_CUT
@@ -322,7 +337,7 @@ class Model:
             else:
                 data = data[self.mask(snap)]
                 if field in MASS_FIELDS:
-                    data = data * 1.0e10 / self.Hubble_h
+                    data = data * self.UnitMass_Msun / self.Hubble_h
                 self._cache[key] = data
         return self._cache[key]
 
@@ -1289,7 +1304,6 @@ def local_baryon_fraction(models):
     plt.figure()
     ax = plt.subplot(111)
 
-    baryon_frac = 0.17
     MinHalo, MaxHalo, Interval = 11.0, 16.0, 0.1
     HaloBins = np.arange(MinHalo, MaxHalo + Interval, Interval)
     Nbins = len(HaloBins) - 1
@@ -1304,10 +1318,12 @@ def local_baryon_fraction(models):
                   ('BlackHoleMass', None, None, None),
                   ('EjectedMass', 'Ejected gas', 'yellow', '--')]
 
-    plt.axhline(y=baryon_frac, color='grey', linestyle='--', linewidth=1.0,
-                label='Baryon Fraction = {:.2f}'.format(baryon_frac))
+    for baryon_frac in sorted({m.BaryonFrac for m in models}):
+        plt.axhline(y=baryon_frac, color='grey', linestyle='--', linewidth=1.0,
+                    label='Baryon Fraction = {:.2f}'.format(baryon_frac))
 
     for k, m in enumerate(models):
+        baryon_frac = m.BaryonFrac
         snap = m.local_snap
         Mvir = m.get(snap, 'Mvir')
         Type = m.get(snap, 'Type')
@@ -1852,7 +1868,7 @@ def local_cgm_fraction_vs_mvir(models):
         CGMgas = m.get(snap, 'CGMgas')
 
         with np.errstate(divide='ignore', invalid='ignore'):
-            CGM_fraction = np.log10(CGMgas / Mvir) * 0.17  # Normalize by cosmic baryon fraction
+            CGM_fraction = np.log10(CGMgas / Mvir) * m.BaryonFrac  # Normalize by cosmic baryon fraction
             finite = np.isfinite(CGM_fraction)
 
             print(f'  {m.label}: CGM fraction vs Mvir sample stats:')
@@ -1956,9 +1972,9 @@ def local_disk_radius_vs_stellar_mass(models):
         # that scale rather than pulling the observations down onto a scale length:
         # r_e = 1.68 r_d for a pure exponential -- the same constant the model itself uses
         # for this conversion (DISK_HALF_MASS_FRAC in src/model_mergers.c).
-        DiskRadius = m.get(snap, 'DiskRadius') * 1.0e3 * 1.68  # kpc/h, effective radius
+        DiskRadius = m.get(snap, 'DiskRadius') * m.UnitLength_kpc * 1.68  # kpc/h, effective radius
         StellarMass = m.get(snap, 'StellarMass')
-        Rvir = m.get(snap, 'Rvir') * 1.0e3  # kpc/h
+        Rvir = m.get(snap, 'Rvir') * m.UnitLength_kpc  # kpc/h
 
         with np.errstate(divide='ignore'):
             logm = np.log10(StellarMass)
@@ -2025,8 +2041,8 @@ def local_half_mass_radius_vs_stellar_mass(models):
         # mass-weighted mean of the disk and bulge half-mass radii, as Shark defines a galaxy's
         # composite size (Lagos et al. 2018; shark Galaxy::composite_size). DiskRadius is the
         # exponential scale length, r_e = 1.68 r_d, as in the disk-size plot above.
-        DiskRadius = m.get(snap, 'DiskRadius') * 1.0e3 * 1.68  # kpc/h, half-mass
-        BulgeRadius = m.get(snap, 'BulgeRadius') * 1.0e3        # kpc/h, half-mass
+        DiskRadius = m.get(snap, 'DiskRadius') * m.UnitLength_kpc * 1.68  # kpc/h, half-mass
+        BulgeRadius = m.get(snap, 'BulgeRadius') * m.UnitLength_kpc        # kpc/h, half-mass
         StellarMass = m.get(snap, 'StellarMass')
         BulgeMass = m.get(snap, 'BulgeMass')
         SFR = m.get(snap, 'SfrDisk') + m.get(snap, 'SfrBulge')  # Msun/yr
@@ -2124,14 +2140,12 @@ def history_rcool_to_rvir_above_mshock(models):
     # ====================================================================
     print('Measuring rcool > Rvir fraction for Mvir > Mshock haloes\n')
 
-    Mshock_Msun = 6.0e11  # MSHOCK_DB06_MSUN, physical Msun (must match the C source)
     measure_targets = [0.0, 2.0, 6.0]
-
-    print(f'  Mshock = {Mshock_Msun:.2e} Msun (De Lucia & Blaizot 2006 eq. 38)')
 
     results = {}
     for m in models:
-        print(f'  [{m.label}]')
+        Mshock_Msun = m.MShockMsun  # physical Msun, the run's MShockMsun parameter
+        print(f'  [{m.label}]  Mshock = {Mshock_Msun:.2e} Msun (De Lucia & Blaizot 2006 eq. 38)')
         print(f'  {"z":>6} {"snap":>5} {"N(Mvir>Mshock)":>15} '
               f'{"f(rcool>Rvir)":>14} {"f(rcool>=Rvir)":>15}')
         frac_strict = []
@@ -2249,12 +2263,14 @@ def history_stellar_mass_function_z(models):
     snap_colors = ['k', 'b', 'g', 'r']
     binwidth = 0.1
     for mi_, m in enumerate(models):
-        default_smf_snaps = [m.LastSnap, 37, 32, 27, 23, 20, 18, 16]
-        SMFsnaps = [s for s in default_smf_snaps if s in m.history_snaps]
-        if not SMFsnaps:
-            SMFsnaps = [m.LastSnap]
+        # Snapshot closest to each target z (the Millennium snaps 37, 32, 27), so every
+        # simulation is drawn at matching redshifts
+        SMFsnaps = [m.LastSnap] + [int(np.argmin(np.abs(np.array(m.redshifts) - target_z)))
+                                   for target_z in (1.39, 2.07, 3.06)]
 
-        for k, snap in enumerate(SMFsnaps[:4]):
+        for k, snap in enumerate(SMFsnaps):
+            if snap not in m.history_snaps:
+                continue
             sm = m.get(snap, 'StellarMass')
             w = np.where(sm > 0.0)[0]
             if len(w) == 0:
@@ -3127,7 +3143,7 @@ def history_metallicity_evolution(models):
                 stellar_mass = m.get(snap_idx, 'StellarMass')
                 # The original plots log10 of MetalsStellarMass as stored (1e10 Msun/h), so
                 # undo the Msun conversion that Model.get applies to it
-                metals = m.get(snap_idx, 'MetalsStellarMass') * m.Hubble_h / 1.0e10
+                metals = m.get(snap_idx, 'MetalsStellarMass') * m.Hubble_h / m.UnitMass_Msun
                 w = np.where((stellar_mass > 0.0) & (metals > 0.0))[0]
                 if len(w) > 0:
                     masses = np.log10(stellar_mass[w])
@@ -3254,13 +3270,11 @@ def history_star_formation_efficiency(models):
     plt.figure(figsize=(10, 7))
     ax = plt.subplot(111)
 
-    f_baryon = 0.17  # Cosmological baryon fraction Omega_b / Omega_m
-
     t_today = 0.0
     for m in models:
-        params = read_simulation_params(m.files[0])
-        OmegaM = params['Omega']
-        OmegaL = params['OmegaLambda']
+        f_baryon = m.BaryonFrac  # Cosmological baryon fraction Omega_b / Omega_m
+        OmegaM = m.Omega
+        OmegaL = m.OmegaLambda
 
         t_arr_sfe = []
         med_sfe = []
@@ -3401,9 +3415,8 @@ def history_central_satellite_fraction_massive_quiescent(models):
 
     z_max_all = 0.0
     for k, m in enumerate(models):
-        params = read_simulation_params(m.files[0])
-        OmegaM_cs = params['Omega']
-        OmegaL_cs = params['OmegaLambda']
+        OmegaM_cs = m.Omega
+        OmegaL_cs = m.OmegaLambda
         inv_H0_yr = (9.778 / m.Hubble_h) * 1.0e9  # 1/H0 in years
 
         z_arr_mq = []

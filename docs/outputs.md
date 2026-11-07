@@ -218,7 +218,7 @@ section below) and the unit actually written.
 |-------|-------|-------------|
 | `SfrDisk` | Msun / yr | Disk SFR averaged over the snapshot interval (mean over the STEPS sub-steps). |
 | `SfrBulge` | Msun / yr | Bulge SFR averaged over the snapshot interval (starburst component). |
-| `SfrDiskZ` | dimensionless | Mass-weighted metallicity of the star-forming disk gas (`MetalsColdGas / ColdGas` averaged over sub-steps). Despite the "Units" attribute saying `Msun/yr`, this field is a metallicity ratio, not a rate. |
+| `SfrDiskZ` | dimensionless | Mass-weighted metallicity of the star-forming disk gas (`MetalsColdGas / ColdGas` averaged over sub-steps). |
 | `SfrBulgeZ` | dimensionless | Mass-weighted metallicity of the star-forming bulge gas. Same caveat as `SfrDiskZ`. |
 | `OutflowRate` | Msun / yr | Cold-gas reheating rate (cold -> hot) integrated over the substep. |
 | `MassLoading` | dimensionless | SN mass-loading factor (outflow rate / SFR). |
@@ -226,6 +226,7 @@ section below) and the unit actually written.
 | `Heating` | log10(erg / s) | log10 of AGN radio-mode heating energy rate. Stored as 0.0 when no heating occurred. |
 | `QuasarModeBHaccretionMass` | 1.0e10 Msun / h | Mass accreted by the black hole since the previous snapshot (over `dT`) in quasar mode (mergers and disk instabilities). Not Eddington-limited. |
 | `RadioModeBHaccretionMass` | 1.0e10 Msun / h | Mass accreted by the black hole since the previous snapshot (over `dT`) in radio mode, from the hot halo or CGM. `Heating` = 0.1 c^2 x this mass / `dT`. |
+| `RadioModeBHaccretionMassUncapped` | 1.0e10 Msun / h | Diagnostic, not used by the model: the radio-mode accretion over `dT` before the cap that limits the heating to the cooling (the recipe's rate x `RadioModeEfficiency`, Eddington- and reservoir-limited). For a jet power, 0.1 c^2 x this mass / `dT`. Equal to `RadioModeBHaccretionMass` when the cap does not bind. |
 
 ### Sizes
 

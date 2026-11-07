@@ -256,6 +256,15 @@ hot gas the halo holds. The accreted mass is tallied in
 `RadioModeBHaccretionMass` (per snapshot), and the `Heating` output is exactly
 `0.1 c^2 * RadioModeBHaccretionMass / dT`.
 
+Because of that cap, `RadioModeBHaccretionMass` is not a jet power: in most
+massive haloes it is zero (Croton et al. 2016, Sec. 9.1.1, note that keeping
+`r_heat` from moving inwards makes the cooling rates a lower limit). As a
+diagnostic, `RadioModeBHaccretionMassUncapped` tallies the accreted mass
+*before* the cooling cap -- the recipe's rate, Eddington- and
+reservoir-limited -- over the same substeps. Nothing in the model reads it, so
+every other output is unchanged. The jet power it implies is
+`0.1 c^2 * RadioModeBHaccretionMassUncapped / dT`.
+
 Note that recipe 3's threshold scales as `(r_cool / R_vir)^3`, so with
 `r_cool` uncapped it rises steeply for `r_cool > R_vir` haloes and the
 trigger fires *less* often for them, not more.

@@ -87,6 +87,7 @@ extern "C" {
       float Heating;
       float QuasarModeBHaccretionMass;
       float RadioModeBHaccretionMass;
+      float RadioModeBHaccretionMassUncapped;
       float TimeOfLastMajorMerger;
       float TimeOfLastMinorMerger;
       float TimeOfLastQuasarBurst;

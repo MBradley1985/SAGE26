@@ -174,6 +174,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].r_heat = 0.0;
     galaxies[p].QuasarModeBHaccretionMass = 0.0;
     galaxies[p].RadioModeBHaccretionMass = 0.0;
+    galaxies[p].RadioModeBHaccretionMassUncapped = 0.0;
     galaxies[p].TimeOfLastMajorMerger = -1.0;
     galaxies[p].TimeOfLastMinorMerger = -1.0;
     galaxies[p].TimeOfLastQuasarBurst = -1.0;

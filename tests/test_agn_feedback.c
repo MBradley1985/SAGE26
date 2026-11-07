@@ -318,6 +318,67 @@ void test_agn_accretion_limit() {
 }
 
 // ============================================================================
+// TEST 9: Uncapped Radio-Mode Accretion Diagnostic
+// ============================================================================
+static void setup_uncapped_test(struct GALAXY *gal, struct params *run_params) {
+    memset(gal, 0, sizeof(struct GALAXY));
+    memset(run_params, 0, sizeof(struct params));
+    run_params->AGNrecipeOn = 2;
+    run_params->RadioModeEfficiency = 0.08;
+    run_params->UnitMass_in_g = 1.989e43;
+    run_params->UnitTime_in_s = 3.08568e16;
+    run_params->UnitEnergy_in_cgs = 1.989e53;
+    run_params->G = 43007.1;
+    run_params->Hubble_h = 0.7;
+
+    gal->HotGas = 10.0;
+    gal->MetalsHotGas = 0.2;
+    gal->BlackHoleMass = 0.1;
+    gal->Vvir = 300.0;
+    gal->Rvir = 300.0;
+    gal->Mvir = 300.0;
+}
+
+void test_radio_uncapped_diagnostic() {
+    BEGIN_TEST("Uncapped Radio-Mode Accretion Is Recorded Without Changing The Physics");
+
+    struct GALAXY gal[1];
+    struct params run_params;
+    const double dt = 0.01;
+    const double x = 1.0;
+    const double rcool = 200.0;
+
+    // Heated region beyond rcool: no cooling left, so the capped accretion is zero
+    setup_uncapped_test(&gal[0], &run_params);
+    gal[0].r_heat = 250.0;
+    const double bh_before = gal[0].BlackHoleMass;
+    do_AGN_heating(1.0, 0, dt, x, rcool, gal, &run_params);
+    ASSERT_EQUAL_FLOAT(gal[0].RadioModeBHaccretionMass, 0.0,
+                       "No radio accretion once r_heat >= rcool");
+    ASSERT_CLOSE(gal[0].BlackHoleMass, bh_before, 1e-12,
+                 "BH mass unchanged when the cap is zero");
+    ASSERT_GREATER_THAN(gal[0].RadioModeBHaccretionMassUncapped, 0.0,
+                        "Uncapped accretion still recorded");
+    const double uncapped_quenched = gal[0].RadioModeBHaccretionMassUncapped;
+
+    // Tiny cooling: the cap binds, so the uncapped mass exceeds the accreted mass
+    setup_uncapped_test(&gal[0], &run_params);
+    do_AGN_heating(1.0e-12, 0, dt, x, rcool, gal, &run_params);
+    ASSERT_GREATER_THAN(gal[0].RadioModeBHaccretionMass, 0.0,
+                        "Some radio accretion with a little cooling");
+    ASSERT_GREATER_THAN(gal[0].RadioModeBHaccretionMassUncapped, gal[0].RadioModeBHaccretionMass,
+                        "Uncapped exceeds capped when the cooling cap binds");
+    ASSERT_CLOSE(gal[0].RadioModeBHaccretionMassUncapped, uncapped_quenched, 1e-6,
+                 "Uncapped accretion does not depend on the cooling rate");
+
+    // Huge cooling: the cap does not bind, so the two agree
+    setup_uncapped_test(&gal[0], &run_params);
+    do_AGN_heating(1.0e6, 0, dt, x, rcool, gal, &run_params);
+    ASSERT_CLOSE(gal[0].RadioModeBHaccretionMassUncapped, gal[0].RadioModeBHaccretionMass, 1e-6,
+                 "Uncapped equals capped when the cooling cap does not bind");
+}
+
+// ============================================================================
 // MAIN TEST RUNNER
 // ============================================================================
 int main(void) {
@@ -335,6 +396,7 @@ int main(void) {
     test_agn_recipe_modes();
     test_agn_heating_coefficient();
     test_agn_accretion_limit();
+    test_radio_uncapped_diagnostic();
 
     PRINT_TEST_SUMMARY();
     

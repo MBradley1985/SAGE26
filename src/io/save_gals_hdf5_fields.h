@@ -92,7 +92,7 @@
       "Unitless") \
     X(dT, dT, float, H5T_NATIVE_FLOAT, \
       "Time between this snapshot and when the galaxy was last evolved.", \
-      "Myr") \
+      "Myr/h") \
     X(Posx, Posx, float, H5T_NATIVE_FLOAT, \
       "Galaxy spatial x position.", \
       "Mpc/h") \
@@ -188,10 +188,10 @@
       "Msun/yr") \
     X(SfrDiskZ, SfrDiskZ, float, H5T_NATIVE_FLOAT, \
       "Average metallicity of star-forming disk gas.", \
-      "Msun/yr") \
+      "Unitless") \
     X(SfrBulgeZ, SfrBulgeZ, float, H5T_NATIVE_FLOAT, \
       "Average metallicity of star-forming bulge gas.", \
-      "Msun/yr") \
+      "Unitless") \
     X(DiskRadius, DiskScaleRadius, float, H5T_NATIVE_FLOAT, \
       "Disk scale radius based on Mo, Shude & White (1998)", \
       "Mpc/h") \
@@ -212,15 +212,18 @@
       "1.0e10 Msun/h") \
     X(Cooling, Cooling, float, H5T_NATIVE_FLOAT, \
       "Energy rate for gas cooling in the galaxy.", \
-      "erg/s") \
+      "log10(erg/s)") \
     X(Heating, Heating, float, H5T_NATIVE_FLOAT, \
       "Energy rate for gas heating in the galaxy.", \
-      "erg/s") \
+      "log10(erg/s)") \
     X(QuasarModeBHaccretionMass, QuasarModeBHaccretionMass, float, H5T_NATIVE_FLOAT, \
       "Mass this galaxy's black hole accreted in quasar mode (mergers and disk instabilities) since the previous snapshot.", \
       "1.0e10 Msun/h") \
     X(RadioModeBHaccretionMass, RadioModeBHaccretionMass, float, H5T_NATIVE_FLOAT, \
       "Mass this galaxy's black hole accreted in radio mode (from the hot halo or CGM) since the previous snapshot.", \
+      "1.0e10 Msun/h") \
+    X(RadioModeBHaccretionMassUncapped, RadioModeBHaccretionMassUncapped, float, H5T_NATIVE_FLOAT, \
+      "Diagnostic: radio-mode accretion since the previous snapshot before the cap that limits the heating to the cooling (Bondi rate x RadioModeEfficiency, Eddington- and reservoir-limited). Not used by the model.", \
       "1.0e10 Msun/h") \
     X(TimeOfLastMajorMerger, TimeOfLastMajorMerger, float, H5T_NATIVE_FLOAT, \
       "Time since this galaxy had a major merger.", \
@@ -236,7 +239,7 @@
       "Msun/yr") \
     X(infallMvir, infallMvir, float, H5T_NATIVE_FLOAT, \
       "Virial mass of this galaxy's halo at the previous timestep.", \
-      "1.0e10 Msun/yr") \
+      "1.0e10 Msun/h") \
     X(infallVvir, infallVvir, float, H5T_NATIVE_FLOAT, \
       "Virial velocity of this galaxy's halo at the previous timestep.", \
       "km/s") \
@@ -287,10 +290,10 @@
       "Unitless") \
     X(mdot_cool, mdot_cool, float, H5T_NATIVE_FLOAT, \
       "Cooling rate of hot halo gas.", \
-      "1.0e10 Msun/yr") \
+      "Msun/yr") \
     X(mdot_stream, mdot_stream, float, H5T_NATIVE_FLOAT, \
       "Cooling rate of cold streams.", \
-      "1.0e10 Msun/yr") \
+      "Msun/yr") \
     X(ICS_disrupt, ICS_disrupt, float, H5T_NATIVE_FLOAT, \
       "In-situ ICS: cumulative satellite stellar mass stripped directly into THIS halo's ICS reservoir. Channel of last transfer, not of origin -- all ICS originates in disruption, but a packet formed in a progenitor group is booked under ICS_accrete once that group falls in.", \
       "1.0e10 Msun/h") \
@@ -301,8 +304,8 @@
       "Mass-weighted sum m*t (code time) at ICS deposition; divide by (ICS_disrupt+ICS_accrete) for mean assembly lookback.", \
       "1.0e10 Msun/h * code_time") \
     X(g_max, g_max, double, H5T_NATIVE_DOUBLE, \
-      "Maximum g value for this galaxy's halo across all snapshots.", \
-      "1.0e10 Msun/h") \
+      "Peak NFW gravitational acceleration of this galaxy's halo at this snapshot (Boylan-Kolchin 2025 FFB test).", \
+      "(km/s)^2/(Mpc/h)") \
     X(r_heat, r_heat, float, H5T_NATIVE_FLOAT, \
       "AGN radio-mode heating radius (ratchet, capped at Rvir in the CGM regime). Cooling is suppressed at r < r_heat.", \
       "Mpc/h")\

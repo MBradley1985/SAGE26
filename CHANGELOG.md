@@ -10,6 +10,16 @@ it says otherwise. See
 
 ## Unreleased
 
+### RadioModeBHaccretionMassUncapped output (new dataset)
+
+- Radio-mode accretion is capped so that the heating never exceeds the
+  cooling, so once `r_heat >= r_cool` a black hole accretes nothing in radio
+  mode; at z=0 on Millennium 87% of centrals above 10^12.5 Msun have
+  `RadioModeBHaccretionMass` = 0 and none reach a radio-loud jet power. The
+  new dataset records the accretion before that cap (the recipe's rate,
+  Eddington- and reservoir-limited) as a jet-power diagnostic. It feeds no
+  recipe: every existing dataset is bit-identical.
+
 ### ConcentrationScatter parameter
 
 - The log-normal scatter in halo concentration for the BK25 threshold
