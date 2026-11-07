@@ -379,6 +379,75 @@ void test_radio_uncapped_diagnostic() {
 }
 
 // ============================================================================
+// TEST 10: RheatMode 2-3 -- Heating Measured Against The Unsuppressed Cooling
+// ============================================================================
+/* Heating and r_heat are float fields; only round-off separates them. */
+static const double RHEAT_PAPER_TOL = 1e-5;
+
+static void check_rheat_paper_heating(const int mode) {
+    BEGIN_TEST(mode == 2 ? "RheatMode 2: Heating Offsets The Unsuppressed Cooling (Croton+16 eqs. 18-20)"
+                         : "RheatMode 3: Heating Offsets The Unsuppressed Cooling (Croton+16 eqs. 18-20)");
+    /*
+     * Asserts: with RheatMode 2 or 3, do_AGN_heating() caps the heating at the
+     *          unsuppressed cooling (eq. 6) and sets r_heat = (heating /
+     *          unsuppressed cooling) r_cool (eq. 18), instead of measuring
+     *          both against the already-suppressed cooling.
+     *
+     * Case 1: r_heat = r_cool, so the suppressed cooling is zero.  In mode 0
+     *         the AGN then accretes nothing; in mode 2 a black hole whose
+     *         Bondi rate exceeds the cooling must heat exactly the full
+     *         cooling flow (heating mass = coolingGas passed in).
+     *
+     * Case 2: r_heat = r_cool / 2 and a Bondi heating budget between half
+     *         and all of the unsuppressed cooling.  Mode 0 would cap the
+     *         heating at the suppressed half and push r_heat to r_cool;
+     *         mode 2 gives r_heat = (heating / coolingGas) r_cool < r_cool,
+     *         and suppresses the cooling with that r_heat (eq. 20 includes
+     *         the current episode), returning (1 - heating / coolingGas)
+     *         of it rather than the stale (1 - 1/2).
+     *
+     * Heating mass is read back from Heating = 0.5 AGNheating Vvir^2.
+     */
+    struct GALAXY gal[1];
+    struct params run_params;
+    const double dt = 0.01;
+    const double x = 1.0;
+    const double rcool = 200.0;
+
+    // Case 1: quenched halo, Bondi budget (~6e3) well above the cooling
+    setup_uncapped_test(&gal[0], &run_params);
+    run_params.RheatMode = mode;
+    gal[0].r_heat = rcool;
+    const double cool_1 = 1.0;
+    const double returned = do_AGN_heating(cool_1, 0, dt, x, rcool, gal, &run_params);
+    ASSERT_EQUAL_FLOAT(returned, 0.0, "Mode 2: no net cooling while r_heat = r_cool");
+    ASSERT_CLOSE(cool_1, 2.0 * gal[0].Heating / (gal[0].Vvir * gal[0].Vvir), RHEAT_PAPER_TOL,
+                 "Mode 2: a quenched halo's AGN heats the full cooling flow");
+    ASSERT_CLOSE(rcool, gal[0].r_heat, RHEAT_PAPER_TOL, "Mode 2: r_heat held at r_cool");
+
+    // Case 2: Bondi budget ~6.4e3 between half (5e3) and all (1e4) of the cooling
+    setup_uncapped_test(&gal[0], &run_params);
+    run_params.RheatMode = mode;
+    gal[0].r_heat = 0.5 * rcool;
+    const double cool_2 = 1.0e4;
+    const double returned_2 = do_AGN_heating(cool_2, 0, dt, x, rcool, gal, &run_params);
+    const double heat_2 = 2.0 * gal[0].Heating / (gal[0].Vvir * gal[0].Vvir);
+    ASSERT_IN_RANGE(heat_2, 0.5 * cool_2, cool_2, "Setup: Bondi heating between half and all of the cooling");
+    ASSERT_CLOSE(rcool * heat_2 / cool_2, gal[0].r_heat, RHEAT_PAPER_TOL,
+                 "Mode 2: r_heat = (heating / unsuppressed cooling) r_cool");
+    ASSERT_CLOSE(cool_2 - heat_2, returned_2, RHEAT_PAPER_TOL,
+                 "Mode 2: net cooling uses r_heat after this substep's heating");
+}
+
+// ============================================================================
+
+void test_rheat_paper_heating() {
+    /* Modes 2 and 3 differ only in the r_heat relaxation, which happens in the
+     * cooling recipes, so do_AGN_heating() must behave the same in both. */
+    check_rheat_paper_heating(2);
+    check_rheat_paper_heating(3);
+}
+
 // MAIN TEST RUNNER
 // ============================================================================
 int main(void) {
@@ -397,6 +466,7 @@ int main(void) {
     test_agn_heating_coefficient();
     test_agn_accretion_limit();
     test_radio_uncapped_diagnostic();
+    test_rheat_paper_heating();
 
     PRINT_TEST_SUMMARY();
     

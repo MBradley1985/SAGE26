@@ -298,11 +298,21 @@ Differences from the hot-halo path:
   cooling flow that was already reservoir-limited could be handed back to
   the caller exceeding the remaining CGM.
 
-### `r_heat` relaxation (`RheatRelaxOn`, experimental)
+### Heating radius modes (`RheatMode`, experimental)
 
-Croton et al. (2016, Sec. 9.1.1) note that "ideally, r_heat would shrink"
-while the AGN is off. With `RheatRelaxOn = 1`, each substep, before the
-suppression, `relax_r_heat()` applies
+`RheatMode` 0 is the behaviour described above (output identical to SAGE26).
+Modes 1-3 change two independent things:
+
+| `RheatMode` | `r_heat` relaxes | Heating measured against |
+|---|---|---|
+| 0 | no | suppressed cooling (SAGE) |
+| 1 | yes | suppressed cooling (SAGE) |
+| 2 | yes | unsuppressed cooling (Croton et al. 2016, eqs. 18-20) |
+| 3 | no | unsuppressed cooling (Croton et al. 2016, eqs. 18-20) |
+
+**Relaxation (modes 1-2).** Croton et al. (2016, Sec. 9.1.1) note that
+"ideally, r_heat would shrink" while the AGN is off. Each substep, before
+the suppression, `relax_r_heat()` applies
 
     r_heat <- r_heat * exp(-dt / t_cool(r_heat))
 
@@ -318,15 +328,43 @@ cooling already assumes, so there is no new parameter:
 `r_heat` is one field per galaxy, so it relaxes once per substep: in the hot
 path for a Regime 1 halo with hot gas, otherwise in the CGM path.
 
-Everything else is unchanged, including the ratchet over the suppressed
-cooling and the cap at the suppressed cooling. With those kept, the relaxation
-does not give a jet power: after r_heat shrinks, one substep of heating equal
-to the gas now cooling restores `r_heat_new = (AGNheating / coolingGas)
-r_cool = r_cool`. Heating and cooling settle at about `dt / t_dyn` of the
-unsuppressed cooling, and so scale with the substep length. On Millennium at
-z = 0 (centrals above 10^12.5 Msun) the median jet power goes from zero to
-10^40.7 erg/s at `SubstepResolution` 1 and 10^40.3 at 2, the median cooling
-rate from 0 to 3.1 and 1.5 Msun/yr.
+**Eqs. 18-20 as written (modes 2-3).** SAGE caps the heating at the
+cooling left after the `(1 - r_heat / r_cool)` suppression and sets
+`r_heat = (AGNheating / suppressed cooling) r_cool`. Croton et al. (2016)
+eqs. 18-19 compare the heating with the unsuppressed cooling of eq. 6, with
+no cap at the suppressed rate, and eq. 20 suppresses the cooling "in the
+presence of current and past radio mode episodes". Modes 2-3 do that in both
+`do_AGN_heating()` and `do_AGN_heating_cgm()`: the cap and the ratchet use the
+unsuppressed cooling (`paper_cooling()`), and the cooling is then suppressed
+with the `r_heat` that includes this substep's heating. Holding `r_heat` at
+`r_cool` therefore costs the full cooling flow every substep, so the jet power
+is `min(Bondi, cooling luminosity)`. For `AGNrecipeOn` 3 the cold-cloud rate
+becomes a fraction of the unsuppressed cooling.
+
+**Results** (Millennium, z = 0, `SubstepResolution` 1; centrals above
+10^12.5 Msun; figures in `darksage_plots/26-29`):
+
+| `RheatMode` | median jet power [erg/s] | jet > 10^42 | median cooling [Msun/yr] | n(M* > 10^11) [10^-5 Mpc^-3] |
+|---|---|---|---|---|
+| 0 | 0 (87% zero) | 0% | 0 | 23 |
+| 1 | 10^40.7 | 1% | 3.1 | 30 |
+| 2 | 10^42.4 | 90% | 0 | 50 |
+| 3 | 10^42.4 | 90% | 0 | 47 |
+
+- Mode 1 does not give a jet power: after `r_heat` shrinks, one substep of
+  heating equal to the gas now cooling restores `r_heat = r_cool`, so heating
+  and cooling settle at about `dt / t_dyn` of the unsuppressed cooling.
+- Modes 2-3 give radio-loud jets in groups and clusters, keep them quenched
+  (zero cooling above 10^12.3 Msun), and differ little from each other: the
+  denominator of eq. 18, not the relaxation, is what matters.
+- Modes 2-3 raise the bright end of the stellar mass function and lower the
+  quenched fraction at 10^11 Msun from about 0.85 to 0.55. With the
+  suppressed cooling as the denominator, `r_heat` grows towards `r_cool` with
+  a heating rate well below the cooling, and the `RadioModeEfficiency` of 0.08
+  is calibrated with that; under eqs. 18-20 the heating must match the
+  cooling, so these modes would need `RadioModeEfficiency` recalibrated.
+- Median black hole mass at a bulge mass of 10^11 Msun is 10^8.4-8.5 Msun in
+  every mode.
 
 ## `cool_gas_onto_galaxy()`
 

@@ -453,7 +453,7 @@ void test_temperature_cooling_regulation() {
 }
 
 // ============================================================================
-// TEST 12: r_heat Relaxes On The Local Cooling Time (RheatRelaxOn)
+// TEST 12: r_heat Relaxes On The Local Cooling Time (RheatMode)
 // ============================================================================
 /* Code time is (Mpc/h)/(km/s), so Rvir / Vvir = 1e-3 below; the tests compare
  * against the closed-form profile cooling times, so round-off is the only
@@ -477,7 +477,7 @@ static void setup_rheat_relax(struct GALAXY *gal, struct params *run_params)
 void test_rheat_relax_hot() {
     BEGIN_TEST("Hot Halo: r_heat Relaxes On t_cool(r_heat) = (Rvir/Vvir)(r_heat/rcool)^2");
     /*
-     * Asserts: with RheatRelaxOn 1, cooling_recipe_hot() shrinks r_heat by
+     * Asserts: with RheatMode 1, cooling_recipe_hot() shrinks r_heat by
      *          exp(-dt / t_cool(r_heat)) before the suppression; with 0 it is
      *          left alone (the Croton et al. 2016 ratchet).
      *
@@ -512,24 +512,33 @@ void test_rheat_relax_hot() {
     gal[0].MetalsHotGas = 0.01;
     gal[0].r_heat = 0.5 * rcool;
     cooling_recipe_hot(0, dt, gal, &run_params);
-    ASSERT_CLOSE(0.5 * rcool, gal[0].r_heat, RHEAT_RELAX_TOL, "RheatRelaxOn 0: r_heat never moves inwards");
+    ASSERT_CLOSE(0.5 * rcool, gal[0].r_heat, RHEAT_RELAX_TOL, "RheatMode 0: r_heat never moves inwards");
 
     // Toggle on: one e-folding per local cooling time
     setup_rheat_relax(&gal[0], &run_params);
     gal[0].HotGas = 0.5;
     gal[0].MetalsHotGas = 0.01;
     gal[0].r_heat = 0.5 * rcool;
-    run_params.RheatRelaxOn = 1;
+    run_params.RheatMode = 1;
     const double t_rheat = (gal[0].Rvir / gal[0].Vvir) * 0.25;
     cooling_recipe_hot(0, dt, gal, &run_params);
     ASSERT_CLOSE(0.5 * rcool * exp(-dt / t_rheat), gal[0].r_heat, RHEAT_RELAX_TOL,
-                 "RheatRelaxOn 1: r_heat shrinks by exp(-dt / t_cool(r_heat))");
+                 "RheatMode 1: r_heat shrinks by exp(-dt / t_cool(r_heat))");
+
+    // Mode 3 is Croton et al. (2016) as written: no relaxation
+    setup_rheat_relax(&gal[0], &run_params);
+    gal[0].HotGas = 0.5;
+    gal[0].MetalsHotGas = 0.01;
+    gal[0].r_heat = 0.5 * rcool;
+    run_params.RheatMode = 3;
+    cooling_recipe_hot(0, dt, gal, &run_params);
+    ASSERT_CLOSE(0.5 * rcool, gal[0].r_heat, RHEAT_RELAX_TOL, "RheatMode 3: r_heat never moves inwards");
 }
 
 void test_rheat_relax_cgm() {
     BEGIN_TEST("CGM Regime: r_heat Relaxes On The alpha = 1.4 Profile's t_cool(r_heat)");
     /*
-     * Asserts: with RheatRelaxOn 1, cooling_recipe_cgm() shrinks r_heat by
+     * Asserts: with RheatMode 1, cooling_recipe_cgm() shrinks r_heat by
      *          exp(-dt / t_cool(r_heat)) in a Regime 0 halo, and leaves it to
      *          the hot path in a Regime 1 halo (one relaxation per substep).
      *
@@ -551,7 +560,7 @@ void test_rheat_relax_cgm() {
     gal[0].CGMgas = 0.5;
     gal[0].MetalsCGMgas = 0.005;
     gal[0].r_heat = 0.5 * gal[0].Rvir;
-    run_params.RheatRelaxOn = 1;
+    run_params.RheatMode = 1;
     cooling_recipe_cgm(0, dt, gal, &run_params);
     const double tcool = gal[0].tcool * SEC_PER_GIGAYEAR / run_params.UnitTime_in_s;
     const double t_rheat = tcool * (I_cool / I_M) * pow(0.5 / 0.1, alpha);
@@ -565,7 +574,7 @@ void test_rheat_relax_cgm() {
     gal[0].CGMgas = 0.5;
     gal[0].MetalsCGMgas = 0.005;
     gal[0].r_heat = 0.5 * gal[0].Rvir;
-    run_params.RheatRelaxOn = 1;
+    run_params.RheatMode = 1;
     cooling_recipe_cgm(0, dt, gal, &run_params);
     ASSERT_CLOSE(0.5 * gal[0].Rvir, gal[0].r_heat, RHEAT_RELAX_TOL,
                  "Regime 1: no second relaxation in the CGM path");

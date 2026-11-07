@@ -61,7 +61,7 @@ optional parameters take the listed default if omitted.
 |-----------|------|----|---------|-------------------|
 | `SFprescription` | int | no | `1` | Star formation prescription: 0=Croton+06; 1=Blitz & Rosolowsky 06 H₂; 2=Somerville+25 SFR; 3=Somerville+25 SFR+H₂; 4=Krumholz & Dekel 12; 5=KMT 09; 6=Krumholz 13; 7=Gnedin & Draine 14. |
 | `AGNrecipeOn` | int | no | `2` | AGN feedback: 0=off; 1=empirical; 2=Bondi-Hoyle; 3=cold cloud accretion. |
-| `RheatRelaxOn` | 0/1 | no | `0` | AGN heating radius: 0 = `r_heat` only moves outwards (Croton et al. 2016), output identical to SAGE26; 1 = `r_heat` relaxes by `exp(-dt / t_cool(r_heat))` each substep, with `t_cool` from the hot halo's or CGM's own density profile, in both regimes. Experimental; see `docs/physics/cooling_and_heating.md`. |
+| `RheatMode` | 0-3 | no | `0` | AGN heating radius. 0: `r_heat` only moves outwards and the heating is measured against the suppressed cooling (SAGE), output identical to SAGE26; 1: as 0, but `r_heat` relaxes by `exp(-dt / t_cool(r_heat))` each substep; 2: as 1, with the heating measured against the unsuppressed cooling (Croton et al. 2016, eqs. 18-20 as written); 3: eqs. 18-20 as written, no relaxation. Experimental: modes 2-3 would need `RadioModeEfficiency` recalibrated; see `docs/physics/cooling_and_heating.md`. |
 | `SupernovaRecipeOn` | 0/1 | no | `1` | SN feedback: 0=off; 1=Croton+16 reheating/ejection (FIRE scaling with FIREmodeOn; per annulus in DarkSAGEMode). |
 | `ReionizationOn` | 0/1 | no | `1` | Reionization suppression of infall: 0=off; 1=Kravtsov+04 analytic fit. |
 | `DiskInstabilityOn` | 0/1 | no | `1` | Disk instability: 0=off; 1=Toomre criterion drives bulge and BH growth. |

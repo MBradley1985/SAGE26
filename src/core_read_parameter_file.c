@@ -130,7 +130,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->ThresholdSatDisruption     = 1.0;
     run_params->MergerTimeFactor           = 2.0;  /* as input/millennium.par (published value 2.0) */
     run_params->Exponent_Forest_Dist_Scheme = 0.7;
-    run_params->RheatRelaxOn               = 0; /* 0: r_heat ratchet only (Croton et al. 2016); 1: r_heat relaxes on t_cool(r_heat) */
+    run_params->RheatMode                  = 0; /* 0: SAGE26 r_heat ratchet; 1: + relaxation; 2: 1 + Croton et al. (2016) eqs. 18-20; 3: eqs. 18-20 only */
     run_params->KarpovModeOn               = 0; /* 0: full Karpov+2023 recipe, 1: low-metallicity floor (Z/Z_sun = 0.01) for reheated and ejected gas */
 
     // DarkSAGEMode: 0 = standard SAGE26; 1, 2 = SAGE26 with radially resolved discs (1: bulk recipes shared over the annuli; 2: recipes per annulus)
@@ -224,7 +224,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("EnhancedSFEfficiency",       &(run_params->EnhancedSFEfficiency),       DOUBLE, 0);
     REG("ConcentrationScatter",       &(run_params->ConcentrationScatter),       DOUBLE, 0);
     REG("KarpovModeOn",               &(run_params->KarpovModeOn),               INT, 0);
-    REG("RheatRelaxOn",               &(run_params->RheatRelaxOn),               INT, 0);
+    REG("RheatMode",                  &(run_params->RheatMode),                  INT, 0);
 
     REG("DarkSAGEMode",                &(run_params->DarkSAGEMode),               INT, 0);
     REG("DustySAGEMode",               &(run_params->DustySAGEMode),              INT, 0);
@@ -560,7 +560,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"H2DepletionMode",        run_params->H2DepletionMode,        0, H2DEPLETIONMODE_MAX},
             {"KarpovModeOn",            run_params->KarpovModeOn,            0, 1},
-            {"RheatRelaxOn",           run_params->RheatRelaxOn,           0, 1},
+            {"RheatMode",              run_params->RheatMode,              0, 3},
             {"DarkSAGEMode",           run_params->DarkSAGEMode,           0, 3},
             {"DustySAGEMode",          run_params->DustySAGEMode,          0, 2},
             {"DustSNIIYields",         run_params->DustSNIIYields,         0, 1},
