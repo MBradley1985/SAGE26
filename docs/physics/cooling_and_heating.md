@@ -298,6 +298,36 @@ Differences from the hot-halo path:
   cooling flow that was already reservoir-limited could be handed back to
   the caller exceeding the remaining CGM.
 
+### `r_heat` relaxation (`RheatRelaxOn`, experimental)
+
+Croton et al. (2016, Sec. 9.1.1) note that "ideally, r_heat would shrink"
+while the AGN is off. With `RheatRelaxOn = 1`, each substep, before the
+suppression, `relax_r_heat()` applies
+
+    r_heat <- r_heat * exp(-dt / t_cool(r_heat))
+
+with `t_cool` the cooling time of the gas at `r_heat` from the profile the
+cooling already assumes, so there is no new parameter:
+
+- Hot halo (`cooling_recipe_hot()`): isothermal, `rho ~ r^-2`, so
+  `t_cool(r) = (R_vir / V_vir) (r / r_cool)^2`.
+- CGM (`cooling_recipe_cgm()`): Carr et al. (2023), `rho ~ r^-1.4`, so
+  `t_cool(r) = t_cool,bulk (I_cool / I_M) (r / r_0)^1.4`, where the bulk
+  `t_cool` is the one at the effective density `rho_0 I_cool / I_M`.
+
+`r_heat` is one field per galaxy, so it relaxes once per substep: in the hot
+path for a Regime 1 halo with hot gas, otherwise in the CGM path.
+
+Everything else is unchanged, including the ratchet over the suppressed
+cooling and the cap at the suppressed cooling. With those kept, the relaxation
+does not give a jet power: after r_heat shrinks, one substep of heating equal
+to the gas now cooling restores `r_heat_new = (AGNheating / coolingGas)
+r_cool = r_cool`. Heating and cooling settle at about `dt / t_dyn` of the
+unsuppressed cooling, and so scale with the substep length. On Millennium at
+z = 0 (centrals above 10^12.5 Msun) the median jet power goes from zero to
+10^40.7 erg/s at `SubstepResolution` 1 and 10^40.3 at 2, the median cooling
+rate from 0 to 3.1 and 1.5 Msun/yr.
+
 ## `cool_gas_onto_galaxy()`
 
 Transfers cooled gas from `HotGas` to `ColdGas` with metallicity tracking.

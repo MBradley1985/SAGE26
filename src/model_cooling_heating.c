@@ -110,6 +110,26 @@ static const double STREAM_THRESHOLD_WIDTH_DEX = 0.15;  /* dex */
  * fraction of the current cooling rate. Croton et al. (2006), AGN appendix. */
 static const double AGN_COLD_CLOUD_FRAC = 1.0e-4;
 
+/*
+ * relax_r_heat -- let the AGN-heated region re-cool (RheatRelaxOn > 0).
+ *
+ * In Croton et al. (2016, Sec. 9.1.1) r_heat never moves inwards, so once it
+ * passes rcool the halo stops cooling for good and the AGN does no more work.
+ * They note that "ideally, r_heat would shrink" while the AGN is off.  Here
+ * r_heat decays by one e-folding per cooling time of the gas at r_heat:
+ *
+ *     r_heat <- r_heat * exp(-dt / t_cool(r_heat))
+ *
+ * t_cool(r_heat) comes from the caller's own density profile (isothermal hot
+ * halo or Carr et al. 2023 CGM), so no new parameter is needed.  Called once
+ * per substep, before the (1 - r_heat / rcool) suppression.
+ */
+static void relax_r_heat(const int gal, const double dt, const double tcool_rheat, struct GALAXY *galaxies)
+{
+    if(tcool_rheat > 0.0)
+        galaxies[gal].r_heat *= exp(-dt / tcool_rheat);
+}
+
 /* File-private: AGN radio-mode heating for CGM-regime galaxies (defined below). */
 static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
                                  struct GALAXY *galaxies, const struct params *run_params);
@@ -303,6 +323,11 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
         // if AGNrecipeOn we now reduce it in line with past heating before proceeding
 
         if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
+            // Isothermal hot gas: t_cool ~ 1/rho ~ r^2, equal to tcool = Rvir/Vvir at rcool
+            if(run_params->RheatRelaxOn > 0) {
+                const double r_ratio = galaxies[gal].r_heat / rcool;
+                relax_r_heat(gal, dt, tcool * r_ratio * r_ratio, galaxies);
+            }
             coolingGas = do_AGN_heating(coolingGas, gal, dt, x, rcool, galaxies, run_params);
         }
 
@@ -379,6 +404,11 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
             }
 
             if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
+                // CGM profile: t_cool ~ 1/rho ~ r^alpha, equal to tcool at rho_eff = rho0 I_cool/I_M.
+                // A Regime 1 halo with hot gas has already relaxed r_heat in cooling_recipe_hot().
+                if(run_params->RheatRelaxOn > 0 && (galaxies[gal].Regime == 0 || galaxies[gal].HotGas <= 0.0)) {
+                    relax_r_heat(gal, dt, tcool * (I_cool / I_M) * pow(galaxies[gal].r_heat / r0, alpha), galaxies);
+                }
                 coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x, rcool, galaxies, run_params);
             }
 
