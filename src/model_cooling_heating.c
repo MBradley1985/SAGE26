@@ -149,8 +149,10 @@ static double suppress_cooling(const double coolingGas, const double r_heat, con
  * SAGE (and RheatMode 0-1) caps the heating at the cooling left after the
  * (1 - r_heat / rcool) suppression and sets r_heat = (heating / that cooling)
  * rcool.  Croton et al. (2016) eqs. 18-19 instead compare the heating with the
- * unsuppressed cooling of eq. 6, and have no cap at the suppressed rate.  With
- * RheatMode 2-3 both use the unsuppressed cooling, so holding r_heat at rcool
+ * unsuppressed cooling of eq. 6, and state no cap.  RheatMode 2-3 follow the
+ * SAGE code before darrencroton/sage bcead05 (April 2015), which the paper's
+ * equations describe: the heating is capped at, and r_heat measured against,
+ * the unsuppressed cooling.  Holding r_heat at rcool
  * costs the full cooling flow each substep (the AGN keeps paying), and
  * r_heat settles at rcool * min(1, heating / cooling).  The callers then
  * suppress the cooling with the r_heat that includes this substep's heating

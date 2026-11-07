@@ -130,7 +130,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->ThresholdSatDisruption     = 1.0;
     run_params->MergerTimeFactor           = 2.0;  /* as input/millennium.par (published value 2.0) */
     run_params->Exponent_Forest_Dist_Scheme = 0.7;
-    run_params->RheatMode                  = 0; /* 0: SAGE26 r_heat ratchet; 1: + relaxation; 2: 1 + Croton et al. (2016) eqs. 18-20; 3: eqs. 18-20 only */
+    run_params->RheatMode                  = 0; /* 0: SAGE26 r_heat ratchet; 1: + relaxation; 2: 1 + Croton et al. (2016) eqs. 18-20 (pre-2015 SAGE order); 3: eqs. 18-20 only */
     run_params->KarpovModeOn               = 0; /* 0: full Karpov+2023 recipe, 1: low-metallicity floor (Z/Z_sun = 0.01) for reheated and ejected gas */
 
     // DarkSAGEMode: 0 = standard SAGE26; 1, 2 = SAGE26 with radially resolved discs (1: bulk recipes shared over the annuli; 2: recipes per annulus)

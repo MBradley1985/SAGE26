@@ -307,8 +307,8 @@ Modes 1-3 change two independent things:
 |---|---|---|
 | 0 | no | suppressed cooling (SAGE) |
 | 1 | yes | suppressed cooling (SAGE) |
-| 2 | yes | unsuppressed cooling (Croton et al. 2016, eqs. 18-20) |
-| 3 | no | unsuppressed cooling (Croton et al. 2016, eqs. 18-20) |
+| 2 | yes | unsuppressed cooling (Croton et al. 2016, eqs. 18-20; pre-2015 SAGE) |
+| 3 | no | unsuppressed cooling (Croton et al. 2016, eqs. 18-20; pre-2015 SAGE) |
 
 **Relaxation (modes 1-2).** Croton et al. (2016, Sec. 9.1.1) note that
 "ideally, r_heat would shrink" while the AGN is off. Each substep, before
@@ -328,12 +328,20 @@ cooling already assumes, so there is no new parameter:
 `r_heat` is one field per galaxy, so it relaxes once per substep: in the hot
 path for a Regime 1 halo with hot gas, otherwise in the CGM path.
 
-**Eqs. 18-20 as written (modes 2-3).** SAGE caps the heating at the
+**Eqs. 18-20 (modes 2-3).** SAGE caps the heating at the
 cooling left after the `(1 - r_heat / r_cool)` suppression and sets
 `r_heat = (AGNheating / suppressed cooling) r_cool`. Croton et al. (2016)
-eqs. 18-19 compare the heating with the unsuppressed cooling of eq. 6, with
-no cap at the suppressed rate, and eq. 20 suppresses the cooling "in the
-presence of current and past radio mode episodes". Modes 2-3 do that in both
+eqs. 18-19 compare the heating with the unsuppressed cooling of eq. 6, and
+eq. 20 suppresses the cooling "in the presence of current and past radio
+mode episodes". That is the order of the SAGE code from November 2013 until
+`darrencroton/sage` commit `bcead05` (April 2015, "heating and cooling are
+now more closly coupled", which also cut `RadioModeEfficiency` from 1.0 to
+0.2); the paper keeps the earlier equations. The pre-2015 code capped the
+heating at the unsuppressed cooling, which the paper does not state (its
+black hole accretes the full eq. 16 rate, as in
+`RadioModeBHaccretionMassUncapped`); modes 2-3 keep that cap, so `r_heat`
+never exceeds `r_cool` through heating and the black hole only accretes what
+offsets cooling. Modes 2-3 do this in both
 `do_AGN_heating()` and `do_AGN_heating_cgm()`: the cap and the ratchet use the
 unsuppressed cooling (`paper_cooling()`), and the cooling is then suppressed
 with the `r_heat` that includes this substep's heating. Holding `r_heat` at
@@ -365,6 +373,17 @@ becomes a fraction of the unsuppressed cooling.
   cooling, so these modes would need `RadioModeEfficiency` recalibrated.
 - Median black hole mass at a bulge mass of 10^11 Msun is 10^8.4-8.5 Msun in
   every mode.
+
+Why the calibration moves: with the suppressed cooling as the denominator,
+SAGE's `r_heat` obeys `r_new = B / (m (1 - r))` for a Bondi heating budget
+`B` and unsuppressed cooling `m` per substep, which has a fixed point only
+while `B / m <= 1/4`. Above that the halo quenches completely, so a black
+hole whose heating is a quarter of the cooling shuts it off. In modes 2-3
+`r_heat = r_cool min(1, B / m)`, so quenching needs `B >= m`. Raising
+`RadioModeEfficiency` to 0.25 in mode 3 (Millennium) brings n(M* > 10^11)
+back to the fiducial (23.1 vs 22.9 x 10^-5 Mpc^-3), with total black hole
+mass within 4% and the jets unchanged (they are set by the cooling luminosity
+in groups and clusters, not by the Bondi rate).
 
 ## `cool_gas_onto_galaxy()`
 

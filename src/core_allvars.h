@@ -620,7 +620,7 @@ struct params
     /* DarkSAGEMode: Full DarkSage physics with radially-resolved disk structure */
     /* When DarkSAGEMode=1: Enables radial bins, Toomre Q instability, precession, j-conservation */
     /* When DarkSAGEMode=0: Standard SAGE behavior */
-    int32_t    RheatMode;               // 0: SAGE26 r_heat ratchet; 1: r_heat relaxes on t_cool(r_heat); 2: 1 + Croton et al. (2016) eqs. 18-20 as written; 3: eqs. 18-20 only
+    int32_t    RheatMode;               // 0: SAGE26 r_heat ratchet; 1: r_heat relaxes on t_cool(r_heat); 2: 1 + Croton et al. (2016) eqs. 18-20 (pre-2015 SAGE order); 3: eqs. 18-20 only
     int32_t    DarkSAGEMode;            // 0: off; 1: annuli, SAGE26's DiskScaleRadius; 2: annuli, DiskScaleRadius from them; 3: as 2, SF law per annulus
     int32_t    DustySAGEMode;           // 0: no dust; 1: passive dust within SAGE26's metals; 2: Dusty-SAGE yields and dust
     int32_t    DustSNIIYields;          // 0: Woosley & Weaver 1995; 1: Nomoto et al. 2006
