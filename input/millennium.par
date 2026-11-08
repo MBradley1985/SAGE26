@@ -53,13 +53,10 @@ DiskInstabilityOn           1   %0: switch off; 1: bulge and BH growth through i
 
 CGMrecipeOn                 1   %0: switch off
 FIREmodeOn                  1   %0: switch off
-
-ConcentrationOn             3   %0: off; 1: Ishiyama+21 lookup table; 2: Vmax/Vvir from simulation; 3: Vmax/Vvir + infall freeze for satellites; 4: DarkSAGE (Dutton & Maccio 2014 + Di Cintio 2014)
 EnhancedStarFormationOn     1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: BK25 acceleration threshold w. log-normal c scatter
 
 SaveFullSFH                 1   %0: switch off
 SaveFullMH                  1   %0: switch off; 1: also save stellar metal mass per SFH bin (needs SaveFullSFH = 1)
-H2DepletionMode             0   %0 off; SFR = M_mol / t_dep in every H2 recipe with 1 nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9
 DarkSAGEMode                0   %0: switch off; 1: SAGE26 bulk recipes shared over 30 radial annuli, SAGE26's DiskScaleRadius (output identical to SAGE26); 2: as 1, DiskScaleRadius from the annuli; 3: as 2, SF law evaluated per annulus
 DustySAGEMode               0   %0: switch off; 1: passive dust within SAGE26's metals; 2: Dusty-SAGE delayed yields and dust
 
