@@ -61,6 +61,7 @@ optional parameters take the listed default if omitted.
 |-----------|------|----|---------|-------------------|
 | `SFprescription` | int | no | `1` | Star formation prescription: 0=Croton+06; 1=Blitz & Rosolowsky 06 H₂; 2=Somerville+25 SFR; 3=Somerville+25 SFR+H₂; 4=Krumholz & Dekel 12; 5=KMT 09; 6=Krumholz 13; 7=Gnedin & Draine 14. |
 | `AGNrecipeOn` | int | no | `2` | AGN feedback: 0=off; 1=empirical; 2=Bondi-Hoyle; 3=cold cloud accretion. |
+| `RheatMode` | 0-3 | no | `0` | AGN heating radius. 0: `r_heat` only moves outwards and the heating is measured against the suppressed cooling (SAGE), output identical to SAGE26; 1: as 0, but `r_heat` relaxes by `exp(-dt / t_cool(r_heat))` each substep; 2: as 1, with the heating capped at and measured against the unsuppressed cooling (Croton et al. 2016, eqs. 18-20; the SAGE code before April 2015); 3: as 2, no relaxation. Experimental: modes 2-3 need `RadioModeEfficiency` recalibrated (about 0.25 for mode 3 on Millennium); see `docs/physics/cooling_and_heating.md`. |
 | `SupernovaRecipeOn` | 0/1 | no | `1` | SN feedback: 0=off; 1=Croton+16 reheating/ejection (FIRE scaling with FIREmodeOn; per annulus in DarkSAGEMode). |
 | `ReionizationOn` | 0/1 | no | `1` | Reionization suppression of infall: 0=off; 1=Kravtsov+04 analytic fit. |
 | `DiskInstabilityOn` | 0/1 | no | `1` | Disk instability: 0=off; 1=Toomre criterion drives bulge and BH growth. |
@@ -136,7 +137,7 @@ optional parameters take the listed default if omitted.
 |-----------|-------|---------|-------------|
 | `ThreshMajorMerger` | dimensionless | `0.3` | Mass ratio above which a merger is classified as major. |
 | `ThresholdSatDisruption` | dimensionless | `1.0` | M_vir-to-baryonic mass ratio below which a satellite is disrupted rather than merged. |
-| `MergerTimeFactor` | dimensionless | `0.75` (published value 2.0) | Scales the Binney & Tremaine (1987) dynamical-friction merger timescale. It also sets how accreted stellar mass splits between the intracluster component and the BCG: when a satellite's subhalo is lost from the tree, its stars go to the ICS if the clock is still running (`MergTime > 0`) and onto the central if it has expired. |
+| `MergerTimeFactor` | dimensionless | `2.0` (the published value) | Scales the Binney & Tremaine (1987) dynamical-friction merger timescale. It also sets how accreted stellar mass splits between the intracluster component and the BCG: when a satellite's subhalo is lost from the tree, its stars go to the ICS if the clock is still running (`MergTime > 0`) and onto the central if it has expired. |
 
 ### Gas cycling
 

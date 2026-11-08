@@ -10,6 +10,28 @@ it says otherwise. See
 
 ## Unreleased
 
+### RheatMode parameter (new toggle, default off)
+
+- The radio-mode heating radius can now follow the order of Croton et al.
+  (2016), eqs. 18-20, as the SAGE code did before April 2015. SAGE16 and
+  SAGE26 suppress the cooling with the past `r_heat` first, then cap the
+  heating at, and measure `r_heat` against, that suppressed cooling. Once
+  `r_heat >= r_cool` there is nothing left to cap against, so radio-mode
+  accretion and jet power are zero. `RheatMode`: 0 (default) keeps that order;
+  1 lets `r_heat` relax on the cooling time; 2 adds the eqs. 18-20 order; 3 is
+  the eqs. 18-20 order alone. Modes 2-3 need `RadioModeEfficiency` raised to
+  about 0.25-0.3 to match the default stellar mass function. Mode 3 at 0.3
+  gives radio AGN in essentially all massive haloes. Details in
+  `docs/physics/cooling_and_heating.md`.
+- `RheatMode` is written to the HDF5 header (`Header/Runtime`).
+- At the default every dataset is bit-identical (Millennium, 264 datasets).
+
+### input/millennium_all.par lists every parameter
+
+- Added `RheatMode`, `MergerTimeFactor`, `ConcentrationScatter` and
+  `DustGrowthMaxDtoZ`, at their code defaults. `docs/parameters.md` now gives
+  `MergerTimeFactor`'s default as 2.0, as in the code.
+
 ### RadioModeBHaccretionMassUncapped output (new dataset)
 
 - Radio-mode accretion is capped so that the heating never exceeds the

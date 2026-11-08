@@ -110,6 +110,61 @@ static const double STREAM_THRESHOLD_WIDTH_DEX = 0.15;  /* dex */
  * fraction of the current cooling rate. Croton et al. (2006), AGN appendix. */
 static const double AGN_COLD_CLOUD_FRAC = 1.0e-4;
 
+/*
+ * relax_r_heat -- let the AGN-heated region re-cool (RheatMode 1 and 2).
+ *
+ * In Croton et al. (2016, Sec. 9.1.1) r_heat never moves inwards, so once it
+ * passes rcool the halo stops cooling for good and the AGN does no more work.
+ * They note that "ideally, r_heat would shrink" while the AGN is off.  Here
+ * r_heat decays by one e-folding per cooling time of the gas at r_heat:
+ *
+ *     r_heat <- r_heat * exp(-dt / t_cool(r_heat))
+ *
+ * t_cool(r_heat) comes from the caller's own density profile (isothermal hot
+ * halo or Carr et al. 2023 CGM), so no new parameter is needed.  Called once
+ * per substep, before the (1 - r_heat / rcool) suppression.
+ */
+static void relax_r_heat(const int gal, const double dt, const double tcool_rheat, struct GALAXY *galaxies)
+{
+    if(tcool_rheat > 0.0)
+        galaxies[gal].r_heat *= exp(-dt / tcool_rheat);
+}
+
+/*
+ * suppress_cooling -- the Croton et al. (2016) eq. 20 suppression,
+ * (1 - r_heat / rcool) of the cooling, zero once r_heat >= rcool.  With
+ * CGMrecipeOn 1 it is also zero once r_heat >= 0.99 rcool, avoiding a
+ * vanishing residual flow that never quite quenches.
+ */
+static double suppress_cooling(const double coolingGas, const double r_heat, const double rcool, const struct params *run_params)
+{
+    if(r_heat < rcool && !(run_params->CGMrecipeOn == 1 && r_heat >= 0.99 * rcool))
+        return (1.0 - r_heat / rcool) * coolingGas;
+    return 0.0;
+}
+
+/*
+ * paper_cooling -- the cooling the AGN heating is measured against.
+ *
+ * SAGE (and RheatMode 0-1) caps the heating at the cooling left after the
+ * (1 - r_heat / rcool) suppression and sets r_heat = (heating / that cooling)
+ * rcool.  Croton et al. (2016) eqs. 18-19 instead compare the heating with the
+ * unsuppressed cooling of eq. 6, and state no cap.  RheatMode 2-3 follow the
+ * SAGE code before darrencroton/sage bcead05 (April 2015), which the paper's
+ * equations describe: the heating is capped at, and r_heat measured against,
+ * the unsuppressed cooling.  Holding r_heat at rcool
+ * costs the full cooling flow each substep (the AGN keeps paying), and
+ * r_heat settles at rcool * min(1, heating / cooling).  The callers then
+ * suppress the cooling with the r_heat that includes this substep's heating
+ * (eq. 20: "in the presence of current and past radio mode episodes"), so
+ * the result does not depend on the substep length.  For AGNrecipeOn 3 the
+ * cold-cloud rate is a fraction of the unsuppressed cooling.
+ */
+static double paper_cooling(const double coolingGas, const double coolingGas_max, const struct params *run_params)
+{
+    return (run_params->RheatMode >= 2) ? coolingGas_max : coolingGas;
+}
+
 /* File-private: AGN radio-mode heating for CGM-regime galaxies (defined below). */
 static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
                                  struct GALAXY *galaxies, const struct params *run_params);
@@ -303,6 +358,11 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
         // if AGNrecipeOn we now reduce it in line with past heating before proceeding
 
         if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
+            // Isothermal hot gas: t_cool ~ 1/rho ~ r^2, equal to tcool = Rvir/Vvir at rcool
+            if(run_params->RheatMode == 1 || run_params->RheatMode == 2) {
+                const double r_ratio = galaxies[gal].r_heat / rcool;
+                relax_r_heat(gal, dt, tcool * r_ratio * r_ratio, galaxies);
+            }
             coolingGas = do_AGN_heating(coolingGas, gal, dt, x, rcool, galaxies, run_params);
         }
 
@@ -379,6 +439,12 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
             }
 
             if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
+                // CGM profile: t_cool ~ 1/rho ~ r^alpha, equal to tcool at rho_eff = rho0 I_cool/I_M.
+                // A Regime 1 halo with hot gas has already relaxed r_heat in cooling_recipe_hot().
+                if((run_params->RheatMode == 1 || run_params->RheatMode == 2) &&
+                   (galaxies[gal].Regime == 0 || galaxies[gal].HotGas <= 0.0)) {
+                    relax_r_heat(gal, dt, tcool * (I_cool / I_M) * pow(galaxies[gal].r_heat / r0, alpha), galaxies);
+                }
                 coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x, rcool, galaxies, run_params);
             }
 
@@ -768,19 +834,18 @@ static void agn_accretion_compute(const int centralgal, const double dt, const d
  */
 double do_AGN_heating(double coolingGas, const int centralgal, const double dt, const double x, const double rcool, struct GALAXY *galaxies, const struct params *run_params)
 {
+    // RheatMode 2-3 measure the heating against this unsuppressed cooling (see paper_cooling())
+    const double coolingGas_max = coolingGas;
+
     // r_heat suppression (always applied for Regime==1 hot-halo)
-    if(galaxies[centralgal].r_heat < rcool &&
-       !(run_params->CGMrecipeOn == 1 && galaxies[centralgal].r_heat >= 0.99 * rcool)) {
-        coolingGas = (1.0 - galaxies[centralgal].r_heat / rcool) * coolingGas;
-    } else {
-        coolingGas = 0.0;
-    }
+    coolingGas = suppress_cooling(coolingGas, galaxies[centralgal].r_heat, rcool, run_params);
     XASSERT(coolingGas >= 0.0, -1,
             "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
 
     if(galaxies[centralgal].HotGas > 0.0) {
         double AGNaccreted, AGNheating, AGNuncapped;
-        agn_accretion_compute(centralgal, dt, x, coolingGas, rcool,
+        const double cool_ref = paper_cooling(coolingGas, coolingGas_max, run_params);
+        agn_accretion_compute(centralgal, dt, x, cool_ref, rcool,
                                galaxies[centralgal].HotGas,
                                galaxies, run_params, &AGNaccreted, &AGNheating, &AGNuncapped);
 
@@ -794,8 +859,8 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
         galaxies[centralgal].MetalsHotGas  -= metallicity * AGNaccreted;
 
         // standard r_heat ratchet
-        if(galaxies[centralgal].r_heat < rcool && coolingGas > 0.0) {
-            const double r_heat_new = (AGNheating / coolingGas) * rcool;
+        if(galaxies[centralgal].r_heat < rcool && cool_ref > 0.0) {
+            const double r_heat_new = (AGNheating / cool_ref) * rcool;
             if(r_heat_new > galaxies[centralgal].r_heat)
                 galaxies[centralgal].r_heat = r_heat_new;
         }
@@ -807,6 +872,9 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
 
     if(run_params->CGMrecipeOn > 0 && galaxies[centralgal].r_heat > galaxies[centralgal].Rvir)
         galaxies[centralgal].r_heat = galaxies[centralgal].Rvir;
+
+    if(run_params->RheatMode >= 2)
+        coolingGas = suppress_cooling(coolingGas_max, galaxies[centralgal].r_heat, rcool, run_params);
 
     return coolingGas;
 }
@@ -820,19 +888,17 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
 static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
                                  struct GALAXY *galaxies, const struct params *run_params)
 {
-    if(galaxies[centralgal].r_heat < rcool &&
-       !(run_params->CGMrecipeOn == 1 && galaxies[centralgal].r_heat >= 0.99 * rcool)) {
-        coolingGas = (1.0 - galaxies[centralgal].r_heat / rcool) * coolingGas;
-    } else {
-        coolingGas = 0.0;
-    }
+    const double coolingGas_max = coolingGas;
+
+    coolingGas = suppress_cooling(coolingGas, galaxies[centralgal].r_heat, rcool, run_params);
 
     XASSERT(coolingGas >= 0.0, -1,
             "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
 
     if(galaxies[centralgal].CGMgas > 0.0) {
         double AGNaccreted, AGNheating, AGNuncapped;
-        agn_accretion_compute(centralgal, dt, x, coolingGas, rcool,
+        const double cool_ref = paper_cooling(coolingGas, coolingGas_max, run_params);
+        agn_accretion_compute(centralgal, dt, x, cool_ref, rcool,
                               galaxies[centralgal].CGMgas, galaxies, run_params,
                               &AGNaccreted, &AGNheating, &AGNuncapped);
         const double metallicity = get_metallicity(galaxies[centralgal].CGMgas, galaxies[centralgal].MetalsCGMgas);
@@ -843,8 +909,8 @@ static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const 
         galaxies[centralgal].CGMgas         -= AGNaccreted;
         galaxies[centralgal].MetalsCGMgas   -= metallicity * AGNaccreted;
 
-        if(galaxies[centralgal].r_heat < rcool && coolingGas > 0.0) {
-            const double r_heat_new = (AGNheating / coolingGas) * rcool;
+        if(galaxies[centralgal].r_heat < rcool && cool_ref > 0.0) {
+            const double r_heat_new = (AGNheating / cool_ref) * rcool;
             if(r_heat_new > galaxies[centralgal].r_heat)
                 galaxies[centralgal].r_heat = r_heat_new;
         }
@@ -853,6 +919,9 @@ static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const 
 
         if(AGNheating > 0.0)
             galaxies[centralgal].Heating += 0.5 * AGNheating * galaxies[centralgal].Vvir * galaxies[centralgal].Vvir;
+
+        if(run_params->RheatMode >= 2)
+            coolingGas = suppress_cooling(coolingGas_max, galaxies[centralgal].r_heat, rcool, run_params);
 
         /* The BH accretion above drew AGNaccreted out of CGMgas, but any
          * earlier clamp of coolingGas used the pre-accretion reservoir.

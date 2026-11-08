@@ -8,6 +8,7 @@ input/300/
 tests/test_build/
 tests/test_output/
 docs/referee/
+darksage_work/
 
 *.o
 *.*~
