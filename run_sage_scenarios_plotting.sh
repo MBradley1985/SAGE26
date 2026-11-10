@@ -25,10 +25,11 @@ RUN_DIRS=(
   # # ---- Millennium (other scenarios + vanilla already run) ----
   # "/fred/oz004/jwillingham/millennium_powerlaw_cap_scheme14"
   # "/fred/oz004/jwillingham/millennium_seed_mstar_threshold"
-  "/fred/oz004/jwillingham/continuous_cold_cloud_radioeff"
+  #"/fred/oz004/jwillingham/continuous_cold_cloud_radioeff"
   # "/fred/oz004/jwillingham/early_merger_burst_scheme3"
   # "/fred/oz004/jwillingham/early_z_unlimited_scheme11"
   # "/fred/oz004/jwillingham/low_mass_host_scheme13"
+  "/fred/oz004/jwillingham/millennium_seeding3"
   # # ---- mini-Uchuu ----
   # "/fred/oz004/jwillingham/miniuchuu_baseline_heavy_eddlim"
   # "/fred/oz004/jwillingham/miniuchuu_unlimited_heavy"

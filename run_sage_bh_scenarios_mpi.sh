@@ -23,19 +23,20 @@ cd "$SLURM_SUBMIT_DIR"
 
 CONFIG_FILES=(
   # ---- Millennium (other scenarios + vanilla already run) ----
-  "input/scenarios/millennium_powerlaw_cap_scheme14.par"
-  "input/scenarios/millennium_seed_mstar_threshold.par"
-  # ---- mini-Uchuu ----
-  "input/scenarios/miniuchuu_baseline_heavy_eddlim.par"
-  "input/scenarios/miniuchuu_unlimited_heavy.par"
-  "input/scenarios/miniuchuu_unlimited_light.par"
-  "input/scenarios/miniuchuu_early_merger_burst_scheme3.par"
-  "input/scenarios/miniuchuu_early_z_unlimited_scheme11.par"
-  "input/scenarios/miniuchuu_low_mass_host_scheme13.par"
-  "input/scenarios/miniuchuu_continuous_cold_cloud_radioeff.par"
-  "input/scenarios/miniuchuu_powerlaw_cap_scheme14.par"
-  "input/scenarios/miniuchuu_seed_mstar_threshold.par"
-  "input/scenarios/miniuchuu_vanilla.par"
+  # "input/scenarios/millennium_powerlaw_cap_scheme14.par"
+  # "input/scenarios/millennium_seed_mstar_threshold.par"
+  # # ---- mini-Uchuu ----
+  # "input/scenarios/miniuchuu_baseline_heavy_eddlim.par"
+  # "input/scenarios/miniuchuu_unlimited_heavy.par"
+  # "input/scenarios/miniuchuu_unlimited_light.par"
+  # "input/scenarios/miniuchuu_early_merger_burst_scheme3.par"
+  # "input/scenarios/miniuchuu_early_z_unlimited_scheme11.par"
+  # "input/scenarios/miniuchuu_low_mass_host_scheme13.par"
+  # "input/scenarios/miniuchuu_continuous_cold_cloud_radioeff.par"
+  # "input/scenarios/miniuchuu_powerlaw_cap_scheme14.par"
+  # "input/scenarios/miniuchuu_seed_mstar_threshold.par"
+  # "input/scenarios/miniuchuu_vanilla.par"
+  "input/scenarios/millennium_seeding3.par"
 )
 
 CONFIG_FILE=${CONFIG_FILES[$SLURM_ARRAY_TASK_ID]}
