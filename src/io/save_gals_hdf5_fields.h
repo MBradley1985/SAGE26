@@ -268,11 +268,11 @@
       "Mass of atomic hydrogen (HI) in the cold gas reservoir.", \
       "1.0e10 Msun/h") \
     X(tcool, tcool, float, H5T_NATIVE_FLOAT, \
-      "Cooling time of the CGM gas in the halo.", \
-      "Gyr") \
+      "Regime 0: cooling time of the CGM gas in the halo. Regime 1: halo dynamical time Rvir/Vvir.", \
+      "Gyr/h") \
     X(tff, tff, float, H5T_NATIVE_FLOAT, \
-      "Free-fall time of the CGM gas in the halo.", \
-      "Gyr") \
+      "Free-fall time of the CGM gas in the halo (-1 in Regime 1).", \
+      "Gyr/h") \
     X(H2DepletionTime_Gyr, H2DepletionTime_Gyr, float, H5T_NATIVE_FLOAT, \
       "H2 depletion time from the K13 prescription, or with H2DepletionMode > 0 the molecular (H2 + He) depletion time M_mol/SFR used for star formation. -1 if not applicable.", \
       "Gyr") \

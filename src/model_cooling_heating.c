@@ -198,10 +198,9 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
         const double tcool = galaxies[gal].Rvir / galaxies[gal].Vvir;
         const double tff = M_SQRT2 * tcool;
         // Store tcool and tff specifically for the hot-halo recipe, which is used in the CGM path to determine the cooling radius.
-        galaxies[gal].tcool = (float)((tcool * 1.0e10 / run_params->Hubble_h
-                       * SEC_PER_GIGAYEAR / run_params->UnitTime_in_s));
-        galaxies[gal].tff = (float)((tff * 1.0e10 / run_params->Hubble_h
-                       * SEC_PER_GIGAYEAR / run_params->UnitTime_in_s));
+        // Diagnostic storage in Gyr/h, the same conversion as the CGM path
+        galaxies[gal].tcool = (float)(tcool * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR);
+        galaxies[gal].tff = (float)(tff * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR);
 
         const double temp = VIRIAL_TEMP_COEFF * galaxies[gal].Vvir * galaxies[gal].Vvir;  // in Kelvin
 

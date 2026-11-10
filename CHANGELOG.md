@@ -19,6 +19,11 @@ it says otherwise. See
 - Output attributes: `TimeOfInfall` is described as a snapshot number
   (unitless, previously labelled Myr), and `Concentration`'s description names
   the method for each `ConcentrationOn`. Values are unchanged.
+- `tcool` in Regime 1 was written about 14,000 times too large: the hot-halo
+  path converted code time to Gyr with an inverted factor and a stray 1e10/h.
+  It now uses the CGM path's conversion, so Regime 1 holds `Rvir/Vvir` in
+  Gyr/h. `tcool` and `tff` are labelled Gyr/h (both were in Gyr/h, labelled
+  Gyr). Only the `tcool` dataset changes (Millennium file 0, 5632 datasets).
 
 ### RheatMode parameter (new toggle, default off)
 
