@@ -280,13 +280,13 @@
       "Ratio of the cooling radius to the virial radius of the halo.", \
       "Unitless") \
     X(TimeOfInfall, TimeOfInfall, float, H5T_NATIVE_FLOAT, \
-      "Time when the galaxy last became a satellite galaxy.", \
-      "Myr") \
+      "Snapshot number at which the galaxy last became a satellite galaxy (0 for centrals).", \
+      "Unitless") \
     X(FFBRegime, FFBRegime, int32_t, H5T_NATIVE_INT, \
       "FFB Regime of this galaxy's halo: 0 = Normal halo 1 = FFB halo.", \
       "Unitless") \
     X(Concentration, Concentration, float, H5T_NATIVE_FLOAT, \
-      "NFW halo concentration parameter from Ishiyama+21 c-M relation.", \
+      "NFW halo concentration parameter, set by ConcentrationOn: 1 Ishiyama+21 c-M relation; 2 Vmax/Vvir; 3 Vmax/Vvir, infall values for satellites; 4 Dutton & Maccio 2014 with the Di Cintio et al. 2014 baryonic factor.", \
       "Unitless") \
     X(mdot_cool, mdot_cool, float, H5T_NATIVE_FLOAT, \
       "Cooling rate of hot halo gas.", \
