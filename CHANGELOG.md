@@ -10,6 +10,16 @@ it says otherwise. See
 
 ## Unreleased
 
+### Millennium particle mass (changes output)
+
+- `PartMass` in `input/millennium.par` and `input/millennium_all.par` is now
+  Millennium's 0.0860657 (10^10 Msun/h), not 0.086, which made particle-count
+  masses 0.08% low. Output is not bit-identical to earlier runs; the
+  regression baseline needs recapturing.
+- Output attributes: `TimeOfInfall` is described as a snapshot number
+  (unitless, previously labelled Myr), and `Concentration`'s description names
+  the method for each `ConcentrationOn`. Values are unchanged.
+
 ### RheatMode parameter (new toggle, default off)
 
 - The radio-mode heating radius can now follow the order of Croton et al.

@@ -38,7 +38,7 @@ Omega           0.25
 OmegaLambda     0.75
 BaryonFrac      0.17
 Hubble_h        0.73
-PartMass        0.086
+PartMass        0.0860657
 BoxSize         62.5 % Size of the simulation box in Mpc/h.
 
 %------------------------------------------
