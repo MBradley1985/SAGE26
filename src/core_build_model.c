@@ -431,8 +431,9 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
     // We integrate things forward by using a number of intervals equal to STEPS
     // Adaptive timesteps: at high-z, snapshot spacing can exceed dynamical time
-    // so we use more substeps when needed
-    const double deltaT_total = galaxies[0].dT;
+    // so we use more substeps when needed.  The interval is the central's, the
+    // galaxy whose t_dyn sets the count below; galaxies[0] need not be the central.
+    const double deltaT_total = galaxies[centralgal].dT;
 
     /* Both FFB criteria read only Mvir/Rvir and the halo's own random draw,
      * none of which infall_recipe() touches, so the position of this call
@@ -618,14 +619,15 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
     } // Go on to the next STEPS substep
 
     // Extra miscellaneous stuff before finishing this halo
-    const double inv_deltaT = 1.0/galaxies[0].dT;
-
     for(int p = 0; p < ngal; p++) {
 
         // Don't bother with galaxies that have already merged
         if(galaxies[p].mergeType > 0) {
             continue;
         }
+
+        // Each galaxy accumulated its rates over its own interval
+        const double inv_deltaT = 1.0/galaxies[p].dT;
 
         galaxies[p].Cooling *= inv_deltaT;
         galaxies[p].Heating *= inv_deltaT;
