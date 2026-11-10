@@ -480,7 +480,7 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
  * add_galaxies_together -- merge all baryonic reservoirs of satellite p into
  * central t.
  *
- * Adds stellar mass, cold/hot/ejected gas, metals, ICS, H2, and CGM gas from p
+ * Adds stellar mass, cold/hot/ejected gas, metals, ICS, H2, H1, and CGM gas from p
  * to t, transferring satellite-owned data (SFH arrays, infall properties, ICS
  * assembly history) to the central.
  */
@@ -494,6 +494,12 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
 
     galaxies[t].ColdGas += galaxies[p].ColdGas;
     galaxies[t].MetalsColdGas += galaxies[p].MetalsColdGas;
+    // The satellite's gas keeps its phases; the sums are fitted back into the merged hydrogen
+    galaxies[t].H2gas += galaxies[p].H2gas;
+    galaxies[t].H1gas += galaxies[p].H1gas;
+    if(sf_prescription_tracks_h2(run_params->SFprescription)) {
+        clamp_phases_to_hydrogen(&galaxies[t]);
+    }
     galaxies[t].ColdDust += galaxies[p].ColdDust;
     galaxies[t].HotDust += galaxies[p].HotDust;
     galaxies[t].CGMDust += galaxies[p].CGMDust;
