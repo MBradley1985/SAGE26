@@ -5,11 +5,15 @@ on:
     branches:
       - main
       - dev
+    tags:
+      - 'v*'
+  release:
+    types: [published]
 
 jobs:
   mirror:
     runs-on: ubuntu-latest
-    if: github.repository == 'MBradley1985/SAGE26'
+    if: github.repository == 'MBradley1985/SAGE26' && github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,6 +23,34 @@ jobs:
       - name: Push to sage-home/SAGE26
         env:
           SAGE_HOME_TOKEN: ${{ secrets.SAGE_HOME_TOKEN }}
+          REF: ${{ github.ref }}
         run: |
           git remote add sage-home https://x-access-token:${SAGE_HOME_TOKEN}@github.com/sage-home/SAGE26.git
-          git push sage-home ${{ github.ref_name }}
+          git push sage-home "${REF}"
+
+  # Releases are GitHub objects, not git data, so the push above cannot copy them.
+  release:
+    runs-on: ubuntu-latest
+    if: github.repository == 'MBradley1985/SAGE26' && github.event_name == 'release'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create the release on sage-home/SAGE26
+        env:
+          SAGE_HOME_TOKEN: ${{ secrets.SAGE_HOME_TOKEN }}
+          GH_TOKEN: ${{ secrets.SAGE_HOME_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+          TITLE: ${{ github.event.release.name }}
+          NOTES: ${{ github.event.release.body }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          # The tag may not have been mirrored yet; pushing an identical tag is a no-op
+          git remote add sage-home https://x-access-token:${SAGE_HOME_TOKEN}@github.com/sage-home/SAGE26.git
+          git push sage-home "refs/tags/${TAG}"
+          flags=(--verify-tag --notes "${NOTES}")
+          if [ -n "${TITLE}" ]; then flags+=(--title "${TITLE}"); fi
+          if [ "${PRERELEASE}" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "${TAG}" -R sage-home/SAGE26 "${flags[@]}"
