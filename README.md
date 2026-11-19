@@ -353,11 +353,17 @@ If you use SAGE26 in a publication, please cite:
 
 ```bibtex
 @article{bradley2026a,
-  title = {SAGE26 Paper I: Modelling the Baryon Cycle from Cosmic Dawn to the Present Day},
-  author = {Bradley, Michael and Croton, Darren J. and Paun, Robert A. Mostoghiu and Chowdhury, Dhruba Dutta and Willingham, Jayde},
-  year = 2026,
-  journal = {The Astrophysical Journal Supplement Series},
-  publisher = {(In prep.)}
+  author        = {Bradley, Michael and Croton, Darren J. and Mostoghiu Paun, Robert Adriel and
+                   Dutta Chowdhury, Dhruba and Willingham, Jayde},
+  title         = {SAGE26 Paper I: Modelling the Baryon Cycle from Cosmic Dawn to the Present Day},
+  journal       = {arXiv e-prints},
+  year          = {2026},
+  month         = oct,
+  eid           = {arXiv:2610.09564},
+  doi           = {10.48550/arXiv.2610.09564},
+  eprint        = {2610.09564},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.GA},
 }
 ```
 
