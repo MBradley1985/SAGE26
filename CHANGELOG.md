@@ -10,6 +10,23 @@ it says otherwise. See
 
 ## Unreleased
 
+### Merger gas joins the target's regime reservoir (changes output)
+
+- With `CGMrecipeOn 1`, `add_galaxies_together()` now adds the satellite's
+  `HotGas` and `CGMgas` (with metals and dust) to the reservoir of the
+  target's regime: `HotGas` for Regime 1, `CGMgas` for Regime 0, as stripping
+  and infall already do. It used to add `CGMgas` to `CGMgas` whatever the
+  regime. A hot-regime central holding that CGM ran the secondary CGM
+  cooling recipe, whose AGN step sets `r_heat` against `rcool = Rvir`; a
+  small reservoir is always out-heated, so `r_heat` jumped to `Rvir` and,
+  under `RheatMode 0`, the halo never cooled again.
+- The effect grows with resolution, since smaller satellites bring smaller
+  CGM packets. Reported on Shin-Uchuu, where nearly all centrals above
+  10^12.5 Msun had stopped cooling by z = 3. In Millennium and microUchuu
+  about 1% of hot-regime centrals above 10^12.5 Msun had `r_heat` pinned at
+  `Rvir` (none after the fix); the z = 0 stellar mass function and
+  stellar-halo mass relation barely change.
+
 ### Millennium particle mass (changes output)
 
 - `PartMass` in `input/millennium.par` and `input/millennium_all.par` is now
