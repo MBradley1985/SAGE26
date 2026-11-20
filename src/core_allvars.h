@@ -328,6 +328,7 @@ struct ctrees_info {
     int64_t ntrees;
 
     void *column_info;/* stored as a void * to avoid including parse_ctrees.h here*/
+    int32_t has_M200c;/* 1 if the trees carry an M200c column (read into M_TopHat) */
 
     /* forest level quantities */
     int64_t *ntrees_per_forest;/* contains nforests elements */
@@ -568,6 +569,8 @@ struct params
                                           // correct at any substep count (unlike the Sfr* rate bins).
     int32_t    SaveFullMH;                // 1 = additionally save the per-snapshot MHMetalsDisk/MHMetalsBulge
                                           // histories, the metal mass in the stars of the SFH bins (needs SaveFullSFH = 1)
+    int32_t    UseM200c;                  // 0: Mvir is the tree's own halo mass (default); 1: the Consistent-Trees readers
+                                          // take M200c instead of Rockstar's Bryan & Norman Mvir (other readers already give M200c)
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
     int32_t    H2DepletionMode;           // 0 off (default); SFR = M_mol / t_dep with 1 nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9; 5 DarkSage
 

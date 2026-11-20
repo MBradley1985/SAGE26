@@ -36,7 +36,8 @@
 #include "parse_ctrees.h"
 
 static void convert_ctrees_conventions_to_lht(struct halo_data *halos, struct additional_info *info, const int64_t nhalos,
-                                              const int32_t snap_offset, const double part_mass, const int64_t forest_offset);
+                                              const int32_t snap_offset, const double part_mass, const int64_t forest_offset,
+                                              const int use_m200c);
 
 /* Builds the path to the first Consistent Trees data file (tree_0_0_0.dat or equivalent TreeName). */
 void get_forests_filename_ctr_ascii(char *filename, const size_t len, const struct params *run_params)
@@ -354,6 +355,20 @@ int setup_forests_io_ctrees(struct forest_info *forests_info, const int ThisTask
         return status;
     }
 
+    /* UseM200c needs the M200c column, which parse_header_ctrees() routes into
+       M_TopHat when the header has it. Without it the halo mass stays Rockstar's
+       mvir, and M_TopHat is never written, so it must not be read. */
+    const struct ctrees_column_to_ptr *columns = ctr->column_info;
+    ctr->has_M200c = 0;
+    for(int64_t i = 0; i < columns->ncols; i++) {
+        if(columns->base_ptr_idx[i] == 0 && columns->dest_offset_to_element[i] == offsetof(struct halo_data, M_TopHat)) {
+            ctr->has_M200c = 1;
+        }
+    }
+    if(run_params->UseM200c && !ctr->has_M200c && ThisTask == 0) {
+        fprintf(stderr, "Warning: UseM200c = 1 but `%s' has no M200c column; Mvir stays the trees' own mvir.\n", filename);
+    }
+
 
     /* Finally setup the multiplication factors necessary to generate
        unique galaxy indices (across all files, all trees and all tasks) for this run*/
@@ -429,7 +444,8 @@ int64_t load_forest_ctrees(const int32_t forestnr, struct halo_data **halos, str
         struct halo_data *local_halos = *halos;
         const int64_t nhalos = base_info.N - prev_N;
         const int32_t snap_offset = 0;/* need to figure out how to set this correctly (do not think there is an automatic way to do so): MS 03/08/2018 */
-        convert_ctrees_conventions_to_lht(&(local_halos[prev_N]), info, nhalos, snap_offset, run_params->PartMass, prev_N);
+        convert_ctrees_conventions_to_lht(&(local_halos[prev_N]), info, nhalos, snap_offset, run_params->PartMass, prev_N,
+                                          run_params->UseM200c && ctr->has_M200c);
     }
     const int64_t totnhalos = base_info.N;
     const int64_t nallocated = base_info.nallocated;
@@ -482,6 +498,9 @@ int64_t load_forest_ctrees(const int32_t forestnr, struct halo_data **halos, str
  *   - Spin[k] /= Mvir      CTrees stores specific angular momentum L; LHT
  *                           stores the dimensionless spin lambda = L/Mvir.
  *   - Masses  *= 1e-10      converts Msun -> 10^10 Msun/h (SAGE internal unit).
+ *   - Mvir = M200c          with use_m200c (UseM200c = 1 and the column present),
+ *                           so Mvir matches SAGE's 200 rho_crit virial radius;
+ *                           a halo with no positive M200c keeps its mvir.
  *   - Len                   estimated from Mvir / part_mass (particle count).
  *   - FileNr, SubhaloIndex, SubHalfMass set to sentinel values (-1 / -1.0).
  *   - MostBoundID carries the Rockstar halo ID through for provenance.
@@ -490,7 +509,8 @@ int64_t load_forest_ctrees(const int32_t forestnr, struct halo_data **halos, str
  *     complete forest is loaded.
  */
 static void convert_ctrees_conventions_to_lht(struct halo_data *halos, struct additional_info *info, const int64_t nhalos,
-                                              const int32_t snap_offset, const double part_mass, const int64_t forest_offset)
+                                              const int32_t snap_offset, const double part_mass, const int64_t forest_offset,
+                                              const int use_m200c)
 {
     const double inv_part_mass = 1.0/part_mass;
     for(int64_t i=0;i<nhalos;i++) {
@@ -502,6 +522,15 @@ static void convert_ctrees_conventions_to_lht(struct halo_data *halos, struct ad
         halos->Mvir  *= 1e-10;
         halos->M_Mean200 *= 1e-10;
         halos->M_TopHat *= 1e-10;
+
+        /* SAGE's virial radius assumes 200 rho_crit, so with use_m200c Mvir takes
+           the matching M200c (stored in M_TopHat) rather than Rockstar's Bryan &
+           Norman mvir. Spin was normalised above by mvir, the mass its J was
+           measured within. A halo with no positive M200c (a few-particle halo)
+           keeps its mvir. */
+        if(use_m200c && halos->M_TopHat > 0.0f) {
+            halos->Mvir = halos->M_TopHat;
+        }
 
         /* Calculate the (approx.) number of particles in this halo */
         halos->Len   = (int) roundf(halos->Mvir * inv_part_mass);

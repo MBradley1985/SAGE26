@@ -10,6 +10,22 @@ it says otherwise. See
 
 ## Unreleased
 
+### UseM200c parameter (new toggle, default off)
+
+- With `UseM200c 1` the Consistent-Trees readers (ASCII and HDF5) take
+  `M200c` as the halo mass instead of Rockstar's Bryan & Norman (1998)
+  `mvir`, so `Mvir` matches the 200 rho_crit virial radius SAGE computes.
+  A halo with no positive `M200c` (a few-particle halo, 0.7% of microUchuu
+  haloes) keeps its `mvir`; ASCII trees without an `M200c` column print a
+  warning and use `mvir`. The L-Halo, Mimic, Genesis and Gadget-4 readers
+  already give M200c, so the parameter changes nothing there.
+- On microUchuu, 1 lowers halo masses by 0.06 dex at z = 0 and 0.02-0.03 dex
+  at z >= 1, and the cosmic SFR density by 0.02-0.05 dex; the z = 0 stellar
+  mass function moves by at most 0.04 dex.
+- `UseM200c` is written to the HDF5 header (`Header/Runtime`). At the default
+  every dataset is bit-identical (Millennium regression; microUchuu, 25200
+  datasets).
+
 ### Mimic L-Halo tree reader (new TreeType)
 
 - `TreeType mimic_lhalo_binary` reads the L-Halo binary trees written by

@@ -36,7 +36,8 @@ static int read_contiguous_forest_ctrees_h5(hid_t h5_forests_group, const hsize_
                                             const char *snap_field_name, const int8_t snap_field_is_double,
                                             struct halo_data *halos);
 static void convert_ctrees_conventions_to_lht(struct halo_data *halos, const int64_t nhalos,
-                                              const int32_t snap_offset, const double part_mass);
+                                              const int32_t snap_offset, const double part_mass,
+                                              const int use_m200c);
 
 
 static void get_forest_metadata_filename(char *metadata_filename, const size_t len, struct params *run_params)
@@ -526,7 +527,8 @@ int64_t load_forest_ctrees_hdf5(int64_t forestnr, struct halo_data **halos,
     /* Done with all the reading for this snapshot */
 
     const int32_t snap_offset = 0;/* need to figure out how to set this correctly (do not think there is an automatic way to do so): MS 03/08/2018 */
-    convert_ctrees_conventions_to_lht(*halos, nhalos, snap_offset, run_params->PartMass);
+    /* M200c is always read (above), so UseM200c alone decides the halo mass. */
+    convert_ctrees_conventions_to_lht(*halos, nhalos, snap_offset, run_params->PartMass, run_params->UseM200c);
 
     return nhalos;
 }
@@ -615,7 +617,8 @@ static int read_contiguous_forest_ctrees_h5(hid_t h5_forests_group, const hsize_
 
 
 static void convert_ctrees_conventions_to_lht(struct halo_data *halos, const int64_t nhalos,
-                                       const int32_t snap_offset, const double part_mass)
+                                       const int32_t snap_offset, const double part_mass,
+                                       const int use_m200c)
 {
     const double inv_part_mass = 1.0/part_mass;
     for(int64_t i=0;i<nhalos;i++) {
@@ -627,6 +630,15 @@ static void convert_ctrees_conventions_to_lht(struct halo_data *halos, const int
         halos->Mvir  *= 1e-10;
         halos->M_Mean200 *= 1e-10;
         halos->M_TopHat *= 1e-10;
+
+        /* SAGE's virial radius assumes 200 rho_crit, so with use_m200c Mvir takes
+           the matching M200c (stored in M_TopHat) rather than Rockstar's Bryan &
+           Norman mvir. Spin was normalised above by mvir, the mass its J was
+           measured within. A halo with no positive M200c (a few-particle halo)
+           keeps its mvir. */
+        if(use_m200c && halos->M_TopHat > 0.0f) {
+            halos->Mvir = halos->M_TopHat;
+        }
 
         /* Calculate the (approx.) number of particles in this halo */
         halos->Len   = (int) roundf(halos->Mvir * inv_part_mass);
