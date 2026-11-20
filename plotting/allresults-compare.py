@@ -45,6 +45,7 @@ warnings.filterwarnings("ignore")
 MODELS = [
     {'dir': 'output/millennium/',          'label': 'SAGE26 Millennium'},
     {'dir': 'output/millennium_vanilla/',  'label': 'SAGE26 vanilla'},
+    {'dir': 'output/microuchuu/',           'label': 'SAGE26 microUchuu'},
 ]
 
 OUTPUT_DIR = 'output/compare_plots/'    # relative to the SAGE26 top directory
