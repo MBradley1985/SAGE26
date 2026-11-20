@@ -520,7 +520,7 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
          * CGMgas left on a hot-regime (Regime 1) target runs the secondary CGM
          * recipe in cooling_recipe_regime_aware(), whose AGN step measures r_heat
          * against rcool = Rvir: a trace reservoir is always out-heated, so r_heat
-         * jumps to Rvir and the hot halo stops cooling for good under RheatMode 0. */
+         * jumps to Rvir and, as r_heat only moves outwards, the hot halo stops cooling for good. */
         const int give_to_cgm = (galaxies[t].Regime == 0);
         float *gas    = give_to_cgm ? &galaxies[t].CGMgas       : &galaxies[t].HotGas;
         float *metals = give_to_cgm ? &galaxies[t].MetalsCGMgas : &galaxies[t].MetalsHotGas;

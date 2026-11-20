@@ -285,7 +285,8 @@ static const double MERGER_GAS_SUM_TOL = 1e-6;
  *        cooling_recipe_regime_aware() through the secondary CGM recipe,
  *        whose AGN step sets r_heat against rcool = Rvir.  With a trace
  *        reservoir the heating always exceeds the cooling, so r_heat jumps
- *        to Rvir and, under RheatMode 0, the hot halo never cools again.
+ *        to Rvir and, as r_heat only moves outwards, the hot halo never
+ *        cools again.
  *
  * Tolerance: MERGER_GAS_SUM_TOL, float round-off on a sum of two floats.
  */

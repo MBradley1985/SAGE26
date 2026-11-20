@@ -389,7 +389,6 @@ static void setup_cgm_agn_params(struct params *run_params)
     run_params->CGMrecipeOn = 1;
     run_params->AGNrecipeOn = 2;
     run_params->RadioModeEfficiency = 0.08;
-    run_params->RheatMode = 0;
 }
 
 /* A 10^13 Msun/h halo with a 10^8 Msun/h black hole, a trace of CGM gas
@@ -415,15 +414,14 @@ static void setup_trace_cgm_halo(struct GALAXY *gal, const int regime)
  *
  * Setup: the same halo with a trace of CGM gas (10^2 Msun/h), once as
  *        Regime 1 with hot gas and once as Regime 0, through
- *        cooling_recipe_cgm() with Bondi radio mode and RheatMode 0.
+ *        cooling_recipe_cgm() with Bondi radio mode.
  *
  * Why: r_heat belongs to the hot halo in Regime 1; do_AGN_heating() sets
  *        it against the hot halo's rcool.  The CGM recipe measures r_heat
  *        against rcool = Rvir, and its cooling scales as CGMgas^2 (t_cool ~
  *        1/rho) while the reservoir-capped heating scales as CGMgas, so a
  *        trace reservoir is always out-heated and would push r_heat to Rvir,
- *        stopping the hot halo's cooling for good.  The same skip already
- *        applies to the r_heat relaxation (RheatMode 1-2).  In Regime 0 the
+ *        stopping the hot halo's cooling for good.  In Regime 0 the
  *        CGM is the halo's own reservoir and the out-heated trace does set
  *        r_heat = Rvir, which is the control.
  *

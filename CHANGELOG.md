@@ -19,7 +19,7 @@ it says otherwise. See
   regime. A hot-regime central holding that CGM ran the secondary CGM
   cooling recipe, whose AGN step sets `r_heat` against `rcool = Rvir`; a
   small reservoir is always out-heated, so `r_heat` jumped to `Rvir` and,
-  under `RheatMode 0`, the halo never cooled again.
+  as `r_heat` only moves outwards, the halo never cooled again.
 - The effect grows with resolution, since smaller satellites bring smaller
   CGM packets. Reported on Shin-Uchuu, where nearly all centrals above
   10^12.5 Msun had stopped cooling by z = 3. In Millennium and microUchuu
@@ -46,25 +46,18 @@ it says otherwise. See
   Gyr/h. `tcool` and `tff` are labelled Gyr/h (both were in Gyr/h, labelled
   Gyr). Only the `tcool` dataset changes (Millennium file 0, 5632 datasets).
 
-### RheatMode parameter (new toggle, default off)
+### RheatMode parameter removed
 
-- The radio-mode heating radius can now follow the order of Croton et al.
-  (2016), eqs. 18-20, as the SAGE code did before April 2015. SAGE16 and
-  SAGE26 suppress the cooling with the past `r_heat` first, then cap the
-  heating at, and measure `r_heat` against, that suppressed cooling. Once
-  `r_heat >= r_cool` there is nothing left to cap against, so radio-mode
-  accretion and jet power are zero. `RheatMode`: 0 (default) keeps that order;
-  1 lets `r_heat` relax on the cooling time; 2 adds the eqs. 18-20 order; 3 is
-  the eqs. 18-20 order alone. Modes 2-3 need `RadioModeEfficiency` raised to
-  about 0.25-0.3 to match the default stellar mass function. Mode 3 at 0.3
-  gives radio AGN in essentially all massive haloes. Details in
-  `docs/physics/cooling_and_heating.md`.
-- `RheatMode` is written to the HDF5 header (`Header/Runtime`).
-- At the default every dataset is bit-identical (Millennium, 264 datasets).
+- The experimental `RheatMode` toggle (r_heat relaxation and the Croton et
+  al. 2016 eqs. 18-20 order) is gone; its default, mode 0, is the model:
+  `r_heat` only moves outwards and the heating is measured against the
+  suppressed cooling. `RheatMode` is no longer read or written to the HDF5
+  header; a parameter file that sets it is rejected as an unknown key.
+  Output is bit-identical to the default.
 
 ### input/millennium_all.par lists every parameter
 
-- Added `RheatMode`, `MergerTimeFactor`, `ConcentrationScatter` and
+- Added `MergerTimeFactor`, `ConcentrationScatter` and
   `DustGrowthMaxDtoZ`, at their code defaults. `docs/parameters.md` now gives
   `MergerTimeFactor`'s default as 2.0, as in the code.
 
