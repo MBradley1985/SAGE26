@@ -1,0 +1,27 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: z, datatype: float64, description: Median redshift of the bin}
+# - {name: e_z_upper, datatype: float64}
+# - {name: e_z_lower, datatype: float64}
+# - {name: log_rho_sfr, unit: log(Msun yr^-1 Mpc^-3), datatype: float64, description: Total SFRD (pure luminosity evolution)}
+# - {name: e_log_rho_sfr_upper, datatype: float64}
+# - {name: e_log_rho_sfr_lower, datatype: float64}
+# meta: !!omap
+# - {source: 'Novak et al. 2017, A&A 602, A5 (arXiv:1703.09724), Table 2, column Total'}
+# - {tracer: 'VLA-COSMOS 3 GHz radio, redshift-dependent IR-radio correlation'}
+# - {IMF: Chabrier03}
+# - cosmology: {H0: 70.0, Omega_m: 0.3, Omega_lambda: 0.7}
+# schema: astropy-2.0
+z e_z_upper e_z_lower log_rho_sfr e_log_rho_sfr_upper e_log_rho_sfr_lower
+0.312 0.088 0.21 -1.77 0.047 0.052
+0.501 0.099 0.10 -1.69 0.045 0.050
+0.695 0.11 0.095 -1.47 0.044 0.048
+0.903 0.097 0.10 -1.31 0.044 0.048
+1.16 0.14 0.16 -1.31 0.043 0.049
+1.44 0.16 0.14 -1.24 0.045 0.051
+1.81 0.19 0.21 -1.16 0.047 0.053
+2.18 0.32 0.18 -1.10 0.048 0.056
+2.81 0.49 0.31 -1.08 0.052 0.060
+3.71 0.89 0.41 -1.23 0.062 0.079
+4.83 0.87 0.23 -1.25 0.085 0.13

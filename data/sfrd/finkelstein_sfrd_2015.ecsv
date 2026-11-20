@@ -1,0 +1,21 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: z, datatype: float64}
+# - {name: log_rho_uv, unit: log(erg s^-1 Hz^-1 Mpc^-3), datatype: float64}
+# - {name: log_rho_sfr_obs, unit: log(Msun yr^-1 Mpc^-3), datatype: float64, description: Observed (no dust correction)}
+# - {name: log_rho_sfr, unit: log(Msun yr^-1 Mpc^-3), datatype: float64, description: Dust corrected}
+# - {name: e_log_rho_sfr_upper, datatype: float64}
+# - {name: e_log_rho_sfr_lower, datatype: float64}
+# meta: !!omap
+# - {source: 'Finkelstein et al. 2015, ApJ 810, 71 (arXiv:1410.5439), Table 7'}
+# - {tracer: 'Rest-frame UV LFs integrated to M_UV = -17; dust from SED-fit E(B-V); z = 8 has E(B-V) fixed to 0'}
+# - {IMF: Salpeter}
+# - {note: 'Errors are those of the dust-corrected column'}
+# schema: astropy-2.0
+z log_rho_uv log_rho_sfr_obs log_rho_sfr e_log_rho_sfr_upper e_log_rho_sfr_lower
+4 26.26 -1.59 -1.03 0.23 0.21
+5 26.17 -1.69 -1.20 0.20 0.25
+6 25.88 -1.97 -1.68 0.24 0.18
+7 25.77 -2.09 -1.85 0.22 0.16
+8 25.65 -2.20 -2.20 0.19 0.19

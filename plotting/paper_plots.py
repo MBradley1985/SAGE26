@@ -17,6 +17,9 @@ from matplotlib.colors import LogNorm
 from matplotlib.collections import LineCollection
 from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter, ScalarFormatter
+from matplotlib import font_manager
+import logging
+import subprocess
 import os
 import numpy as np
 import sys
@@ -143,6 +146,11 @@ OBS_IMF = {
     'Moffett+16':         ('chabrier', 'lit'),
     'Wright+18':          ('chabrier', 'lit'),
     'Thorne+21':          ('chabrier', 'lit'),
+    'Driver+18':          ('chabrier', 'file'),
+    "D'Silva+23":         ('chabrier', 'lit'),
+    'Novak+17':           ('chabrier', 'file'),
+    'Bouwens+15':         ('salpeter', 'file'),
+    'Finkelstein+15':     ('salpeter', 'file'),
     'Weaver+23':          ('chabrier', 'lit'),
     'Song+16':            ('chabrier', 'lit'),
     'Bellstedt+20':       ('chabrier', 'lit'),
@@ -433,6 +441,38 @@ _EVOLUTION_PROPERTIES = [
 def setup_style():
     """Configure matplotlib for publication-quality white-background plots."""
     plt.style.use("./plotting/kieren_cohare_palatino_sty.mplstyle")
+    # Fall back to mathtext where the TeX install can't render the style
+    # (e.g. no Palatino fonts on the supercomputer).
+    fig = plt.figure()
+    fig.text(0.5, 0.5, r'$\log_{10} M_\odot$ test')
+    try:
+        fig.canvas.draw()
+    except Exception as exc:
+        print(f'TeX rendering failed ({type(exc).__name__}); using mathtext instead.')
+        plt.rcParams['text.usetex'] = False
+        # Without Palatino matplotlib drops to the much wider DejaVu Sans, so
+        # every label grows. Use a Palatino clone if installed, else STIX
+        # (shipped with matplotlib), with maths in the same font. TeX installs
+        # often carry the TeX Gyre Pagella clone where matplotlib can't see it.
+        for name in ('regular', 'italic', 'bold', 'bolditalic'):
+            try:
+                path = subprocess.run(['kpsewhich', f'texgyrepagella-{name}.otf'],
+                                      capture_output=True, text=True, timeout=10).stdout.strip()
+                if path:
+                    font_manager.fontManager.addfont(path)
+            except (OSError, subprocess.SubprocessError):
+                break
+        plt.rcParams['font.serif'] = ['Palatino', 'TeX Gyre Pagella', 'P052', 'URW Palladio L',
+                                      'Palatino Linotype', 'STIXGeneral', 'DejaVu Serif']
+        plt.rcParams['mathtext.fontset'] = 'custom'
+        plt.rcParams['mathtext.rm'] = 'serif'
+        plt.rcParams['mathtext.it'] = 'serif:italic'
+        plt.rcParams['mathtext.bf'] = 'serif:bold'
+        plt.rcParams['mathtext.fallback'] = 'stix'
+        logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
+        print(f"  font: {font_manager.findfont('serif')}")
+    finally:
+        plt.close(fig)
 
 
 def _tex_safe(s):
@@ -1792,6 +1832,56 @@ def load_oesch_sfrd_2018_data():
     except Exception as e:
         print(f"Error loading Oesch 2018 SFRD data: {e}")
     return None, None, None, None
+
+def load_driver_sfrd_2018_data():
+    """Load Driver et al. 2018 SFRD (GAMA/G10-COSMOS/3D-HST, Chabrier, h = 0.7).
+
+    Returns bin-centre z, log SFRD, the quadrature sum of the four quoted error
+    terms, and the lower/upper half-widths of each redshift bin.
+    """
+    filename = './data/sfrd/Driver18_sfr.dat'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None, None
+    d = np.loadtxt(filename, comments='#')
+    z = 0.5 * (d[:, 0] + d[:, 1])
+    err = np.sqrt(d[:, 3]**2 + d[:, 4]**2 + d[:, 5]**2 + d[:, 6]**2)
+    return z, d[:, 2] + imf_shift('Driver+18'), err, z - d[:, 0], d[:, 1] - z
+
+
+def load_dsilva_sfrd_2023_data():
+    """Load D'Silva et al. 2023 SFRD (GAMA/DEVILS, Chabrier, h = 0.7).
+
+    Returns z, log SFRD, lower/upper SFRD errors and lower/upper z errors.
+    """
+    filename = './data/sfrd/DSilva23_sfr.dat'
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found.")
+        return None, None, None, None, None, None
+    d = np.loadtxt(filename, comments='#')
+    return (d[:, 3], d[:, 0] + imf_shift("D'Silva+23"), d[:, 2], d[:, 1],
+            d[:, 5], d[:, 4])
+
+
+# Tabulated SFRD files with columns z, log_rho_sfr, e_log_rho_sfr_upper/lower.
+# Each header records the paper, table and IMF; the UV ones are dust corrected.
+SFRD_TABLES = {
+    'Novak+17':       './data/sfrd/novak_sfrd_2017.ecsv',
+    'Bouwens+15':     './data/sfrd/bouwens_sfrd_2015.ecsv',
+    'Finkelstein+15': './data/sfrd/finkelstein_sfrd_2015.ecsv',
+}
+
+
+def load_sfrd_table(dataset):
+    """Load one SFRD_TABLES entry: z, log SFRD (Chabrier), upper and lower errors."""
+    filename = SFRD_TABLES[dataset]
+    if not HAS_ASTROPY or not os.path.exists(filename):
+        print(f"Warning: {filename} not available.")
+        return None, None, None, None
+    t = Table.read(filename, format='ascii.ecsv')
+    return (np.array(t['z']), np.array(t['log_rho_sfr']) + imf_shift(dataset),
+            np.array(t['e_log_rho_sfr_upper']), np.array(t['e_log_rho_sfr_lower']))
+
 
 def load_mcleod_rho_sfr_2024_data():
     """Load McLeod et al. 2023 SFR density data."""
@@ -3563,7 +3653,7 @@ def plot_9_cgm_fractions_depletion(snapdata):
                 ax1.plot(bc[valid], med[valid], '--s', color=color, lw=2,
                          alpha=0.6, markersize=5, label=f'Hot ({label})')
     else:
-        gas_label = r'$M_{\rm hot}/M_{\rm vir}$'
+        gas_label = r'$m_{\rm hot}/M_{\rm vir}$'
         for snap, label, color in snap_list:
             if snap not in snapdata:
                 continue
@@ -7142,6 +7232,60 @@ def plot_15_sfr_vs_stellar_mass(primary, vanilla):
 
 # ========================== PLOT 16: COSMIC SFR DENSITY HISTORY (CSRDH) ==========================
 
+# Above this many galaxies the bootstrap of a summed density is replaced by its
+# normal limit, sum +/- sqrt(N) * std; resampling ~10^7 galaxies 100 times per
+# snapshot is what made the density histories slow on the full boxes.
+BOOT_EXACT_MAX = 100_000
+
+
+def _bootstrap_sum_range(x, n_boot):
+    """16th and 84th percentiles of the bootstrapped sum of *x*."""
+    n = len(x)
+    if n <= BOOT_EXACT_MAX:
+        boot = np.array([np.sum(x[np.random.randint(0, n, n)]) for _ in range(n_boot)])
+        return np.percentile(boot, 16), np.percentile(boot, 84)
+    total, sigma = np.sum(x), np.sqrt(n) * np.std(x)
+    return total - sigma, total + sigma
+
+
+def _density_history(path, first, last, volume, props, quantity, tag,
+                     mass_convert=MASS_CONVERT, n_boot=100):
+    """
+    Per-snapshot density sum(quantity(d)) / volume for snapshots first..last, with
+    bootstrap 16th-84th percentiles (zero when n_boot = 0). Cached in OUTPUT_DIR
+    and reused until the model files change; *tag* names the quantity in the cache.
+    """
+    files = find_model_files(path)
+    n_snaps = last - first + 1
+    dens, lo, hi = np.zeros(n_snaps), np.zeros(n_snaps), np.zeros(n_snaps)
+    if not files:
+        return dens, lo, hi
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    cache = os.path.join(OUTPUT_DIR, f'history_{tag}_{os.path.basename(os.path.normpath(path))}.npz')
+    stamp = max(os.path.getmtime(f) for f in files)
+    key = f'{os.path.abspath(path)}|{first}|{last}|{volume}|{mass_convert}|{n_boot}|{BOOT_EXACT_MAX}|{stamp}'
+    if os.path.exists(cache):
+        c = np.load(cache)
+        if str(c['key']) == key:
+            print(f'  {tag} history for {path} from cache')
+            return c['dens'], c['lo'], c['hi']
+
+    for snap in range(first, last + 1):
+        d = read_snap_from_files(files, f'Snap_{snap}', props, mass_convert=mass_convert)
+        if not d:
+            continue
+        x = quantity(d)
+        if len(x) == 0:
+            continue
+        i = snap - first
+        dens[i] = np.sum(x) / volume
+        if n_boot:
+            b_lo, b_hi = _bootstrap_sum_range(x, n_boot)
+            lo[i], hi[i] = b_lo / volume, b_hi / volume
+    np.savez(cache, dens=dens, lo=lo, hi=hi, key=key)
+    return dens, lo, hi
+
+
 def plot_16_sfrd_history():
     """
     Plot G: Cosmic SFR Density History.
@@ -7218,53 +7362,22 @@ def plot_16_sfrd_history():
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
-    # --- 2. PLOT OBSERVATIONAL DATA (Croton et al. 2006 Compilation) ---
-    # Exact array from uploaded file
-    ObsSFRdensity = np.array([
-        [0, 0.0158489, 0, 0, 0.0251189, 0.01000000],
-        [0.150000, 0.0173780, 0, 0.300000, 0.0181970, 0.0165959],
-        [0.0425000, 0.0239883, 0.0425000, 0.0425000, 0.0269153, 0.0213796],
-        [0.200000, 0.0295121, 0.100000, 0.300000, 0.0323594, 0.0269154],
-        [0.350000, 0.0147911, 0.200000, 0.500000, 0.0173780, 0.0125893],
-        [0.625000, 0.0275423, 0.500000, 0.750000, 0.0331131, 0.0229087],
-        [0.825000, 0.0549541, 0.750000, 1.00000, 0.0776247, 0.0389045],
-        [0.625000, 0.0794328, 0.500000, 0.750000, 0.0954993, 0.0660693],
-        [0.700000, 0.0323594, 0.575000, 0.825000, 0.0371535, 0.0281838],
-        [1.25000, 0.0467735, 1.50000, 1.00000, 0.0660693, 0.0331131],
-        [0.750000, 0.0549541, 0.500000, 1.00000, 0.0389045, 0.0776247],
-        [1.25000, 0.0741310, 1.00000, 1.50000, 0.0524807, 0.104713],
-        [1.75000, 0.0562341, 1.50000, 2.00000, 0.0398107, 0.0794328],
-        [2.75000, 0.0794328, 2.00000, 3.50000, 0.0562341, 0.112202],
-        [4.00000, 0.0309030, 3.50000, 4.50000, 0.0489779, 0.0194984],
-        [0.250000, 0.0398107, 0.00000, 0.500000, 0.0239883, 0.0812831],
-        [0.750000, 0.0446684, 0.500000, 1.00000, 0.0323594, 0.0776247],
-        [1.25000, 0.0630957, 1.00000, 1.50000, 0.0478630, 0.109648],
-        [1.75000, 0.0645654, 1.50000, 2.00000, 0.0489779, 0.112202],
-        [2.50000, 0.0831764, 2.00000, 3.00000, 0.0512861, 0.158489],
-        [3.50000, 0.0776247, 3.00000, 4.00000, 0.0416869, 0.169824],
-        [4.50000, 0.0977237, 4.00000, 5.00000, 0.0416869, 0.269153],
-        [5.50000, 0.0426580, 5.00000, 6.00000, 0.0177828, 0.165959],
-        [3.00000, 0.120226, 2.00000, 4.00000, 0.173780, 0.0831764],
-        [3.04000, 0.128825, 2.69000, 3.39000, 0.151356, 0.109648],
-        [4.13000, 0.114815, 3.78000, 4.48000, 0.144544, 0.0912011],
-        [0.350000, 0.0346737, 0.200000, 0.500000, 0.0537032, 0.0165959],
-        [0.750000, 0.0512861, 0.500000, 1.00000, 0.0575440, 0.0436516],
-        [1.50000, 0.0691831, 1.00000, 2.00000, 0.0758578, 0.0630957],
-        [2.50000, 0.147911, 2.00000, 3.00000, 0.169824, 0.128825],
-        [3.50000, 0.0645654, 3.00000, 4.00000, 0.0776247, 0.0512861],
-    ], dtype=np.float32)
-
-    ObsRedshift = ObsSFRdensity[:, 0]
-    xErrLo = np.abs(ObsSFRdensity[:, 0]-ObsSFRdensity[:, 2])
-    xErrHi = np.abs(ObsSFRdensity[:, 3]-ObsSFRdensity[:, 0])
-    ObsSFR = np.log10(ObsSFRdensity[:, 1])
-    yErrLo = np.abs(np.log10(ObsSFRdensity[:, 1])-np.log10(ObsSFRdensity[:, 4]))
-    yErrHi = np.abs(np.log10(ObsSFRdensity[:, 5])-np.log10(ObsSFRdensity[:, 1]))
-
-    ax.errorbar(ObsRedshift, ObsSFR, yerr=[yErrLo, yErrHi], xerr=[xErrLo, xErrHi],
-                fmt='o', markerfacecolor='gray', markeredgecolor='k', markeredgewidth=1.0,
-                ecolor='k', color='k', ms=8, lw=1.0, alpha=0.6, ls='none',
-                zorder=Z_OBS, label='Somerville+01 compilation')
+    # --- 2. PLOT OBSERVATIONAL DATA ---
+    obs_style = dict(markerfacecolor='gray', markeredgecolor='k', markeredgewidth=1.0,
+                     ecolor='k', color='k', ms=8, lw=1.0, alpha=0.6, ls='none',
+                     zorder=Z_OBS)
+    z_d18, sfrd_d18, err_d18, zlo_d18, zhi_d18 = load_driver_sfrd_2018_data()
+    if z_d18 is not None:
+        ax.errorbar(z_d18, sfrd_d18, yerr=err_d18, xerr=[zlo_d18, zhi_d18],
+                    fmt='o', label='Driver+18', **obs_style)
+    z_ds, sfrd_ds, elo_ds, ehi_ds, zlo_ds, zhi_ds = load_dsilva_sfrd_2023_data()
+    if z_ds is not None:
+        ax.errorbar(z_ds, sfrd_ds, yerr=[elo_ds, ehi_ds], xerr=[zlo_ds, zhi_ds],
+                    fmt='D', label="D'Silva+23", **obs_style)
+    for dataset, fmt in (('Novak+17', '^'), ('Bouwens+15', '<'), ('Finkelstein+15', '>')):
+        z_t, sfrd_t, eu_t, el_t = load_sfrd_table(dataset)
+        if z_t is not None:
+            ax.errorbar(z_t, sfrd_t, yerr=[el_t, eu_t], fmt=fmt, label=dataset, **obs_style)
 
     # Madau & Dickinson 2014 Fit
     def MD14_sfrd(z):
@@ -7292,36 +7405,10 @@ def plot_16_sfrd_history():
         sim_last = sim['last_snap']
         sim_volume = sim['volume']
         do_bootstrap = True  # bootstrap error shading for all three models
-        n_snaps = sim_last - sim_first + 1
-        sfr_density = np.zeros(n_snaps)
-        sfr_density_lo = np.zeros(n_snaps)
-        sfr_density_hi = np.zeros(n_snaps)
-
-        # Loop strictly from first_snap to last_snap
-        for snap in range(sim_first, sim_last + 1):
-            snap_name = f'Snap_{snap}'
-            idx = snap - sim_first
-
-            try:
-                model_files = find_model_files(sim_path)
-                d = read_snap_from_files(model_files, snap_name,
-                                         ['SfrDisk', 'SfrBulge'])
-                if d:
-                    sfr_disk = d['SfrDisk']
-                    sfr_bulge = d['SfrBulge']
-                    sfr_total = sfr_disk + sfr_bulge
-                    sfr_density[idx] = np.sum(sfr_total) / sim_volume
-
-                    if do_bootstrap and len(sfr_total) > 0:
-                        n_gal = len(sfr_total)
-                        boot = np.array([
-                            np.sum(sfr_total[np.random.randint(0, n_gal, n_gal)])
-                            for _ in range(N_BOOT)
-                        ]) / sim_volume
-                        sfr_density_lo[idx] = np.percentile(boot, 16)
-                        sfr_density_hi[idx] = np.percentile(boot, 84)
-            except Exception:
-                continue
+        sfr_density, sfr_density_lo, sfr_density_hi = _density_history(
+            sim_path, sim_first, sim_last, sim_volume, ['SfrDisk', 'SfrBulge'],
+            lambda d: d['SfrDisk'] + d['SfrBulge'], 'sfrd',
+            n_boot=N_BOOT if do_bootstrap else 0)
 
         # Plot
         nonzero = np.where(sfr_density > 0.0)[0]
@@ -7561,39 +7648,11 @@ def plot_17_smd_history():
         sim_volume = sim['volume']
         sim_mass_convert = sim['mass_convert']
         do_bootstrap = (sim_label == 'SAGE26 (Millennium)')
-        n_snaps = sim_last - sim_first + 1
-        smd = np.zeros(n_snaps)
-        smd_lo = np.zeros(n_snaps)
-        smd_hi = np.zeros(n_snaps)
-
-        for snap in range(sim_first, sim_last + 1):
-            snap_name = f'Snap_{snap}'
-            idx = snap - sim_first
-
-            try:
-                model_files = find_model_files(sim_path)
-                d = read_snap_from_files(model_files, snap_name,
-                                         ['StellarMass'],
-                                         mass_convert=sim_mass_convert)
-                if d:
-                    m_stars = d['StellarMass']
-
-                    # Apply limits 1e8 < M < 1e13 (from uploaded script)
-                    w = np.where((m_stars > 1.0e8) & (m_stars < 1.0e13))[0]
-                    if len(w) > 0:
-                        m_sel = m_stars[w]
-                        smd[idx] = np.sum(m_sel) / sim_volume
-
-                        if do_bootstrap:
-                            n_gal = len(m_sel)
-                            boot = np.array([
-                                np.sum(m_sel[np.random.randint(0, n_gal, n_gal)])
-                                for _ in range(N_BOOT)
-                            ]) / sim_volume
-                            smd_lo[idx] = np.percentile(boot, 16)
-                            smd_hi[idx] = np.percentile(boot, 84)
-            except Exception:
-                continue
+        # Limits 1e8 < M < 1e13 (from uploaded script)
+        smd, smd_lo, smd_hi = _density_history(
+            sim_path, sim_first, sim_last, sim_volume, ['StellarMass'],
+            lambda d: d['StellarMass'][(d['StellarMass'] > 1.0e8) & (d['StellarMass'] < 1.0e13)],
+            'smd', mass_convert=sim_mass_convert, n_boot=N_BOOT if do_bootstrap else 0)
 
         # Plot
         nonzero = np.where(smd > 0.0)[0]
@@ -11111,7 +11170,7 @@ def plot_32_hi_mass_function():
     ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
     ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
 
-    ax.set_xlabel(r'$\log_{10}\ M_{\mathrm{HI}}\ [M_{\odot}]$')
+    ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{HI}}\ [M_{\odot}]$')
     ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
 
     # Separate legends: models and observations both inside the plot
@@ -11306,7 +11365,7 @@ def plot_33_h2_mass_function():
     ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
     ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
 
-    ax.set_xlabel(r'$\log_{10}\ M_{\mathrm{H_2}}\ [M_{\odot}]$')
+    ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{H_2}}\ [M_{\odot}]$')
     ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
 
     # Separate legends: models and observations both inside the plot
@@ -11435,7 +11494,7 @@ def plot_34_hi_mass_function_primary_uchuu():
     ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
     ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
 
-    ax.set_xlabel(r'$\log_{10}\ M_{\mathrm{HI}}\ [M_{\odot}]$')
+    ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{HI}}\ [M_{\odot}]$')
     ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
 
     handles, labels = ax.get_legend_handles_labels()
@@ -11553,7 +11612,7 @@ def plot_35_h2_mass_function_primary_uchuu():
     ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
     ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
 
-    ax.set_xlabel(r'$\log_{10}\ M_{\mathrm{H_2}}\ [M_{\odot}]$')
+    ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{H_2}}\ [M_{\odot}]$')
     ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
 
     handles, labels = ax.get_legend_handles_labels()
@@ -11636,7 +11695,7 @@ def plot_38_hi_mass_function_recipes():
     ax.xaxis.set_minor_locator(plt.MultipleLocator(0.2))
     ax.yaxis.set_minor_locator(plt.MultipleLocator(0.2))
 
-    ax.set_xlabel(r'$\log_{10}\ M_{\mathrm{HI}}\ [M_{\odot}]$')
+    ax.set_xlabel(r'$\log_{10}\ m_{\mathrm{HI}}\ [M_{\odot}]$')
     ax.set_ylabel(r'$\log_{10}\ \phi\ [\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1}]$')
 
     handles, labels = ax.get_legend_handles_labels()
@@ -11673,13 +11732,13 @@ def plot_39_gas_mass_functions_stacked():
     MASS_CUT = 1e8
 
     panels = [
-        {'field': 'ColdGas', 'tag': r'$M_{\mathrm{cold}}$',
+        {'field': 'ColdGas', 'tag': r'$m_{\mathrm{cold}}$',
          'obs': load_himf_observations() + load_h2mf_observations(),
          'recipes': False, 'sage16': True},
-        {'field': 'H1gas', 'tag': r'$M_{\mathrm{HI}}$',
+        {'field': 'H1gas', 'tag': r'$m_{\mathrm{HI}}$',
          'obs': load_himf_observations(),
          'recipes': False, 'sage16': True},
-        {'field': 'H2gas', 'tag': r'$M_{\mathrm{H_2}}$',
+        {'field': 'H2gas', 'tag': r'$m_{\mathrm{H_2}}$',
          'obs': load_h2mf_observations(),
          'recipes': True, 'sage16': False},
     ]
@@ -11767,7 +11826,7 @@ def plot_39_gas_mass_functions_stacked():
             ax.legend(oh, ol, loc='upper right', frameon=False, fontsize=10)
 
     axes[-1].set_xlim(8.0, 11.0)
-    axes[-1].set_xlabel(r'$\log_{10}\ M_{\mathrm{gas}}\ [M_{\odot}]$')
+    axes[-1].set_xlabel(r'$\log_{10}\ m_{\mathrm{gas}}\ [M_{\odot}]$')
     axes[-1].xaxis.set_major_locator(plt.MultipleLocator(1.0))
     axes[-1].xaxis.set_minor_locator(plt.MultipleLocator(0.2))
 
@@ -11965,13 +12024,13 @@ def plot_40_gas_mass_functions_stacked_recipes():
     MASS_CUT = 1e8
 
     panels = [
-        {'field': 'ColdGas', 'tag': r'$M_{\mathrm{cold}}$',
+        {'field': 'ColdGas', 'tag': r'$m_{\mathrm{cold}}$',
          'obs': load_himf_observations() + load_h2mf_observations(),
          'h2_style': False, 'sage16': True},
-        {'field': 'H1gas', 'tag': r'$M_{\mathrm{HI}}$',
+        {'field': 'H1gas', 'tag': r'$m_{\mathrm{HI}}$',
          'obs': load_himf_observations(),
          'h2_style': False, 'sage16': True},
-        {'field': 'H2gas', 'tag': r'$M_{\mathrm{H_2}}$',
+        {'field': 'H2gas', 'tag': r'$m_{\mathrm{H_2}}$',
          'obs': load_h2mf_observations(),
          'h2_style': True, 'sage16': False},
     ]
@@ -12080,7 +12139,7 @@ def plot_40_gas_mass_functions_stacked_recipes():
             ax.legend(oh, ol, loc='upper right', frameon=False, fontsize=10)
 
     axes[-1].set_xlim(8.0, 11.0)
-    axes[-1].set_xlabel(r'$\log_{10}\ M_{\mathrm{gas}}\ [M_{\odot}]$')
+    axes[-1].set_xlabel(r'$\log_{10}\ m_{\mathrm{gas}}\ [M_{\odot}]$')
     axes[-1].xaxis.set_major_locator(plt.MultipleLocator(1.0))
     axes[-1].xaxis.set_minor_locator(plt.MultipleLocator(0.2))
 
@@ -12193,15 +12252,19 @@ def plot_36_selection_thresholds_mz():
     from matplotlib.colors import ListedColormap
     conc_cmap = ListedColormap(plt.get_cmap('plasma')(np.linspace(0.0, 0.85, 256)))
     if len(m_mbk):
-        # Coloured by the concentration the selection actually used.
-        print('  MBK25 selection c  (5/50/95 pct): %.2f / %.2f / %.2f'
-              % tuple(np.percentile(c_mbk, [5, 50, 95])))
+        # Coloured by the concentration the selection actually used.  The scale
+        # starts at the lowest c so the few low-c haloes (selected only well
+        # above the line) stay visible; the high-c tail is capped at the 95th
+        # percentile.
+        print('  MBK25 selection c  (min/5/50/95 pct): %.2f / %.2f / %.2f / %.2f'
+              % ((c_mbk.min(),) + tuple(np.percentile(c_mbk, [5, 50, 95]))))
         sc = ax_mbk.scatter(z_mbk, np.log10(m_mbk), s=6, alpha=1.0,
                          c=c_mbk, cmap=conc_cmap,
-                         vmin=np.percentile(c_mbk, 5),
+                         vmin=c_mbk.min(),
                          vmax=np.percentile(c_mbk, 95),
                          edgecolors='none', rasterized=True, zorder=2)
-        cbar = fig.colorbar(sc, ax=ax_mbk, location='right', pad=0.02, aspect=30)
+        cbar = fig.colorbar(sc, ax=ax_mbk, location='right', pad=0.02, aspect=30,
+                            extend='max')
         cbar.set_label('Halo concentration', fontsize='small')
 
     ax_mbk.plot(z_grid, np.log10(mbk25_threshold_mass_msun(z_grid, C_MEDIAN)),
