@@ -10,6 +10,8 @@ it says otherwise. See
 
 ## Unreleased
 
+## v0.95 -- 2026-11-21
+
 ### Merger gas joins the target's regime reservoir (changes output)
 
 - With `CGMrecipeOn 1`, `add_galaxies_together()` now adds the satellite's
