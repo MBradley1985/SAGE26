@@ -14,6 +14,7 @@
 #include "test_framework.h"
 #include "../src/core_allvars.h"
 #include "../src/model_misc.h"
+#include "../src/core_cool_func.h"
 #include "../src/model_cooling_heating.h"
 #include "../src/model_starformation_and_feedback.h"
 
@@ -367,6 +368,92 @@ void test_cold_stream_fraction() {
     ASSERT_IN_RANGE(expected_f_stream, 0.0, 1.0, "Cold stream fraction in [0,1]");
 }
 
+/* r_heat is a float field; an untouched value comes back exactly, a moved one
+ * moves by many orders more than single-precision round-off. */
+static const double RHEAT_UNCHANGED_TOL = 1e-6;
+
+/* SAGE standard units (Mpc/h, km/s, 10^10 Msun/h) and the Bondi radio mode. */
+static void setup_cgm_agn_params(struct params *run_params)
+{
+    memset(run_params, 0, sizeof(struct params));
+    run_params->MShockMsun = 6.0e11;
+    run_params->Hubble_h = 0.7;
+    run_params->UnitLength_in_cm = 3.08568e24;
+    run_params->UnitVelocity_in_cm_per_s = 1e5;
+    run_params->UnitMass_in_g = 1.989e43;
+    run_params->UnitTime_in_s = run_params->UnitLength_in_cm / run_params->UnitVelocity_in_cm_per_s;
+    run_params->UnitDensity_in_cgs = run_params->UnitMass_in_g / pow(run_params->UnitLength_in_cm, 3);
+    run_params->UnitEnergy_in_cgs = run_params->UnitMass_in_g * pow(run_params->UnitVelocity_in_cm_per_s, 2);
+    run_params->G = 6.672e-8 / pow(run_params->UnitLength_in_cm, 3)
+                    * run_params->UnitMass_in_g * pow(run_params->UnitTime_in_s, 2);
+    run_params->CGMrecipeOn = 1;
+    run_params->AGNrecipeOn = 2;
+    run_params->RadioModeEfficiency = 0.08;
+    run_params->RheatMode = 0;
+}
+
+/* A 10^13 Msun/h halo with a 10^8 Msun/h black hole, a trace of CGM gas
+ * (10^2 Msun/h) and r_heat at 5% of Rvir. */
+static void setup_trace_cgm_halo(struct GALAXY *gal, const int regime)
+{
+    memset(gal, 0, sizeof(struct GALAXY));
+    gal->Regime = regime;
+    gal->Mvir = 1000.0;
+    gal->Vvir = 450.0;
+    gal->Rvir = 0.45;
+    gal->HotGas = (regime == 1) ? 100.0 : 0.0;
+    gal->MetalsHotGas = 0.02 * gal->HotGas;
+    gal->CGMgas = 1.0e-8;
+    gal->MetalsCGMgas = 2.0e-10;
+    gal->BlackHoleMass = 0.01;
+    gal->r_heat = 0.05 * gal->Rvir;
+}
+
+/*
+ * Asserts: the CGM recipe leaves r_heat alone in a hot-regime (Regime 1)
+ *          halo that holds hot gas, and still sets it in a CGM-regime halo.
+ *
+ * Setup: the same halo with a trace of CGM gas (10^2 Msun/h), once as
+ *        Regime 1 with hot gas and once as Regime 0, through
+ *        cooling_recipe_cgm() with Bondi radio mode and RheatMode 0.
+ *
+ * Why: r_heat belongs to the hot halo in Regime 1; do_AGN_heating() sets
+ *        it against the hot halo's rcool.  The CGM recipe measures r_heat
+ *        against rcool = Rvir, and its cooling scales as CGMgas^2 (t_cool ~
+ *        1/rho) while the reservoir-capped heating scales as CGMgas, so a
+ *        trace reservoir is always out-heated and would push r_heat to Rvir,
+ *        stopping the hot halo's cooling for good.  The same skip already
+ *        applies to the r_heat relaxation (RheatMode 1-2).  In Regime 0 the
+ *        CGM is the halo's own reservoir and the out-heated trace does set
+ *        r_heat = Rvir, which is the control.
+ *
+ * Tolerance: RHEAT_UNCHANGED_TOL, float round-off.
+ */
+void test_cgm_recipe_leaves_hot_halo_rheat() {
+    BEGIN_TEST("Trace CGM in a hot-regime halo does not move r_heat");
+
+    // Real Sutherland & Dopita (1993) tables; loaded once, here, since no other
+    // test in this file uses them and a second call would shift the metallicity grid
+    read_cooling_functions();
+
+    struct params run_params;
+    setup_cgm_agn_params(&run_params);
+    const double dt = 0.001;
+
+    struct GALAXY hot;
+    setup_trace_cgm_halo(&hot, 1);
+    const double rheat_before = hot.r_heat;
+    cooling_recipe_cgm(0, dt, &hot, &run_params);
+    ASSERT_CLOSE(rheat_before, hot.r_heat, RHEAT_UNCHANGED_TOL,
+                 "Regime 1 with hot gas: r_heat unchanged by the CGM recipe");
+
+    struct GALAXY cgm;
+    setup_trace_cgm_halo(&cgm, 0);
+    cooling_recipe_cgm(0, dt, &cgm, &run_params);
+    ASSERT_CLOSE(cgm.Rvir, cgm.r_heat, RHEAT_UNCHANGED_TOL,
+                 "Regime 0: the out-heated trace sets r_heat = Rvir");
+}
+
 int main() {
     BEGIN_TEST_SUITE("Regime Determination & CGM Physics");
 
@@ -376,6 +463,7 @@ int main() {
     test_gas_routing_to_correct_reservoir();
     test_regime_transition();
     test_cold_stream_fraction();
+    test_cgm_recipe_leaves_hot_halo_rheat();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

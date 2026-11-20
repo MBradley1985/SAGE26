@@ -26,6 +26,10 @@ it says otherwise. See
   about 1% of hot-regime centrals above 10^12.5 Msun had `r_heat` pinned at
   `Rvir` (none after the fix); the z = 0 stellar mass function and
   stellar-halo mass relation barely change.
+- As a safeguard, the CGM recipe no longer sets `r_heat` in a Regime 1 halo
+  that holds hot gas; `do_AGN_heating()` already sets it against the hot
+  halo's `rcool`. Output is bit-identical (Millennium; microUchuu, 25200
+  datasets), since after the merger fix such haloes carry no CGM.
 
 ### Millennium particle mass (changes output)
 

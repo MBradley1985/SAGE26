@@ -908,7 +908,13 @@ static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const 
         galaxies[centralgal].CGMgas         -= AGNaccreted;
         galaxies[centralgal].MetalsCGMgas   -= metallicity * AGNaccreted;
 
-        if(galaxies[centralgal].r_heat < rcool && cool_ref > 0.0) {
+        /* A Regime 1 halo with hot gas has already set r_heat against the hot
+         * halo's rcool in do_AGN_heating().  Here rcool = Rvir and the CGM
+         * cooling scales as CGMgas^2 against a reservoir-capped heating that
+         * scales as CGMgas, so a leftover trace of CGM would always push r_heat
+         * to Rvir and stop the hot halo cooling for good under RheatMode 0. */
+        const int sets_rheat = (galaxies[centralgal].Regime == 0 || galaxies[centralgal].HotGas <= 0.0);
+        if(sets_rheat && galaxies[centralgal].r_heat < rcool && cool_ref > 0.0) {
             const double r_heat_new = (AGNheating / cool_ref) * rcool;
             if(r_heat_new > galaxies[centralgal].r_heat)
                 galaxies[centralgal].r_heat = r_heat_new;
