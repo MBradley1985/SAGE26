@@ -25,7 +25,7 @@ OutputFormat      sage_hdf5 % sets the desired output format. Either 'sage_binar
 %------------------------------------------
 
 TreeName              trees_063   % assumes the trees are named TreeName.n where n is the file number
-TreeType              lhalo_binary % 'lhalo_binary', 'lhalo_hdf5', 'consistent_trees_ascii', 'consistent_trees_hdf5', 'genesis_hdf5', 'gadget4_hdf5'
+TreeType              lhalo_binary % 'lhalo_binary', 'mimic_lhalo_binary', 'lhalo_hdf5', 'consistent_trees_ascii', 'consistent_trees_hdf5', 'genesis_hdf5', 'gadget4_hdf5'
 NumSimulationTreeFiles 8 % Number of files the trees are split over. This can be different to `FirstFile` -> `LastFile` range.
 
 %SimulationDir      /<absolute>/<root>/<path>/sage-home/sage-model/input/millennium/trees/
@@ -60,6 +60,7 @@ EnhancedStarFormationOn     1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 SaveFullSFH                 0   %0: switch off
 SaveFullMH                  0   %0: switch off; 1: also save stellar metal mass per SFH bin (needs SaveFullSFH = 1)
+UseM200c                    0   %halo mass for Consistent-Trees input: 0: trees' own mvir; 1: M200c, matching SAGE's 200 rho_crit Rvir (no effect on L-Halo trees)
 StarburstColdGasOn          1   %0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 
 SubstepResolution           1.0   %multiplier on the adaptive substep count (scales the STEPS floor and MAX_STEPS cap); 1.0 = unscaled

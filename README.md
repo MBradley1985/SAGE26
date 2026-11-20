@@ -37,7 +37,7 @@ of halo properties. Test trees for the
 | Concentration | `ConcentrationOn` | Ishiyama+21 lookup table, Vmax/Vvir, Vmax/Vvir with subhalo infall freeze, Dutton & Macciò (2014) |
 | Radially resolved discs in 30 specific-angular-momentum annuli, gas and stellar spins | `DarkSAGEMode` | Stevens, Croton & Mutch (2016); Stevens et al. (2024) |
 | Dust: delayed AGB/SNII production, grain growth, SN destruction, sputtering | `DustySAGEMode` | Triani et al. (2020) |
-| ConsistentTrees, Genesis, Gadget-4 tree readers | `TreeType` | — |
+| ConsistentTrees, Genesis, Gadget-4, Mimic L-Halo tree readers | `TreeType` | — |
 | HDF5 output + libsage.so for Python/PSO | `OutputFormat` | — |
 
 ---
@@ -283,8 +283,10 @@ unchanged. See [`docs/outputs.md`](docs/outputs.md).
 
 ### Supported tree formats (`TreeType`)
 
-`lhalo_binary`, `lhalo_hdf5`, `consistent_trees_ascii`, `consistent_trees_hdf5`,
-`genesis_hdf5`, `gadget4_hdf5`
+`lhalo_binary`, `mimic_lhalo_binary`, `lhalo_hdf5`, `consistent_trees_ascii`,
+`consistent_trees_hdf5`, `genesis_hdf5`, `gadget4_hdf5`
+
+`mimic_lhalo_binary` reads the L-Halo binary files that Mimic's tree converter writes (an L-Halo header followed by Mimic's 88-byte halo record, with masses in Msun/h). The reader scales masses to SAGE26's code units and sets the record fields the format lacks to -1; see `src/io/read_tree_mimic_lhalo_binary.c`.
 
 ---
 

@@ -10,6 +10,41 @@ it says otherwise. See
 
 ## Unreleased
 
+### UseM200c parameter (new toggle, default off)
+
+- With `UseM200c 1` the Consistent-Trees readers (ASCII and HDF5) take
+  `M200c` as the halo mass instead of Rockstar's Bryan & Norman (1998)
+  `mvir`, so `Mvir` matches the 200 rho_crit virial radius SAGE computes.
+  A halo with no positive `M200c` (a few-particle halo, 0.7% of microUchuu
+  haloes) keeps its `mvir`; ASCII trees without an `M200c` column print a
+  warning and use `mvir`. The L-Halo, Mimic, Genesis and Gadget-4 readers
+  already give M200c, so the parameter changes nothing there.
+- On microUchuu, 1 lowers halo masses by 0.06 dex at z = 0 and 0.02-0.03 dex
+  at z >= 1, and the cosmic SFR density by 0.02-0.05 dex; the z = 0 stellar
+  mass function moves by at most 0.04 dex.
+- `UseM200c` is written to the HDF5 header (`Header/Runtime`). At the default
+  every dataset is bit-identical (Millennium regression; microUchuu, 25200
+  datasets).
+
+### Mimic L-Halo tree reader (new TreeType)
+
+- `TreeType mimic_lhalo_binary` reads the L-Halo binary trees written by
+  Mimic's tree converter (`src/io/read_tree_mimic_lhalo_binary.c`): the
+  classic L-Halo header followed by an 88-byte halo record that stores
+  `M_Crit200` in Msun/h and an already-specific `Spin`, and lacks
+  `M_Mean200`, `M_TopHat`, `SubhaloIndex` and `SubHalfMass`. Each record is
+  converted to `struct halo_data`, the mass scaled to 10^10 Msun/h and the
+  absent fields set to -1. Ported from the Mimic team's branch
+  `dev-mimic-lhalo-reader` on sage-home/SAGE26.
+- The `lhalo_binary` setup pass is shared through
+  `setup_forests_io_lht_binary_recsize()`, and both readers now refuse a file
+  whose size is not header plus one record per halo, or whose per-forest
+  halo counts are negative or do not sum to the header total.
+- `input/shin-uchuu/shin-uchuu.a_list` holds the 70 Shin-Uchuu snapshot
+  scale factors.
+- Output of the existing readers is unchanged (Millennium regression baseline
+  bit-identical).
+
 ## v0.95 -- 2026-11-21
 
 ### Merger gas joins the target's regime reservoir (changes output)
