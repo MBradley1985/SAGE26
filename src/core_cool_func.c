@@ -103,7 +103,8 @@ void read_cooling_functions(void)
  * get_rate -- linearly interpolate the cooling rate for metallicity table tab
  * at log-temperature logTemp.
  *
- * Clamps logTemp to [4.0, 8.5].  Returns log10(cooling rate) in CGS.
+ * Clamps logTemp below at 4.0; above the last table entry (8.5) the rate is
+ * extrapolated linearly from the last interval.  Returns log10(cooling rate) in CGS.
  */
 static double get_rate(int tab, double logTemp)
 {

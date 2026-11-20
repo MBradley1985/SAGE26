@@ -244,15 +244,15 @@ section below) and the unit actually written.
 | `TimeOfLastMajorMerger` | Myr | Code-time of the last major merger, converted to Myr. |
 | `TimeOfLastMinorMerger` | Myr | Code-time of the last minor merger, converted to Myr. |
 | `TimeOfLastQuasarBurst` | Myr / h | Lookback time to z=0 of the last quasar-mode accretion (`grow_black_hole`, from a merger or disk instability), at the midpoint of its substep. Negative if the galaxy has had none. Only the snapshot interval is physical: orphan mergers fire late in the interval because of the linear `Mvir` ramp, and instabilities fire at its start when `Vmax` or the disk radius changes, so the position within the interval is not a real burst time. |
-| `TimeOfInfall` | Myr | Code-time at which this galaxy became a satellite (zero for Type 0). |
+| `TimeOfInfall` | -- | Snapshot number at which this galaxy last became a satellite (zero for Type 0). |
 
 ### Two-regime cooling (CGM model)
 
 | Field | Units | Description |
 |-------|-------|-------------|
 | `Regime` | -- | CGM regime flag (see flag table above). |
-| `tcool` | Gyr | Meaning depends on regime. Regime 0: bulk cooling time of the Carr et al. (2023) `alpha = 1.4` CGM profile. Regime 1: the halo dynamical time `R_vir / V_vir`. |
-| `tff` | Gyr | Regime 0: halo free-fall time at the virial radius. Regime 1: set to **-1** as a sentinel -- the hot path has no CGM free-fall time. |
+| `tcool` | Gyr/h | Meaning depends on regime. Regime 0: bulk cooling time of the Carr et al. (2023) `alpha = 1.4` CGM profile. Regime 1: the halo dynamical time `R_vir / V_vir`. |
+| `tff` | Gyr/h | Regime 0: halo free-fall time at the virial radius. Regime 1: set to **-1** as a sentinel -- the hot path has no CGM free-fall time. |
 | `CoolingRate` | Msun / Gyr | Cooled gas rate, `coolingGas / dt`, including the active regime's final suppression. On the regime-aware path this is the sum of both reservoirs' contributions. |
 | `H2DepletionTime_Gyr` | Gyr | H2 depletion time from the K13 prescription. Set to -1 when not applicable. |
 | `RcoolToRvir` | dimensionless | Ratio of the cooling radius to the virial radius, from the hot-halo path only. **Uncapped**, so values > 1 occur and are physical (a corona cooling faster than it can be shock-heated). Set to **-1** when the cooling radius was never evaluated for this halo. |

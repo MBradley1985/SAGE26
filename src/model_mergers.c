@@ -480,8 +480,9 @@ void quasar_mode_wind(const int gal, const double BHaccrete, struct GALAXY *gala
  * add_galaxies_together -- merge all baryonic reservoirs of satellite p into
  * central t.
  *
- * Adds stellar mass, cold/hot/ejected gas, metals, ICS, H2, and CGM gas from p
- * to t, transferring satellite-owned data (SFH arrays, infall properties, ICS
+ * Adds stellar mass, cold/hot/ejected gas, metals, ICS, H2, H1, and CGM gas from p
+ * to t (with CGMrecipeOn 1 the hot and CGM gas both go to the reservoir of t's
+ * regime), transferring satellite-owned data (SFH arrays, infall properties, ICS
  * assembly history) to the central.
  */
 void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, const struct params *run_params)
@@ -494,9 +495,13 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
 
     galaxies[t].ColdGas += galaxies[p].ColdGas;
     galaxies[t].MetalsColdGas += galaxies[p].MetalsColdGas;
+    // The satellite's gas keeps its phases; the sums are fitted back into the merged hydrogen
+    galaxies[t].H2gas += galaxies[p].H2gas;
+    galaxies[t].H1gas += galaxies[p].H1gas;
+    if(sf_prescription_tracks_h2(run_params->SFprescription)) {
+        clamp_phases_to_hydrogen(&galaxies[t]);
+    }
     galaxies[t].ColdDust += galaxies[p].ColdDust;
-    galaxies[t].HotDust += galaxies[p].HotDust;
-    galaxies[t].CGMDust += galaxies[p].CGMDust;
     galaxies[t].EjectedDust += galaxies[p].EjectedDust;
     if(run_params->DustySAGEMode >= 1) {
         // The merged stars keep returning delayed yields: their history, and this substep's
@@ -509,8 +514,30 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[t].StellarMass += galaxies[p].StellarMass;
     galaxies[t].MetalsStellarMass += galaxies[p].MetalsStellarMass;
 
-    galaxies[t].HotGas += galaxies[p].HotGas;
-    galaxies[t].MetalsHotGas += galaxies[p].MetalsHotGas;
+    if(run_params->CGMrecipeOn == 1) {
+        /* The satellite's hot-phase gas, in HotGas or CGMgas, joins the reservoir
+         * of the target's regime, as in strip_from_satellite() and infall_recipe().
+         * CGMgas left on a hot-regime (Regime 1) target runs the secondary CGM
+         * recipe in cooling_recipe_regime_aware(), whose AGN step measures r_heat
+         * against rcool = Rvir: a trace reservoir is always out-heated, so r_heat
+         * jumps to Rvir and, as r_heat only moves outwards, the hot halo stops cooling for good. */
+        const int give_to_cgm = (galaxies[t].Regime == 0);
+        float *gas    = give_to_cgm ? &galaxies[t].CGMgas       : &galaxies[t].HotGas;
+        float *metals = give_to_cgm ? &galaxies[t].MetalsCGMgas : &galaxies[t].MetalsHotGas;
+        float *dust   = give_to_cgm ? &galaxies[t].CGMDust      : &galaxies[t].HotDust;
+
+        *gas    += galaxies[p].HotGas + galaxies[p].CGMgas;
+        *metals += galaxies[p].MetalsHotGas + galaxies[p].MetalsCGMgas;
+        *dust   += galaxies[p].HotDust + galaxies[p].CGMDust;
+    } else {
+        // Classical SAGE: all hot-phase gas is HotGas (CGMgas is zeroed in infall_recipe())
+        galaxies[t].HotGas += galaxies[p].HotGas;
+        galaxies[t].MetalsHotGas += galaxies[p].MetalsHotGas;
+        galaxies[t].HotDust += galaxies[p].HotDust;
+        galaxies[t].CGMgas += galaxies[p].CGMgas;
+        galaxies[t].MetalsCGMgas += galaxies[p].MetalsCGMgas;
+        galaxies[t].CGMDust += galaxies[p].CGMDust;
+    }
 
     galaxies[t].EjectedMass += galaxies[p].EjectedMass;
     galaxies[t].MetalsEjectedMass += galaxies[p].MetalsEjectedMass;
@@ -540,9 +567,6 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     galaxies[p].ICS_disrupt = galaxies[p].ICS_accrete = galaxies[p].ICS_sum_mt = 0.0;
 
     galaxies[t].BlackHoleMass += galaxies[p].BlackHoleMass;
-
-    galaxies[t].CGMgas += galaxies[p].CGMgas;
-    galaxies[t].MetalsCGMgas += galaxies[p].MetalsCGMgas;
 
     // add merger to bulge
     galaxies[t].BulgeMass += galaxies[p].StellarMass;

@@ -453,14 +453,12 @@ void test_temperature_cooling_regulation() {
 }
 
 // ============================================================================
-// TEST 12: r_heat Relaxes On The Local Cooling Time (RheatMode)
+// TEST 12: r_heat Only Moves Outwards
 // ============================================================================
-/* Code time is (Mpc/h)/(km/s), so Rvir / Vvir = 1e-3 below; the tests compare
- * against the closed-form profile cooling times, so round-off is the only
- * error (r_heat is a float). */
-static const double RHEAT_RELAX_TOL = 1e-5;
+/* r_heat is a float field; an untouched value comes back to round-off. */
+static const double RHEAT_RATCHET_TOL = 1e-5;
 
-static void setup_rheat_relax(struct GALAXY *gal, struct params *run_params)
+static void setup_rheat_ratchet(struct GALAXY *gal, struct params *run_params)
 {
     memset(gal, 0, sizeof(struct GALAXY));
     memset(run_params, 0, sizeof(struct params));
@@ -472,22 +470,21 @@ static void setup_rheat_relax(struct GALAXY *gal, struct params *run_params)
     gal->Vvir = 200.0;                /* km/s */
     gal->Rvir = 0.2;                  /* Mpc/h */
     gal->Mvir = 0.186;                /* Vvir^2 Rvir / G, 10^10 Msun/h */
+    gal->HotGas = 0.5;
+    gal->MetalsHotGas = 0.01;
 }
 
-void test_rheat_relax_hot() {
-    BEGIN_TEST("Hot Halo: r_heat Relaxes On t_cool(r_heat) = (Rvir/Vvir)(r_heat/rcool)^2");
+void test_rheat_ratchet_hot() {
+    BEGIN_TEST("Hot Halo: r_heat Never Moves Inwards");
     /*
-     * Asserts: with RheatMode 1, cooling_recipe_hot() shrinks r_heat by
-     *          exp(-dt / t_cool(r_heat)) before the suppression; with 0 it is
-     *          left alone (the Croton et al. 2016 ratchet).
+     * Asserts: cooling_recipe_hot() leaves r_heat alone when the AGN adds no
+     *          heating (Croton et al. 2016, Sec. 9.1.1: r_heat is a ratchet).
      *
      * Setup: a hot-halo galaxy with no black hole, so no heating can push
-     *        r_heat back out, and r_heat = rcool / 2.
+     *        r_heat out, and r_heat = rcool / 2.
      *
-     * Physical reason: SAGE's hot gas is isothermal, rho ~ r^-2, so the
-     *        cooling time scales as r^2 and equals Rvir / Vvir at rcool.
-     *        At r_heat = rcool / 2 that is t_dyn / 4 = 2.5e-4 here, and
-     *        dt = 1e-4 gives a decay factor exp(-0.4).
+     * Why: r_heat records the extent of past AGN heating and only grows; the
+     *        cooling it suppresses is (1 - r_heat / rcool) of the flow.
      */
     struct GALAXY gal[1];
     struct params run_params;
@@ -498,86 +495,16 @@ void test_rheat_relax_hot() {
     read_cooling_functions();
 
     // rcool of this halo (no AGN, so nothing else changes)
-    setup_rheat_relax(&gal[0], &run_params);
-    gal[0].HotGas = 0.5;
-    gal[0].MetalsHotGas = 0.01;
+    setup_rheat_ratchet(&gal[0], &run_params);
     run_params.AGNrecipeOn = 0;
     cooling_recipe_hot(0, dt, gal, &run_params);
     const double rcool = gal[0].RcoolToRvir * gal[0].Rvir;
     ASSERT_LESS_THAN(rcool, gal[0].Rvir, "Setup: quasi-static cooling, rcool < Rvir");
 
-    // Toggle off: r_heat untouched
-    setup_rheat_relax(&gal[0], &run_params);
-    gal[0].HotGas = 0.5;
-    gal[0].MetalsHotGas = 0.01;
+    setup_rheat_ratchet(&gal[0], &run_params);
     gal[0].r_heat = 0.5 * rcool;
     cooling_recipe_hot(0, dt, gal, &run_params);
-    ASSERT_CLOSE(0.5 * rcool, gal[0].r_heat, RHEAT_RELAX_TOL, "RheatMode 0: r_heat never moves inwards");
-
-    // Toggle on: one e-folding per local cooling time
-    setup_rheat_relax(&gal[0], &run_params);
-    gal[0].HotGas = 0.5;
-    gal[0].MetalsHotGas = 0.01;
-    gal[0].r_heat = 0.5 * rcool;
-    run_params.RheatMode = 1;
-    const double t_rheat = (gal[0].Rvir / gal[0].Vvir) * 0.25;
-    cooling_recipe_hot(0, dt, gal, &run_params);
-    ASSERT_CLOSE(0.5 * rcool * exp(-dt / t_rheat), gal[0].r_heat, RHEAT_RELAX_TOL,
-                 "RheatMode 1: r_heat shrinks by exp(-dt / t_cool(r_heat))");
-
-    // Mode 3 is Croton et al. (2016) as written: no relaxation
-    setup_rheat_relax(&gal[0], &run_params);
-    gal[0].HotGas = 0.5;
-    gal[0].MetalsHotGas = 0.01;
-    gal[0].r_heat = 0.5 * rcool;
-    run_params.RheatMode = 3;
-    cooling_recipe_hot(0, dt, gal, &run_params);
-    ASSERT_CLOSE(0.5 * rcool, gal[0].r_heat, RHEAT_RELAX_TOL, "RheatMode 3: r_heat never moves inwards");
-}
-
-void test_rheat_relax_cgm() {
-    BEGIN_TEST("CGM Regime: r_heat Relaxes On The alpha = 1.4 Profile's t_cool(r_heat)");
-    /*
-     * Asserts: with RheatMode 1, cooling_recipe_cgm() shrinks r_heat by
-     *          exp(-dt / t_cool(r_heat)) in a Regime 0 halo, and leaves it to
-     *          the hot path in a Regime 1 halo (one relaxation per substep).
-     *
-     * Setup: a CGM-regime galaxy with no black hole and r_heat = Rvir / 2.
-     *
-     * Physical reason: the Carr et al. (2023) CGM is rho = rho_0 (r/r_0)^-1.4
-     *        with r_0 = Rvir / 10.  The local cooling time scales as 1/rho,
-     *        and the stored bulk tcool is the one at rho_eff = rho_0 I_cool/I_M,
-     *        so t_cool(r) = tcool (I_cool / I_M) (r / r_0)^1.4.
-     */
-    struct GALAXY gal[1];
-    struct params run_params;
-    const double dt = 1.0e-4;
-    const double alpha = 1.4;
-    const double I_M = (pow(10.0, 3.0 - alpha) - 1.0) / (3.0 - alpha);
-    const double I_cool = (pow(10.0, 3.0 - 2.0 * alpha) - 1.0) / (3.0 - 2.0 * alpha);
-
-    setup_rheat_relax(&gal[0], &run_params);
-    gal[0].CGMgas = 0.5;
-    gal[0].MetalsCGMgas = 0.005;
-    gal[0].r_heat = 0.5 * gal[0].Rvir;
-    run_params.RheatMode = 1;
-    cooling_recipe_cgm(0, dt, gal, &run_params);
-    const double tcool = gal[0].tcool * SEC_PER_GIGAYEAR / run_params.UnitTime_in_s;
-    const double t_rheat = tcool * (I_cool / I_M) * pow(0.5 / 0.1, alpha);
-    ASSERT_CLOSE(0.5 * gal[0].Rvir * exp(-dt / t_rheat), gal[0].r_heat, RHEAT_RELAX_TOL,
-                 "Regime 0: r_heat shrinks by exp(-dt / t_cool(r_heat))");
-
-    // Regime 1 with hot gas: the hot path owns the relaxation, so none here
-    setup_rheat_relax(&gal[0], &run_params);
-    gal[0].Regime = 1;
-    gal[0].HotGas = 0.5;
-    gal[0].CGMgas = 0.5;
-    gal[0].MetalsCGMgas = 0.005;
-    gal[0].r_heat = 0.5 * gal[0].Rvir;
-    run_params.RheatMode = 1;
-    cooling_recipe_cgm(0, dt, gal, &run_params);
-    ASSERT_CLOSE(0.5 * gal[0].Rvir, gal[0].r_heat, RHEAT_RELAX_TOL,
-                 "Regime 1: no second relaxation in the CGM path");
+    ASSERT_CLOSE(0.5 * rcool, gal[0].r_heat, RHEAT_RATCHET_TOL, "r_heat never moves inwards");
 }
 
 // ============================================================================
@@ -601,8 +528,7 @@ int main(void) {
     test_regime_aware_cooling();
     test_cooling_time_scaling();
     test_temperature_cooling_regulation();
-    test_rheat_relax_hot();
-    test_rheat_relax_cgm();
+    test_rheat_ratchet_hot();
 
     PRINT_TEST_SUMMARY();
     

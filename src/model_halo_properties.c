@@ -283,7 +283,9 @@ double interpolate_concentration_ishiyama21(const double logM, const double z, c
  * Infer NFW concentration from V_max / V_vir via bisection.
  *
  * Inverts (Vmax/Vvir)^2 = 0.2162 * c / mu(c) where mu(c) = ln(1+c) - c/(1+c).
- * Returns 0 when either velocity is non-positive.
+ * Returns 0 when either velocity is non-positive or Vmax < Vvir.  The bisection
+ * bracket [1, 200] is not checked, so the result is clamped to it: 1 <= Vmax/Vvir
+ * < 1.058 returns c = 1, and Vmax/Vvir > 3.168 returns c = 200.
  */
 double concentration_from_vmax_vvir(const double Vmax, const double Vvir)
 {

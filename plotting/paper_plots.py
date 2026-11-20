@@ -61,7 +61,7 @@ FFB_BK25_FFB100_DIR = './output/millennium_mbk100/'
 FFB_NOSIGMOID_DIR = './output/millennium_nosigmoid/'
 # CGM_DYN_DIR = './output/millennium_cgmdyn/'
 # DISK_SMOOTH_DIR = './output/millennium_disk2/'
-MINIUCHUU_DIR = './output/microuchuu_DarkandDusty/'
+MINIUCHUU_DIR = './output/microuchuu/'
 MODEL_FILE = 'model_0.hdf5'
 OBS_DIR = './data/'
 
