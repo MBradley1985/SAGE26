@@ -167,6 +167,9 @@ run_test_if_exists 18 "DarkSAGEMode Annuli" "./test_build/test_darksage" \
 run_test_if_exists 19 "DustySAGEMode Dust" "./test_build/test_dust" \
     "Testing dust bookkeeping and conservation..." 17
 
+run_test_if_exists 20 "Mimic L-Halo Reader" "./test_build/test_mimic_lhalo_reader" \
+    "Testing the 88-byte record conversion and malformed-file rejection..." 97
+
 # Count total passes, fails, and skipped tests
 PASSED=0
 FAILED=0

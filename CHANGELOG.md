@@ -10,6 +10,25 @@ it says otherwise. See
 
 ## Unreleased
 
+### Mimic L-Halo tree reader (new TreeType)
+
+- `TreeType mimic_lhalo_binary` reads the L-Halo binary trees written by
+  Mimic's tree converter (`src/io/read_tree_mimic_lhalo_binary.c`): the
+  classic L-Halo header followed by an 88-byte halo record that stores
+  `M_Crit200` in Msun/h and an already-specific `Spin`, and lacks
+  `M_Mean200`, `M_TopHat`, `SubhaloIndex` and `SubHalfMass`. Each record is
+  converted to `struct halo_data`, the mass scaled to 10^10 Msun/h and the
+  absent fields set to -1. Ported from the Mimic team's branch
+  `dev-mimic-lhalo-reader` on sage-home/SAGE26.
+- The `lhalo_binary` setup pass is shared through
+  `setup_forests_io_lht_binary_recsize()`, and both readers now refuse a file
+  whose size is not header plus one record per halo, or whose per-forest
+  halo counts are negative or do not sum to the header total.
+- `input/shin-uchuu/shin-uchuu.a_list` holds the 70 Shin-Uchuu snapshot
+  scale factors.
+- Output of the existing readers is unchanged (Millennium regression baseline
+  bit-identical).
+
 ## v0.95 -- 2026-11-21
 
 ### Merger gas joins the target's regime reservoir (changes output)
