@@ -194,6 +194,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
 
     galaxies[p].mdot_cool = 0.0;
     galaxies[p].mdot_stream = 0.0;
+    galaxies[p].InfallRate = 0.0;
 
     galaxies[p].g_max = 0.0;
 

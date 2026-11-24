@@ -50,15 +50,18 @@ MILL_SNAPS = (63, 37, 32, 27)
 # Per simulation: run directories by StreamRheatFix, h, box (Mpc/h), line style
 SIMS = {
     'mill':  dict(name='mini-Millennium', h=0.73, box=62.5, ls='-',
-                  runs={0: './output/millennium_streamfix0', 1: './output/millennium_streamfix1'},
+                  runs={0: './output/millennium_streamfix0', 1: './output/millennium_streamfix1',
+                        2: './output/millennium_streamfix2'},
                   sfrd='./rheat_hotonly_plots/sfrd_history_streamfix{}.npz'),
     'uchuu': dict(name='microUchuu', h=0.6774, box=100.0, ls='--',
-                  runs={0: './output/microuchuu', 1: './output/microuchuu_streamfix1'},
+                  runs={0: './output/microuchuu', 1: './output/microuchuu_streamfix1',
+                        2: './output/microuchuu_streamfix2'},
                   sfrd='./rheat_hotonly_plots/sfrd_history_uchuu_streamfix{}.npz'),
 }
 OPTIONS = {
     0: ('0  v0.98: streams suppressed by r_heat', '#222222'),
     1: ('1  streams bypass the AGN step',         '#eb6834'),
+    2: ('2  as 1, streams <= f_stream x infall',  '#2a78d6'),
 }
 OBS_COLOR = '#8a8a86'
 
@@ -151,7 +154,10 @@ def main():
         snaps['uchuu'] = tuple(min(have, key=lambda i: abs(zu[i] - z)) for z in zslot)
         print('microUchuu snapshots', snaps['uchuu'], 'z =', [round(zu[i], 2) for i in snaps['uchuu']])
     data = {(k, i): load(k[0], k[1], snaps[k[0]][i]) for k in keys for i in range(4)}
-    diffs = [sim for sim in sims if (sim, 1) in keys]
+    diffs = [k for k in keys if k[1] > 0]
+    # SFR histories are cached, so a deleted run still has its line
+    sfrd_keys = [(sim, n) for sim in SIMS for n in OPTIONS
+                 if (sim, n) in keys or os.path.exists(SIMS[sim]['sfrd'].format(n))]
 
     fig, axes = plt.subplots(4, 4, figsize=(22, 21))
     smf_edges = np.arange(8.0, 12.01, 0.1)
@@ -248,8 +254,8 @@ def main():
         dz = np.median(np.diff(zc)) if len(zc) > 1 else 0.25
         sel = slice(None, None, max(1, int(round(0.25 / dz))) if dz > 0 else 1)
         ax.errorbar(zc[sel], s50[sel], yerr=[(s50 - s16)[sel], (s84 - s50)[sel]], fmt='s', label='COSMOS-Web', **obs_style)
-    sfrd = {k: sfrd_history(*k) for k in keys}
-    for k in keys:
+    sfrd = {k: sfrd_history(*k) for k in sfrd_keys}
+    for k in sfrd_keys:
         h = sfrd[k]
         ok = h['dens'] > 0
         line(ax, h['z'][ok], np.log10(h['dens'][ok]), k)
@@ -267,16 +273,18 @@ def main():
     # ---------------- Row 3: changes relative to RheatFix 0 ----------------
     for col, i in enumerate((0, 2)):
         ax = axes[2, col]
-        for sim in diffs:
+        banded = False
+        for sim, n in diffs:
             c0 = np.histogram(data[(sim, 0), i]['lms'], smf_edges)[0]
             ok0 = c0 >= MIN_COUNT
-            if sim == 'mill':
+            if sim == 'mill' and not banded:
+                banded = True
                 band = 0.434 * np.sqrt(2.0 / np.maximum(c0, 1))      # Poisson scatter of a ratio of two such counts
                 ax.fill_between(smf_x[ok0], -band[ok0], band[ok0], color=OBS_COLOR, alpha=0.25, lw=0,
                                 label='Poisson 1-sigma (mini-Millennium)')
-            c = np.histogram(data[(sim, 1), i]['lms'], smf_edges)[0]
+            c = np.histogram(data[(sim, n), i]['lms'], smf_edges)[0]
             ok = ok0 & (c >= MIN_COUNT)
-            line(ax, smf_x[ok], np.log10(c[ok] / c0[ok]), (sim, 1))
+            line(ax, smf_x[ok], np.log10(c[ok] / c0[ok]), (sim, n))
         s = 63 if i == 0 else 32
         ax.axhline(0, color='#222222', lw=1.2)
         ax.set(xlim=(8.5, 11.6), ylim=(-0.3, 0.3), title=f'SMF change vs v0.98, z = {zs[s]:.2f}',
@@ -284,27 +292,29 @@ def main():
         ax.legend(loc='lower left', fontsize=8, frameon=False)
 
     ax = axes[2, 2]
-    for sim in diffs:
+    banded = False
+    for sim, n in [k for k in sfrd_keys if k[1] > 0 and (k[0], 0) in sfrd]:
         h0 = sfrd[sim, 0]
         ok0 = (h0['dens'] > 0) & (h0['lo'] > 0)
-        if sim == 'mill':
+        if sim == 'mill' and not banded:
+            banded = True
             ax.fill_between(h0['z'][ok0], np.log10(h0['lo'][ok0] / h0['dens'][ok0]), np.log10(h0['hi'][ok0] / h0['dens'][ok0]),
                             color=OBS_COLOR, alpha=0.25, lw=0, label='bootstrap 16-84% (mini-Millennium)')
-        h = sfrd[sim, 1]
+        h = sfrd[sim, n]
         ok = ok0 & (h['dens'] > 0)
-        line(ax, h['z'][ok], np.log10(h['dens'][ok] / h0['dens'][ok]), (sim, 1))
+        line(ax, h['z'][ok], np.log10(h['dens'][ok] / h0['dens'][ok]), (sim, n))
     ax.axhline(0, color='#222222', lw=1.2)
     ax.set(xlim=(0.0, 7.5), ylim=(-0.3, 0.3), title='SFR density change vs v0.98',
            xlabel='Redshift', ylabel=r'$\Delta\log_{10}\rho_\mathrm{SFR}$')
     ax.legend(loc='lower left', fontsize=8, frameon=False)
 
     ax = axes[2, 3]
-    for sim in diffs:
+    for sim, n in diffs:
         a0 = d0[sim, 0]
         r0 = binned(a0['lmv'], a0['lms'], a0['cen'] & (a0['StellarMass'] > 0), mv_edges, np.median)
-        d = d0[sim, 1]
+        d = d0[sim, n]
         r = binned(d['lmv'], d['lms'], d['cen'] & (d['StellarMass'] > 0), mv_edges, np.median)
-        line(ax, centres(mv_edges), r - r0, (sim, 1))
+        line(ax, centres(mv_edges), r - r0, (sim, n))
     ax.axhline(0, color='#222222', lw=1.2)
     ax.axvline(np.log10(MSHOCK), color=OBS_COLOR, lw=0.8, ls='--')
     ax.set(xlim=(10.4, 14.0), ylim=(-0.3, 0.3), title='SHMR change vs v0.98, centrals, z = 0',

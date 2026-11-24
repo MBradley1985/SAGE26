@@ -146,7 +146,7 @@ double cooling_recipe(const int gal, const double dt, struct GALAXY *galaxies, c
 double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     double coolingGas;
-    double stream_cooling = 0.0;  /* StreamRheatFix 1: cold streams, kept out of the AGN step */
+    double stream_cooling = 0.0;  /* StreamRheatFix 1-2: cold streams, kept out of the AGN step */
 
     galaxies[gal].tcool = 0.0f;
 
@@ -294,6 +294,16 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 
             cold_stream_cooling = f_stream * galaxies[gal].HotGas / tcool * dt;
 
+            // StreamRheatFix 2: the streams are the cold part of the
+            // cosmological inflow (Dekel et al. 2009), so they carry at most
+            // f_stream of the halo's infall rate, not f_stream of the whole
+            // hot reservoir per dynamical time.  The gas held back stays in
+            // HotGas.
+            if(run_params->StreamRheatFix == 2) {
+                const double stream_cap = f_stream * galaxies[gal].InfallRate * dt;
+                if(cold_stream_cooling > stream_cap) cold_stream_cooling = stream_cap;
+            }
+
             hot_halo_cooling = (1.0 - f_stream) * (galaxies[gal].HotGas / galaxies[gal].Rvir) *
                                 (rcool / (2.0 * tcool)) * dt;
 
@@ -302,10 +312,10 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             
             coolingGas = cold_stream_cooling + hot_halo_cooling;
 
-            // StreamRheatFix 1: filaments that penetrate the hot atmosphere do
+            // StreamRheatFix 1-2: filaments that penetrate the hot atmosphere do
             // not feel its entropy floor r_heat, so only the cooling flow goes
             // through the AGN step (suppression, ratchet and heating cap).
-            if(run_params->StreamRheatFix == 1) {
+            if(run_params->StreamRheatFix >= 1) {
                 stream_cooling = (cold_stream_cooling < galaxies[gal].HotGas) ? cold_stream_cooling : galaxies[gal].HotGas;
                 galaxies[gal].mdot_stream = stream_cooling / dt;
                 coolingGas = hot_halo_cooling;

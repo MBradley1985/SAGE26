@@ -60,7 +60,7 @@ EnhancedStarFormationOn     1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 SaveFullSFH                 0   %0: switch off
 SaveFullMH                  0   %0: switch off; 1: also save stellar metal mass per SFH bin (needs SaveFullSFH = 1)
-StreamRheatFix              0   %hot-regime cold streams: 0 suppressed by r_heat with the cooling flow (v0.98); 1 bypass the AGN step
+StreamRheatFix              0   %hot-regime cold streams: 0 suppressed by r_heat with the cooling flow (v0.98); 1 bypass the AGN step; 2 as 1, streams limited to f_stream x infall rate
 UseM200c                    0   %halo mass for Consistent-Trees input: 0: trees' own mvir; 1: M200c, matching SAGE's 200 rho_crit Rvir (no effect on L-Halo trees)
 StarburstColdGasOn          1   %0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 

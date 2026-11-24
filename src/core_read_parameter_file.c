@@ -559,7 +559,7 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
             {"SaveFullMH",             run_params->SaveFullMH,             0, 1},
-            {"StreamRheatFix",         run_params->StreamRheatFix,         0, 1},
+            {"StreamRheatFix",         run_params->StreamRheatFix,         0, 2},
             {"UseM200c",               run_params->UseM200c,               0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"H2DepletionMode",        run_params->H2DepletionMode,        0, H2DEPLETIONMODE_MAX},

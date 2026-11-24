@@ -238,6 +238,7 @@ struct GALAXY
 
     float mdot_cool;    /* instantaneous CGM cooling rate onto the disk [10^10 Msun/h / code time] */
     float mdot_stream;  /* cold-stream inflow rate from CGMgas [10^10 Msun/h / code time] */
+    double InfallRate;  /* this snapshot's baryonic infall onto the central (>= 0) [10^10 Msun/h / code time]; 0 for satellites */
 
     double g_max; /* peak NFW gravitational acceleration for the BK25 FFB threshold, code units (UnitLength/UnitTime^2) */
 
@@ -570,7 +571,8 @@ struct params
     int32_t    SaveFullMH;                // 1 = additionally save the per-snapshot MHMetalsDisk/MHMetalsBulge
                                           // histories, the metal mass in the stars of the SFH bins (needs SaveFullSFH = 1)
     int32_t    StreamRheatFix;            // 0 (default): cold streams go through the AGN step with the cooling flow;
-                                          // 1: cold streams bypass r_heat suppression, the ratchet and the heating cap
+                                          // 1: cold streams bypass r_heat suppression, the ratchet and the heating cap;
+                                          // 2: as 1, with streams limited to f_stream x the halo's infall rate
     int32_t    UseM200c;                  // 0: Mvir is the tree's own halo mass (default); 1: the Consistent-Trees readers
                                           // take M200c instead of Rockstar's Bryan & Norman Mvir (other readers already give M200c)
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas

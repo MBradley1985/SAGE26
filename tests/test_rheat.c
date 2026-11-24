@@ -4,7 +4,8 @@
  * Validates: the CGM recipe (Regime 0) has no radio mode and neither reads
  * nor writes r_heat, so a halo whose r_heat reached Rvir still cools; the
  * hot-halo radio mode does not cap r_heat at Rvir; with StreamRheatFix 1 the
- * hot-regime cold streams bypass the AGN step.
+ * hot-regime cold streams bypass the AGN step, and with 2 they are limited to
+ * f_stream times the halo's infall rate.
  *
  * Run: from tests/, `make test_rheat && ./test_build/test_rheat`.
  *
@@ -139,8 +140,8 @@ void test_hot_rheat_no_rvir_cap(void)
 /* A hot-regime halo below Mshock at z = 3 (Mvir = 3 x 10^11 Msun/h), where
  * the Dekel & Birnboim (2006) criterion lets most of the inflow come in as
  * cold streams, through cooling_recipe_hot(). */
-static double stream_halo_cooling(const int stream_fix, const double r_heat_over_rvir, const double bh_mass,
-                                  struct GALAXY *gal)
+static double stream_halo_cooling_infall(const int stream_fix, const double r_heat_over_rvir, const double bh_mass,
+                                         const double infall_rate, struct GALAXY *gal)
 {
     struct params run_params;
     setup_params(&run_params);
@@ -155,7 +156,14 @@ static double stream_halo_cooling(const int stream_fix, const double r_heat_over
     gal->MetalsHotGas = 0.003;
     gal->BlackHoleMass = bh_mass;
     gal->r_heat = r_heat_over_rvir * gal->Rvir;
+    gal->InfallRate = infall_rate;
     return cooling_recipe_hot(0, STREAM_DT, gal, &run_params);
+}
+
+static double stream_halo_cooling(const int stream_fix, const double r_heat_over_rvir, const double bh_mass,
+                                  struct GALAXY *gal)
+{
+    return stream_halo_cooling_infall(stream_fix, r_heat_over_rvir, bh_mass, 0.0, gal);
 }
 
 /*
@@ -192,6 +200,35 @@ void test_streams_bypass_agn(void)
     ASSERT_CLOSE((float)0.001, gal.BlackHoleMass, 1e-15, "StreamRheatFix 1: no radio-mode growth from streams (float field)");
 }
 
+/*
+ * Asserts: with StreamRheatFix 2 the streams carry at most f_stream times the
+ *          halo's infall rate, none without infall, and still bypass r_heat.
+ *
+ * Setup: the stream_halo_cooling() halo with r_heat = 10 Rvir, so the
+ *        cooling flow is fully suppressed and only streams cool, with an
+ *        infall rate of 1% of HotGas / t_dyn and with none.
+ *
+ * Why: Dekel et al. (2009): the streams are the cold part of the
+ *        cosmological inflow, which caps them at the infall rate.
+ */
+void test_streams_limited_to_infall(void)
+{
+    BEGIN_TEST("StreamRheatFix 2: cold streams limited to the infall rate");
+
+    struct GALAXY gal;
+    stream_halo_cooling(1, 10.0, 0.001, &gal);
+    const double uncapped = gal.mdot_stream;
+    const double infall = 0.01 * uncapped;
+
+    const double capped = stream_halo_cooling_infall(2, 10.0, 0.001, infall, &gal);
+    ASSERT_LESS_THAN(capped, infall * STREAM_DT * (1.0 + RHEAT_UNCHANGED_TOL), "streams <= infall rate x dt");
+    ASSERT_GREATER_THAN(capped, 0.5 * infall * STREAM_DT, "streams ~ f_stream x infall rate x dt (f_stream ~ 1 here)");
+    ASSERT_CLOSE(10.0 * gal.Rvir, gal.r_heat, RHEAT_UNCHANGED_TOL * 10.0 * gal.Rvir, "r_heat unchanged");
+
+    const double none = stream_halo_cooling_infall(2, 10.0, 0.001, 0.0, &gal);
+    ASSERT_CLOSE(0.0, none, 1e-30, "no infall: no streams, and the suppressed flow gives no cooling");
+}
+
 int main(void)
 {
     BEGIN_TEST_SUITE("r_heat across the regimes");
@@ -201,6 +238,7 @@ int main(void)
     test_cgm_recipe_ignores_rheat();
     test_hot_rheat_no_rvir_cap();
     test_streams_bypass_agn();
+    test_streams_limited_to_infall();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

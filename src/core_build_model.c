@@ -435,6 +435,15 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
     // galaxy whose t_dyn sets the count below; galaxies[0] need not be the central.
     const double deltaT_total = galaxies[centralgal].dT;
 
+    /* The halo's baryonic infall rate, which limits the cold streams under
+     * StreamRheatFix 2 (Dekel et al. 2009: streams carry the inflow). */
+    for(int p = 0; p < ngal; p++) {
+        galaxies[p].InfallRate = 0.0;
+    }
+    if(infallingGas > 0.0 && deltaT_total > 0.0) {
+        galaxies[centralgal].InfallRate = infallingGas / deltaT_total;
+    }
+
     /* Both FFB criteria read only Mvir/Rvir and the halo's own random draw,
      * none of which infall_recipe() touches, so the position of this call
      * relative to it does not affect the classification. */
