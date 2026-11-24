@@ -3277,11 +3277,11 @@ def plot_7_tcool_tff_distribution(snapdata):
     print('Plot 7: t_cool/t_ff distribution')
 
     snap_info = [
-        (SNAP_Z0, f'z = {REDSHIFTS[SNAP_Z0]:.1f}'),
-        (SNAP_Z1, f'z = {REDSHIFTS[SNAP_Z1]:.1f}'),
-        (SNAP_Z2, f'z = {REDSHIFTS[SNAP_Z2]:.1f}'),
-        (SNAP_Z3, f'z = {REDSHIFTS[SNAP_Z3]:.1f}'),
-        (SNAP_Z4, f'z = {REDSHIFTS[SNAP_Z4]:.1f}'),
+        (SNAP_Z0, f'$z = {REDSHIFTS[SNAP_Z0]:.1f}$'),
+        (SNAP_Z1, f'$z = {REDSHIFTS[SNAP_Z1]:.1f}$'),
+        (SNAP_Z2, f'$z = {REDSHIFTS[SNAP_Z2]:.1f}$'),
+        (SNAP_Z3, f'$z = {REDSHIFTS[SNAP_Z3]:.1f}$'),
+        (SNAP_Z4, f'$z = {REDSHIFTS[SNAP_Z4]:.1f}$'),
     ]
     cmap_violin = plt.cm.plasma
     colors_violin = [cmap_violin(x) for x in np.linspace(0.0, 0.85, len(snap_info))]
@@ -5830,7 +5830,7 @@ def plot_13_ffb_vs_redshift(snapdata):
         f_theory = ffb_fraction(Mvir, actual_z, delta_log_M)
         M_thresh = ffb_threshold_mass_msun(actual_z)
         ax.plot(log_Mvir, f_theory, color=color, lw=2,
-                label=f'z = {actual_z:.2f}')
+                label=f'$z = {actual_z:.2f}$')
         ax.axvline(np.log10(M_thresh), color=color, ls=':', alpha=1.0, lw=1)
 
         # MBK25 theoretical curve (log-normal concentration scatter, sigma_c=0.2)
@@ -10556,7 +10556,7 @@ def plot_27_cold_gas_mass_ratio():
 _MDOT_Z_TARGETS = [0.0, 1.0, 2.0, 3.0, 4.0]
 
 _MDOT_SNAP_PANELS = [
-    (_snap_nearest_z(REDSHIFTS, z), f'z = {z:.0f}')
+    (_snap_nearest_z(REDSHIFTS, z), f'$z = {z:.0f}$')
     for z in _MDOT_Z_TARGETS
 ]
 
@@ -10946,7 +10946,7 @@ def print_mdot_stream_cool_stats():
     print("\n==== mdot_stream / mdot_cool statistics by halo mass ====")
     mass_bins = np.arange(10.0, 16.0, 0.2)
     snap_nums = [SNAP_Z0, SNAP_Z1, SNAP_Z2, SNAP_Z3, SNAP_Z4, SNAP_Z5, SNAP_Z10]
-    snap_labels = [f"z = {REDSHIFTS[s]:.1f}" for s in snap_nums]
+    snap_labels = [f"$z = {REDSHIFTS[s]:.1f}$" for s in snap_nums]
     snapdata = load_snapshots(PRIMARY_DIR, snap_nums, _MDOT_PROPS)
 
     for snap, zlabel in zip(snap_nums, snap_labels):

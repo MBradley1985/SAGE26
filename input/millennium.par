@@ -59,6 +59,7 @@ SaveFullSFH                 1   %0: switch off
 SaveFullMH                  1   %0: switch off; 1: also save stellar metal mass per SFH bin (needs SaveFullSFH = 1)
 DarkSAGEMode                0   %0: switch off; 1: SAGE26 bulk recipes shared over 30 radial annuli, SAGE26's DiskScaleRadius (output identical to SAGE26); 2: as 1, DiskScaleRadius from the annuli; 3: as 2, SF law evaluated per annulus
 DustySAGEMode               0   %0: switch off; 1: passive dust within SAGE26's metals; 2: Dusty-SAGE delayed yields and dust
+RheatFix                    2
 
 %------------------------------------------
 %----- SAGE model parameters --------------

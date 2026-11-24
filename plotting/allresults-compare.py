@@ -44,7 +44,7 @@ warnings.filterwarnings("ignore")
 # the automatic choice below for that model only.
 MODELS = [
     {'dir': 'output/millennium/',          'label': 'SAGE26 Millennium'},
-    {'dir': 'output/millennium_vanilla/',  'label': 'SAGE26 vanilla'},
+    # {'dir': 'output/millennium_vanilla/',  'label': 'SAGE26 vanilla'},
     {'dir': 'output/microuchuu/',           'label': 'SAGE26 microUchuu'},
 ]
 
