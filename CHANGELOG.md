@@ -8,7 +8,30 @@ below reproduces the committed regression baseline dataset-for-dataset unless
 it says otherwise. See
 [docs/developer/REGRESSION_BASELINE.md](docs/developer/REGRESSION_BASELINE.md).
 
-## Unreleased
+## v0.98 -- 2026-11-24
+
+### No radio mode in the CGM regime; no Rvir cap on r_heat (changes output)
+
+- With `CGMrecipeOn 1`, `cooling_recipe_cgm()` no longer runs the radio
+  mode: it neither reads nor writes `r_heat`, the entropy floor of a hot
+  atmosphere, which a CGM-regime (Regime 0) halo lacks. `r_heat` keeps its
+  last hot-regime value. The recipe used to run the `r_heat` ratchet against
+  `rcool` pinned at `Rvir`; a reservoir-capped heating that passes a quarter
+  of the cooling sends `r_heat` to `Rvir`, and since `r_heat` only moves
+  outwards the halo stopped cooling for good. On Millennium at z = 0 that
+  locked out 5/23/47/70% of Regime 0 centrals at `Mvir` = 10^10.5/11/11.5/
+  11.75 Msun, about half of the quenched centrals at M* = 10^8.5-10.5.
+- The hot-regime cap of `r_heat` at `Rvir` is gone, so the hot regime is
+  SAGE16's radio mode. The cap came with the `rcool <= Rvir` cap of 2026-07,
+  which was removed in 2026-09.
+- On mini-Millennium at z = 0 the quiescent fraction at M* = 10^9.5 falls
+  from 0.24 to 0.08, the number of galaxies above M* = 10^10.5 rises by 20%
+  and the stellar mass density by 20%, the SMF knee moves towards Baldry et
+  al. (2008), and the cosmic SFR density rises by 0.15 dex at z = 0, fading
+  to no change by z ~ 5. The excess over the observed SMF at z = 1.4-3
+  grows. The model has not been recalibrated.
+- The experimental `RheatFix` parameter (branch `exp-rheat-hot-only`) is not
+  kept; this is its option 2. Output is bit-identical to it.
 
 ### UseM200c parameter (new toggle, default off)
 

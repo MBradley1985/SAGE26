@@ -225,7 +225,7 @@ section below) and the unit actually written.
 | `Cooling` | log10(erg / s) | log10 of cooling energy rate. Stored as 0.0 when no cooling occurred (i.e. zero, not "1 erg/s"). |
 | `Heating` | log10(erg / s) | log10 of AGN radio-mode heating energy rate. Stored as 0.0 when no heating occurred. |
 | `QuasarModeBHaccretionMass` | 1.0e10 Msun / h | Mass accreted by the black hole since the previous snapshot (over `dT`) in quasar mode (mergers and disk instabilities). Not Eddington-limited. |
-| `RadioModeBHaccretionMass` | 1.0e10 Msun / h | Mass accreted by the black hole since the previous snapshot (over `dT`) in radio mode, from the hot halo or CGM. `Heating` = 0.1 c^2 x this mass / `dT`. |
+| `RadioModeBHaccretionMass` | 1.0e10 Msun / h | Mass accreted by the black hole since the previous snapshot (over `dT`) in radio mode, from the hot halo (Regime 1 only). `Heating` = 0.1 c^2 x this mass / `dT`. |
 | `RadioModeBHaccretionMassUncapped` | 1.0e10 Msun / h | Diagnostic, not used by the model: the radio-mode accretion over `dT` before the cap that limits the heating to the cooling (the recipe's rate x `RadioModeEfficiency`, Eddington- and reservoir-limited). For a jet power, 0.1 c^2 x this mass / `dT`. Equal to `RadioModeBHaccretionMass` when the cap does not bind. |
 
 ### Sizes
@@ -258,7 +258,7 @@ section below) and the unit actually written.
 | `RcoolToRvir` | dimensionless | Ratio of the cooling radius to the virial radius, from the hot-halo path only. **Uncapped**, so values > 1 occur and are physical (a corona cooling faster than it can be shock-heated). Set to **-1** when the cooling radius was never evaluated for this halo. |
 | `mdot_cool` | Msun / yr | Quasi-static hot-halo cooling rate, `(1 - f_stream)` share of the flow out of `HotGas`. Hot-regime path only. |
 | `mdot_stream` | Msun / yr | Dekel & Birnboim cold-stream accretion rate, `f_stream` share of the flow out of **`HotGas`** -- a hot-regime quantity, not a CGM one. Zero for Regime 0 galaxies. |
-| `r_heat` | Mpc / h | AGN heating radius; the monotonic ratchet that suppresses cooling by `(1 - r_heat / r_cool)`. Capped at `R_vir` on the CGM path only. |
+| `r_heat` | Mpc / h | AGN heating radius; the monotonic ratchet that suppresses cooling by `(1 - r_heat / r_cool)`. Set by the hot-halo (Regime 1) radio mode only; it keeps its last value while a halo is in Regime 0. |
 
 A halo that has drained its `CGMgas` has `tcool`, `tff` and `RcoolToRvir`
 cleared rather than left holding the last values it computed, so selecting on

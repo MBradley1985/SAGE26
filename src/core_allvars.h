@@ -205,7 +205,7 @@ struct GALAXY
     float MergTime;        /* dynamical-friction merger clock; counts down to 0 [code time units]; >999 = unset */
     double Cooling;        /* total cooling luminosity this snapshot [code energy / code time] */
     double Heating;        /* total AGN heating luminosity this snapshot [code energy / code time] */
-    float r_heat;          /* AGN radio-mode heating radius [Mpc/h]; suppresses cooling gas at r < r_heat. Only moves outwards (ratchet), capped at Rvir in the CGM regime. */
+    float r_heat;          /* AGN radio-mode heating radius [Mpc/h]; suppresses cooling gas at r < r_heat. Only moves outwards (ratchet); set by the hot-halo radio mode only. */
     float QuasarModeBHaccretionMass; /* BH mass accreted in quasar mode this snapshot [10^10 Msun/h] */
     float RadioModeBHaccretionMass;  /* BH mass accreted in radio mode this snapshot [10^10 Msun/h] */
     float RadioModeBHaccretionMassUncapped; /* diagnostic: radio-mode accretion before the cooling cap this snapshot [10^10 Msun/h] */

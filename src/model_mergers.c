@@ -517,10 +517,9 @@ void add_galaxies_together(const int t, const int p, struct GALAXY *galaxies, co
     if(run_params->CGMrecipeOn == 1) {
         /* The satellite's hot-phase gas, in HotGas or CGMgas, joins the reservoir
          * of the target's regime, as in strip_from_satellite() and infall_recipe().
-         * CGMgas left on a hot-regime (Regime 1) target runs the secondary CGM
-         * recipe in cooling_recipe_regime_aware(), whose AGN step measures r_heat
-         * against rcool = Rvir: a trace reservoir is always out-heated, so r_heat
-         * jumps to Rvir and, as r_heat only moves outwards, the hot halo stops cooling for good. */
+         * CGMgas left on a hot-regime (Regime 1) target would cool through the
+         * secondary CGM recipe in cooling_recipe_regime_aware() alongside the
+         * hot halo. */
         const int give_to_cgm = (galaxies[t].Regime == 0);
         float *gas    = give_to_cgm ? &galaxies[t].CGMgas       : &galaxies[t].HotGas;
         float *metals = give_to_cgm ? &galaxies[t].MetalsCGMgas : &galaxies[t].MetalsHotGas;

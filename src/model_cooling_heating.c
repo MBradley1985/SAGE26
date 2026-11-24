@@ -123,9 +123,6 @@ static double suppress_cooling(const double coolingGas, const double r_heat, con
     return 0.0;
 }
 
-/* File-private: AGN radio-mode heating for CGM-regime galaxies (defined below). */
-static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
-                                 struct GALAXY *galaxies, const struct params *run_params);
 
 
 
@@ -377,10 +374,6 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
             galaxies[gal].tcool = (float)(tcool * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR);
             galaxies[gal].tff = (float)(tff * run_params->UnitTime_in_s / SEC_PER_GIGAYEAR);
             
-            // Pin rcool to Rvir since we are evaluating bulk accretion
-            double rcool = galaxies[gal].Rvir;
-            // galaxies[gal].RcoolToRvir = 1.0;
-
             // 5. Carr et al. Bulk Cooling Formula
             coolingGas = (galaxies[gal].CGMgas / (tcool + tff)) * dt;
 
@@ -390,10 +383,11 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
                 coolingGas = 0.0;
             }
 
-            if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
-                coolingGas = do_AGN_heating_cgm(coolingGas, gal, dt, x, rcool, galaxies, run_params);
-            }
-
+            // No radio mode here: r_heat is the entropy floor of a hot
+            // atmosphere, which a CGM-regime halo lacks, so this recipe neither
+            // reads nor writes it.  Measured against rcool = Rvir, the ratchet
+            // reached Rvir in any halo whose heating passed a quarter of its
+            // cooling and stopped it cooling for good (v0.95).
             if (coolingGas > 0.0) {
                 galaxies[gal].Cooling += 0.5 * coolingGas * galaxies[gal].Vvir * galaxies[gal].Vvir;
             }
@@ -647,9 +641,7 @@ double cooling_recipe_regime_aware(const int gal, const double dt, struct GALAXY
         }
     }
 
-    // Apply CGM cooling. Clamp to available CGMgas after AGN heating (which
-    // runs inside cooling_recipe_cgm for Regime==0 and can drain CGMgas
-    // between the internal cap and this apply).
+    // Apply CGM cooling, clamped to the available CGMgas.
     if(cgm_cooling > 0.0) {
         if(cgm_cooling > galaxies[gal].CGMgas) {
             cgm_cooling = galaxies[gal].CGMgas;
@@ -812,66 +804,6 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
                 * galaxies[centralgal].Vvir * galaxies[centralgal].Vvir;
     }
 
-    if(run_params->CGMrecipeOn > 0 && galaxies[centralgal].r_heat > galaxies[centralgal].Rvir)
-        galaxies[centralgal].r_heat = galaxies[centralgal].Rvir;
-
-    return coolingGas;
-}
-
-/*
- * AGN radio-mode heating for CGM-dominated (Regime==0) galaxies.
- *
- * Applies the same r_heat/rcool suppression and ratchet as the hot-halo
- * path, then caps r_heat at Rvir. Accretion draws from CGMgas.
- */
-static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
-                                 struct GALAXY *galaxies, const struct params *run_params)
-{
-    coolingGas = suppress_cooling(coolingGas, galaxies[centralgal].r_heat, rcool, run_params);
-
-    XASSERT(coolingGas >= 0.0, -1,
-            "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
-
-    if(galaxies[centralgal].CGMgas > 0.0) {
-        double AGNaccreted, AGNheating, AGNuncapped;
-        agn_accretion_compute(centralgal, dt, x, coolingGas, rcool,
-                              galaxies[centralgal].CGMgas, galaxies, run_params,
-                              &AGNaccreted, &AGNheating, &AGNuncapped);
-        const double metallicity = get_metallicity(galaxies[centralgal].CGMgas, galaxies[centralgal].MetalsCGMgas);
-        galaxies[centralgal].BlackHoleMass  += AGNaccreted;
-        galaxies[centralgal].RadioModeBHaccretionMass += AGNaccreted;
-        galaxies[centralgal].RadioModeBHaccretionMassUncapped += AGNuncapped;
-        dust_move(&galaxies[centralgal].CGMDust, galaxies[centralgal].CGMgas, AGNaccreted, NULL);
-        galaxies[centralgal].CGMgas         -= AGNaccreted;
-        galaxies[centralgal].MetalsCGMgas   -= metallicity * AGNaccreted;
-
-        /* A Regime 1 halo with hot gas has already set r_heat against the hot
-         * halo's rcool in do_AGN_heating().  Here rcool = Rvir and the CGM
-         * cooling scales as CGMgas^2 against a reservoir-capped heating that
-         * scales as CGMgas, so a leftover trace of CGM would always push r_heat
-         * to Rvir and stop the hot halo cooling for good (r_heat only moves out). */
-        const int sets_rheat = (galaxies[centralgal].Regime == 0 || galaxies[centralgal].HotGas <= 0.0);
-        if(sets_rheat && galaxies[centralgal].r_heat < rcool && coolingGas > 0.0) {
-            const double r_heat_new = (AGNheating / coolingGas) * rcool;
-            if(r_heat_new > galaxies[centralgal].r_heat)
-                galaxies[centralgal].r_heat = r_heat_new;
-        }
-        if(galaxies[centralgal].r_heat > galaxies[centralgal].Rvir)
-            galaxies[centralgal].r_heat = galaxies[centralgal].Rvir;
-
-        if(AGNheating > 0.0)
-            galaxies[centralgal].Heating += 0.5 * AGNheating * galaxies[centralgal].Vvir * galaxies[centralgal].Vvir;
-
-        /* The BH accretion above drew AGNaccreted out of CGMgas, but any
-         * earlier clamp of coolingGas used the pre-accretion reservoir.
-         * Re-cap so the caller cannot overdraw the CGM by up to AGNaccreted
-         * (manifested as an XASSERT abort when cooling was reservoir-limited
-         * and Bondi accretion nonzero in the same call, e.g. with
-         * CGMDensityProfile = 1). */
-        if(coolingGas > galaxies[centralgal].CGMgas) {
-            coolingGas = galaxies[centralgal].CGMgas;
-        }
-    }
     return coolingGas;
 }
 
