@@ -205,7 +205,7 @@ struct GALAXY
     float MergTime;        /* dynamical-friction merger clock; counts down to 0 [code time units]; >999 = unset */
     double Cooling;        /* total cooling luminosity this snapshot [code energy / code time] */
     double Heating;        /* total AGN heating luminosity this snapshot [code energy / code time] */
-    float r_heat;          /* AGN radio-mode heating radius [Mpc/h]; suppresses cooling gas at r < r_heat. Only moves outwards (ratchet), capped at Rvir in the CGM regime. */
+    float r_heat;          /* AGN radio-mode heating radius [Mpc/h]; suppresses cooling gas at r < r_heat. Only moves outwards (ratchet); set by the hot-halo radio mode only. */
     float QuasarModeBHaccretionMass; /* BH mass accreted in quasar mode this snapshot [10^10 Msun/h] */
     float RadioModeBHaccretionMass;  /* BH mass accreted in radio mode this snapshot [10^10 Msun/h] */
     float RadioModeBHaccretionMassUncapped; /* diagnostic: radio-mode accretion before the cooling cap this snapshot [10^10 Msun/h] */
@@ -514,20 +514,6 @@ struct save_info {
  *   1  nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9;
  *   5  DarkSage eps_H2 (Stevens+24 eq. 63) */
 #define H2DEPLETIONMODE_MAX 5
-
-/* RheatFix (see docs/parameters.md): how the AGN heating radius r_heat is
- * treated in the CGM regime (Regime 0).  0 off (r_heat ratchets against
- * rcool = Rvir, as v0.95).  1 hot-only: the CGM recipe neither reads nor
- * writes r_heat and has no radio mode; 2 (favoured) as 1 without the
- * hot-regime Rvir cap, so the hot regime is SAGE16's radio mode.  3 memoryless radio mode in Regime 0.  4 a moving CGM cooling radius
- * in place of Rvir, with no Rvir caps. */
-#define RHEATFIX_OFF            0
-#define RHEATFIX_HOT_ONLY       1
-#define RHEATFIX_HOT_ONLY_NOCAP 2
-#define RHEATFIX_MEMORYLESS     3
-#define RHEATFIX_CGM_RCOOL      4
-#define RHEATFIX_MAX            4
-#define RHEATFIX_HOT_ONLY_MODE(p) ((p)->RheatFix == RHEATFIX_HOT_ONLY || (p)->RheatFix == RHEATFIX_HOT_ONLY_NOCAP)
 #define FG_TDEP(p)         ((p)->H2DepletionMode > 0)
 
 struct params
@@ -585,7 +571,6 @@ struct params
                                           // histories, the metal mass in the stars of the SFH bins (needs SaveFullSFH = 1)
     int32_t    UseM200c;                  // 0: Mvir is the tree's own halo mass (default); 1: the Consistent-Trees readers
                                           // take M200c instead of Rockstar's Bryan & Norman Mvir (other readers already give M200c)
-    int32_t    RheatFix;                  // 0 off (default); r_heat in the CGM regime, RHEATFIX_* above
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
     int32_t    H2DepletionMode;           // 0 off (default); SFR = M_mol / t_dep with 1 nu_SF = 1/Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9; 5 DarkSage
 

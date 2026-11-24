@@ -409,26 +409,24 @@ static void setup_trace_cgm_halo(struct GALAXY *gal, const int regime)
 }
 
 /*
- * Asserts: the CGM recipe leaves r_heat alone in a hot-regime (Regime 1)
- *          halo that holds hot gas, and still sets it in a CGM-regime halo.
+ * Asserts: the CGM recipe leaves r_heat alone in either regime, also for
+ *          an out-heated trace of CGM.
  *
  * Setup: the same halo with a trace of CGM gas (10^2 Msun/h), once as
  *        Regime 1 with hot gas and once as Regime 0, through
  *        cooling_recipe_cgm() with Bondi radio mode.
  *
- * Why: r_heat belongs to the hot halo in Regime 1; do_AGN_heating() sets
- *        it against the hot halo's rcool.  The CGM recipe measures r_heat
- *        against rcool = Rvir, and its cooling scales as CGMgas^2 (t_cool ~
- *        1/rho) while the reservoir-capped heating scales as CGMgas, so a
- *        trace reservoir is always out-heated and would push r_heat to Rvir,
- *        stopping the hot halo's cooling for good.  In Regime 0 the
- *        CGM is the halo's own reservoir and the out-heated trace does set
- *        r_heat = Rvir, which is the control.
+ * Why: r_heat belongs to the hot halo; only do_AGN_heating() sets it.  Up
+ *        to v0.95 the CGM recipe measured r_heat against rcool = Rvir, and
+ *        as its cooling scales as CGMgas^2 (t_cool ~ 1/rho) while the
+ *        reservoir-capped heating scales as CGMgas, a trace reservoir was
+ *        always out-heated and pushed r_heat to Rvir, stopping the halo's
+ *        cooling for good.
  *
  * Tolerance: RHEAT_UNCHANGED_TOL, float round-off.
  */
-void test_cgm_recipe_leaves_hot_halo_rheat() {
-    BEGIN_TEST("Trace CGM in a hot-regime halo does not move r_heat");
+void test_cgm_recipe_leaves_rheat() {
+    BEGIN_TEST("Trace CGM does not move r_heat in either regime");
 
     // Real Sutherland & Dopita (1993) tables; loaded once, here, since no other
     // test in this file uses them and a second call would shift the metallicity grid
@@ -448,8 +446,8 @@ void test_cgm_recipe_leaves_hot_halo_rheat() {
     struct GALAXY cgm;
     setup_trace_cgm_halo(&cgm, 0);
     cooling_recipe_cgm(0, dt, &cgm, &run_params);
-    ASSERT_CLOSE(cgm.Rvir, cgm.r_heat, RHEAT_UNCHANGED_TOL,
-                 "Regime 0: the out-heated trace sets r_heat = Rvir");
+    ASSERT_CLOSE(rheat_before, cgm.r_heat, RHEAT_UNCHANGED_TOL,
+                 "Regime 0: r_heat unchanged by the CGM recipe");
 }
 
 int main() {
@@ -461,7 +459,7 @@ int main() {
     test_gas_routing_to_correct_reservoir();
     test_regime_transition();
     test_cold_stream_fraction();
-    test_cgm_recipe_leaves_hot_halo_rheat();
+    test_cgm_recipe_leaves_rheat();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

@@ -54,7 +54,7 @@ MIMIC_READER_SOURCES = \
 TEST_SOURCES = \
 	test_conservation.c \
 	test_regime_cgm.c \
-	test_rheat_fix.c \
+	test_rheat.c \
 	test_bulge_sizes.c \
 	test_physics_validation.c \
 	test_mergers.c \
@@ -249,8 +249,8 @@ test_conservation: $(OUTPUT_DIR)/test_conservation
 test_regime: $(OUTPUT_DIR)/test_regime_cgm
 	$(OUTPUT_DIR)/test_regime_cgm
 
-test_rheat_fix: $(OUTPUT_DIR)/test_rheat_fix
-	$(OUTPUT_DIR)/test_rheat_fix
+test_rheat: $(OUTPUT_DIR)/test_rheat
+	$(OUTPUT_DIR)/test_rheat
 
 test_bulge: $(OUTPUT_DIR)/test_bulge_sizes
 	$(OUTPUT_DIR)/test_bulge_sizes
@@ -304,4 +304,4 @@ help:
 	@echo "  run_integration_tests.sh - Full integration tests"
 	@echo ""
 
-.PHONY: all test quick clean help test_conservation test_regime test_rheat_fix test_bulge test_physics test_mimic_lhalo_reader
+.PHONY: all test quick clean help test_conservation test_regime test_rheat test_bulge test_physics test_mimic_lhalo_reader

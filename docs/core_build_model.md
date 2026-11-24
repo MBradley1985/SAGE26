@@ -101,7 +101,7 @@ classical Croton+06). The classification is a stochastic sigmoid in
 | Infall destination | `CGMgas` | `HotGas` |
 | Cooling recipe | `cooling_recipe_cgm()` (primary) | `cooling_recipe_hot()` (primary) + `cooling_recipe_cgm()` for any residual `CGMgas` |
 | Density profile | power law, `alpha = 1.4`, `r_0 = 0.1 R_vir` (Carr+23) | singular isothermal |
-| AGN suppression mechanism | `r_heat` ratchet capped at R_vir | `r_heat` ratchet (no R_vir cap) |
+| AGN suppression mechanism | none (no radio mode; `r_heat` untouched) | `r_heat` ratchet (no R_vir cap) |
 | Cooling criterion | bulk `CGMgas / (t_cool + t_ff)` (Carr+23) | isothermal `r_cool` from Sutherland-Dopita cooling time, split by the DB06 cold-stream fraction |
 
 When `CGMrecipeOn = 0`, `determine_and_store_regime()` still runs but
