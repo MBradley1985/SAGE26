@@ -15,6 +15,7 @@
 #include "test_framework.h"
 #include "../src/core_allvars.h"
 #include "../src/model_misc.h"
+#include "../src/model_regimes.h"
 
 /* ──────────────────────────────────────────────────────────────────
  *  Helper: set up run_params with Millennium cosmology + code units
@@ -830,6 +831,54 @@ void test_ffb_mode2_scatter_width_is_a_parameter()
     ASSERT_GREATER_THAN(spread[2], spread[1], "A wider scatter spreads g_max further");
 }
 
+/*
+ * Asserts: with FFBDrawFixed 1 a halo held at the Li+24 threshold (f_ffb =
+ *          0.5) keeps its FFB state, and a BK25 halo keeps its scattered
+ *          concentration (g_max) over 40 snapshots; with 0 both change.
+ *
+ * Setup: one galaxy created by set_fixed_regime_draws() at z = 10, Mvir at
+ *        the Li+24 threshold mass, reclassified at snapshots 20-59 with a
+ *        new MostBoundID each snapshot.
+ *
+ * Why: Li et al. (2024) eq. 3 gives the FFB fraction of the population; a
+ *        per-snapshot draw also moves a single halo in and out of FFB at
+ *        constant mass, and redraws a BK25 halo's concentration every
+ *        snapshot.
+ */
+void test_ffb_fixed_draw_holds()
+{
+    BEGIN_TEST("FFBDrawFixed: a halo at threshold keeps its FFB state and concentration");
+
+    const double z = 10.0;
+    for(int mode = 1; mode <= 2; mode++) {
+        for(int fixed = 0; fixed <= 1; fixed++) {
+            struct params rp;
+            init_millennium_params(&rp);
+            rp.EnhancedStarFormationOn = mode;
+            rp.FFBDrawFixed = fixed;
+            struct GALAXY gal;
+            memset(&gal, 0, sizeof(gal));
+            set_fixed_regime_draws(&gal, 31337, 5);
+            gal.Mvir = calculate_ffb_threshold_mass(z, &rp);
+            gal.Rvir = 0.015;
+            int changes = 0, last = -1;
+            double g_first = -1.0, g_spread = 0.0;
+            for(int s = 20; s < 60; s++) {
+                gal.MostBoundID = 7919LL * s + 13;
+                determine_and_store_ffb_regime(1, z, s, &gal, &rp);
+                if(last >= 0) changes += (gal.FFBRegime != last);
+                last = gal.FFBRegime;
+                if(g_first < 0.0) g_first = gal.g_max;
+                g_spread = fmax(g_spread, fabs(gal.g_max - g_first));
+            }
+            if(mode == 1 && fixed) ASSERT_EQUAL_INT(0, changes, "Li+24, fixed draw: no FFB changes at constant mass");
+            if(mode == 1 && !fixed) ASSERT_GREATER_THAN(changes, 0, "Li+24, per-snapshot draw: FFB changes at constant mass");
+            if(mode == 2 && fixed) ASSERT_CLOSE(0.0, g_spread, 1e-30, "BK25, fixed draw: g_max constant");
+            if(mode == 2 && !fixed) ASSERT_GREATER_THAN(g_spread, 0.0, "BK25, per-snapshot draw: g_max redrawn");
+        }
+    }
+}
+
 int main()
 {
     BEGIN_TEST_SUITE("FFB & Concentration");
@@ -871,6 +920,7 @@ int main()
     test_ffb_mode2_gmax_brackets_table_concentration();
     test_ffb_mode2_scatter_width_is_a_parameter();
     test_ffb_mode2_deterministic();
+    test_ffb_fixed_draw_holds();
     test_ffb_li24_and_bk25_select_the_same_haloes();
 
     END_TEST_SUITE();

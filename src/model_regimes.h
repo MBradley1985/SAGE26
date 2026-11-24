@@ -22,6 +22,7 @@ extern "C" {
                                             const int snapnum,
                                             struct GALAXY *galaxies,
                                             const struct params *run_params);
+    extern void set_fixed_regime_draws(struct GALAXY *g, const long long most_bound_id, const int snapnum);
     extern double calculate_ffb_threshold_mass(const double z, const struct params *run_params);
     extern double calculate_ffb_fraction(const double Mvir, const double z, const struct params *run_params);
 

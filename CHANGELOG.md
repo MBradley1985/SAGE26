@@ -8,6 +8,24 @@ below reproduces the committed regression baseline dataset-for-dataset unless
 it says otherwise. See
 [docs/developer/REGRESSION_BASELINE.md](docs/developer/REGRESSION_BASELINE.md).
 
+## Unreleased
+
+### `RegimeDrawFixed`, `FFBDrawFixed`: one regime draw per galaxy (default off, bit-identical)
+
+- The CGM/hot and FFB classifications compare a uniform draw with a sigmoid
+  in halo mass. The draw is fresh every snapshot, so a central near
+  `MShockMsun` changes regime at a rate 2P(1-P) per snapshot (up to 47% of
+  snapshot steps on mini-Millennium), whatever its mass does, and moves
+  0.2-0.6 of its f_b Mvir between `HotGas` and `CGMgas` each time.
+  `RegimeRandomMode 1`, a draw kept per galaxy, was removed in 065e848
+  (2026-09-29) as never varied.
+- With `RegimeDrawFixed 1` / `FFBDrawFixed 1` a galaxy keeps one draw from
+  creation (`set_fixed_regime_draws()`, hashed from the creating halo's
+  `MostBoundID` and snapshot): each halo gets its own threshold mass (and
+  BK25 concentration quantile), the population fraction is the same sigmoid,
+  and the halo is re-tested every snapshot.
+- The defaults reproduce the regression baseline.
+
 ## v0.98 -- 2026-11-24
 
 ### No radio mode in the CGM regime; no Rvir cap on r_heat (changes output)
