@@ -115,24 +115,13 @@ static const double AGN_COLD_CLOUD_FRAC = 1.0e-4;
  * (1 - r_heat / rcool) of the cooling, zero once r_heat >= rcool.  With
  * CGMrecipeOn 1 it is also zero once r_heat >= 0.99 rcool, avoiding a
  * vanishing residual flow that never quite quenches.
- *
- * mass_slope is the slope of M(<r) in the assumed gas profile: 1 for the
- * isothermal sphere of eq. 20, so the heated fraction is r_heat / rcool;
- * 1.6 for the CGM alpha = 1.4 profile under RheatFix 7.
  */
-static double suppress_cooling(const double coolingGas, const double r_heat, const double rcool,
-                               const double mass_slope, const struct params *run_params)
+static double suppress_cooling(const double coolingGas, const double r_heat, const double rcool, const struct params *run_params)
 {
-    if(r_heat < rcool && !(run_params->CGMrecipeOn == 1 && r_heat >= 0.99 * rcool)) {
-        const double heated = (mass_slope == 1.0) ? r_heat / rcool : pow(r_heat / rcool, mass_slope);
-        return (1.0 - heated) * coolingGas;
-    }
+    if(r_heat < rcool && !(run_params->CGMrecipeOn == 1 && r_heat >= 0.99 * rcool))
+        return (1.0 - r_heat / rcool) * coolingGas;
     return 0.0;
 }
-
-/* RheatFix 7: M(<r) ~ r^(3 - alpha) for the Carr et al. (2023) alpha = 1.4
- * CGM profile used by cooling_recipe_cgm(). */
-static const double CGM_PROFILE_MASS_SLOPE = 3.0 - 1.4;
 
 /* File-private: AGN radio-mode heating for CGM-regime galaxies (defined below). */
 static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
@@ -394,11 +383,11 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
             double rcool = galaxies[gal].Rvir;
             // galaxies[gal].RcoolToRvir = 1.0;
 
-            // RheatFix 6-7: a real cooling radius in the profile instead, where
+            // RheatFix 4: a real cooling radius in the profile instead, where
             // rho(r) = rho0 (r/r0)^-alpha reaches the density whose cooling time
             // is Rvir/Vvir, as cooling_recipe_hot() defines it.  It moves with
             // the reservoir and may lie beyond Rvir (rapid cooling).
-            if(RHEATFIX_CGM_RCOOL_MODE(run_params)) {
+            if(run_params->RheatFix == RHEATFIX_CGM_RCOOL) {
                 const double rho_rcool = x / (galaxies[gal].Rvir / galaxies[gal].Vvir) * (1.5 * MU_IONISED);
                 rcool = r0 * pow(rho0 / rho_rcool, 1.0 / alpha);
             }
@@ -412,7 +401,7 @@ double cooling_recipe_cgm(const int gal, const double dt, struct GALAXY *galaxie
                 coolingGas = 0.0;
             }
 
-            // RheatFix 1-4: no radio mode here, so r_heat is neither read nor
+            // RheatFix 1-2: no radio mode here, so r_heat is neither read nor
             // written; it is the entropy floor of a hot atmosphere only.
             if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0 && !RHEATFIX_HOT_ONLY_MODE(run_params)) {
                 if(run_params->RheatFix == RHEATFIX_MEMORYLESS)
@@ -808,7 +797,7 @@ static void agn_accretion_compute(const int centralgal, const double dt, const d
 double do_AGN_heating(double coolingGas, const int centralgal, const double dt, const double x, const double rcool, struct GALAXY *galaxies, const struct params *run_params)
 {
     // r_heat suppression (always applied for Regime==1 hot-halo)
-    coolingGas = suppress_cooling(coolingGas, galaxies[centralgal].r_heat, rcool, 1.0, run_params);
+    coolingGas = suppress_cooling(coolingGas, galaxies[centralgal].r_heat, rcool, run_params);
     XASSERT(coolingGas >= 0.0, -1,
             "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
 
@@ -840,8 +829,8 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
     }
 
     // The Rvir cap exists only because the CGM recipe shared r_heat on an
-    // Rvir scale; RheatFix 2, 6 and 7 drop it.
-    const int rvir_cap = (run_params->RheatFix != RHEATFIX_HOT_ONLY_NOCAP && !RHEATFIX_CGM_RCOOL_MODE(run_params));
+    // Rvir scale; RheatFix 2 and 4 drop it.
+    const int rvir_cap = (run_params->RheatFix != RHEATFIX_HOT_ONLY_NOCAP && run_params->RheatFix != RHEATFIX_CGM_RCOOL);
     if(run_params->CGMrecipeOn > 0 && rvir_cap && galaxies[centralgal].r_heat > galaxies[centralgal].Rvir)
         galaxies[centralgal].r_heat = galaxies[centralgal].Rvir;
 
@@ -857,8 +846,7 @@ double do_AGN_heating(double coolingGas, const int centralgal, const double dt, 
 static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const double dt, const double x, const double rcool,
                                  struct GALAXY *galaxies, const struct params *run_params)
 {
-    const double mass_slope = (run_params->RheatFix == RHEATFIX_CGM_RCOOL_PROFILE) ? CGM_PROFILE_MASS_SLOPE : 1.0;
-    coolingGas = suppress_cooling(coolingGas, galaxies[centralgal].r_heat, rcool, mass_slope, run_params);
+    coolingGas = suppress_cooling(coolingGas, galaxies[centralgal].r_heat, rcool, run_params);
 
     XASSERT(coolingGas >= 0.0, -1,
             "Error: Cooling gas mass = %g should be >= 0.0", coolingGas);
@@ -883,14 +871,11 @@ static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const 
          * to Rvir and stop the hot halo cooling for good (r_heat only moves out). */
         const int sets_rheat = (galaxies[centralgal].Regime == 0 || galaxies[centralgal].HotGas <= 0.0);
         if(sets_rheat && galaxies[centralgal].r_heat < rcool && coolingGas > 0.0) {
-            // The heated mass fraction is AGNheating / coolingGas; its radius
-            // is that fraction to the power 1 / mass_slope (RheatFix 7)
-            const double heated = AGNheating / coolingGas;
-            const double r_heat_new = ((mass_slope == 1.0) ? heated : pow(heated, 1.0 / mass_slope)) * rcool;
+            const double r_heat_new = (AGNheating / coolingGas) * rcool;
             if(r_heat_new > galaxies[centralgal].r_heat)
                 galaxies[centralgal].r_heat = r_heat_new;
         }
-        if(!RHEATFIX_CGM_RCOOL_MODE(run_params) && galaxies[centralgal].r_heat > galaxies[centralgal].Rvir)
+        if(run_params->RheatFix != RHEATFIX_CGM_RCOOL && galaxies[centralgal].r_heat > galaxies[centralgal].Rvir)
             galaxies[centralgal].r_heat = galaxies[centralgal].Rvir;
 
         if(AGNheating > 0.0)
@@ -910,7 +895,7 @@ static double do_AGN_heating_cgm(double coolingGas, const int centralgal, const 
 }
 
 /*
- * RheatFix 5: radio mode for CGM-regime galaxies without memory.
+ * RheatFix 3: radio mode for CGM-regime galaxies without memory.
  *
  * The same accretion and heating as do_AGN_heating_cgm(), drawn from CGMgas,
  * but the heating offsets only this substep's cooling and r_heat is neither

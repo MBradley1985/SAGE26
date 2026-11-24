@@ -109,7 +109,6 @@ struct GALAXY
     int32_t   SnapNum;
     int32_t   Type;       /* 0=central; 1=satellite with subhalo; 2=orphan satellite; 3=merged (dead) */
     int32_t   Regime;     /* 0=CGM-dominated (cold-flow/precipitation); 1=hot-halo (classical); set by determine_and_store_regime() */
-    float     RegimeQuantile;  /* RheatFix 4: the galaxy's fixed regime-draw quantile in (0, 1); 0 = not drawn yet */
     int32_t   FFBRegime;  /* 0=standard SF; 1=feedback-free burst active; set by determine_and_store_ffb_regime() */
 
     int32_t   GalaxyNr;   /* index within the current forest's galaxy array */
@@ -518,23 +517,17 @@ struct save_info {
 
 /* RheatFix (see docs/parameters.md): how the AGN heating radius r_heat is
  * treated in the CGM regime (Regime 0).  0 off (r_heat ratchets against
- * rcool = Rvir, as v0.95).  1-4 hot-only: the CGM recipe neither reads nor
- * writes r_heat and has no radio mode; 2 also drops the hot-regime Rvir cap,
- * 3 adds a one-way CGM -> hot transition, 4 draws the regime from a fixed
- * per-galaxy quantile.  5 memoryless radio mode in Regime 0.  6-7 a moving
- * CGM cooling radius in place of Rvir, no Rvir caps; 7 also matches the
- * suppression and ratchet to the alpha = 1.4 profile. */
-#define RHEATFIX_OFF              0
-#define RHEATFIX_HOT_ONLY         1
-#define RHEATFIX_HOT_ONLY_NOCAP   2
-#define RHEATFIX_HOT_ONLY_ONEWAY  3
-#define RHEATFIX_HOT_ONLY_QUANTILE 4
-#define RHEATFIX_MEMORYLESS       5
-#define RHEATFIX_CGM_RCOOL        6
-#define RHEATFIX_CGM_RCOOL_PROFILE 7
-#define RHEATFIX_MAX              7
-#define RHEATFIX_HOT_ONLY_MODE(p)  ((p)->RheatFix >= RHEATFIX_HOT_ONLY && (p)->RheatFix <= RHEATFIX_HOT_ONLY_QUANTILE)
-#define RHEATFIX_CGM_RCOOL_MODE(p) ((p)->RheatFix == RHEATFIX_CGM_RCOOL || (p)->RheatFix == RHEATFIX_CGM_RCOOL_PROFILE)
+ * rcool = Rvir, as v0.95).  1 hot-only: the CGM recipe neither reads nor
+ * writes r_heat and has no radio mode; 2 as 1 without the hot-regime Rvir
+ * cap.  3 memoryless radio mode in Regime 0.  4 a moving CGM cooling radius
+ * in place of Rvir, with no Rvir caps. */
+#define RHEATFIX_OFF            0
+#define RHEATFIX_HOT_ONLY       1
+#define RHEATFIX_HOT_ONLY_NOCAP 2
+#define RHEATFIX_MEMORYLESS     3
+#define RHEATFIX_CGM_RCOOL      4
+#define RHEATFIX_MAX            4
+#define RHEATFIX_HOT_ONLY_MODE(p) ((p)->RheatFix == RHEATFIX_HOT_ONLY || (p)->RheatFix == RHEATFIX_HOT_ONLY_NOCAP)
 #define FG_TDEP(p)         ((p)->H2DepletionMode > 0)
 
 struct params
