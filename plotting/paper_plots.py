@@ -4128,9 +4128,13 @@ def plot_10_sfe_ffb(snapdata):
     d_bk25 = load_single_snap(FFB_BK25_SMOOTH_DIR, snap)
     d_noffb, w_normal = load_noffb_comparison(snap, [d, d_bk25], label='plot 10')
 
+    # Haloes of at least 20 particles in M_vir.  The FFB selection is on the
+    # subhalo's particle count (Len >= 20), so M_vir itself can fall below it.
+    MVIR_MIN = MIN_PARTICLES * PARTICLE_MASS_MSUN
+
     def _valid(dd, rows):
         rows = np.asarray(rows, dtype=np.int64)
-        return rows[(dd['StellarMass'][rows] > 0) & (dd['Mvir'][rows] > 0)]
+        return rows[(dd['StellarMass'][rows] > 0) & (dd['Mvir'][rows] >= MVIR_MIN)]
 
     w_ffb = _valid(d, ffb_central_rows(d))
     w_bk25 = _valid(d_bk25, ffb_central_rows(d_bk25)) if d_bk25 is not None else np.array([], dtype=np.int64)
@@ -4207,14 +4211,6 @@ def plot_10_sfe_ffb(snapdata):
             x, med, lo, hi = _median_percentile(log_mvir, eps)
             ax.plot(x, med, color=lc, lw=2, label=label, zorder=zo)
             ax.fill_between(x, lo, hi, color=bc, alpha=0.2, zorder=zo - 1)
-
-        # Haloes whose M_vir is below 20 particles (selection is on the subhalo's
-        # particle count, Len >= 20, so M_vir itself can fall below it).
-        x_lo, x_hi = ax.get_xlim()
-        lm_20 = np.log10(MIN_PARTICLES * PARTICLE_MASS_MSUN)
-        if np.isfinite(lm_20) and lm_20 > x_lo:
-            ax.axvspan(x_lo, lm_20, color='grey', alpha=0.15, lw=0, zorder=0)
-            ax.set_xlim(x_lo, x_hi)
 
         ax.axvline(x=np.log10(M_ffb), color='goldenrod', ls=':', lw=2,
                    alpha=0.6,
@@ -8359,6 +8355,13 @@ def plot_18_smf_redshift_grid():
             'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
             'volume': VOLUME, 'mass_convert': MASS_CONVERT,
         })
+    if os.path.exists(NOFFB_DIR):
+        models.append({
+            'path': NOFFB_DIR, 'label': 'SAGE26 (no FFBs)', 'band': False,
+            'color': 'black', 'ls': '--', 'lw': 2.5,
+            'redshifts': mill_redshifts, 'first_snap': 0, 'last_snap': 63,
+            'volume': VOLUME, 'mass_convert': MASS_CONVERT,
+        })
 
     # Load observational data
     all_obs = _load_smf_grid_observations()
@@ -8404,7 +8407,7 @@ def plot_18_smf_redshift_grid():
                 log_m = np.log10(m_stars[w])
 
                     # Use bootstrap for SAGE26 models
-                if model['label'].startswith('SAGE26'):
+                if model['label'].startswith('SAGE26') and model.get('band', True):
                     x, phi, phi_lo, phi_hi, _ = mass_function_bootstrap(
                         log_m, model['volume'], binwidth, n_boot=100)
                     valid = np.isfinite(phi)
