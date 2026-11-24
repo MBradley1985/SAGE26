@@ -146,6 +146,7 @@ double cooling_recipe(const int gal, const double dt, struct GALAXY *galaxies, c
 double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxies, const struct params *run_params)
 {
     double coolingGas;
+    double stream_cooling = 0.0;  /* StreamRheatFix 1: cold streams, kept out of the AGN step */
 
     galaxies[gal].tcool = 0.0f;
 
@@ -300,10 +301,20 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
             galaxies[gal].mdot_stream = cold_stream_cooling / dt;
             
             coolingGas = cold_stream_cooling + hot_halo_cooling;
+
+            // StreamRheatFix 1: filaments that penetrate the hot atmosphere do
+            // not feel its entropy floor r_heat, so only the cooling flow goes
+            // through the AGN step (suppression, ratchet and heating cap).
+            if(run_params->StreamRheatFix == 1) {
+                stream_cooling = (cold_stream_cooling < galaxies[gal].HotGas) ? cold_stream_cooling : galaxies[gal].HotGas;
+                galaxies[gal].mdot_stream = stream_cooling / dt;
+                coolingGas = hot_halo_cooling;
+            }
         }
 
-        if(coolingGas > galaxies[gal].HotGas) {
-            coolingGas = galaxies[gal].HotGas;
+        const double hot_available = galaxies[gal].HotGas - stream_cooling;
+        if(coolingGas > hot_available) {
+            coolingGas = hot_available;
         } else {
             if(coolingGas < 0.0) coolingGas = 0.0;
         }
@@ -313,6 +324,12 @@ double cooling_recipe_hot(const int gal, const double dt, struct GALAXY *galaxie
 
         if(run_params->AGNrecipeOn > 0 && coolingGas > 0.0) {
             coolingGas = do_AGN_heating(coolingGas, gal, dt, x, rcool, galaxies, run_params);
+        }
+
+        if(stream_cooling > 0.0) {
+            // The AGN step drew its accretion from HotGas after the clamp above
+            coolingGas += stream_cooling;
+            if(coolingGas > galaxies[gal].HotGas) coolingGas = galaxies[gal].HotGas;
         }
 
         if (coolingGas > 0.0) {

@@ -21,6 +21,7 @@ optional parameters take the listed default if omitted.
 | `NumOutputs` | int | no | `-1` | Number of snapshot outputs; `-1` = all snapshots. |
 | `SaveFullSFH` | 0/1 | no | `0` | Store per-snapshot SFR history arrays (`SFHMassDisk`, `SFHMassBulge`). |
 | `SaveFullMH` | 0/1 | no | `0` | Store the metal mass in the stars of each SFH bin (`MHMetalsDisk`, `MHMetalsBulge`). Needs `SaveFullSFH = 1`. |
+| `StreamRheatFix` | 0/1 | no | `0` | Hot-regime Dekel & Birnboim (2006) cold streams and the AGN step (`CGMrecipeOn 1`). 0: the stream and cooling-flow mass are summed and suppressed together by `(1 - r_heat / r_cool)`, and the sum drives the `r_heat` ratchet and caps the radio-mode heating (v0.98). 1: only the cooling flow goes through the AGN step; streams, which penetrate the hot atmosphere, are added after it unsuppressed, and `mdot_stream` is the delivered stream rate. Experimental (branch `exp-stream-unsuppressed`). |
 | `UseM200c` | 0/1 | no | `0` | Halo mass definition for Consistent-Trees input. 0: `Mvir` is the trees' own `mvir` (Rockstar's Bryan & Norman 1998 virial mass). 1: `Mvir` is the trees' `M200c`, matching the 200 rho_crit virial radius SAGE computes (a halo with no positive `M200c` keeps `mvir`; without an `M200c` column a warning is printed and `mvir` is used). The other readers already give M200c, so it changes nothing there. On microUchuu, 1 lowers halo masses by 0.06 dex at z = 0 and 0.02-0.03 dex at z >= 1, and the cosmic SFR density by 0.02-0.05 dex. |
 
 ---

@@ -1598,6 +1598,8 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
        are sensitive to. */
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SubstepResolution", run_params->SubstepResolution, H5T_NATIVE_DOUBLE);
     /* Which halo mass definition Mvir holds (Consistent-Trees input only). */
+    /* Whether cold streams bypass the AGN step in the hot regime. */
+    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "StreamRheatFix", run_params->StreamRheatFix, H5T_NATIVE_INT);
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "UseM200c", run_params->UseM200c, H5T_NATIVE_INT);
     /* The enum-valued parameters need lvalues: CREATE_SINGLE_ATTRIBUTE takes the
        address of its argument, so a cast expression cannot be passed directly. */

@@ -569,6 +569,8 @@ struct params
                                           // correct at any substep count (unlike the Sfr* rate bins).
     int32_t    SaveFullMH;                // 1 = additionally save the per-snapshot MHMetalsDisk/MHMetalsBulge
                                           // histories, the metal mass in the stars of the SFH bins (needs SaveFullSFH = 1)
+    int32_t    StreamRheatFix;            // 0 (default): cold streams go through the AGN step with the cooling flow;
+                                          // 1: cold streams bypass r_heat suppression, the ratchet and the heating cap
     int32_t    UseM200c;                  // 0: Mvir is the tree's own halo mass (default); 1: the Consistent-Trees readers
                                           // take M200c instead of Rockstar's Bryan & Norman Mvir (other readers already give M200c)
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas

@@ -3,7 +3,8 @@
  *
  * Validates: the CGM recipe (Regime 0) has no radio mode and neither reads
  * nor writes r_heat, so a halo whose r_heat reached Rvir still cools; the
- * hot-halo radio mode does not cap r_heat at Rvir.
+ * hot-halo radio mode does not cap r_heat at Rvir; with StreamRheatFix 1 the
+ * hot-regime cold streams bypass the AGN step.
  *
  * Run: from tests/, `make test_rheat && ./test_build/test_rheat`.
  *
@@ -28,6 +29,10 @@ static const double COOLING_REL_TOL = 1e-12;
 
 /* One substep, in code time units (~1 Myr). */
 static const double DT = 0.001;
+
+/* A shorter substep for the stream halo, whose dynamical time is ~0.4 Myr,
+ * so the streams stay well below the hot reservoir. */
+static const double STREAM_DT = 1.0e-5;
 
 /* SAGE standard units (Mpc/h, km/s, 10^10 Msun/h), CGM regimes on and the
  * Bondi radio mode, as in test_regime_cgm.c. */
@@ -131,6 +136,62 @@ void test_hot_rheat_no_rvir_cap(void)
     ASSERT_CLOSE(0.25, cooling, RHEAT_UNCHANGED_TOL, "cooling suppressed by 1 - r_heat / rcool = 0.25 (float r_heat)");
 }
 
+/* A hot-regime halo below Mshock at z = 3 (Mvir = 3 x 10^11 Msun/h), where
+ * the Dekel & Birnboim (2006) criterion lets most of the inflow come in as
+ * cold streams, through cooling_recipe_hot(). */
+static double stream_halo_cooling(const int stream_fix, const double r_heat_over_rvir, const double bh_mass,
+                                  struct GALAXY *gal)
+{
+    struct params run_params;
+    setup_params(&run_params);
+    run_params.StreamRheatFix = stream_fix;
+    run_params.ZZ[0] = 3.0;
+    memset(gal, 0, sizeof(struct GALAXY));
+    gal->Regime = 1;
+    gal->Mvir = 30.0;
+    gal->Vvir = 150.0;
+    gal->Rvir = 43.0 * gal->Mvir / (gal->Vvir * gal->Vvir);
+    gal->HotGas = 3.0;
+    gal->MetalsHotGas = 0.003;
+    gal->BlackHoleMass = bh_mass;
+    gal->r_heat = r_heat_over_rvir * gal->Rvir;
+    return cooling_recipe_hot(0, STREAM_DT, gal, &run_params);
+}
+
+/*
+ * Asserts: with StreamRheatFix 1 the cold streams of a hot-regime halo are
+ *          delivered when r_heat suppresses the cooling flow completely, and
+ *          neither move r_heat nor grow the black hole; with no AGN both
+ *          modes give the same cooling.
+ *
+ * Setup: the stream_halo_cooling() halo with r_heat = 10 Rvir (beyond rcool)
+ *        and with r_heat = 0 and no black hole, under StreamRheatFix 0 and 1.
+ *
+ * Why: filaments that penetrate the hot atmosphere do not feel its entropy
+ *        floor, so only the cooling flow goes through the AGN step.
+ */
+void test_streams_bypass_agn(void)
+{
+    BEGIN_TEST("StreamRheatFix 1: cold streams bypass the AGN step");
+
+    struct GALAXY gal;
+
+    const double free0 = stream_halo_cooling(0, 0.0, 0.0, &gal);
+    const double free_stream = gal.mdot_stream * STREAM_DT;
+    ASSERT_GREATER_THAN(free_stream, 0.5 * free0, "the halo cools mostly through streams");
+    const double free1 = stream_halo_cooling(1, 0.0, 0.0, &gal);
+    ASSERT_CLOSE(free0, free1, COOLING_REL_TOL * free0, "no AGN: both modes cool the same");
+
+    const double off = stream_halo_cooling(0, 10.0, 0.001, &gal);
+    ASSERT_CLOSE(0.0, off, 1e-30, "StreamRheatFix 0: r_heat beyond rcool stops all cooling");
+
+    const double on = stream_halo_cooling(1, 10.0, 0.001, &gal);
+    ASSERT_CLOSE(free_stream, on, RHEAT_UNCHANGED_TOL * free_stream, "StreamRheatFix 1: the streams still cool (float mdot_stream)");
+    ASSERT_CLOSE(on, gal.mdot_stream * STREAM_DT, RHEAT_UNCHANGED_TOL * on, "StreamRheatFix 1: mdot_stream is the delivered rate");
+    ASSERT_CLOSE(10.0 * gal.Rvir, gal.r_heat, RHEAT_UNCHANGED_TOL * 10.0 * gal.Rvir, "StreamRheatFix 1: r_heat unchanged");
+    ASSERT_CLOSE((float)0.001, gal.BlackHoleMass, 1e-15, "StreamRheatFix 1: no radio-mode growth from streams (float field)");
+}
+
 int main(void)
 {
     BEGIN_TEST_SUITE("r_heat across the regimes");
@@ -139,6 +200,7 @@ int main(void)
 
     test_cgm_recipe_ignores_rheat();
     test_hot_rheat_no_rvir_cap();
+    test_streams_bypass_agn();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();
