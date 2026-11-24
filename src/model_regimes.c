@@ -42,6 +42,11 @@ static const double BK25_G_CRIT_MSUN_PC2 = 3100.0;
  * pivots the threshold about that redshift rather than shifting it wholesale. */
 static const double FFB_THRESHOLD_SLOPE = -6.2;
 
+/* RheatFix 3: a hot-regime central returns to the CGM regime only once its
+ * Mvir is this far below Mshock.  0.3 dex is three widths of the regime
+ * sigmoid, where a fresh draw would give the hot regime 5% of the time. */
+static const double RHEATFIX_HOT_EXIT_DEX = 0.3;
+
 
 
 /*
@@ -120,9 +125,24 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
             // re-tested against the sigmoid every timestep rather than being
             // held to one quantile fixed at creation.  The draw is keyed on the
             // halo and snapshot, so it is reproducible run to run.
-            const double random_uniform = halo_uniform(galaxies[p].MostBoundID, galaxies[p].SnapNum,
-                                                       DRAW_STREAM_REGIME);
+            // RheatFix 4 instead holds each galaxy to the quantile of its
+            // first draw, so it crosses Mshock once as it grows.
+            double random_uniform;
+            if(run_params->RheatFix == RHEATFIX_HOT_ONLY_QUANTILE) {
+                if(galaxies[p].RegimeQuantile <= 0.0f)
+                    galaxies[p].RegimeQuantile = (float)halo_uniform(galaxies[p].MostBoundID, galaxies[p].SnapNum,
+                                                                     DRAW_STREAM_REGIME);
+                random_uniform = galaxies[p].RegimeQuantile;
+            } else {
+                random_uniform = halo_uniform(galaxies[p].MostBoundID, galaxies[p].SnapNum, DRAW_STREAM_REGIME);
+            }
             new_regime = (random_uniform < hot_fraction) ? 1 : 0;
+
+            // RheatFix 3: once hot, a central stays hot until its mass falls
+            // clearly below Mshock, so it does not flip back and forth.
+            if(run_params->RheatFix == RHEATFIX_HOT_ONLY_ONEWAY && galaxies[p].Regime == 1
+               && log10(mass_ratio) > -RHEATFIX_HOT_EXIT_DEX)
+                new_regime = 1;
         }
 
         galaxies[p].Regime = new_regime;
