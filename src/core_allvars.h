@@ -518,8 +518,8 @@ struct save_info {
 /* RheatFix (see docs/parameters.md): how the AGN heating radius r_heat is
  * treated in the CGM regime (Regime 0).  0 off (r_heat ratchets against
  * rcool = Rvir, as v0.95).  1 hot-only: the CGM recipe neither reads nor
- * writes r_heat and has no radio mode; 2 as 1 without the hot-regime Rvir
- * cap.  3 memoryless radio mode in Regime 0.  4 a moving CGM cooling radius
+ * writes r_heat and has no radio mode; 2 (favoured) as 1 without the
+ * hot-regime Rvir cap, so the hot regime is SAGE16's radio mode.  3 memoryless radio mode in Regime 0.  4 a moving CGM cooling radius
  * in place of Rvir, with no Rvir caps. */
 #define RHEATFIX_OFF            0
 #define RHEATFIX_HOT_ONLY       1
