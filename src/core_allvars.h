@@ -109,8 +109,8 @@ struct GALAXY
     int32_t   SnapNum;
     int32_t   Type;       /* 0=central; 1=satellite with subhalo; 2=orphan satellite; 3=merged (dead) */
     int32_t   Regime;     /* 0=CGM-dominated (cold-flow/precipitation); 1=hot-halo (classical); set by determine_and_store_regime() */
-    double    RegimeDraw; /* uniform in (0,1) fixed at creation; the CGM/hot draw under RegimeDrawFixed 1 */
-    double    FFBDraw;    /* uniform in (0,1) fixed at creation; the Li+24/BK25 draw under FFBDrawFixed 1 */
+    double    RegimeDraw; /* uniform in (0,1) fixed at creation; the CGM/hot regime draw */
+    double    FFBDraw;    /* uniform in (0,1) fixed at creation; the Li+24/BK25 FFB draw */
     int32_t   FFBRegime;  /* 0=standard SF; 1=feedback-free burst active; set by determine_and_store_ffb_regime() */
 
     int32_t   GalaxyNr;   /* index within the current forest's galaxy array */
@@ -571,8 +571,6 @@ struct params
                                           // correct at any substep count (unlike the Sfr* rate bins).
     int32_t    SaveFullMH;                // 1 = additionally save the per-snapshot MHMetalsDisk/MHMetalsBulge
                                           // histories, the metal mass in the stars of the SFH bins (needs SaveFullSFH = 1)
-    int32_t    RegimeDrawFixed;           // 0 (default): fresh CGM/hot draw every snapshot; 1: one draw per galaxy for its life
-    int32_t    FFBDrawFixed;              // 0 (default): fresh Li+24/BK25 draw every snapshot; 1: one draw per galaxy for its life
     int32_t    UseM200c;                  // 0: Mvir is the tree's own halo mass (default); 1: the Consistent-Trees readers
                                           // take M200c instead of Rockstar's Bryan & Norman Mvir (other readers already give M200c)
     int32_t    StarburstColdGasOn;        // 0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas

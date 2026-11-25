@@ -8,23 +8,45 @@ below reproduces the committed regression baseline dataset-for-dataset unless
 it says otherwise. See
 [docs/developer/REGRESSION_BASELINE.md](docs/developer/REGRESSION_BASELINE.md).
 
-## Unreleased
+## v0.98.1 -- 2026-11-26
 
-### `RegimeDrawFixed`, `FFBDrawFixed`: one regime draw per galaxy (default off, bit-identical)
+### One regime draw per galaxy (changes output)
 
 - The CGM/hot and FFB classifications compare a uniform draw with a sigmoid
-  in halo mass. The draw is fresh every snapshot, so a central near
-  `MShockMsun` changes regime at a rate 2P(1-P) per snapshot (up to 47% of
-  snapshot steps on mini-Millennium), whatever its mass does, and moves
-  0.2-0.6 of its f_b Mvir between `HotGas` and `CGMgas` each time.
-  `RegimeRandomMode 1`, a draw kept per galaxy, was removed in 065e848
-  (2026-09-29) as never varied.
-- With `RegimeDrawFixed 1` / `FFBDrawFixed 1` a galaxy keeps one draw from
-  creation (`set_fixed_regime_draws()`, hashed from the creating halo's
-  `MostBoundID` and snapshot): each halo gets its own threshold mass (and
-  BK25 concentration quantile), the population fraction is the same sigmoid,
-  and the halo is re-tested every snapshot.
-- The defaults reproduce the regression baseline.
+  in halo mass (Dekel & Birnboim 2006 shock mass; Li et al. 2024 eq. 3; the
+  Boylan-Kolchin 2025 log-normal concentration). Up to v0.98 the draw was fresh
+  every snapshot, so a central near the threshold changed regime at a rate
+  2P(1-P) per snapshot (up to 47% of snapshot steps on mini-Millennium)
+  whatever its mass did, and the rate depended on the snapshot spacing. Each
+  CGM/hot change moved 0.2-0.6 of its f_b Mvir between `HotGas` and `CGMgas`.
+- A galaxy now keeps one draw of each kind from creation
+  (`set_fixed_regime_draws()`, hashed from the creating halo's `MostBoundID`
+  and snapshot). Each halo has its own threshold mass (and BK25 concentration
+  quantile); across the population the thresholds follow the same sigmoid, so
+  the fraction in each regime at fixed (Mvir, z) is unchanged. The halo is
+  still re-tested every snapshot and changes regime when its mass crosses its
+  own threshold.
+- On mini-Millennium: CGM/hot changes per step at Mvir = 10^11.4-12.3 fall from
+  0.224 to 0.034; Li+24 FFB changes near the threshold from 0.395 to 0.096, and
+  FFB episodes last 3.9 snapshots on average instead of 1.4. The SMF, SFRD and
+  FFB fractions are unchanged within the noise; quenching starts at lower halo
+  mass (central quiescent fraction at Mvir = 10^12: 0.27 -> 0.56).
+- `RegimeDrawFixed` and `FFBDrawFixed`, briefly available on a development
+  branch, are removed: their setting 1 is now the only behaviour, and runs made
+  with them set to 1 are reproduced exactly. `determine_and_store_ffb_regime()`
+  no longer takes a snapshot argument.
+- Regression baselines re-captured.
+
+### Plotting
+
+- `plotting/paper1_plots.py` and `plotting/paper2_plots.py` reproduce the
+  figures and quoted numbers of SAGE26 Papers I and II. Both are self-contained
+  (they need only the runs and `data/`), read each model file once in parallel
+  (4 workers by default) and write to `<run>/paper1/` and `<run>/paper2/`;
+  `--box big` selects the full 500 Mpc/h runs.
+- `paper_plots.py`, `ablation_series.py` and the other one-off scripts are no
+  longer distributed; `plotting/` keeps the `allresults-*` exploration scripts
+  and the two paper scripts.
 
 ## v0.98 -- 2026-11-24
 

@@ -1532,8 +1532,6 @@ def read_header(d):
             redshifts=np.array(f['Header/snapshot_redshifts'][:], dtype=float),
             mode=int(rt.get('EnhancedStarFormationOn', rt.get('FeedbackFreeModeOn', -1))),
             alpha=float(rt.get('EnhancedSFEfficiency', rt.get('FFBMaxEfficiency', np.nan))),
-            regime_fixed=int(rt.get('RegimeDrawFixed', 0)),
-            ffb_fixed=int(rt.get('FFBDrawFixed', 0)),
             particle_mass=float(sim.get('particle_mass', np.nan)),
         )
     hdr['vfrac'] = 0.0
@@ -2536,8 +2534,8 @@ def numbers(D, pp, path):
         if h is None:
             out(f'  {k:7s} MISSING  {d}')
         else:
-            out(f'  {k:7s} mode={h["mode"]} alpha_eff={h["alpha"]:.2f} RegimeDrawFixed={h["regime_fixed"]} '
-                f'FFBDrawFixed={h["ffb_fixed"]} box={h["box"]:.1f} V={h["volume"]:.3e} Mpc^3  {d}')
+            out(f'  {k:7s} mode={h["mode"]} alpha_eff={h["alpha"]:.2f} box={h["box"]:.1f} '
+                f'V={h["volume"]:.3e} Mpc^3  {d}')
 
     # ---- analytic (Sections 3, 5.2, 5.4) ----
     from scipy.optimize import brentq

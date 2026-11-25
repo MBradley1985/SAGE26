@@ -60,8 +60,6 @@ EnhancedStarFormationOn     1   %0: off; 1: Li+24 mass threshold w. sigmoid; 2: 
 BulgeSizeOn                 3   %0: switch off; 1: Shen eq. 33; 2: Shen eq. 32; 3: Tonini
 SaveFullSFH                 0   %0: switch off
 SaveFullMH                  0   %0: switch off; 1: also save stellar metal mass per SFH bin (needs SaveFullSFH = 1)
-RegimeDrawFixed             0   %CGM/hot regime draw: 0 fresh every snapshot; 1 one draw per galaxy for its life
-FFBDrawFixed                0   %FFB (Li+24/BK25) draw: 0 fresh every snapshot; 1 one draw per galaxy for its life
 UseM200c                    0   %halo mass for Consistent-Trees input: 0: trees' own mvir; 1: M200c, matching SAGE's 200 rho_crit Rvir (no effect on L-Halo trees)
 StarburstColdGasOn          1   %0: starbursts use H2 (follows SFprescription); 1: all non-FFB starbursts use cold gas
 

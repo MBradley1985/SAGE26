@@ -55,11 +55,11 @@ static const double FFB_THRESHOLD_SLOPE = -6.2;
  * how many galaxies the run has created, merged or disrupted.
  *
  * The stream index gives each classification its own draw, so the CGM/hot and
- * FFB outcomes of a halo are not correlated.  Stream 0 is the FFB draw and
- * reproduces the value used before streams were added.
+ * FFB outcomes of a galaxy are not correlated.  Streams 0 and 1 were the
+ * per-snapshot FFB and CGM/hot draws used up to v0.98; 2 and 3 are kept so the
+ * per-galaxy draws are unchanged from runs made with RegimeDrawFixed and
+ * FFBDrawFixed set to 1.
  */
-#define DRAW_STREAM_FFB          0
-#define DRAW_STREAM_REGIME       1
 #define DRAW_STREAM_REGIME_FIXED 2
 #define DRAW_STREAM_FFB_FIXED    3
 
@@ -76,12 +76,14 @@ static double halo_uniform(const long long most_bound_id, const int snapnum, con
 
 /*
  * set_fixed_regime_draws -- the CGM/hot and FFB draws a galaxy keeps for its
- * life, used under RegimeDrawFixed 1 and FFBDrawFixed 1.
+ * life.
  *
  * Called once from init_galaxy() with the creating halo's MostBoundID and
  * snapshot, so runs on the same trees give a galaxy the same draws.  The
  * galaxy struct carries them along its main branch.  Their own streams keep
- * them independent of each other and of the per-snapshot draws.
+ * them independent of each other.  A fresh draw every snapshot (up to v0.98)
+ * made a central near the threshold change regime at a rate 2P(1-P) per
+ * snapshot, whatever its mass did, and tied that rate to the snapshot spacing.
  */
 void set_fixed_regime_draws(struct GALAXY *g, const long long most_bound_id, const int snapnum)
 {
@@ -133,19 +135,13 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
             // Smoothly varies from 0 (well below Mshock) to 1 (well above Mshock)
             const double hot_fraction = 1.0 / (1.0 + exp(-x));
 
-            // RegimeDrawFixed 0: a fresh draw each snapshot, keyed on the halo
-            // and snapshot, so a borderline-mass central changes regime at a
-            // rate 2P(1-P) per snapshot whatever its mass does.
-            // RegimeDrawFixed 1: the galaxy's own draw, fixed at creation
-            // (set_fixed_regime_draws()).  Hot when random_uniform < hot_fraction
-            // is then Mvir above the galaxy's own threshold,
-            // Mshock * 10^(delta_log_M * ln[u / (1 - u)]); the thresholds across
-            // the population follow the same sigmoid, and a central is still
-            // re-tested every snapshot, changing regime only when its mass
+            // The galaxy's own draw, fixed at creation (set_fixed_regime_draws()).
+            // Hot when random_uniform < hot_fraction is Mvir above the galaxy's
+            // own threshold, Mshock * 10^(delta_log_M * ln[u / (1 - u)]); the
+            // thresholds across the population follow the same sigmoid, and a
+            // central is re-tested every snapshot, changing regime when its mass
             // crosses its threshold.
-            const double random_uniform = run_params->RegimeDrawFixed
-                ? galaxies[p].RegimeDraw
-                : halo_uniform(galaxies[p].MostBoundID, galaxies[p].SnapNum, DRAW_STREAM_REGIME);
+            const double random_uniform = galaxies[p].RegimeDraw;
             new_regime = (random_uniform < hot_fraction) ? 1 : 0;
         }
 
@@ -205,21 +201,21 @@ static double inverse_normal_cdf(double p)
  *        so the transition is smooth across the population.
  *   2 -- Boylan-Kolchin (2025) acceleration threshold, g_max > g_crit, with
  *        log-normal scatter applied to the halo concentration.  The scatter is
- *        set by the same per-snapshot uniform draw as mode 1, so the threshold
+ *        set by the same per-galaxy uniform draw as mode 1, so the threshold
  *        is sharp per halo but smooth across the population.
  *
  * Both modes read the draw in the same sense: a low draw favours FFB.  A halo
  * therefore sits at the same quantile under either criterion, and the two
  * select the same haloes wherever their FFB probabilities agree.
  *
- * The per-snapshot draw is a hash of the host halo's MostBoundID and the
- * snapshot (halo_uniform), not the next rand() value.  Runs on the same merger
- * trees therefore give a halo the same draw under either criterion.
+ * The draw is the galaxy's own, set once at creation (set_fixed_regime_draws(),
+ * a hash of the creating halo's MostBoundID and snapshot), not the next rand()
+ * value.  Runs on the same merger trees therefore give a galaxy the same draw
+ * under either criterion.
  *
  * All galaxies are marked non-FFB when EnhancedStarFormationOn == 0.
  */
 void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
-                                     const int snapnum,
                                      struct GALAXY *galaxies,
                                      const struct params *run_params)
 {
@@ -249,16 +245,12 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
         // regime: FFB is set by the burst's own density and feedback timescale,
         // not by whether the halo carries a virial shock.
 
-        // FFBDrawFixed 0: a fresh draw each snapshot, keyed on the halo and
-        // snapshot, so a halo near the threshold moves in and out of FFB, and
-        // a BK25 halo's concentration is redrawn every snapshot.
-        // FFBDrawFixed 1: the galaxy's own draw, fixed at creation
-        // (set_fixed_regime_draws()), so each halo has its own Li+24 threshold
-        // mass and its own BK25 concentration quantile.  Li+24 eq. 3 is then the
-        // FFB fraction across the population at (Mvir, z), as they define it.
-        const double draw = run_params->FFBDrawFixed
-            ? galaxies[p].FFBDraw
-            : halo_uniform(galaxies[p].MostBoundID, snapnum, DRAW_STREAM_FFB);
+        // The galaxy's own draw, fixed at creation (set_fixed_regime_draws()),
+        // so each halo has its own Li+24 threshold mass and its own BK25
+        // concentration quantile, and is re-tested every snapshot.  Li+24 eq. 3
+        // is then the FFB fraction across the population at (Mvir, z), as they
+        // define it.
+        const double draw = galaxies[p].FFBDraw;
 
         if(run_params->EnhancedStarFormationOn == 1) {
             // Li et al. 2024 mass-based method (original)

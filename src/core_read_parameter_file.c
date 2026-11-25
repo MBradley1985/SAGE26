@@ -109,8 +109,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->SaveFullSFH                = 0;
     run_params->SaveFullMH                 = 0;
     run_params->UseM200c                   = 0;   /* tree's own halo mass */
-    run_params->RegimeDrawFixed            = 0;   /* fresh CGM/hot draw every snapshot */
-    run_params->FFBDrawFixed               = 0;   /* fresh FFB draw every snapshot */
     run_params->StarburstColdGasOn         = 1;
     run_params->H2DepletionMode            = 0;   /* as input/millennium.par */
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
@@ -197,8 +195,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("SaveFullSFH",           &(run_params->SaveFullSFH),          INT, 0);
     REG("SaveFullMH",            &(run_params->SaveFullMH),           INT, 0);
     REG("UseM200c",              &(run_params->UseM200c),             INT, 0);
-    REG("RegimeDrawFixed",       &(run_params->RegimeDrawFixed),      INT, 0);
-    REG("FFBDrawFixed",          &(run_params->FFBDrawFixed),         INT, 0);
     REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
     REG("H2DepletionMode",       &(run_params->H2DepletionMode),      INT, 0);
     REG("SubstepResolution",     &(run_params->SubstepResolution),     DOUBLE, 0);
@@ -562,8 +558,6 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
             {"SaveFullMH",             run_params->SaveFullMH,             0, 1},
             {"UseM200c",               run_params->UseM200c,               0, 1},
-            {"RegimeDrawFixed",        run_params->RegimeDrawFixed,        0, 1},
-            {"FFBDrawFixed",           run_params->FFBDrawFixed,           0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
             {"H2DepletionMode",        run_params->H2DepletionMode,        0, H2DEPLETIONMODE_MAX},
             {"KarpovModeOn",            run_params->KarpovModeOn,            0, 1},

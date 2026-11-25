@@ -21,8 +21,6 @@ optional parameters take the listed default if omitted.
 | `NumOutputs` | int | no | `-1` | Number of snapshot outputs; `-1` = all snapshots. |
 | `SaveFullSFH` | 0/1 | no | `0` | Store per-snapshot SFR history arrays (`SFHMassDisk`, `SFHMassBulge`). |
 | `SaveFullMH` | 0/1 | no | `0` | Store the metal mass in the stars of each SFH bin (`MHMetalsDisk`, `MHMetalsBulge`). Needs `SaveFullSFH = 1`. |
-| `RegimeDrawFixed` | 0/1 | no | `0` | With `CGMrecipeOn 1`: the uniform draw that places a central in the CGM or hot regime against the 0.1 dex sigmoid about `MShockMsun`. 0: a fresh draw every snapshot (hashed from the halo's `MostBoundID` and snapshot), so a central near `MShockMsun` changes regime at a rate 2P(1-P) per snapshot whatever its mass does, moving its hot-phase gas between `HotGas` and `CGMgas` each time. 1: one draw per galaxy, fixed when it is created; each central then has its own threshold mass, the population still follows the sigmoid, and a central is re-tested every snapshot but changes regime only when its mass crosses its threshold (Dekel & Birnboim 2006 give a mass threshold with halo-to-halo scatter). Experimental (branch `fix-regime-transitions`). |
-| `FFBDrawFixed` | 0/1 | no | `0` | With `EnhancedStarFormationOn` 1 or 2: the uniform draw behind the FFB classification. 0: a fresh draw every snapshot, so a halo near the Li+24 threshold moves in and out of FFB and a BK25 halo's concentration is redrawn every snapshot. 1: one draw per galaxy, fixed when it is created, so each halo has its own Li+24 threshold mass (their eq. 3 is then the FFB fraction across the population) and its own BK25 concentration quantile. Changes Paper II results; experimental (branch `fix-regime-transitions`). |
 | `UseM200c` | 0/1 | no | `0` | Halo mass definition for Consistent-Trees input. 0: `Mvir` is the trees' own `mvir` (Rockstar's Bryan & Norman 1998 virial mass). 1: `Mvir` is the trees' `M200c`, matching the 200 rho_crit virial radius SAGE computes (a halo with no positive `M200c` keeps `mvir`; without an `M200c` column a warning is printed and `mvir` is used). The other readers already give M200c, so it changes nothing there. On microUchuu, 1 lowers halo masses by 0.06 dex at z = 0 and 0.02-0.03 dex at z >= 1, and the cosmic SFR density by 0.02-0.05 dex. |
 
 ---
@@ -222,8 +220,9 @@ reader who goes looking for a knob can find where it went.
 | `FFBConcSigma` | `FFB_CONC_SIGMA = 0.2` in [`src/model_regimes.c`](../src/model_regimes.c). |
 | `FFBThresholdSlope` | `FFB_THRESHOLD_SLOPE = -6.2` in [`src/model_regimes.c`](../src/model_regimes.c). |
 | `FFBIgnoreRegime` | Always on: the FFB criteria apply whatever the halo's CGM/hot regime. |
-| `FFBRandomMode` | Always a fresh draw each snapshot. |
-| `RegimeRandomMode` | Always a fresh draw each snapshot. |
+| `FFBRandomMode` | Always one draw per galaxy, set when it forms (since v0.98.1; a fresh draw each snapshot before). |
+| `RegimeRandomMode` | Always one draw per galaxy, set when it forms (since v0.98.1; a fresh draw each snapshot before). |
+| `RegimeDrawFixed`, `FFBDrawFixed` | Removed in v0.98.1: their setting 1, one draw per galaxy, is now the only behaviour. |
 | `FFBFeedbackDelayMyr`, `FFBCloudClumping`, `FFBCloudClumpingDisk`, `FFBStreamRadiusFraction`, `FFBShellSoundSpeedKms`, `FFBToomreQ`, `FFBSigmaCritMsunPc2` | Removed with the Dekel+23 shell and disc criteria (old FFB modes 8-11). |
 | `SNEnergyConservationOn` | Always on: both the reheating and the ejection term are bounded by the supernova energy available. |
 | `MaxSNEnergyCoupling` | `MAX_SN_ENERGY_COUPLING = 2.0` in [`src/model_misc.h`](../src/model_misc.h). |

@@ -29,8 +29,13 @@ hot_fraction = 1 / (1 + exp(-log10(Mvir / M_shock) / 0.1))
 Regime       = (random_uniform < hot_fraction) ? 1 : 0
 ```
 
-The draw is fresh every snapshot, so a borderline-mass central is re-tested
-against the sigmoid at each timestep and can flip regime between snapshots.
+The draw (`RegimeDraw`) is the galaxy's own, set once when it forms
+(`set_fixed_regime_draws()`), which gives each halo its own threshold mass,
+`M_shock * 10^(0.1 ln[u / (1 - u)])`. The thresholds across the population
+follow the same sigmoid. A central is re-tested every snapshot, so it changes
+regime when its mass crosses its own threshold, not at random. (Up to v0.98 the
+draw was fresh every snapshot, and a borderline central flipped regime at a rate
+2P(1-P) per snapshot.)
 
 - **Regime 0 (CGM):** below `M_shock`. Cooling proceeds via the Carr et al.
   (2023) bulk formula on the `CGMgas` reservoir.

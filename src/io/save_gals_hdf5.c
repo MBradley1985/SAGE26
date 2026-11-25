@@ -1599,8 +1599,6 @@ static int32_t write_header(hid_t file_id, const struct forest_info *forest_info
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "SubstepResolution", run_params->SubstepResolution, H5T_NATIVE_DOUBLE);
     /* Which halo mass definition Mvir holds (Consistent-Trees input only). */
     CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "UseM200c", run_params->UseM200c, H5T_NATIVE_INT);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "RegimeDrawFixed", run_params->RegimeDrawFixed, H5T_NATIVE_INT);
-    CREATE_SINGLE_ATTRIBUTE(runtime_group_id, "FFBDrawFixed", run_params->FFBDrawFixed, H5T_NATIVE_INT);
     /* The enum-valued parameters need lvalues: CREATE_SINGLE_ATTRIBUTE takes the
        address of its argument, so a cast expression cannot be passed directly. */
     const int32_t forest_dist_scheme = (int32_t) run_params->ForestDistributionScheme;
