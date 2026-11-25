@@ -110,6 +110,7 @@ default and does nothing. The regression baseline requires the serial build.
 mpirun -np 4 ./sage input/millennium.par  # run in parallel
 python plotting/allresults-local.py     # z=0 diagnostic plots
 python plotting/allresults-history.py   # multi-redshift diagnostics
+python plotting/paper1_plots.py         # reproduce the Paper I figures and numbers (paper2_plots.py for Paper II)
 ```
 
 Full details on the parameter file format, output format, and all physics switches are in

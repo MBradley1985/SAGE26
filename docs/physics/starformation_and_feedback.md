@@ -249,9 +249,13 @@ FFB-eligible:
   applied per halo, which is what turns the sharp threshold into a smooth
   transition across the population. `g_max` is written to the output.
 
-Both apply to centrals regardless of the halo's CGM/hot regime, and both draw
-fresh from the shared `rand()` stream each snapshot, so a halo near the
-threshold moves in and out of FFB between snapshots.
+Both apply to centrals regardless of the halo's CGM/hot regime, and both read
+the galaxy's own draw (`FFBDraw`), set once when it forms
+(`set_fixed_regime_draws()`). Each halo therefore has its own Li+24 threshold
+mass and its own BK25 concentration quantile, and is re-tested every snapshot,
+entering or leaving FFB as its mass and redshift move it across that threshold.
+(Up to v0.98 the draw was fresh every snapshot, so a halo near the threshold
+moved in and out of FFB at constant mass.)
 Dekel+23 sec. 8.2 is explicit that a *disc* density cannot substitute -- it
 "translates to a threshold in redshift with no explicit mass dependence", their
 eq. 63 giving `n_d ~ Mvir^0.05` -- which is why mode 8 is no longer a disc

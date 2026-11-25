@@ -6,6 +6,8 @@
  * - CGM bulk cooling timescales
  * - Gas routing to correct reservoirs
  * - Regime transitions
+ * - The regime draw: one per galaxy for its life, so a central changes
+ *   regime only when its mass crosses its own threshold
  */
 
 #include <stdio.h>
@@ -17,6 +19,7 @@
 #include "../src/core_cool_func.h"
 #include "../src/model_cooling_heating.h"
 #include "../src/model_starformation_and_feedback.h"
+#include "../src/model_regimes.h"
 
 void test_regime_boundary() {
     BEGIN_TEST("Regime Boundary Determination (Voit 2015) - Statistical");
@@ -57,6 +60,7 @@ void test_regime_boundary() {
             // Convert to code units: 10^10 Msun/h
             gal.Mvir = test_cases[i].Mvir_physical / (1e10 / run_params.Hubble_h);
             gal.MostBoundID = j;   /* distinct halo -> independent draw */
+            set_fixed_regime_draws(&gal, j, 0);   /* the draw it gets at creation */
 
             // Determine regime
             determine_and_store_regime(1, &gal, &run_params);
@@ -117,6 +121,7 @@ void test_regime_sigmoid_transition() {
             double Mvir_physical = test_cases[i].mass_factor * Mshock;
             gal.Mvir = Mvir_physical / (1e10 / run_params.Hubble_h);
             gal.MostBoundID = j;   /* distinct halo -> independent draw */
+            set_fixed_regime_draws(&gal, j, 0);   /* the draw it gets at creation */
 
             determine_and_store_regime(1, &gal, &run_params);
 
@@ -450,6 +455,113 @@ void test_cgm_recipe_leaves_rheat() {
                  "Regime 0: r_heat unchanged by the CGM recipe");
 }
 
+/* Regime of a central of log10(M / Mshock) = dlog, created in halo
+ * most_bound_id, after determine_and_store_regime() at snapshot snap.  The
+ * halo's MostBoundID changes from snapshot to snapshot, as in the trees. */
+static int regime_at(const struct params *rp, struct GALAXY *gal, const double dlog, const int snap)
+{
+    gal->Mvir = rp->MShockMsun * pow(10.0, dlog) / (1e10 / rp->Hubble_h);
+    gal->SnapNum = snap;
+    gal->MostBoundID = 7919LL * snap + 13;
+    determine_and_store_regime(1, gal, rp);
+    return gal->Regime;
+}
+
+static void setup_regime_params(struct params *rp)
+{
+    memset(rp, 0, sizeof(struct params));
+    rp->MShockMsun = 6.0e11;
+    rp->Hubble_h = 0.7;
+    rp->CGMrecipeOn = 1;
+}
+
+/*
+ * Asserts: a central held at Mshock (P(hot) = 0.5) keeps one regime over
+ *          40 snapshots.
+ *
+ * Setup: one galaxy created by set_fixed_regime_draws() in halo 4242 at
+ *        snapshot 10, reclassified at snapshots 20-59.
+ *
+ * Why: a draw renewed every snapshot (up to v0.98) made a borderline
+ *        central change regime at a rate 2P(1-P) per snapshot whatever its
+ *        mass did, moving its whole hot-phase gas between HotGas and CGMgas
+ *        each time.
+ */
+void test_fixed_regime_draw_holds() {
+    BEGIN_TEST("Regime draw: a central at Mshock keeps its regime");
+
+    struct params rp;
+    struct GALAXY gal;
+    setup_regime_params(&rp);
+    memset(&gal, 0, sizeof(gal));
+    set_fixed_regime_draws(&gal, 4242, 10);
+    int changes = 0;
+    int last = regime_at(&rp, &gal, 0.0, 20);
+    for(int s = 21; s < 60; s++) {
+        const int r = regime_at(&rp, &gal, 0.0, s);
+        changes += (r != last);
+        last = r;
+    }
+    ASSERT_EQUAL_INT(0, changes, "no regime changes at constant mass");
+}
+
+/*
+ * Asserts: the hot fraction of 4000 centrals at
+ *          log10(M / Mshock) = +0.1 is still the sigmoid S(0.1 / 0.1) = 0.731.
+ *
+ * Setup: 4000 galaxies created in different haloes, one classification each.
+ *
+ * Why: the fixed draw gives each halo its own threshold mass; across the
+ *        population the thresholds follow the same sigmoid.
+ */
+void test_fixed_regime_draw_population() {
+    BEGIN_TEST("Regime draw: population hot fraction follows the sigmoid");
+
+    struct params rp;
+    setup_regime_params(&rp);
+    const int N = 4000;
+    int hot = 0;
+    for(int i = 0; i < N; i++) {
+        struct GALAXY gal;
+        memset(&gal, 0, sizeof(gal));
+        set_fixed_regime_draws(&gal, 1000003LL * (i + 1), 30);
+        hot += regime_at(&rp, &gal, 0.1, 40);
+    }
+    const double expected = 1.0 / (1.0 + exp(-1.0));
+    /* 4 binomial sigma, sqrt(0.731 * 0.269 / 4000) = 0.0070 */
+    ASSERT_IN_RANGE((double)hot / N, expected - 0.028, expected + 0.028, "hot fraction = S(1) within 4 sigma");
+}
+
+/*
+ * Asserts: each of 500 centrals growing steadily from
+ *          -0.5 to +0.5 dex about Mshock changes regime at most once.
+ *
+ * Setup: 500 galaxies in different haloes, 50 snapshots of steady growth.
+ *
+ * Why: a growing halo should cross the shock threshold once (Dekel &
+ *        Birnboim 2006), not flip at random on the way through.
+ */
+void test_fixed_regime_draw_growth_crosses_once() {
+    BEGIN_TEST("Regime draw: a growing central changes regime at most once");
+
+    struct params rp;
+    setup_regime_params(&rp);
+    int worst = 0;
+    for(int i = 0; i < 500; i++) {
+        struct GALAXY gal;
+        memset(&gal, 0, sizeof(gal));
+        set_fixed_regime_draws(&gal, 99991LL * (i + 1), 5);
+        int last = regime_at(&rp, &gal, -0.5, 10), changes = 0;
+        for(int s = 1; s < 50; s++) {
+            const int r = regime_at(&rp, &gal, -0.5 + s / 49.0, 10 + s);
+            changes += (r != last);
+            last = r;
+        }
+        if(changes > worst) worst = changes;
+    }
+    ASSERT_TRUE(worst <= 1, "no galaxy changes regime more than once");
+}
+
 int main() {
     BEGIN_TEST_SUITE("Regime Determination & CGM Physics");
 
@@ -460,6 +572,9 @@ int main() {
     test_regime_transition();
     test_cold_stream_fraction();
     test_cgm_recipe_leaves_rheat();
+    test_fixed_regime_draw_holds();
+    test_fixed_regime_draw_population();
+    test_fixed_regime_draw_growth_crosses_once();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

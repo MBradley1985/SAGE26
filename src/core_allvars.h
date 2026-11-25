@@ -109,6 +109,8 @@ struct GALAXY
     int32_t   SnapNum;
     int32_t   Type;       /* 0=central; 1=satellite with subhalo; 2=orphan satellite; 3=merged (dead) */
     int32_t   Regime;     /* 0=CGM-dominated (cold-flow/precipitation); 1=hot-halo (classical); set by determine_and_store_regime() */
+    double    RegimeDraw; /* uniform in (0,1) fixed at creation; the CGM/hot regime draw */
+    double    FFBDraw;    /* uniform in (0,1) fixed at creation; the Li+24/BK25 FFB draw */
     int32_t   FFBRegime;  /* 0=standard SF; 1=feedback-free burst active; set by determine_and_store_ffb_regime() */
 
     int32_t   GalaxyNr;   /* index within the current forest's galaxy array */

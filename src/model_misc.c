@@ -18,6 +18,7 @@
 #include "core_allvars.h"
 
 #include "model_misc.h"
+#include "model_regimes.h"
 #include "model_darksage_disc.h"
 #include "model_darksage_instability.h"
 
@@ -83,6 +84,7 @@ void init_galaxy(const int p, const int halonr, int *galaxycounter, const struct
     galaxies[p].HaloNr = halonr;
     galaxies[p].MostBoundID = halos[halonr].MostBoundID;
     galaxies[p].SnapNum = halos[halonr].SnapNum - 1;
+    set_fixed_regime_draws(&galaxies[p], halos[halonr].MostBoundID, halos[halonr].SnapNum);
 
     galaxies[p].mergeType = 0;
     galaxies[p].mergeIntoID = -1;

@@ -220,8 +220,9 @@ reader who goes looking for a knob can find where it went.
 | `FFBConcSigma` | `FFB_CONC_SIGMA = 0.2` in [`src/model_regimes.c`](../src/model_regimes.c). |
 | `FFBThresholdSlope` | `FFB_THRESHOLD_SLOPE = -6.2` in [`src/model_regimes.c`](../src/model_regimes.c). |
 | `FFBIgnoreRegime` | Always on: the FFB criteria apply whatever the halo's CGM/hot regime. |
-| `FFBRandomMode` | Always a fresh draw each snapshot. |
-| `RegimeRandomMode` | Always a fresh draw each snapshot. |
+| `FFBRandomMode` | Always one draw per galaxy, set when it forms (since v0.98.1; a fresh draw each snapshot before). |
+| `RegimeRandomMode` | Always one draw per galaxy, set when it forms (since v0.98.1; a fresh draw each snapshot before). |
+| `RegimeDrawFixed`, `FFBDrawFixed` | Removed in v0.98.1: their setting 1, one draw per galaxy, is now the only behaviour. |
 | `FFBFeedbackDelayMyr`, `FFBCloudClumping`, `FFBCloudClumpingDisk`, `FFBStreamRadiusFraction`, `FFBShellSoundSpeedKms`, `FFBToomreQ`, `FFBSigmaCritMsunPc2` | Removed with the Dekel+23 shell and disc criteria (old FFB modes 8-11). |
 | `SNEnergyConservationOn` | Always on: both the reheating and the ejection term are bounded by the supernova energy available. |
 | `MaxSNEnergyCoupling` | `MAX_SN_ENERGY_COUPLING = 2.0` in [`src/model_misc.h`](../src/model_misc.h). |

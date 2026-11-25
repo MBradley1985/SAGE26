@@ -44,9 +44,7 @@ warnings.filterwarnings("ignore")
 # the automatic choice below for that model only.
 MODELS = [
     {'dir': 'output/millennium/',          'label': 'SAGE26 Millennium'},
-    # {'dir': 'output/millennium_vanilla/',  'label': 'SAGE26 vanilla'},
-    {'dir': 'output/microuchuu/',           'label': 'SAGE26 microUchuu'},
-]
+    {'dir': 'output/millennium_vanilla/',  'label': 'SAGE26 vanilla'},]
 
 OUTPUT_DIR = 'output/compare_plots/'    # relative to the SAGE26 top directory
 DATA_DIR = None                         # None -> <script_dir>/../data
@@ -95,7 +93,7 @@ plt.rcParams['legend.edgecolor'] = 'black'
 # Offset in dex of each IMF's stellar masses above the Chabrier (2003) scale.
 # Kroupa (2001) sits 0.04 dex above Chabrier -- the value the Tremonti04, MMAdrews13
 # and MMR-Kewley08 headers themselves quote -- and Salpeter 0.24 dex above.
-# paper_plots.py carries the same numbers in IMF_TO_CHABRIER_DEX; keep the two in step.
+# paper1_plots.py and paper2_plots.py carry the same numbers in IMF_TO_CHABRIER_DEX; keep them in step.
 _IMF_ABOVE_CHABRIER_DEX = {
     'chabrier': 0.00,
     'kroupa': 0.04,
