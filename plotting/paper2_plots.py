@@ -728,7 +728,7 @@ def fig1(D, pp, out):
         ax.set_ylim(9.5, 13.5)
         ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
         ax.xaxis.set_minor_locator(plt.NullLocator())
-    pp.save_figure(fig, os.path.join(out, 'Fig1_Selection_Thresholds_Mz.pdf'))
+    pp.save_figure(fig, os.path.join(out, 'Selection_Thresholds_Mz.pdf'))
 
 
 _SMF_MODELS = [  # (run, label, colour, ls, lw)
@@ -801,7 +801,7 @@ def fig2(D, pp, out):
         axf[-1].legend(*zip(*obs_hl), loc='upper right', frameon=False, ncol=2, bbox_to_anchor=(1.0, 0.92))
     fig.tight_layout()
     fig.subplots_adjust(hspace=0.001, wspace=0.001)
-    pp.save_figure(fig, os.path.join(out, 'Fig2_SMF_FFB_Grid_MBK25.pdf'))
+    pp.save_figure(fig, os.path.join(out, 'SMF_FFB_Grid_MBK25.pdf'))
 
 
 def fig3(D, pp, out):
@@ -856,7 +856,7 @@ def fig3(D, pp, out):
         ax.set_ylim(*yl)
     fig.tight_layout()
     fig.subplots_adjust(hspace=0.0)
-    pp.save_figure(fig, os.path.join(out, 'Fig3_FFB_Density_Evolution_MBK25.pdf'))
+    pp.save_figure(fig, os.path.join(out, 'FFB_Density_Evolution_MBK25.pdf'))
 
 
 def mbk25_half_mass(pp, z):
@@ -922,7 +922,7 @@ def fig4(D, pp, out):
     ax.text(0.98, 0.04, f'$z = {z:.1f}$', transform=ax.transAxes, ha='right', va='bottom', fontsize=20, zorder=10)
     pp._standard_legend(ax, loc='upper left')
     fig.tight_layout()
-    pp.save_figure(fig, os.path.join(out, 'Fig4_SFE_FFB.pdf'))
+    pp.save_figure(fig, os.path.join(out, 'SFE_FFB.pdf'))
 
 
 def fig5_values(D, pp):
@@ -963,7 +963,7 @@ def fig5(D, pp, out):
     axes[1].text(0.95, 0.95, f'z={Z[D["snap_z10"]]:.1f}', transform=axes[1].transAxes, ha='right', va='top')
     pp._standard_legend(axes[0], loc='upper left')
     fig.tight_layout()
-    pp.save_figure(fig, os.path.join(out, 'Fig5_FFBPropertiesHistograms_Combined.pdf'))
+    pp.save_figure(fig, os.path.join(out, 'FFBPropertiesHistograms_Combined.pdf'))
 
 
 def _tracked_sample(D):
@@ -1008,7 +1008,7 @@ def fig6(D, pp, out):
     axes[0, 0].set_xlim(z_min, z_hi)
     fig.tight_layout()
     fig.subplots_adjust(hspace=0.0, wspace=0.0)
-    pp.save_figure(fig, os.path.join(out, 'Fig6_SFH_FFB_transitions_sfr_stacked.pdf'))
+    pp.save_figure(fig, os.path.join(out, 'SFH_FFB_transitions_sfr_stacked.pdf'))
 
 
 def fig7(D, pp, out):
@@ -1070,7 +1070,7 @@ def fig7(D, pp, out):
     ax.set_xlim(*zr)
     ax.set_ylim(6.5, 12.5)
     fig.tight_layout()
-    pp.save_figure(fig, os.path.join(out, 'Fig7_G_mstar_vs_z_ndensity.pdf'))
+    pp.save_figure(fig, os.path.join(out, 'G_mstar_vs_z_ndensity.pdf'))
 
 
 def frac_series(D, run):
@@ -1101,7 +1101,7 @@ def fig8(D, pp, out):
     pp._ffb_histogram_x_axes(ax)
     fig.tight_layout()
     plt.subplots_adjust(bottom=0.2)
-    pp.save_figure(fig, os.path.join(out, 'Fig8_FFB_Fraction_Li24_vs_MBK25.pdf'))
+    pp.save_figure(fig, os.path.join(out, 'FFB_Fraction_Li24_vs_MBK25.pdf'))
 
 
 FIGS = {1: fig1, 2: fig2, 3: fig3, 4: fig4, 5: fig5, 6: fig6, 7: fig7, 8: fig8}
