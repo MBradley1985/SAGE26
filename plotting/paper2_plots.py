@@ -27,7 +27,7 @@ re-drawn anywhere with --replot without the model files.
 
 Usage (from anywhere; paths are taken relative to the SAGE26 root):
     python plotting/paper2_plots.py                      # mini-Millennium runs in output/
-    python plotting/paper2_plots.py --box big -j 32      # 500 Mpc/h runs (Millennium_*) in output/
+    python plotting/paper2_plots.py --box big            # 500 Mpc/h runs (Millennium_*) in output/
     python plotting/paper2_plots.py --replot --out DIR   # re-draw from DIR/paper2_reductions.pkl
     python plotting/paper2_plots.py --figs 2 3 --run NO=/path/to/run/
 
@@ -42,6 +42,9 @@ import pickle
 import argparse
 
 os.environ.setdefault('HDF5_USE_FILE_LOCKING', 'FALSE')   # Lustre/GPFS on clusters
+# One thread per process, so 4 workers use 4 CPUs (numpy/BLAS would otherwise start one per core).
+for _v in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS'):
+    os.environ.setdefault(_v, '1')
 
 import numpy as np
 import h5py as h5
@@ -1428,7 +1431,8 @@ def main():
     ap.add_argument('--figs', type=int, nargs='*', default=sorted(FIGS), help='figures to draw (default all)')
     ap.add_argument('--no-numbers', action='store_true', help='skip the numbers report')
     ap.add_argument('-j', '--workers', type=int,
-                    default=int(os.environ.get('SLURM_CPUS_PER_TASK', os.cpu_count() or 1)))
+                    default=min(4, os.cpu_count() or 1),
+                    help='worker processes (default 4: the head-node allowance)')
     ap.add_argument('--out', default=None, help='output directory (default <FFB run>/paper2/)')
     ap.add_argument('--track-z', type=float, default=TRACK_SELECT_Z,
                     help='Fig 6: select the tracked haloes at the snapshot nearest this z (default 10.1)')

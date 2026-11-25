@@ -37,7 +37,7 @@ Everything printed is also written to <out>/paper1_numbers.txt.
 
 Usage (from anywhere; paths are relative to the SAGE26 root):
     python plotting/paper1_plots.py                    # mini-Millennium runs in output/
-    python plotting/paper1_plots.py --box big -j 32    # full boxes (Millennium_*, miniUchuu_FFB) in output/
+    python plotting/paper1_plots.py --box big          # full boxes (Millennium_*, miniUchuu_FFB) in output/
     python plotting/paper1_plots.py --figs 2 12 R      # some figures only
 """
 
@@ -50,6 +50,9 @@ import subprocess
 from collections.abc import Mapping
 
 os.environ.setdefault('HDF5_USE_FILE_LOCKING', 'FALSE')
+# One thread per process, so 4 workers use 4 CPUs (numpy/BLAS would otherwise start one per core).
+for _v in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS'):
+    os.environ.setdefault(_v, '1')
 
 import numpy as np
 import h5py as h5
@@ -288,7 +291,8 @@ def main():
     ap.add_argument('--ablation', action='store_true',
                     help='Fig 13: also run ablation_series.py on its existing variant outputs')
     ap.add_argument('-j', '--workers', type=int,
-                    default=int(os.environ.get('SLURM_CPUS_PER_TASK', os.cpu_count() or 1)))
+                    default=min(4, os.cpu_count() or 1),
+                    help='worker processes (default 4: the head-node allowance)')
     ap.add_argument('--out', default=None, help='output directory (default <primary run>/plots/)')
     args = ap.parse_args()
     if '13' in args.figs and not args.ablation:
