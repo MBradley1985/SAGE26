@@ -27,7 +27,7 @@ re-drawn anywhere with --replot without the model files.
 
 Usage (from anywhere; paths are taken relative to the SAGE26 root):
     python plotting/paper2_plots.py                      # mini-Millennium runs in output/
-    python plotting/paper2_plots.py --box big -j 32      # 500 Mpc/h runs in output/testmodels/
+    python plotting/paper2_plots.py --box big -j 32      # 500 Mpc/h runs (Millennium_*) in output/
     python plotting/paper2_plots.py --replot --out DIR   # re-draw from DIR/paper2_reductions.pkl
     python plotting/paper2_plots.py --figs 2 3 --run NO=/path/to/run/
 
@@ -59,16 +59,16 @@ RUN_SETS = {
         'MBK100': 'output/millennium_mbk100/',
         'UCHUU':  'output/microuchuu/',
     },
-    'big': {
-        'FFB':    'output/testmodels/Millennium_FFB/',
-        'MBK':    'output/testmodels/Millennium_FFB_MBK25_smooth/',
-        'NO':     'output/testmodels/Millennium_noFFB/',
-        'FFB100': 'output/testmodels/Millennium_FFB100/',
-        'MBK100': 'output/testmodels/Millennium_MBK_FFB100/',
-        # Section 4.2: SN reheating + ejection x 1/(1+eta), and no SN feedback, in FFB mode
-        'FFBML2': 'output/testmodels/Millennium_FFB_reducedfb_both/',
-        'FFBML3': 'output/testmodels/Millennium_FFB_fboff/',
-        'UCHUU':  'output/testmodels/miniUchuu_FFB/',
+    'big': {   # layout on the supercomputer (as the paper_plots.py directory block there)
+        'FFB':    'output/Millennium_FFB/',
+        'MBK':    'output/Millennium_FFB_MBK25/',
+        'NO':     'output/Millennium_noFFB/',
+        'FFB100': 'output/Millennium_FFB100/',
+        'MBK100': 'output/Millennium_MBK_FFB100/',
+        # Section 4.2: SN reheating + ejection x 1/(1+eta), and no SN feedback, in FFB mode (skipped if absent)
+        'FFBML2': 'output/Millennium_FFB_reducedfb_both/',
+        'FFBML3': 'output/Millennium_FFB_fboff/',
+        'UCHUU':  'output/miniUchuu_FFB/',
     },
 }
 
