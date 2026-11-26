@@ -36,13 +36,6 @@ static const double PC_IN_CM              =  3.08568e18;
  * Units: M_sun / pc^2 (pre-multiplication by G to get acceleration). */
 static const double BK25_G_CRIT_MSUN_PC2 = 3100.0;
 
-/* Width of the log-normal scatter in halo concentration, sigma_c in ln(c),
- * applied to the BK25 threshold.  0.2 is the measured spread at fixed halo
- * mass (Jing 2000; Bullock et al. 2001; Dolag et al. 2004).  It is what turns
- * the sharp acceleration threshold into a smooth transition across the halo
- * population. */
-static const double FFB_CONC_SIGMA = 0.2;
-
 /* Exponent n in the Li et al. (2024) eq. 2 threshold mass,
  * M_v,ffb / 10^10.8 Msun ~ ((1+z)/10)^n.  Their value is -6.2.  The 10^10.8
  * normalisation is pinned at z = 9, where (1+z)/10 = 1, so the exponent
@@ -51,6 +44,52 @@ static const double FFB_THRESHOLD_SLOPE = -6.2;
 
 
 
+/*
+ * Uniform deviate in (0, 1) fixed by a halo's MostBoundID, the snapshot and a
+ * stream index.
+ *
+ * SplitMix64 (Steele, Lea & Flood 2014) mixes the three into 64 well-scrambled
+ * bits; the top 53 become a double.  Adding one half keeps the result off 0
+ * and 1, which inverse_normal_cdf() cannot take.  The same halo at the same
+ * snapshot gets the same value in every run on the same trees, independent of
+ * how many galaxies the run has created, merged or disrupted.
+ *
+ * The stream index gives each classification its own draw, so the CGM/hot and
+ * FFB outcomes of a galaxy are not correlated.  Streams 0 and 1 were the
+ * per-snapshot FFB and CGM/hot draws used up to v0.98; 2 and 3 are kept so the
+ * per-galaxy draws are unchanged from runs made with RegimeDrawFixed and
+ * FFBDrawFixed set to 1.
+ */
+#define DRAW_STREAM_REGIME_FIXED 2
+#define DRAW_STREAM_FFB_FIXED    3
+
+static double halo_uniform(const long long most_bound_id, const int snapnum, const int stream)
+{
+    uint64_t x = (uint64_t)most_bound_id ^ ((uint64_t)(uint32_t)snapnum * 0x9E3779B97F4A7C15ULL)
+                                         ^ ((uint64_t)(uint32_t)stream  * 0xD1B54A32D192ED03ULL);
+    x += 0x9E3779B97F4A7C15ULL;
+    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    x = (x ^ (x >> 27)) * 0x94D049BB133111EBULL;
+    x ^= x >> 31;
+    return ((double)(x >> 11) + 0.5) * (1.0 / 9007199254740992.0);   /* 2^-53 */
+}
+
+/*
+ * set_fixed_regime_draws -- the CGM/hot and FFB draws a galaxy keeps for its
+ * life.
+ *
+ * Called once from init_galaxy() with the creating halo's MostBoundID and
+ * snapshot, so runs on the same trees give a galaxy the same draws.  The
+ * galaxy struct carries them along its main branch.  Their own streams keep
+ * them independent of each other.  A fresh draw every snapshot (up to v0.98)
+ * made a central near the threshold change regime at a rate 2P(1-P) per
+ * snapshot, whatever its mass did, and tied that rate to the snapshot spacing.
+ */
+void set_fixed_regime_draws(struct GALAXY *g, const long long most_bound_id, const int snapnum)
+{
+    g->RegimeDraw = halo_uniform(most_bound_id, snapnum, DRAW_STREAM_REGIME_FIXED);
+    g->FFBDraw    = halo_uniform(most_bound_id, snapnum, DRAW_STREAM_FFB_FIXED);
+}
 
 /*
  * Classify each central galaxy as CGM-regime or hot-halo regime (Voit 2015).
@@ -65,6 +104,14 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
 {
     for(int p = 0; p < ngal; p++) {
         if(galaxies[p].mergeType > 0) continue;
+
+        /* Only centrals are classified.  infall_recipe() moves a central's gas
+         * into the reservoir of its regime, but nothing moves a satellite's, and
+         * a satellite cools and is stripped only from the reservoir its own
+         * regime names.  Reclassifying satellites from their shrinking subhalo
+         * mass (or Mvir = 0 for orphans) stranded their hot gas in the other
+         * reservoir; satellites instead keep the regime they had at infall. */
+        if(galaxies[p].Type != 0) continue;
 
         // Convert Mvir to physical units (Msun)
         // Mvir is stored in units of 10^10 Msun/h
@@ -88,10 +135,13 @@ void determine_and_store_regime(const int ngal, struct GALAXY *galaxies,
             // Smoothly varies from 0 (well below Mshock) to 1 (well above Mshock)
             const double hot_fraction = 1.0 / (1.0 + exp(-x));
 
-            // A fresh draw each snapshot: a borderline-mass central is
-            // re-tested against the sigmoid every timestep rather than being
-            // held to one quantile fixed at creation.
-            const double random_uniform = (double)rand() / (double)RAND_MAX;
+            // The galaxy's own draw, fixed at creation (set_fixed_regime_draws()).
+            // Hot when random_uniform < hot_fraction is Mvir above the galaxy's
+            // own threshold, Mshock * 10^(delta_log_M * ln[u / (1 - u)]); the
+            // thresholds across the population follow the same sigmoid, and a
+            // central is re-tested every snapshot, changing regime when its mass
+            // crosses its threshold.
+            const double random_uniform = galaxies[p].RegimeDraw;
             new_regime = (random_uniform < hot_fraction) ? 1 : 0;
         }
 
@@ -151,8 +201,17 @@ static double inverse_normal_cdf(double p)
  *        so the transition is smooth across the population.
  *   2 -- Boylan-Kolchin (2025) acceleration threshold, g_max > g_crit, with
  *        log-normal scatter applied to the halo concentration.  The scatter is
- *        drawn from the halo's own persistent quantile, so the threshold is
- *        sharp per halo but smooth across the population.
+ *        set by the same per-galaxy uniform draw as mode 1, so the threshold
+ *        is sharp per halo but smooth across the population.
+ *
+ * Both modes read the draw in the same sense: a low draw favours FFB.  A halo
+ * therefore sits at the same quantile under either criterion, and the two
+ * select the same haloes wherever their FFB probabilities agree.
+ *
+ * The draw is the galaxy's own, set once at creation (set_fixed_regime_draws(),
+ * a hash of the creating halo's MostBoundID and snapshot), not the next rand()
+ * value.  Runs on the same merger trees therefore give a galaxy the same draw
+ * under either criterion.
  *
  * All galaxies are marked non-FFB when EnhancedStarFormationOn == 0.
  */
@@ -186,10 +245,12 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
         // regime: FFB is set by the burst's own density and feedback timescale,
         // not by whether the halo carries a virial shock.
 
-        // A fresh draw each snapshot, with no memory across timesteps, so a
-        // halo sitting near the threshold moves in and out of FFB rather than
-        // being locked to one quantile fixed at creation.
-        const double draw = (double)rand() / (double)RAND_MAX;
+        // The galaxy's own draw, fixed at creation (set_fixed_regime_draws()),
+        // so each halo has its own Li+24 threshold mass and its own BK25
+        // concentration quantile, and is re-tested every snapshot.  Li+24 eq. 3
+        // is then the FFB fraction across the population at (Mvir, z), as they
+        // define it.
+        const double draw = galaxies[p].FFBDraw;
 
         if(run_params->EnhancedStarFormationOn == 1) {
             // Li et al. 2024 mass-based method (original)
@@ -209,7 +270,8 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
             // BK25 acceleration-based with log-normal concentration scatter.
             // The Ishiyama+21 table gives the mean concentration; individual halos
             // scatter around it following p(c)dc ~ exp(-(ln c - ln c0)^2 / 2sigma_c^2) d(ln c)
-            // with sigma_c ~ 0.2 (Jing 2000; Bullock+01; Dolag+04).
+            // with sigma_c = ConcentrationScatter, default 0.2, the measured spread at
+            // fixed mass (Jing 2000; Bullock+01; Dolag+04).
             // Each halo draws its own concentration quantile, giving a smooth
             // FFB transition across the halo population rather than a single
             // sharp mass threshold.
@@ -228,13 +290,15 @@ void determine_and_store_ffb_regime(const int ngal, const double Zcurr,
             double c = interpolate_concentration_ishiyama21(logM, Zcurr, run_params);
             if(c < 1.0) c = 1.0;
 
-            // Apply log-normal scatter: ln(c) ~ Normal(ln(c_mean), sigma_c)
+            // Apply log-normal scatter: ln(c) ~ Normal(ln(c_mean), sigma_c).
+            // A high concentration favours FFB, so the quantile is 1 - draw: a
+            // low draw then favours FFB here exactly as it does in mode 1.
             {
-                double u = draw;
+                double u = 1.0 - draw;
                 if(u < 1.0e-6) u = 1.0e-6;
                 if(u > 1.0 - 1.0e-6) u = 1.0 - 1.0e-6;
                 const double z_normal = inverse_normal_cdf(u);
-                c = c * exp(FFB_CONC_SIGMA * z_normal);
+                c = c * exp(run_params->ConcentrationScatter * z_normal);
                 if(c < 1.0) c = 1.0;
             }
 

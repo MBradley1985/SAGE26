@@ -36,40 +36,13 @@
 #include "model_mergers.h"
 #include "model_infall.h"
 #include "model_reincorporation.h"
+#include "model_darksage_disc.h"
+#include "model_darksage_sf.h"
+#include "model_dust.h"
 #include "model_starformation_and_feedback.h"
 
 #include "model_cooling_heating.h"
 #include "model_enhanced_bhphysics.h"
-
-/* ----------------------------------------------------------------------------
- * TEMPORARY DIAGNOSTIC -- satellite destruction trace.
- *
- * Dumps one CSV row per destruction event with the values the disruption test
- * actually sees at the moment it fires, so the trigger can be identified from
- * outside.  Inert unless the environment variable SAGE_DISRUPT_LOG is set to a
- * path prefix; a normal run never opens a file and never takes the branch.
- * Remove this block and its two call sites when the question is answered.
- * -------------------------------------------------------------------------- */
-static FILE *sage_disrupt_log = NULL;
-static int sage_disrupt_log_tried = 0;
-
-static FILE *get_disrupt_log(const int task)
-{
-    if(sage_disrupt_log_tried) return sage_disrupt_log;
-    sage_disrupt_log_tried = 1;
-    const char *prefix = getenv("SAGE_DISRUPT_LOG");
-    if(prefix == NULL || prefix[0] == '\0') return NULL;
-    char path[2048];
-    snprintf(path, sizeof(path), "%s.%d.csv", prefix, task);
-    sage_disrupt_log = fopen(path, "w");
-    if(sage_disrupt_log != NULL) {
-        fprintf(sage_disrupt_log,
-                "snap,step,steps,type,gate_zero_baryons,mvir,deltamvir,"
-                "currentmvir,baryons,ratio,mergtime,stellarmass,coldgas,len,dest\n");
-    }
-    return sage_disrupt_log;
-}
-
 
 
 static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *maxgals, struct halo_data *halos,
@@ -236,6 +209,35 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
 
             galaxies[ngal].dT = -1.0;
 
+            // Per-snapshot accumulators start from zero for every galaxy carried forward,
+            // orphans included: a central or satellite of a secondary progenitor becomes an
+            // orphan here and would otherwise carry last snapshot's SFR into its merger
+            // (add_galaxies_together adds it to the central's SfrBulge).
+            galaxies[ngal].Cooling = 0.0;
+            galaxies[ngal].Heating = 0.0;
+            galaxies[ngal].QuasarModeBHaccretionMass = 0.0;
+            galaxies[ngal].RadioModeBHaccretionMassUncapped = 0.0;
+            galaxies[ngal].OutflowRate = 0.0;
+            galaxies[ngal].DustFormationRate = galaxies[ngal].DustGrowthRate = galaxies[ngal].DustDestructionRate = 0.0f;
+            galaxies[ngal].DustSubsteps = 0;
+
+            for(int step = 0; step < STEPS; step++) {
+                galaxies[ngal].SfrDisk[step] = galaxies[ngal].SfrBulge[step] = 0.0;
+                galaxies[ngal].SfrDiskColdGas[step] = galaxies[ngal].SfrDiskColdGasMetals[step] = 0.0;
+                galaxies[ngal].SfrBulgeColdGas[step] = galaxies[ngal].SfrBulgeColdGasMetals[step] = 0.0;
+            }
+
+            // DarkSAGEMode: Zero DiscSFR array for this output step
+            if(run_params->DarkSAGEMode >= 1) {
+                for(int bin_i = 0; bin_i < N_BINS; bin_i++) {
+                    galaxies[ngal].DiscSFR[bin_i] = 0.0;
+                }
+
+                // Update disc radii as halo grows - rotation curve depends on current mass distribution
+                // This also fixes galaxies that started with Vvir=0 (zero disc radii)
+                update_disc_radii(ngal, galaxies, halos, run_params);
+            }
+
             // this deals with the central galaxies of (sub)halos
             if(galaxies[ngal].Type == 0 || galaxies[ngal].Type == 1) {
                 // this halo shouldn't hold a galaxy that has already merged; remove it from future processing
@@ -270,17 +272,6 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                     }
                     galaxies[ngal].Mvir = new_Mvir;
 
-                    galaxies[ngal].Cooling = 0.0;
-                    galaxies[ngal].Heating = 0.0;
-                    galaxies[ngal].QuasarModeBHaccretionMass = 0.0;
-                    galaxies[ngal].OutflowRate = 0.0;
-
-                    for(int step = 0; step < STEPS; step++) {
-                        galaxies[ngal].SfrDisk[step] = galaxies[ngal].SfrBulge[step] = 0.0;
-                        galaxies[ngal].SfrDiskColdGas[step] = galaxies[ngal].SfrDiskColdGasMetals[step] = 0.0;
-                        galaxies[ngal].SfrBulgeColdGas[step] = galaxies[ngal].SfrBulgeColdGasMetals[step] = 0.0;
-                    }
-
                     if(halonr == halos[halonr].FirstHaloInFOFgroup) {
                         // a central galaxy
                         galaxies[ngal].mergeType = 0;
@@ -295,7 +286,20 @@ static int join_galaxies_of_progenitors(const int halonr, const int ngalstart, i
                         }
 
                         galaxies[ngal].DiskScaleRadius = get_disk_radius(halonr, ngal, halos, galaxies);
+                        galaxies[ngal].SpinDiskRadius = galaxies[ngal].DiskScaleRadius;
                         get_bulge_radius(ngal, galaxies, run_params);
+
+                        // DarkSAGEMode: newly cooling gas follows the current halo, like DiskScaleRadius above:
+                        // its j-profile scale and the hot-gas spin direction are refreshed every snapshot
+                        if(run_params->DarkSAGEMode >= 1) {
+                            galaxies[ngal].CoolScaleRadius = galaxies[ngal].DiskScaleRadius;
+                            const double spin_mag = sqrt(halos[halonr].Spin[0] * halos[halonr].Spin[0] +
+                                                         halos[halonr].Spin[1] * halos[halonr].Spin[1] +
+                                                         halos[halonr].Spin[2] * halos[halonr].Spin[2]);
+                            if(spin_mag > 0.0) {
+                                for(int j = 0; j < 3; j++) galaxies[ngal].SpinHot[j] = (float)(halos[halonr].Spin[j] / spin_mag);
+                            }
+                        }
 
                         galaxies[ngal].Type = 0;
                     } else {
@@ -406,7 +410,19 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
     const int halo_snapnum = halos[halonr].SnapNum;
     const double Zcurr = run_params->ZZ[halo_snapnum];
-    
+    const double halo_age = run_params->Age[halo_snapnum];
+
+    /* On entry each galaxy's SnapNum still names the snapshot it was last
+     * evolved to (its progenitor's).  Record the interval it has to cover in
+     * dT, then move SnapNum to the snapshot being evolved to, so that every
+     * routine reading redshift or snapshot-indexed arrays from SnapNum (FIRE
+     * and DB06 redshift terms, the regime draw, the SFH bins) sees the current
+     * snapshot rather than lagging by one. */
+    for(int p = 0; p < ngal; p++) {
+        galaxies[p].dT = run_params->Age[galaxies[p].SnapNum] - halo_age;
+        galaxies[p].SnapNum = halo_snapnum;
+    }
+
     if (run_params->CGMrecipeOn == 1) {
         determine_and_store_regime(ngal, galaxies, run_params);
     }
@@ -423,13 +439,13 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         }
     }
 
-    const double halo_age = run_params->Age[halo_snapnum];
     const double infallingGas = infall_recipe(centralgal, ngal, Zcurr, galaxies, run_params);
 
     // We integrate things forward by using a number of intervals equal to STEPS
     // Adaptive timesteps: at high-z, snapshot spacing can exceed dynamical time
-    // so we use more substeps when needed
-    const double deltaT_total = run_params->Age[galaxies[0].SnapNum] - halo_age;
+    // so we use more substeps when needed.  The interval is the central's, the
+    // galaxy whose t_dyn sets the count below; galaxies[0] need not be the central.
+    const double deltaT_total = galaxies[centralgal].dT;
 
     /* Both FFB criteria read only Mvir/Rvir and the halo's own random draw,
      * none of which infall_recipe() touches, so the position of this call
@@ -479,6 +495,15 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
         galaxies[p].SubstepsUsed = effective_steps;
     }
 
+    // DarkSAGEMode: Zero DiscSFR arrays before accumulating over timesteps
+    if(run_params->DarkSAGEMode >= 1) {
+        for(int p = 0; p < ngal; p++) {
+            for(int i = 0; i < N_BINS; i++) {
+                galaxies[p].DiscSFR[i] = 0.0;
+            }
+        }
+    }
+
     for(int step = 0; step < effective_steps; step++) {
 
         // Loop over all galaxies in the halo
@@ -488,11 +513,10 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                 continue;
             }
 
-            const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
-            const double time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
-
-            if(galaxies[p].dT < 0.0) {
-                galaxies[p].dT = deltaT;
+            const double deltaT = galaxies[p].dT;
+            const double time = halo_age + deltaT - (step + 0.5) * (deltaT / effective_steps);
+            if(run_params->DarkSAGEMode >= 1) {
+                darksage_set_disk_scale_radius(p, galaxies, run_params);
             }
 
             // For the central galaxy only
@@ -518,13 +542,32 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
             } else {
                 coolingGas = cooling_recipe(p, halo_snapnum, deltaT / effective_steps, galaxies, run_params);
+                const double cold_before = galaxies[p].ColdGas, cold_metals_before = galaxies[p].MetalsColdGas;
+                const double cold_dust_before = galaxies[p].ColdDust;
                 cool_gas_onto_galaxy(p, coolingGas, galaxies);
+                // DarkSAGEMode: the gas SAGE26 just cooled joins the annuli by its j
+                if(run_params->DarkSAGEMode >= 1) {
+                    darksage_deposit_cooling(p, galaxies[p].ColdGas - cold_before, galaxies[p].MetalsColdGas - cold_metals_before,
+                                             galaxies[p].ColdDust - cold_dust_before,
+                                             galaxies[p].RcoolToRvir > 0.0f && galaxies[p].RcoolToRvir < 1.0f,
+                                             galaxies, run_params);
+                }
+            }
+
+            // DarkSAGEMode: refresh the annulus radii from the rotation curve every substep
+            // after the first (DarkSage core_build_model.c)
+            if(run_params->DarkSAGEMode >= 1 && step != 0) {
+                update_disc_radii(p, galaxies, halos, run_params);
             }
 
             // stars form and then explode!
             // Map adaptive step to fixed STEPS bins for SFR arrays
             int step_bin = (step * STEPS) / effective_steps;
             if(step_bin >= STEPS) step_bin = STEPS - 1;
+            // DarkSAGEMode: the disc scale radius the recipes read follows the annuli
+            if(run_params->DarkSAGEMode >= 1) {
+                darksage_set_disk_scale_radius(p, galaxies, run_params);
+            }
             starformation_and_feedback(p, centralgal, time, deltaT / effective_steps, halonr, halo_snapnum, step_bin, galaxies, run_params);
         }
 
@@ -538,14 +581,13 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
                         "Error: galaxies[%d].MergTime = %lf is too large! Should have been within the age of the Universe\n",
                         p, galaxies[p].MergTime);
 
-                const double deltaT = run_params->Age[galaxies[p].SnapNum] - halo_age;
+                const double deltaT = galaxies[p].dT;
                 galaxies[p].MergTime -= deltaT / effective_steps;
 
                 // only consider mergers or disruption for halo-to-baryonic mass ratios below the threshold
                 // or for satellites with no baryonic mass (they don't grow and will otherwise hang around forever)
                 double currentMvir = galaxies[p].Mvir - galaxies[p].deltaMvir * (1.0 - ((double)step + 1.0) / (double)effective_steps);
                 double galaxyBaryons = galaxies[p].StellarMass + galaxies[p].ColdGas;
-                const int gate_zero_baryons = (galaxyBaryons == 0.0);   /* DIAGNOSTIC */
                 if((galaxyBaryons == 0.0) || (galaxyBaryons > 0.0 && (currentMvir / galaxyBaryons <= run_params->ThresholdSatDisruption))) {
 
                     int merger_centralgal = galaxies[p].Type==1 ? centralgal:galaxies[p].CentralGal;
@@ -558,22 +600,7 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
                     if(isfinite(galaxies[p].MergTime)) {
                         // Time at which this event occurs (same formula used for mergers)
-                        const double event_time = run_params->Age[galaxies[p].SnapNum] - (step + 0.5) * (deltaT / effective_steps);
-                        /* DIAGNOSTIC: record what the test saw, before the
-                           destruction routines zero the galaxy's fields. */
-                        FILE *dlog = get_disrupt_log(run_params->ThisTask);
-                        if(dlog != NULL) {
-                            fprintf(dlog,
-                                    "%d,%d,%d,%d,%d,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%d,%d\n",
-                                    galaxies[p].SnapNum, step, effective_steps,
-                                    galaxies[p].Type, gate_zero_baryons,
-                                    galaxies[p].Mvir, galaxies[p].deltaMvir,
-                                    currentMvir, galaxyBaryons,
-                                    galaxyBaryons > 0.0 ? currentMvir / galaxyBaryons : -1.0,
-                                    galaxies[p].MergTime, galaxies[p].StellarMass,
-                                    galaxies[p].ColdGas, galaxies[p].Len,
-                                    galaxies[p].MergTime > 0.0 ? 4 : 1);
-                        }
+                        const double event_time = halo_age + deltaT - (step + 0.5) * (deltaT / effective_steps);
                         // disruption has occurred!
                         if(galaxies[p].MergTime > 0.0) {
                             disrupt_satellite_to_ICS(merger_centralgal, p, event_time, galaxies, run_params);
@@ -589,12 +616,21 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
 
             }
         }
+
+        // DustySAGEMode: the substep's dust physics, once per surviving galaxy, after its star
+        // formation and any merger burst
+        if(run_params->DustySAGEMode >= 1) {
+            for(int p = 0; p < ngal; p++) {
+                if(galaxies[p].mergeType > 0) continue;
+                dust_evolve(p, centralgal, galaxies[p].dT / effective_steps, galaxies, run_params);
+                if(run_params->DarkSAGEMode >= 1 && run_params->DustySAGEMode == 2) {
+                    darksage_sync_disc_metals(p, galaxies);   /* mode 2 changes the cold metals */
+                }
+            }
+        }
     } // Go on to the next STEPS substep
 
     // Extra miscellaneous stuff before finishing this halo
-    const double deltaT = run_params->Age[galaxies[0].SnapNum] - halo_age;
-    const double inv_deltaT = 1.0/deltaT;
-
     for(int p = 0; p < ngal; p++) {
 
         // Don't bother with galaxies that have already merged
@@ -602,9 +638,26 @@ static int evolve_galaxies(const int halonr, const int ngal, int *numgals, int *
             continue;
         }
 
+        // Each galaxy accumulated its rates over its own interval
+        const double inv_deltaT = 1.0/galaxies[p].dT;
+
         galaxies[p].Cooling *= inv_deltaT;
         galaxies[p].Heating *= inv_deltaT;
         galaxies[p].OutflowRate *= inv_deltaT;
+        {
+            const float to_rate = (float)(inv_deltaT * run_params->UnitMass_in_g / run_params->UnitTime_in_s * SEC_PER_YEAR / SOLAR_MASS);
+            galaxies[p].DustFormationRate *= to_rate;
+            galaxies[p].DustGrowthRate *= to_rate;
+            galaxies[p].DustDestructionRate *= to_rate;
+        }
+
+        if(run_params->DarkSAGEMode >= 1) {
+            // the radii the output carries follow the snapshot's final masses (DarkSage
+            // core_build_model.c refreshes them here, before output)
+            update_disc_radii(p, galaxies, halos, run_params);
+            darksage_sync_disc_phases(p, galaxies);
+            darksage_set_half_mass_radii(p, galaxies);
+        }
     }
 
 

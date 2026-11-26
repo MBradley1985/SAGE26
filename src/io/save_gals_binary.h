@@ -86,8 +86,11 @@ extern "C" {
       float Cooling;
       float Heating;
       float QuasarModeBHaccretionMass;
+      float RadioModeBHaccretionMass;
+      float RadioModeBHaccretionMassUncapped;
       float TimeOfLastMajorMerger;
       float TimeOfLastMinorMerger;
+      float TimeOfLastQuasarBurst;
       float OutflowRate;
 
       /* infall properties */

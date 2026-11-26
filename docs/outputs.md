@@ -57,6 +57,7 @@ field reference. Everything else is in code units.
 +- Snap_<N>/         (one group per output snapshot)
    +- SnapNum, Type, GalaxyIndex, ...   (one dataset per field)
    +- SFHMassDisk, SFHMassBulge          (only if SaveFullSFH = 1)
+   +- MHMetalsDisk, MHMetalsBulge        (only if SaveFullMH = 1)
 ```
 
 Each galaxy-property dataset has two HDF5 attributes:
@@ -163,7 +164,7 @@ section below) and the unit actually written.
 | `mergeType` | -- | Merger/disruption channel (see flag table above). |
 | `mergeIntoID` | -- | `GalaxyIndex` of the galaxy this one is merging into. |
 | `mergeIntoSnapNum` | -- | Snapshot of the merge target. |
-| `dT` | Myr | Time since this galaxy was last evolved (snapshot interval / sub-step). |
+| `dT` | h^-1 Myr | Time over which this galaxy was evolved to reach this snapshot (the snapshot interval). Code times carry a factor of h, so divide by h for Myr. |
 
 ### Halo properties
 
@@ -179,7 +180,7 @@ section below) and the unit actually written.
 | `Vvir` | km / s | Virial velocity of this galaxy's halo. |
 | `Vmax` | km / s | Maximum circular velocity of this galaxy's halo. |
 | `VelDisp` | km / s | Velocity dispersion of this galaxy's halo. |
-| `Concentration` | -- | NFW halo concentration from the Ishiyama+21 c-M relation (set when `ConcentrationOn = 1`). |
+| `Concentration` | -- | NFW halo concentration from the method chosen by `ConcentrationOn` (1: Ishiyama+21; 2, 3: V_max/V_vir; 4: DarkSAGE). |
 | `g_max` | code units (UnitLength / UnitTime^2) | Peak NFW gravitational acceleration used for the Boylan-Kolchin (2025) feedback-free-burst threshold (HDF5 dtype: float64). Set per snapshot by `EnhancedStarFormationOn = 2` (the BK25 method) and reset to 0 for non-FFB haloes; not a running maximum across snapshots, and unrelated to CGM cooling. |
 
 ### Baryonic reservoirs
@@ -217,13 +218,15 @@ section below) and the unit actually written.
 |-------|-------|-------------|
 | `SfrDisk` | Msun / yr | Disk SFR averaged over the snapshot interval (mean over the STEPS sub-steps). |
 | `SfrBulge` | Msun / yr | Bulge SFR averaged over the snapshot interval (starburst component). |
-| `SfrDiskZ` | dimensionless | Mass-weighted metallicity of the star-forming disk gas (`MetalsColdGas / ColdGas` averaged over sub-steps). Despite the "Units" attribute saying `Msun/yr`, this field is a metallicity ratio, not a rate. |
+| `SfrDiskZ` | dimensionless | Mass-weighted metallicity of the star-forming disk gas (`MetalsColdGas / ColdGas` averaged over sub-steps). |
 | `SfrBulgeZ` | dimensionless | Mass-weighted metallicity of the star-forming bulge gas. Same caveat as `SfrDiskZ`. |
 | `OutflowRate` | Msun / yr | Cold-gas reheating rate (cold -> hot) integrated over the substep. |
 | `MassLoading` | dimensionless | SN mass-loading factor (outflow rate / SFR). |
 | `Cooling` | log10(erg / s) | log10 of cooling energy rate. Stored as 0.0 when no cooling occurred (i.e. zero, not "1 erg/s"). |
 | `Heating` | log10(erg / s) | log10 of AGN radio-mode heating energy rate. Stored as 0.0 when no heating occurred. |
-| `QuasarModeBHaccretionMass` | 1.0e10 Msun / h | Mass accreted by the black hole during the last sub-step via the quasar (merger-driven) mode. |
+| `QuasarModeBHaccretionMass` | 1.0e10 Msun / h | Mass accreted by the black hole since the previous snapshot (over `dT`) in quasar mode (mergers and disk instabilities). Not Eddington-limited. |
+| `RadioModeBHaccretionMass` | 1.0e10 Msun / h | Mass accreted by the black hole since the previous snapshot (over `dT`) in radio mode, from the hot halo (Regime 1 only). `Heating` = 0.1 c^2 x this mass / `dT`. |
+| `RadioModeBHaccretionMassUncapped` | 1.0e10 Msun / h | Diagnostic, not used by the model: the radio-mode accretion over `dT` before the cap that limits the heating to the cooling (the recipe's rate x `RadioModeEfficiency`, Eddington- and reservoir-limited). For a jet power, 0.1 c^2 x this mass / `dT`. Equal to `RadioModeBHaccretionMass` when the cap does not bind. |
 
 ### Sizes
 
@@ -240,21 +243,22 @@ section below) and the unit actually written.
 |-------|-------|-------------|
 | `TimeOfLastMajorMerger` | Myr | Code-time of the last major merger, converted to Myr. |
 | `TimeOfLastMinorMerger` | Myr | Code-time of the last minor merger, converted to Myr. |
-| `TimeOfInfall` | Myr | Code-time at which this galaxy became a satellite (zero for Type 0). |
+| `TimeOfLastQuasarBurst` | Myr / h | Lookback time to z=0 of the last quasar-mode accretion (`grow_black_hole`, from a merger or disk instability), at the midpoint of its substep. Negative if the galaxy has had none. Only the snapshot interval is physical: orphan mergers fire late in the interval because of the linear `Mvir` ramp, and instabilities fire at its start when `Vmax` or the disk radius changes, so the position within the interval is not a real burst time. |
+| `TimeOfInfall` | -- | Snapshot number at which this galaxy last became a satellite (zero for Type 0). |
 
 ### Two-regime cooling (CGM model)
 
 | Field | Units | Description |
 |-------|-------|-------------|
 | `Regime` | -- | CGM regime flag (see flag table above). |
-| `tcool` | Gyr | Meaning depends on regime. Regime 0: bulk cooling time of the Carr et al. (2023) `alpha = 1.4` CGM profile. Regime 1: the halo dynamical time `R_vir / V_vir`. |
-| `tff` | Gyr | Regime 0: halo free-fall time at the virial radius. Regime 1: set to **-1** as a sentinel -- the hot path has no CGM free-fall time. |
+| `tcool` | Gyr/h | Meaning depends on regime. Regime 0: bulk cooling time of the Carr et al. (2023) `alpha = 1.4` CGM profile. Regime 1: the halo dynamical time `R_vir / V_vir`. |
+| `tff` | Gyr/h | Regime 0: halo free-fall time at the virial radius. Regime 1: set to **-1** as a sentinel -- the hot path has no CGM free-fall time. |
 | `CoolingRate` | Msun / Gyr | Cooled gas rate, `coolingGas / dt`, including the active regime's final suppression. On the regime-aware path this is the sum of both reservoirs' contributions. |
 | `H2DepletionTime_Gyr` | Gyr | H2 depletion time from the K13 prescription. Set to -1 when not applicable. |
 | `RcoolToRvir` | dimensionless | Ratio of the cooling radius to the virial radius, from the hot-halo path only. **Uncapped**, so values > 1 occur and are physical (a corona cooling faster than it can be shock-heated). Set to **-1** when the cooling radius was never evaluated for this halo. |
 | `mdot_cool` | Msun / yr | Quasi-static hot-halo cooling rate, `(1 - f_stream)` share of the flow out of `HotGas`. Hot-regime path only. |
 | `mdot_stream` | Msun / yr | Dekel & Birnboim cold-stream accretion rate, `f_stream` share of the flow out of **`HotGas`** -- a hot-regime quantity, not a CGM one. Zero for Regime 0 galaxies. |
-| `r_heat` | Mpc / h | AGN heating radius; the monotonic ratchet that suppresses cooling by `(1 - r_heat / r_cool)`. Capped at `R_vir` on the CGM path only. |
+| `r_heat` | Mpc / h | AGN heating radius; the monotonic ratchet that suppresses cooling by `(1 - r_heat / r_cool)`. Set by the hot-halo (Regime 1) radio mode only; it keeps its last value while a halo is in Regime 0. |
 
 A halo that has drained its `CGMgas` has `tcool`, `tff` and `RcoolToRvir`
 cleared rather than left holding the last values it computed, so selecting on
@@ -301,6 +305,53 @@ The result is in code-time units; multiply by
 
 These fields are always present in both writers and always accumulate.
 
+## DarkSAGEMode annuli (`DarkSAGEMode >= 1`)
+
+HDF5 output only, written when `DarkSAGEMode` is 1, 2 or 3 (files from
+`DarkSAGEMode = 0` are unchanged). Per-annulus fields are 2-D datasets of
+shape (ngalaxies, 30), or (ngalaxies, 31) for the annulus edges. The
+annuli sum to the bulk fields: `DiscGas` to `ColdGas`, `DiscGasMetals` to
+`MetalsColdGas`, `DiscStars` to `StellarMass - BulgeMass` (the bulge is not
+in the annuli), `DiscStarsMetals` to `MetalsStellarMass - MetalsBulgeMass`,
+`DiscH2` to `H2gas`, `DiscHI` to `H1gas` and `DiscSFR` to `SfrDisk`. In
+modes 2 and 3 `DiskRadius` is measured from the annuli, J_disc / (2 M_disc
+V_disc) over gas and disc stars, V_disc being the disc's own rotation speed
+(half the mass-weighted mean radius), rather than from the halo spin. The
+radii, rotation curve and half-mass radii are refreshed at the end of each
+snapshot, so they follow the written masses.
+
+| Field | Units | Description |
+|-------|-------|-------------|
+| `DiscRadii` | Mpc / h | Radius of each annulus edge (j-bin edge through the rotation curve). |
+| `DiscVcirc` | km / s | Circular velocity at each annulus edge, from the same rotation curve. The rotation speed j/r is lower in the centre, where rotational support is partial. |
+| `DiscGas`, `DiscGasMetals` | 1.0e10 Msun / h | Cold gas and its metals in each annulus. |
+| `DiscStars`, `DiscStarsMetals` | 1.0e10 Msun / h | Disc stars and their metals in each annulus. |
+| `DiscH2`, `DiscHI` | 1.0e10 Msun / h | H2 and HI in each annulus. H2 and HI half-mass radii can be computed from these. |
+| `DiscSFR` | Msun / yr | Star formation rate in each annulus, averaged over the snapshot like `SfrDisk`. |
+| `VelDispStars` | km / s | Stellar velocity dispersion in each annulus. |
+| `SpinGas`, `SpinStars` | -- | Unit vectors of the gas- and stellar-disc angular momenta. |
+| `GasDiscScaleRadius`, `StellarDiscScaleRadius` | Mpc / h | Exponential scale radii fitted to the cold-gas annuli (all of `ColdGas`) and the disc-star annuli (`StellarMass - BulgeMass`), DarkSage's method. |
+| `GasDiscHalfMassRadius`, `StellarDiscHalfMassRadius` | Mpc / h | Radii enclosing half the cold gas and half the disc stars in the annuli. |
+| `VelDispBulge`, `VelDispMergerBulge` | km / s | Velocity dispersions of the instability and merger bulges. |
+| `SpinClassicalBulge` | (Mpc / h) (km / s) | Specific angular momentum vector of the merger bulge. |
+| `ICSMeanRadius` | Mpc / h | Mass-weighted radius at which the intrahalo stars were deposited. |
+
+## DustySAGEMode dust (`DustySAGEMode >= 1`)
+
+HDF5 output only, written when `DustySAGEMode` is 1 or 2 (files from
+`DustySAGEMode = 0` are unchanged). In mode 1 each reservoir's dust is part
+of its metals (`MetalsColdGas` etc. include it); in mode 2 it is held
+outside them, so the total metals of the cold gas are `MetalsColdGas +
+ColdDust`.
+
+| Field | Units | Description |
+|-------|-------|-------------|
+| `ColdDust`, `HotDust`, `CGMDust`, `EjectedDust` | 1.0e10 Msun / h | Dust in the cold, hot halo, CGM and ejected gas. |
+| `DustFormationRate` | Msun / yr | Dust made by AGB stars and SNII, averaged over the snapshot. |
+| `DustGrowthRate` | Msun / yr | Dust grown by accretion in the cold gas, averaged over the snapshot. |
+| `DustDestructionRate` | Msun / yr | Dust destroyed by supernova shocks, averaged over the snapshot. |
+| `DiscDust` | 1.0e10 Msun / h | `[ngal, 30]`, written only when `DarkSAGEMode` is also on: dust in the cold gas of each annulus, summing to `ColdDust`. |
+
 ## Cumulative star formation history (`SaveFullSFH = 1`)
 
 HDF5 output only. When `SaveFullSFH = 1`, two extra 2-D datasets are
@@ -308,12 +359,15 @@ written per output snapshot:
 
 | Dataset | Shape | Units | Description |
 |---------|-------|-------|-------------|
-| `SFHMassDisk` | (ngalaxies, SimMaxSnaps) | 1.0e10 Msun / h | Stellar mass formed in the disk at each snapshot up to the current one. |
-| `SFHMassBulge` | (ngalaxies, SimMaxSnaps) | 1.0e10 Msun / h | Stellar mass formed in the bulge (starbursts) at each snapshot up to the current one. |
+| `SFHMassDisk` | (ngalaxies, SimMaxSnaps) | 1.0e10 Msun / h | Stellar mass now in the disk, by the snapshot bin in which it formed. Sums to `StellarMass - BulgeMass`. |
+| `SFHMassBulge` | (ngalaxies, SimMaxSnaps) | 1.0e10 Msun / h | Stellar mass now in the bulge, by the snapshot bin in which it formed: bulge starbursts, merged satellites (all their stars), and disk stars moved by disk instabilities and major mergers (which take the disk's age mix with them). Sums to `BulgeMass`. |
 
 Each dataset carries `Description`, `Units`, and `NumSnapshots`
 attributes. Entries for snapshots beyond the galaxy's current
-`SnapNum` are zero. Reconstructing the SFR(z) curve for a galaxy
+`SnapNum` are zero. Stars formed between snapshots k and k+1 are filed
+in bin k (so the galaxy's own snapshot bin is always empty), and each
+bin holds the mass that survives recycling, (1 - R) x formed, so the
+bins sum to `StellarMass`. Reconstructing the SFR(z) curve for a galaxy
 amounts to differencing consecutive snapshot bins and dividing by
 the snapshot interval.
 

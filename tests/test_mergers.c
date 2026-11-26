@@ -7,6 +7,7 @@
  * - Bulge formation during mergers
  * - Mass redistribution
  * - Black hole growth
+ * - Hot-phase gas routed to the merger target's regime reservoir
  */
 
 #include <stdio.h>
@@ -266,15 +267,156 @@ void test_black_hole_merger() {
                       "Secondary BH mass transferred");
 }
 
+/* Gas masses are floats; a sum of two floats agrees with the double sum to
+ * single-precision round-off. */
+static const double MERGER_GAS_SUM_TOL = 1e-6;
+
+/*
+ * Asserts: add_galaxies_together() puts the satellite's CGMgas into the
+ *          HotGas of a hot-regime (Regime == 1) target, with its metals and
+ *          dust, and leaves the target's CGMgas at zero.
+ *
+ * Setup: a Regime 1 central holding only hot gas merges with a Regime 0
+ *        satellite holding CGM gas and a little hot gas.  CGMrecipeOn = 1.
+ *
+ * Why: a hot-regime central keeps its hot-phase gas in HotGas.  Infall,
+ *        stripping and feedback all route gas there; this test asks the
+ *        same of a merger.  Any CGMgas left on a Regime 1 central sends
+ *        cooling_recipe_regime_aware() through the secondary CGM recipe,
+ *        whose AGN step sets r_heat against rcool = Rvir.  With a trace
+ *        reservoir the heating always exceeds the cooling, so r_heat jumps
+ *        to Rvir and, as r_heat only moves outwards, the hot halo never
+ *        cools again.
+ *
+ * Tolerance: MERGER_GAS_SUM_TOL, float round-off on a sum of two floats.
+ */
+void test_merger_cgm_into_hot_regime_target() {
+    BEGIN_TEST("Merger: satellite CGM joins a hot-regime target's HotGas");
+
+    static struct GALAXY gals[2];
+    memset(gals, 0, sizeof(gals));
+    struct params run_params;
+    memset(&run_params, 0, sizeof(struct params));
+    run_params.CGMrecipeOn = 1;
+
+    gals[0].Regime = 1;
+    gals[0].HotGas = 10.0;
+    gals[0].MetalsHotGas = 0.1;
+    gals[0].HotDust = 0.01;
+
+    gals[1].Regime = 0;
+    gals[1].CGMgas = 0.5;
+    gals[1].MetalsCGMgas = 0.005;
+    gals[1].CGMDust = 0.0005;
+    gals[1].HotGas = 0.2;
+    gals[1].MetalsHotGas = 0.002;
+    gals[1].HotDust = 0.0002;
+
+    add_galaxies_together(0, 1, gals, &run_params);
+
+    ASSERT_EQUAL_FLOAT(0.0, gals[0].CGMgas, "Target CGMgas stays zero");
+    ASSERT_EQUAL_FLOAT(0.0, gals[0].MetalsCGMgas, "Target MetalsCGMgas stays zero");
+    ASSERT_EQUAL_FLOAT(0.0, gals[0].CGMDust, "Target CGMDust stays zero");
+    ASSERT_CLOSE(10.0 + 0.5 + 0.2, gals[0].HotGas, MERGER_GAS_SUM_TOL,
+                 "Satellite CGM and hot gas both join the target's HotGas");
+    ASSERT_CLOSE(0.1 + 0.005 + 0.002, gals[0].MetalsHotGas, MERGER_GAS_SUM_TOL,
+                 "Their metals join MetalsHotGas");
+    ASSERT_CLOSE(0.01 + 0.0005 + 0.0002, gals[0].HotDust, MERGER_GAS_SUM_TOL,
+                 "Their dust joins HotDust");
+}
+
+/*
+ * Asserts: add_galaxies_together() puts the satellite's HotGas into the
+ *          CGMgas of a CGM-regime (Regime == 0) target, with its metals and
+ *          dust, and leaves the target's HotGas at zero.
+ *
+ * Setup: the mirror of the test above -- a Regime 0 central holding only
+ *        CGM gas merges with a Regime 1 satellite holding hot and CGM gas.
+ *
+ * Why: a CGM-regime central cools only from CGMgas, so hot gas handed to
+ *        it would sit idle until infall_recipe() folds it into the CGM at
+ *        the next snapshot.  Stripping (strip_from_satellite) already gives
+ *        to the reservoir of the receiving central's regime; a merger
+ *        should do the same.
+ *
+ * Tolerance: MERGER_GAS_SUM_TOL, float round-off on a sum of two floats.
+ */
+void test_merger_hot_into_cgm_regime_target() {
+    BEGIN_TEST("Merger: satellite hot gas joins a CGM-regime target's CGMgas");
+
+    static struct GALAXY gals[2];
+    memset(gals, 0, sizeof(gals));
+    struct params run_params;
+    memset(&run_params, 0, sizeof(struct params));
+    run_params.CGMrecipeOn = 1;
+
+    gals[0].Regime = 0;
+    gals[0].CGMgas = 3.0;
+    gals[0].MetalsCGMgas = 0.03;
+    gals[0].CGMDust = 0.003;
+
+    gals[1].Regime = 1;
+    gals[1].HotGas = 0.4;
+    gals[1].MetalsHotGas = 0.004;
+    gals[1].HotDust = 0.0004;
+    gals[1].CGMgas = 0.1;
+    gals[1].MetalsCGMgas = 0.001;
+    gals[1].CGMDust = 0.0001;
+
+    add_galaxies_together(0, 1, gals, &run_params);
+
+    ASSERT_EQUAL_FLOAT(0.0, gals[0].HotGas, "Target HotGas stays zero");
+    ASSERT_EQUAL_FLOAT(0.0, gals[0].MetalsHotGas, "Target MetalsHotGas stays zero");
+    ASSERT_EQUAL_FLOAT(0.0, gals[0].HotDust, "Target HotDust stays zero");
+    ASSERT_CLOSE(3.0 + 0.4 + 0.1, gals[0].CGMgas, MERGER_GAS_SUM_TOL,
+                 "Satellite hot and CGM gas both join the target's CGMgas");
+    ASSERT_CLOSE(0.03 + 0.004 + 0.001, gals[0].MetalsCGMgas, MERGER_GAS_SUM_TOL,
+                 "Their metals join MetalsCGMgas");
+    ASSERT_CLOSE(0.003 + 0.0004 + 0.0001, gals[0].CGMDust, MERGER_GAS_SUM_TOL,
+                 "Their dust joins CGMDust");
+}
+
+/*
+ * Asserts: with CGMrecipeOn = 0 a merger still adds HotGas to HotGas,
+ *          whatever Regime holds.
+ *
+ * Setup: Regime 0 on the target (the zeroed default) and CGMrecipeOn = 0.
+ *
+ * Why: without the CGM recipe every halo keeps its hot-phase gas in HotGas
+ *        (classical SAGE); the regime routing above must not apply.
+ *
+ * Tolerance: MERGER_GAS_SUM_TOL, float round-off on a sum of two floats.
+ */
+void test_merger_hot_gas_without_cgm_recipe() {
+    BEGIN_TEST("Merger: hot gas joins HotGas with the CGM recipe off");
+
+    static struct GALAXY gals[2];
+    memset(gals, 0, sizeof(gals));
+    struct params run_params;
+    memset(&run_params, 0, sizeof(struct params));
+    run_params.CGMrecipeOn = 0;
+
+    gals[0].HotGas = 5.0;
+    gals[1].HotGas = 0.5;
+
+    add_galaxies_together(0, 1, gals, &run_params);
+
+    ASSERT_CLOSE(5.5, gals[0].HotGas, MERGER_GAS_SUM_TOL, "Satellite hot gas joins HotGas");
+    ASSERT_EQUAL_FLOAT(0.0, gals[0].CGMgas, "CGMgas stays zero");
+}
+
 int main() {
     BEGIN_TEST_SUITE("Galaxy Merger Physics");
-    
+
     test_merger_classification();
     test_merger_timescale();
     test_merger_timescale_scaling();
     test_merger_mass_conservation();
     test_merger_remnant_radius();
     test_black_hole_merger();
+    test_merger_cgm_into_hot_regime_target();
+    test_merger_hot_into_cgm_regime_target();
+    test_merger_hot_gas_without_cgm_recipe();
     
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

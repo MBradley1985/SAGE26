@@ -19,10 +19,22 @@ extern "C" {
 
     #include "core_allvars.h"
 
+    /* After cold gas has been removed, fit H2gas and H1gas back into its hydrogen, 0.74 ColdGas:
+     * H2gas first (unchanged if it fits), H1gas in the hydrogen left.  Capped separately, as before,
+     * their sum could exceed the hydrogen.  float, as the SAGE26 clamps it replaces. */
+    static inline void clamp_phases_to_hydrogen(struct GALAXY *g)
+    {
+        const float max_h = (g->ColdGas > 0.0f) ? g->ColdGas * HYDROGEN_MASS_FRAC : 0.0f;
+        if(g->H2gas > max_h) g->H2gas = max_h;
+        const float max_h1 = max_h - g->H2gas;
+        if(g->H1gas > max_h1) g->H1gas = (max_h1 > 0.0f) ? max_h1 : 0.0f;
+    }
+
     /* functions in model_starformation_and_feedback.c */
     extern void starformation_and_feedback(const int p, const int centralgal, const double time, const double dt, const int halonr, const int halo_snapnum, const int step,
                                            struct GALAXY *galaxies, const struct params *run_params);
-    extern void update_from_star_formation(const int p, const double stars, const double metallicity, struct GALAXY *galaxies, const struct params *run_params);
+    /* returns the dust added to MetalsStellarMass (DustySAGEMode 2; else 0) */
+    extern double update_from_star_formation(const int p, const double stars, const double metallicity, struct GALAXY *galaxies, const struct params *run_params);
     extern void update_from_feedback(const int p, const int centralgal, const double reheated_mass, double ejected_mass, const double metallicity,
                                      struct GALAXY *galaxies, const struct params *run_params);
 
@@ -31,7 +43,7 @@ extern "C" {
 
     /* Print totals of the silent physics clamps (H2 cap, negative HI,
        reheated-mass cap); called from finalize_sage() in VERBOSE builds. */
-    extern void report_sf_clamp_counts(void);
+    // extern void report_sf_clamp_counts(void);
 
 #ifdef __cplusplus
 }

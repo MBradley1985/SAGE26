@@ -453,6 +453,61 @@ void test_temperature_cooling_regulation() {
 }
 
 // ============================================================================
+// TEST 12: r_heat Only Moves Outwards
+// ============================================================================
+/* r_heat is a float field; an untouched value comes back to round-off. */
+static const double RHEAT_RATCHET_TOL = 1e-5;
+
+static void setup_rheat_ratchet(struct GALAXY *gal, struct params *run_params)
+{
+    memset(gal, 0, sizeof(struct GALAXY));
+    memset(run_params, 0, sizeof(struct params));
+    run_params->UnitTime_in_s = 3.08568e+16;
+    run_params->UnitDensity_in_cgs = 6.76991e-31;
+    run_params->Hubble_h = 0.7;
+    run_params->G = 43007.1;
+    run_params->AGNrecipeOn = 2;      /* Bondi; BlackHoleMass = 0 so no new heating */
+    gal->Vvir = 200.0;                /* km/s */
+    gal->Rvir = 0.2;                  /* Mpc/h */
+    gal->Mvir = 0.186;                /* Vvir^2 Rvir / G, 10^10 Msun/h */
+    gal->HotGas = 0.5;
+    gal->MetalsHotGas = 0.01;
+}
+
+void test_rheat_ratchet_hot() {
+    BEGIN_TEST("Hot Halo: r_heat Never Moves Inwards");
+    /*
+     * Asserts: cooling_recipe_hot() leaves r_heat alone when the AGN adds no
+     *          heating (Croton et al. 2016, Sec. 9.1.1: r_heat is a ratchet).
+     *
+     * Setup: a hot-halo galaxy with no black hole, so no heating can push
+     *        r_heat out, and r_heat = rcool / 2.
+     *
+     * Why: r_heat records the extent of past AGN heating and only grows; the
+     *        cooling it suppresses is (1 - r_heat / rcool) of the flow.
+     */
+    struct GALAXY gal[1];
+    struct params run_params;
+    const double dt = 1.0e-4;
+
+    // Real Sutherland & Dopita (1993) tables, so rcool is physical; loaded once,
+    // here, because the earlier tests in this file run without them
+    read_cooling_functions();
+
+    // rcool of this halo (no AGN, so nothing else changes)
+    setup_rheat_ratchet(&gal[0], &run_params);
+    run_params.AGNrecipeOn = 0;
+    cooling_recipe_hot(0, /*halo_snapnum*/ 0, dt, gal, &run_params);
+    const double rcool = gal[0].RcoolToRvir * gal[0].Rvir;
+    ASSERT_LESS_THAN(rcool, gal[0].Rvir, "Setup: quasi-static cooling, rcool < Rvir");
+
+    setup_rheat_ratchet(&gal[0], &run_params);
+    gal[0].r_heat = 0.5 * rcool;
+    cooling_recipe_hot(0, /*halo_snapnum*/ 0, dt, gal, &run_params);
+    ASSERT_CLOSE(0.5 * rcool, gal[0].r_heat, RHEAT_RATCHET_TOL, "r_heat never moves inwards");
+}
+
+// ============================================================================
 // MAIN TEST RUNNER
 // ============================================================================
 int main(void) {
@@ -473,6 +528,7 @@ int main(void) {
     test_regime_aware_cooling();
     test_cooling_time_scaling();
     test_temperature_cooling_regulation();
+    test_rheat_ratchet_hot();
 
     PRINT_TEST_SUMMARY();
     

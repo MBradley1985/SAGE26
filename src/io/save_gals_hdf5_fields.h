@@ -9,13 +9,55 @@
  * line in save_hdf5_galaxies() that fills the buffer value.
  *
  * Not listed here (special cases handled explicitly): TaskForestNr (internal
- * per-tree bookkeeping, never written) and SFHMassDisk/SFHMassBulge (2-D
- * star-formation-history datasets with their own shape and write path).
+ * per-tree bookkeeping, never written), SFHMassDisk/SFHMassBulge and
+ * MHMetalsDisk/MHMetalsBulge (2-D star-formation and metallicity history
+ * datasets with their own shape and write path).
  *
  * SAGE26 -- released under MIT (see LICENSE).
  */
 
 #pragma once
+
+/* DarkSAGEMode outputs, written only when DarkSAGEMode >= 1 so DarkSAGEMode == 0 files are unchanged.
+ * X(DatasetName == GALAXY member, width, description, units); width 1 is a 1-D dataset,
+ * width > 1 a 2-D [ngal, width] dataset (one column per annulus or annulus edge). */
+#define DARKSAGE_OUTPUT_FIELDS(X) \
+    X(DiscRadii, N_BINS + 1, "Radius of each annulus edge (j-bin edge mapped through the rotation curve).", "Mpc/h") \
+    X(DiscVcirc, N_BINS + 1, "Circular velocity at each annulus edge, from the rotation curve (the rotation speed j/r is lower where rotational support is partial).", "km/s") \
+    X(DiscGas, N_BINS, "Cold gas mass in each annulus.", "1.0e10 Msun/h") \
+    X(DiscGasMetals, N_BINS, "Cold gas metals in each annulus.", "1.0e10 Msun/h") \
+    X(DiscStars, N_BINS, "Stellar disc mass in each annulus.", "1.0e10 Msun/h") \
+    X(DiscStarsMetals, N_BINS, "Stellar disc metals in each annulus.", "1.0e10 Msun/h") \
+    X(DiscH2, N_BINS, "H2 mass in each annulus (modes 1-2: H2gas shared by the per-annulus H2 law; mode 3: that law, summing to H2gas).", "1.0e10 Msun/h") \
+    X(DiscHI, N_BINS, "HI mass in each annulus, summing to H1gas.", "1.0e10 Msun/h") \
+    X(DiscSFR, N_BINS, "Star formation rate in each annulus, averaged over the snapshot's substeps.", "Msun/yr") \
+    X(VelDispStars, N_BINS, "Stellar velocity dispersion in each annulus.", "km/s") \
+    X(SpinGas, 3, "Unit vector of the gas-disc angular momentum.", "Unitless") \
+    X(SpinStars, 3, "Unit vector of the stellar-disc angular momentum.", "Unitless") \
+    X(ICSMeanRadius, 1, "Mass-weighted radius at which the intrahalo stars were deposited; sets their Hernquist profile.", "Mpc/h") \
+    X(VelDispBulge, 1, "Velocity dispersion of the instability-built (secular) bulge.", "km/s") \
+    X(VelDispMergerBulge, 1, "Velocity dispersion of the merger-driven (classical) bulge.", "km/s") \
+    X(SpinClassicalBulge, 3, "Specific angular momentum vector of the merger-driven bulge.", "(Mpc/h)(km/s)") \
+    X(StellarDiscScaleRadius, 1, "Exponential scale radius fitted to the disc-star annuli (StellarMass - BulgeMass; DarkSage method).", "Mpc/h") \
+    X(GasDiscScaleRadius, 1, "Exponential scale radius fitted to the cold-gas annuli (all of ColdGas; DarkSage method).", "Mpc/h") \
+    X(StellarDiscHalfMassRadius, 1, "Radius enclosing half the disc stars (StellarMass - BulgeMass) in the annuli.", "Mpc/h") \
+    X(GasDiscHalfMassRadius, 1, "Radius enclosing half the cold gas (all of ColdGas) in the annuli.", "Mpc/h")
+
+/* DustySAGEMode outputs, written only when DustySAGEMode >= 1 (same X() form, written by the same
+ * code as DARKSAGE_OUTPUT_FIELDS).  Mode 1 counts the dust inside the reservoirs' metals, mode 2
+ * outside them. */
+#define DUSTY_OUTPUT_FIELDS(X) \
+    X(ColdDust, 1, "Dust in the cold gas.", "1.0e10 Msun/h") \
+    X(HotDust, 1, "Dust in the hot halo gas.", "1.0e10 Msun/h") \
+    X(CGMDust, 1, "Dust in the CGM gas.", "1.0e10 Msun/h") \
+    X(EjectedDust, 1, "Dust in the ejected gas.", "1.0e10 Msun/h") \
+    X(DustFormationRate, 1, "Dust made by stars (AGB, SNII), averaged over the snapshot.", "Msun/yr") \
+    X(DustGrowthRate, 1, "Dust grown by accretion in the cold gas, averaged over the snapshot.", "Msun/yr") \
+    X(DustDestructionRate, 1, "Dust destroyed by supernova shocks, averaged over the snapshot.", "Msun/yr")
+
+/* Outputs of DarkSAGEMode and DustySAGEMode together, written only when both are on (same X() form) */
+#define DARK_DUSTY_OUTPUT_FIELDS(X) \
+    X(DiscDust, N_BINS, "Dust in the cold gas of each annulus, summing to ColdDust.", "1.0e10 Msun/h")
 
 #define GALAXY_OUTPUT_FIELDS(X) \
     X(SnapNum, SnapNum, int32_t, H5T_NATIVE_INT, \
@@ -50,7 +92,7 @@
       "Unitless") \
     X(dT, dT, float, H5T_NATIVE_FLOAT, \
       "Time between this snapshot and when the galaxy was last evolved.", \
-      "Myr") \
+      "Myr/h") \
     X(Posx, Posx, float, H5T_NATIVE_FLOAT, \
       "Galaxy spatial x position.", \
       "Mpc/h") \
@@ -146,10 +188,10 @@
       "Msun/yr") \
     X(SfrDiskZ, SfrDiskZ, float, H5T_NATIVE_FLOAT, \
       "Average metallicity of star-forming disk gas.", \
-      "Msun/yr") \
+      "Unitless") \
     X(SfrBulgeZ, SfrBulgeZ, float, H5T_NATIVE_FLOAT, \
       "Average metallicity of star-forming bulge gas.", \
-      "Msun/yr") \
+      "Unitless") \
     X(DiskRadius, DiskScaleRadius, float, H5T_NATIVE_FLOAT, \
       "Disk scale radius based on Mo, Shude & White (1998)", \
       "Mpc/h") \
@@ -170,15 +212,18 @@
       "1.0e10 Msun/h") \
     X(Cooling, Cooling, float, H5T_NATIVE_FLOAT, \
       "Energy rate for gas cooling in the galaxy.", \
-      "erg/s") \
+      "log10(erg/s)") \
     X(Heating, Heating, float, H5T_NATIVE_FLOAT, \
       "Energy rate for gas heating in the galaxy.", \
-      "erg/s") \
+      "log10(erg/s)") \
     X(BHSeedMass, BHSeedMass, float, H5T_NATIVE_FLOAT, \
       "Mass of the black hole seed when it was seeded.", \
       "1.0e10 Msun/h") \
     X(QuasarModeBHaccretionMass, QuasarModeBHaccretionMass, float, H5T_NATIVE_FLOAT, \
-      "Mass that this galaxy's black hole accreted during the last time step.", \
+      "Mass this galaxy's black hole accreted in quasar mode (mergers and disk instabilities) since the previous snapshot.", \
+      "1.0e10 Msun/h") \
+    X(RadioModeBHaccretionMassUncapped, RadioModeBHaccretionMassUncapped, float, H5T_NATIVE_FLOAT, \
+      "Diagnostic: radio-mode accretion since the previous snapshot before the cap that limits the heating to the cooling (Bondi rate x RadioModeEfficiency, Eddington- and reservoir-limited). Not used by the model.", \
       "1.0e10 Msun/h") \
     X(TimeOfLastMajorMerger, TimeOfLastMajorMerger, float, H5T_NATIVE_FLOAT, \
       "Time since this galaxy had a major merger.", \
@@ -186,12 +231,15 @@
     X(TimeOfLastMinorMerger, TimeOfLastMinorMerger, float, H5T_NATIVE_FLOAT, \
       "Time since this galaxy had a minor merger.", \
       "Myr") \
+    X(TimeOfLastQuasarBurst, TimeOfLastQuasarBurst, float, H5T_NATIVE_FLOAT, \
+      "Lookback time to z=0 of this galaxy's last quasar-mode accretion, from a merger or disk instability; negative if none.", \
+      "Myr/h") \
     X(OutflowRate, OutflowRate, float, H5T_NATIVE_FLOAT, \
       "Rate at which cold gas is reheated to hot gas.", \
       "Msun/yr") \
     X(infallMvir, infallMvir, float, H5T_NATIVE_FLOAT, \
       "Virial mass of this galaxy's halo at the previous timestep.", \
-      "1.0e10 Msun/yr") \
+      "1.0e10 Msun/h") \
     X(infallVvir, infallVvir, float, H5T_NATIVE_FLOAT, \
       "Virial velocity of this galaxy's halo at the previous timestep.", \
       "km/s") \
@@ -220,32 +268,32 @@
       "Mass of atomic hydrogen (HI) in the cold gas reservoir.", \
       "1.0e10 Msun/h") \
     X(tcool, tcool, float, H5T_NATIVE_FLOAT, \
-      "Cooling time of the CGM gas in the halo.", \
-      "Gyr") \
+      "Regime 0: cooling time of the CGM gas in the halo. Regime 1: halo dynamical time Rvir/Vvir.", \
+      "Gyr/h") \
     X(tff, tff, float, H5T_NATIVE_FLOAT, \
-      "Free-fall time of the CGM gas in the halo.", \
-      "Gyr") \
+      "Free-fall time of the CGM gas in the halo (-1 in Regime 1).", \
+      "Gyr/h") \
     X(H2DepletionTime_Gyr, H2DepletionTime_Gyr, float, H5T_NATIVE_FLOAT, \
-      "H2 depletion time from the K13 prescription. -1 if not applicable.", \
+      "H2 depletion time from the K13 prescription, or with H2DepletionMode > 0 the molecular (H2 + He) depletion time M_mol/SFR used for star formation. -1 if not applicable.", \
       "Gyr") \
     X(RcoolToRvir, RcoolToRvir, float, H5T_NATIVE_FLOAT, \
       "Ratio of the cooling radius to the virial radius of the halo.", \
       "Unitless") \
     X(TimeOfInfall, TimeOfInfall, float, H5T_NATIVE_FLOAT, \
-      "Time when the galaxy last became a satellite galaxy.", \
-      "Myr") \
+      "Snapshot number at which the galaxy last became a satellite galaxy (0 for centrals).", \
+      "Unitless") \
     X(FFBRegime, FFBRegime, int32_t, H5T_NATIVE_INT, \
       "FFB Regime of this galaxy's halo: 0 = Normal halo 1 = FFB halo.", \
       "Unitless") \
     X(Concentration, Concentration, float, H5T_NATIVE_FLOAT, \
-      "NFW halo concentration parameter from Ishiyama+21 c-M relation.", \
+      "NFW halo concentration parameter, set by ConcentrationOn: 1 Ishiyama+21 c-M relation; 2 Vmax/Vvir; 3 Vmax/Vvir, infall values for satellites; 4 Dutton & Maccio 2014 with the Di Cintio et al. 2014 baryonic factor.", \
       "Unitless") \
     X(mdot_cool, mdot_cool, float, H5T_NATIVE_FLOAT, \
       "Cooling rate of hot halo gas.", \
-      "1.0e10 Msun/yr") \
+      "Msun/yr") \
     X(mdot_stream, mdot_stream, float, H5T_NATIVE_FLOAT, \
       "Cooling rate of cold streams.", \
-      "1.0e10 Msun/yr") \
+      "Msun/yr") \
     X(ICS_disrupt, ICS_disrupt, float, H5T_NATIVE_FLOAT, \
       "In-situ ICS: cumulative satellite stellar mass stripped directly into THIS halo's ICS reservoir. Channel of last transfer, not of origin -- all ICS originates in disruption, but a packet formed in a progenitor group is booked under ICS_accrete once that group falls in.", \
       "1.0e10 Msun/h") \
@@ -256,8 +304,8 @@
       "Mass-weighted sum m*t (code time) at ICS deposition; divide by (ICS_disrupt+ICS_accrete) for mean assembly lookback.", \
       "1.0e10 Msun/h * code_time") \
     X(g_max, g_max, double, H5T_NATIVE_DOUBLE, \
-      "Maximum g value for this galaxy's halo across all snapshots.", \
-      "1.0e10 Msun/h") \
+      "Peak NFW gravitational acceleration of this galaxy's halo at this snapshot (Boylan-Kolchin 2025 FFB test).", \
+      "(km/s)^2/(Mpc/h)") \
     X(r_heat, r_heat, float, H5T_NATIVE_FLOAT, \
       "AGN radio-mode heating radius (ratchet, capped at Rvir in the CGM regime). Cooling is suppressed at r < r_heat.", \
       "Mpc/h")\

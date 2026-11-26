@@ -20,6 +20,8 @@ optional parameters take the listed default if omitted.
 | `OutputFormat` | string | no | `sage_hdf5` | `sage_hdf5`, `sage_binary`, or `lhalo_binary_output`. The last converts any supported input tree format to lhalo-binary and writes no galaxy catalogue. |
 | `NumOutputs` | int | no | `-1` | Number of snapshot outputs; `-1` = all snapshots. |
 | `SaveFullSFH` | 0/1 | no | `0` | Store per-snapshot SFR history arrays (`SFHMassDisk`, `SFHMassBulge`). |
+| `SaveFullMH` | 0/1 | no | `0` | Store the metal mass in the stars of each SFH bin (`MHMetalsDisk`, `MHMetalsBulge`). Needs `SaveFullSFH = 1`. |
+| `UseM200c` | 0/1 | no | `0` | Halo mass definition for Consistent-Trees input. 0: `Mvir` is the trees' own `mvir` (Rockstar's Bryan & Norman 1998 virial mass). 1: `Mvir` is the trees' `M200c`, matching the 200 rho_crit virial radius SAGE computes (a halo with no positive `M200c` keeps `mvir`; without an `M200c` column a warning is printed and `mvir` is used). The other readers already give M200c, so it changes nothing there. On microUchuu, 1 lowers halo masses by 0.06 dex at z = 0 and 0.02-0.03 dex at z >= 1, and the cosmic SFR density by 0.02-0.05 dex. |
 
 ---
 
@@ -27,7 +29,7 @@ optional parameters take the listed default if omitted.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `TreeType` | string | yes | — | Merger tree format: `lhalo_binary`, `lhalo_hdf5`, `consistent_trees_ascii`, `consistent_trees_hdf5`, `genesis_hdf5`, `gadget4_hdf5`. |
+| `TreeType` | string | yes | — | Merger tree format: `lhalo_binary`, `mimic_lhalo_binary` (L-Halo header with Mimic's 88-byte record), `lhalo_hdf5`, `consistent_trees_ascii`, `consistent_trees_hdf5`, `genesis_hdf5`, `gadget4_hdf5`. |
 | `TreeName` | string | yes | — | Tree file basename (files are named `TreeName.N`). |
 | `SimulationDir` | string | yes | — | Directory containing tree files. |
 | `FileWithSnapList` | string | yes | — | File listing snapshot scale factors, one per line. |
@@ -60,16 +62,23 @@ optional parameters take the listed default if omitted.
 |-----------|------|----|---------|-------------------|
 | `SFprescription` | int | no | `1` | Star formation prescription: 0=Croton+06; 1=Blitz & Rosolowsky 06 H₂; 2=Somerville+25 SFR; 3=Somerville+25 SFR+H₂; 4=Krumholz & Dekel 12; 5=KMT 09; 6=Krumholz 13; 7=Gnedin & Draine 14. |
 | `AGNrecipeOn` | int | no | `2` | AGN feedback: 0=off; 1=empirical; 2=Bondi-Hoyle; 3=cold cloud accretion. |
-| `SupernovaRecipeOn` | 0/1 | no | `1` | SN feedback: 0=off; 1=Croton+16 reheating/ejection. |
+| `SupernovaRecipeOn` | 0/1 | no | `1` | SN feedback: 0=off; 1=Croton+16 reheating/ejection (FIRE scaling with FIREmodeOn; per annulus in DarkSAGEMode). |
 | `ReionizationOn` | 0/1 | no | `1` | Reionization suppression of infall: 0=off; 1=Kravtsov+04 analytic fit. |
 | `DiskInstabilityOn` | 0/1 | no | `1` | Disk instability: 0=off; 1=Toomre criterion drives bulge and BH growth. |
 | `CGMrecipeOn` | 0/1 | no | `1` | Two-regime CGM model: 0=off (classical C16 cooling only, including its rapid cold-accretion branch at `r_cool > R_vir`); 1=on. |
 | `KarpovModeOn` | 0/1 | no | `0` | Metallicity of SN-reheated and ejected gas: 0=the full Karpov+23 recipe; 1=a low-metallicity floor at `Z/Z_sun = 0.01`. Only acts when the reheating/ejection path computes a metallicity for the outflow. |
 | `FIREmodeOn` | 0/1 | no | `1` | FIRE stellar feedback: 0=off; 1=on. |
-| `EnhancedStarFormationOn` | int | no | `1` | Feedback-free burst (FFB) galaxies: 0=off; 1=Li+24 mass threshold with their eq. 3 sigmoid, so a halo is FFB with probability `f_ffb(Mvir, z)`; 2=Boylan-Kolchin (2025) acceleration threshold `g_max > g_crit`, with log-normal scatter applied to the halo concentration. Both apply to centrals regardless of the halo's CGM/hot regime, and both draw fresh from the shared `rand()` stream each snapshot. See [Star formation and feedback](physics/starformation_and_feedback.md). |
-| `ConcentrationOn` | int | no | `3` | Halo concentration method: 0=off; 1=Ishiyama+21 table; 2=V_max/V_vir; 3=V_max/V_vir with infall freeze for satellites. |
+| `EnhancedStarFormationOn` | int | no | `1` | Feedback-free burst (FFB) galaxies: 0=off; 1=Li+24 mass threshold with their eq. 3 sigmoid, so a halo is FFB with probability `f_ffb(Mvir, z)`; 2=Boylan-Kolchin (2025) acceleration threshold `g_max > g_crit`, with log-normal scatter applied to the halo concentration. Both apply to centrals regardless of the halo's CGM/hot regime, and both take a fresh draw each snapshot from a hash of the halo's MostBoundID and the snapshot, so classifications are reproducible run to run. See [Star formation and feedback](physics/starformation_and_feedback.md). |
+| `ConcentrationOn` | int | no | `3` | Halo concentration method: 0=off; 1=Ishiyama+21 table; 2=V_max/V_vir; 3=V_max/V_vir with infall freeze for satellites; 4=DarkSAGE (Dutton & Macciò 2014 with the Di Cintio et al. 2014 baryonic factor; the DarkSAGEMode disc always uses this). |
 | `BulgeSizeOn` | int | no | `3` | Bulge radius model: 0=off; 1=Shen+2003 eq.33; 2=Shen+2003 eq.32; 3=Tonini+2016 (separate merger and instability channels, mass-weighted average). |
 | `StarburstColdGasOn` | 0/1 | no | `1` | Include cold gas contribution during merger starbursts. |
+| `H2DepletionMode` | 0-5 | no | `0` | Cold-gas fixes (see `investigation/gas_metals/README.md`). 0: off. 1-4: every H2 prescription (SFprescription 1, 3-7) forms stars at SFR = M_mol / t_dep (M_mol = H2gas / 0.74, helium included) instead of its efficiency x H2 / t_dyn law; nothing else changes. t_dep is: 1: t_dep = 1 Gyr (Lagos+18 Table 3 default nu_SF = 1 Gyr^-1). 2: Krumholz, McKee & Tumlinson (2009) eq. 10, t_dep = 2.6 Gyr (Sigma_gas/85 Msun pc^-2)^(+-0.33). 3: Krumholz (2013) eqs. 15-16, t_dep = t_ff/eps_ff, t_ff = pi^(1/4)/sqrt(8) sigma_g/(G (Sigma_GMC^3 Sigma_gas)^(1/4)), sigma_g = 8 km/s, Sigma_GMC = 85 Msun pc^-2, eps_ff = 0.01. 4: Krumholz, Dekel & McKee (2012) eqs. 2, 4, 8, 9, t_dep = min(t_ff,GMC, t_ff,T)/eps_ff with t_ff,GMC as in 3 and t_ff,T = sqrt(3 pi^2 Q^2 / (32 (beta+1) phi_P)) / Omega, Q = 1, beta = 0, phi_P = 3, Omega = Vmax/r. 5: DarkSage (Stevens et al. 2024 eq. 63), SFR = M_H2 / 2.30 Gyr (the DarkSage source value of eps_H2, after Bigiel et al. 2011). Modes 1 and 5 are constants; modes 2-4 are evaluated per annulus and need H2RadialIntegrationOn = 1 (also in DarkSAGEMode 1-2, which run the bulk recipes), except in DarkSAGEMode 3, where the disc annuli are used instead. |
+| `DarkSAGEMode` | 0-3 | no | `0` | Radially resolved discs on top of the SAGE26 recipes (DarkSage structure: 30 annuli in specific angular momentum mapped through the rotation curve, gas and stellar spins, precession, merger gas placed by j, radial intrahalo stars). 0: off, output identical to SAGE26. 1: SAGE26's bulk recipes run unchanged and are shared over the annuli (star formation and H2 by the same law evaluated per annulus, the instability's gas and stars taken from the annuli the Toomre Q marks unstable, and gas and stars still unstable after that moved to the neighbouring annuli with the disc's angular momentum kept, as in DarkSage; cooling by j); the annuli sum to the bulk, and `DiskScaleRadius` stays at SAGE26's halo-spin value, so every shared output is identical to SAGE26 and the annuli only resolve it. 2: as 1, but `DiskScaleRadius` is measured from the annuli, J_disc / (2 M_disc V_disc) with V_disc the disc's own rotation speed, i.e. half the mass-weighted mean radius of gas and disc stars; this is the one change to SAGE26's physics. 3: as 2, and the star-formation law is evaluated on each annulus's own surface density, the galaxy totals being the sums. In all, SAGE26 sets the instability, cooling, merger and feedback-free-burst masses. See [Outputs](outputs.md#darksagemode-annuli-darksagemode--1) and [the physics notes](physics/darksage_and_dust.md). |
+| `DustySAGEMode` | 0-2 | no | `0` | Dust in the cold, hot, CGM and ejected gas, following Dusty-SAGE (Triani et al. 2020): production by AGB stars and SNII from delayed element yields (Karakas 2010; Woosley & Weaver 1995 or Nomoto et al. 2006; SNIa from Iwamoto et al. 1999 or Seitenzahl et al. 2013) with Popping et al. (2017) condensation, grain growth in molecular gas and SN destruction (Asano et al. 2013), and thermal sputtering in the hot gas of centrals and satellites (Popping et al. 2017). Grain growth needs H2, so it is off with `SFprescription` 0 or 2, which do not track H2. With `DarkSAGEMode` on, the cold dust is carried by the annuli (`DiscDust`): it moves with the annulus gas, the yields go where stars are forming, and grain growth and SN destruction follow each annulus's gas, metals, H2 and star formation (DarkSAGEMode 1-2 share SAGE26's galaxy-wide rates over the annuli; mode 3 sums the annuli's own). Dust moves with the gas everywhere SAGE26 moves gas. 0: off, output identical to SAGE26. 1: passive -- SAGE26's metals are unchanged (every other output identical to mode 0), dust is part of them, and its production is capped by the metals SAGE26 made. 2: Dusty-SAGE's delayed yields replace SAGE26's metal production (`Yield` is not used) and dust is held outside `MetalsColdGas`; the cooling metallicity includes the halo's dust. |
+| `DustSNIIYields` | 0/1 | no | `0` | DustySAGEMode SNII yields: 0 = Woosley & Weaver (1995); 1 = Nomoto et al. (2006). |
+| `DustSNIaYields` | 0/1 | no | `0` | DustySAGEMode SNIa yields: 0 = Iwamoto et al. (1999); 1 = Seitenzahl et al. (2013). |
+| `DustGrowthMaxDtoZ` | float | no | `0.5` | DustySAGEMode: grain growth stops at this dust-to-metals ratio, dD/dt = (1 - D / (f Z_metals)) f_H2 D / tau_acc. 0.5 is where the Dusty-SAGE source's growth stops (it limits growth by the gas-phase metals); 1 is Asano et al. (2013) as written, which takes the dust towards all the metals above ~Zsun (dust-to-metals 0.8-0.9). Must be in (0, 1]. |
+| `DustBinaryFraction` | float | no | `0.1` | DustySAGEMode: fraction of 3-16 Msun stars in binaries that end as SNIa (Dusty-SAGE). |
 
 ---
 
@@ -79,6 +88,7 @@ optional parameters take the listed default if omitted.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `EnhancedSFEfficiency` | double | no | `0.2` | Maximum star formation efficiency during FFB bursts. `0.2` matches observations; `1.0` is the theoretical maximum. |
+| `ConcentrationScatter` | double | no | `0.2` | Log-normal scatter σ in ln(c) applied to each halo's Ishiyama+21 concentration for the BK25 threshold (`EnhancedStarFormationOn = 2`); sets the width of the transition. `0.2` is the spread for relaxed haloes (Jing 2000); `0` gives a sharp threshold. |
 
 ---
 
@@ -142,7 +152,7 @@ optional parameters take the listed default if omitted.
 |-----------|-------|---------|-------------|
 | `ThreshMajorMerger` | dimensionless | `0.3` | Mass ratio above which a merger is classified as major. |
 | `ThresholdSatDisruption` | dimensionless | `1.0` | M_vir-to-baryonic mass ratio below which a satellite is disrupted rather than merged. |
-| `MergerTimeFactor` | dimensionless | `2.0` | Scales the Binney & Tremaine (1987) dynamical-friction merger timescale. It also sets how accreted stellar mass splits between the intracluster component and the BCG: when a satellite's subhalo is lost from the tree, its stars go to the ICS if the clock is still running (`MergTime > 0`) and onto the central if it has expired. |
+| `MergerTimeFactor` | dimensionless | `2.0` (the published value) | Scales the Binney & Tremaine (1987) dynamical-friction merger timescale. It also sets how accreted stellar mass splits between the intracluster component and the BCG: when a satellite's subhalo is lost from the tree, its stars go to the ICS if the clock is still running (`MergTime > 0`) and onto the central if it has expired. |
 
 ### Gas cycling
 
@@ -178,7 +188,7 @@ calibration transfer across simulations with different output spacing.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `SubstepResolution` | double | `1.0` | Runtime multiplier on the adaptive-substep floor **and** cap. **Calibration-locked numerical knob, not a physics choice** — the model is calibrated at `1.0`; do not change it for science runs without recalibrating. Coarse steps over-cool (cooling outruns the AGN `r_heat` response before it can react), so raising the resolution lowers the massive-end SMF and total stellar mass. The shift from `1.0` to fully converged is only **~0.1 dex** at the massive end (within typical observational SMF scatter), but runtime grows **~linearly** with the substep count. Use higher values only for deliberate convergence / resolution studies. Note that the reported `SfrDisk`/`SfrBulge` are normalised by the substep count actually integrated (`SubstepsUsed`), not by `STEPS`; before September 2026 they were divided by `STEPS`, which scaled the reported SFR by `effective_steps/STEPS` and made this knob useless for convergence testing. **Run convergence sweeps with `FFBRandomMode=1` and `RegimeRandomMode=1`.** With the default per-snapshot draws, changing the substep count shifts the global `rand()` sequence, and the resulting scatter is non-monotonic and larger than the convergence signal: total stellar mass on mini-Millennium goes 1528 / 962 / 1255 / 1191 for N = 5 / 10 / 20 / 30. With persistent per-galaxy draws the same sweep is monotonic and converging -- 1529 / 1349 / 1262 / 1211, i.e. -12%, -6.4%, -4%. Note the two modes agree to within 2% at N = 5, 20 and 30 but differ by 30% at the default N = 10, which is worth understanding before quoting either number. |
+| `SubstepResolution` | double | `1.0` | Runtime multiplier on the adaptive-substep floor **and** cap. **Calibration-locked numerical knob, not a physics choice** — the model is calibrated at `1.0`; do not change it for science runs without recalibrating. Coarse steps over-cool (cooling outruns the AGN `r_heat` response before it can react), so raising the resolution lowers the massive-end SMF and total stellar mass. The shift from `1.0` to fully converged is only **~0.1 dex** at the massive end (within typical observational SMF scatter), but runtime grows **~linearly** with the substep count. Use higher values only for deliberate convergence / resolution studies. Note that the reported `SfrDisk`/`SfrBulge` are normalised by the substep count actually integrated (`SubstepsUsed`), not by `STEPS`; before September 2026 they were divided by `STEPS`, which scaled the reported SFR by `effective_steps/STEPS` and made this knob useless for convergence testing. The CGM/hot and FFB draws are keyed on the halo and snapshot, so changing the substep count does not change which haloes are classified as hot or FFB. |
 
 **Convergence note.** The substep dependence is a long-standing property of SAGE's
 cooling/feedback operator-splitting (it is present, and slightly *stronger*, with
@@ -225,8 +235,9 @@ reader who goes looking for a knob can find where it went.
 | `FFBConcSigma` | `FFB_CONC_SIGMA = 0.2` in [`src/model_regimes.c`](../src/model_regimes.c). |
 | `FFBThresholdSlope` | `FFB_THRESHOLD_SLOPE = -6.2` in [`src/model_regimes.c`](../src/model_regimes.c). |
 | `FFBIgnoreRegime` | Always on: the FFB criteria apply whatever the halo's CGM/hot regime. |
-| `FFBRandomMode` | Always a fresh draw each snapshot. |
-| `RegimeRandomMode` | Always a fresh draw each snapshot. |
+| `FFBRandomMode` | Always one draw per galaxy, set when it forms (since v0.98.1; a fresh draw each snapshot before). |
+| `RegimeRandomMode` | Always one draw per galaxy, set when it forms (since v0.98.1; a fresh draw each snapshot before). |
+| `RegimeDrawFixed`, `FFBDrawFixed` | Removed in v0.98.1: their setting 1, one draw per galaxy, is now the only behaviour. |
 | `FFBFeedbackDelayMyr`, `FFBCloudClumping`, `FFBCloudClumpingDisk`, `FFBStreamRadiusFraction`, `FFBShellSoundSpeedKms`, `FFBToomreQ`, `FFBSigmaCritMsunPc2` | Removed with the Dekel+23 shell and disc criteria (old FFB modes 8-11). |
 | `SNEnergyConservationOn` | Always on: both the reheating and the ejection term are bounded by the supernova energy available. |
 | `MaxSNEnergyCoupling` | `MAX_SN_ENERGY_COUPLING = 2.0` in [`src/model_misc.h`](../src/model_misc.h). |

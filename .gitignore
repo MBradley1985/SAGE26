@@ -1,6 +1,7 @@
 sage
 tests/test_data/
 input/millennium/
+input/shin-uchuu/
 output/
 input/microuchuu/
 input/U400/
@@ -10,6 +11,7 @@ tests/test_output/
 docs/referee/
 super_eddington_stats
 SHAM
+darksage_work/
 
 *.o
 *.*~
@@ -62,3 +64,6 @@ tests/baseline/microuchuu/
 CLAUDE.md
 
 plotting/random_plotting_scripts/
+SAGE26_model_issues.md
+sage26-handback.md
+potential_bug2/SAGE26 r_heat in the CGM regime - problem and proposed fix 2026-11-23.md

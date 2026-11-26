@@ -102,7 +102,9 @@ So accretion scales with merger violence and is suppressed in shallow
 potential wells (the `V_vir = 280 km/s` floor is hard-coded from
 Croton+06). The accreted gas is removed from `ColdGas` with metallicity
 tracking, deposited into `BlackHoleMass`, and tallied in
-`QuasarModeBHaccretionMass`.
+`QuasarModeBHaccretionMass` (reset at each snapshot, so it is the mass
+accreted since the previous one). Radio-mode accretion is tallied the same
+way in `RadioModeBHaccretionMass`.
 
 ### `quasar_mode_wind()` -- ejection from quasar-mode energy
 

@@ -102,11 +102,15 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->CGMrecipeOn                = 1;
     run_params->FIREmodeOn                 = 1;
     run_params->EnhancedSFEfficiency       = 0.2;
+    run_params->ConcentrationScatter       = 0.2;
     run_params->ConcentrationOn            = 3;
     run_params->EnhancedStarFormationOn    = 1;
     run_params->BulgeSizeOn                = 3;
     run_params->SaveFullSFH                = 0;
+    run_params->SaveFullMH                 = 0;
+    run_params->UseM200c                   = 0;   /* tree's own halo mass */
     run_params->StarburstColdGasOn         = 1;
+    run_params->H2DepletionMode            = 0;   /* as input/millennium.par */
     run_params->SubstepResolution          = 1.0; /* default: unscaled adaptive substeps (STEPS floor, MAX_STEPS cap) */
     run_params->ThreshMajorMerger          = 0.3;
     run_params->RecycleFraction            = 0.43;
@@ -156,6 +160,16 @@ int read_parameter_file(const char *fname, struct params *run_params)
     run_params->FirstEventGrowthBoost = 1.0; // Default: no effect (decoupled R2 growth-rate boost)
     run_params->EarlyUniverseZCut = 4.0;    // Default threshold for AGNAccretionScheme=11 (unused unless selected)
     run_params->LowMassHostThreshold = 0.1; // Default: 1e9 Msun/h, typical LRD host scale (unused unless scheme=13)
+
+    // DarkSAGEMode: 0 = standard SAGE26; 1, 2 = SAGE26 with radially resolved discs (1: bulk recipes shared over the annuli; 2: recipes per annulus)
+    run_params->DarkSAGEMode               = 0; /* default: standard SAGE behavior */
+    // DustySAGEMode: 0 = no dust; 1 = passive dust within SAGE26's metals; 2 = Dusty-SAGE yields and dust
+    run_params->DustySAGEMode              = 0;
+    run_params->DustSNIIYields             = 0;    /* Dusty-SAGE defaults */
+    run_params->DustSNIaYields             = 0;
+    run_params->DustBinaryFraction         = 0.1;
+    run_params->DustGrowthMaxDtoZ          = 0.5; /* where the Dusty-SAGE source's growth stops */
+
 
 /* Register a parameter: tag name, address, type, required (1) or optional with default (0) */
 #define REG(tag, addr, type, req) do {         \
@@ -207,7 +221,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("EnhancedStarFormationOn", &(run_params->EnhancedStarFormationOn), INT, 0);
     REG("BulgeSizeOn",           &(run_params->BulgeSizeOn),          INT, 0);
     REG("SaveFullSFH",           &(run_params->SaveFullSFH),          INT, 0);
+    REG("SaveFullMH",            &(run_params->SaveFullMH),           INT, 0);
+    REG("UseM200c",              &(run_params->UseM200c),             INT, 0);
     REG("StarburstColdGasOn",    &(run_params->StarburstColdGasOn),   INT, 0);
+    REG("H2DepletionMode",       &(run_params->H2DepletionMode),      INT, 0);
     REG("SubstepResolution",     &(run_params->SubstepResolution),     DOUBLE, 0);
     REG("H2DiskAreaOption",      &(run_params->H2DiskAreaOption),     INT, 0);
     REG("H2RadialIntegrationOn", &(run_params->H2RadialIntegrationOn),INT, 0);
@@ -263,9 +280,15 @@ int read_parameter_file(const char *fname, struct params *run_params)
     REG("MergerTimeFactor",           &(run_params->MergerTimeFactor),           DOUBLE, 0);
     REG("H2RadialRMaxFactor",         &(run_params->H2RadialRMaxFactor),         DOUBLE, 0);
     REG("EnhancedSFEfficiency",       &(run_params->EnhancedSFEfficiency),       DOUBLE, 0);
+    REG("ConcentrationScatter",       &(run_params->ConcentrationScatter),       DOUBLE, 0);
     REG("KarpovModeOn",               &(run_params->KarpovModeOn),               INT, 0);
 
-
+    REG("DarkSAGEMode",                &(run_params->DarkSAGEMode),               INT, 0);
+    REG("DustySAGEMode",               &(run_params->DustySAGEMode),              INT, 0);
+    REG("DustSNIIYields",              &(run_params->DustSNIIYields),             INT, 0);
+    REG("DustSNIaYields",              &(run_params->DustSNIaYields),             INT, 0);
+    REG("DustBinaryFraction",          &(run_params->DustBinaryFraction),         DOUBLE, 0);
+    REG("DustGrowthMaxDtoZ",           &(run_params->DustGrowthMaxDtoZ),          DOUBLE, 0);
 
 #undef REG
 
@@ -528,10 +551,10 @@ int read_parameter_file(const char *fname, struct params *run_params)
 
     const char tree_names[][MAXTAGLEN] = {"lhalo_hdf5", "lhalo_binary", "genesis_hdf5",
                                           "consistent_trees_ascii", "consistent_trees_hdf5",
-                                          "gadget4_hdf5"};
+                                          "gadget4_hdf5", "mimic_lhalo_binary"};
     const enum Valid_TreeTypes tree_enums[] = {lhalo_hdf5, lhalo_binary, genesis_hdf5,
                                                consistent_trees_ascii, consistent_trees_hdf5,
-                                               gadget4_hdf5};
+                                               gadget4_hdf5, mimic_lhalo_binary};
     /* enum, not const int: BUILD_BUG_OR_ZERO declares an array of this size, and in C99
        only an integer constant expression keeps that from being a variable-length array. */
     enum { nvalid_tree_types = sizeof(tree_names)/(MAXTAGLEN*sizeof(char)) };
@@ -584,13 +607,21 @@ int read_parameter_file(const char *fname, struct params *run_params)
             {"DiskInstabilityOn",      run_params->DiskInstabilityOn,      0, 1},
             {"CGMrecipeOn",            run_params->CGMrecipeOn,            0, 1},
             {"FIREmodeOn",             run_params->FIREmodeOn,             0, 1},
-            {"ConcentrationOn",        run_params->ConcentrationOn,        0, 3},
+            {"ConcentrationOn",        run_params->ConcentrationOn,        0, 4},
             {"EnhancedStarFormationOn", run_params->EnhancedStarFormationOn, 0, 2},
             {"BulgeSizeOn",            run_params->BulgeSizeOn,            0, 3},
             {"H2DiskAreaOption",       run_params->H2DiskAreaOption,       0, 2},
             {"H2RadialIntegrationOn",  run_params->H2RadialIntegrationOn,  0, 1},
             {"SaveFullSFH",            run_params->SaveFullSFH,            0, 1},
+            {"SaveFullMH",             run_params->SaveFullMH,             0, 1},
+            {"UseM200c",               run_params->UseM200c,               0, 1},
             {"StarburstColdGasOn",     run_params->StarburstColdGasOn,     0, 1},
+            {"H2DepletionMode",        run_params->H2DepletionMode,        0, H2DEPLETIONMODE_MAX},
+            {"KarpovModeOn",            run_params->KarpovModeOn,            0, 1},
+            {"DarkSAGEMode",           run_params->DarkSAGEMode,           0, 3},
+            {"DustySAGEMode",          run_params->DustySAGEMode,          0, 2},
+            {"DustSNIIYields",         run_params->DustSNIIYields,         0, 1},
+            {"DustSNIaYields",         run_params->DustSNIaYields,         0, 1}
         };
         for(size_t i = 0; i < sizeof(option_ranges) / sizeof(option_ranges[0]); i++) {
             if(option_ranges[i].value < option_ranges[i].min || option_ranges[i].value > option_ranges[i].max) {
@@ -601,6 +632,35 @@ int read_parameter_file(const char *fname, struct params *run_params)
                 ABORT(EXIT_FAILURE);
             }
         }
+    }
+
+    /* A dust-to-metals ceiling is a fraction of the metals. */
+    if(!(run_params->DustGrowthMaxDtoZ > 0.0 && run_params->DustGrowthMaxDtoZ <= 1.0)) {
+        fprintf(stderr, "Error: DustGrowthMaxDtoZ = %g is not valid; it must be in (0, 1].\n", run_params->DustGrowthMaxDtoZ);
+        ABORT(EXIT_FAILURE);
+    }
+
+    /* The metal histories only give a metallicity when divided by the SFH mass bins. */
+    if(run_params->SaveFullMH && !run_params->SaveFullSFH) {
+        fprintf(stderr, "Error: SaveFullMH = 1 needs SaveFullSFH = 1.\n");
+        ABORT(EXIT_FAILURE);
+    }
+
+    /* H2DepletionMode > 0 replaces how H2 is turned into stars, so it needs a prescription that
+       tracks H2; the surface-density-dependent depletion times (H2DepletionMode 2-4)
+       are local laws evaluated annulus by annulus. */
+    if(FG_TDEP(run_params) && !sf_prescription_tracks_h2(run_params->SFprescription)) {
+        fprintf(stderr, "Error: H2DepletionMode = %d needs an H2-tracking SFprescription (1, 3-7); SFprescription = %d does not track H2.\n",
+                run_params->H2DepletionMode, run_params->SFprescription);
+        ABORT(EXIT_FAILURE);
+    }
+    /* The local laws (modes 2-4) need the radial integration, or in DarkSAGEMode 3 the disc
+       annuli; DarkSAGEMode 1-2 run the bulk recipes and need the radial integration as mode 0
+       does.  Modes 1 and 5 are constant depletion times and need neither. */
+    if(run_params->H2DepletionMode >= 2 && run_params->H2DepletionMode <= 4
+       && run_params->DarkSAGEMode != 3 && !run_params->H2RadialIntegrationOn) {
+        fprintf(stderr, "Error: H2DepletionMode = %d needs H2RadialIntegrationOn = 1.\n", run_params->H2DepletionMode);
+        ABORT(EXIT_FAILURE);
     }
 
     /* Numeric parameters that must be strictly positive for the physics to

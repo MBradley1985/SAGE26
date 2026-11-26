@@ -14,8 +14,8 @@
  * Load   (load_forest_genesis_hdf5):       reads each active snapshot group in
  *   reverse time order, decodes Head/Tail/hostHaloID into LHaloTree-compatible
  *   Descendant/FirstProgenitor/FirstHaloInFOFgroup indices, assembles
- *   NextProgenitor and NextHaloInFOFgroup chains, and calls fix_flybys_genesis()
- *   to enforce a single z=0 root per forest.
+ *   NextProgenitor and NextHaloInFOFgroup chains. A forest may keep several FOF
+ *   hosts at z=0; they are not merged into one.
  * Cleanup (cleanup_forests_io_genesis_hdf5): closes all open HDF5 handles and
  *   frees per-forest bookkeeping arrays.
  *
@@ -60,7 +60,6 @@ enum GalaxyProperty
 };
 
 static char galaxy_property_names[num_galaxy_props][MAX_STRING_LEN];
-static int fix_flybys_genesis(struct halo_data *halos, const int64_t nhalos_last_snap, const int64_t forestnr);
 static void get_forest_metadata_filename(const char *forestfilename, const size_t stringlen, char *metadata_filename);
 
 #define CONVERSION_FACTOR_FOR_GENESIS_UNIQUE_INDEX      (1000000000000)
@@ -617,8 +616,7 @@ int setup_forests_io_genesis_hdf5(struct forest_info *forests_info, const int Th
  *      velocities (/scale_factor), masses (*hubble_h), spins (*h^2 * 1e-10).
  *   4. After all snapshots are read, builds NextProgenitor and NextHaloInFOFgroup
  *      linked lists by scanning the Descendant/FirstHaloInFOFgroup arrays.
- *   5. Calls fix_flybys_genesis() to merge multiple z=0 FOF roots into one.
- *   6. Advances halo_offset_per_snap so the next forest reads from the correct
+ *   5. Advances halo_offset_per_snap so the next forest reads from the correct
  *      position in each snapshot group.
  *
  * Returns the total number of halos in the forest, or a negative error code.
@@ -1071,13 +1069,6 @@ int64_t load_forest_genesis_hdf5(int64_t forestnr, struct halo_data **halos, str
         local_halos[next_halo].NextHaloInFOFgroup = i;
     }
 
-    const int32_t lastsnap = local_halos[0].SnapNum;
-    const int64_t numhalos_last_snap = nhalos_per_snap[lastsnap];;
-    int status = fix_flybys_genesis(local_halos, numhalos_last_snap, forestnr);
-    if(status != EXIT_SUCCESS) {
-        return -1;
-    }
-
     myfree(forest_local_offsets);
 
     /* We have loaded in this forest -> now update the offsets so that we can
@@ -1112,103 +1103,3 @@ void cleanup_forests_io_genesis_hdf5(struct forest_info *forests_info)
     myfree(gen->h5_fds);
     myfree(gen->offset_for_global_forestnum);
 }
-
-#define CHECK_IF_HALO_IS_FOF(halos, index)  (halos[index].FirstHaloInFOFgroup == index ? 1:0)
-
-/*
- * fix_flybys_genesis -- enforce a single z=0 FOF root per forest.
- *
- * Genesis forests can contain multiple FOF halos at the last snapshot (flybys:
- * halos that passed through one another but are not physically merged). SAGE
- * requires exactly one root per forest. This function identifies the most massive
- * FOF halo at the last snapshot and attaches all other z=0 FOF halos as members
- * of that group by updating their FirstHaloInFOFgroup and linking them through
- * NextHaloInFOFgroup. The flyby halos' MostBoundIDs are negated to flag them as
- * non-primary centrals.
- */
-static int fix_flybys_genesis(struct halo_data *halos, const int64_t nhalos_last_snap, const int64_t forestnr)
-{
-    if(nhalos_last_snap == 0) {
-        fprintf(stderr,"Warning: There are no halos at the last snapshot. Therefore nothing to fix for flybys. BUT this should not happen - check code\n");
-        return EXIT_SUCCESS;
-    }
-    if(halos == NULL || nhalos_last_snap < 0) {
-        fprintf(stderr,"Error: In function %s> The struct containing halo data (address = %p )can not be NULL *AND* the total number of halos (=%"PRId64") must be > 0\n",
-                __FUNCTION__, halos, nhalos_last_snap);
-        return EXIT_FAILURE;
-    }
-
-
-    int64_t num_fofs = 0;
-    for(int64_t i=0;i<nhalos_last_snap;i++) {
-        num_fofs += CHECK_IF_HALO_IS_FOF(halos, i);
-    }
-
-    if(num_fofs == 0) {
-        fprintf(stderr,"Error: For forestnr = %"PRId64" There are no FOF halos at the last snapshot. This is highly unusual and almost certainly a bug (in reading the data)\n", forestnr);
-        return EXIT_FAILURE;
-    }
-
-    /* Is there anything to do? If there is only one FOF at z=0, then simply return */
-    if(num_fofs == 1) {
-        return EXIT_SUCCESS;
-    }
-
-    int64_t max_mass_fof_loc = -1;
-    float max_mass_fof = -1.0f;
-    for(int64_t i=0;i<nhalos_last_snap;i++) {
-        if(halos[i].Mvir > max_mass_fof && CHECK_IF_HALO_IS_FOF(halos, i) == 1) {
-            max_mass_fof_loc = i;
-            max_mass_fof = halos[max_mass_fof_loc].Mvir;
-        }
-    }
-
-    XRETURN(max_mass_fof_loc >= 0 && max_mass_fof_loc < INT_MAX, EXIT_FAILURE,
-            "Most massive FOF location=%"PRId64" must be representable within INT_MAX=%d and >= 0",
-            max_mass_fof_loc, INT_MAX);
-
-    int FirstHaloInFOFgroup = (int) max_mass_fof_loc;
-    int insertion_point_next_sub = FirstHaloInFOFgroup;
-    /* fprintf(stderr,"nfofs = %"PRId64"\n", num_fofs); */
-    while(halos[insertion_point_next_sub].NextHaloInFOFgroup != -1) {
-        /* fprintf(stderr, "FirstHaloInFOFgroup = %d insertion_point_next_sub = %d halos[insertion_point_next_sub].NextHaloInFOFgroup = %d\n", */
-        /*         FirstHaloInFOFgroup, insertion_point_next_sub, halos[insertion_point_next_sub].NextHaloInFOFgroup); */
-        insertion_point_next_sub = halos[insertion_point_next_sub].NextHaloInFOFgroup;
-    }
-
-    if(insertion_point_next_sub < 0 || insertion_point_next_sub>= nhalos_last_snap || halos[insertion_point_next_sub].NextHaloInFOFgroup != -1) {
-        fprintf(stderr,"bug in code logic in previous while loop at line=%d in file=%s\n", __LINE__, __FILE__);
-        return -1;
-    }
-
-    for(int64_t i=0;i<nhalos_last_snap;i++) {
-        if(i == FirstHaloInFOFgroup) {
-            continue;
-        }
-
-        //Only need to switch for other FOF halos
-        if(CHECK_IF_HALO_IS_FOF(halos, i) == 1) {
-            //Show that this halo was switched from being a central
-            //just flip the sign. (MostBoundID should not have negative
-            //values -> this would signify a flyby)
-            halos[i].MostBoundID = -halos[i].MostBoundID;
-            halos[insertion_point_next_sub].NextHaloInFOFgroup = i;
-            halos[i].FirstHaloInFOFgroup = FirstHaloInFOFgroup;
-
-            //Now figure out where the next FOF halo (if any) would need to be attached
-            insertion_point_next_sub = i;
-            while(halos[insertion_point_next_sub].NextHaloInFOFgroup != -1) {
-                insertion_point_next_sub = halos[insertion_point_next_sub].NextHaloInFOFgroup;
-                halos[insertion_point_next_sub].FirstHaloInFOFgroup = FirstHaloInFOFgroup;
-            }
-
-            if(insertion_point_next_sub < 0 || insertion_point_next_sub>= nhalos_last_snap || halos[insertion_point_next_sub].NextHaloInFOFgroup != -1) {
-                fprintf(stderr,"bug in code logic in previous while loop at line=%d in file=%s\n", __LINE__, __FILE__);
-                return -1;
-            }
-        }
-    }
-
-    return EXIT_SUCCESS;
-}
-#undef CHECK_IF_HALO_IS_FOF

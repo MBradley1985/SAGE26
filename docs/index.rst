@@ -29,6 +29,7 @@ Source code and issue tracker: https://github.com/MBradley1985/SAGE26
    physics/disk_sizes
    physics/mergers_and_disruptions
    physics/ics
+   physics/darksage_and_dust
 
 .. toctree::
    :maxdepth: 2

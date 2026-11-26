@@ -288,9 +288,9 @@ int32_t finalize_sage(void *params)
             }
         }
 
-#ifdef VERBOSE
-    report_sf_clamp_counts();
-#endif
+// #ifdef VERBOSE
+//     report_sf_clamp_counts();
+// #endif
 
     free(run_params);
 

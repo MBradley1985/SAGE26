@@ -29,8 +29,13 @@ hot_fraction = 1 / (1 + exp(-log10(Mvir / M_shock) / 0.1))
 Regime       = (random_uniform < hot_fraction) ? 1 : 0
 ```
 
-The draw is fresh every snapshot, so a borderline-mass central is re-tested
-against the sigmoid at each timestep and can flip regime between snapshots.
+The draw (`RegimeDraw`) is the galaxy's own, set once when it forms
+(`set_fixed_regime_draws()`), which gives each halo its own threshold mass,
+`M_shock * 10^(0.1 ln[u / (1 - u)])`. The thresholds across the population
+follow the same sigmoid. A central is re-tested every snapshot, so it changes
+regime when its mass crosses its own threshold, not at random. (Up to v0.98 the
+draw was fresh every snapshot, and a borderline central flipped regime at a rate
+2P(1-P) per snapshot.)
 
 - **Regime 0 (CGM):** below `M_shock`. Cooling proceeds via the Carr et al.
   (2023) bulk formula on the `CGMgas` reservoir.
@@ -206,11 +211,15 @@ precipitation fraction, and no equilibrium-reservoir term -- the sum of the
 two timescales sets the rate directly, so the flow is slow when either
 cooling or free-fall is slow.
 
-### Step 4 -- AGN heating
+### Step 4 -- no AGN heating
 
-`r_cool` is pinned to `R_vir` -- the flow is a bulk quantity with no cooling
-radius of its own -- and used only to pass a heating radius to
-`do_AGN_heating_cgm()`, which fires whenever `AGNrecipeOn > 0`.
+The CGM recipe has no radio mode: it neither reads nor writes `r_heat`, the
+entropy floor of a hot atmosphere, which a CGM-regime halo lacks. Up to v0.95
+it ran the `r_heat` ratchet against `r_cool = R_vir`; since a reservoir-capped
+heating that passes a quarter of the cooling sends `r_heat` to `R_vir` and
+`r_heat` only moves outwards, such a halo stopped cooling for good (5-70% of
+Regime 0 centrals at `Mvir = 10^10.5-10^11.75` on Millennium at z = 0).
+`r_heat` keeps its last hot-regime value while a halo is in Regime 0.
 
 ### Step 5 -- diagnostics
 
@@ -227,11 +236,11 @@ radius was never evaluated.
 
 ## AGN radio-mode heating
 
-Two functions implement the AGN suppression for the two regimes. Both
-share the accretion calculation via the file-private
+Radio-mode heating runs in the hot regime only (Regime 1, and every halo
+with `CGMrecipeOn = 0`), through `do_AGN_heating()` and the file-private
 `agn_accretion_compute()` helper.
 
-### `agn_accretion_compute()` -- the shared accretion calculation
+### `agn_accretion_compute()` -- the accretion calculation
 
 Computes the BH accretion rate from one of three recipes
 (`AGNrecipeOn = 1, 2, 3`), applies the Eddington limit, and derives the
@@ -247,6 +256,23 @@ from the appropriate reservoir and updates `r_heat`.
 Accretion is then capped at the Eddington rate. The resulting heating mass
 is converted from accreted mass via `AGNheating = (1.34e5 / V_vir)^2 *
 AGNaccreted` (with the coefficient derived from `sqrt(2 * eta * c^2)`).
+
+The heating mass is then capped at the (already suppressed) cooling mass, and
+`AGNaccreted` is cut back to match. Radio-mode accretion therefore only ever
+offsets cooling: once `r_heat >= r_cool` the cooling mass is zero, so the
+black hole accretes nothing in radio mode and `Heating` is zero, however much
+hot gas the halo holds. The accreted mass is tallied in
+`RadioModeBHaccretionMass` (per snapshot), and the `Heating` output is exactly
+`0.1 c^2 * RadioModeBHaccretionMass / dT`.
+
+Because of that cap, `RadioModeBHaccretionMass` is not a jet power: in most
+massive haloes it is zero (Croton et al. 2016, Sec. 9.1.1, note that keeping
+`r_heat` from moving inwards makes the cooling rates a lower limit). As a
+diagnostic, `RadioModeBHaccretionMassUncapped` tallies the accreted mass
+*before* the cooling cap -- the recipe's rate, Eddington- and
+reservoir-limited -- over the same substeps. Nothing in the model reads it, so
+every other output is unchanged. The jet power it implies is
+`0.1 c^2 * RadioModeBHaccretionMassUncapped / dT`.
 
 Note that recipe 3's threshold scales as `(r_cool / R_vir)^3`, so with
 `r_cool` uncapped it rises steeply for `r_cool > R_vir` haloes and the
@@ -265,21 +291,11 @@ The classical Croton+06 ratchet:
 3. Update `r_heat` monotonically: `r_heat_new = (AGNheating / coolingGas)
    * r_cool`; if larger than the stored `r_heat`, replace it.
 
-The ratchet is never reduced, so `r_heat` can only grow over time. In the
-hot-halo path there is no `R_vir` cap -- once `r_heat >= r_cool`, cooling
-stays fully suppressed for that substep.
-
-### `do_AGN_heating_cgm()` -- Regime 0 (CGM)
-
-Differences from the hot-halo path:
-
-- Accretion draws from `CGMgas`, not `HotGas`.
-- After the ratchet updates `r_heat`, the value is capped at `R_vir` so
-  the heating radius cannot grow past the halo boundary.
-- The returned `coolingGas` is re-capped against the post-accretion
-  `CGMgas`: the Bondi draw reduces the reservoir, and without the re-cap a
-  cooling flow that was already reservoir-limited could be handed back to
-  the caller exceeding the remaining CGM.
+The ratchet is never reduced, so `r_heat` can only grow over time. There is
+no `R_vir` cap, as in SAGE16 -- once `r_heat >= r_cool`, cooling stays fully
+suppressed for that substep. (Up to v0.95 `r_heat` was capped at `R_vir` when
+`CGMrecipeOn > 0`, a leftover of the `r_cool <= R_vir` cap removed in
+2026-09.)
 
 ## `cool_gas_onto_galaxy()`
 

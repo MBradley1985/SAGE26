@@ -15,6 +15,7 @@
 #include "test_framework.h"
 #include "../src/core_allvars.h"
 #include "../src/model_misc.h"
+#include "../src/model_regimes.h"
 
 /* ──────────────────────────────────────────────────────────────────
  *  Helper: set up run_params with Millennium cosmology + code units
@@ -35,6 +36,7 @@ static void init_millennium_params(struct params *rp)
            * rp->UnitMass_in_g * rp->UnitTime_in_s * rp->UnitTime_in_s;
     rp->EnergySNcode = rp->EnergySN / rp->UnitMass_in_g
                      / rp->UnitVelocity_in_cm_per_s / rp->UnitVelocity_in_cm_per_s;
+    rp->ConcentrationScatter = 0.2;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -430,15 +432,15 @@ void test_ffb_mode1_sigmoid_limits()
     const double z = 10.0;
     const double M_thresh = calculate_ffb_threshold_mass(z, &rp);
 
-    /* The draw is now always fresh from rand(), so a single galaxy's outcome
-     * at the threshold is not predictable.  The limits are: far above the
-     * threshold f_ffb -> 1 and every draw succeeds; far below it f_ffb -> 0
-     * and none do.  Both hold for any draw, so they are testable directly. */
+    /* A single galaxy's outcome at the threshold depends on its draw.  The
+     * limits do not: far above the threshold f_ffb -> 1 and every draw
+     * succeeds; far below it f_ffb -> 0 and none do. */
     srand(12345);
 
     struct GALAXY gal;
     for(int i = 0; i < 50; i++) {
         memset(&gal, 0, sizeof(struct GALAXY));
+        set_fixed_regime_draws(&gal, 1000003LL * (i + 1), 0);
         gal.Mvir = M_thresh * 100.0;   /* f_ffb indistinguishable from 1 */
         gal.Rvir = 0.1;
         determine_and_store_ffb_regime(1, z, &gal, &rp);
@@ -451,6 +453,7 @@ void test_ffb_mode1_sigmoid_limits()
 
     for(int i = 0; i < 50; i++) {
         memset(&gal, 0, sizeof(struct GALAXY));
+        set_fixed_regime_draws(&gal, 1000003LL * (i + 1), 0);
         gal.Mvir = M_thresh * 0.01;    /* f_ffb indistinguishable from 0 */
         gal.Rvir = 0.1;
         determine_and_store_ffb_regime(1, z, &gal, &rp);
@@ -464,7 +467,7 @@ void test_ffb_mode1_sigmoid_limits()
 
 void test_ffb_same_seed_reproduces()
 {
-    BEGIN_TEST("FFB classification reproduces under the same rand() seed");
+    BEGIN_TEST("FFB classification depends on the halo and snapshot, not the rand() seed");
 
     struct params rp;
     init_millennium_params(&rp);
@@ -473,18 +476,21 @@ void test_ffb_same_seed_reproduces()
     const double z = 10.0;
     const double M_thresh = calculate_ffb_threshold_mass(z, &rp);
 
-    /* Draws come from the global rand() stream, so reproducibility is a
-     * property of the seed rather than of any per-galaxy stored quantile. */
+    /* Draws are set at creation from the creating halo's MostBoundID and
+     * snapshot, so the classification must not change when the rand() seed
+     * does. */
     const int N = 64;
     struct GALAXY gals[64];
     int first[64];
 
     for(int pass = 0; pass < 2; pass++) {
-        srand(99);
+        srand(pass == 0 ? 99 : 12345);
         memset(gals, 0, sizeof(gals));
         for(int i = 0; i < N; i++) {
             gals[i].Mvir = M_thresh;   /* right at f_ffb = 0.5 */
             gals[i].Rvir = 0.1;
+            gals[i].MostBoundID = 1000003LL * (i + 1);
+            set_fixed_regime_draws(&gals[i], gals[i].MostBoundID, 0);
         }
         determine_and_store_ffb_regime(N, z, gals, &rp);
         if(pass == 0) {
@@ -494,7 +500,7 @@ void test_ffb_same_seed_reproduces()
             for(int i = 0; i < N; i++) {
                 if(first[i] != gals[i].FFBRegime) mismatches++;
             }
-            ASSERT_EQUAL_INT(0, mismatches, "Same seed gives the same classification");
+            ASSERT_EQUAL_INT(0, mismatches, "A different seed gives the same classification");
         }
     }
 
@@ -604,10 +610,11 @@ void test_ffb_mode2_scatter_splits_identical_halos()
     init_millennium_params(&rp);
     rp.EnhancedStarFormationOn = 2;
 
-    /* Every halo here is identical, so without scatter they would all share
-     * one g_max and one FFBRegime.  Each now draws its own concentration
-     * quantile from rand(), which is exactly what turns the sharp BK25
-     * threshold into a smooth transition across the population. */
+    /* Every halo here is identical in mass and radius, so without scatter
+     * they would all share one g_max and one FFBRegime.  Each is a different
+     * halo (its own MostBoundID), so each gets its own concentration quantile,
+     * which is exactly what turns the sharp BK25 threshold into a smooth
+     * transition across the population. */
     srand(7);
 
     const int N = 64;
@@ -616,6 +623,8 @@ void test_ffb_mode2_scatter_splits_identical_halos()
     for(int i = 0; i < N; i++) {
         gals[i].Mvir = 10.0;    /* 10^11 Msun/h, near the threshold at z=10 */
         gals[i].Rvir = 0.015;   /* ~15 kpc/h */
+        gals[i].MostBoundID = 1000003LL * (i + 1);
+        set_fixed_regime_draws(&gals[i], gals[i].MostBoundID, 0);
     }
 
     determine_and_store_ffb_regime(N, 10.0, gals, &rp);
@@ -660,6 +669,8 @@ void test_ffb_mode2_gmax_brackets_table_concentration()
     for(int i = 0; i < N; i++) {
         gals[i].Mvir = 100.0;
         gals[i].Rvir = 0.05;
+        gals[i].MostBoundID = 1000003LL * (i + 1);
+        set_fixed_regime_draws(&gals[i], gals[i].MostBoundID, 0);
     }
 
     srand(4242);
@@ -696,7 +707,7 @@ void test_ffb_mode2_gmax_brackets_table_concentration()
 
 void test_ffb_mode2_deterministic()
 {
-    BEGIN_TEST("EnhancedStarFormationOn=2 reproduces under the same rand() seed");
+    BEGIN_TEST("EnhancedStarFormationOn=2 gives a galaxy the same draw whatever the rand() seed");
 
     struct params rp;
     init_millennium_params(&rp);
@@ -707,21 +718,82 @@ void test_ffb_mode2_deterministic()
 
     srand(31337);
     memset(&gal1, 0, sizeof(struct GALAXY));
+    set_fixed_regime_draws(&gal1, 123456789LL, 20);
     gal1.Mvir = 1.0;     /* 10^10 Msun/h */
     gal1.Rvir = 0.05;    /* 50 kpc/h */
     determine_and_store_ffb_regime(1, 5.0, &gal1, &rp);
 
-    /* Re-seeding replays the same draw, so the result must be identical. */
-    srand(31337);
+    /* A different seed, as a run with different galaxy counts would have:
+       a galaxy created in the same halo at the same snapshot gets the same draw. */
+    srand(2718);
     memset(&gal2, 0, sizeof(struct GALAXY));
+    set_fixed_regime_draws(&gal2, 123456789LL, 20);
     gal2.Mvir = 1.0;
     gal2.Rvir = 0.05;
     determine_and_store_ffb_regime(1, 5.0, &gal2, &rp);
 
     ASSERT_EQUAL_INT(gal1.FFBRegime, gal2.FFBRegime,
-                     "Same seed gives same FFBRegime");
+                     "Same creating halo and snapshot give the same FFBRegime");
     ASSERT_EQUAL_DOUBLE((double)gal1.g_max, (double)gal2.g_max,
-                        "Same seed gives same g_max");
+                        "Same creating halo and snapshot give the same g_max");
+
+    /* The draw belongs to the galaxy: a new host halo ID (the next snapshot)
+       does not change it. */
+    gal2.MostBoundID = 987654321LL;
+    determine_and_store_ffb_regime(1, 5.0, &gal2, &rp);
+    ASSERT_EQUAL_DOUBLE((double)gal1.g_max, (double)gal2.g_max,
+                        "The galaxy keeps its draw at the next snapshot");
+
+    set_fixed_regime_draws(&gal2, 987654321LL, 20);
+    determine_and_store_ffb_regime(1, 5.0, &gal2, &rp);
+    ASSERT_TRUE(gal2.g_max != gal1.g_max, "A galaxy created in a different halo gets a different draw");
+}
+
+void test_ffb_li24_and_bk25_select_the_same_haloes()
+{
+    BEGIN_TEST("Li+24 (mode 1) and BK25 (mode 2) share each halo's draw");
+
+    struct params rp;
+    init_millennium_params(&rp);
+
+    /* Haloes at the Li+24 threshold mass at z = 10, where both selection
+       probabilities are near one half.  Rvir follows the 200c definition:
+       R^3 = 2 G M / (200 H^2), with H in km/s per Mpc/h.  G is computed here
+       rather than taken from rp.G: init_millennium_params divides by one power
+       of the unit length, not three, which cancels in g_max/g_crit but not in R. */
+    const double z = 10.0;
+    const double M = calculate_ffb_threshold_mass(z, &rp);
+    const double E2 = 0.25 * pow(1.0 + z, 3.0) + 0.75;
+    const double H2 = 100.0 * 100.0 * E2;
+    const double G_code = GRAVITY / pow(rp.UnitLength_in_cm, 3.0)
+                        * rp.UnitMass_in_g * rp.UnitTime_in_s * rp.UnitTime_in_s;
+    const double R = cbrt(2.0 * G_code * M / (200.0 * H2));
+
+    const int n = 2000;
+    int agree = 0, n_li = 0, n_bk = 0;
+    for(int i = 0; i < n; i++) {
+        struct GALAXY gal;
+        memset(&gal, 0, sizeof(struct GALAXY));
+        gal.Mvir = M;
+        gal.Rvir = R;
+        gal.MostBoundID = 1000003LL * (i + 1);
+        set_fixed_regime_draws(&gal, gal.MostBoundID, 0);
+
+        rp.EnhancedStarFormationOn = 1;
+        determine_and_store_ffb_regime(1, z, &gal, &rp);
+        const int li = gal.FFBRegime;
+        rp.EnhancedStarFormationOn = 2;
+        determine_and_store_ffb_regime(1, z, &gal, &rp);
+        const int bk = gal.FFBRegime;
+
+        n_li += li; n_bk += bk; agree += (li == bk);
+    }
+    printf("  Li+24 selects %d, BK25 selects %d, agree on %d of %d haloes\n",
+           n_li, n_bk, agree, n);
+    ASSERT_TRUE(n_li > n / 4 && n_li < 3 * n / 4, "Li+24 selects about half at its threshold");
+    /* Independent draws would agree on about half; a shared draw agrees on
+       all but the haloes between the two probabilities. */
+    ASSERT_TRUE(agree > (8 * n) / 10, "The two criteria agree on more than 80% of haloes");
 }
 
 
@@ -729,6 +801,89 @@ void test_ffb_mode2_deterministic()
 /* ═══════════════════════════════════════════════════════════════════
  *  main
  * ═══════════════════════════════════════════════════════════════════ */
+void test_ffb_mode2_scatter_width_is_a_parameter()
+{
+    BEGIN_TEST("EnhancedStarFormationOn=2 scatter width is set by ConcentrationScatter");
+
+    struct params rp;
+    init_millennium_params(&rp);
+    rp.EnhancedStarFormationOn = 2;
+
+    /* The same halos and snapshot are classified at three widths, so each halo
+     * keeps its draw.  With no scatter every identical halo has the table
+     * concentration and one g_max; a wider scatter spreads them further. */
+    const double z = 10.0;
+    const int N = 64;
+    const double widths[3] = {0.0, 0.2, 0.4};
+    double spread[3];
+
+    for(int w = 0; w < 3; w++) {
+        rp.ConcentrationScatter = widths[w];
+        struct GALAXY gals[64];
+        memset(gals, 0, sizeof(gals));
+        for(int i = 0; i < N; i++) {
+            gals[i].Mvir = 10.0;
+            gals[i].Rvir = 0.015;
+            gals[i].MostBoundID = 1000003LL * (i + 1);
+            set_fixed_regime_draws(&gals[i], gals[i].MostBoundID, 0);
+        }
+        determine_and_store_ffb_regime(N, z, gals, &rp);
+
+        double gmin = gals[0].g_max, gmax = gals[0].g_max;
+        for(int i = 0; i < N; i++) {
+            if(gals[i].g_max < gmin) gmin = gals[i].g_max;
+            if(gals[i].g_max > gmax) gmax = gals[i].g_max;
+        }
+        spread[w] = log(gmax / gmin);
+    }
+
+    ASSERT_CLOSE(0.0, spread[0], 1e-12, "No scatter gives every identical halo the same g_max");
+    ASSERT_GREATER_THAN(spread[2], spread[1], "A wider scatter spreads g_max further");
+}
+
+/*
+ * Asserts: a halo held at the Li+24 threshold (f_ffb = 0.5) keeps its FFB
+ *          state, and a BK25 halo keeps its scattered concentration (g_max),
+ *          over 40 snapshots.
+ *
+ * Setup: one galaxy created by set_fixed_regime_draws() at z = 10, Mvir at
+ *        the Li+24 threshold mass, reclassified at snapshots 20-59 with a
+ *        new MostBoundID each snapshot.
+ *
+ * Why: Li et al. (2024) eq. 3 gives the FFB fraction of the population; the
+ *        draw renewed every snapshot up to v0.98 also moved a single halo in
+ *        and out of FFB at constant mass, and redrew a BK25 halo's
+ *        concentration every snapshot.
+ */
+void test_ffb_fixed_draw_holds()
+{
+    BEGIN_TEST("FFB draw: a halo at threshold keeps its FFB state and concentration");
+
+    const double z = 10.0;
+    for(int mode = 1; mode <= 2; mode++) {
+        struct params rp;
+        init_millennium_params(&rp);
+        rp.EnhancedStarFormationOn = mode;
+        struct GALAXY gal;
+        memset(&gal, 0, sizeof(gal));
+        set_fixed_regime_draws(&gal, 31337, 5);
+        gal.Mvir = calculate_ffb_threshold_mass(z, &rp);
+        gal.Rvir = 0.015;
+        int changes = 0, last = -1;
+        double g_first = -1.0, g_spread = 0.0;
+        for(int s = 20; s < 60; s++) {
+            gal.MostBoundID = 7919LL * s + 13;
+            determine_and_store_ffb_regime(1, z, &gal, &rp);
+            if(last >= 0) changes += (gal.FFBRegime != last);
+            last = gal.FFBRegime;
+            if(g_first < 0.0) g_first = gal.g_max;
+            g_spread = fmax(g_spread, fabs(gal.g_max - g_first));
+        }
+        if(mode == 1) ASSERT_EQUAL_INT(0, changes, "Li+24: no FFB changes at constant mass");
+        if(mode == 2) ASSERT_CLOSE(0.0, g_spread, 1e-30, "BK25: g_max constant");
+    }
+}
+
 int main()
 {
     BEGIN_TEST_SUITE("FFB & Concentration");
@@ -768,7 +923,10 @@ int main()
     test_ffb_mode2_basic_threshold();
     test_ffb_mode2_scatter_splits_identical_halos();
     test_ffb_mode2_gmax_brackets_table_concentration();
+    test_ffb_mode2_scatter_width_is_a_parameter();
     test_ffb_mode2_deterministic();
+    test_ffb_fixed_draw_holds();
+    test_ffb_li24_and_bk25_select_the_same_haloes();
 
     END_TEST_SUITE();
     PRINT_TEST_SUMMARY();

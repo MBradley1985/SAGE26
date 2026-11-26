@@ -9,7 +9,10 @@
 SAGE26 is a C99 semi-analytic code for modelling galaxy formation in a cosmological
 context. It is a major update to [Croton et al. (2016)](https://arxiv.org/abs/1601.04709),
 adding a two-regime CGM model, FIRE stellar feedback, feedback-free burst (FFB) galaxies,
-multiple H2-based star formation prescriptions, and extended bulge/ICS tracking.
+multiple H2-based star formation prescriptions, and extended bulge/ICS tracking. Two
+optional layers add detail on top of these recipes: radially resolved discs with
+angular-momentum tracking (`DarkSAGEMode`, after DarkSage) and dust (`DustySAGEMode`,
+after Dusty-SAGE).
 
 SAGE reads N-body merger trees, evolves galaxies through cosmic time using
 semi-analytic prescriptions, and writes galaxy catalogues in HDF5 or binary format.
@@ -30,9 +33,42 @@ of halo properties. Test trees for the
 | Separate merger/instability bulge tracking | `BulgeSizeOn` | Tonini et al. (2016) |
 | ICS assembly tracking | always on | — |
 | Full star formation history arrays | `SaveFullSFH` | — |
-| Concentration | `ConcentrationOn` | Ishiyama+21 lookup table, Vmax/Vvir, Vmax/Vvir with subhalo infall freeze |
-| ConsistentTrees, Genesis, Gadget-4 tree readers | `TreeType` | — |
+| Full stellar metallicity history arrays | `SaveFullMH` | — |
+| Concentration | `ConcentrationOn` | Ishiyama+21 lookup table, Vmax/Vvir, Vmax/Vvir with subhalo infall freeze, Dutton & Macciò (2014) |
+| Radially resolved discs in 30 specific-angular-momentum annuli, gas and stellar spins | `DarkSAGEMode` | Stevens, Croton & Mutch (2016); Stevens et al. (2024) |
+| Dust: delayed AGB/SNII production, grain growth, SN destruction, sputtering | `DustySAGEMode` | Triani et al. (2020) |
+| ConsistentTrees, Genesis, Gadget-4, Mimic L-Halo tree readers | `TreeType` | — |
 | HDF5 output + libsage.so for Python/PSO | `OutputFormat` | — |
+
+---
+
+## Discs and dust on top of SAGE26
+
+SAGE26 can carry two extra layers of detail without changing any of its results:
+
+```
+DarkSAGEMode                1   %0: switch off; 1: SAGE26 bulk recipes shared over 30 radial annuli, SAGE26's DiskScaleRadius (output identical to SAGE26); 2: as 1, DiskScaleRadius from the annuli; 3: as 2, SF law evaluated per annulus
+DustySAGEMode               1   %0: switch off; 1: passive dust within SAGE26's metals; 2: Dusty-SAGE delayed yields and dust
+```
+
+With this combination every SAGE26 output is identical to a run with both modes off
+(verified field by field), and the extra detail is written alongside:
+
+- **Discs in annuli** (`DarkSAGEMode 1`): each galaxy's cold gas, gas metals, stellar
+  disc, stellar metals, H2, HI and star formation (and dust, with `DustySAGEMode` on) in
+  30 annuli of specific angular momentum, mapped to radii through the galaxy's rotation curve (`DiscRadii`, `DiscVcirc`),
+  plus gas and stellar spin vectors, stellar velocity dispersions, disc scale and half-mass
+  radii. The annuli sum to SAGE26's galaxy totals.
+- **Dust** (`DustySAGEMode 1`): dust in the cold, hot, CGM and ejected gas, made by AGB
+  stars and SNII from delayed yields, grown in molecular gas, destroyed by supernovae and
+  sputtered in hot gas, with formation, growth and destruction rates. It sits within
+  SAGE26's metals and moves with the gas.
+
+The higher modes go further and do change SAGE26's results: `DarkSAGEMode 2` lets the disc
+radius come from the annuli, `DarkSAGEMode 3` also forms stars annulus by annulus, and
+`DustySAGEMode 2` replaces SAGE26's metal production with the delayed yields. The modes
+work together and with every other option. Details: [`docs/physics/darksage_and_dust.md`](docs/physics/darksage_and_dust.md);
+outputs: [`docs/outputs.md`](docs/outputs.md).
 
 ---
 
@@ -74,6 +110,7 @@ default and does nothing. The regression baseline requires the serial build.
 mpirun -np 4 ./sage input/millennium.par  # run in parallel
 python plotting/allresults-local.py     # z=0 diagnostic plots
 python plotting/allresults-history.py   # multi-redshift diagnostics
+python plotting/paper1_plots.py         # reproduce the Paper I figures and numbers (paper2_plots.py for Paper II)
 ```
 
 Full details on the parameter file format, output format, and all physics switches are in
@@ -175,6 +212,7 @@ cap) rather than a fixed count.
 | 1 | Ishiyama+2021 lookup table |
 | 2 | V_max / V_vir from the simulation |
 | 3 | V_max / V_vir with subhalo infall freeze for satellites |
+| 4 | Dutton & Macciò (2014) with the Di Cintio et al. (2014) baryonic factor (DarkSage) |
 
 ### H2 star formation (auxiliary switches)
 
@@ -183,6 +221,45 @@ cap) rather than a fixed count.
 | `H2DiskAreaOption` | 0–2 | Disk area for H2 surface density: 0=π r_s²; 1=π (3 r_s)²; 2=2π r_s² |
 | `H2RadialIntegrationOn` | 0/1 | Radial ring integration for H2 fraction (slower, more accurate) |
 | `H2RadialNBins` | int | Number of radial bins for ring integration |
+| `H2DepletionMode` | 0-5 | 0 off; 1-5: SFR = M_mol / t_dep (no SfrEfficiency), with t_dep: 1 = 1 Gyr (Lagos+18); 2 KMT09 eq. 10; 3 Krumholz 2013 eqs. 15-16; 4 KDM12 eqs. 4, 8, 9; 5 DarkSage, 2.30 Gyr |
+
+### Radially resolved discs (`DarkSAGEMode`)
+
+Follows DarkSage (Stevens, Croton & Mutch 2016; Stevens et al. 2024): 30 annuli in
+specific angular momentum, mapped to radii through each galaxy's rotation curve; cooling
+and merging gas placed by its angular momentum; gas and stellar disc spins, precession and
+counter-rotation. SAGE26 keeps deciding how much gas cools, forms stars, is reheated,
+becomes unstable or bursts.
+
+| Value | Mode |
+|-------|------|
+| 0 | Off |
+| 1 | SAGE26's recipes shared over the annuli, with SAGE26's disc radius: output identical to SAGE26, the annuli as added detail |
+| 2 | As 1, but the disc radius is measured from the annuli (smaller massive discs, less efficient star formation in gas-rich small discs) |
+| 3 | As 2, and the star-formation law is evaluated on each annulus's own surface density |
+
+`H2DepletionMode` 2-4 need `H2RadialIntegrationOn = 1` in modes 0-2; mode 3 uses the
+annuli instead.
+
+### Dust (`DustySAGEMode`)
+
+Follows Dusty-SAGE (Triani et al. 2020), with its known source bugs fixed (listed in
+`docs/physics/darksage_and_dust.md`).
+
+| Value | Mode |
+|-------|------|
+| 0 | Off |
+| 1 | Passive dust inside SAGE26's metals; every non-dust output identical to 0 |
+| 2 | Dusty-SAGE delayed yields replace SAGE26's metal production; dust held outside the metals |
+
+| Parameter | Values | Effect |
+|-----------|--------|--------|
+| `DustSNIIYields` | 0/1 | SNII yields: 0 = Woosley & Weaver (1995); 1 = Nomoto et al. (2006) |
+| `DustSNIaYields` | 0/1 | SNIa yields: 0 = Iwamoto et al. (1999); 1 = Seitenzahl et al. (2013) |
+| `DustBinaryFraction` | double | Fraction of 3-16 Msun stars in SNIa binaries (default 0.1) |
+
+Grain growth needs H2, so it is off with `SFprescription` 0 or 2. With `DarkSAGEMode`
+on, the dust is carried by the annuli (`DiscDust`).
 
 ### Mergers and ICS tracking
 
@@ -198,12 +275,19 @@ ICS assembly tracking (`ICS_disrupt`, `ICS_accrete`, `ICS_sum_mt`) is always on.
 |-----------|--------|--------|
 | `OutputFormat` | string | `sage_hdf5`, `sage_binary`, or `lhalo_binary_output` to convert the input trees to lhalo-binary instead of running the model |
 | `SaveFullSFH` | 0/1 | Track per-snapshot SFR history arrays |
+| `SaveFullMH` | 0/1 | Track the metal mass in the stars of each SFH bin (needs `SaveFullSFH = 1`) |
 | `NumOutputs` | int | Number of snapshot outputs; `-1` = all snapshots |
+
+`DarkSAGEMode` and `DustySAGEMode` add their own datasets (annulus arrays, spins, dust
+reservoirs and rates) to the HDF5 output only when they are on; files with both off are
+unchanged. See [`docs/outputs.md`](docs/outputs.md).
 
 ### Supported tree formats (`TreeType`)
 
-`lhalo_binary`, `lhalo_hdf5`, `consistent_trees_ascii`, `consistent_trees_hdf5`,
-`genesis_hdf5`, `gadget4_hdf5`
+`lhalo_binary`, `mimic_lhalo_binary`, `lhalo_hdf5`, `consistent_trees_ascii`,
+`consistent_trees_hdf5`, `genesis_hdf5`, `gadget4_hdf5`
+
+`mimic_lhalo_binary` reads the L-Halo binary files that Mimic's tree converter writes (an L-Halo header followed by Mimic's 88-byte halo record, with masses in Msun/h). The reader scales masses to SAGE26's code units and sets the record fields the format lacks to -1; see `src/io/read_tree_mimic_lhalo_binary.c`.
 
 ---
 
@@ -214,7 +298,12 @@ cd tests && make test               # build and run all suites
 cd tests && make test_conservation  # conservation tests only (fastest)
 cd tests && make quick              # single fastest check
 bash tests/run_integration_tests.sh # full integration test (slower)
+bash tests/darksage_mode_checks.sh  # DarkSAGEMode/DustySAGEMode checks on full Millennium runs
 ```
+
+`darksage_mode_checks.sh` checks that `DarkSAGEMode 1` and `DustySAGEMode 1` reproduce
+SAGE26 exactly and that the annuli sum to the galaxy totals. Its runs take about 30 GB
+while it works and are deleted when it finishes.
 
 The regression baseline checks that every one of the 5252 output datasets is
 bit-identical to the committed reference. It needs the serial build, and note
@@ -239,7 +328,7 @@ for the full policy.
 
 ---
 
-## Parameter calibration (SAGE-PSO)
+## Parameter calibration (SAGEswarm)
 
 Automated parameter calibration via Particle Swarm Optimization is available as a separate
 package: [SAGE-PSO](https://github.com/MBradley1985/SAGE-PSO). It drives `libsage.so` to
@@ -249,17 +338,35 @@ optimization.
 
 ---
 
+## ViSAGE
+
+Everything in one place, plus data visualisation. Give it a try: https://github.com/MBradley1985/ViSAGE
+<p align="center">
+  <img src="launch.png" width="600" alt="ViSAGE launch page"/>
+  <img src="structure_mode.png" width="600" alt="A group of galaxies">
+  <img src="HD_mode.png" width="600" alt="HD galaxy">
+  <img src="lightcone_spectra.png" width="600" alt="HD galaxy in LightSAGE with spectra">
+</p>
+
+---
+
 ## Citation
 
 If you use SAGE26 in a publication, please cite:
 
 ```bibtex
 @article{bradley2026a,
-  title = {SAGE26 Paper I: Modelling the Baryon Cycle from Cosmic Dawn to the Present Day},
-  author = {Bradley, Michael and Croton, Darren J. and Paun, Robert A. Mostoghiu and Chowdhury, Dhruba Dutta and Willingham, Jayde},
-  year = 2026,
-  journal = {The Astrophysical Journal Supplement Series},
-  publisher = {(In prep.)}
+  author        = {Bradley, Michael and Croton, Darren J. and Mostoghiu Paun, Robert Adriel and
+                   Dutta Chowdhury, Dhruba and Willingham, Jayde},
+  title         = {SAGE26 Paper I: Modelling the Baryon Cycle from Cosmic Dawn to the Present Day},
+  journal       = {arXiv e-prints},
+  year          = {2026},
+  month         = oct,
+  eid           = {arXiv:2610.09564},
+  doi           = {10.48550/arXiv.2610.09564},
+  eprint        = {2610.09564},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.GA},
 }
 ```
 

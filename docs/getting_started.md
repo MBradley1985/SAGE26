@@ -63,9 +63,20 @@ Then:
 python plotting/allresults-local.py                       # z=0 diagnostics
 python plotting/allresults-local.py path/to/output/       # specify output dir
 python plotting/allresults-history.py                     # multi-redshift diagnostics
-python plotting/paper_plots.py                            # all paper figures
-python plotting/paper_plots.py 1 3 5                      # specific figure numbers
+python plotting/allresults-compare.py                     # compare several runs (MODELS list at the top)
 ```
+
+To reproduce the figures and quoted numbers of the SAGE26 papers (each script is
+self-contained and needs only the runs and the `data/` directory):
+
+```bash
+python plotting/paper1_plots.py                # Paper I figures + numbers -> <run>/paper1/
+python plotting/paper1_plots.py --figs 2 12    # some figures only
+python plotting/paper2_plots.py                # Paper II (FFB vs MBK25) figures + numbers -> <run>/paper2/
+python plotting/paper2_plots.py --box big      # the full 500 Mpc/h runs (output/Millennium_*)
+```
+
+Both read four files at a time by default (`-j` to change). Runs that are missing are skipped.
 
 ## Tests
 
