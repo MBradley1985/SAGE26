@@ -143,16 +143,19 @@ def draw_fbh(ax, d, files, show_lit=True, n_scatter=40_000, mask_seeds=True,
                    alpha=0.25, lw=0.3, rasterized=True, zorder=3)
     lrd.kde_contour(ax, mb, lfbh, x_lo, x_hi, y_lo, y_hi, SHAM_COLOR, zorder=5)
     # zero-scatter locus and scattered percentile track
-    o = np.argsort(mb_i)
-    ax.plot(mb_i[o], (mb_i - ms_i)[o], color='k', lw=1.5 * (0.7 if compact else 1), ls='-', zorder=6)
+    show_locus = 'no_locus' not in d          # a decorrelated pairing has no single zero-scatter locus
+    if show_locus:
+        o = np.argsort(mb_i)
+        ax.plot(mb_i[o], (mb_i - ms_i)[o], color='k', lw=1.5 * (0.7 if compact else 1), ls='-', zorder=6)
     xc, q = percentile_track(mb, lfbh, np.arange(x_lo, x_hi + 0.01, 0.25))
     ax.plot(xc, q[:, 1], color=SHAM_COLOR, lw=2.2 * (0.7 if compact else 1), zorder=7)
     ax.fill_between(xc, q[:, 0], q[:, 2], color=SHAM_COLOR, alpha=0.15, zorder=2)
     handles += [Line2D([0], [0], marker='o', ls='none', markerfacecolor=SHAM_COLOR,
                        markeredgecolor='none', ms=7,
                        label='SHAM BHs' if compact else f'SHAM BHs ({len(mb):,})'),
-                Line2D([0], [0], color=SHAM_COLOR, lw=2.2, label='SHAM median, 16-84%'),
-                Line2D([0], [0], color='k', lw=1.5, label='SHAM, zero scatter')]
+                Line2D([0], [0], color=SHAM_COLOR, lw=2.2, label='SHAM median, 16-84%')]
+    if show_locus:
+        handles.append(Line2D([0], [0], color='k', lw=1.5, label='SHAM, zero scatter'))
 
     # ---- observations -------------------------------------------------------
     if show_lit:

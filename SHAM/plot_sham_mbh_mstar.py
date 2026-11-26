@@ -99,16 +99,19 @@ def draw_mbh_mstar(ax, d, xlim, ylim, show_lit=True, n_scatter=12_000, bt_A=None
                    alpha=0.25, lw=0.3, rasterized=True, zorder=3)
     big = rng.choice(len(mb), min(200_000, len(mb)), replace=False)
     lrd.kde_contour(ax, ms[big], mb[big], x_lo, x_hi, y_lo, y_hi, SHAM_COLOR, zorder=5)
-    o = np.argsort(ms_i)
-    ax.plot(ms_i[o], mb_i[o], color='k', lw=1.0, zorder=6)
+    show_locus = 'no_locus' not in d          # a decorrelated pairing has no single zero-scatter locus
+    if show_locus:
+        o = np.argsort(ms_i)
+        ax.plot(ms_i[o], mb_i[o], color='k', lw=1.0, zorder=6)
     xc, q = percentile_track(ms, mb, np.arange(x_lo, x_hi + 0.01, 0.25))
     ax.plot(xc, q[:, 1], color=SHAM_COLOR, lw=1.5, zorder=7)
     ax.fill_between(xc, q[:, 0], q[:, 2], color=SHAM_COLOR, alpha=0.15, zorder=2)
     handles = [kh,
                Line2D([0], [0], marker='o', ls='none', markerfacecolor=SHAM_COLOR,
                       markeredgecolor='none', ms=7, label='SHAM'),
-               Line2D([0], [0], color=SHAM_COLOR, lw=1.5, label='SHAM median, 16-84%'),
-               Line2D([0], [0], color='k', lw=1.0, label='SHAM, zero scatter')]
+               Line2D([0], [0], color=SHAM_COLOR, lw=1.5, label='SHAM median, 16-84%')]
+    if show_locus:
+        handles.append(Line2D([0], [0], color='k', lw=1.0, label='SHAM, zero scatter'))
 
     # observations
     if show_lit:

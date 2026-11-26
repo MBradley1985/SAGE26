@@ -55,14 +55,18 @@ def obs_window(z, lo=10, hi=90):
             np.percentile(mb, 50), np.percentile(ms, 50))
 
 
-def ceiling(lm_s, phi_s, lm_b, phi_b, win, fbh):
-    """Greedy max density of (M* in win, M_BH >= fbh*M*) pairs given both marginals."""
+def ceiling(lm_s, phi_s, lm_b, phi_b, win, fbh, mbh_min=None):
+    """Greedy max density of (M* in win, M_BH >= fbh*M*) pairs given both marginals.
+    mbh_min [Msun], if given, also requires M_BH >= mbh_min (e.g. L_min / (lambda_max L_Edd) for a luminosity cut)."""
     ds, db = lm_s[1] - lm_s[0], lm_b[1] - lm_b[0]
     supply = phi_b * db
     j, tot = 0, 0.0
     for i in np.where((lm_s >= win[0]) & (lm_s <= win[1]))[0]:
         need = phi_s[i] * ds
-        j = max(j, int(np.searchsorted(lm_b, lm_s[i] + np.log10(fbh))))
+        lo_m = lm_s[i] + np.log10(fbh)
+        if mbh_min is not None:
+            lo_m = max(lo_m, np.log10(mbh_min))
+        j = max(j, int(np.searchsorted(lm_b, lo_m)))
         while need > 0 and j < len(lm_b):
             take = min(need, supply[j])
             supply[j] -= take; need -= take; tot += take

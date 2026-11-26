@@ -9,6 +9,7 @@ tests/test_build/
 tests/test_output/
 docs/referee/
 super_eddington_stats
+SHAM
 
 *.o
 *.*~
