@@ -16,8 +16,8 @@ authors:
     affiliation: "Swinburne University of Technology"
 repository-code: "https://github.com/MBradley1985/SAGE26"
 license: MIT
-version: "26.0"
-date-released: "2026-01-01"
+version: "1.0.0"
+date-released: "2026-11-27"
 preferred-citation:
   type: article
   authors:

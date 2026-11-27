@@ -8,6 +8,29 @@ below reproduces the committed regression baseline dataset-for-dataset unless
 it says otherwise. See
 [docs/developer/REGRESSION_BASELINE.md](docs/developer/REGRESSION_BASELINE.md).
 
+## v1.0.0 -- 2026-11-27
+
+First formal release, the model of the resubmitted SAGE26 Paper I (ApJS) and
+Paper II. The model is frozen at this release: no changes to the physics,
+parameters or output; later releases fix only bugs that break mass
+conservation, documentation or plotting. The model is unchanged from v0.98.1
+(output is bit-identical).
+
+### Plotting
+
+- `paper2_plots.py`: one resolution cut throughout, haloes with `Len >= 20`.
+  Fig 4 (`SFE_FFB`) no longer also requires Mvir >= 20 particle masses, and the
+  z = 0 survivor count applies the same cut. The numbers report gives
+  eps_SFE as percentages (medians, 16-84% ranges, fractions above 5% and 10%,
+  above and below the threshold mass, and the per-halo enhancement over the
+  same haloes without the efficient mode).
+- `paper2_plots.py`: Fig 5 histogram transparency adjusted so FFB and MBK25
+  bars stay visible; Fig 5 also writes `FFBPropertiesContours_Combined`, SFR
+  and Z* against Mvir as number-density contours.
+- `paper1_plots.py`: the mass-loading figure starts both axes at
+  log10 V_vir = 1.4, with the legends moved to the upper left.
+- `CITATION.cff` gives version 1.0.0.
+
 ## v0.98.1 -- 2026-11-26
 
 ### One regime draw per galaxy (changes output)
