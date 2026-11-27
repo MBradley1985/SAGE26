@@ -6,8 +6,9 @@ Figures (same content and style as the paper_plots.py functions named):
   1  Selection thresholds in the M-z plane        plot_36_selection_thresholds_mz
   2  SMF grid, 5 < z < 11                          plot_19c_smf_ffb_grid_mbk25
   3  SFRD and SMD histories                        plot_14c_density_evolution_mbk25
-  4  eps_SFE vs Mvir at z ~ 10, Mvir >= 20 particles  plot_10_sfe_ffb
+  4  eps_SFE vs Mvir at z ~ 10                    plot_10_sfe_ffb
   5  SFR and Z* histograms at z ~ 10               plot_11d_ffb_histograms_combined
+     (also FFBPropertiesContours_Combined: SFR and Z* vs Mvir as density contours)
   6  Tracked SFHs, FFB and MBK25 vs no-FFB         plot_12h_sfh_ffb_transitions_sfr
   7  m* at n = 1e-5 Mpc^-3 vs z                    plot_G_mstar_vs_z_ndensity
   8  Selected fraction vs z                        plot_23c_ffb_fraction_bk25
@@ -1689,7 +1690,7 @@ def track_file(task):
     """
     kind 'gid':  rows (Len >= 20) whose GalaxyIndex is in gids[s], per snapshot.
     kind 'near': rows (Len >= 20, Type <= 1) whose Mvir is within 1e-3 of targets[s].
-    kind 'final': rows (any Len) of the final snapshot whose GalaxyIndex is in gids.
+    kind 'final': rows (Len >= 20) of the final snapshot whose GalaxyIndex is in gids.
     """
     path, run, kind, spec, mass_convert = task
     out = {}
@@ -1698,7 +1699,7 @@ def track_file(task):
             key = f'Snap_{s}'
             if key not in f or len(want) == 0:
                 continue
-            c = _Snap(f[key], mass_convert, min_len=0 if kind == 'final' else MIN_PARTICLES)
+            c = _Snap(f[key], mass_convert)
             if c.keep is not None and not c.keep.any():
                 continue
             if kind in ('gid', 'final'):
@@ -2272,16 +2273,15 @@ def mbk25_half_mass(pp, z):
 
 
 def fig4_curves(D, pp):
-    """Binned eps_SFE medians and 16-84% for the Fig 4 samples (haloes >= 20 particles in Mvir)."""
+    """Binned eps_SFE medians and 16-84% for the Fig 4 samples (haloes with Len >= 20, as everywhere)."""
     S = z10_samples(D, pp)
     h = D['hdrs']['FFB']
-    mvir_min = MIN_PARTICLES * h['mp_msun']
     use = {}
     for name in ('NO', 'FFB', 'MBK25', 'FFBML2', 'FFBML3'):
         if name not in S:
             continue
         d, rows = S[name]
-        rows = rows[(d['StellarMass'][rows] > 0) & (d['Mvir'][rows] >= mvir_min)]
+        rows = rows[d['StellarMass'][rows] > 0]
         use[name] = (np.log10(d['Mvir'][rows]), d['StellarMass'][rows] / (h['fb'] * d['Mvir'][rows]))
     allm = np.concatenate([u[0] for k, u in use.items() if k in ('NO', 'FFB', 'MBK25')] or [np.empty(0)])
     if allm.size == 0:
@@ -2300,12 +2300,65 @@ def fig4_curves(D, pp):
     return use, cur
 
 
+def sfe_percentages(D, pp, z):
+    """
+    Fig 4 as percentages, so the text can quote them in place of the figure.
+    Same sample as Fig 4 (selected centrals, Len >= 20); the
+    no-FFB values are paired halo by halo with the run they are matched from.
+    """
+    S = z10_samples(D, pp)
+    h = D['hdrs']['FFB']
+    pc = lambda x: f'{100 * x:.1f}%'
+    eps = lambda d, r: d['StellarMass'][r] / (h['fb'] * d['Mvir'][r])
+    thr = {'FFB': ('Li+24 M_FFB', pp.ffb_threshold_mass_msun(z)), 'MBK25': ('MBK25 M_half', mbk25_half_mass(pp, z))}
+    L = [f'  eps_SFE as percentages (Fig 4 sample: selected centrals, Len >= {MIN_PARTICLES})']
+    NO = S.get('NO', (None,))[0]
+    for name in ('FFB', 'MBK25'):
+        if name not in S:
+            continue
+        d, r = S[name]
+        r = r[d['StellarMass'][r] > 0]
+        e = eps(d, r)
+        if e.size == 0:
+            continue
+        L.append(f'    {name:5s} N={e.size}: median {pc(np.median(e))} (16-84%: {pc(np.percentile(e, 16))}-'
+                 f'{pc(np.percentile(e, 84))}); {pc(np.mean(e > 0.05))} above 5%, {pc(np.mean(e > 0.1))} above 10%, '
+                 f'max {pc(e.max())}')
+        lab, M = thr[name]
+        if M is not None:
+            above = d['Mvir'][r] >= M
+            L.append(f'    {name:5s} {pc(above.mean())} of galaxies above {lab} = {M:.2e} Msun; median above '
+                     f'{pc(np.median(e[above])) if above.any() else "-"}, below {pc(np.median(e[~above])) if (~above).any() else "-"}')
+        if NO is not None:
+            m = pp.same_halo_rows(d, r, NO, box_size=h['box'])
+            ok = (m >= 0)
+            ok[ok] = NO['StellarMass'][m[ok]] > 0
+            if ok.any():
+                en = eps(NO, m[ok])
+                ratio = e[ok] / en
+                L.append(f'    {name:5s} vs same haloes without the mode (N={ok.sum()}): no-mode median {pc(np.median(en))} '
+                         f'(16-84%: {pc(np.percentile(en, 16))}-{pc(np.percentile(en, 84))}), {pc(np.mean(en > 0.05))} above 5%; '
+                         f'eps higher in {pc(np.mean(ratio > 1))} of haloes; median per-halo ratio {np.median(ratio):.1f}x '
+                         f'(+{100 * (np.median(ratio) - 1):.0f}%, 16-84%: {np.percentile(ratio, 16):.1f}-{np.percentile(ratio, 84):.1f}x)')
+    for k in ('FFBML2', 'FFBML3'):
+        if k in S and 'FFB' in S:
+            d, r = S[k]
+            r = r[(d['StellarMass'][r] > 0) & (d['Mvir'][r] >= thr['FFB'][1])]
+            d0, r0 = S['FFB']
+            r0 = r0[(d0['StellarMass'][r0] > 0) & (d0['Mvir'][r0] >= thr['FFB'][1])]
+            if r.size and r0.size:
+                e, e0 = np.median(eps(d, r)), np.median(eps(d0, r0))
+                L.append(f'    {k} (feedback ablation) median above M_FFB: {pc(e)} vs FFB {pc(e0)} '
+                         f'({np.log10(e / e0):+.2f} dex, {e / e0:.1f}x)')
+    return L
+
+
 def fig4(D, pp, out):
     plt = _style(pp)
     Z = D['hdrs']['FFB']['redshifts']
     z = Z[D['snap_z10']]
     use, cur = fig4_curves(D, pp)
-    print('  Fig 4: ' + ', '.join(f'{k} {v[0].size}' for k, v in use.items()) + ' haloes (>= 20 particles)')
+    print('  Fig 4: ' + ', '.join(f'{k} {v[0].size}' for k, v in use.items()) + ' haloes (Len >= 20)')
     fig, ax = plt.subplots()
     for name, lc, bc, lab, zo in (('NO', 'firebrick', 'darkred', pp.NOFFB_SAME_HALO_LABEL, 3),
                                   ('FFB', 'black', 'grey', 'FFB galaxies', 5),
@@ -2349,9 +2402,12 @@ def fig5(D, pp, out):
     plt = _style(pp)
     Z = D['hdrs']['FFB']['redshifts']
     V = fig5_values(D, pp)
+    # FFB and MBK25 select nearly the same haloes, so their bars overlap: FFB is
+    # a little more transparent than in paper_plots.py and MBK25 a little more
+    # again, so the bars underneath stay visible.
     kw = {'NO': dict(alpha=0.5, color='firebrick', edgecolor='darkred', label=pp.NOFFB_SAME_HALO_LABEL),
-          'FFB': dict(alpha=0.7, color='black', edgecolor='black', label='FFB galaxies'),
-          'MBK25': dict(alpha=0.7, color='mediumpurple', edgecolor='indigo', label='MBK25 galaxies')}
+          'FFB': dict(alpha=0.48, color='black', edgecolor='black', label='FFB galaxies'),
+          'MBK25': dict(alpha=0.45, color='mediumpurple', edgecolor='indigo', label='MBK25 galaxies')}
     fig, axes = plt.subplots(1, 2, figsize=(12, 6))
     for i, (ax, xl, xlim) in enumerate(((axes[0], r'$\log_{10}(\mathrm{SFR}\ [M_{\odot}\,\mathrm{yr}^{-1}])$', (-2, 2.7)),
                                         (axes[1], r'$\log_{10}(Z_*/Z_{\odot})$', (-2, -0.5)))):
@@ -2361,7 +2417,7 @@ def fig5(D, pp, out):
             edges = np.linspace(allv.min(), allv.max(), 31) if allv.min() < allv.max() else 30
             for k in ('NO', 'FFB', 'MBK25'):
                 if k in V and V[k][i].size:
-                    ax.hist(V[k][i], bins=edges, density=True, linewidth=1.2, **kw[k])
+                    ax.hist(V[k][i], bins=edges, density=True, linewidth=2.0, **kw[k])
         ax.set_xlabel(xl)
         ax.set_ylabel('Normalized Count')
         ax.set_ylim(0, ax.get_ylim()[1] * 1.35)
@@ -2370,6 +2426,85 @@ def fig5(D, pp, out):
     pp._standard_legend(axes[0], loc='upper left')
     fig.tight_layout()
     pp.save_figure(fig, os.path.join(out, 'FFBPropertiesHistograms_Combined.pdf'))
+    fig5_contours(D, pp, out)
+
+
+def fig5_contours(D, pp, out):
+    """
+    Fig 5 alternative, same two panels and galaxies: SFR (left) and Z* (right),
+    each against halo mass, as number-density contours with one colormap per
+    model (no-FFB Reds, FFB Greys, MBK25 Purples) and a colorbar each, in
+    galaxies per (0.1 dex)^2.  The density is a Gaussian KDE scaled by the
+    sample size.  FFB and MBK25 select nearly the same galaxies, so MBK25 is
+    drawn as coloured contour lines over the filled FFB contours.  Saved as
+    FFBPropertiesContours_Combined.
+    """
+    from scipy.stats import gaussian_kde
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import BoundaryNorm, ListedColormap
+    plt = _style(pp)
+    Z = D['hdrs']['FFB']['redshifts']
+    S = z10_samples(D, pp)
+    ylim = (9.9, 11.4)
+    panels = ((r'$\log_{10}(\mathrm{SFR}\ [M_{\odot}\,\mathrm{yr}^{-1}])$', (-2.0, 2.5)),
+              (r'$\log_{10}(Z_*/Z_{\odot})$', (-2.5, -0.2)))
+    models = (('NO', 'Reds', True, 'No-FFB/MBK25\n(same haloes)'),
+              ('FFB', 'Greys', True, 'FFB'),
+              ('MBK25', 'Purples', False, 'MBK25'))
+    cell = 0.1 * 0.1
+    data = {}
+    for k, *_ in models:
+        if k not in S:
+            continue
+        d, w = S[k]
+        sfr, mv = d['SFR'][w], d['Mvir'][w]
+        with np.errstate(divide='ignore', invalid='ignore'):
+            zr = d['MetalsStellarMass'][w] / d['StellarMass'][w] / pp.Z_SUN
+        ok = (sfr > 0) & (zr > 0) & (mv > 0)
+        if ok.sum() >= 5:
+            data[k] = (np.log10(sfr[ok]), np.log10(zr[ok]), np.log10(mv[ok]))   # Mvir already in Msun, as in Fig 4
+    # Density on each panel's grid; one colour scale per model, shared by both panels.
+    grids, dens = [], {}
+    for i, (_, xlim) in enumerate(panels):
+        gx, gy = np.meshgrid(np.linspace(*xlim, 220), np.linspace(*ylim, 220))
+        grids.append((gx, gy))
+        for k, (ls, lz, lm) in data.items():
+            x = (ls, lz)[i]
+            dens[k, i] = gaussian_kde(np.vstack([x, lm]))(np.vstack([gx.ravel(), gy.ravel()])).reshape(gx.shape) \
+                * x.size * cell
+    fig = plt.figure(figsize=(15, 6.5))
+    axes = [fig.add_axes([0.06, 0.13, 0.33, 0.80]), fig.add_axes([0.45, 0.13, 0.33, 0.80])]
+    cbar_x = [0.81, 0.87, 0.93]
+    nbar = 0
+    for k, cmap, filled, lab in models:
+        if k not in data:
+            continue
+        top = max(dens[k, 0].max(), dens[k, 1].max())
+        levels = top * np.array([0.15, 0.4, 0.7, 1.0])   # three contours per model
+        cm = ListedColormap(plt.get_cmap(cmap)(np.linspace(0.25, 1.0, 256)))
+        for i, ax in enumerate(axes):
+            gx, gy = grids[i]
+            if filled:
+                cs = ax.contourf(gx, gy, dens[k, i], levels=levels, cmap=cm, alpha=0.55, zorder=1 + nbar)
+            else:
+                ax.contour(gx, gy, dens[k, i], levels=levels[:3], cmap=cm, linewidths=2.0, zorder=5)
+        if not filled:
+            cs = ScalarMappable(norm=BoundaryNorm(levels, cm.N), cmap=cm)
+        cax = fig.add_axes([cbar_x[nbar], 0.13, 0.018, 0.80])
+        cb = fig.colorbar(cs, cax=cax)
+        cb.ax.tick_params(labelsize=11)
+        cb.ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
+        cb.ax.set_title(lab, fontsize=11, pad=8)
+        nbar += 1
+    if nbar:
+        cax.set_ylabel(r'$N$ per $(0.1\,{\rm dex})^2$', fontsize=13)
+    for ax, (xl, xlim) in zip(axes, panels):
+        ax.set_xlabel(xl)
+        ax.set_ylabel(r'$\log_{10}(M_{\rm vir}/M_{\odot})$')
+        ax.set_xlim(*xlim)
+        ax.set_ylim(*ylim)
+    axes[1].text(0.95, 0.95, f'z={Z[D["snap_z10"]]:.1f}', transform=axes[1].transAxes, ha='right', va='top')
+    pp.save_figure(fig, os.path.join(out, 'FFBPropertiesContours_Combined.pdf'))
 
 
 def _tracked_sample(D):
@@ -2680,6 +2815,8 @@ def numbers(D, pp, path):
                 base = med if k == 'FFB' else base
                 extra = f' ({np.log10(med / base):+.2f} dex vs FFB)' if base and k != 'FFB' else ''
                 out(f'  median eps above M_FFB, {k}: {med:.3f} (N={above.sum()}){extra} (Sec 4.2: +0.4, +0.6 dex, to ~0.2)')
+    for line in sfe_percentages(D, pp, zs):
+        out(line)
     V = fig5_values(D, pp)
     for i, q in enumerate(('log SFR', 'log Z*/Zsun')):
         cells = [f'{k} {np.median(V[k][i]):+.3f} (N={V[k][i].size})' for k in ('NO', 'FFB', 'MBK25') if k in V]

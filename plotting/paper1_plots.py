@@ -3433,6 +3433,9 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
     # trustworthy rather than where galaxies merely exist.
     V_MEASURED_MIN = 24.0
     vbins = np.logspace(np.log10(V_MEASURED_MIN), np.log10(600.0), 24)
+    # miniUchuu needs no separate edge: there Mvir is tied to the particle count
+    # (rockstar), so the 20-particle cut already stops it at V_vir ~ 30 km/s at
+    # z = 0, above this one.
 
     cmap = plt.get_cmap('plasma')
     colours = [cmap(x) for x in np.linspace(0.05, 0.85, len(z_targets))]
@@ -3595,15 +3598,14 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
         obs_handles.append(h)
 
     axL.axvline(FIRE_V_CRIT, color='0.55', ls=':', lw=1.4, zorder=1)
-    # Keep this inside axL's y-range: it was pinned at 1.6e3 and disappeared
-    # when the limit came down to 500.
+    # At the foot of the line: the observations key sits in the upper left.
     # In-panel annotations take the legend size, not font.size: at the
     # stylesheet default (20) they render as large as the axis labels and
     # dominate the panel.  Still stylesheet-driven, just the smaller of the
     # two values it defines.
     _ann_fs = plt.rcParams['legend.fontsize']
     axL.annotate(rf'$V_{{\rm vir}}={FIRE_V_CRIT:.0f}$ km s$^{{-1}}$',
-                 xy=(FIRE_V_CRIT, 260), xytext=(3, 0), fontsize=_ann_fs,
+                 xy=(FIRE_V_CRIT, 0.07), xytext=(3, 0), fontsize=_ann_fs,
                  textcoords='offset points', color='0.4')
     axR.axvline(v_eject, color='crimson', ls='--', lw=1.4, zorder=1)
     axR.annotate(rf'$\dot{{E}}_{{\rm FB}}=\dot{{E}}_{{\rm lift}}$'
@@ -3621,10 +3623,10 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
         a.yaxis.set_major_formatter(_log10_tick_formatter(0))
         a.set_xticks([], minor=True)
         a.set_yticks([], minor=True)
-    axL.set_xlim(15, 600); axL.set_ylim(0.05, 500)
-    axL.set_xticks([10**e for e in (1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6)])
+    axL.set_xlim(10**1.4, 600); axL.set_ylim(0.05, 500)
+    axL.set_xticks([10**e for e in (1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6)])
     axL.set_yticks([10**e for e in (-1, 0, 1, 2)])
-    axR.set_xlim(20, 200); axR.set_ylim(1e-2, 1e4)
+    axR.set_xlim(10**1.4, 200); axR.set_ylim(1e-2, 1e4)
     # for _v, _c in _sat_marks:
     #     if 20 <= _v <= 200:
     #         axR.axvline(_v, ymin=0.0, ymax=0.05, color=_c, lw=2.4,
@@ -3642,10 +3644,9 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
     # No hardcoded fontsize anywhere in this figure: sizes come from
     # kieren_cohare_palatino_sty.mplstyle (legend.fontsize 14, font.size 20)
     # so this figure matches every other panel in the paper.
-    # Simulation key lives in the ejection panel, lower left, where nothing is
-    # drawn.  The left panel already carries the redshift key (upper right) and
-    # the observations key (lower left), and a third block there is one too
-    # many.  Proxy artists, since every measured curve is drawn label=None.
+    # Simulation key lives in the ejection panel, upper left.  The left panel
+    # already carries the redshift key (upper right) and the observations key
+    # (upper left), and a third block there is one too many.  Proxy artists, since every measured curve is drawn label=None.
     if model_files_exist(MINIUCHUU_DIR):
         axR.plot([], [], '-',  color='0.3', lw=2.2, label='Millennium')
         axR.plot([], [], '--', color='0.3', lw=1.8, label='miniUchuu')
@@ -3657,9 +3658,9 @@ def plot_24_mass_loading_vs_velocity(primary, vanilla):
                            handles=model_handles, labels=model_labels)
     axL.add_artist(leg1)
     if obs_handles:
-        _standard_legend(axL, loc='lower left', handles=obs_handles,
+        _standard_legend(axL, loc='upper left', handles=obs_handles,
                          labels=[h.get_label() for h in obs_handles])
-    _standard_legend(axR, loc='lower left')
+    _standard_legend(axR, loc='upper left')
 
     fig.tight_layout()
     outputFile = os.path.join(OUTPUT_DIR, 'MassLoading_vs_Velocity' + OUTPUT_FORMAT)
